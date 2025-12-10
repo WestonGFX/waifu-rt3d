@@ -1,0 +1,35 @@
+{
+  "profile": "auto",
+  "input_mode": "text",
+  "output_mode": "text+voice",
+  "llm": {
+    "provider": "lmstudio",
+    "endpoint": "http://127.0.0.1:1234/v1",
+    "api_key": "lm-studio",
+    "model": ""
+  },
+  "tts": {
+    "provider": "fish_audio",
+    "endpoint": "https://api.fish.audio/v1",
+    "api_key": "",
+    "voice_id": "8ef4a238714b45718ce04243307c57a7",
+    "format": "mp3",
+    "sample_rate": 24000,
+    "fallback_chain": [
+      "piper_local",
+      "xtts_server",
+      "elevenlabs"
+    ]
+  },
+  "asr": {
+    "enabled": false,
+    "provider": "browser",
+    "endpoint": "",
+    "api_key": "",
+    "model": "whisper-1",
+    "language": "en"
+  },
+  "memory": {
+    "max_history": 20
+  }
+}

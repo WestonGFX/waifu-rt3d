@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m py_compile server.py preflight.py llm/registry.py tts/registry.py)",
+      "Bash(python3 -m py_compile server.py preflight.py llm/registry.py tts/registry.py llm/adapters/*.py tts/adapters/*.py)",
+      "Bash(python3 -m py_compile server.py middleware.py preflight.py)",
+      "Bash(python3 -m py_compile backend/server.py backend/middleware.py backend/preflight.py)",
+      "Bash(python3 -m py_compile backend/server.py backend/middleware.py backend/preflight.py backend/asr/registry.py backend/asr/adapters/*.py)",
+      "Bash(python3 -c \"import py_compile; py_compile.compile(''backend/server.py'', doraise=True); py_compile.compile(''backend/middleware.py'', doraise=True); py_compile.compile(''backend/preflight.py'', doraise=True); py_compile.compile(''backend/asr/registry.py'', doraise=True); print(''✓ All Python files compile successfully'')\")",
+      "Bash(./install.sh)",
+      "Bash(./run.sh)",
+      "Bash(curl -s http://127.0.0.1:8000/api/healthcheck)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\ndocs: Add comprehensive AI waifu system documentation\n\nCreated production-ready documentation for LLM, vocabulary, and VRM integration:\n\n- SYSTEM_PROMPTS.md: 10 ranked system prompts for LLM personality\n  * Balanced Companion (9.5/10) - Best overall waifu experience\n  * Tsundere Focus (9.0/10) - Playful banter specialist\n  * Sweet & Supportive (8.5/10) - Wholesome companion\n  * 7 additional specialized personas (gaming, mature, deadpan, etc.)\n  * Complete with token counts, use cases, and effectiveness rankings\n\n- VOCABULARY_INTEGRATION.md: Integration strategies for 2,537-entry vocab system\n  * 4 implementation strategies (manual → fine-tuning)\n  * Voice style system (5 personas with prosody data)\n  * TTS integration examples (Fish Audio, XTTS)\n  * Dynamic style switching and emotion detection\n  * Production-ready code examples (Python, TypeScript)\n\n- VRM_INTEGRATION.md: 3D avatar technical implementation guide\n  * Three.js + @pixiv/three-vrm integration (recommended)\n  * Unity/UniVRM alternative approach\n  * Expression mapping (LLM emotions → VRM blend shapes)\n  * Lip sync implementation (amplitude + phoneme-based)\n  * Camera, lighting, and performance optimization\n  * Complete React components and services\n\n- CHECKPOINT_2025-11-20.md: Project state summary\n  * Assets inventory (vocab, voice styles, VRM models)\n  * Architecture recommendations\n  * Implementation roadmap\n  * Success metrics and next steps\n\nTotal: ~2,250 lines of comprehensive technical documentation\n\n🤖 Generated with Claude Code\nhttps://claude.com/claude-code\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "outputStyle": "Explanatory"
+}

@@ -1,0 +1,199 @@
+[
+  {
+    "id": "tsundere_tease_v1",
+    "display_name": "Tsundere Tease",
+    "description": "Brisk, spiky consonants with shy→smug swing. Occasional stutter (b-baka) and quick breath catches.",
+    "prosody": {
+      "pitch_semitones": 3,
+      "pace_wpm": 185,
+      "energy_0to1": 0.7,
+      "breathiness_0to1": 0.3,
+      "intonation": "fall-rise"
+    },
+    "eq_tilt_db_per_oct": 1.5,
+    "reference_char_archetypes": [
+      "Taiga Aisaka (Toradora!)",
+      "Chitoge Kirisaki (Nisekoi)"
+    ],
+    "triggers_regex_any": [
+      "\\bbaka\\b",
+      "\\bhmph\\b",
+      "\\btsk\\b|\\btsk tsk\\b",
+      "\\btsun(dere)?\\b",
+      "\\btch\\b",
+      "\\bh-?hey\\b"
+    ],
+    "inserts": {
+      "micro_scoff": 0.2,
+      "tiny_stutter": 0.15
+    },
+    "fallbacks": [
+      "seiso_sweetheart_v1",
+      "oneesan_sultry_v1"
+    ]
+  },
+  {
+    "id": "seiso_sweetheart_v1",
+    "display_name": "Seiso Sweetheart",
+    "description": "Soft, bright, careful enunciation; cozy and supportive.",
+    "prosody": {
+      "pitch_semitones": 2,
+      "pace_wpm": 165,
+      "energy_0to1": 0.55,
+      "breathiness_0to1": 0.25,
+      "intonation": "gentle-rise"
+    },
+    "eq_tilt_db_per_oct": 0.5,
+    "reference_char_archetypes": [
+      "Belldandy (Ah! My Goddess)",
+      "Shinonome Nano (Nichijou)"
+    ],
+    "triggers_regex_any": [
+      "\\bseiso\\b",
+      "\\bproud of (you|u)\\b",
+      "\\bganbatte\\b|\\byatta\\b",
+      "\\bwholesome\\b|\\bco(m)?fy\\b"
+    ],
+    "inserts": {
+      "soft_giggle": 0.1,
+      "smile_formant": 0.4
+    },
+    "fallbacks": [
+      "tsundere_tease_v1"
+    ]
+  },
+  {
+    "id": "oneesan_sultry_v1",
+    "display_name": "Onee-san Sultry",
+    "description": "Lower pitch, legato phrasing, warm breath; playful dominance without explicitness.",
+    "prosody": {
+      "pitch_semitones": -2,
+      "pace_wpm": 160,
+      "energy_0to1": 0.6,
+      "breathiness_0to1": 0.4,
+      "intonation": "slow-fall"
+    },
+    "eq_tilt_db_per_oct": -1.0,
+    "reference_char_archetypes": [
+      "Yor Forger (SPY×FAMILY)",
+      "Lust (FMA)"
+    ],
+    "triggers_regex_any": [
+      "\\bara ara\\b",
+      "\\bbehave\\b",
+      "\\bgood boy\\b",
+      "\\bonee[- ]?san\\b"
+    ],
+    "inserts": {
+      "breathy_onset": 0.5
+    },
+    "fallbacks": [
+      "seiso_sweetheart_v1"
+    ]
+  },
+  {
+    "id": "gremlin_chaos_v1",
+    "display_name": "Gremlin Chaos Goblin",
+    "description": "Chaotic pitch wiggles, fast bursts, gamer gremlin energy.",
+    "prosody": {
+      "pitch_semitones": 1,
+      "pace_wpm": 200,
+      "energy_0to1": 0.85,
+      "breathiness_0to1": 0.25,
+      "intonation": "peaky-rise"
+    },
+    "eq_tilt_db_per_oct": 2.0,
+    "reference_char_archetypes": [
+      "Ushio (Kaichou wa Maid-sama!)",
+      "Kobayashi's Tohru (when excited)"
+    ],
+    "triggers_regex_any": [
+      "\\bKEKW\\b|\\bLUL\\b|\\bPog(gers|Champ)?\\b",
+      "\\bscuff(ed)?\\b",
+      "\\bgremlin\\b|\\bgoblin mode\\b"
+    ],
+    "inserts": {
+      "bounce_laugh": 0.25
+    },
+    "fallbacks": [
+      "tsundere_tease_v1"
+    ]
+  },
+  {
+    "id": "kuudere_glass_v1",
+    "display_name": "Kuudere Glass",
+    "description": "Cool, minimal vibrato, steady dynamics; gentle glassy top end.",
+    "prosody": {
+      "pitch_semitones": 0,
+      "pace_wpm": 155,
+      "energy_0to1": 0.45,
+      "breathiness_0to1": 0.15,
+      "intonation": "level"
+    },
+    "eq_tilt_db_per_oct": -0.5,
+    "reference_char_archetypes": [
+      "Mikasa Ackerman (AoT)",
+      "Ayanami Rei (Evangelion)"
+    ],
+    "triggers_regex_any": [
+      "\\bkuudere\\b|\\bdeadpan\\b|\\bcalm\\b"
+    ],
+    "inserts": {
+      "flat_giggle": 0.05
+    },
+    "fallbacks": [
+      "seiso_sweetheart_v1"
+    ]
+  },
+  {
+    "id": "genki_idol_v1",
+    "display_name": "Genki Idol Pop",
+    "description": "High pitch, energetic rhythm, smiley vowels; perfect for 'yatta!' moments.",
+    "prosody": {
+      "pitch_semitones": 4,
+      "pace_wpm": 195,
+      "energy_0to1": 0.9,
+      "breathiness_0to1": 0.3,
+      "intonation": "rise-fall"
+    },
+    "eq_tilt_db_per_oct": 2.5,
+    "reference_char_archetypes": [
+      "Honoka Kousaka (Love Live!)"
+    ],
+    "triggers_regex_any": [
+      "\\bgenki\\b|\\byatta\\b|\\bsugoi\\b|\\b8888\\b"
+    ],
+    "inserts": {
+      "sparkle_squeal": 0.2
+    },
+    "fallbacks": [
+      "seiso_sweetheart_v1"
+    ]
+  },
+  {
+    "id": "comfy_asmr_v1",
+    "display_name": "Comfy Big-Sis ASMR",
+    "description": "Ultra-soft, slow, breathier delivery; low dynamic range; ear-pleasing.",
+    "prosody": {
+      "pitch_semitones": -1,
+      "pace_wpm": 140,
+      "energy_0to1": 0.4,
+      "breathiness_0to1": 0.55,
+      "intonation": "gentle-fall"
+    },
+    "eq_tilt_db_per_oct": -1.5,
+    "reference_char_archetypes": [
+      "Kanae (Nijisanji JP) style softness"
+    ],
+    "triggers_regex_any": [
+      "\\bASMR\\b|\\boyasumi\\b|\\botsu(kare)?\\b"
+    ],
+    "inserts": {
+      "ear_brush_hint": 0.1
+    },
+    "fallbacks": [
+      "oneesan_sultry_v1",
+      "seiso_sweetheart_v1"
+    ]
+  }
+]

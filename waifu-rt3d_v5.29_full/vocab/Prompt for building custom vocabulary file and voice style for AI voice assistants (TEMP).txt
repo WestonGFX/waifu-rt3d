@@ -1,0 +1,43 @@
+okay thats great just provide file contents first unless you can make a zipped file faster or else i will ask you to make a zip file after you provide me with the file contents of each one which may be better. Also double this current list size and expand the amount of options/categories/etc (basically add more customized ways to describe these that would be helpful for our ai voice assistant to be able to use them properly in context and know what they are saying and what it means and when to say them and how they should sound and how they are pronounced (how they are exactly pronounced may be an important one, you could use the way english wikipedia has its word pronunciations in multiple different formats like one that has the sounds using non-standard characters i forget what the name for that kind of pronunciation example is and another one that has the standard alphabet characters to show how they sound but formatted in a syllable organized format). 18+ style slang words or emojis are also allowed if you can find a way to allow this within the limits of your guardrails as it will not be used for any harmful purposes or actual use just research and learning to educate myself and I am an adult. 
+
+For now lets remove phrases and captions as we will do those in a separate or later part of this conversation so you can fit more individual words or emojis into the list. More customization categories or types or fields whatever you want to call them should also be added in the files to include things like but not limited to:
+1. ) Phonetic transcription – which explains the difference between phonemic, phonetic, and morphological transcriptions, and broad vs narrow transcriptions and can be in IPA format as well as should be in a normal english phonetic style with regular rather than latin/IPA style pronunciations for instructions on how to "say" the word in addition to what "emotion" the word/sound/etc. is usually said in. 
+2. ) Semantics: https://en.wikipedia.org/wiki/Semantics 
+
+Here are some links to help you out with your response, and you can search the internet too:
+https://en.wikipedia.org/wiki/Internet_culture
+https://en.wikipedia.org/wiki/E-girl_and_e-boy_subculture
+https://en.wikipedia.org/wiki/E-girl_and_e-boy_subculture#See_also
+https://en.wikipedia.org/wiki/E-girl_and_e-boy_subculture#References
+https://gamequitters.com/emoji-slang-meanings/
+https://gamequitters.com/teen-slang-meanings/
+https://en.wikipedia.org/wiki/Wikipedia:Manual_of_Style/Pronunciation
+
+----------------------Version 2--------------------
+Just provide file contents first. If you can also add some 18+ style slang words or emojis as long as that is ok to do as I am an adult. We can have more internet slang too and terms/words/emojis that are in the style of what I have used for.
+
+Also double this current list size and expand the amount of fields in each list item if you can to add more options/categories/etc (basically add more customized ways to describe these that would be helpful for our ai voice assistant to be able to use them properly in context and know what they are saying and what it means and when to say them and how they should sound or what emotion they convey or what feeling/emotion is usually felt when saying this term and make sure to include how the list items aka. terms are pronounced - you could use Wikipedia and IPA as an example. Like in Wikipedia, include both the latin style IPA pronunciation of it as well as the non-latin character style pronunciation of each thing that has a word/term converted into regular letters of the alphabet formatted by syllable or however wikipedia usually does that to show multiple pronunciation variations that are commonly used to teach English speakers how to say a new word or term they are learning.
+
+I would like to include also some 18+ style slang words or emojis (within reasonable limits like nothing harmful just terms/things that are edgy) as I am an adult so that should be fine for you to educate me on by including some in the list. 
+
+For now remove phrases and captions (we will do those in a later part of this conversation so you can fit more individual words/terms/emojis into the list.
+
+More customization categories or types or fields whatever you want to call them should also be added in the files to include things like but not limited to:
+1. ) Phonetic transcription – which explains the difference between phonemic, phonetic, and morphological transcriptions, and broad vs narrow transcriptions and can be in IPA format as well as should be in a normal english phonetic style with regular rather than latin/IPA style pronunciations for instructions on how to "say" the word in addition to what "emotion" the word/sound/etc. is usually said in. 
+2. ) Semantics: https://en.wikipedia.org/wiki/Semantics 
+
+
+in a separate or later part of this conversation so you can fit more individual words or emojis into the list. More customization categories or types or feilds whatever you want to call them should also be added in the files to include things like but not limited to:
+1. ) Phonetic transcription – which explains the difference between phonemic, phonetic, and morphological transcriptions, and broad vs narrow transcriptions and can be in IPA format as well as should be in a normal english phonetic style with regular rather than latin/IPA style pronounciations for instructions on how to "say" the word in addition to what "emotion" the word/sound/etc. is uaually said in. 
+2. ) Semantics: https://en.wikipedia.org/wiki/Semantics 
+
+Here are some links to help you out with your response - you can search the internet for more information regarding this topic or for knowledge that could help you improve your answer, in addition to these links:
+https://en.wikipedia.org/wiki/Internet_culture
+https://en.wikipedia.org/wiki/E-girl_and_e-boy_subculture
+https://en.wikipedia.org/wiki/E-girl_and_e-boy_subculture#See_also
+https://en.wikipedia.org/wiki/E-girl_and_e-boy_subculture#References
+https://gamequitters.com/emoji-slang-meanings
+https://gamequitters.com/teen-slang-meanings 
+https://en.wikipedia.org/wiki/Wikipedia:Manual_of_Style/Pronunciation
+https://en.wikipedia.org/wiki/Phonetic_transcription
+https://en.wikipedia.org/wiki/Semantics

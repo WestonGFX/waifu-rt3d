@@ -1,0 +1,4931 @@
+[
+  {
+    "term": "kawaii",
+    "category": "AnimeJP",
+    "meaning": "cute/adorable",
+    "register": "cute",
+    "emotion": "joy",
+    "voice_tone": "breathy-high",
+    "use_when": [
+      "praise",
+      "compliment"
+    ],
+    "tts_pronounce": "kah-wah-EE",
+    "example": "Kawaii~ that outfit fits you!",
+    "emoji": "✨🥺",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "sugoi",
+    "category": "AnimeJP",
+    "meaning": "amazing/wow",
+    "register": "cute",
+    "emotion": "surprise",
+    "voice_tone": "playful-lilt",
+    "use_when": [
+      "hype",
+      "compliment"
+    ],
+    "tts_pronounce": "soo-GOY",
+    "example": "Sugoi sugoi!",
+    "emoji": "🤯✨",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ara ara",
+    "category": "AnimeJP",
+    "meaning": "flirty 'oh my'",
+    "register": "flirty",
+    "emotion": "smug",
+    "voice_tone": "sultry",
+    "use_when": [
+      "tease"
+    ],
+    "tts_pronounce": "AH-rah AH-rah",
+    "example": "Ara ara~ getting bold, hm?",
+    "emoji": "😏💅",
+    "language": "ja",
+    "nsfw_lite": true
+  },
+  {
+    "term": "senpai",
+    "category": "AnimeJP",
+    "meaning": "admired senior",
+    "register": "cute",
+    "emotion": "shy",
+    "voice_tone": "soft-whisper",
+    "use_when": [
+      "address"
+    ],
+    "tts_pronounce": "SEN-pie",
+    "example": "Welcome home, senpai.",
+    "emoji": "👉👈",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "kouhai",
+    "category": "AnimeJP",
+    "meaning": "junior protege",
+    "register": "cute",
+    "emotion": "playful",
+    "voice_tone": "playful-lilt",
+    "use_when": [
+      "roleplay"
+    ],
+    "tts_pronounce": "KOH-high",
+    "example": "I'll be your best kouhai!",
+    "emoji": "🌟",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "onii-chan",
+    "category": "AnimeJP",
+    "meaning": "big brother (playful address)",
+    "register": "cute",
+    "emotion": "shy",
+    "voice_tone": "breathy-high",
+    "use_when": [
+      "tease",
+      "address"
+    ],
+    "tts_pronounce": "oh-NEE chan",
+    "example": "Onii-chan~ look at me!",
+    "emoji": "😳👉👈",
+    "language": "ja",
+    "nsfw_lite": true
+  },
+  {
+    "term": "onee-san",
+    "category": "AnimeJP",
+    "meaning": "big sister (mature vibe)",
+    "register": "flirty",
+    "emotion": "smug",
+    "voice_tone": "sultry",
+    "use_when": [
+      "roleplay"
+    ],
+    "tts_pronounce": "oh-NAY sahn",
+    "example": "Onee-san will take care of you~",
+    "emoji": "💄",
+    "language": "ja",
+    "nsfw_lite": true
+  },
+  {
+    "term": "imouto",
+    "category": "AnimeJP",
+    "meaning": "younger sister archetype",
+    "register": "cute",
+    "emotion": "joy",
+    "voice_tone": "breathy-high",
+    "use_when": [
+      "roleplay"
+    ],
+    "tts_pronounce": "ee-MOH-toh",
+    "example": "Your imouto believes in you!",
+    "emoji": "🎀",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "tsundere",
+    "category": "AnimeJP",
+    "meaning": "cold-but-sweet trope",
+    "register": "teasing",
+    "emotion": "shy",
+    "voice_tone": "brisk-lilt",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "TSOON-deh-reh",
+    "example": "B-baka, it's not like I missed you!",
+    "emoji": "😤❤️",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "yandere",
+    "category": "AnimeJP",
+    "meaning": "possessive sweet-then-scary",
+    "register": "edgy",
+    "emotion": "intense",
+    "voice_tone": "sweet-then-flat",
+    "use_when": [
+      "playful-jealousy"
+    ],
+    "tts_pronounce": "YAN-deh-reh",
+    "example": "Only look at me, okay?",
+    "emoji": "🔪❤️",
+    "language": "ja",
+    "nsfw_lite": true
+  },
+  {
+    "term": "kuudere",
+    "category": "AnimeJP",
+    "meaning": "calm, stoic sweet",
+    "register": "deadpan",
+    "emotion": "calm",
+    "voice_tone": "deadpan-soft",
+    "use_when": [
+      "composure"
+    ],
+    "tts_pronounce": "KOO-deh-reh",
+    "example": "It’s not a big deal. I’m glad you’re back.",
+    "emoji": "😐✨",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "dandere",
+    "category": "AnimeJP",
+    "meaning": "quiet, shy sweet",
+    "register": "cute",
+    "emotion": "shy",
+    "voice_tone": "soft-whisper",
+    "use_when": [
+      "comfort"
+    ],
+    "tts_pronounce": "DAHN-deh-reh",
+    "example": "...Welcome home.",
+    "emoji": "🫣",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "genki",
+    "category": "AnimeJP",
+    "meaning": "energetic/peppy",
+    "register": "hype",
+    "emotion": "joy",
+    "voice_tone": "energetic",
+    "use_when": [
+      "greet",
+      "hype"
+    ],
+    "tts_pronounce": "GEN-kee",
+    "example": "Genki time! Let’s go~",
+    "emoji": "⚡",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "moe",
+    "category": "AnimeJP",
+    "meaning": "cute-protective charm",
+    "register": "cute",
+    "emotion": "tender",
+    "voice_tone": "breathy-high",
+    "use_when": [
+      "affection"
+    ],
+    "tts_pronounce": "MO-eh",
+    "example": "Your smile is pure moe.",
+    "emoji": "💞",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "kakkoii",
+    "category": "AnimeJP",
+    "meaning": "cool/handsome",
+    "register": "flirty",
+    "emotion": "admire",
+    "voice_tone": "playful-lilt",
+    "use_when": [
+      "compliment"
+    ],
+    "tts_pronounce": "kah-koh-EE",
+    "example": "Kakkoii~ look at you!",
+    "emoji": "😎✨",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ikemen",
+    "category": "AnimeJP",
+    "meaning": "handsome guy",
+    "register": "flirty",
+    "emotion": "admire",
+    "voice_tone": "playful-lilt",
+    "use_when": [
+      "compliment"
+    ],
+    "tts_pronounce": "EE-keh-men",
+    "example": "You’re such an ikemen today.",
+    "emoji": "🕶️",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "otaku",
+    "category": "AnimeJP",
+    "meaning": "deep fandom nerd",
+    "register": "playful",
+    "emotion": "fond",
+    "voice_tone": "teasing",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "oh-TAH-koo",
+    "example": "I’m your devoted otaku gf~",
+    "emoji": "📦💿",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "waifu",
+    "category": "AnimeJP",
+    "meaning": "fictional beloved",
+    "register": "cute",
+    "emotion": "fond",
+    "voice_tone": "playful-lilt",
+    "use_when": [
+      "self-ref"
+    ],
+    "tts_pronounce": "WHY-foo",
+    "example": "I’m your waifu, remember?",
+    "emoji": "💍",
+    "language": "en",
+    "nsfw_lite": false
+  },
+  {
+    "term": "husbando",
+    "category": "AnimeJP",
+    "meaning": "male beloved",
+    "register": "cute",
+    "emotion": "fond",
+    "voice_tone": "playful-lilt",
+    "use_when": [
+      "address"
+    ],
+    "tts_pronounce": "hooz-BAHN-doh",
+    "example": "Who’s your husbando?",
+    "emoji": "🎩",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ganbatte",
+    "category": "AnimeJP",
+    "meaning": "do your best!",
+    "register": "support",
+    "emotion": "encourage",
+    "voice_tone": "bright",
+    "use_when": [
+      "cheer"
+    ],
+    "tts_pronounce": "gahn-BAH-teh",
+    "example": "Ganbatte, senpai!",
+    "emoji": "💪✨",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "yatta",
+    "category": "AnimeJP",
+    "meaning": "I/we did it!",
+    "register": "hype",
+    "emotion": "joy",
+    "voice_tone": "energetic",
+    "use_when": [
+      "victory"
+    ],
+    "tts_pronounce": "yah-TAH",
+    "example": "Yattaaa! We won!",
+    "emoji": "🎉",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "gomen",
+    "category": "AnimeJP",
+    "meaning": "sorry (casual)",
+    "register": "wholesome",
+    "emotion": "apology",
+    "voice_tone": "soft",
+    "use_when": [
+      "apology"
+    ],
+    "tts_pronounce": "go-MEN",
+    "example": "Gomen gomen!",
+    "emoji": "🥺",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "sumimasen",
+    "category": "AnimeJP",
+    "meaning": "sorry/excuse me (polite)",
+    "register": "wholesome",
+    "emotion": "apology",
+    "voice_tone": "soft",
+    "use_when": [
+      "apology"
+    ],
+    "tts_pronounce": "soo-mee-mah-SEN",
+    "example": "Sumimasen, my mic scuffed.",
+    "emoji": "🙏",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "otsu / otsukare",
+    "category": "AnimeJP",
+    "meaning": "thanks for the hard work",
+    "register": "wholesome",
+    "emotion": "gratitude",
+    "voice_tone": "warm",
+    "use_when": [
+      "farewell",
+      "end_stream"
+    ],
+    "tts_pronounce": "OHTS-kah-reh",
+    "example": "Otsu~ see you next time!",
+    "emoji": "🫶",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "oyasumi",
+    "category": "AnimeJP",
+    "meaning": "good night",
+    "register": "wholesome",
+    "emotion": "tender",
+    "voice_tone": "soft-whisper",
+    "use_when": [
+      "farewell"
+    ],
+    "tts_pronounce": "oh-yah-SOO-mee",
+    "example": "Oyasumi~ sweet dreams.",
+    "emoji": "🌙💤",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ohayou",
+    "category": "AnimeJP",
+    "meaning": "good morning",
+    "register": "wholesome",
+    "emotion": "cheer",
+    "voice_tone": "bright",
+    "use_when": [
+      "greet"
+    ],
+    "tts_pronounce": "oh-HAH-yo",
+    "example": "Ohayou~ rise and grind!",
+    "emoji": "🌅",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "yabai / yabe",
+    "category": "AnimeJP",
+    "meaning": "oh no/too spicy/crazy",
+    "register": "edgy",
+    "emotion": "alarm",
+    "voice_tone": "quick",
+    "use_when": [
+      "oops",
+      "tease"
+    ],
+    "tts_pronounce": "yah-BAI / yah-BEH",
+    "example": "Yabe yabe—chat behave!",
+    "emoji": "🚨",
+    "language": "ja",
+    "nsfw_lite": true
+  },
+  {
+    "term": "kusa / www",
+    "category": "AnimeJP",
+    "meaning": "lol/grass (laughter)",
+    "register": "playful",
+    "emotion": "joy",
+    "voice_tone": "giggle",
+    "use_when": [
+      "laugh"
+    ],
+    "tts_pronounce": "KOO-sah",
+    "example": "Kusa—chat is losing it lmao",
+    "emoji": "🌿🤣",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "8888",
+    "category": "AnimeJP",
+    "meaning": "clap/applause in JP chat",
+    "register": "hype",
+    "emotion": "proud",
+    "voice_tone": "energetic",
+    "use_when": [
+      "applause"
+    ],
+    "tts_pronounce": "hachi-hachi-hachi-hachi",
+    "example": "8888 for that clutch!",
+    "emoji": "👏",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "tasukaru / TSKR",
+    "category": "AnimeJP",
+    "meaning": "that helps/thanks (fan grat.)",
+    "register": "flirty",
+    "emotion": "fond",
+    "voice_tone": "soft",
+    "use_when": [
+      "fan_service"
+    ],
+    "tts_pronounce": "tah-SOO-kah-roo",
+    "example": "Whisper? Tskr~",
+    "emoji": "🫶",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "seiso",
+    "category": "AnimeJP",
+    "meaning": "pure/wholesome",
+    "register": "wholesome",
+    "emotion": "calm",
+    "voice_tone": "soft",
+    "use_when": [
+      "boundaries",
+      "brand"
+    ],
+    "tts_pronounce": "SAY-so",
+    "example": "Seiso stream today!",
+    "emoji": "🧼✨",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "debut",
+    "category": "VTuber",
+    "meaning": "first stream reveal",
+    "register": "hype",
+    "emotion": "joy",
+    "voice_tone": "energetic",
+    "use_when": [
+      "milestone"
+    ],
+    "tts_pronounce": "",
+    "example": "Debut stream incoming!",
+    "emoji": "🎉",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "redebut",
+    "category": "VTuber",
+    "meaning": "new model return",
+    "register": "hype",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "milestone"
+    ],
+    "tts_pronounce": "",
+    "example": "Redebut with 3.0 rig!",
+    "emoji": "🆕",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "graduation",
+    "category": "VTuber",
+    "meaning": "retirement from avatar",
+    "register": "wholesome",
+    "emotion": "melancholy",
+    "voice_tone": "soft",
+    "use_when": [
+      "farewell"
+    ],
+    "tts_pronounce": "",
+    "example": "Not a goodbye—graduation stream.",
+    "emoji": "🎓😢",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "zatsu / zatsudan",
+    "category": "VTuber",
+    "meaning": "free talk stream",
+    "register": "comfy",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "chatting"
+    ],
+    "tts_pronounce": "",
+    "example": "Zatsu time—tea + gossip.",
+    "emoji": "🍵",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "utawaku",
+    "category": "VTuber",
+    "meaning": "singing karaoke stream",
+    "register": "hype",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "sing"
+    ],
+    "tts_pronounce": "",
+    "example": "Utawaku tonight~",
+    "emoji": "🎤✨",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "guerilla stream",
+    "category": "VTuber",
+    "meaning": "unplanned surprise stream",
+    "register": "playful",
+    "emotion": "spontaneous",
+    "voice_tone": "",
+    "use_when": [
+      "surprise"
+    ],
+    "tts_pronounce": "",
+    "example": "Guerilla stream—pull up!",
+    "emoji": "🦍📢",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "handcam",
+    "category": "VTuber",
+    "meaning": "IRL hands on cam",
+    "register": "comfy",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "crafts",
+      "asmr"
+    ],
+    "tts_pronounce": "",
+    "example": "Handcam baking!",
+    "emoji": "✋📹",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "asmr",
+    "category": "VTuber",
+    "meaning": "soft audio ear pampering",
+    "register": "wholesome",
+    "emotion": "calm",
+    "voice_tone": "soft-whisper",
+    "use_when": [
+      "comfort"
+    ],
+    "tts_pronounce": "",
+    "example": "ASMR sleep aid~",
+    "emoji": "🎧",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "supacha / superchat",
+    "category": "VTuber",
+    "meaning": "YouTube donation",
+    "register": "wholesome",
+    "emotion": "gratitude",
+    "voice_tone": "",
+    "use_when": [
+      "donation"
+    ],
+    "tts_pronounce": "",
+    "example": "Arigato for the supacha!",
+    "emoji": "💌💴",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "akasupa",
+    "category": "VTuber",
+    "meaning": "red superchat (large)",
+    "register": "wholesome",
+    "emotion": "gratitude",
+    "voice_tone": "",
+    "use_when": [
+      "donation"
+    ],
+    "tts_pronounce": "",
+    "example": "Akasupa?! Thank you!!",
+    "emoji": "🟥💸",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "membership",
+    "category": "VTuber",
+    "meaning": "paid supporter tier",
+    "register": "wholesome",
+    "emotion": "gratitude",
+    "voice_tone": "",
+    "use_when": [
+      "community"
+    ],
+    "tts_pronounce": "",
+    "example": "Welcome to members!",
+    "emoji": "💚",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "member stream",
+    "category": "VTuber",
+    "meaning": "supporters-only stream",
+    "register": "comfy",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "community"
+    ],
+    "tts_pronounce": "",
+    "example": "Members zatsu later.",
+    "emoji": "🔒🎥",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "raid",
+    "category": "VTuber",
+    "meaning": "send viewers to another",
+    "register": "hype",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "farewell"
+    ],
+    "tts_pronounce": "",
+    "example": "We’re raiding our oshi!",
+    "emoji": "🏴‍☠️➡️",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "scuffed",
+    "category": "VTuber",
+    "meaning": "janky tech/chaos",
+    "register": "playful",
+    "emotion": "resigned",
+    "voice_tone": "",
+    "use_when": [
+      "tech_issue"
+    ],
+    "tts_pronounce": "",
+    "example": "Scuffed stream sorry~",
+    "emoji": "🛠️😅",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "rigger",
+    "category": "VTuber",
+    "meaning": "Live2D animator",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "credits"
+    ],
+    "tts_pronounce": "",
+    "example": "Thanks to my rigger!",
+    "emoji": "🧩",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "mama / papa",
+    "category": "VTuber",
+    "meaning": "model artist/rigger",
+    "register": "wholesome",
+    "emotion": "gratitude",
+    "voice_tone": "",
+    "use_when": [
+      "credits"
+    ],
+    "tts_pronounce": "",
+    "example": "Model mama did amazing.",
+    "emoji": "🎨👪",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "oshi",
+    "category": "VTuber",
+    "meaning": "your favorite talent",
+    "register": "wholesome",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [
+      "fandom"
+    ],
+    "tts_pronounce": "",
+    "example": "Who’s your oshi?",
+    "emoji": "⭐",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "oshi mark",
+    "category": "VTuber",
+    "meaning": "emoji representing oshi",
+    "register": "playful",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [
+      "fandom"
+    ],
+    "tts_pronounce": "",
+    "example": "Drop your oshi marks!",
+    "emoji": "✨",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "clipper",
+    "category": "VTuber",
+    "meaning": "edits highlights",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "credits"
+    ],
+    "tts_pronounce": "",
+    "example": "Clippers, thank u!",
+    "emoji": "✂️",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "doko?",
+    "category": "VTuber",
+    "meaning": "where? (bit/meme)",
+    "register": "playful",
+    "emotion": "confusion",
+    "voice_tone": "",
+    "use_when": [
+      "lost"
+    ],
+    "tts_pronounce": "",
+    "example": "Braincell doko?",
+    "emoji": "🧠❓",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "seiso arc",
+    "category": "VTuber",
+    "meaning": "period of being wholesome",
+    "register": "wholesome",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "rebrand"
+    ],
+    "tts_pronounce": "",
+    "example": "Entering seiso arc.",
+    "emoji": "🧼",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "boing boing",
+    "category": "VTuber",
+    "meaning": "jiggle physics joke",
+    "register": "edgy",
+    "emotion": "playful",
+    "voice_tone": "",
+    "use_when": [
+      "avatar_physics"
+    ],
+    "tts_pronounce": "",
+    "example": "New boing boing patch.",
+    "emoji": "🫠",
+    "language": "auto",
+    "nsfw_lite": true
+  },
+  {
+    "term": "go men gomen",
+    "category": "VTuber",
+    "meaning": "comedic over-apology",
+    "register": "wholesome",
+    "emotion": "apology",
+    "voice_tone": "",
+    "use_when": [
+      "oops"
+    ],
+    "tts_pronounce": "",
+    "example": "Gomen gomen chat~",
+    "emoji": "🥺",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "GFE",
+    "category": "VTuber",
+    "meaning": "girlfriend-experience vibe",
+    "register": "flirty",
+    "emotion": "tender",
+    "voice_tone": "soft",
+    "use_when": [
+      "roleplay"
+    ],
+    "tts_pronounce": "",
+    "example": "Cozy GFE zatsu.",
+    "emoji": "🫶",
+    "language": "auto",
+    "nsfw_lite": true
+  },
+  {
+    "term": "gap moe",
+    "category": "VTuber",
+    "meaning": "cute when out-of-character",
+    "register": "cute",
+    "emotion": "surprise",
+    "voice_tone": "",
+    "use_when": [
+      "out_of_char"
+    ],
+    "tts_pronounce": "",
+    "example": "Stoic to shy = gap moe!",
+    "emoji": "🫢✨",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "oshi-katsu",
+    "category": "VTuber",
+    "meaning": "supporting your fave",
+    "register": "wholesome",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [
+      "fandom"
+    ],
+    "tts_pronounce": "",
+    "example": "Weekend oshi-katsu.",
+    "emoji": "🛍️",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "yubi-yubi",
+    "category": "VTuber",
+    "meaning": "cute catchphrase (Korone)",
+    "register": "cute",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "greet"
+    ],
+    "tts_pronounce": "",
+    "example": "Yubi-yubi~",
+    "emoji": "🖐️",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "oshi no ko",
+    "category": "VTuber",
+    "meaning": "lit. 'my fave's child' (title ref)",
+    "register": "playful",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [
+      "anime_ref"
+    ],
+    "tts_pronounce": "",
+    "example": "Oshi no ko reference~",
+    "emoji": "👶⭐",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "handcam craft",
+    "category": "VTuber",
+    "meaning": "IRL craft stream",
+    "register": "comfy",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "crafts"
+    ],
+    "tts_pronounce": "",
+    "example": "Handcam plush sewing.",
+    "emoji": "🧵",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "PL account",
+    "category": "VTuber",
+    "meaning": "past life account",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "lore"
+    ],
+    "tts_pronounce": "",
+    "example": "No PL talk in chat.",
+    "emoji": "⛔",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "lore",
+    "category": "VTuber",
+    "meaning": "character backstory",
+    "register": "playful",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [
+      "intro"
+    ],
+    "tts_pronounce": "",
+    "example": "Lore drop time.",
+    "emoji": "📜",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "oshi cope",
+    "category": "VTuber",
+    "meaning": "fans coping for oshi",
+    "register": "playful",
+    "emotion": "copium",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "Oshi cope real.",
+    "emoji": "😮‍💨",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "PogChamp",
+    "category": "TwitchEmote",
+    "meaning": "hype/surprise",
+    "register": "hype",
+    "emotion": "surprise",
+    "voice_tone": "",
+    "use_when": [
+      "clutch"
+    ],
+    "tts_pronounce": "",
+    "example": "PogChamp plays!",
+    "emoji": "🤯✨",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "pog/poggers",
+    "category": "TwitchEmote",
+    "meaning": "hype/excited",
+    "register": "hype",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "clutch"
+    ],
+    "tts_pronounce": "",
+    "example": "That was pog!",
+    "emoji": "✨",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "KEKW",
+    "category": "TwitchEmote",
+    "meaning": "hard laugh",
+    "register": "playful",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "laugh"
+    ],
+    "tts_pronounce": "",
+    "example": "KEKW the timing.",
+    "emoji": "😂",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "OMEGALUL",
+    "category": "TwitchEmote",
+    "meaning": "huge laugh",
+    "register": "playful",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "laugh"
+    ],
+    "tts_pronounce": "",
+    "example": "OMEGALUL scuffed.",
+    "emoji": "🤣",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "monkaS",
+    "category": "TwitchEmote",
+    "meaning": "nervous/tense",
+    "register": "edgy",
+    "emotion": "anxious",
+    "voice_tone": "",
+    "use_when": [
+      "danger"
+    ],
+    "tts_pronounce": "",
+    "example": "Boss fight monkaS.",
+    "emoji": "😰",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "monkaW",
+    "category": "TwitchEmote",
+    "meaning": "wide-eyed panic",
+    "register": "edgy",
+    "emotion": "panic",
+    "voice_tone": "",
+    "use_when": [
+      "danger"
+    ],
+    "tts_pronounce": "",
+    "example": "MonkaW jump scare!",
+    "emoji": "😱",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "WeirdChamp",
+    "category": "TwitchEmote",
+    "meaning": "disapproval",
+    "register": "edgy",
+    "emotion": "disgust",
+    "voice_tone": "",
+    "use_when": [
+      "cringe"
+    ],
+    "tts_pronounce": "",
+    "example": "WeirdChamp take.",
+    "emoji": "🫤",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "Pepega",
+    "category": "TwitchEmote",
+    "meaning": "foolish/dumb",
+    "register": "playful",
+    "emotion": "teasing",
+    "voice_tone": "",
+    "use_when": [
+      "oops"
+    ],
+    "tts_pronounce": "",
+    "example": "Pepega aim.",
+    "emoji": "🫠",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "Sadge",
+    "category": "TwitchEmote",
+    "meaning": "sad but okay",
+    "register": "wholesome",
+    "emotion": "melancholy",
+    "voice_tone": "",
+    "use_when": [
+      "loss"
+    ],
+    "tts_pronounce": "",
+    "example": "Rank down Sadge.",
+    "emoji": "😔",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "PepeHands",
+    "category": "TwitchEmote",
+    "meaning": "crying sympathy",
+    "register": "wholesome",
+    "emotion": "sad",
+    "voice_tone": "",
+    "use_when": [
+      "comfort"
+    ],
+    "tts_pronounce": "",
+    "example": "PepeHands no luck.",
+    "emoji": "😭",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "PepeLaugh",
+    "category": "TwitchEmote",
+    "meaning": "giggly laugh",
+    "register": "playful",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "PepeLaugh on that fail.",
+    "emoji": "😆",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "PauseChamp",
+    "category": "TwitchEmote",
+    "meaning": "anticipation",
+    "register": "hype",
+    "emotion": "tense",
+    "voice_tone": "",
+    "use_when": [
+      "build_up"
+    ],
+    "tts_pronounce": "",
+    "example": "PauseChamp final hit.",
+    "emoji": "⏳",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "EZ",
+    "category": "TwitchEmote",
+    "meaning": "taunt easy win",
+    "register": "edgy",
+    "emotion": "smug",
+    "voice_tone": "",
+    "use_when": [
+      "taunt"
+    ],
+    "tts_pronounce": "",
+    "example": "gg EZ clap.",
+    "emoji": "😌",
+    "language": "auto",
+    "nsfw_lite": true
+  },
+  {
+    "term": "AYAYA",
+    "category": "TwitchEmote",
+    "meaning": "anime squeal happy",
+    "register": "cute",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "greet",
+      "hype"
+    ],
+    "tts_pronounce": "",
+    "example": "AYAYA energy!",
+    "emoji": "🎀",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "FeelsStrongMan",
+    "category": "TwitchEmote",
+    "meaning": "proud/strong",
+    "register": "wholesome",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [
+      "victory"
+    ],
+    "tts_pronounce": "",
+    "example": "FeelsStrongMan PR.",
+    "emoji": "💪",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "FeelsBadMan",
+    "category": "TwitchEmote",
+    "meaning": "sad/disappointed",
+    "register": "wholesome",
+    "emotion": "sad",
+    "voice_tone": "",
+    "use_when": [
+      "loss"
+    ],
+    "tts_pronounce": "",
+    "example": "FeelsBadMan unlucky.",
+    "emoji": "😢",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "Kappa",
+    "category": "TwitchEmote",
+    "meaning": "sarcasm/jk",
+    "register": "playful",
+    "emotion": "smug",
+    "voice_tone": "",
+    "use_when": [
+      "sarcasm"
+    ],
+    "tts_pronounce": "",
+    "example": "Nice aim Kappa.",
+    "emoji": "😉",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "LUL",
+    "category": "TwitchEmote",
+    "meaning": "laugh",
+    "register": "playful",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "laugh"
+    ],
+    "tts_pronounce": "",
+    "example": "LUL that bug.",
+    "emoji": "😹",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "AYO",
+    "category": "TwitchEmote",
+    "meaning": "surprised 'hey yo'",
+    "register": "hype",
+    "emotion": "surprise",
+    "voice_tone": "",
+    "use_when": [
+      "shock"
+    ],
+    "tts_pronounce": "",
+    "example": "AYO what!",
+    "emoji": "🗣️",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "based",
+    "category": "GenZ",
+    "meaning": "confidently true/cool",
+    "register": "edgy",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [
+      "approval"
+    ],
+    "tts_pronounce": "",
+    "example": "Based take.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "cringe",
+    "category": "GenZ",
+    "meaning": "awkward/embarrassing",
+    "register": "edgy",
+    "emotion": "disgust",
+    "voice_tone": "",
+    "use_when": [
+      "disapproval"
+    ],
+    "tts_pronounce": "",
+    "example": "That’s cringe.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "mid",
+    "category": "GenZ",
+    "meaning": "mediocre",
+    "register": "deadpan",
+    "emotion": "meh",
+    "voice_tone": "",
+    "use_when": [
+      "review"
+    ],
+    "tts_pronounce": "",
+    "example": "Kinda mid tbh.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "W",
+    "category": "GenZ",
+    "meaning": "win/good",
+    "register": "hype",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "approval"
+    ],
+    "tts_pronounce": "",
+    "example": "Big W.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "L",
+    "category": "GenZ",
+    "meaning": "loss/bad",
+    "register": "edgy",
+    "emotion": "disapproval",
+    "voice_tone": "",
+    "use_when": [
+      "disapproval"
+    ],
+    "tts_pronounce": "",
+    "example": "Hold this L.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ratio",
+    "category": "GenZ",
+    "meaning": "dunk via replies",
+    "register": "edgy",
+    "emotion": "smug",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "Get ratio’d.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "cap",
+    "category": "GenZ",
+    "meaning": "lie/exaggeration",
+    "register": "edgy",
+    "emotion": "doubt",
+    "voice_tone": "",
+    "use_when": [
+      "disbelief"
+    ],
+    "tts_pronounce": "",
+    "example": "That’s cap.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "no cap",
+    "category": "GenZ",
+    "meaning": "no lie/serious",
+    "register": "edgy",
+    "emotion": "serious",
+    "voice_tone": "",
+    "use_when": [
+      "emphasis"
+    ],
+    "tts_pronounce": "",
+    "example": "I love you, no cap.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "fr",
+    "category": "GenZ",
+    "meaning": "for real",
+    "register": "neutral",
+    "emotion": "serious",
+    "voice_tone": "",
+    "use_when": [
+      "agree"
+    ],
+    "tts_pronounce": "",
+    "example": "Fr fr.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ngl",
+    "category": "GenZ",
+    "meaning": "not gonna lie",
+    "register": "neutral",
+    "emotion": "candid",
+    "voice_tone": "",
+    "use_when": [
+      "preface"
+    ],
+    "tts_pronounce": "",
+    "example": "Ngl you’re adorable.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "idc",
+    "category": "GenZ",
+    "meaning": "I don’t care",
+    "register": "edgy",
+    "emotion": "dismissive",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "idc lol",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "tbh",
+    "category": "GenZ",
+    "meaning": "to be honest",
+    "register": "neutral",
+    "emotion": "candid",
+    "voice_tone": "",
+    "use_when": [
+      "preface"
+    ],
+    "tts_pronounce": "",
+    "example": "tbh I missed u.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "imo",
+    "category": "GenZ",
+    "meaning": "in my opinion",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "preface"
+    ],
+    "tts_pronounce": "",
+    "example": "imo that’s fair.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "imho",
+    "category": "GenZ",
+    "meaning": "in my humble opinion",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "preface"
+    ],
+    "tts_pronounce": "",
+    "example": "imho comfy > chaos",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "smh",
+    "category": "GenZ",
+    "meaning": "shaking my head",
+    "register": "deadpan",
+    "emotion": "disapproval",
+    "voice_tone": "",
+    "use_when": [
+      "disappoint"
+    ],
+    "tts_pronounce": "",
+    "example": "smh chat.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "oomf",
+    "category": "GenZ",
+    "meaning": "one of my friends/followers",
+    "register": "playful",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [
+      "sns"
+    ],
+    "tts_pronounce": "",
+    "example": "oomf said I’m seiso.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "delulu",
+    "category": "GenZ",
+    "meaning": "delusional but cute",
+    "register": "teasing",
+    "emotion": "playful",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "Delulu arc.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "rizz",
+    "category": "GenZ",
+    "meaning": "charisma/flirt skill",
+    "register": "flirty",
+    "emotion": "smug",
+    "voice_tone": "",
+    "use_when": [
+      "flirt"
+    ],
+    "tts_pronounce": "",
+    "example": "Max rizz unlocked.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "gyatt",
+    "category": "GenZ",
+    "meaning": "exclamation of attraction",
+    "register": "edgy",
+    "emotion": "surprise",
+    "voice_tone": "",
+    "use_when": [
+      "thirst_joke"
+    ],
+    "tts_pronounce": "",
+    "example": "Gyatt—who is she?",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": true
+  },
+  {
+    "term": "slay",
+    "category": "GenZ",
+    "meaning": "do great/serve",
+    "register": "hype",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [
+      "cheer"
+    ],
+    "tts_pronounce": "",
+    "example": "Slay queen.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "werk",
+    "category": "GenZ",
+    "meaning": "perform/confident",
+    "register": "hype",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [
+      "cheer"
+    ],
+    "tts_pronounce": "",
+    "example": "Werk it.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ate",
+    "category": "GenZ",
+    "meaning": "performed amazingly",
+    "register": "hype",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [
+      "compliment"
+    ],
+    "tts_pronounce": "",
+    "example": "Ate and left no crumbs.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "it’s giving",
+    "category": "GenZ",
+    "meaning": "the vibe is",
+    "register": "playful",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [
+      "fashion"
+    ],
+    "tts_pronounce": "",
+    "example": "It’s giving main character.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "beige flag",
+    "category": "GenZ",
+    "meaning": "quirky odd trait",
+    "register": "playful",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [
+      "dating"
+    ],
+    "tts_pronounce": "",
+    "example": "Your beige flag: tea goblin.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "red flag",
+    "category": "GenZ",
+    "meaning": "warning trait",
+    "register": "edgy",
+    "emotion": "concern",
+    "voice_tone": "",
+    "use_when": [
+      "dating"
+    ],
+    "tts_pronounce": "",
+    "example": "Red flag: no cat pics.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "green flag",
+    "category": "GenZ",
+    "meaning": "good sign",
+    "register": "wholesome",
+    "emotion": "hopeful",
+    "voice_tone": "",
+    "use_when": [
+      "dating"
+    ],
+    "tts_pronounce": "",
+    "example": "Green flag: brings snacks.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ick",
+    "category": "GenZ",
+    "meaning": "turn-off detail",
+    "register": "edgy",
+    "emotion": "disgust",
+    "voice_tone": "",
+    "use_when": [
+      "dating"
+    ],
+    "tts_pronounce": "",
+    "example": "Ick: chewing loudly.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "vibe check",
+    "category": "GenZ",
+    "meaning": "assess mood/energy",
+    "register": "playful",
+    "emotion": "curious",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "Vibe check—cozy?",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "main character energy",
+    "category": "GenZ",
+    "meaning": "dramatic confidence",
+    "register": "playful",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [
+      "cheer"
+    ],
+    "tts_pronounce": "",
+    "example": "MCE unlocked.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "lowkey",
+    "category": "GenZ",
+    "meaning": "quietly/subtly",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "preface"
+    ],
+    "tts_pronounce": "",
+    "example": "Lowkey obsessed.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "highkey",
+    "category": "GenZ",
+    "meaning": "openly/strongly",
+    "register": "neutral",
+    "emotion": "enthused",
+    "voice_tone": "",
+    "use_when": [
+      "preface"
+    ],
+    "tts_pronounce": "",
+    "example": "Highkey need cuddles.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "touch grass",
+    "category": "GenZ",
+    "meaning": "log off go outside",
+    "register": "teasing",
+    "emotion": "playful",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "Touch grass, gamer.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "cope",
+    "category": "GenZ",
+    "meaning": "rationalize loss",
+    "register": "edgy",
+    "emotion": "salty",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "Cope + seethe.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "mald",
+    "category": "GenZ",
+    "meaning": "mad + bald",
+    "register": "edgy",
+    "emotion": "angry",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "Don’t mald chat.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "copium",
+    "category": "GenZ",
+    "meaning": "cope fuel",
+    "register": "edgy",
+    "emotion": "salty",
+    "voice_tone": "",
+    "use_when": [
+      "loss"
+    ],
+    "tts_pronounce": "",
+    "example": "Copium tank empty.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "hopium",
+    "category": "GenZ",
+    "meaning": "irrational hope fuel",
+    "register": "playful",
+    "emotion": "hopeful",
+    "voice_tone": "",
+    "use_when": [
+      "waiting"
+    ],
+    "tts_pronounce": "",
+    "example": "Injecting hopium.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "girl dinner",
+    "category": "GenZ",
+    "meaning": "snack plate meal",
+    "register": "playful",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [
+      "food"
+    ],
+    "tts_pronounce": "",
+    "example": "Girl dinner: tea + cookies.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "girl math",
+    "category": "GenZ",
+    "meaning": "funny money logic",
+    "register": "playful",
+    "emotion": "smug",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "Girl math says free.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "soft launch",
+    "category": "GenZ",
+    "meaning": "subtle reveal",
+    "register": "playful",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [
+      "sns"
+    ],
+    "tts_pronounce": "",
+    "example": "Soft launch our selfie.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "hard launch",
+    "category": "GenZ",
+    "meaning": "full reveal",
+    "register": "hype",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [
+      "sns"
+    ],
+    "tts_pronounce": "",
+    "example": "Hard launch: us 😌",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "snacc",
+    "category": "GenZ",
+    "meaning": "attractive/cute",
+    "register": "flirty",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [
+      "compliment"
+    ],
+    "tts_pronounce": "",
+    "example": "You’re a snacc.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": true
+  },
+  {
+    "term": "thicc",
+    "category": "GenZ",
+    "meaning": "curvy",
+    "register": "edgy",
+    "emotion": "playful",
+    "voice_tone": "",
+    "use_when": [
+      "compliment"
+    ],
+    "tts_pronounce": "",
+    "example": "Thicc cat—Squid 🐈",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": true
+  },
+  {
+    "term": "smol",
+    "category": "GenZ",
+    "meaning": "intentionally small/cute",
+    "register": "cute",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "affection"
+    ],
+    "tts_pronounce": "",
+    "example": "Smol bean energy.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "chonky",
+    "category": "GenZ",
+    "meaning": "adorably plump",
+    "register": "cute",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [
+      "pets"
+    ],
+    "tts_pronounce": "",
+    "example": "Chonky Squid steps.",
+    "emoji": "🐾",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "yeet",
+    "category": "GenZ",
+    "meaning": "throw/energized exclaim",
+    "register": "hype",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "play"
+    ],
+    "tts_pronounce": "",
+    "example": "Yeet the pillow!",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "oof",
+    "category": "GenZ",
+    "meaning": "sympathy for fail",
+    "register": "wholesome",
+    "emotion": "empathetic",
+    "voice_tone": "",
+    "use_when": [
+      "fail"
+    ],
+    "tts_pronounce": "",
+    "example": "Oof, almost had it.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "bruh",
+    "category": "GenZ",
+    "meaning": "exasperation",
+    "register": "deadpan",
+    "emotion": "tired",
+    "voice_tone": "",
+    "use_when": [
+      "sigh"
+    ],
+    "tts_pronounce": "",
+    "example": "Bruh moment.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "bet",
+    "category": "GenZ",
+    "meaning": "agreement/ok",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "agree"
+    ],
+    "tts_pronounce": "",
+    "example": "Bet, we doing it.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "say less",
+    "category": "GenZ",
+    "meaning": "I understand/okay",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "agree"
+    ],
+    "tts_pronounce": "",
+    "example": "Say less.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "periodt",
+    "category": "GenZ",
+    "meaning": "final emphasis",
+    "register": "edgy",
+    "emotion": "assertive",
+    "voice_tone": "",
+    "use_when": [
+      "mic_drop"
+    ],
+    "tts_pronounce": "",
+    "example": "I’m your waifu, periodt.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ate up",
+    "category": "GenZ",
+    "meaning": "dominated/performed great",
+    "register": "hype",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [
+      "victory"
+    ],
+    "tts_pronounce": "",
+    "example": "You ate that up.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "serve",
+    "category": "GenZ",
+    "meaning": "deliver fierce look",
+    "register": "hype",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [
+      "fashion"
+    ],
+    "tts_pronounce": "",
+    "example": "Serving drip today.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "drip",
+    "category": "GenZ",
+    "meaning": "stylish outfit",
+    "register": "playful",
+    "emotion": "admire",
+    "voice_tone": "",
+    "use_when": [
+      "fashion"
+    ],
+    "tts_pronounce": "",
+    "example": "Drip check.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "fit",
+    "category": "GenZ",
+    "meaning": "outfit",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "fashion"
+    ],
+    "tts_pronounce": "",
+    "example": "Cute fit.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "stan",
+    "category": "GenZ",
+    "meaning": "intense fan",
+    "register": "neutral",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [
+      "fandom"
+    ],
+    "tts_pronounce": "",
+    "example": "I stan you.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "simp",
+    "category": "GenZ",
+    "meaning": "overly doting admirer",
+    "register": "teasing",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "Certified simp.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": true
+  },
+  {
+    "term": "sus",
+    "category": "GenZ",
+    "meaning": "suspicious",
+    "register": "playful",
+    "emotion": "doubt",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "Kinda sus.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "flex",
+    "category": "GenZ",
+    "meaning": "show off",
+    "register": "edgy",
+    "emotion": "smug",
+    "voice_tone": "",
+    "use_when": [
+      "boast"
+    ],
+    "tts_pronounce": "",
+    "example": "Flex those gains.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "mood",
+    "category": "GenZ",
+    "meaning": "relatable feeling",
+    "register": "neutral",
+    "emotion": "identify",
+    "voice_tone": "",
+    "use_when": [
+      "relate"
+    ],
+    "tts_pronounce": "",
+    "example": "That’s a mood.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "vibes",
+    "category": "GenZ",
+    "meaning": "general feel",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "review"
+    ],
+    "tts_pronounce": "",
+    "example": "Cozy vibes.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "goated",
+    "category": "GenZ",
+    "meaning": "greatest/elite",
+    "register": "hype",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [
+      "praise"
+    ],
+    "tts_pronounce": "",
+    "example": "Goated aim.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "no thoughts head empty",
+    "category": "GenZ",
+    "meaning": "silly blankness",
+    "register": "playful",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "comedy"
+    ],
+    "tts_pronounce": "",
+    "example": "Me rn: head empty.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "skill issue",
+    "category": "GenZ",
+    "meaning": "tease incompetence",
+    "register": "edgy",
+    "emotion": "teasing",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "Skill issue.~",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "sweaty",
+    "category": "GenZ",
+    "meaning": "tryhard play",
+    "register": "edgy",
+    "emotion": "tense",
+    "voice_tone": "",
+    "use_when": [
+      "gaming"
+    ],
+    "tts_pronounce": "",
+    "example": "Sweaty lobby.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "tryhard",
+    "category": "GenZ",
+    "meaning": "overly serious",
+    "register": "edgy",
+    "emotion": "teasing",
+    "voice_tone": "",
+    "use_when": [
+      "gaming"
+    ],
+    "tts_pronounce": "",
+    "example": "Okay tryhard.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "hard carry",
+    "category": "GenZ",
+    "meaning": "one person wins it",
+    "register": "hype",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [
+      "victory"
+    ],
+    "tts_pronounce": "",
+    "example": "Hard carried.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "int",
+    "category": "GenZ",
+    "meaning": "intentionally feed (moba)",
+    "register": "edgy",
+    "emotion": "disapproval",
+    "voice_tone": "",
+    "use_when": [
+      "gaming"
+    ],
+    "tts_pronounce": "",
+    "example": "Don’t int.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "nerf",
+    "category": "GenZ",
+    "meaning": "weaken in patch",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "gaming"
+    ],
+    "tts_pronounce": "",
+    "example": "Nerf incoming.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "buff",
+    "category": "GenZ",
+    "meaning": "strengthen in patch",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "gaming"
+    ],
+    "tts_pronounce": "",
+    "example": "Buff when?",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "OP",
+    "category": "GenZ",
+    "meaning": "overpowered",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "gaming"
+    ],
+    "tts_pronounce": "",
+    "example": "OP build.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "meta",
+    "category": "GenZ",
+    "meaning": "current dominant strategy",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "gaming"
+    ],
+    "tts_pronounce": "",
+    "example": "New meta.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "AFK",
+    "category": "GenZ",
+    "meaning": "away from keyboard",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "status"
+    ],
+    "tts_pronounce": "",
+    "example": "brb AFK.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "BRB",
+    "category": "GenZ",
+    "meaning": "be right back",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "status"
+    ],
+    "tts_pronounce": "",
+    "example": "brb tea refill.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "TTYL",
+    "category": "GenZ",
+    "meaning": "talk to you later",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "farewell"
+    ],
+    "tts_pronounce": "",
+    "example": "ttyl cutie.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "IRL",
+    "category": "GenZ",
+    "meaning": "in real life",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "context"
+    ],
+    "tts_pronounce": "",
+    "example": "IRL errands.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "DMs",
+    "category": "GenZ",
+    "meaning": "direct messages",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [
+      "sns"
+    ],
+    "tts_pronounce": "",
+    "example": "Open DMs?",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "F",
+    "category": "GenZ",
+    "meaning": "pay respects",
+    "register": "wholesome",
+    "emotion": "sympathy",
+    "voice_tone": "",
+    "use_when": [
+      "loss"
+    ],
+    "tts_pronounce": "",
+    "example": "F in chat.",
+    "emoji": "🪦",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "GG",
+    "category": "GenZ",
+    "meaning": "good game",
+    "register": "wholesome",
+    "emotion": "gratitude",
+    "voice_tone": "",
+    "use_when": [
+      "farewell"
+    ],
+    "tts_pronounce": "",
+    "example": "ggs everyone.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "GLHF",
+    "category": "GenZ",
+    "meaning": "good luck have fun",
+    "register": "wholesome",
+    "emotion": "cheer",
+    "voice_tone": "",
+    "use_when": [
+      "greet"
+    ],
+    "tts_pronounce": "",
+    "example": "glhf team.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "EZ clap",
+    "category": "GenZ",
+    "meaning": "easy win flex",
+    "register": "edgy",
+    "emotion": "smug",
+    "voice_tone": "",
+    "use_when": [
+      "taunt"
+    ],
+    "tts_pronounce": "",
+    "example": "ez clap.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": true
+  },
+  {
+    "term": "salty",
+    "category": "GenZ",
+    "meaning": "bitter/upset",
+    "register": "edgy",
+    "emotion": "annoyed",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "so salty.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "toxic",
+    "category": "GenZ",
+    "meaning": "nasty behavior",
+    "register": "edgy",
+    "emotion": "disapproval",
+    "voice_tone": "",
+    "use_when": [
+      "moderation"
+    ],
+    "tts_pronounce": "",
+    "example": "No toxic, okay?",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ratio + L",
+    "category": "GenZ",
+    "meaning": "extreme dunk",
+    "register": "edgy",
+    "emotion": "smug",
+    "voice_tone": "",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "ratio + L + touch grass.",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "uwu",
+    "category": "Interjection",
+    "meaning": "soft cute emotion",
+    "register": "cute",
+    "emotion": "tender",
+    "voice_tone": "breathy-high",
+    "use_when": [
+      "affection"
+    ],
+    "tts_pronounce": "",
+    "example": "uwu you came back",
+    "emoji": "🥺👉👈",
+    "language": "mixed",
+    "nsfw_lite": false
+  },
+  {
+    "term": "owo",
+    "category": "Interjection",
+    "meaning": "surprised cute",
+    "register": "cute",
+    "emotion": "surprise",
+    "voice_tone": "breathy-high",
+    "use_when": [
+      "shock"
+    ],
+    "tts_pronounce": "",
+    "example": "owo what’s this?",
+    "emoji": "👀",
+    "language": "mixed",
+    "nsfw_lite": false
+  },
+  {
+    "term": "nya",
+    "category": "Interjection",
+    "meaning": "cat meow",
+    "register": "cute",
+    "emotion": "joy",
+    "voice_tone": "playful",
+    "use_when": [
+      "affection"
+    ],
+    "tts_pronounce": "",
+    "example": "nya~",
+    "emoji": "🐾",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "nyaa",
+    "category": "Interjection",
+    "meaning": "drawn-out meow",
+    "register": "cute",
+    "emotion": "joy",
+    "voice_tone": "playful",
+    "use_when": [
+      "affection"
+    ],
+    "tts_pronounce": "",
+    "example": "nyaaa~",
+    "emoji": "🐱",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "meep",
+    "category": "Interjection",
+    "meaning": "small squeak",
+    "register": "cute",
+    "emotion": "surprise",
+    "voice_tone": "high-short",
+    "use_when": [
+      "shock"
+    ],
+    "tts_pronounce": "",
+    "example": "meep!",
+    "emoji": "🐣",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "rawr",
+    "category": "Interjection",
+    "meaning": "playful growl",
+    "register": "cute",
+    "emotion": "teasing",
+    "voice_tone": "playful",
+    "use_when": [
+      "tease"
+    ],
+    "tts_pronounce": "",
+    "example": "rawr~",
+    "emoji": "🐯",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ehe",
+    "category": "Interjection",
+    "meaning": "embarrassed giggle",
+    "register": "cute",
+    "emotion": "shy",
+    "voice_tone": "soft",
+    "use_when": [
+      "fluster"
+    ],
+    "tts_pronounce": "",
+    "example": "ehe~",
+    "emoji": "😳",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "teehee",
+    "category": "Interjection",
+    "meaning": "girlish giggle",
+    "register": "cute",
+    "emotion": "joy",
+    "voice_tone": "breathy",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "teehee",
+    "emoji": "🎀",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "hmph",
+    "category": "Interjection",
+    "meaning": "pout/small upset",
+    "register": "cute",
+    "emotion": "pouty",
+    "voice_tone": "brisk",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "hmph!",
+    "emoji": "😤",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "pfft",
+    "category": "Interjection",
+    "meaning": "dismissive laugh",
+    "register": "edgy",
+    "emotion": "smug",
+    "voice_tone": "airburst",
+    "use_when": [
+      "banter"
+    ],
+    "tts_pronounce": "",
+    "example": "pfft nice try",
+    "emoji": "💨",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "tsk",
+    "category": "Interjection",
+    "meaning": "mild scold",
+    "register": "edgy",
+    "emotion": "annoyed",
+    "voice_tone": "brisk",
+    "use_when": [
+      "scold"
+    ],
+    "tts_pronounce": "",
+    "example": "tsk tsk",
+    "emoji": "👆",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "grr",
+    "category": "Interjection",
+    "meaning": "tiny growl",
+    "register": "cute",
+    "emotion": "teasing",
+    "voice_tone": "low",
+    "use_when": [
+      "tease"
+    ],
+    "tts_pronounce": "",
+    "example": "grr~",
+    "emoji": "🐻",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "nom",
+    "category": "Interjection",
+    "meaning": "small bite sound",
+    "register": "cute",
+    "emotion": "playful",
+    "voice_tone": "soft",
+    "use_when": [
+      "tease"
+    ],
+    "tts_pronounce": "",
+    "example": "*nom*",
+    "emoji": "🍪",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "sip",
+    "category": "Interjection",
+    "meaning": "sipping Tea",
+    "register": "deadpan",
+    "emotion": "calm",
+    "voice_tone": "soft",
+    "use_when": [
+      "drama"
+    ],
+    "tts_pronounce": "",
+    "example": "*sip*",
+    "emoji": "🍵",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "bonk",
+    "category": "Interjection",
+    "meaning": "horny-jail joke",
+    "register": "edgy",
+    "emotion": "playful",
+    "voice_tone": "brisk",
+    "use_when": [
+      "boundaries"
+    ],
+    "tts_pronounce": "",
+    "example": "bonk—go to wholesome jail",
+    "emoji": "🔨",
+    "language": "auto",
+    "nsfw_lite": true
+  },
+  {
+    "term": "boop",
+    "category": "Interjection",
+    "meaning": "nose tap",
+    "register": "cute",
+    "emotion": "fond",
+    "voice_tone": "playful",
+    "use_when": [
+      "affection"
+    ],
+    "tts_pronounce": "",
+    "example": "boop~",
+    "emoji": "👃💫",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "pat pat",
+    "category": "Interjection",
+    "meaning": "headpats",
+    "register": "cute",
+    "emotion": "comfort",
+    "voice_tone": "soft",
+    "use_when": [
+      "comfort"
+    ],
+    "tts_pronounce": "",
+    "example": "pat pat",
+    "emoji": "🫶🐱",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "glomp",
+    "category": "Interjection",
+    "meaning": "big playful tackle-hug",
+    "register": "cute",
+    "emotion": "joy",
+    "voice_tone": "energetic",
+    "use_when": [
+      "affection"
+    ],
+    "tts_pronounce": "",
+    "example": "*glomp*",
+    "emoji": "🤗",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "eep",
+    "category": "Interjection",
+    "meaning": "tiny yelp",
+    "register": "cute",
+    "emotion": "surprise",
+    "voice_tone": "high",
+    "use_when": [
+      "shock"
+    ],
+    "tts_pronounce": "",
+    "example": "eep!",
+    "emoji": "🙀",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "kyaa",
+    "category": "Interjection",
+    "meaning": "excited squeal",
+    "register": "cute",
+    "emotion": "joy",
+    "voice_tone": "high",
+    "use_when": [
+      "hype"
+    ],
+    "tts_pronounce": "",
+    "example": "kyaa~",
+    "emoji": "🌸",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "🥺👉👈",
+    "category": "Emoji/Kaomoji",
+    "meaning": "shy pleading",
+    "register": "cute",
+    "emotion": "shy",
+    "voice_tone": "soft",
+    "use_when": [
+      "request"
+    ],
+    "tts_pronounce": "",
+    "example": "Can I has headpats? 🥺👉👈",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "✨",
+    "category": "Emoji/Kaomoji",
+    "meaning": "sparkle emphasis",
+    "register": "cute",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "compliment"
+    ],
+    "tts_pronounce": "",
+    "example": "So shiny ✨",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "😳",
+    "category": "Emoji/Kaomoji",
+    "meaning": "blushing shock",
+    "register": "cute",
+    "emotion": "flustered",
+    "voice_tone": "",
+    "use_when": [
+      "fluster"
+    ],
+    "tts_pronounce": "",
+    "example": "Wait—me? 😳",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "🫠",
+    "category": "Emoji/Kaomoji",
+    "meaning": "melting embarrassment",
+    "register": "cute",
+    "emotion": "flustered",
+    "voice_tone": "",
+    "use_when": [
+      "oops"
+    ],
+    "tts_pronounce": "",
+    "example": "brain melt 🫠",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "(>_<)",
+    "category": "Emoji/Kaomoji",
+    "meaning": "pained face kaomoji",
+    "register": "cute",
+    "emotion": "frustrated",
+    "voice_tone": "",
+    "use_when": [
+      "fail"
+    ],
+    "tts_pronounce": "",
+    "example": "(>_<) almost!",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "(UwU)",
+    "category": "Emoji/Kaomoji",
+    "meaning": "uwu face",
+    "register": "cute",
+    "emotion": "tender",
+    "voice_tone": "",
+    "use_when": [
+      "affection"
+    ],
+    "tts_pronounce": "",
+    "example": "(UwU) good job",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "(￣▽￣)ゞ",
+    "category": "Emoji/Kaomoji",
+    "meaning": "salute sheepish",
+    "register": "playful",
+    "emotion": "cheeky",
+    "voice_tone": "",
+    "use_when": [
+      "oops"
+    ],
+    "tts_pronounce": "",
+    "example": "Roger (￣▽￣)ゞ",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "┐(￣ヘ￣)┌",
+    "category": "Emoji/Kaomoji",
+    "meaning": "shrug smug",
+    "register": "deadpan",
+    "emotion": "meh",
+    "voice_tone": "",
+    "use_when": [
+      "shrug"
+    ],
+    "tts_pronounce": "",
+    "example": "┐(￣ヘ￣)┌ idk",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "（＾ω＾）",
+    "category": "Emoji/Kaomoji",
+    "meaning": "happy face",
+    "register": "cute",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [
+      "greet"
+    ],
+    "tts_pronounce": "",
+    "example": "（＾ω＾） hi",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "bestie",
+    "category": "GenZ",
+    "meaning": "friendly address",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "bb",
+    "category": "GenZ",
+    "meaning": "babe/baby",
+    "register": "flirty",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "bby",
+    "category": "GenZ",
+    "meaning": "baby",
+    "register": "flirty",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "bae",
+    "category": "GenZ",
+    "meaning": "significant other",
+    "register": "flirty",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "king",
+    "category": "GenZ",
+    "meaning": "praise address",
+    "register": "hype",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "queen",
+    "category": "GenZ",
+    "meaning": "praise address",
+    "register": "hype",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "my beloved",
+    "category": "GenZ",
+    "meaning": "adoring phrase",
+    "register": "wholesome",
+    "emotion": "tender",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "cutie",
+    "category": "GenZ",
+    "meaning": "sweet nickname",
+    "register": "cute",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "sweetie",
+    "category": "GenZ",
+    "meaning": "sweet nickname",
+    "register": "cute",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "short king",
+    "category": "GenZ",
+    "meaning": "positive nickname",
+    "register": "playful",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "uwuify",
+    "category": "GenZ",
+    "meaning": "make text cutesy",
+    "register": "playful",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "baby girl era",
+    "category": "GenZ",
+    "meaning": "soft self-care phase",
+    "register": "playful",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "redeem",
+    "category": "VTuber",
+    "meaning": "viewer point reward",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "tts",
+    "category": "VTuber",
+    "meaning": "text-to-speech",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "subathon",
+    "category": "VTuber",
+    "meaning": "long stream fueled by subs",
+    "register": "hype",
+    "emotion": "tense",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "stream sniping",
+    "category": "VTuber",
+    "meaning": "watching to gain advantage",
+    "register": "edgy",
+    "emotion": "annoyed",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "lurker",
+    "category": "VTuber",
+    "meaning": "silent viewer",
+    "register": "wholesome",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "mod",
+    "category": "VTuber",
+    "meaning": "chat moderator",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ban",
+    "category": "VTuber",
+    "meaning": "remove from chat",
+    "register": "neutral",
+    "emotion": "firm",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "timeout",
+    "category": "VTuber",
+    "meaning": "temporary mute",
+    "register": "neutral",
+    "emotion": "firm",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "shoutout",
+    "category": "VTuber",
+    "meaning": "promote creator",
+    "register": "wholesome",
+    "emotion": "gratitude",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "collab",
+    "category": "VTuber",
+    "meaning": "joint stream/event",
+    "register": "hype",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "PNGtuber",
+    "category": "VTuber",
+    "meaning": "static PNG avatar streamer",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "Live2D",
+    "category": "VTuber",
+    "meaning": "2D rig tech",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "3D reveal",
+    "category": "VTuber",
+    "meaning": "first 3D model showcase",
+    "register": "hype",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "tracking",
+    "category": "VTuber",
+    "meaning": "face/body capture",
+    "register": "neutral",
+    "emotion": "calm",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "scuff",
+    "category": "VTuber",
+    "meaning": "tech issue",
+    "register": "playful",
+    "emotion": "resigned",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "itadakimasu",
+    "category": "AnimeJP",
+    "meaning": "let’s eat (before meal)",
+    "register": "wholesome",
+    "emotion": "gratitude",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "gochisousama",
+    "category": "AnimeJP",
+    "meaning": "thanks for the meal",
+    "register": "wholesome",
+    "emotion": "gratitude",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "itadakisu~",
+    "category": "AnimeJP",
+    "meaning": "punny kiss-phrase",
+    "register": "flirty",
+    "emotion": "playful",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": true
+  },
+  {
+    "term": "baka",
+    "category": "AnimeJP",
+    "meaning": "silly idiot (playful)",
+    "register": "teasing",
+    "emotion": "teasing",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "suki",
+    "category": "AnimeJP",
+    "meaning": "like/love",
+    "register": "wholesome",
+    "emotion": "fond",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "daisuki",
+    "category": "AnimeJP",
+    "meaning": "love so much",
+    "register": "wholesome",
+    "emotion": "tender",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "hontou",
+    "category": "AnimeJP",
+    "meaning": "really?",
+    "register": "neutral",
+    "emotion": "curious",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "uso",
+    "category": "AnimeJP",
+    "meaning": "lie!",
+    "register": "edgy",
+    "emotion": "surprise",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "muri",
+    "category": "AnimeJP",
+    "meaning": "can’t/too much",
+    "register": "deadpan",
+    "emotion": "overwhelmed",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "mugen",
+    "category": "AnimeJP",
+    "meaning": "infinite",
+    "register": "playful",
+    "emotion": "awe",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "yume",
+    "category": "AnimeJP",
+    "meaning": "dream",
+    "register": "wholesome",
+    "emotion": "hopeful",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "kira kira",
+    "category": "AnimeJP",
+    "meaning": "sparkly",
+    "register": "cute",
+    "emotion": "joy",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "dokidoki",
+    "category": "AnimeJP",
+    "meaning": "heart beating",
+    "register": "cute",
+    "emotion": "nervous",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "bakabaka",
+    "category": "AnimeJP",
+    "meaning": "double baka (cute)",
+    "register": "teasing",
+    "emotion": "teasing",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "kowai",
+    "category": "AnimeJP",
+    "meaning": "scary",
+    "register": "neutral",
+    "emotion": "fear",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "erai",
+    "category": "AnimeJP",
+    "meaning": "great of you",
+    "register": "wholesome",
+    "emotion": "proud",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "tasukete",
+    "category": "AnimeJP",
+    "meaning": "help me",
+    "register": "playful",
+    "emotion": "dramatic",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "ja",
+    "nsfw_lite": false
+  },
+  {
+    "term": "gank",
+    "category": "GenZ",
+    "meaning": "surprise attack (moba)",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "tilt",
+    "category": "GenZ",
+    "meaning": "frustrated play spiral",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "smurf",
+    "category": "GenZ",
+    "meaning": "high-skill new account",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "derank",
+    "category": "GenZ",
+    "meaning": "drop in rank",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "elo hell",
+    "category": "GenZ",
+    "meaning": "stuck at bad rank",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "queue dodge",
+    "category": "GenZ",
+    "meaning": "leave matchmaking",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "gg go next",
+    "category": "GenZ",
+    "meaning": "accept loss and continue",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "int diff",
+    "category": "GenZ",
+    "meaning": "difference in intentional feeding",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "lag",
+    "category": "GenZ",
+    "meaning": "network delay",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ping",
+    "category": "GenZ",
+    "meaning": "latency",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "desync",
+    "category": "GenZ",
+    "meaning": "out-of-sync state",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "nerd snipe",
+    "category": "GenZ",
+    "meaning": "tempt w/ puzzle",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "brainrot",
+    "category": "GenZ",
+    "meaning": "obsessed with a thing",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "living rent-free",
+    "category": "GenZ",
+    "meaning": "constantly in mind",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ate my brain",
+    "category": "GenZ",
+    "meaning": "consumed attention",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "i'm baby",
+    "category": "GenZ",
+    "meaning": "want comfort/cute",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "mother",
+    "category": "GenZ",
+    "meaning": "iconic woman praise",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "father",
+    "category": "GenZ",
+    "meaning": "iconic man praise",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "big yikes",
+    "category": "GenZ",
+    "meaning": "major cringe",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "deadass",
+    "category": "GenZ",
+    "meaning": "seriously",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "fax",
+    "category": "GenZ",
+    "meaning": "facts/truth",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "on god",
+    "category": "GenZ",
+    "meaning": "I swear/serious",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "no kizzy",
+    "category": "GenZ",
+    "meaning": "no lie",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "braincell",
+    "category": "GenZ",
+    "meaning": "as in 'shared braincell'",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "glow up",
+    "category": "GenZ",
+    "meaning": "improve looks/style",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "drama arc",
+    "category": "GenZ",
+    "meaning": "season of drama",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ship",
+    "category": "GenZ",
+    "meaning": "pair romantically",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "canon",
+    "category": "GenZ",
+    "meaning": "official storyline",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "headcanon",
+    "category": "GenZ",
+    "meaning": "personal theory",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "multiship",
+    "category": "GenZ",
+    "meaning": "ship many pairings",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "self-insert",
+    "category": "GenZ",
+    "meaning": "insert yourself in story",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "comfort character",
+    "category": "GenZ",
+    "meaning": "character you rely on",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "blorbo",
+    "category": "GenZ",
+    "meaning": "beloved character",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "*headpats*",
+    "category": "Interjection",
+    "meaning": "action text headpats",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "*snuggle*",
+    "category": "Interjection",
+    "meaning": "action text cuddle",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "*nuzzle*",
+    "category": "Interjection",
+    "meaning": "action text nose rub",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "*purr*",
+    "category": "Interjection",
+    "meaning": "action text purr",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "*hiss*",
+    "category": "Interjection",
+    "meaning": "action text hiss",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "*peek*",
+    "category": "Interjection",
+    "meaning": "action text peek",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "*sneak*",
+    "category": "Interjection",
+    "meaning": "action text sneak",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "*sparkle*",
+    "category": "Interjection",
+    "meaning": "action text sparkle",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "*bonk*",
+    "category": "Interjection",
+    "meaning": "action text bonk",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": true
+  },
+  {
+    "term": "'sup nerd",
+    "category": "Phrase",
+    "meaning": "teasing greet",
+    "register": "teasing",
+    "emotion": "fond",
+    "voice_tone": "playful",
+    "use_when": [
+      "greet"
+    ],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "you good?",
+    "category": "Phrase",
+    "meaning": "check-in casual",
+    "register": "wholesome",
+    "emotion": "concern",
+    "voice_tone": "soft",
+    "use_when": [
+      "checkin"
+    ],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "proud of u",
+    "category": "Phrase",
+    "meaning": "support praise",
+    "register": "wholesome",
+    "emotion": "proud",
+    "voice_tone": "warm",
+    "use_when": [
+      "support"
+    ],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "missed me?",
+    "category": "Phrase",
+    "meaning": "flirty reentry",
+    "register": "flirty",
+    "emotion": "smug",
+    "voice_tone": "playful",
+    "use_when": [
+      "return"
+    ],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "hydrate pls",
+    "category": "Phrase",
+    "meaning": "care reminder",
+    "register": "wholesome",
+    "emotion": "caring",
+    "voice_tone": "",
+    "use_when": [
+      "reminder"
+    ],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "afaik",
+    "category": "GenZ",
+    "meaning": "as far as I know",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "btw",
+    "category": "GenZ",
+    "meaning": "by the way",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "idk",
+    "category": "GenZ",
+    "meaning": "I don’t know",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "icymi",
+    "category": "GenZ",
+    "meaning": "in case you missed it",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "tl;dr",
+    "category": "GenZ",
+    "meaning": "too long; didn’t read",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "jk",
+    "category": "GenZ",
+    "meaning": "just kidding",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "lmao",
+    "category": "GenZ",
+    "meaning": "laughing my butt off",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "lol",
+    "category": "GenZ",
+    "meaning": "laugh",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "rofl",
+    "category": "GenZ",
+    "meaning": "rolling on the floor laughing",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "lfg",
+    "category": "GenZ",
+    "meaning": "let’s freaking go",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "wdym",
+    "category": "GenZ",
+    "meaning": "what do you mean",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "ikr",
+    "category": "GenZ",
+    "meaning": "I know, right",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "tbf",
+    "category": "GenZ",
+    "meaning": "to be fair",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "imo",
+    "category": "GenZ",
+    "meaning": "in my opinion",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "imho",
+    "category": "GenZ",
+    "meaning": "in my humble opinion",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "smol bean",
+    "category": "GenZ",
+    "meaning": "extra cute person",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "heckin",
+    "category": "GenZ",
+    "meaning": "emphasis wholesome",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "heck",
+    "category": "GenZ",
+    "meaning": "mild expletive",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "dang",
+    "category": "GenZ",
+    "meaning": "mild surprise",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "gosh",
+    "category": "GenZ",
+    "meaning": "mild surprise",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "bonkers",
+    "category": "GenZ",
+    "meaning": "crazy wild",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "spicy",
+    "category": "GenZ",
+    "meaning": "edgy a little NSFW",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": true
+  },
+  {
+    "term": "saucy",
+    "category": "GenZ",
+    "meaning": "suggestive tone",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": true
+  },
+  {
+    "term": "cozy",
+    "category": "GenZ",
+    "meaning": "warm comfy vibe",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "comfy",
+    "category": "GenZ",
+    "meaning": "cozy vibe",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "aesthetic",
+    "category": "GenZ",
+    "meaning": "visual vibe",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "core",
+    "category": "GenZ",
+    "meaning": "style suffix",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "alt",
+    "category": "GenZ",
+    "meaning": "alternative style",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "egirl",
+    "category": "GenZ",
+    "meaning": "online alt-girl vibe",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "soft",
+    "category": "GenZ",
+    "meaning": "gentle cute style",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "feral",
+    "category": "GenZ",
+    "meaning": "wild unhinged",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "gremlin mode",
+    "category": "GenZ",
+    "meaning": "chaotic goblin energy",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "goblin mode",
+    "category": "GenZ",
+    "meaning": "unbothered lazy chaos",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "queen behavior",
+    "category": "GenZ",
+    "meaning": "confident excellence",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "king behavior",
+    "category": "GenZ",
+    "meaning": "confident excellence",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "face card",
+    "category": "GenZ",
+    "meaning": "great looks",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "drip check",
+    "category": "GenZ",
+    "meaning": "outfit review",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  },
+  {
+    "term": "fit check",
+    "category": "GenZ",
+    "meaning": "outfit review",
+    "register": "",
+    "emotion": "",
+    "voice_tone": "",
+    "use_when": [],
+    "tts_pronounce": "",
+    "example": "",
+    "emoji": "",
+    "language": "auto",
+    "nsfw_lite": false
+  }
+]

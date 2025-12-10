@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"/><title>Viewer</title>
+<style>html,body{margin:0;height:100%;background:#0b0c10}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+import {loadLib} from '/frontend/viewer/loader.js';
+const THREE = (await loadLib('/frontend/lib/three.module.js','https://cdn.jsdelivr.net/npm/three@0.177.0/build/three.module.js'));
+const { GLTFLoader } = await loadLib('/frontend/lib/GLTFLoader.js','https://cdn.jsdelivr.net/npm/three@0.177.0/examples/jsm/loaders/GLTFLoader.js');
+let VRMlib=null; try{ VRMlib = await loadLib('/frontend/lib/three-vrm.module.min.js','https://cdn.jsdelivr.net/npm/three-vrm@2.0.6/lib/three-vrm.module.min.js'); }catch(e){}
+const canvas=document.getElementById('c'); const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0b0c10);
+const camera=new THREE.PerspectiveCamera(50, innerWidth/innerHeight, .1, 100); camera.position.set(0,1.4,2.2);
+const key=new THREE.DirectionalLight(0xffffff,1.0); key.position.set(1,2,2); const amb=new THREE.AmbientLight(0xffffff,.2); scene.add(key,amb);
+function resize(){ renderer.setSize(innerWidth,innerHeight); camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); } window.addEventListener('resize', resize); resize();
+const url=new URLSearchParams(location.search).get('url'); const loader=new GLTFLoader();
+if(url){ loader.load(url,(g)=>{ scene.add(g.scene); animate(); },undefined,(e)=>{ console.error(e); const msg=document.createElement('div'); msg.style='position:absolute;top:10px;left:10px;color:#e6e6e6'; msg.textContent='Failed to load model.'; document.body.appendChild(msg);}); }
+else{ const m=new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({color:0x66ccff,metalness:.1,roughness:.6})); scene.add(m); animate(); }
+function animate(){ requestAnimationFrame(animate); renderer.render(scene,camera); }
+</script></body></html>

@@ -1,0 +1,107 @@
+{
+  "name": "waifu-rt3d",
+  "description": "Real-time 3D AI Waifu companion with voice interaction and VRM avatars",
+  "version": "5.30",
+
+  "context": {
+    "tech_stack": [
+      "FastAPI backend (Python 3.x)",
+      "Vanilla JavaScript frontend",
+      "Three.js for 3D rendering",
+      "SQLite database with FTS5",
+      "LM Studio for local LLM",
+      "Multiple TTS providers (Fish Audio, XTTS, Piper, ElevenLabs)",
+      "ASR support (Whisper API, Whisper.cpp)"
+    ],
+
+    "architecture": "Adapter pattern for LLM/TTS/ASR, modular and extensible"
+  },
+
+  "instructions": [
+    "CRITICAL: Always read files before editing them",
+    "CRITICAL: Create checkpoint (CHECKPOINT_YYYY-MM-DD_*.md) before major changes",
+    "When adding adapters: Follow the pattern in backend/llm/, backend/tts/, or backend/asr/",
+    "When adding API endpoints: Add to backend/server.py with docstrings and proper error handling",
+    "When modifying database: Update schema_vX.sql file and backend/preflight.py migration logic",
+    "When adding features: Document in docs/features/FEATURE_*.md format",
+    "Test all Python files with py_compile before committing",
+    "Update docs/planning/MILESTONES.md for version changes",
+    "Follow FastAPI best practices (async where needed, HTTPException for errors)",
+    "Keep adapter implementations consistent across modules"
+  ],
+
+  "workflows": {
+    "adding_new_feature": [
+      "1. Create checkpoint document",
+      "2. Implement feature following existing patterns",
+      "3. Test with py_compile",
+      "4. Document in docs/features/",
+      "5. Update API_REFERENCE.md if adding endpoints",
+      "6. Commit with descriptive message"
+    ],
+
+    "fixing_bug": [
+      "1. Read affected files completely",
+      "2. Identify root cause",
+      "3. Fix with minimal changes",
+      "4. Test syntax",
+      "5. Commit with bug description"
+    ],
+
+    "version_upgrade": [
+      "1. Create pre-upgrade checkpoint",
+      "2. Create ZIP backup",
+      "3. Implement changes",
+      "4. Update version in server.py and project.json",
+      "5. Document in MILESTONES.md",
+      "6. Create post-upgrade checkpoint",
+      "7. Create new ZIP backup"
+    ]
+  },
+
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(python3 -m py_compile:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(wc:*)",
+      "Read(**/*.py)",
+      "Read(**/*.md)",
+      "Read(**/*.json)",
+      "Read(**/*.sql)",
+      "Read(**/*.js)",
+      "Read(**/*.html)",
+      "Write(docs/**)",
+      "Write(CHECKPOINT_*.md)"
+    ],
+
+    "ask": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(rm:*)",
+      "Bash(mv:*)",
+      "Bash(zip:*)",
+      "Edit(backend/db/schema*.sql)",
+      "Edit(backend/server.py)",
+      "Edit(backend/preflight.py)",
+      "Edit(backend/config/app.json)",
+      "Edit(.claude/project.json)",
+      "Write(backend/**/*.py)",
+      "Write(frontend/**)"
+    ],
+
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -fd:*)",
+      "Write(.env)",
+      "Write(**/.env)"
+    ]
+  }
+}

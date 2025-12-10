@@ -1,0 +1,113 @@
+[
+  {
+    "id": "tsundere_tease_v2",
+    "display_name": "Tsundere Tease — Chris Tuned",
+    "description": "Brisk, bright; shy→smug swings; tiny stutters; micro-scoffs; playful denials.",
+    "prosody": {
+      "pitch_semitones": 3.5,
+      "pace_wpm": 188,
+      "energy_0to1": 0.72,
+      "breathiness_0to1": 0.32,
+      "intonation": "fall-rise"
+    },
+    "eq_tilt_db_per_oct": 1.7,
+    "reference_char_archetypes": [
+      "Ryuko-leaning edge with softer landings",
+      "Erza-like command when serious"
+    ],
+    "triggers_regex_any": [
+      "\\bbaka\\b",
+      "\\bhmph\\b",
+      "\\btsk\\b",
+      "\\bnot like I\\b",
+      "\\bb-\\w+"
+    ],
+    "inserts": {
+      "micro_scoff": 0.22,
+      "tiny_stutter": 0.18,
+      "breathy_onset": 0.12
+    },
+    "fallbacks": [
+      "oneesan_sultry_v1",
+      "alt_deadpan_v1",
+      "seiso_sweetheart_v1"
+    ]
+  },
+  {
+    "id": "oneesan_sultry_v1",
+    "display_name": "Onee-san Sultry",
+    "prosody": {
+      "pitch_semitones": -2,
+      "pace_wpm": 162,
+      "energy_0to1": 0.6,
+      "breathiness_0to1": 0.42,
+      "intonation": "slow-fall"
+    }
+  },
+  {
+    "id": "alt_deadpan_v1",
+    "display_name": "Alt-Girl Deadpan",
+    "prosody": {
+      "pitch_semitones": -1,
+      "pace_wpm": 165,
+      "energy_0to1": 0.5,
+      "breathiness_0to1": 0.2,
+      "intonation": "level-fall"
+    }
+  },
+  {
+    "id": "seiso_sweetheart_v1",
+    "display_name": "Seiso Sweetheart",
+    "prosody": {
+      "pitch_semitones": 2,
+      "pace_wpm": 165,
+      "energy_0to1": 0.55,
+      "breathiness_0to1": 0.25,
+      "intonation": "gentle-rise"
+    }
+  },
+  {
+    "id": "kuudere_glass_v1",
+    "display_name": "Kuudere Glass",
+    "prosody": {
+      "pitch_semitones": 0,
+      "pace_wpm": 155,
+      "energy_0to1": 0.45,
+      "breathiness_0to1": 0.15,
+      "intonation": "level"
+    }
+  },
+  {
+    "id": "ryuko_edgefire_v1",
+    "display_name": "Edgefire Rebel (Ryuko)",
+    "prosody": {
+      "pitch_semitones": 0.5,
+      "pace_wpm": 180,
+      "energy_0to1": 0.75,
+      "breathiness_0to1": 0.2,
+      "intonation": "rise-fall"
+    }
+  },
+  {
+    "id": "erza_command_v1",
+    "display_name": "Commanding Knight (Erza)",
+    "prosody": {
+      "pitch_semitones": -0.5,
+      "pace_wpm": 170,
+      "energy_0to1": 0.7,
+      "breathiness_0to1": 0.2,
+      "intonation": "firm-fall"
+    }
+  },
+  {
+    "id": "raphtalia_warm_v1",
+    "display_name": "Loyal Warmth (Raphtalia)",
+    "prosody": {
+      "pitch_semitones": 1,
+      "pace_wpm": 165,
+      "energy_0to1": 0.55,
+      "breathiness_0to1": 0.28,
+      "intonation": "gentle-fall"
+    }
+  }
+]

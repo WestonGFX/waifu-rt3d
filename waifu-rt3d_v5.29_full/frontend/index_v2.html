@@ -1,0 +1,324 @@
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>waifu-rt3d v5.30</title>
+<link rel="stylesheet" href="/assets/css/theme.css"/>
+<style>
+.chat-container { display: grid; grid-template-columns: 250px 1fr; gap: 12px; }
+.sessions-panel { display: flex; flex-direction: column; gap: 8px; }
+.session-item { padding: 10px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; }
+.session-item:hover { border-color: var(--ac); }
+.session-item.active { border-color: var(--ac); background: rgba(106, 169, 255, 0.1); }
+.session-item button { padding: 4px 8px; font-size: 0.8rem; }
+.mic-button { background: var(--ac); color: black; border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+.mic-button.recording { background: #ff6b6b; animation: pulse 1s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+.voice-indicator { display: none; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem; }
+.voice-indicator.active { display: flex; }
+@media (max-width: 768px) { .chat-container { grid-template-columns: 1fr; } .sessions-panel { max-height: 200px; overflow-y: auto; } }
+</style>
+</head>
+<body>
+<header class="topbar"><h1>waifu‑rt3d <span class="ver">v5.30</span></h1>
+<nav><button class="tabbtn" data-tab="setup">Setup</button><button class="tabbtn" data-tab="viewer">Viewer</button><button class="tabbtn" data-tab="chat">Chat</button><button class="tabbtn" data-tab="system">System</button></nav></header>
+<main>
+<section id="setup" class="tab active"><h2>Setup</h2>
+<div class="card grid">
+<h3 style="grid-column:1/-1;margin:0;">LLM</h3>
+<label>Provider<select id="provider"><option value="lmstudio">lmstudio (local)</option></select></label>
+<label>Endpoint<input id="endpoint" placeholder="http://127.0.0.1:1234/v1"/><small>Must end with <code>/v1</code> for LM Studio</small></label>
+<label>API key<input id="api_key" placeholder="lm-studio"/></label>
+<label>Model<input id="model" placeholder="Paste exact LM Studio model name"/></label>
+<label>Max history<input id="max_history" type="number" value="12" min="4" max="32"/></label>
+<h3 style="grid-column:1/-1;margin:0;">TTS</h3>
+<label>Provider<select id="tts_provider"><option value="fish_audio">Fish Audio (cloud/self-host)</option><option value="piper_local">Piper (local CLI)</option><option value="xtts_server">XTTS Server (local)</option><option value="elevenlabs">ElevenLabs (API)</option></select></label>
+<label>TTS Endpoint<input id="tts_endpoint" placeholder="https://api.fish.audio/v1"/><small>For self-host, paste your base URL (e.g., http://127.0.0.1:8001/v1)</small></label>
+<label>TTS API key<input id="tts_api_key" placeholder="Required for cloud providers"/></label>
+<label>TTS Voice/ID<input id="tts_voice_id" placeholder="Fish voice_id or ElevenLabs voice_id"/><small>Defaults to E-girl for Fish Audio</small></label>
+<label>Format<select id="tts_format"><option>mp3</option><option>wav</option><option>opus</option></select></label>
+<label>Sample rate<input id="tts_sr" type="number" value="24000"/></label>
+<label>Piper voice path<input id="piper_voice" placeholder="Path to .onnx (Piper)"/></label>
+<h3 style="grid-column:1/-1;margin:0;">ASR (Speech Recognition)</h3>
+<label>Enable Voice Input<input id="asr_enabled" type="checkbox"/></label>
+<label>Provider<select id="asr_provider"><option value="browser">Browser (Web Speech API)</option><option value="whisper">Whisper API (future)</option></select></label>
+<div class="actions"><button id="saveCfg">Save</button><span id="saveMsg"></span></div>
+</div></section>
+<section id="viewer" class="tab"><h2>Viewer</h2>
+<div class="card"><input type="file" id="file" accept=".vrm,.glb,.gltf"/><button id="upload">Upload Model</button><div id="uploadMsg"></div></div>
+<div class="card"><h3>Available Models</h3><ul id="models"></ul></div>
+</section>
+<section id="chat" class="tab"><h2>Chat</h2>
+<div class="chat-container">
+<div class="sessions-panel">
+<h3 style="margin:0 0 8px 0;">Sessions</h3>
+<button id="newSession" style="margin-bottom:8px;">+ New Session</button>
+<div id="sessionsList"></div>
+</div>
+<div>
+<div class="card">
+<div id="currentSessionTitle" style="font-weight:600;margin-bottom:8px;color:var(--ac);">Session 1</div>
+<textarea id="msg" rows="3" placeholder="Say hi or click the microphone…"></textarea>
+<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">
+<button id="send">Send</button>
+<button id="micBtn" class="mic-button" title="Voice input">🎤</button>
+<label style="display:flex;align-items:center;gap:6px;"><input id="speak" type="checkbox" checked/><span>Speak replies</span></label>
+<div id="voiceIndicator" class="voice-indicator"><span>🎙️ Listening...</span></div>
+</div>
+</div>
+<div id="log"></div>
+</div>
+</div>
+</section>
+<section id="system" class="tab"><h2>System</h2><div class="card"><button id="refreshHealth">Refresh</button><pre id="health"></pre></div></section>
+</main>
+<script type="module">
+const $=(q)=>document.querySelector(q);
+let currentSessionId = 1;
+let recognition = null;
+let asrEnabled = false;
+
+// Tab switching
+document.querySelectorAll('.tabbtn').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(s=>s.classList.remove('active'));
+  document.getElementById(b.dataset.tab).classList.add('active');
+}));
+
+// Load configuration
+async function loadCfg(){
+  const r=await fetch('/api/config');const j=await r.json();
+  $('#provider').value=j.llm?.provider||'lmstudio';
+  $('#endpoint').value=j.llm?.endpoint||'http://127.0.0.1:1234/v1';
+  $('#api_key').value=j.llm?.api_key||'lm-studio';
+  $('#model').value=j.llm?.model||'';
+  $('#max_history').value=j.memory?.max_history||12;
+  $('#tts_provider').value=j.tts?.provider||'fish_audio';
+  $('#tts_endpoint').value=j.tts?.endpoint||'https://api.fish.audio/v1';
+  $('#tts_api_key').value=j.tts?.api_key||'';
+  $('#tts_voice_id').value=j.tts?.voice_id||'';
+  $('#tts_format').value=j.tts?.format||'mp3';
+  $('#tts_sr').value=j.tts?.sample_rate||24000;
+  $('#piper_voice').value=j.tts?.voice||'';
+  asrEnabled = j.asr?.enabled || false;
+  $('#asr_enabled').checked = asrEnabled;
+  $('#asr_provider').value = j.asr?.provider || 'browser';
+  if (asrEnabled) initASR();
+}
+
+// Save configuration
+$('#saveCfg').onclick=async()=>{
+  const body={
+    llm:{provider:$('#provider').value,endpoint:$('#endpoint').value,api_key:$('#api_key').value,model:$('#model').value},
+    memory:{max_history:parseInt($('#max_history').value||'12')},
+    tts:{provider:$('#tts_provider').value,endpoint:$('#tts_endpoint').value,api_key:$('#tts_api_key').value,voice_id:$('#tts_voice_id').value,format:$('#tts_format').value,sample_rate:parseInt($('#tts_sr').value||'24000'),voice:$('#piper_voice').value},
+    asr:{enabled:$('#asr_enabled').checked,provider:$('#asr_provider').value}
+  };
+  const r=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  $('#saveMsg').textContent=(r.ok?'Saved ✅':'Failed ❌');
+  setTimeout(()=>$('#saveMsg').textContent='',2000);
+  if ($('#asr_enabled').checked) initASR();
+};
+
+loadCfg();
+
+// Session Management
+async function loadSessions() {
+  const r = await fetch('/api/sessions');
+  const j = await r.json();
+  const container = $('#sessionsList');
+  container.innerHTML = '';
+
+  if (j.sessions.length === 0) {
+    await createSession('Default Session');
+    return loadSessions();
+  }
+
+  j.sessions.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'session-item' + (s.id === currentSessionId ? ' active' : '');
+    div.innerHTML = `
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${s.title}</span>
+      <button onclick="deleteSession(${s.id}, event)">×</button>
+    `;
+    div.onclick = (e) => {
+      if (e.target.tagName !== 'BUTTON') switchSession(s.id, s.title);
+    };
+    container.appendChild(div);
+  });
+}
+
+async function createSession(title = null) {
+  if (!title) {
+    title = prompt('Session name:', `Session ${Date.now()}`);
+    if (!title) return;
+  }
+  const r = await fetch('/api/sessions', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({title})
+  });
+  const j = await r.json();
+  if (j.ok) {
+    await loadSessions();
+    switchSession(j.session_id, title);
+  }
+}
+
+async function switchSession(id, title) {
+  currentSessionId = id;
+  $('#currentSessionTitle').textContent = title;
+  $('#log').innerHTML = '';
+
+  // Load messages for this session
+  const r = await fetch(`/api/sessions/${id}/messages`);
+  const j = await r.json();
+  const log = $('#log');
+
+  j.messages.forEach(m => {
+    const bubble = document.createElement('div');
+    bubble.className = `bubble ${m.role === 'user' ? 'me' : 'ai'}`;
+    bubble.textContent = m.text;
+    log.appendChild(bubble);
+  });
+
+  log.scrollTop = log.scrollHeight;
+  loadSessions();
+}
+
+window.deleteSession = async function(id, event) {
+  event.stopPropagation();
+  if (!confirm('Delete this session?')) return;
+  await fetch(`/api/sessions/${id}`, {method: 'DELETE'});
+  if (id === currentSessionId) {
+    currentSessionId = 1;
+    $('#log').innerHTML = '';
+  }
+  loadSessions();
+}
+
+$('#newSession').onclick = () => createSession();
+loadSessions();
+
+// ASR (Speech Recognition)
+function initASR() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    console.warn('Speech recognition not supported');
+    return;
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'en-US';
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    $('#msg').value = transcript;
+    $('#voiceIndicator').classList.remove('active');
+    $('#micBtn').classList.remove('recording');
+  };
+
+  recognition.onerror = (event) => {
+    console.error('Speech recognition error:', event.error);
+    $('#voiceIndicator').classList.remove('active');
+    $('#micBtn').classList.remove('recording');
+  };
+
+  recognition.onend = () => {
+    $('#voiceIndicator').classList.remove('active');
+    $('#micBtn').classList.remove('recording');
+  };
+}
+
+$('#micBtn').onclick = () => {
+  if (!recognition) {
+    alert('Please enable voice input in Setup tab and save');
+    return;
+  }
+
+  if ($('#micBtn').classList.contains('recording')) {
+    recognition.stop();
+  } else {
+    $('#voiceIndicator').classList.add('active');
+    $('#micBtn').classList.add('recording');
+    recognition.start();
+  }
+};
+
+// Avatar Management
+async function listModels(){
+  const ul=$('#models'); ul.innerHTML='';
+  const r=await fetch('/api/avatars'); const j=await r.json();
+  j.avatars.forEach(a=>{
+    const li=document.createElement('li');
+    li.innerHTML=`<span>${a.name}</span><a class="btn" href="/frontend/viewer/viewer.html?url=${encodeURIComponent(a.url)}" target="_blank">Open</a><button data-del="${a.name}">Delete</button>`;
+    ul.appendChild(li);
+    li.querySelector('button').onclick=async()=>{
+      await fetch('/api/avatars/'+encodeURIComponent(a.name),{method:'DELETE'});
+      listModels();
+    };
+  });
+}
+
+$('#upload').onclick=async()=>{
+  const f=$('#file').files[0];
+  if(!f){$('#uploadMsg').textContent='Pick a .vrm/.glb/.gltf file first.'; return;}
+  const fd=new FormData(); fd.append('file', f);
+  const r=await fetch('/api/avatars/upload',{method:'POST',body:fd});
+  const j=await r.json();
+  $('#uploadMsg').textContent=j.ok?'Uploaded ✅':('Failed ❌ '+(j.error||''));
+  listModels();
+};
+
+listModels();
+
+// Chat functionality
+let lastAudio=null;
+function playUrl(u){
+  try{if(lastAudio){lastAudio.pause(); lastAudio=null;}}catch{}
+  lastAudio=new Audio(u);
+  lastAudio.play().catch(console.error);
+}
+
+async function sendMessage() {
+  const text=$('#msg').value.trim();
+  if(!text) return;
+  $('#msg').value='';
+
+  const log=$('#log');
+  const me=document.createElement('div');
+  me.className='bubble me';
+  me.textContent=text;
+  log.appendChild(me);
+
+  const speak=$('#speak').checked;
+  const r=await fetch(`/api/chat?session_id=${currentSessionId}`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text,speak})
+  });
+  const j=await r.json();
+
+  const ai=document.createElement('div');
+  ai.className='bubble ai';
+  ai.textContent=j.ok? j.reply : ('Error: '+j.error);
+  log.appendChild(ai);
+  log.scrollTop=log.scrollHeight;
+
+  if(j.ok && j.audio){ playUrl(j.audio); }
+}
+
+$('#send').onclick = sendMessage;
+$('#msg').onkeydown = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+};
+
+// System health check
+$('#refreshHealth').onclick=async()=>{
+  const r=await fetch('/api/healthcheck');
+  const j=await r.json();
+  $('#health').textContent=JSON.stringify(j,null,2);
+};
+</script>
+</body></html>

@@ -108,7 +108,18 @@ async def chat(session_id: int = 1, req: Request = None):
     cur.execute("SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
                 (session_id, cfg.get("memory",{}).get("max_history",12)))
     hist = [{"role": r, "content": t} for (r,t) in cur.fetchall()][::-1]
-    messages = [{"role":"system","content":"You are a friendly anime companion."}] + hist
+    
+    # --- PERSONALITY FIX: Fetch Default Character (ID 1) ---
+    cur.execute("SELECT system_prompt, voice_id, tts_provider FROM characters WHERE id=1")
+    char_row = cur.fetchone()
+    if char_row:
+        sys_prompt, char_voice, char_prov = char_row
+    else:
+        sys_prompt = "You are a friendly anime companion."
+        char_voice, char_prov = None, None
+    # --------------------------------------------------------
+
+    messages = [{"role":"system","content": sys_prompt}] + hist
     try:
         from .llm.registry import get_client
         adapter = get_client(cfg)
@@ -125,7 +136,12 @@ async def chat(session_id: int = 1, req: Request = None):
         try:
             from .tts.registry import get_tts
             tts_client = get_tts(cfg)
-            tts_res = tts_client.speak(reply, cfg.get("tts",{}))
+            # Use character voice if available, else config defaults
+            tts_opts = cfg.get("tts",{}).copy()
+            if char_voice: tts_opts['voice_id'] = char_voice
+            if char_prov: tts_opts['provider'] = char_prov
+            
+            tts_res = tts_client.speak(reply, tts_opts)
             if tts_res.get("ok"): tts_url = f"/files/audio/{tts_res['filename']}"
         except Exception: tts_url = None
 

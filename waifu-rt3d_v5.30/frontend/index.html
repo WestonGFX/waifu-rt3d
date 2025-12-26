@@ -1,0 +1,480 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>waifu-rt3d v5.30</title>
+  <link rel="stylesheet" href="/assets/css/theme.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+</head>
+
+<body>
+
+  <!-- Setup Wizard Overlay -->
+  <div id="wizard"
+    style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:999;backdrop-filter:blur(5px);align-items:center;justify-content:center;">
+    <div class="card" style="max-width:500px;width:90%;animation:popIn 0.3s forwards;">
+      <h2
+        style="text-align:center;background:var(--ac-grad);-webkit-background-clip:text;background-clip:text;color:transparent;">
+        Welcome to waifu-rt3d!</h2>
+      <p style="color:var(--muted);text-align:center;">Let's get you connected to your Local LLM.</p>
+
+      <div style="margin:20px 0;">
+        <h3 style="font-size:1rem;color:var(--fg);">1. Start LM Studio</h3>
+        <p style="font-size:0.9rem;color:var(--muted);">Load your model and start the Local Server (usually on port
+          1234).</p>
+
+        <h3 style="font-size:1rem;color:var(--fg);margin-top:15px;">2. Connect</h3>
+        <label>LM Studio URL
+          <input id="wiz_endpoint" value="http://127.0.0.1:1234" placeholder="http://127.0.0.1:1234" />
+        </label>
+        <label style="margin-top:10px;">Model Name
+          <input id="wiz_model" placeholder="e.g. gemma-2b-it" />
+          <small>Copy exact name from LM Studio</small>
+        </label>
+      </div>
+
+      <div style="text-align:center;">
+        <button id="wiz_save" class="primary" style="width:100%;">Connect & Start</button>
+        <button onclick="$('#wizard').style.display='none'"
+          style="background:transparent;color:var(--muted);margin-top:10px;font-size:0.9rem;">Skip Setup</button>
+      </div>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <h1>waifu‑rt3d <span class="ver">v5.30</span></h1>
+    <nav>
+      <button class="tabbtn" data-tab="chat">Chat</button>
+      <button class="tabbtn" data-tab="viewer">Viewer</button>
+      <button class="tabbtn" data-tab="setup">Setup</button>
+      <button class="tabbtn" data-tab="system">System</button>
+    </nav>
+  </header>
+
+  <main>
+
+    <!-- CHAT TAB -->
+    <section id="chat" class="tab active">
+      <div class="chat-container">
+
+        <!-- Sessions Sidebar -->
+        <div class="sessions-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h3 style="margin:0;">Sessions</h3>
+            <button id="newSession" style="padding:6px 10px;font-size:0.9rem;">+</button>
+          </div>
+
+          <div id="sessionsList" style="flex:1;overflow-y:auto;">
+            <!-- Sessions injected here -->
+          </div>
+
+          <button id="toggleArchived"
+            style="margin-top:10px;background:rgba(255,255,255,0.05);color:var(--muted);font-size:0.85rem;">Show
+            Trash</button>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-view">
+          <div class="card" style="margin-bottom:0;padding:10px;background:transparent;border:none;box-shadow:none;">
+            <div id="currentSessionTitle" style="font-weight:600;color:var(--ac-1);">Session 1</div>
+          </div>
+
+          <div id="log">
+            <div class="bubble ai">Hello! I'm your AI companion. How can I help you today?</div>
+          </div>
+
+          <div class="input-area">
+            <textarea id="msg" rows="1" placeholder="Type a message..."></textarea>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="display:flex;gap:10px;align-items:center;">
+                <button id="micBtn" class="mic-button" title="Voice input"
+                  style="border-radius:50%;width:40px;height:40px;padding:0;display:flex;align-items:center;justify-content:center;">🎤</button>
+                <label style="flex-direction:row;align-items:center;margin:0;cursor:pointer;">
+                  <input id="speak" type="checkbox" checked />
+                  <span style="font-size:0.85rem;">Voice Reply</span>
+                </label>
+                <div id="voiceIndicator" class="voice-indicator" style="font-size:0.85rem;color:var(--ac-1);">
+                  Listening...</div>
+              </div>
+              <button id="send">Send</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- SETUP TAB -->
+    <section id="setup" class="tab">
+      <h2>Settings</h2>
+
+      <div class="grid">
+        <!-- LLM Card -->
+        <div class="card">
+          <h3>🤖 LLM Connection</h3>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <label>Provider
+              <select id="provider">
+                <option value="lmstudio">LM Studio (Local)</option>
+              </select>
+            </label>
+
+            <label title="The URL where LM Studio works. Usually http://127.0.0.1:1234">Endpoint URL ⓘ
+              <input id="endpoint" placeholder="http://127.0.0.1:1234" />
+            </label>
+
+            <label>Model Name
+              <input id="model" placeholder="e.g. gemma-2b-it" />
+            </label>
+
+            <label title="How many previous messages to remember">Context History ⓘ
+              <input id="max_history" type="number" min="4" max="50" />
+            </label>
+          </div>
+        </div>
+
+        <!-- TTS Card -->
+        <div class="card">
+          <h3>🗣️ Voice (TTS)</h3>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <label>Provider
+              <select id="tts_provider">
+                <option value="fish_audio">Fish Audio (Best Quality)</option>
+                <option value="piper_local">Piper (Offline/Fast)</option>
+                <option value="xtts_server">XTTS Server</option>
+                <option value="elevenlabs">ElevenLabs (Cloud)</option>
+              </select>
+            </label>
+
+            <label>Reference ID / Voice
+              <input id="tts_voice_id" placeholder="Voice ID" />
+            </label>
+
+            <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px;">
+              <label>Format
+                <select id="tts_format">
+                  <option>mp3</option>
+                  <option>wav</option>
+                </select>
+              </label>
+              <label>Sample Rate
+                <input id="tts_sr" type="number" value="24000" />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- ASR Card -->
+        <div class="card">
+          <h3>🎤 Microphone</h3>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <label style="flex-direction:row;align-items:center;gap:10px;">
+              <input id="asr_enabled" type="checkbox" />
+              <span>Enable Voice Input</span>
+            </label>
+            <label>Provider
+              <select id="asr_provider">
+                <option value="browser">Browser Native</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div style="position:fixed;bottom:20px;right:20px;">
+        <button id="saveCfg" class="primary" style="padding:15px 30px;font-size:1.1rem;box-shadow:var(--shadow-2);">Save
+          Settings</button>
+        <div id="saveMsg" style="text-align:center;margin-top:5px;font-weight:bold;"></div>
+      </div>
+    </section>
+
+    <!-- VIEWER TAB -->
+    <section id="viewer" class="tab">
+      <h2>3D Avatar Viewer</h2>
+      <div class="card">
+        <div style="display:flex;gap:10px;align-items:center;">
+          <input type="file" id="file" accept=".vrm,.glb,.gltf" style="flex:1" />
+          <button id="upload">Upload</button>
+        </div>
+        <div id="uploadMsg" style="margin-top:8px;color:var(--ac-1);"></div>
+      </div>
+
+      <div class="card">
+        <h3>Library</h3>
+        <ul id="models" style="padding:0;list-style:none;"></ul>
+      </div>
+    </section>
+
+    <!-- SYSTEM TAB -->
+    <section id="system" class="tab">
+      <h2>System Status</h2>
+      <div class="card">
+        <button id="refreshHealth">Check Health</button>
+        <pre id="health" style="background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;margin-top:10px;"></pre>
+      </div>
+    </section>
+
+  </main>
+
+  <script type="module">
+    const $ = (q) => document.querySelector(q);
+    let currentSessionId = 1;
+    let recognition = null;
+    let viewingArchived = false;
+
+    // TABS
+    document.querySelectorAll('.tabbtn').forEach(b => {
+      b.onclick = () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tabbtn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(b.dataset.tab).classList.add('active');
+        b.classList.add('active');
+      };
+    });
+    // Set default active tab
+    $('.tabbtn[data-tab="chat"]').click();
+
+    // WIZARD LOGIC
+    if (!localStorage.getItem('waifu_setup_done')) {
+      $('#wizard').style.display = 'flex';
+    }
+    $('#wiz_save').onclick = async () => {
+      const ep = $('#wiz_endpoint').value;
+      const mod = $('#wiz_model').value;
+      $('#endpoint').value = ep;
+      $('#model').value = mod;
+
+      // Save via existing save logic
+      $('#saveCfg').click();
+
+      $('#wizard').style.display = 'none';
+      localStorage.setItem('waifu_setup_done', 'true');
+    };
+
+
+    // CONFIG
+    async function loadCfg() {
+      try {
+        const r = await fetch('/api/config');
+        const j = await r.json();
+        $('#provider').value = j.llm?.provider || 'lmstudio';
+        $('#endpoint').value = j.llm?.endpoint || 'http://127.0.0.1:1234/v1';
+        $('#api_key').value = j.llm?.api_key || 'lm-studio';
+        $('#model').value = j.llm?.model || '';
+        $('#max_history').value = j.memory?.max_history || 12;
+        // TTS
+        $('#tts_provider').value = j.tts?.provider || 'fish_audio';
+        $('#tts_voice_id').value = j.tts?.voice_id || '';
+        // ASR
+        $('#asr_enabled').checked = j.asr?.enabled || false;
+        if (j.asr?.enabled) initASR();
+      } catch (e) { console.error("Load config failed", e); }
+    }
+
+    $('#saveCfg').onclick = async () => {
+      const body = {
+        llm: {
+          provider: $('#provider').value,
+          endpoint: $('#endpoint').value,
+          api_key: $('#api_key').value,
+          model: $('#model').value
+        },
+        memory: { max_history: parseInt($('#max_history').value) },
+        tts: {
+          provider: $('#tts_provider').value,
+          voice_id: $('#tts_voice_id').value,
+          format: $('#tts_format').value,
+          sample_rate: parseInt($('#tts_sr').value)
+        },
+        asr: { enabled: $('#asr_enabled').checked, provider: $('#asr_provider').value }
+      };
+
+      const r = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const ok = r.ok;
+      $('#saveMsg').textContent = ok ? 'Saved Successfully ✅' : 'Save Failed ❌';
+      $('#saveMsg').style.color = ok ? 'var(--ok)' : 'var(--fail)';
+      if ($('#asr_enabled').checked) initASR();
+    };
+
+    loadCfg();
+
+    // SESSIONS
+    async function loadSessions() {
+      const r = await fetch(`/api/sessions?archived=${viewingArchived}`);
+      const j = await r.json();
+      const c = $('#sessionsList');
+      c.innerHTML = '';
+
+      if (j.sessions.length === 0 && !viewingArchived) {
+        // Don't auto-create if viewing trash
+        if (!viewingArchived) await createSession('New Chat');
+        return; // Will recurse in createSession
+      }
+
+      j.sessions.forEach(s => {
+        const d = document.createElement('div');
+        d.className = 'session-item' + (s.id == currentSessionId ? ' active' : '');
+        d.innerHTML = `
+      <span>${s.title}</span>
+      ${s.archived
+            ? `<div style="display:flex;gap:5px;">
+             <button onclick="restoreSession(${s.id}, event)" title="Restore">♻️</button>
+             <button onclick="deleteSession(${s.id}, event)" title="Delete" style="color:var(--fail)">❌</button>
+           </div>`
+            : `<button onclick="archiveSession(${s.id}, event)" title="Archive" style="opacity:0.6;">🗑️</button>`
+          }
+    `;
+        d.onclick = (e) => {
+          if (e.target.tagName !== 'BUTTON') switches(s.id, s.title);
+        };
+        c.appendChild(d);
+      });
+    }
+
+    async function createSession(title) {
+      const r = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title || `Chat ${new Date().toLocaleTimeString()}` })
+      });
+      const j = await r.json();
+      if (j.ok) {
+        await loadSessions();
+        switches(j.session_id, j.title);
+      }
+    }
+
+    async function switches(id, title) {
+      currentSessionId = id;
+      $('#currentSessionTitle').textContent = title;
+
+      const log = $('#log');
+      log.innerHTML = ''; // Requesting existing msgs
+
+      const r = await fetch(`/api/sessions/${id}/messages`);
+      const j = await r.json();
+
+      j.messages.forEach(m => {
+        addBubble(m.text, m.role === 'user');
+      });
+
+      // If empty and clean session, add welcome
+      if (j.messages.length === 0) {
+        addBubble("Hello! I'm ready to chat.", false);
+      }
+    }
+
+    function addBubble(text, isMe) {
+      const d = document.createElement('div');
+      d.className = `bubble ${isMe ? 'me' : 'ai'}`;
+      d.textContent = text;
+      $('#log').appendChild(d);
+      $('#log').scrollTop = $('#log').scrollHeight;
+    }
+
+    // Global scope for onclicks
+    window.archiveSession = async (id, e) => { e.stopPropagation(); await fetch(`/api/sessions/${id}/archive`, { method: 'PUT' }); loadSessions(); };
+    window.restoreSession = async (id, e) => { e.stopPropagation(); await fetch(`/api/sessions/${id}/unarchive`, { method: 'PUT' }); loadSessions(); };
+    window.deleteSession = async (id, e) => { e.stopPropagation(); if (confirm('Delete forever?')) { await fetch(`/api/sessions/${id}`, { method: 'DELETE' }); loadSessions(); } };
+
+    $('#newSession').onclick = () => createSession();
+    $('#toggleArchived').onclick = () => {
+      viewingArchived = !viewingArchived;
+      $('#toggleArchived').textContent = viewingArchived ? 'Back to Chats' : 'Show Trash';
+      loadSessions();
+    };
+
+    loadSessions();
+
+    // CHAT
+    let lastAudio = null;
+    $('#send').onclick = send;
+    $('#msg').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
+
+    async function send() {
+      const txt = $('#msg').value.trim();
+      if (!txt) return;
+      $('#msg').value = '';
+
+      addBubble(txt, true);
+
+      const res = await fetch(`/api/chat?session_id=${currentSessionId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: txt, speak: $('#speak').checked })
+      });
+      const j = await res.json();
+
+      const reply = j.ok ? j.reply : `Error: ${j.error}`;
+      addBubble(reply, false);
+
+      if (j.ok && j.audio) {
+        if (lastAudio) lastAudio.pause();
+        lastAudio = new Audio(j.audio);
+        lastAudio.play();
+      }
+    }
+
+    // ASR
+    function initASR() {
+      if (!window.webkitSpeechRecognition) return;
+      recognition = new webkitSpeechRecognition();
+      recognition.continuous = false;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = e => {
+        const t = e.results[0][0].transcript;
+        $('#msg').value = t;
+        endListen();
+      };
+      recognition.onerror = endListen;
+      recognition.onend = endListen;
+    }
+
+    function startListen() {
+      if (!recognition) return;
+      $('#voiceIndicator').style.opacity = '1';
+      $('#micBtn').style.background = '#ff4444';
+      recognition.start();
+    }
+    function endListen() {
+      $('#voiceIndicator').style.opacity = '0';
+      $('#micBtn').style.background = '';
+    }
+
+    $('#micBtn').onclick = startListen;
+
+    // FILE UPLOAD
+    async function listModels() {
+      const ul = $('#models'); ul.innerHTML = '';
+      const j = await (await fetch('/api/avatars')).json();
+      j.avatars.forEach(a => {
+        const li = document.createElement('li');
+        li.style.display = 'flex'; li.style.justifyContent = 'space-between'; li.style.marginBottom = '8px';
+        li.innerHTML = `<span>${a.name}</span> <div><a href="/frontend/viewer/viewer.html?url=${encodeURIComponent(a.url)}" target="_blank" style="margin-right:10px;color:var(--ac-1);">Open</a> <button onclick="delModel('${a.name}')" style="padding:2px 6px;font-size:0.8rem;background:#333;">X</button></div>`;
+        ul.appendChild(li);
+      });
+    }
+    window.delModel = async (n) => { await fetch(`/api/avatars/${n}`, { method: 'DELETE' }); listModels(); };
+    $('#upload').onclick = async () => {
+      const f = $('#file').files[0];
+      if (!f) return;
+      const fd = new FormData(); fd.append('file', f);
+      await fetch('/api/avatars/upload', { method: 'POST', body: fd });
+      listModels();
+    };
+    listModels();
+
+    // HEALTH
+    $('#refreshHealth').onclick = async () => {
+      const j = await (await fetch('/api/healthcheck')).json();
+      $('#health').textContent = JSON.stringify(j, null, 2);
+    }
+
+  </script>
+</body>
+
+</html>

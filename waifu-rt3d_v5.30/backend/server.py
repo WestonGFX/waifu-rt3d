@@ -3,8 +3,14 @@ from fastapi.responses import HTMLResponse
 from starlette.staticfiles import StaticFiles
 from pathlib import Path
 import json, sqlite3, requests
+import logging
+
+# Initialize logging
+logging.basicConfig(level=logging.INFO)
 
 ROOT = Path(__file__).resolve().parents[1]
+VERSION_FILE = ROOT / "VERSION"
+VERSION = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else "5.31.0"
 FRONTEND = ROOT / "frontend"
 STORAGE = ROOT / "backend" / "storage"
 AVATARS = STORAGE / "avatars"
@@ -12,7 +18,7 @@ AUDIO = STORAGE / "audio"
 CONFIG = ROOT / "backend" / "config" / "app.json"
 DB_PATH = STORAGE / "app.db"
 
-app = FastAPI(title="waifu-rt3d", version="5.30")
+app = FastAPI(title="waifu-rt3d", version=VERSION)
 
 def preflight():
     from . import preflight as pf
@@ -22,16 +28,78 @@ def preflight():
 def _startup():
     preflight()
 
+DEFAULT_CONFIG = {
+    "onboarded": False,
+    "llm": {
+        "provider": "local",
+        "endpoint": "http://127.0.0.1:1234/v1",
+        "model": "",
+        "api_key": "lm-studio",
+        "temperature": 0.7,
+        "history_limit": 20
+    },
+    "tts": {
+        "enabled": True,
+        "provider": "local",
+        "voice_id": "fox_v1",
+        "auto_speak": True
+    },
+    "asr": {
+        "enabled": False,
+        "provider": "web_speech",
+        "language": "en-US"
+    },
+    "ui": {
+        "scanline_opacity": 0.4,
+        "flicker_enabled": True,
+        "theme": "retro"
+    }
+}
+
 def load_config():
+    cfg = DEFAULT_CONFIG.copy()
     if CONFIG.exists():
-        return json.loads(CONFIG.read_text(encoding="utf-8"))
-    return {}
+        try:
+            saved = json.loads(CONFIG.read_text(encoding="utf-8"))
+            for k, v in saved.items():
+                if isinstance(v, dict) and k in cfg:
+                    cfg[k].update(v)
+                else:
+                    cfg[k] = v
+        except:
+            pass
+    return cfg
 
 def save_config(cfg):
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
     CONFIG.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 
 def db():
     return sqlite3.connect(DB_PATH)
+
+# Global sentiment analyzer instance (lazy-loaded)
+_sentiment_analyzer = None
+
+def get_sentiment_analyzer():
+    """
+    Lazy-load advanced sentiment analyzer.
+
+    Loads HuggingFace emotion detection model on first use to avoid
+    slow startup. Model takes ~2-3s to load.
+
+    Returns:
+        AdvancedSentimentAnalyzer: Initialized sentiment analyzer instance
+
+    Example:
+        >>> analyzer = get_sentiment_analyzer()
+        >>> result = analyzer.analyze("I love this!")
+        >>> print(result["emotion"])  # "joy"
+    """
+    global _sentiment_analyzer
+    if _sentiment_analyzer is None:
+        from backend.emotion.advanced_sentiment import AdvancedSentimentAnalyzer
+        _sentiment_analyzer = AdvancedSentimentAnalyzer(use_gpu=False)
+    return _sentiment_analyzer
 
 @app.get("/", response_class=HTMLResponse)
 def index():
@@ -47,21 +115,65 @@ def get_config(): return load_config()
 @app.put("/api/config")
 async def set_config(req: Request):
     incoming = await req.json()
-    cfg = load_config() or {}
-    for k,v in (incoming or {}).items():
-        if isinstance(v, dict) and isinstance(cfg.get(k), dict): cfg[k].update(v)
-        else: cfg[k] = v
+    cfg = load_config()
+    for k, v in (incoming or {}).items():
+        if isinstance(v, dict) and k in cfg and isinstance(cfg[k], dict):
+            cfg[k].update(v)
+        else:
+            cfg[k] = v
     save_config(cfg)
     return {"ok": True, "config": cfg}
 
+@app.post("/api/config/reset")
+def reset_config():
+    save_config(DEFAULT_CONFIG)
+    return {"ok": True, "config": DEFAULT_CONFIG}
+
 @app.get("/api/healthcheck")
 def health():
+    """System health check endpoint.
+
+    Returns:
+        dict: {
+            "ok": bool - Overall system health
+            "version": str - Application version
+            "schema_version": int - Database schema version
+            "libs": dict - Frontend library availability
+            "lmstudio": bool - LLM endpoint connectivity
+            "ttsConfigured": bool - TTS availability
+            "issues": list - Any detected problems
+        }
+
+    Example:
+        >>> GET /api/healthcheck
+        >>> {
+        ...     "ok": true,
+        ...     "version": "5.31.0",
+        ...     "schema_version": 5,
+        ...     "libs": {"three_local": true, ...},
+        ...     "lmstudio": true,
+        ...     "ttsConfigured": true,
+        ...     "issues": []
+        ... }
+    """
     libs = {
         "three_local": (FRONTEND/'lib'/'three.module.js').exists(),
         "gltf_loader_local": (FRONTEND/'lib'/'GLTFLoader.js').exists(),
         "three_vrm_local": (FRONTEND/'lib'/'three-vrm.module.min.js').exists()
     }
     issues = []; ok = True; lm_ok=False; tts=True
+
+    # Get schema version
+    try:
+        from .preflight import get_schema_version
+        con = db()
+        schema_version = get_schema_version(con)
+        con.close()
+    except Exception as e:
+        schema_version = None
+        issues.append(f"Schema version check failed: {e}")
+
+    # Check LLM endpoint
     try:
         cfg = load_config()
         url = (cfg.get("llm",{}).get("endpoint","http://127.0.0.1:1234/v1")).rstrip("/") + "/models"
@@ -70,7 +182,16 @@ def health():
         if not lm_ok: ok=False; issues.append(f"LLM models status: {r.status_code}")
     except Exception as e:
         ok=False; issues.append(f"LLM probe: {e}")
-    return {"ok": ok, "libs": libs, "lmstudio": lm_ok, "ttsConfigured": tts, "issues": issues}
+
+    return {
+        "ok": ok,
+        "version": VERSION,
+        "schema_version": schema_version,
+        "libs": libs,
+        "lmstudio": lm_ok,
+        "ttsConfigured": tts,
+        "issues": issues
+    }
 
 @app.get("/api/avatars")
 def list_avatars():
@@ -96,79 +217,91 @@ def delete_avatar(name: str):
     return {"ok": True}
 
 @app.post("/api/chat")
-async def chat(session_id: int = 1, req: Request = None):
+async def chat(session_id: int = 1, char_id: int = None, req: Request = None):
     body = await req.json()
     if not body or "text" not in body: raise HTTPException(400, "missing text")
     text = body["text"]; speak = bool(body.get("speak", False))
+    if char_id is None: char_id = body.get("character_id", 1)
+
     cfg = load_config()
     con = db(); cur = con.cursor()
-    cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)", (session_id, f"Session {session_id}"))
-    cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "user", text))
-    con.commit()
-    cur.execute("SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
-                (session_id, cfg.get("memory",{}).get("max_history",12)))
-    hist = [{"role": r, "content": t} for (r,t) in cur.fetchall()][::-1]
-    
-    # --- PERSONALITY FIX: Fetch Default Character (ID 1) ---
-    cur.execute("SELECT system_prompt, voice_id, tts_provider FROM characters WHERE id=1")
-    char_row = cur.fetchone()
-    if char_row:
-        sys_prompt, char_voice, char_prov = char_row
-    else:
-        sys_prompt = "You are a friendly anime companion."
-        char_voice, char_prov = None, None
-    # --------------------------------------------------------
-
-    messages = [{"role":"system","content": sys_prompt}] + hist
     try:
-        from .llm.registry import get_client
-        adapter = get_client(cfg)
-        res = adapter.chat(messages, cfg["llm"]["model"], cfg["llm"]["endpoint"], cfg["llm"]["api_key"])
-    except Exception as e:
-        return {"ok": False, "error": f"Adapter error: {e}"}
-    if not res.get("ok"): return {"ok": False, "error": res.get("error","adapter failed")}
-    reply = res["reply"]
-    cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "assistant", reply))
-    con.commit(); con.close()
+        cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)", (session_id, f"Session {session_id}"))
+        cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "user", text))
+        con.commit()
+        cur.execute("SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
+                    (session_id, cfg.get("memory",{}).get("max_history",12)))
+        hist = [{"role": r, "content": t} for (r,t) in cur.fetchall()][::-1]
+        
+        cur.execute("SELECT system_prompt, voice_id, tts_provider FROM characters WHERE id=?", (char_id,))
+        char_row = cur.fetchone()
+        if char_row:
+            sys_prompt, char_voice, char_prov = char_row
+        else:
+            cur.execute("SELECT system_prompt, voice_id, tts_provider FROM characters WHERE id=1")
+            char_row = cur.fetchone()
+            if char_row:
+                sys_prompt, char_voice, char_prov = char_row
+            else:
+                sys_prompt = "You are a friendly anime companion."
+                char_voice, char_prov = None, None
 
-    tts_url = None
-    if speak:
+        messages = [{"role":"system","content": sys_prompt}] + hist
+        
         try:
-            from .tts.registry import get_tts
-            tts_client = get_tts(cfg)
-            # Use character voice if available, else config defaults
-            tts_opts = cfg.get("tts",{}).copy()
-            if char_voice: tts_opts['voice_id'] = char_voice
-            if char_prov: tts_opts['provider'] = char_prov
+            from .llm.registry import get_client
+            adapter = get_client(cfg)
+            llm_model = cfg["llm"].get("model") or "local-model"
+            res = adapter.chat(messages, llm_model, cfg["llm"]["endpoint"], cfg["llm"]["api_key"])
+        except Exception as e:
+            return {"ok": False, "error": f"Adapter error: {e}"}
             
-            tts_res = tts_client.speak(reply, tts_opts)
-            if tts_res.get("ok"): tts_url = f"/files/audio/{tts_res['filename']}"
-        except Exception: tts_url = None
+        if not res.get("ok"): 
+            return {"ok": False, "error": res.get("error","adapter failed")}
+            
+        reply = res["reply"]
+        cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "assistant", reply))
+        con.commit()
 
-    return {"ok": True, "reply": reply, "audio": tts_url, "session_id": session_id}
+        # Analyze sentiment/emotion from reply using advanced HuggingFace model
+        analyzer = get_sentiment_analyzer()
+        sentiment = analyzer.analyze(reply, min_confidence=0.3)
 
-@app.post("/api/tts")
-async def api_tts(req: Request):
-    body = await req.json()
-    text = body.get("text","").strip()
-    if not text: raise HTTPException(400, "text required")
-    cfg = load_config(); cfg_tts = cfg.get("tts",{}).copy()
-    for k in ("provider","endpoint","api_key","voice_id","format","sample_rate"):
-        if k in body: cfg_tts[k] = body[k]
-    from .tts.registry import get_tts
-    tts = get_tts(cfg)
-    res = tts.speak(text, cfg_tts)
-    if not res.get("ok"): raise HTTPException(400, res.get("error","TTS failed"))
-    return {"ok": True, "url": f"/files/audio/{res['filename']}", "meta": res.get("meta",{})}
+        tts_url = None
+        if speak:
+            try:
+                from .tts.registry import get_tts
+                tts_client = get_tts(cfg)
+                tts_opts = cfg.get("tts",{}).copy()
+                if char_voice: tts_opts['voice_id'] = char_voice
+                if char_prov: tts_opts['provider'] = char_prov
+                tts_res = tts_client.speak(reply, tts_opts)
+                if tts_res.get("ok"): tts_url = f"/files/audio/{tts_res['filename']}"
+            except Exception: tts_url = None
 
-# ==================== SESSION MANAGEMENT ====================
+        # Build emotion confidence scores (top 3 emotions)
+        emotion_confidence = {}
+        if "all_emotions" in sentiment:
+            for pred in sentiment["all_emotions"][:3]:
+                emotion_confidence[pred["label"]] = round(pred["score"], 3)
+
+        return {
+            "ok": True,
+            "reply": reply,
+            "audio": tts_url,
+            "session_id": session_id,
+            "emotion": sentiment["emotion"],
+            "intensity": sentiment["intensity"],
+            "gesture": sentiment["gesture"],
+            "secondary_emotion": sentiment.get("secondary_emotion"),
+            "emotion_confidence": emotion_confidence
+        }
+    finally:
+        con.close()
 
 @app.get("/api/sessions")
 def list_sessions(archived: bool = False):
-    """List all chat sessions. Default: active only."""
-    conn = db()
-    cur = conn.cursor()
-    # Handle int/bool conversion for SQLite (0/1)
+    conn = db(); cur = conn.cursor()
     is_archived = 1 if archived else 0
     cur.execute("""
         SELECT s.id, s.title, s.created_ts, COUNT(m.id) as msg_count, s.archived
@@ -178,227 +311,335 @@ def list_sessions(archived: bool = False):
         GROUP BY s.id
         ORDER BY s.created_ts DESC
     """, (is_archived,))
-    sessions = [
-        {
-            "id": row[0],
-            "title": row[1] or f"Session {row[0]}",
-            "created_ts": row[2],
-            "message_count": row[3],
-            "archived": bool(row[4])
-        }
-        for row in cur.fetchall()
-    ]
+    sessions = [{"id": row[0], "title": row[1] or f"Session {row[0]}", "created_ts": row[2], "message_count": row[3], "archived": bool(row[4])} for row in cur.fetchall()]
     conn.close()
     return {"sessions": sessions}
 
 @app.post("/api/sessions")
 async def create_session(req: Request):
-    """Create a new chat session."""
-    body = await req.json()
-    title = body.get("title", "New Session")
-    conn = db()
-    cur = conn.cursor()
+    """Create a new chat session.
+
+    Args:
+        req: FastAPI Request with JSON body containing optional "title"
+
+    Returns:
+        dict: {
+            "id": int - Session ID
+            "session_id": int - Session ID (duplicate for compatibility)
+            "title": str - Session title
+            "created_ts": float - Creation timestamp
+        }
+
+    Example:
+        >>> POST /api/sessions
+        >>> {"title": "My Chat"}
+        >>> {"id": 1, "session_id": 1, "title": "My Chat", "created_ts": 1234567890.0}
+    """
+    body = await req.json(); title = body.get("title", "New Session")
+    conn = db(); cur = conn.cursor()
     cur.execute("INSERT INTO sessions (title) VALUES (?)", (title,))
-    session_id = cur.lastrowid
-    cur.execute("SELECT created_ts FROM sessions WHERE id=?", (session_id,))
-    created_ts = cur.fetchone()[0]
-    conn.commit()
-    conn.close()
-    return {"id": session_id, "session_id": session_id, "title": title, "created_ts": created_ts}
-
-@app.put("/api/sessions/{session_id}/archive")
-def archive_session(session_id: int):
-    """Archive a session."""
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("UPDATE sessions SET archived=1 WHERE id=?", (session_id,))
-    conn.commit()
-    conn.close()
-    return {"ok": True}
-
-@app.put("/api/sessions/{session_id}/unarchive")
-def unarchive_session(session_id: int):
-    """Unarchive a session (restore)."""
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("UPDATE sessions SET archived=0 WHERE id=?", (session_id,))
-    conn.commit()
-    conn.close()
-    return {"ok": True}
+    sid = cur.lastrowid
+    cur.execute("SELECT created_ts FROM sessions WHERE id=?", (sid,))
+    ts = cur.fetchone()[0]
+    conn.commit(); conn.close()
+    return {"id": sid, "session_id": sid, "title": title, "created_ts": ts}
 
 @app.put("/api/sessions/{session_id}")
 async def update_session(session_id: int, req: Request):
-    """Update session title."""
+    """Update session title or archive status.
+
+    Args:
+        session_id: Session ID to update
+        req: Request with JSON: {"title": str, "archived": bool}
+
+    Returns:
+        dict: {
+            "ok": bool - Success status
+            "session": dict - Updated session object
+        }
+
+    Raises:
+        HTTPException: 400 if request body is empty
+        HTTPException: 404 if session not found
+
+    Example:
+        >>> PUT /api/sessions/1
+        >>> {"title": "Renamed Session", "archived": false}
+        >>> {"ok": true, "session": {"id": 1, "title": "Renamed Session", ...}}
+    """
     body = await req.json()
-    title = body.get("title", "")
-    if not title:
-        raise HTTPException(400, "Title required")
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("UPDATE sessions SET title=? WHERE id=?", (title, session_id))
-    conn.commit()
+    if not body:
+        raise HTTPException(400, "Empty request body")
+
+    conn = db(); cur = conn.cursor()
+
+    # Validate session exists
+    cur.execute("SELECT id FROM sessions WHERE id=?", (session_id,))
+    if not cur.fetchone():
+        conn.close()
+        raise HTTPException(404, f"Session {session_id} not found")
+
+    # Update fields
+    updates, params = [], []
+    if "title" in body:
+        updates.append("title=?")
+        params.append(body["title"])
+    if "archived" in body:
+        updates.append("archived=?")
+        params.append(1 if body["archived"] else 0)
+
+    if updates:
+        params.append(session_id)
+        cur.execute(f"UPDATE sessions SET {', '.join(updates)} WHERE id=?", params)
+        conn.commit()
+
+    # Fetch updated session
+    cur.execute("SELECT id, title, created_ts, archived FROM sessions WHERE id=?", (session_id,))
+    row = cur.fetchone()
     conn.close()
-    return {"ok": True}
+
+    return {"ok": True, "session": {"id": row[0], "title": row[1], "created_ts": row[2], "archived": bool(row[3])}}
 
 @app.delete("/api/sessions/{session_id}")
 def delete_session(session_id: int):
-    """Delete session and all its messages."""
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM messages WHERE session_id=?", (session_id,))
+    """Delete session and all associated messages.
+
+    Args:
+        session_id: Session ID to delete
+
+    Returns:
+        dict: {
+            "ok": bool - Success status
+            "deleted_messages": int - Number of messages deleted
+        }
+
+    Raises:
+        HTTPException: 404 if session not found
+
+    Example:
+        >>> DELETE /api/sessions/1
+        >>> {"ok": true, "deleted_messages": 15}
+    """
+    conn = db(); cur = conn.cursor()
+
+    cur.execute("SELECT id FROM sessions WHERE id=?", (session_id,))
+    if not cur.fetchone():
+        conn.close()
+        raise HTTPException(404, f"Session {session_id} not found")
+
+    cur.execute("SELECT COUNT(*) FROM messages WHERE session_id=?", (session_id,))
+    msg_count = cur.fetchone()[0]
+
     cur.execute("DELETE FROM sessions WHERE id=?", (session_id,))
-    conn.commit()
+    conn.commit(); conn.close()
+
+    return {"ok": True, "deleted_messages": msg_count}
+
+@app.get("/api/sessions/search")
+def search_sessions(q: str = ""):
+    """Search sessions using FTS5 full-text search on messages.
+
+    Args:
+        q: Search query string (searches message content)
+
+    Returns:
+        dict: {
+            "sessions": list - Matching sessions with metadata
+            "total": int - Total number of results
+        }
+
+    Example:
+        >>> GET /api/sessions/search?q=hello
+        >>> {"sessions": [{"id": 1, "title": "...", ...}], "total": 1}
+    """
+    conn = db(); cur = conn.cursor()
+
+    if not q:
+        # No query - return all sessions
+        cur.execute("SELECT id, title, created_ts, archived FROM sessions ORDER BY created_ts DESC")
+    else:
+        # FTS5 search on messages
+        cur.execute("""
+            SELECT DISTINCT s.id, s.title, s.created_ts, s.archived
+            FROM sessions s
+            INNER JOIN messages m ON s.id = m.session_id
+            INNER JOIN messages_fts fts ON m.id = fts.rowid
+            WHERE messages_fts MATCH ?
+            ORDER BY s.created_ts DESC
+        """, (q,))
+
+    sessions = [{"id": r[0], "title": r[1], "created_ts": r[2], "archived": bool(r[3])} for r in cur.fetchall()]
     conn.close()
-    return {"ok": True}
+    return {"sessions": sessions, "total": len(sessions)}
 
 @app.get("/api/sessions/{session_id}/messages")
 def get_session_messages(session_id: int):
-    """Get all messages for a session."""
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT id, role, text, ts
-        FROM messages
-        WHERE session_id=?
-        ORDER BY id ASC
-    """, (session_id,))
-    messages = [
-        {"id": row[0], "role": row[1], "text": row[2], "ts": row[3]}
-        for row in cur.fetchall()
-    ]
+    conn = db(); cur = conn.cursor()
+    cur.execute("SELECT id, role, text, ts FROM messages WHERE session_id=? ORDER BY id ASC", (session_id,))
+    msgs = [{"id": row[0], "role": row[1], "text": row[2], "ts": row[3]} for row in cur.fetchall()]
     conn.close()
-    return {"messages": messages}
-
-# ==================== CHARACTER MANAGEMENT ====================
+    return {"messages": msgs}
 
 @app.get("/api/characters")
 def list_characters():
-    """List all characters."""
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider, personality_traits
-        FROM characters
-        ORDER BY id ASC
-    """)
-    characters = []
+    """List all available characters.
+
+    Returns:
+        dict: {
+            "characters": list - Array of character objects with full details
+        }
+
+    Example:
+        >>> GET /api/characters
+        >>> {"characters": [{"id": 1, "name": "Default", ...}, ...]}
+    """
+    conn = db(); cur = conn.cursor()
+    cur.execute("SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider, personality_traits FROM characters ORDER BY id ASC")
+    chars = []
     for row in cur.fetchall():
-        traits = []
-        try:
-            if row[6]:
-                traits = json.loads(row[6])
-        except:
-            pass
-        characters.append({
-            "id": row[0],
-            "name": row[1],
-            "system_prompt": row[2],
-            "avatar_url": row[3],
-            "voice_id": row[4],
-            "tts_provider": row[5],
-            "personality_traits": traits
-        })
+        chars.append({"id": row[0], "name": row[1], "system_prompt": row[2], "avatar_url": row[3], "voice_id": row[4], "tts_provider": row[5], "personality_traits": json.loads(row[6]) if row[6] else []})
     conn.close()
-    return {"characters": characters}
+    return {"characters": chars}
 
 @app.post("/api/characters")
 async def create_character(req: Request):
-    """Create a new character."""
+    """Create a new character.
+
+    Args:
+        req: Request with JSON body containing:
+            - name: str (required)
+            - system_prompt: str (required)
+            - avatar_url: str (optional)
+            - voice_id: str (optional)
+            - tts_provider: str (optional)
+            - personality_traits: list (optional)
+
+    Returns:
+        dict: {
+            "ok": bool - Success status
+            "character": dict - Created character object
+        }
+
+    Raises:
+        HTTPException: 400 if name or system_prompt missing
+
+    Example:
+        >>> POST /api/characters
+        >>> {"name": "Tsuki", "system_prompt": "You are Tsuki..."}
+        >>> {"ok": true, "character": {"id": 2, "name": "Tsuki", ...}}
+    """
     body = await req.json()
-    name = body.get("name", "")
-    system_prompt = body.get("system_prompt", "")
-    if not name or not system_prompt:
-        raise HTTPException(400, "name and system_prompt required")
-    avatar_url = body.get("avatar_url", "")
-    voice_id = body.get("voice_id", "")
-    tts_provider = body.get("tts_provider", "")
-    personality_traits = json.dumps(body.get("personality_traits", []))
-    conn = db()
-    cur = conn.cursor()
+    if not body or "name" not in body or "system_prompt" not in body:
+        raise HTTPException(400, "Missing name or system_prompt")
+
+    conn = db(); cur = conn.cursor()
+    traits_json = json.dumps(body.get("personality_traits", []))
+
     cur.execute("""
         INSERT INTO characters (name, system_prompt, avatar_url, voice_id, tts_provider, personality_traits)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, (name, system_prompt, avatar_url, voice_id, tts_provider, personality_traits))
+    """, (body["name"], body["system_prompt"], body.get("avatar_url"),
+          body.get("voice_id"), body.get("tts_provider"), traits_json))
+
     char_id = cur.lastrowid
     conn.commit()
-    conn.close()
-    return {
-        "id": char_id,
-        "name": name,
-        "system_prompt": system_prompt,
-        "avatar_url": avatar_url,
-        "voice_id": voice_id,
-        "tts_provider": tts_provider,
-        "personality_traits": json.loads(personality_traits)
-    }
 
-@app.put("/api/characters/{character_id}")
-async def update_character(character_id: int, req: Request):
-    """Update character details."""
+    cur.execute("SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider, personality_traits FROM characters WHERE id=?", (char_id,))
+    row = cur.fetchone()
+    conn.close()
+
+    return {"ok": True, "character": {"id": row[0], "name": row[1], "system_prompt": row[2],
+                                       "avatar_url": row[3], "voice_id": row[4],
+                                       "tts_provider": row[5],
+                                       "personality_traits": json.loads(row[6]) if row[6] else []}}
+
+@app.put("/api/characters/{char_id}")
+async def update_character(char_id: int, req: Request):
+    """Update existing character.
+
+    Args:
+        char_id: Character ID to update
+        req: Request with JSON containing fields to update
+
+    Returns:
+        dict: {
+            "ok": bool - Success status
+            "character": dict - Updated character object
+        }
+
+    Raises:
+        HTTPException: 400 if request body is empty
+        HTTPException: 404 if character not found
+
+    Example:
+        >>> PUT /api/characters/2
+        >>> {"name": "Tsuki Updated", "voice_id": "tsuki_v2"}
+        >>> {"ok": true, "character": {"id": 2, ...}}
+    """
     body = await req.json()
-    conn = db()
-    cur = conn.cursor()
-    updates = []
-    params = []
-    if "name" in body:
-        updates.append("name=?")
-        params.append(body["name"])
-    if "system_prompt" in body:
-        updates.append("system_prompt=?")
-        params.append(body["system_prompt"])
-    if "avatar_url" in body:
-        updates.append("avatar_url=?")
-        params.append(body["avatar_url"])
-    if "voice_id" in body:
-        updates.append("voice_id=?")
-        params.append(body["voice_id"])
-    if "tts_provider" in body:
-        updates.append("tts_provider=?")
-        params.append(body["tts_provider"])
+    if not body:
+        raise HTTPException(400, "Empty request body")
+
+    conn = db(); cur = conn.cursor()
+
+    cur.execute("SELECT id FROM characters WHERE id=?", (char_id,))
+    if not cur.fetchone():
+        conn.close()
+        raise HTTPException(404, f"Character {char_id} not found")
+
+    updates, params = [], []
+    for field in ["name", "system_prompt", "avatar_url", "voice_id", "tts_provider"]:
+        if field in body:
+            updates.append(f"{field}=?")
+            params.append(body[field])
+
     if "personality_traits" in body:
         updates.append("personality_traits=?")
         params.append(json.dumps(body["personality_traits"]))
-    if not updates:
-        raise HTTPException(400, "No fields to update")
-    params.append(character_id)
-    query = f"UPDATE characters SET {', '.join(updates)} WHERE id=?"
-    cur.execute(query, params)
-    conn.commit()
+
+    if updates:
+        params.append(char_id)
+        cur.execute(f"UPDATE characters SET {', '.join(updates)} WHERE id=?", params)
+        conn.commit()
+
+    cur.execute("SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider, personality_traits FROM characters WHERE id=?", (char_id,))
+    row = cur.fetchone()
     conn.close()
-    return {"ok": True}
 
-@app.delete("/api/characters/{character_id}")
-def delete_character(character_id: int):
-    """Delete a character."""
-    if character_id == 1:
-        raise HTTPException(400, "Cannot delete default character")
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM characters WHERE id=?", (character_id,))
-    conn.commit()
-    conn.close()
-    return {"ok": True}
+    return {"ok": True, "character": {"id": row[0], "name": row[1], "system_prompt": row[2],
+                                       "avatar_url": row[3], "voice_id": row[4],
+                                       "tts_provider": row[5],
+                                       "personality_traits": json.loads(row[6]) if row[6] else []}}
 
-# ==================== ASR (SPEECH RECOGNITION) ====================
+@app.delete("/api/characters/{char_id}")
+def delete_character(char_id: int):
+    """Delete a character.
 
-@app.post("/api/asr")
-async def transcribe_audio(file: UploadFile = File(...)):
-    """Transcribe uploaded audio file to text."""
-    from .asr.registry import get_asr_adapter
-    cfg = load_config()
-    asr_config = cfg.get("asr", {})
-    if not asr_config.get("enabled", False):
-        raise HTTPException(400, "ASR not enabled in configuration")
-    try:
-        adapter = get_asr_adapter(asr_config)
-        if not adapter:
-            raise HTTPException(500, "ASR adapter not available")
-        audio_bytes = await file.read()
-        result = await adapter.transcribe(audio_bytes)
-        return {
-            "text": result["text"],
-            "language": result.get("language", "unknown"),
-            "confidence": result.get("confidence", 0.0)
+    Args:
+        char_id: Character ID to delete
+
+    Returns:
+        dict: {
+            "ok": bool - Success status
         }
-    except Exception as e:
-        raise HTTPException(500, f"Transcription failed: {str(e)}")
+
+    Raises:
+        HTTPException: 400 if attempting to delete default character (id=1)
+        HTTPException: 404 if character not found
+
+    Example:
+        >>> DELETE /api/characters/2
+        >>> {"ok": true}
+    """
+    if char_id == 1:
+        raise HTTPException(400, "Cannot delete default character")
+
+    conn = db(); cur = conn.cursor()
+    cur.execute("SELECT id FROM characters WHERE id=?", (char_id,))
+    if not cur.fetchone():
+        conn.close()
+        raise HTTPException(404, f"Character {char_id} not found")
+
+    cur.execute("DELETE FROM characters WHERE id=?", (char_id,))
+    conn.commit(); conn.close()
+    return {"ok": True}

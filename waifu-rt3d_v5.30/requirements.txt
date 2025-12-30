@@ -9,6 +9,11 @@ python-multipart==0.0.6
 # HTTP Client
 requests==2.31.0
 
+# AI/ML - Emotion Detection (v5.4+)
+transformers==4.36.0      # HuggingFace transformers for advanced sentiment analysis
+torch==2.1.0              # PyTorch (CPU version, use torch with CUDA for GPU)
+sentencepiece==0.1.99     # Tokenizer dependency
+
 # Database (built-in with Python)
 # sqlite3 - included in Python standard library
 

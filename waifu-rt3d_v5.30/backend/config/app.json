@@ -1,18 +1,20 @@
 {
-  "profile": "auto",
-  "input_mode": "text",
-  "output_mode": "text+voice",
+  "onboarded": true,
   "llm": {
     "provider": "lmstudio",
-    "endpoint": "http://10.0.0.17:1234",
+    "endpoint": "http://127.0.0.1:1234/v1",
+    "model": "wizardlm-1.0-uncensored-llama2-13b",
     "api_key": "lm-studio",
-    "model": "test-model"
+    "temperature": 0.5,
+    "history_limit": 20
   },
   "tts": {
-    "provider": "fish_audio",
+    "enabled": true,
+    "provider": "local",
+    "voice_id": "8ef4a238714b45718ce04243307c57a7",
+    "auto_speak": true,
     "endpoint": "https://api.fish.audio/v1",
     "api_key": "",
-    "voice_id": "8ef4a238714b45718ce04243307c57a7",
     "format": "mp3",
     "sample_rate": 24000,
     "fallback_chain": [
@@ -23,13 +25,21 @@
     "voice": ""
   },
   "asr": {
-    "enabled": false,
-    "provider": "browser",
+    "enabled": true,
+    "provider": "whisper",
+    "language": "en",
     "endpoint": "",
     "api_key": "",
-    "model": "whisper-1",
-    "language": "en"
+    "model": "whisper-1"
   },
+  "ui": {
+    "scanline_opacity": 0.1,
+    "flicker_enabled": false,
+    "theme": "retro"
+  },
+  "profile": "auto",
+  "input_mode": "text",
+  "output_mode": "text+voice",
   "memory": {
     "max_history": 200
   }

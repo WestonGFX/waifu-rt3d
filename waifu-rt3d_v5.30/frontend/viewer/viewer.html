@@ -1,19 +1,621 @@
-<!doctype html><html><head><meta charset="utf-8"/><title>Viewer</title>
-<style>html,body{margin:0;height:100%;background:#0b0c10}</style></head>
-<body><canvas id="c"></canvas>
-<script type="module">
-import {loadLib} from '/frontend/viewer/loader.js';
-const THREE = (await loadLib('/frontend/lib/three.module.js','https://cdn.jsdelivr.net/npm/three@0.177.0/build/three.module.js'));
-const { GLTFLoader } = await loadLib('/frontend/lib/GLTFLoader.js','https://cdn.jsdelivr.net/npm/three@0.177.0/examples/jsm/loaders/GLTFLoader.js');
-let VRMlib=null; try{ VRMlib = await loadLib('/frontend/lib/three-vrm.module.min.js','https://cdn.jsdelivr.net/npm/three-vrm@2.0.6/lib/three-vrm.module.min.js'); }catch(e){}
-const canvas=document.getElementById('c'); const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
-renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
-const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0b0c10);
-const camera=new THREE.PerspectiveCamera(50, innerWidth/innerHeight, .1, 100); camera.position.set(0,1.4,2.2);
-const key=new THREE.DirectionalLight(0xffffff,1.0); key.position.set(1,2,2); const amb=new THREE.AmbientLight(0xffffff,.2); scene.add(key,amb);
-function resize(){ renderer.setSize(innerWidth,innerHeight); camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); } window.addEventListener('resize', resize); resize();
-const url=new URLSearchParams(location.search).get('url'); const loader=new GLTFLoader();
-if(url){ loader.load(url,(g)=>{ scene.add(g.scene); animate(); },undefined,(e)=>{ console.error(e); const msg=document.createElement('div'); msg.style='position:absolute;top:10px;left:10px;color:#e6e6e6'; msg.textContent='Failed to load model.'; document.body.appendChild(msg);}); }
-else{ const m=new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({color:0x66ccff,metalness:.1,roughness:.6})); scene.add(m); animate(); }
-function animate(){ requestAnimationFrame(animate); renderer.render(scene,camera); }
-</script></body></html>
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Viewer</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            background: #0b0c10;
+            overflow: hidden;
+        }
+
+        #loading {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #00f2ff;
+            font-family: monospace;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading">UPLINKING_VISUAL_FEED...</div>
+    <canvas id="c"></canvas>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "/frontend/lib/three.module.js"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from '/frontend/lib/GLTFLoader.js';
+        import { VRM, VRMUtils } from '/frontend/lib/three-vrm.module.min.js';
+
+        let currentVrm = null;
+        let clock = new THREE.Clock();
+        let lipSync = null; // AudioLipSync instance
+        let blinkController = null; // Automatic blinking
+        let headMovement = null; // Idle head movements
+        let expressionController = null; // Emotion-based expressions
+        let gestureController = null; // Gesture animations
+
+        /**
+         * Real-time audio-driven lip sync using Web Audio API.
+         * Analyzes audio frequency data and maps it to VRM blendshapes.
+         */
+        class AudioLipSync {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.analyser = this.audioContext.createAnalyser();
+                this.analyser.fftSize = 256;
+                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+                this.isPlaying = false;
+                this.currentSource = null;
+            }
+
+            /**
+             * Play audio file with synchronized lip movements.
+             * @param {string} audioUrl - URL to audio file (MP3, WAV, etc.)
+             * @returns {Promise<void>}
+             */
+            async playAudioWithLipSync(audioUrl) {
+                try {
+                    // Stop any currently playing audio
+                    this.stop();
+
+                    // Fetch and decode audio
+                    const response = await fetch(audioUrl);
+                    const arrayBuffer = await response.arrayBuffer();
+                    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+
+                    // Create audio source
+                    const source = this.audioContext.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(this.analyser);
+                    this.analyser.connect(this.audioContext.destination);
+
+                    this.currentSource = source;
+                    this.isPlaying = true;
+                    source.start(0);
+
+                    // Close mouth when audio ends
+                    source.onended = () => {
+                        this.isPlaying = false;
+                        this.currentSource = null;
+                        this.setMouthOpen(0);
+                        console.log('LIPSYNC_ENDED');
+                    };
+
+                    console.log('LIPSYNC_STARTED:', audioUrl);
+                    this.updateLipSync();
+                } catch (error) {
+                    console.error('LIPSYNC_ERROR:', error);
+                    this.isPlaying = false;
+                    this.setMouthOpen(0);
+                }
+            }
+
+            /**
+             * Continuous update loop for lip sync animation.
+             * Analyzes audio frequency and updates mouth blendshape.
+             */
+            updateLipSync() {
+                if (!this.isPlaying) return;
+
+                // Get frequency data from audio
+                this.analyser.getByteFrequencyData(this.dataArray);
+
+                // Calculate average volume
+                let sum = 0;
+                for (let i = 0; i < this.dataArray.length; i++) {
+                    sum += this.dataArray[i];
+                }
+                const average = sum / this.dataArray.length;
+
+                // Normalize to 0.0 - 1.0 range
+                const normalized = Math.min(average / 128, 1.0);
+
+                // Apply smoothing to prevent jitter
+                const smoothed = normalized * 0.7 + (this.lastValue || 0) * 0.3;
+                this.lastValue = smoothed;
+
+                // Update mouth shape
+                this.setMouthOpen(smoothed);
+
+                // Continue animation loop
+                requestAnimationFrame(() => this.updateLipSync());
+            }
+
+            /**
+             * Set mouth open value on VRM blendshapes.
+             * @param {number} value - Mouth open amount (0.0 to 1.0)
+             */
+            setMouthOpen(value) {
+                if (!this.vrm) return;
+
+                // VRM 1.0 (newer format)
+                if (this.vrm.expressionManager) {
+                    this.vrm.expressionManager.setValue('aa', value);
+                }
+                // VRM 0.x (legacy format)
+                else if (this.vrm.blendShapeProxy) {
+                    this.vrm.blendShapeProxy.setValue('aa', value);
+                }
+            }
+
+            /**
+             * Stop current audio playback and reset mouth.
+             */
+            stop() {
+                if (this.currentSource) {
+                    try {
+                        this.currentSource.stop();
+                    } catch (e) {
+                        // Already stopped
+                    }
+                    this.currentSource = null;
+                }
+                this.isPlaying = false;
+                this.setMouthOpen(0);
+            }
+        }
+
+        /**
+         * Automatic blinking animation controller.
+         * Creates realistic random blinks every 2-6 seconds.
+         */
+        class BlinkController {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.nextBlinkTime = this.getNextBlinkDelay();
+                this.isBlinking = false;
+                this.blinkProgress = 0;
+            }
+
+            update(deltaTime) {
+                if (this.isBlinking) {
+                    this.blinkProgress += deltaTime * 10; // Blink speed
+
+                    if (this.blinkProgress < 0.5) {
+                        // Closing eyes
+                        const value = this.blinkProgress * 2;
+                        this.setBlinkValue(value);
+                    } else {
+                        // Opening eyes
+                        const value = 1.0 - ((this.blinkProgress - 0.5) * 2);
+                        this.setBlinkValue(value);
+                    }
+
+                    if (this.blinkProgress >= 1.0) {
+                        this.isBlinking = false;
+                        this.blinkProgress = 0;
+                        this.setBlinkValue(0);
+                        this.nextBlinkTime = this.getNextBlinkDelay();
+                    }
+                } else {
+                    this.nextBlinkTime -= deltaTime;
+                    if (this.nextBlinkTime <= 0) {
+                        this.isBlinking = true;
+                    }
+                }
+            }
+
+            setBlinkValue(value) {
+                if (!this.vrm) return;
+
+                // VRM 1.0
+                if (this.vrm.expressionManager) {
+                    this.vrm.expressionManager.setValue('blink', value);
+                }
+                // VRM 0.x
+                else if (this.vrm.blendShapeProxy) {
+                    this.vrm.blendShapeProxy.setValue('blink', value);
+                }
+            }
+
+            getNextBlinkDelay() {
+                // Random blink every 2-6 seconds
+                return 2 + Math.random() * 4;
+            }
+        }
+
+        /**
+         * Subtle idle head movement controller.
+         * Creates natural-looking random head movements.
+         */
+        class IdleHeadMovement {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.headTarget = { x: 0, y: 0, z: 0 };
+                this.headCurrent = { x: 0, y: 0, z: 0 };
+                this.nextMoveTime = 5;
+            }
+
+            update(deltaTime) {
+                this.nextMoveTime -= deltaTime;
+
+                if (this.nextMoveTime <= 0) {
+                    // Choose new random target
+                    this.headTarget = {
+                        x: (Math.random() - 0.5) * 0.15, // ±0.075 radians (subtle)
+                        y: (Math.random() - 0.5) * 0.25, // ±0.125 radians
+                        z: (Math.random() - 0.5) * 0.08  // ±0.04 radians
+                    };
+                    this.nextMoveTime = 3 + Math.random() * 7; // 3-10 seconds
+                }
+
+                // Smooth interpolation to target
+                const lerpSpeed = deltaTime * 0.5;
+                this.headCurrent.x += (this.headTarget.x - this.headCurrent.x) * lerpSpeed;
+                this.headCurrent.y += (this.headTarget.y - this.headCurrent.y) * lerpSpeed;
+                this.headCurrent.z += (this.headTarget.z - this.headCurrent.z) * lerpSpeed;
+
+                // Apply to head bone
+                const head = this.vrm.humanoid.getBoneNode('head');
+                if (head) {
+                    head.rotation.x = this.headCurrent.x;
+                    head.rotation.y = this.headCurrent.y;
+                    head.rotation.z = this.headCurrent.z;
+                }
+            }
+        }
+
+        /**
+         * Emotion-based facial expression controller.
+         * Blends between different emotional expressions smoothly.
+         */
+        class ExpressionController {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.currentExpression = "neutral";
+                this.targetExpression = "neutral";
+                this.currentIntensity = 0;
+                this.targetIntensity = 0;
+                this.transitionProgress = 1.0;
+                this.transitionDuration = 0.5;
+            }
+
+            /**
+             * Set target facial expression.
+             * @param {string} emotion - Emotion name (happy/sad/surprised/confused/thinking/neutral)
+             * @param {number} intensity - Expression intensity (0.0-1.0)
+             * @param {number} duration - Transition duration in seconds
+             */
+            setExpression(emotion, intensity = 1.0, duration = 0.5) {
+                if (emotion === this.targetExpression) return; // Already transitioning to this
+
+                this.targetExpression = emotion;
+                this.targetIntensity = Math.min(Math.max(intensity, 0), 1);
+                this.transitionDuration = duration;
+                this.transitionProgress = 0;
+
+                console.log(`EXPRESSION_SET: ${emotion} (${intensity})`);
+            }
+
+            update(deltaTime) {
+                if (this.transitionProgress < 1.0) {
+                    this.transitionProgress += deltaTime / this.transitionDuration;
+                    const t = Math.min(this.transitionProgress, 1.0);
+
+                    // Smooth easing
+                    const eased = t * t * (3 - 2 * t); // Smoothstep
+
+                    // Interpolate intensity
+                    const blendedIntensity = this.currentIntensity + (this.targetIntensity - this.currentIntensity) * eased;
+
+                    // Apply expression
+                    this.applyExpression(this.targetExpression, blendedIntensity);
+
+                    if (this.transitionProgress >= 1.0) {
+                        this.currentExpression = this.targetExpression;
+                        this.currentIntensity = this.targetIntensity;
+                    }
+                }
+            }
+
+            applyExpression(emotion, intensity) {
+                if (!this.vrm) return;
+
+                const em = this.vrm.expressionManager || this.vrm.blendShapeProxy;
+                if (!em) return;
+
+                // Reset all expressions first
+                const allExpressions = ['happy', 'sad', 'surprised', 'angry', 'relaxed'];
+                allExpressions.forEach(expr => {
+                    try {
+                        em.setValue(expr, 0);
+                    } catch(e) {
+                        // Expression not available in this VRM
+                    }
+                });
+
+                // Apply target expression
+                try {
+                    if (emotion === "happy") {
+                        em.setValue('happy', intensity);
+                    } else if (emotion === "sad") {
+                        em.setValue('sad', intensity);
+                    } else if (emotion === "surprised") {
+                        em.setValue('surprised', intensity);
+                    } else if (emotion === "confused") {
+                        // Mix surprised with slight head tilt
+                        em.setValue('surprised', intensity * 0.4);
+                        const head = this.vrm.humanoid.getBoneNode('head');
+                        if (head) head.rotation.z = 0.15 * intensity;
+                    } else if (emotion === "thinking") {
+                        // Relaxed expression
+                        em.setValue('relaxed', intensity * 0.6);
+                    }
+                } catch (e) {
+                    console.warn('Expression not available:', emotion);
+                }
+            }
+        }
+
+        /**
+         * Gesture animation controller.
+         * Handles one-shot animations like nods, waves, tilts, shrugs.
+         */
+        class GestureController {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.currentGesture = null;
+                this.gestureProgress = 0;
+                this.gestureDuration = 0;
+            }
+
+            /**
+             * Trigger a gesture animation.
+             * @param {string} gesture - Gesture name (nod/tilt/wave/shrug)
+             */
+            playGesture(gesture) {
+                if (this.currentGesture) return; // Already playing
+
+                this.currentGesture = gesture;
+                this.gestureProgress = 0;
+                this.gestureDuration = 0.6; // 600ms gesture
+
+                console.log(`GESTURE_PLAY: ${gesture}`);
+            }
+
+            update(deltaTime) {
+                if (!this.currentGesture) return;
+
+                this.gestureProgress += deltaTime;
+
+                if (this.gestureProgress >= this.gestureDuration) {
+                    // Gesture complete - reset bones
+                    this.resetGesture();
+                    this.currentGesture = null;
+                    return;
+                }
+
+                const t = this.gestureProgress / this.gestureDuration;
+                const eased = Math.sin(t * Math.PI); // Smooth in-out
+
+                if (this.currentGesture === "nod") {
+                    const neck = this.vrm.humanoid.getBoneNode('neck');
+                    if (neck) neck.rotation.x = eased * 0.3;
+                }
+                else if (this.currentGesture === "tilt") {
+                    const head = this.vrm.humanoid.getBoneNode('head');
+                    if (head) head.rotation.z = eased * 0.35;
+                }
+                else if (this.currentGesture === "wave") {
+                    const rightArm = this.vrm.humanoid.getBoneNode('rightUpperArm');
+                    const rightHand = this.vrm.humanoid.getBoneNode('rightHand');
+                    if (rightArm) {
+                        rightArm.rotation.z = -eased * 1.2; // Raise arm
+                        rightArm.rotation.x = eased * 0.3;
+                    }
+                    if (rightHand) {
+                        // Wave hand back and forth
+                        rightHand.rotation.z = Math.sin(t * Math.PI * 4) * 0.4;
+                    }
+                }
+                else if (this.currentGesture === "shrug") {
+                    const leftShoulder = this.vrm.humanoid.getBoneNode('leftUpperArm');
+                    const rightShoulder = this.vrm.humanoid.getBoneNode('rightUpperArm');
+                    if (leftShoulder) leftShoulder.rotation.z = eased * 0.3;
+                    if (rightShoulder) rightShoulder.rotation.z = -eased * 0.3;
+
+                    const head = this.vrm.humanoid.getBoneNode('head');
+                    if (head) head.rotation.z = Math.sin(t * Math.PI) * 0.1;
+                }
+            }
+
+            resetGesture() {
+                if (!this.vrm) return;
+
+                // Reset all gesture-related bones
+                const bones = ['neck', 'head', 'leftUpperArm', 'rightUpperArm', 'rightHand'];
+                bones.forEach(boneName => {
+                    const bone = this.vrm.humanoid.getBoneNode(boneName);
+                    if (bone) {
+                        bone.rotation.x = 0;
+                        bone.rotation.z = 0;
+                    }
+                });
+            }
+        }
+
+        async function init() {
+            const canvas = document.getElementById('c');
+            const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0b0c10);
+
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 1.4, 1.2); // Closer for portrait
+
+            const light = new THREE.DirectionalLight(0xffffff, 1.5);
+            light.position.set(1, 2, 3);
+            const light2 = new THREE.DirectionalLight(0xffffff, 0.5);
+            light2.position.set(-1, 1, -2);
+            scene.add(light, light2, new THREE.AmbientLight(0xffffff, 0.8));
+
+            /**
+             * Main animation loop.
+             * Updates VRM model, idle animations, and renders the scene.
+             */
+            function animate() {
+                requestAnimationFrame(animate);
+                const delta = clock.getDelta();
+
+                if (currentVrm) {
+                    // Update VRM internal animations
+                    currentVrm.update(delta);
+
+                    // Breathing animation (chest movement)
+                    const breathStrength = Math.sin(clock.elapsedTime * 2) * 0.003;
+                    const chest = currentVrm.humanoid.getBoneNode('chest');
+                    if (chest) {
+                        chest.rotation.x = breathStrength;
+                        chest.rotation.z = breathStrength * 0.5;
+                    }
+
+                    // Update blink controller
+                    if (blinkController) {
+                        blinkController.update(delta);
+                    }
+
+                    // Update idle head movement
+                    if (headMovement) {
+                        headMovement.update(delta);
+                    }
+
+                    // Update expression controller
+                    if (expressionController) {
+                        expressionController.update(delta);
+                    }
+
+                    // Update gesture controller
+                    if (gestureController) {
+                        gestureController.update(delta);
+                    }
+                }
+
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            const url = new URLSearchParams(location.search).get('url');
+            if (url) {
+                console.log("VRM_LOADING:", url);
+                const loader = new GLTFLoader();
+                loader.load(url, async (gltf) => {
+                    try {
+                        console.log("GLTF_LOADED, converting to VRM...");
+                        const vrm = await VRM.from(gltf);
+                        scene.add(vrm.scene);
+                        currentVrm = vrm;
+                        VRMUtils.rotateVRM0(vrm);
+
+                        // Initialize animation controllers
+                        lipSync = new AudioLipSync(vrm);
+                        blinkController = new BlinkController(vrm);
+                        headMovement = new IdleHeadMovement(vrm);
+                        expressionController = new ExpressionController(vrm);
+                        gestureController = new GestureController(vrm);
+
+                        console.log("ANIMATION_SYSTEMS_INITIALIZED: lip_sync, blink, head_movement, expressions, gestures");
+
+                        document.getElementById('loading').style.display = 'none';
+                        console.log("VRM_READY:", vrm);
+                    } catch (vrmErr) {
+                        console.error("VRM_CONVERSION_ERR:", vrmErr);
+                        // Fallback: render as regular GLTF
+                        scene.add(gltf.scene);
+                        document.getElementById('loading').textContent = "LEGACY_MODE (No VRM)";
+                    }
+                }, (progress) => {
+                    const pct = Math.round((progress.loaded / progress.total) * 100);
+                    document.getElementById('loading').textContent = `LOADING... ${pct}%`;
+                }, (err) => {
+                    console.error("LOAD_ERR:", err);
+                    document.getElementById('loading').textContent = "DATA_CORRUPTION: " + err.message;
+                });
+            } else {
+                document.getElementById('loading').textContent = "NO_SIGNAL";
+            }
+
+            /**
+             * Message handler for avatar animations.
+             * Receives commands from parent window (frontend/index.html).
+             */
+            window.addEventListener('message', (e) => {
+                if (!currentVrm) return;
+                const { type, state, audioUrl } = e.data;
+
+                if (type === 'nod') {
+                    // Quick head nod animation
+                    const neck = currentVrm.humanoid.getBoneNode('neck');
+                    if (neck) {
+                        neck.rotation.x = 0.2;
+                        setTimeout(() => neck.rotation.x = 0, 300);
+                    }
+                }
+                else if (type === 'playAudio') {
+                    // Real-time audio-driven lip sync
+                    if (lipSync && audioUrl) {
+                        lipSync.playAudioWithLipSync(audioUrl);
+                    }
+                }
+                else if (type === 'stopAudio') {
+                    // Stop audio playback
+                    if (lipSync) {
+                        lipSync.stop();
+                    }
+                }
+                else if (type === 'setExpression') {
+                    // Set emotion-based facial expression
+                    if (expressionController && e.data.emotion) {
+                        expressionController.setExpression(
+                            e.data.emotion,
+                            e.data.intensity || 1.0,
+                            e.data.duration || 0.5
+                        );
+                    }
+                }
+                else if (type === 'playGesture') {
+                    // Play one-shot gesture animation
+                    if (gestureController && e.data.gesture) {
+                        gestureController.playGesture(e.data.gesture);
+                    }
+                }
+                else if (type === 'speak') {
+                    // Legacy: simple mouth toggle (kept for backward compatibility)
+                    if (!lipSync) {
+                        const mouth = currentVrm.expressionManager;
+                        if (mouth) {
+                            const val = state ? 1.0 : 0.0;
+                            mouth.setValue('aa', val);
+                        }
+                    }
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+            });
+        }
+        init();
+    </script>
+</body>
+
+</html>

@@ -8,8 +8,10 @@ class LMStudioAdapter(LLMAdapter):
         if not base.endswith('/v1'):
             base += '/v1'
         url = base + '/chat/completions'
+        # Try to find ROOT/backend/debug.log
+        log_path = "/Users/chris/Code/waifu-rt3d/waifu-rt3d_v5.30/backend/debug.log"
         try:
-            r = requests.post(url, headers={'Authorization': f'Bearer {api_key}'}, json={'model': model,'messages': messages}, timeout=60)
+            r = requests.post(url, headers={'Authorization': f'Bearer {api_key}'}, json={'model': model,'messages': messages}, timeout=120)
         except Exception as e:
             return {'ok': False, 'error': f'LLM request failed: {e}'}
         if r.status_code != 200: return {'ok': False, 'error': f'LLM error: {r.text}'}

@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from starlette.staticfiles import StaticFiles
 from pathlib import Path
-import json, sqlite3, requests
+import json, sqlite3, requests, asyncio, time
 import logging
 
 # Initialize logging
@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_FILE = ROOT / "VERSION"
 VERSION = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else "5.31.0"
-FRONTEND = ROOT / "frontend"
+FRONTEND = ROOT / "frontend_v2"
 STORAGE = ROOT / "backend" / "storage"
 AVATARS = STORAGE / "avatars"
 AUDIO = STORAGE / "audio"
@@ -20,13 +20,47 @@ DB_PATH = STORAGE / "app.db"
 
 app = FastAPI(title="waifu-rt3d", version=VERSION)
 
+# Global LLM Health Status
+_llm_status = {"ok": False, "error": "Not Checked", "models": [], "last_check": 0}
+
+async def llm_heartbeat():
+    global _llm_status
+    while True:
+        try:
+            cfg = load_config()
+            llm_cfg = cfg.get("llm", {})
+            endpoint = llm_cfg.get("endpoint", "")
+            if not endpoint:
+                _llm_status = {"ok": False, "error": "No endpoint configured", "last_check": time.time()}
+            else:
+                base = endpoint.rstrip('/')
+                if not base.endswith('/v1'): base += '/v1'
+                # Use a specific timeout for the heartbeat
+                try:
+                    r = requests.get(f"{base}/models", timeout=5)
+                    if r.status_code == 200:
+                        _llm_status = {
+                            "ok": True, 
+                            "models": r.json().get("data", []), 
+                            "last_check": time.time(),
+                            "endpoint": endpoint
+                        }
+                    else:
+                        _llm_status = {"ok": False, "error": f"HTTP {r.status_code}", "last_check": time.time()}
+                except Exception as e:
+                    _llm_status = {"ok": False, "error": f"Connection failed: {str(e)}", "last_check": time.time()}
+        except Exception as e:
+            logging.error(f"Heartbeat error: {e}")
+        await asyncio.sleep(60) # Check every minute
+
 def preflight():
     from . import preflight as pf
     pf.run()
 
 @app.on_event("startup")
-def _startup():
+async def _startup():
     preflight()
+    asyncio.create_task(llm_heartbeat())
 
 DEFAULT_CONFIG = {
     "onboarded": False,
@@ -131,23 +165,15 @@ def reset_config():
 
 @app.get("/api/healthcheck")
 def health():
-    """System health check endpoint.
-
-    Returns:
-        dict: {
-            "ok": bool - Overall system health
-            "version": str - Application version
-            "schema_version": int - Database schema version
-            "libs": dict - Frontend library availability
-            "lmstudio": bool - LLM endpoint connectivity
-            "ttsConfigured": bool - TTS availability
-            "issues": list - Any detected problems
-        }
-
-    Example:
-        >>> GET /api/healthcheck
-        >>> {
-        ...     "ok": true,
+    cfg = load_config()
+    return {
+        "ok": _llm_status["ok"],
+        "version": VERSION,
+        "schema_version": 5,
+        "llm": _llm_status,
+        "ttsConfigured": bool(cfg.get("tts", {}).get("endpoint") or cfg.get("tts", {}).get("api_key")),
+        "issues": [_llm_status["error"]] if not _llm_status["ok"] else []
+    }
         ...     "version": "5.31.0",
         ...     "schema_version": 5,
         ...     "libs": {"three_local": true, ...},
@@ -254,10 +280,12 @@ async def chat(session_id: int = 1, char_id: int = None, req: Request = None):
             llm_model = cfg["llm"].get("model") or "local-model"
             res = adapter.chat(messages, llm_model, cfg["llm"]["endpoint"], cfg["llm"]["api_key"])
         except Exception as e:
-            return {"ok": False, "error": f"Adapter error: {e}"}
+            return {"ok": False, "error": f"ADAPTER_ERR: {e}", "code": "ERR_ADAPTER"}
             
         if not res.get("ok"): 
-            return {"ok": False, "error": res.get("error","adapter failed")}
+            err_msg = res.get("error","adapter failed")
+            code = "ERR_LLM_DISCONNECT" if "failed" in err_msg.lower() or "connection" in err_msg.lower() else "ERR_LLM_GENERIC"
+            return {"ok": False, "error": err_msg, "code": code}
             
         reply = res["reply"]
         cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "assistant", reply))

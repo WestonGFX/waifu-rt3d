@@ -10,6 +10,12 @@ A full-stack web application that brings AI companions to life with voice synthe
 
 ## ✨ Features
 
+### 🌟 New in v5.30 (Retro-Modern Update)
+- **Model Manager**: Built-in interface to search and install models directly from HuggingFace (LLM, TTS, ASR).
+- **Themes**: Choose between "Cyberpunk" (Neon/Dark) and "Anime Pop" (Pastel/Light) styles.
+- **System Monitoring**: Live CPU/RAM usage stats in the sidebar.
+- **Terminal Log**: Real-time server log viewer accessible from the UI.
+
 ### 🤖 AI Integration
 - **Local LLM Support** via LM Studio (privacy-first, no API costs)
 - **Conversation Memory** with configurable history length

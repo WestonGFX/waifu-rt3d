@@ -5,6 +5,15 @@ document.addEventListener('alpine:init', () => {
         darkMode: localStorage.getItem('darkMode') === 'true',
         sidebarOpen: false,
         settingsOpen: false,
+        modelManagerOpen: false,
+        terminalOpen: true,
+        modelSearchQuery: '',
+        modelFilter: 'downloads',
+        searchResults: [],
+        installedModels: {},
+        isSearching: false,
+        logs: [],
+        systemStats: { cpu: 0, ram: 0, gpu: 0 },
         currentSessionId: 1,
         currentCharacterId: 1,
         sessions: [],
@@ -42,9 +51,11 @@ document.addEventListener('alpine:init', () => {
             await this.loadSessions();
             await this.loadMessages(this.currentSessionId);
 
-            // Start health polling
+            // Start polling
             this.pollHealth();
+            this.pollStats();
             setInterval(() => this.pollHealth(), 30000);
+            setInterval(() => this.pollStats(), 2000);
 
             // Setup auto-scroll on new messages
             this.$watch('messages', () => {
@@ -63,6 +74,79 @@ document.addEventListener('alpine:init', () => {
         async pollHealth() {
             const data = await api.healthCheck();
             this.llmStatus = data.llm || { ok: data.ok, error: data.issues?.[0] || 'Unknown' };
+        },
+
+        async pollStats() {
+            const stats = await api.getSystemStats();
+            this.systemStats = stats;
+            
+            if (this.terminalOpen) {
+                try {
+                    const res = await fetch('/api/logs');
+                    const data = await res.json();
+                    if (data.logs && data.logs.length > 0) {
+                        this.logs = [...this.logs, ...data.logs].slice(-50);
+                        this.$nextTick(() => {
+                            const term = document.getElementById('terminal-output');
+                            if (term) term.scrollTop = term.scrollHeight;
+                        });
+                    }
+                } catch(e) {}
+            }
+        },
+
+        // Model Manager
+        async searchModels(type) {
+            this.isSearching = true;
+            this.searchResults = [];
+            try {
+                let task = '';
+                if (type === 'llm') task = 'text-generation';
+                if (type === 'tts') task = 'text-to-speech';
+                if (type === 'asr') task = 'automatic-speech-recognition';
+                
+                const data = await api.searchModels(this.modelSearchQuery, task, this.modelFilter);
+                this.searchResults = data.models || [];
+            } catch (e) {
+                this.showToast('Search failed', 'error');
+            } finally {
+                this.isSearching = false;
+            }
+        },
+        
+        async installModel(id, type) {
+            try {
+                const res = await api.installModel(id, type);
+                if (res.ok) {
+                    this.showToast(`Installing ${id}...`, 'info');
+                } else {
+                    this.showToast(res.error, 'error');
+                }
+            } catch (e) { this.showToast('Install request failed', 'error'); }
+        },
+        
+        async loadInstalledModels() {
+            const data = await api.getInstalledModels();
+            this.installedModels = data;
+        },
+        
+        async deleteModel(type, id) {
+            if (!confirm('Are you sure you want to delete this model?')) return;
+            try {
+                const res = await api.deleteModel(type, id);
+                if (res.ok) {
+                    this.showToast('Model deleted', 'success');
+                    this.loadInstalledModels();
+                } else {
+                    this.showToast('Delete failed', 'error');
+                }
+            } catch (e) { this.showToast('Delete error', 'error'); }
+        },
+
+        formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num;
         },
 
         // Session management

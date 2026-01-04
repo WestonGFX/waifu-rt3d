@@ -61,5 +61,41 @@ const api = {
         } catch (error) {
             return { ok: false, error: error.message };
         }
+    },
+
+    // Model Manager
+    async searchModels(query, task, sort) {
+        const params = new URLSearchParams({ q: query, task: task || '', sort: sort || 'downloads' });
+        const response = await fetch(`${API_BASE}/api/models/search?${params}`);
+        return response.json();
+    },
+
+    async installModel(id, type) {
+        const response = await fetch(`${API_BASE}/api/models/install`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, type })
+        });
+        return response.json();
+    },
+
+    async getInstalledModels() {
+        const response = await fetch(`${API_BASE}/api/models/installed`);
+        return response.json();
+    },
+    
+    async deleteModel(type, id) {
+        const response = await fetch(`${API_BASE}/api/models/${type}/${id.replace(/\//g, '_')}`, {
+            method: 'DELETE'
+        });
+        return response.json();
+    },
+
+    // System Stats
+    async getSystemStats() {
+        try {
+            const response = await fetch(`${API_BASE}/api/system/stats`);
+            return response.json();
+        } catch (e) { return { cpu: 0, ram: 0, gpu: 0 }; }
     }
 };

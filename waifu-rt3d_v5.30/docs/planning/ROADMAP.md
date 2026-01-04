@@ -248,6 +248,41 @@ Create the most flexible, privacy-focused, and feature-rich AI companion platfor
 
 ---
 
+## 🔮 Version 5.30+ (Immediate Roadmap Expansion)
+**Target:** Q1-Q2 2025
+**Focus:** Usability, Model Management, and Polish
+
+- [ ] **Model Manager Quantization Logic**
+  - Auto-detect GPU VRAM
+  - Recommend GGUF/GPTQ quantization levels (Q4_K_M vs Q8_0)
+  - Warning system for insufficient VRAM
+
+- [ ] **Preset Management**
+  - Save "Loadouts" (Character + Voice + LLM + System Prompt)
+  - One-click profile switching
+  - Shareable presets (JSON export)
+
+- [ ] **Accessibility Suite**
+  - UI Font Scaling (independent of browser zoom)
+  - High Contrast Mode (Cyberpunk theme is high contrast, but dedicated mode)
+  - Screen Reader optimization (ARIA labels)
+
+- [ ] **Auto-Updater**
+  - Self-updating executable/script
+  - Branch selection (Stable/Beta/Dev)
+  - Rollback capability
+
+- [ ] **Advanced System Monitoring**
+  - Real-time GPU VRAM usage graph
+  - Token/sec generation speed live counter
+  - Temperature/Fan speed integration (where available)
+
+- [ ] **Security & Auth (Local Web)**
+  - Simple PIN/Password protection for local network sharing
+  - Admin vs Guest roles (Guest can chat, Admin can configure)
+
+---
+
 ## 🧪 Testing & Quality
 
 ### Ongoing

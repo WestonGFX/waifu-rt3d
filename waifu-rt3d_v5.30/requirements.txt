@@ -9,6 +9,11 @@ python-multipart==0.0.6
 # HTTP Client
 requests==2.31.0
 
+# System & Model Management
+huggingface_hub==0.19.4     # For model searching and downloading
+psutil==5.9.6               # For system resource monitoring
+aiofiles==23.2.1            # For async file operations
+
 # AI/ML - Emotion Detection (v5.4+)
 transformers==4.36.0      # HuggingFace transformers for advanced sentiment analysis
 torch==2.1.0              # PyTorch (CPU version, use torch with CUDA for GPU)

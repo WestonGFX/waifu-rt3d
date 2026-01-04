@@ -32,10 +32,20 @@
     "api_key": "",
     "model": "whisper-1"
   },
+  "system": {
+    "huggingface_token": "",
+    "advanced_mode": false,
+    "log_level": "INFO",
+    "model_paths": {
+      "llm": "backend/storage/models/llm",
+      "tts": "backend/storage/models/tts",
+      "asr": "backend/storage/models/asr"
+    }
+  },
   "ui": {
     "scanline_opacity": 0.1,
     "flicker_enabled": false,
-    "theme": "retro"
+    "theme": "cyberpunk"
   },
   "profile": "auto",
   "input_mode": "text",

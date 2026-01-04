@@ -1,4 +1,5 @@
 import logging, logging.handlers, queue
+import psutil
 from datetime import datetime
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -89,6 +90,9 @@ def preflight():
 async def _startup():
     preflight()
     asyncio.create_task(llm_heartbeat())
+    global model_manager
+    from .models.manager import ModelManager
+    model_manager = ModelManager(load_config())
 
 DEFAULT_CONFIG = {
     "onboarded": False,
@@ -190,6 +194,51 @@ async def set_config(req: Request):
 def reset_config():
     save_config(DEFAULT_CONFIG)
     return {"ok": True, "config": DEFAULT_CONFIG}
+
+# --- Model Manager API ---
+model_manager = None
+
+@app.get("/api/models/search")
+def search_models(q: str = "", task: str = None, sort: str = "downloads"):
+    """Search HuggingFace models."""
+    if not model_manager: return {"models": []}
+    return {"models": model_manager.search(q, task, sort)}
+
+@app.post("/api/models/install")
+async def install_model(req: Request):
+    """Install a model (async)."""
+    body = await req.json()
+    model_id = body.get("id")
+    mtype = body.get("type", "llm")
+    if not model_id: raise HTTPException(400, "Missing model id")
+    
+    # Run in background
+    asyncio.create_task(model_manager.install(model_id, mtype))
+    return {"ok": True, "status": "started", "id": model_id}
+
+@app.get("/api/models/installed")
+def list_installed_models():
+    if not model_manager: return {}
+    return model_manager.list_installed()
+
+@app.delete("/api/models/{type}/{id}")
+def delete_model(type: str, id: str):
+    if not model_manager: return {"ok": False}
+    # Reconstruct ID from safe URL param if needed, or just pass through
+    # Frontend should encode / as _ or similar if needed, or we handle it
+    # But for now assuming ID is passed safely
+    real_id = id.replace("_", "/")
+    success = model_manager.delete(real_id, type)
+    return {"ok": success}
+
+@app.get("/api/system/stats")
+def get_system_stats():
+    """Get real-time system resource usage."""
+    return {
+        "cpu": psutil.cpu_percent(interval=None),
+        "ram": psutil.virtual_memory().percent,
+        "gpu": 0 # Placeholder for now, requires pynvml or torch
+    }
 
 @app.get("/api/healthcheck")
 def health():

@@ -23,35 +23,42 @@
       max-width: 400px;
       word-wrap: break-word;
     }
+
     .toast-error {
       background: var(--neon-pink);
       color: #000;
       border: 2px solid var(--neon-pink);
     }
+
     .toast-success {
       background: var(--neon-green);
       color: #000;
       border: 2px solid var(--neon-green);
     }
+
     .toast-info {
       background: var(--neon-blue);
       color: #000;
       border: 2px solid var(--neon-blue);
     }
+
     @keyframes slideIn {
       from {
         transform: translateX(400px);
         opacity: 0;
       }
+
       to {
         transform: translateX(0);
         opacity: 1;
       }
     }
+
     @keyframes fadeOut {
       from {
         opacity: 1;
       }
+
       to {
         opacity: 0;
       }
@@ -66,10 +73,14 @@
       font-size: 0.5rem;
       animation: pulse 1s infinite;
     }
+
     @keyframes pulse {
-      0%, 100% {
+
+      0%,
+      100% {
         opacity: 0.3;
       }
+
       50% {
         opacity: 1;
       }
@@ -86,9 +97,11 @@
       cursor: pointer;
       transition: all 0.2s ease;
     }
+
     .filter-btn:hover {
       background: rgba(185, 103, 255, 0.4);
     }
+
     .filter-btn.active {
       background: var(--neon-green);
       color: #000;
@@ -107,9 +120,11 @@
       cursor: pointer;
       transition: all 0.2s ease;
     }
+
     .session-action-btn:hover {
       box-shadow: 0 0 5px currentColor;
     }
+
     .session-action-btn.delete {
       background: var(--neon-pink);
     }
@@ -127,9 +142,11 @@
       align-items: center;
       z-index: 9999;
     }
+
     .modal.open {
       display: flex;
     }
+
     .modal-content {
       background: var(--bg-dark);
       border: 2px solid var(--neon-purple);
@@ -139,9 +156,11 @@
       padding: 20px;
       box-shadow: 0 0 20px rgba(185, 103, 255, 0.5);
     }
+
     .form-group {
       margin-bottom: 15px;
     }
+
     .form-group label {
       display: block;
       color: var(--neon-blue);
@@ -149,7 +168,10 @@
       font-size: 0.6rem;
       margin-bottom: 5px;
     }
-    .form-group input, .form-group textarea, .form-group select {
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
       width: 100%;
       padding: 8px;
       background: rgba(0, 0, 0, 0.5);
@@ -158,6 +180,7 @@
       font-family: var(--font-mono);
       font-size: 0.6rem;
     }
+
     .form-group textarea {
       resize: vertical;
       min-height: 80px;
@@ -173,13 +196,18 @@
   </div>
 
   <!-- SETUP WIZARD MODAL -->
-  <div id="wizard-overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.9); z-index:2000; justify-content:center; align-items:center;">
-    <div class="settings-card" style="width:500px; border:2px solid var(--neon-blue); box-shadow: 0 0 30px var(--neon-blue);">
-      <h2 style="font-family:var(--font-pixel); font-size:0.8rem; color:var(--neon-blue); border-bottom:1px solid var(--neon-blue); padding-bottom:10px;">INITIAL_DYN_SETUP</h2>
+  <div id="wizard-overlay"
+    style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.9); z-index:2000; justify-content:center; align-items:center;">
+    <div class="settings-card"
+      style="width:500px; border:2px solid var(--neon-blue); box-shadow: 0 0 30px var(--neon-blue);">
+      <h2
+        style="font-family:var(--font-pixel); font-size:0.8rem; color:var(--neon-blue); border-bottom:1px solid var(--neon-blue); padding-bottom:10px;">
+        INITIAL_DYN_SETUP</h2>
       <div id="wizard-steps">
         <!-- Step 1: LLM -->
         <div class="wizard-step" data-step="1">
-          <p style="font-size:0.7rem; color:var(--neon-green); margin-bottom:20px;">[ STEP_01 ] CONNECTING TO NEURAL_BRAIN...</p>
+          <p style="font-size:0.7rem; color:var(--neon-green); margin-bottom:20px;">[ STEP_01 ] CONNECTING TO
+            NEURAL_BRAIN...</p>
           <div class="form-group">
             <label>LLM_ENDPOINT (LM Studio / Ollama / OpenAI)</label>
             <input id="wiz_endpoint" value="http://127.0.0.1:1234/v1" />
@@ -188,13 +216,18 @@
             <label>API_KEY (Optional for local)</label>
             <input id="wiz_api_key" value="lm-studio" />
           </div>
-          <button class="next-step" style="background:var(--neon-blue); border:none; padding:10px; font-family:var(--font-pixel); font-size:0.5rem; width:100%; cursor:pointer;">NEXT_MODULE >></button>
+          <button class="next-step"
+            style="background:var(--neon-blue); border:none; padding:10px; font-family:var(--font-pixel); font-size:0.5rem; width:100%; cursor:pointer;">NEXT_MODULE
+            >></button>
         </div>
         <!-- Step 2: Welcome -->
         <div class="wizard-step" data-step="2" style="display:none;">
-          <p style="font-size:0.7rem; color:var(--neon-green); margin-bottom:20px;">[ STEP_02 ] SYSTEM CALIBRATION COMPLETE.</p>
-          <p style="font-size:0.8rem; line-height:1.5;">Welcome to WAIFU_LINK. Your companion is ready to be initialized.</p>
-          <button id="finish-wizard" style="background:var(--neon-green); border:none; padding:10px; font-family:var(--font-pixel); font-size:0.5rem; width:100%; cursor:pointer; margin-top:20px;">EXECUTE_UPLINK</button>
+          <p style="font-size:0.7rem; color:var(--neon-green); margin-bottom:20px;">[ STEP_02 ] SYSTEM CALIBRATION
+            COMPLETE.</p>
+          <p style="font-size:0.8rem; line-height:1.5;">Welcome to WAIFU_LINK. Your companion is ready to be
+            initialized.</p>
+          <button id="finish-wizard"
+            style="background:var(--neon-green); border:none; padding:10px; font-family:var(--font-pixel); font-size:0.5rem; width:100%; cursor:pointer; margin-top:20px;">EXECUTE_UPLINK</button>
         </div>
       </div>
     </div>
@@ -210,9 +243,9 @@
       </div>
       <div id="sessionList" style="flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;">
         <!-- Session controls -->
-        <div class="session-controls" style="margin-bottom:10px;position:sticky;top:0;background:var(--bg-dark);z-index:10;padding-bottom:5px;">
-          <input type="text" id="sessionSearch" placeholder="SEARCH_SESSIONS..."
-                 style="width:100%;padding:8px;background:rgba(0,0,0,0.5);border:1px solid var(--neon-purple);
+        <div class="session-controls"
+          style="margin-bottom:10px;position:sticky;top:0;background:var(--bg-dark);z-index:10;padding-bottom:5px;">
+          <input type="text" id="sessionSearch" placeholder="SEARCH_SESSIONS..." style="width:100%;padding:8px;background:rgba(0,0,0,0.5);border:1px solid var(--neon-purple);
                         color:var(--neon-blue);font-family:var(--font-mono);font-size:0.5rem;margin-bottom:8px;" />
           <div style="display:flex;gap:5px;">
             <button id="showActive" class="filter-btn active" style="flex:1;">ACTIVE</button>
@@ -225,12 +258,23 @@
         <span>TERMINAL</span>
       </div>
       <div id="status-display"
-        style="padding:10px;font-size:0.5rem;color:var(--neon-green);font-family:var(--font-mono);line-height:1.4;">
-        LINK: NOMINAL<br>
-        BUF: 4K/4K<br>
-        UPLINK: ACTIVE<br>
-        <span id="stat-llm">LLM: OK</span><br>
-        <span id="stat-tts">TTS: READY</span>
+        style="padding:10px;font-size:0.5rem;color:var(--neon-green);font-family:var(--font-mono);line-height:1.4; border-bottom: 1px solid rgba(185,103,255,0.2);">
+        <div class="flex items-center gap-2">
+          <span id="led-link" class="status-dot status-online" style="transform:scale(0.8)"></span>
+          <span>LINK: NOMINAL</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="led-llm" class="status-dot status-checking" style="transform:scale(0.8)"></span>
+          <span id="stat-llm">LLM: OK</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="led-tts" class="status-dot status-online" style="transform:scale(0.8)"></span>
+          <span id="stat-tts">TTS: READY</span>
+        </div>
+      </div>
+      <div id="terminal-feed"
+        style="flex:1; overflow-y:auto; padding:10px; font-size:0.45rem; color:var(--neon-blue); font-family:var(--font-mono); opacity:0.8; height: 150px; background: rgba(0,0,0,0.3);">
+        <!-- Logs flow here -->
       </div>
       <div id="version-display"
         style="position:absolute; bottom:10px; left:10px; font-size:0.4rem; color:var(--neon-blue); font-family:var(--font-mono); opacity:0.7;">
@@ -264,10 +308,11 @@
               <div class="char-tray">
                 <div id="charList"></div>
               </div>
-              
+
               <div class="chat-history">
                 <div id="log">
-                  <div class="bubble ai" style="border-bottom: 1px solid rgba(185, 103, 255, 0.2); margin-bottom: 2rem;">
+                  <div class="bubble ai"
+                    style="border-bottom: 1px solid rgba(185, 103, 255, 0.2); margin-bottom: 2rem;">
                     <pre style="color:var(--neon-green);font-size:0.5rem;line-height:1;margin:0;">
  _  _  ____  __  ____  __  __ 
 ( \/ )(_  _)(  )(  __)(  )(  )
@@ -310,18 +355,35 @@
           <div class="settings-grid">
             <!-- LLM CONFIG -->
             <div class="settings-card">
-              <h3>[ 01 ] LLM_MODULE</h3>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3>[ 01 ] LLM_MODULE</h3>
+                <label style="font-size:0.45rem; color:var(--neon-pink); cursor:pointer;">
+                  [DEV_MODE] <input type="checkbox" id="dev_mode" style="width:auto; vertical-align:middle;" />
+                </label>
+              </div>
               <div class="form-group">
                 <label>ENDPOINT_URL</label>
                 <input id="endpoint" value="http://127.0.0.1:1234/v1" />
               </div>
               <div class="form-group">
-                <label>MODEL_IDENTIFIER</label>
-                <input id="model" placeholder="Model ID..." />
+                <label>ACTIVE_MODEL</label>
+                <div style="display:flex; gap:5px;">
+                  <input id="model" placeholder="Model ID..." style="flex:1;" />
+                  <button id="discoverModels"
+                    style="background:var(--neon-blue); border:none; padding:5px; font-family:var(--font-pixel); font-size:0.4rem; cursor:pointer;">SCAN</button>
+                </div>
               </div>
-              <div class="form-group">
-                <label>TEMPERATURE</label>
-                <input type="range" id="temp" min="0" max="1" step="0.1" value="0.7" />
+
+              <div id="dev-params"
+                style="display:none; margin-top:10px; border-top:1px dashed var(--neon-purple); padding-top:10px;">
+                <div class="form-group">
+                  <label>HISTORY_LIMIT</label>
+                  <input type="number" id="history_limit" value="20" />
+                </div>
+                <div class="form-group">
+                  <label>TEMPERATURE</label>
+                  <input type="range" id="temp" min="0" max="2" step="0.1" value="0.7" />
+                </div>
               </div>
             </div>
 
@@ -385,7 +447,7 @@
             <div class="settings-card">
               <h3>[ 05 ] CHARACTER_DATABASE</h3>
               <button id="openCharModal"
-                      style="background:var(--neon-purple);border:none;padding:15px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;width:100%;color:#000;">
+                style="background:var(--neon-purple);border:none;padding:15px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;width:100%;color:#000;">
                 MANAGE_CHARACTERS
               </button>
             </div>
@@ -394,26 +456,43 @@
           <div style="display:flex; gap:20px;">
             <button id="saveCfg"
               style="background:var(--neon-blue);border:none;padding:20px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;flex:1;margin-top:20px;">COMMIT_CHANGES</button>
-            <button id="resetCfg" style="background:var(--neon-pink);border:none;padding:20px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;width:150px;margin-top:20px;color:#000;">FACTORY_RESET</button>
+            <button id="resetCfg"
+              style="background:var(--neon-pink);border:none;padding:20px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;width:150px;margin-top:20px;color:#000;">FACTORY_RESET</button>
           </div>
         </section>
 
         <!-- DIAG TAB -->
-        <section id="system" class="tab" style="padding:20px;">
-          <!-- Emotion Detection Monitor -->
-          <h2 style="font-family:var(--font-pixel);font-size:0.8rem;color:var(--neon-purple);margin-bottom:10px;">EMOTION_ANALYTICS</h2>
-          <div id="emotion-indicator" style="margin-bottom:30px;min-height:100px;font-family:var(--font-mono);color:var(--neon-green);">
-            <div style="padding:20px;background:rgba(0,0,0,0.5);border:1px solid rgba(185,103,255,0.3);border-radius:4px;text-align:center;">
-              <span style="font-size:0.5rem;color:#888;">AWAITING_EMOTION_DATA...</span>
+        <section id="system" class="tab" style="padding:20px; color: var(--neon-green); font-family: var(--font-mono);">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h2 style="font-family:var(--font-pixel);font-size:0.8rem;color:var(--neon-purple);margin-bottom:10px;">
+                CORE_DIAGNOSTICS</h2>
+              <div id="health"
+                style="background:rgba(0,0,0,0.5); padding:20px; border:1px solid var(--neon-purple); font-size:0.7rem; min-height: 200px;">
+                INITIALIZING_SCAN...
+              </div>
+              <button id="refreshHealth"
+                style="background:var(--neon-green);border:none;padding:15px;font-family:var(--font-pixel);font-size:0.4rem;cursor:pointer;margin-top:20px; width:100%;">FORCE_PROBE</button>
+            </div>
+
+            <div>
+              <h2 style="font-family:var(--font-pixel);font-size:0.8rem;color:var(--neon-yellow);margin-bottom:10px;">
+                EMOTION_ENGINES</h2>
+              <div id="emotion-indicator"
+                style="background:rgba(0,0,0,0.5); padding:20px; border:1px solid var(--neon-yellow); font-size:0.7rem;">
+                AWAITING_INPUT_FOR_ANALYSIS...
+              </div>
+
+              <h2 style="font-family:var(--font-pixel);font-size:0.8rem;color:var(--neon-blue);margin:20px 0 10px;">
+                UPLINK_STATUS</h2>
+              <div
+                style="background:rgba(0,0,0,0.5); padding:15px; border:1px solid var(--neon-blue); font-size:0.6rem;">
+                LATENCY: <span id="diag-latency">--ms</span><br>
+                UPLINK_KEY: SHA-256_HIDDEN<br>
+                AUTH: GRANTED
+              </div>
             </div>
           </div>
-
-          <!-- System Health Monitor -->
-          <h2 style="font-family:var(--font-pixel);font-size:0.8rem;">CORE_HEALTH_MONITOR</h2>
-          <pre id="health"
-            style="font-size:0.8rem;color:var(--neon-green);margin-top:20px;background:rgba(0,0,0,0.5);padding:20px;flex:1;overflow:auto;">RUNNING_DIAGNOSTICS...</pre>
-          <button id="refreshHealth"
-            style="background:var(--neon-green);border:none;padding:15px;font-family:var(--font-pixel);font-size:0.4rem;cursor:pointer;margin-top:20px;">RERUN_DIAG</button>
         </section>
       </div>
     </main>
@@ -560,13 +639,13 @@
         bootIdx++;
         setTimeout(runBoot, 100 + Math.random() * 100);
       } else {
-          setTimeout(() => { 
-            $('#boot-overlay').style.opacity = '0';
-            setTimeout(() => { 
-              $('#boot-overlay').style.display = 'none'; 
-              checkOnboarding();
-            }, 500);
-          }, 300);
+        setTimeout(() => {
+          $('#boot-overlay').style.opacity = '0';
+          setTimeout(() => {
+            $('#boot-overlay').style.display = 'none';
+            checkOnboarding();
+          }, 500);
+        }, 300);
       }
     }
     runBoot();
@@ -584,7 +663,7 @@
           const versionText = `v${j.version}${j.schema_version ? ` | DB v${j.schema_version}` : ''}`;
           $('#version-display').textContent = versionText;
         }
-      } catch(e) {
+      } catch (e) {
         console.error('Version fetch failed:', e);
         // Non-critical, don't show toast
       }
@@ -599,7 +678,7 @@
         if (!cfg.onboarded) {
           $('#wizard-overlay').style.display = 'flex';
         }
-      } catch(e) {
+      } catch (e) {
         console.error('Onboarding check failed:', e);
         showToast('Failed to load configuration', 'error');
       }
@@ -652,7 +731,7 @@
     // Initialize Dashboard VRM
     function initDashboard() {
       if ($('#vrm-iframe').src === 'about:blank') {
-          $('#vrm-iframe').src = `/frontend/viewer/viewer.html?url=/files/avatars/Panicandy.vrm`;
+        $('#vrm-iframe').src = `/frontend/viewer/viewer.html?url=/files/avatars/Panicandy.vrm`;
       }
     }
     initDashboard();
@@ -905,7 +984,7 @@
      */
     $('#newSession').onclick = async () => {
       try {
-        const title = `LOG_${new Date().toISOString().slice(11,19)}`;
+        const title = `LOG_${new Date().toISOString().slice(11, 19)}`;
         const r = await fetchWithRetry('/api/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -979,7 +1058,7 @@
           $('#temp').value = j.llm.temperature || 0.7;
         }
         if (j.tts) {
-           $('#tts_enabled').checked = !!j.tts.enabled;
+          $('#tts_enabled').checked = !!j.tts.enabled;
           $('#tts_provider').value = j.tts.provider || 'local';
           $('#tts_voice_id').value = j.tts.voice_id || '';
         }
@@ -1007,22 +1086,125 @@
       $('.scanlines').style.opacity = opacity;
     }
 
+    async function pollLogs() {
+      try {
+        const r = await fetch('/api/logs');
+        if (!r.ok) return;
+        const j = await r.json();
+        const feed = $('#terminal-feed');
+        if (j.logs && j.logs.length > 0) {
+          j.logs.forEach(msg => {
+            const div = document.createElement('div');
+            div.textContent = msg;
+            feed.appendChild(div);
+          });
+          feed.scrollTop = feed.scrollHeight;
+          // Keep only last 50 logs
+          while (feed.children.length > 50) feed.removeChild(feed.firstChild);
+        }
+      } catch (e) {
+        console.warn('Logging offline');
+      }
+    }
+
     /**
-     * Update status indicator lights for LLM and TTS services.
+     * Update status indicator lights with neon classes.
      */
     async function updateStatusLights() {
-       try {
-         const r = await fetchWithRetry('/api/healthcheck');
-         if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+      try {
+        const r = await fetch('/api/healthcheck');
+        if (!r.ok) throw new Error('OFFLINE');
+        const j = await r.json();
 
-         const j = await r.json();
-         $('#stat-llm').style.color = j.lmstudio ? 'var(--neon-green)' : 'var(--neon-pink)';
-         $('#stat-llm').textContent = `LLM: ${j.lmstudio ? 'OK' : 'ERR'}`;
-       } catch(e) {
-         console.error('updateStatusLights error:', e);
-         $('#stat-llm').style.color = 'var(--neon-pink)';
-         $('#stat-llm').textContent = 'LLM: ERR';
-       }
+        // LLM status
+        const llmOk = j.ok && j.llm && j.llm.ok;
+        const llmLabel = $('#stat-llm');
+        const llmDot = $('#led-llm');
+
+        llmLabel.textContent = `LLM: ${llmOk ? 'CONNECTED' : 'OFFLINE'}`;
+        llmLabel.style.color = llmOk ? 'var(--neon-green)' : 'var(--neon-pink)';
+        llmDot.className = `status-dot ${llmOk ? 'status-online' : 'status-offline'}`;
+
+        // TTS status
+        const ttsOk = j.ttsConfigured;
+        const ttsLabel = $('#stat-tts');
+        const ttsDot = $('#led-tts');
+        ttsLabel.textContent = `TTS: ${ttsOk ? 'READY' : 'OFFLINE'}`;
+        ttsLabel.style.color = ttsOk ? 'var(--neon-green)' : 'var(--neon-pink)';
+        ttsDot.className = `status-dot ${ttsOk ? 'status-online' : 'status-offline'}`;
+
+        // Latency/Uplink
+        if ($('#diag-latency')) {
+          const start = Date.now();
+          await fetch('/api/config');
+          const latency = Date.now() - start;
+          $('#diag-latency').textContent = `${latency}ms`;
+        }
+      } catch (e) {
+        $('#led-llm').className = 'status-dot status-offline';
+        $('#led-tts').className = 'status-dot status-offline';
+        $('#stat-llm').textContent = 'LLM: DISCONNECTED';
+        $('#stat-llm').style.color = 'var(--neon-pink)';
+      }
+    }
+
+    // Auto-polling intervals
+    setInterval(pollLogs, 2000);
+    setInterval(updateStatusLights, 5000);
+
+    // Dev Mode Toggle
+    $('#dev_mode').onchange = () => {
+      $('#dev-params').style.display = $('#dev_mode').checked ? 'block' : 'none';
+    };
+
+    // Model Discovery
+    $('#discoverModels').onclick = async () => {
+      try {
+        const endpoint = $('#endpoint').value.trim();
+        const base = endpoint.replace(/\/v1$/, '').replace(/\/$/, '') + '/v1';
+        showToast('SCANNING_MODELS...', 'info');
+        const r = await fetch(`${base}/models`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json();
+        if (j.data && j.data.length > 0) {
+          const modelId = j.data[0].id;
+          $('#model').value = modelId;
+          showToast(`FOUND: ${modelId}`, 'success');
+        } else {
+          showToast('NO_MODELS_FOUND');
+        }
+      } catch (e) {
+        showToast('SCAN_FAILED: ' + e.message);
+      }
+    };
+
+    /**
+     * Load current configuration from backend and populate UI fields.
+     */
+    async function loadCfg() {
+      try {
+        const r = await fetchWithRetry('/api/config');
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+
+        const j = await r.json();
+
+        if (j.llm) {
+          $('#endpoint').value = j.llm.endpoint || '';
+          $('#model').value = j.llm.model || '';
+          $('#temp').value = j.llm.temperature || 0.7;
+          $('#history_limit').value = j.llm.history_limit || 20;
+        }
+        // ... (existing tts/asr/ui loads unchanged in previous steps)
+
+        // Reload Dev Mode state from localStorage if you want, or just default off
+        $('#dev_mode').checked = localStorage.getItem('retro_dev_mode') === 'true';
+        $('#dev_mode').onchange();
+
+        updateStatusLights();
+      } catch (e) {
+        showToast('Failed to load configuration: ' + e.message);
+        console.error('loadCfg error:', e);
+      }
     }
 
     /**
@@ -1030,8 +1212,14 @@
      */
     $('#saveCfg').onclick = async () => {
       try {
+        localStorage.setItem('retro_dev_mode', $('#dev_mode').checked);
         const body = {
-          llm: { endpoint: $('#endpoint').value, model: $('#model').value, temperature: parseFloat($('#temp').value) },
+          llm: {
+            endpoint: $('#endpoint').value,
+            model: $('#model').value,
+            temperature: parseFloat($('#temp').value),
+            history_limit: parseInt($('#history_limit').value) || 20
+          },
           tts: { enabled: $('#tts_enabled').checked, provider: $('#tts_provider').value, voice_id: $('#tts_voice_id').value },
           asr: { enabled: $('#asr_enabled').value === "true", provider: $('#asr_provider').value },
           ui: { scanline_opacity: parseFloat($('#ui_scanlines').value), flicker_enabled: $('#ui_flicker').value === "true" }
@@ -1057,7 +1245,7 @@
      * Reset configuration to factory defaults and reload page.
      */
     $('#resetCfg').onclick = async () => {
-      if(!confirm("CONFIRM FACTORY_RESET? ALL DATA WILL BE WIPED.")) return;
+      if (!confirm("CONFIRM FACTORY_RESET? ALL DATA WILL BE WIPED.")) return;
 
       try {
         const r = await fetchWithRetry('/api/config/reset', { method: 'POST' });
@@ -1488,11 +1676,14 @@
         <h2 style="font-family:var(--font-pixel); font-size:0.8rem; color:var(--neon-blue); margin:0;">
           CHARACTER_DATABASE
         </h2>
-        <button id="closeCharModal" style="background:transparent; border:none; color:var(--neon-pink); cursor:pointer; font-size:1.5rem; padding:0; line-height:1;">&times;</button>
+        <button id="closeCharModal"
+          style="background:transparent; border:none; color:var(--neon-pink); cursor:pointer; font-size:1.5rem; padding:0; line-height:1;">&times;</button>
       </div>
 
       <!-- Character List -->
-      <div id="charListManage" style="max-height:200px; overflow-y:auto; margin-bottom:20px; border:1px solid var(--neon-purple); padding:10px; background:rgba(0,0,0,0.3);"></div>
+      <div id="charListManage"
+        style="max-height:200px; overflow-y:auto; margin-bottom:20px; border:1px solid var(--neon-purple); padding:10px; background:rgba(0,0,0,0.3);">
+      </div>
 
       <!-- Character Form -->
       <div id="charForm">
@@ -1535,12 +1726,15 @@
         </div>
 
         <div style="display:flex; gap:10px; margin-top:20px;">
-          <button id="saveChar" style="flex:1; background:var(--neon-green); color:#000; border:none; padding:15px; font-family:var(--font-pixel); font-size:0.6rem; cursor:pointer;">SAVE</button>
-          <button id="newChar" style="flex:1; background:var(--neon-blue); color:#000; border:none; padding:15px; font-family:var(--font-pixel); font-size:0.6rem; cursor:pointer;">NEW</button>
+          <button id="saveChar"
+            style="flex:1; background:var(--neon-green); color:#000; border:none; padding:15px; font-family:var(--font-pixel); font-size:0.6rem; cursor:pointer;">SAVE</button>
+          <button id="newChar"
+            style="flex:1; background:var(--neon-blue); color:#000; border:none; padding:15px; font-family:var(--font-pixel); font-size:0.6rem; cursor:pointer;">NEW</button>
         </div>
       </div>
     </div>
   </div>
 
 </body>
+
 </html>

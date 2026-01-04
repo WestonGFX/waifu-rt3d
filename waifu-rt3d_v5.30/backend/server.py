@@ -1,17 +1,45 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
-from fastapi.responses import HTMLResponse
-from starlette.staticfiles import StaticFiles
-from pathlib import Path
-import json, sqlite3, requests, asyncio, time
-import logging
-
-# Initialize logging
-logging.basicConfig(level=logging.INFO)
+import logging, logging.handlers, queue
+from datetime import datetime
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_FILE = ROOT / "VERSION"
-VERSION = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else "5.31.0"
+VERSION = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else "5.30.0"
 FRONTEND = ROOT / "frontend"
+STORAGE = ROOT / "backend" / "storage"
+DEBUG_LOG = ROOT / "debug.log"
+
+# --- CORE LOGGING SYSTEM ---
+# Memory buffer for the UI "Terminal"
+LOG_QUEUE = queue.Queue(maxsize=100)
+
+class UIHandler(logging.Handler):
+    def emit(self, record):
+        msg = self.format(record)
+        if LOG_QUEUE.full():
+            try: LOG_QUEUE.get_nowait()
+            except: pass
+        LOG_QUEUE.put_nowait(msg)
+
+# Setup file and memory logging
+logger = logging.getLogger("waifu")
+logger.setLevel(logging.DEBUG)
+
+# File handler (Rotation at 1MB)
+file_handler = logging.handlers.RotatingFileHandler(DEBUG_LOG, maxBytes=1_000_000, backupCount=3)
+file_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+logger.addHandler(file_handler)
+
+# UI handler (Memory Buffer)
+ui_handler = UIHandler()
+ui_handler.setFormatter(logging.Formatter('> %(message)s'))
+logger.addHandler(ui_handler)
+
+# Standard console handler
+console = logging.StreamHandler()
+console.setFormatter(logging.Formatter('\033[94m%(levelname)s\033[0m: %(message)s'))
+logger.addHandler(console)
+
+logger.info(f"--- WAIFU_LINK BOOT SEQUENCE v{VERSION} ---")
 STORAGE = ROOT / "backend" / "storage"
 AVATARS = STORAGE / "avatars"
 AUDIO = STORAGE / "audio"
@@ -242,12 +270,25 @@ def delete_avatar(name: str):
     if p.exists(): p.unlink()
     return {"ok": True}
 
+@app.get("/api/logs")
+async def get_logs():
+    """Endpoint for retrieving current log buffer for the sidebar terminal."""
+    logs = []
+    while not LOG_QUEUE.empty():
+        logs.append(LOG_QUEUE.get_nowait())
+    return {"logs": logs}
+
 @app.post("/api/chat")
 async def chat(session_id: int = 1, char_id: int = None, req: Request = None):
     body = await req.json()
-    if not body or "text" not in body: raise HTTPException(400, "missing text")
+    if not body or "text" not in body:
+        logger.warning("Chat request missing text body")
+        raise HTTPException(400, "missing text")
+    
     text = body["text"]; speak = bool(body.get("speak", False))
     if char_id is None: char_id = body.get("character_id", 1)
+
+    logger.info(f"USER: {text[:50]}...")
 
     cfg = load_config()
     con = db(); cur = con.cursor()

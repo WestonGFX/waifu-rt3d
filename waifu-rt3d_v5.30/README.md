@@ -77,8 +77,8 @@ Then open: **http://127.0.0.1:8000**
 
 ## 📁 Project Structure
 
-```
-waifu-rt3d_v5.29_full/
+``` 
+waifu-rt3d_v5.30
 ├── backend/
 │   ├── server.py              # FastAPI application
 │   ├── preflight.py           # Initialization & setup
@@ -249,12 +249,90 @@ TTS Providers:
 - [Coqui XTTS](https://github.com/coqui-ai/TTS)
 - [ElevenLabs](https://elevenlabs.io/)
 
+## 🚀 Quick Start (Mac/Linux)
+
+**Preferred Method (macOS)**: We strongly recommend using **Homebrew** (`brew install`) for system dependencies.
+
+1. **Install Dependencies**:
+
+   ```bash
+   brew install python@3.10 ffmpeg git
+   ```
+
+2. **Clone & Setup**:
+
+   ```bash
+   git clone https://github.com/WestonGFX/waifu-rt3d.git
+   cd waifu-rt3d
+   ./install.sh
+   # Follow the prompts!
+   # Then run:
+   python3 -m backend.server
+   ```
+
+## 💡 40 Ranked Optional Ideas (The "Wishlist")
+
+These features are prioritized by "Soul" impact and feasibility.
+
+### Priority Tier S (Critical Soul)
+
+1. [ ] **Dynamic Eye Contact**: Avatar eyes track mouse usage or active window focus.
+2. [ ] **Blinking LED Status**: Physical-style status lights (Network/Mic) on the HUD.
+3. [ ] **Glitch Effects**: Visual artifacting when the LLM is confused or generates errors.
+4. [ ] **Idle Mumbling**: The AI whispers to itself if left alone for >5 minutes.
+5. [ ] **Haptic Feedback**: Screen shake during intense emotional responses (Anger/Joy).
+6. [ ] **CRT Power-Down**: Retro TV switch-off animation when closing the tab.
+7. [ ] **Boot Sequence**: Matrix-style "BIOS" load screen showing modules loading.
+8. [ ] **Typing Sound**: Mechanical keyboard SFX when the AI generates text (streaming).
+9. [ ] **Music Visualizer**: Winamp-style bars reacting to the AI's voice frequency.
+10. [ ] **Day/Night Cycle**: Background changes based on real-world local time.
+
+### Priority Tier A (High Value)
+
+1. [ ] **Discord Integration**: Bot that can join VC and listen/speak.
+2. [ ] **Desktop Pet (Electron)**: Transparent window overlay for the avatar.
+3. [ ] **Spotify Connection**: AI can see what song you're playing and comment on it.
+4. [ ] **Obsidian/Notion Plug-in**: AI can read your notes for context.
+5. [ ] **Twitch Integration**: Read chat and respond to viewers (Neuro-sama style).
+6. [ ] **Local RAG (PDF)**: Drag & drop PDF manuals for the AI to "read".
+7. [ ] **Web Search**: Agentic capability to Google things (SerpAPI).
+8. [ ] **Image Gen (SDXL)**: "Imagine a cat" -> Generating image...
+9. [ ] **Voice Cloning (RVC)**: 5-second sample to clone the user's voice.
+10. [ ] **emotional-damage.mp3**: Play memes/SFX based on context.
+
+### Priority Tier B (Nice to Have)
+
+1. [ ] **Weather API**: "It's raining, look!" (Changes background to rain).
+2. [ ] **Calendar Sync**: "You have a meeting in 10 minutes."
+3. [ ] **Code Interpreter**: Execute Python code in a sandbox.
+4. [ ] **V-Tuber Mode**: Face tracking (webcam) drives the avatar instead of AI.
+5. [ ] **Multi-character Rooms**: Chat with 2 AI waifus at once.
+6. [ ] **Translation Mode**: Realtime speech-to-speech translation.
+7. [ ] **Game State API**: Hook into Minecraft/GTA via mods to see game events.
+8. [ ] **Alarm Clock**: Wake up call with custom personality.
+9. [ ] **News Feed**: Morning briefing of RSS feeds.
+10. [ ] **System Monitor**: "Your CPU is hot (85°C), are you gaming?"
+
+### Priority Tier C (Experimental / Fun)
+
+1. [ ] **Tamagotchi Mode**: Hunger/Energy stats that need maintenance.
+2. [ ] **Dream Journal**: Generates a daily diary entry of chats.
+3. [ ] **Horoscope Mode**: "Stars are aligned for coding today."
+4. [ ] **Rickroll Prevention**: AI warns you before clicking suspicious links.
+5. [ ] **ASCII Art output**: Can generate images in chat using text.
+6. [ ] **Screenssaver**: Runs when computer is idle.
+7. [ ] **AR Mode**: View avatar through phone camera (WebXR).
+8. [ ] **Theme Store**: Download community CSS themes.
+9. [ ] **Voice Changer (User)**: Modulate user input voice.
+10. [ ] **Easter Eggs**: Secret commands like `sudo make me a sandwich`.
+
 ## 📧 Support
 
 For issues and questions:
+
 - Open an issue on GitHub
 - Check existing documentation in `/docs`
 
 ---
 
-Made with ❤️ for the AI companion community
+Made with ❤️ from the west coast of North America.

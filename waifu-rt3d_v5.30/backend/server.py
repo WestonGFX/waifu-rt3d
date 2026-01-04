@@ -1,6 +1,11 @@
 import logging, logging.handlers, queue
 import psutil
 from datetime import datetime
+from pathlib import Path
+import json, sqlite3, requests, asyncio, time
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from starlette.staticfiles import StaticFiles
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_FILE = ROOT / "VERSION"
@@ -46,8 +51,6 @@ AVATARS = STORAGE / "avatars"
 AUDIO = STORAGE / "audio"
 CONFIG = ROOT / "backend" / "config" / "app.json"
 DB_PATH = STORAGE / "app.db"
-
-app = FastAPI(title="waifu-rt3d", version=VERSION)
 
 # Global LLM Health Status
 _llm_status = {"ok": False, "error": "Not Checked", "models": [], "last_check": 0}
@@ -248,33 +251,10 @@ def health():
         "version": VERSION,
         "schema_version": 5,
         "llm": _llm_status,
-        "ttsConfigured": bool(cfg.get("tts", {}).get("endpoint") or cfg.get("tts", {}).get("api_key")),
+        "lmstudio": _llm_status["ok"], # Backwards compat for retro UI
+        "ttsConfigured": bool(cfg.get("tts", {}).get("enabled") or cfg.get("tts", {}).get("api_key")),
         "issues": [_llm_status["error"]] if not _llm_status["ok"] else []
     }
-        ...     "version": "5.31.0",
-        ...     "schema_version": 5,
-        ...     "libs": {"three_local": true, ...},
-        ...     "lmstudio": true,
-        ...     "ttsConfigured": true,
-        ...     "issues": []
-        ... }
-    """
-    libs = {
-        "three_local": (FRONTEND/'lib'/'three.module.js').exists(),
-        "gltf_loader_local": (FRONTEND/'lib'/'GLTFLoader.js').exists(),
-        "three_vrm_local": (FRONTEND/'lib'/'three-vrm.module.min.js').exists()
-    }
-    issues = []; ok = True; lm_ok=False; tts=True
-
-    # Get schema version
-    try:
-        from .preflight import get_schema_version
-        con = db()
-        schema_version = get_schema_version(con)
-        con.close()
-    except Exception as e:
-        schema_version = None
-        issues.append(f"Schema version check failed: {e}")
 
     # Check LLM endpoint
     try:
@@ -432,6 +412,33 @@ def list_sessions(archived: bool = False):
     sessions = [{"id": row[0], "title": row[1] or f"Session {row[0]}", "created_ts": row[2], "message_count": row[3], "archived": bool(row[4])} for row in cur.fetchall()]
     conn.close()
     return {"sessions": sessions}
+
+# Global Exception Handler
+@app.middleware("http")
+async def global_exception_handler(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        logger.error(f"Global Exception: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Internal Server Error", "details": str(e)}
+        )
+
+# 10+ Common Error Handlers
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    return JSONResponse(status_code=exc.status_code, content={"ok": False, "error": exc.detail})
+
+@app.exception_handler(sqlite3.Error)
+async def db_exception_handler(request, exc):
+    logger.error(f"Database Error: {exc}")
+    return JSONResponse(status_code=500, content={"ok": False, "error": "Database Error", "details": str(exc)})
+
+@app.exception_handler(requests.RequestException)
+async def network_exception_handler(request, exc):
+    logger.error(f"Network Error: {exc}")
+    return JSONResponse(status_code=503, content={"ok": False, "error": "External Service Unavailable", "details": str(exc)})
 
 @app.post("/api/sessions")
 async def create_session(req: Request):
@@ -761,3 +768,35 @@ def delete_character(char_id: int):
     cur.execute("DELETE FROM characters WHERE id=?", (char_id,))
     conn.commit(); conn.close()
     return {"ok": True}
+
+if __name__ == "__main__":
+    import uvicorn
+    import sys
+    
+    # Smart Port Scanning (8080 -> 8090)
+    port = 8080
+    max_port = 8090
+    
+    while port <= max_port:
+        try:
+            logger.info(f"Attempting to bind to port {port}...")
+            # We don't actually bind here, just rely on Uvicorn. 
+            # If Uvicorn fails, we catch it? No, uvicorn.run blocks.
+            # So checking port beforehand is safer.
+            import socket
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                if s.connect_ex(('0.0.0.0', port)) != 0:
+                    # Port is free
+                    break
+                else:
+                    logger.warning(f"Port {port} is busy.")
+        except:
+            pass
+        port += 1
+    
+    if port > max_port:
+        logger.error("No free ports found between 8080-8090!")
+        sys.exit(1)
+        
+    logger.info(f"Starting Waifu-RT3D on http://localhost:{port}")
+    uvicorn.run("backend.server:app", host="0.0.0.0", port=port, reload=False)

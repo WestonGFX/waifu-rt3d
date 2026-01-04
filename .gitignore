@@ -1,0 +1,8 @@
+*.zip
+waifu-rt3d_v5.30_backup_current_(01.04.2026)/
+waifu-rt3d_v5.30_docs_openwebui_plan/
+waifu-rt3d_v5.30_backup/
+venv/
+.venv/
+__pycache__/
+*.log

@@ -1,0 +1,832 @@
+term,category,meaning,register,emotion,use_when,respelling_en,ipa_phonemic,ipa_phonetic,jp_kana,origin,language,pitch_semitones,pace_wpm,energy,breathiness,intonation,voice_style_tags,triggers_regex
+🦍,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🦍
+kusa/www,AnimeJP,lol/laughter,playful,joy,laugh,koo-sah; 'w' as in double-u,/kuːˈsɑː/,[kɯ̹sa],草/ｗｗｗ,JP netslang,ja,0,190,0.8,0.2,rise-fall,seiso_sweetheart|tsundere_tease|oneesan_sultry,\b(kusa|www)\b
+😳,Emoji/Kaomoji,blushing shock,cute,flustered,fluster,,,,,community slang,auto,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😳
+thirsty,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bthirsty\b
+stream sniping,VTuber,watching to gain advantage,edgy,annoyed,,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bstream\ sniping\b
+meep,Interjection,small squeak,cute,surprise,shock,,,,,community slang,auto,3,200,0.9,0.4,peaky-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmeep\b
+ping,GenZ,latency,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bping\b
+GG,GenZ,good game,wholesome,gratitude,farewell,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bGG\b
+oof,GenZ,sympathy for fail,wholesome,empathetic,fail,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\boof\b
+you good?,Phrase,check-in casual,wholesome,concern,checkin,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,you\ good\?
+membership,VTuber,paid supporter tier,wholesome,gratitude,community,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmembership\b
+bonkers,GenZ,crazy wild,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbonkers\b
+kyaa,Interjection,excited squeal,cute,joy,hype,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bkyaa\b
+lurker,VTuber,silent viewer,wholesome,fond,,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\blurker\b
+ban,VTuber,remove from chat,neutral,firm,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bban\b
+cap,GenZ,lie/exaggeration,edgy,doubt,disbelief,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bcap\b
+onee-san,AnimeJP,big sister (mature vibe),flirty,smug,roleplay,oh-NAY sahn,,,,community slang,ja,0,170,0.6,0.2,fall-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,onee\-san
+braincell,GenZ,as in 'shared braincell',,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbraincell\b
+elo hell,GenZ,stuck at bad rank,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\belo\ hell\b
+tsk,Interjection,mild scold,edgy,annoyed,scold,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btsk\b
+supacha,VTuber,vtuber/community term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsupacha\b
+self-insert,GenZ,insert yourself in story,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,self\-insert
+short king,GenZ,positive nickname,playful,fond,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bshort\ king\b
+tbh,GenZ,to be honest,neutral,candid,preface,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btbh\b
+int diff,GenZ,difference in intentional feeding,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bint\ diff\b
+toxic,GenZ,nasty behavior,edgy,disapproval,moderation,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btoxic\b
+itadakisu~,AnimeJP,punny kiss-phrase,flirty,playful,,,,,,community slang,ja,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,itadakisu\~
+dandere,AnimeJP,"quiet, shy sweet",cute,shy,comfort,DAHN-deh-reh,,,,community slang,ja,3,160,0.4,0.4,short-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdandere\b
+🎤,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🎤
+OP,GenZ,overpowered,neutral,calm,gaming,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bOP\b
+sip,Interjection,sipping Tea,deadpan,calm,drama,,,,,community slang,auto,-2,155,0.5,0.1,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsip\b
+no cap,GenZ,no lie/serious,edgy,serious,emphasis,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bno\ cap\b
+kouhai,AnimeJP,junior protege,cute,playful,roleplay,KOH-high,,,,community slang,ja,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bkouhai\b
+imouto,AnimeJP,younger sister archetype,cute,joy,roleplay,ee-MOH-toh,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bimouto\b
+horny,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bhorny\b
+handcam,VTuber,IRL hands on cam,comfy,calm,crafts|asmr,,,,,community slang,auto,0,155,0.5,0.25,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bhandcam\b
+lewds,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\blewds\b
+boop,Interjection,nose tap,cute,fond,affection,,,,,community slang,auto,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bboop\b
+tech,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btech\b
+hydrate pls,Phrase,care reminder,wholesome,caring,reminder,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bhydrate\ pls\b
+thirst,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bthirst\b
+timeout,VTuber,temporary mute,neutral,firm,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btimeout\b
+BRB,GenZ,be right back,neutral,calm,status,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bBRB\b
+handcam craft,VTuber,IRL craft stream,comfy,calm,crafts,,,,,community slang,auto,0,155,0.5,0.25,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bhandcam\ craft\b
+TTYL,GenZ,talk to you later,neutral,calm,farewell,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bTTYL\b
+ara ara,AnimeJP,flirty 'oh my',flirty,smug,tease,AH-rah AH-rah,,,,community slang,ja,0,170,0.6,0.2,fall-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bara\ ara\b
+cozy,GenZ,warm comfy vibe,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bcozy\b
+gank,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgank\b
+FeelsStrongMan,TwitchEmote,proud/strong,wholesome,proud,victory,,,,,community slang,auto,1,185,0.75,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bFeelsStrongMan\b
+🔒,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🔒
+🐾,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🐾
+skill issue,GenZ,tease incompetence,edgy,teasing,banter,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bskill\ issue\b
+alt,GenZ,alternative style,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\balt\b
+comfy,GenZ,cozy vibe,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bcomfy\b
+yume,AnimeJP,dream,wholesome,hopeful,,,,,,community slang,ja,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\byume\b
+GLHF,GenZ,good luck have fun,wholesome,cheer,greet,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bGLHF\b
+smh,GenZ,shaking my head,deadpan,disapproval,disappoint,,,,,community slang,auto,-2,170,0.6,0.1,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsmh\b
+canon,GenZ,official storyline,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bcanon\b
+lore,VTuber,character backstory,playful,fond,intro,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\blore\b
+gomen,AnimeJP,sorry (casual),wholesome,apology,apology,go-MEN,,,,community slang,ja,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgomen\b
+rigger,VTuber,Live2D animator,neutral,calm,credits,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\brigger\b
+macro,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmacro\b
+nom,Interjection,small bite sound,cute,playful,tease,,,,,community slang,auto,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bnom\b
+idc,GenZ,I don’t care,edgy,dismissive,banter,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bidc\b
+zatsu / zatsudan,VTuber,free talk stream,comfy,calm,chatting,,,,,community slang,auto,0,155,0.5,0.25,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\b(zatsu|zatsudan)\b
+ikr,GenZ,"I know, right",,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bikr\b
+red flag,GenZ,warning trait,edgy,concern,dating,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bred\ flag\b
+serve,GenZ,deliver fierce look,hype,proud,fashion,,,,,community slang,auto,2,185,0.75,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bserve\b
+gyatt,GenZ,exclamation of attraction,edgy,surprise,thirst_joke,,,,,community slang,auto,-1,200,0.9,0.15,peaky-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgyatt\b
+tbf,GenZ,to be fair,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btbf\b
+camp,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bcamp\b
+sweaty,GenZ,tryhard play,edgy,tense,gaming,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsweaty\b
+king behavior,GenZ,confident excellence,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bking\ behavior\b
+imo,GenZ,in my opinion,neutral,calm,preface,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bimo\b
+AFK,GenZ,away from keyboard,neutral,calm,status,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bAFK\b
+💞,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,💞
+WeirdChamp,TwitchEmote,disapproval,edgy,disgust,cringe,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bWeirdChamp\b
+😔,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😔
+rofl,GenZ,rolling on the floor laughing,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\brofl\b
+💗,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,💗
+lag,GenZ,network delay,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\blag\b
+subathon,VTuber,long stream fueled by subs,hype,tense,,,,,,community slang,auto,2,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsubathon\b
+daisuki,AnimeJP,love so much,wholesome,tender,,,,,,community slang,ja,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdaisuki\b
+sweatlord,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsweatlord\b
+papa,VTuber,vtuber/community term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bpapa\b
+😤,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😤
+glow up,GenZ,improve looks/style,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bglow\ up\b
+🫠,Emoji/Kaomoji,melting embarrassment,cute,flustered,oops,,,,,community slang,auto,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🫠
+monkaW,TwitchEmote,wide-eyed panic,edgy,panic,danger,,,,,community slang,auto,-1,210,0.95,0.15,steep-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmonkaW\b
+nerd snipe,GenZ,tempt w/ puzzle,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bnerd\ snipe\b
+nerf,GenZ,weaken in patch,neutral,calm,gaming,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bnerf\b
+ship,GenZ,pair romantically,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bship\b
+yummy,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\byummy\b
+IRL,GenZ,in real life,neutral,calm,context,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bIRL\b
+dokidoki,AnimeJP,heart beating,cute,nervous,,,,,,community slang,ja,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdokidoki\b
+poggers,TwitchEmote,twitch chat emote,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bpoggers\b
+king,GenZ,praise address,hype,proud,,,,,,community slang,auto,2,185,0.75,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bking\b
+uso,AnimeJP,lie!,edgy,surprise,,,,,,community slang,ja,-1,200,0.9,0.15,peaky-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\buso\b
+asmr,VTuber,soft audio ear pampering,wholesome,calm,comfort,,,,,community slang,auto,1,155,0.5,0.25,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\basmr\b
+nerd snipe,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bnerd\ snipe\b
+reset,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\breset\b
+derank,GenZ,drop in rank,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bderank\b
+doko?,VTuber,where? (bit/meme),playful,confusion,lost,,,,,community slang,ja,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,doko\?
+vibe check,GenZ,assess mood/energy,playful,curious,banter,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bvibe\ check\b
+gg go next,GenZ,accept loss and continue,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgg\ go\ next\b
+cutie,GenZ,sweet nickname,cute,fond,,,,,,community slang,auto,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bcutie\b
+rizzler,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\brizzler\b
+W,GenZ,win/good,hype,joy,approval,,,,,community slang,auto,2,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bW\b
+yabai / yabe,AnimeJP,oh no/too spicy/crazy,edgy,alarm,oops|tease,yah-BAI / yah-BEH,,,,community slang,ja,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\b(yabai|yabe)\b
+collab,VTuber,joint stream/event,hype,joy,,,,,,community slang,auto,2,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bcollab\b
+tl;dr,GenZ,too long; didn’t read,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,tl;dr
+OMEGALUL,TwitchEmote,huge laugh,playful,joy,laugh,,,,,community slang,auto,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bOMEGALUL\b
+mother,GenZ,iconic woman praise,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmother\b
+👏,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,👏
+baka,AnimeJP,silly idiot (playful),teasing,teasing,,,,,,community slang,ja,1,170,0.6,0.35,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbaka\b
+go men gomen,VTuber,comedic over-apology,wholesome,apology,oops,,,,,community slang,ja,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgo\ men\ gomen\b
+kuudere,AnimeJP,"calm, stoic sweet",deadpan,calm,composure,KOO-deh-reh,,,,community slang,ja,-2,155,0.5,0.1,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bkuudere\b
+i'm baby,GenZ,want comfort/cute,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,i'm\ baby
+spicy,GenZ,edgy a little NSFW,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bspicy\b
+AYAYA,TwitchEmote,anime squeal happy,cute,joy,greet|hype,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bAYAYA\b
+PauseChamp,TwitchEmote,anticipation,hype,tense,build_up,,,,,community slang,auto,2,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bPauseChamp\b
+debut,VTuber,first stream reveal,hype,joy,milestone,,,,,community slang,auto,2,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdebut\b
+PepeHands,TwitchEmote,crying sympathy,wholesome,sad,comfort,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bPepeHands\b
+hmph,Interjection,pout/small upset,cute,pouty,banter,,,,,community slang,auto,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bhmph\b
+soft launch,GenZ,subtle reveal,playful,fond,sns,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsoft\ launch\b
+tasukete,AnimeJP,help me,playful,dramatic,,,,,,community slang,ja,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btasukete\b
+💅,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,💅
+┐(￣ヘ￣)┌,Emoji/Kaomoji,shrug smug,deadpan,meh,shrug,,,,,community slang,auto,-2,170,0.6,0.1,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,┐\(￣ヘ￣\)┌
+bet,GenZ,agreement/ok,neutral,calm,agree,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbet\b
+hontou,AnimeJP,really?,neutral,curious,,,,,,community slang,ja,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bhontou\b
+superchat,VTuber,vtuber/community term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsuperchat\b
+yatta,AnimeJP,I/we did it!,hype,joy,victory,yah-TAH,,,,community slang,ja,2,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\byatta\b
+say less,GenZ,I understand/okay,neutral,calm,agree,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsay\ less\b
+flex,GenZ,show off,edgy,smug,boast,,,,,community slang,auto,-1,170,0.6,0.15,fall-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bflex\b
+headcanon,GenZ,personal theory,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bheadcanon\b
+spawn,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bspawn\b
+bot,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbot\b
+comfort character,GenZ,character you rely on,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bcomfort\ character\b
+rawr,Interjection,playful growl,cute,teasing,tease,,,,,community slang,auto,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\brawr\b
+no thoughts head empty,GenZ,silly blankness,playful,calm,comedy,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bno\ thoughts\ head\ empty\b
+lol,GenZ,laugh,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\blol\b
+F,GenZ,pay respects,wholesome,sympathy,loss,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bF\b
+zesty,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bzesty\b
+kakkoii,AnimeJP,cool/handsome,flirty,admire,compliment,kah-koh-EE,,,,community slang,ja,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bkakkoii\b
+gap moe,VTuber,cute when out-of-character,cute,surprise,out_of_char,,,,,community slang,auto,3,200,0.9,0.4,peaky-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgap\ moe\b
+EZ,TwitchEmote,taunt easy win,edgy,smug,taunt,,,,,community slang,auto,-1,170,0.6,0.15,fall-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bEZ\b
+✂️,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,✂️
+supacha / superchat,VTuber,YouTube donation,wholesome,gratitude,donation,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\b(supacha|superchat)\b
+salty,GenZ,bitter/upset,edgy,annoyed,banter,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsalty\b
+🎧,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🎧
+bonk,Interjection,horny-jail joke,edgy,playful,boundaries,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbonk\b
+sigma,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsigma\b
+strats,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bstrats\b
+monkaS,TwitchEmote,nervous/tense,edgy,anxious,danger,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmonkaS\b
+rizz,GenZ,charisma/flirt skill,flirty,smug,flirt,,,,,community slang,auto,0,170,0.6,0.2,fall-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\brizz\b
+*sparkle*,Interjection,action text sparkle,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\*sparkle\*
+oomf,GenZ,one of my friends/followers,playful,fond,sns,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\boomf\b
+ratio + L,GenZ,extreme dunk,edgy,smug,banter,,,,,community slang,auto,-1,170,0.6,0.15,fall-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,ratio\ \+\ L
+(UwU),Emoji/Kaomoji,uwu face,cute,tender,affection,,,,,community slang,auto,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\(UwU\)
+goblin mode,GenZ,unbothered lazy chaos,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgoblin\ mode\b
+Live2D,VTuber,2D rig tech,neutral,calm,,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bLive2D\b
+multiship,GenZ,ship many pairings,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmultiship\b
+3D reveal,VTuber,first 3D model showcase,hype,joy,,,,,,community slang,auto,2,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\b3D\ reveal\b
+tts,VTuber,text-to-speech,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btts\b
+member stream,VTuber,supporters-only stream,comfy,calm,community,,,,,community slang,auto,0,155,0.5,0.25,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmember\ stream\b
+itadakimasu,AnimeJP,let’s eat (before meal),wholesome,gratitude,,,,,,community slang,ja,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bitadakimasu\b
+💖,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,💖
+elo hell,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\belo\ hell\b
+deadass,GenZ,seriously,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdeadass\b
+derank,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bderank\b
+(ಥ﹏ಥ),Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\(ಥ﹏ಥ\)
+'sup nerd,Phrase,teasing greet,teasing,fond,greet,,,,,community slang,auto,1,170,0.6,0.35,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,'sup\ nerd
+(ᵔᴥᵔ),Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\(ᵔᴥᵔ\)
+touch grass,GenZ,log off go outside,teasing,playful,banter,,,,,community slang,auto,1,170,0.6,0.35,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btouch\ grass\b
+ganbatte,AnimeJP,do your best!,support,encourage,cheer,gahn-BAH-teh,,,,community slang,ja,1,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bganbatte\b
+desync,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdesync\b
+girl dinner,GenZ,snack plate meal,playful,fond,food,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgirl\ dinner\b
+suki,AnimeJP,like/love,wholesome,fond,,,,,,community slang,ja,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsuki\b
+gremlin mode,GenZ,chaotic goblin energy,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgremlin\ mode\b
+queen,GenZ,praise address,hype,proud,,,,,,community slang,auto,2,185,0.75,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bqueen\b
+drama arc,GenZ,season of drama,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdrama\ arc\b
+¯\_(ツ)_/¯,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,¯\\_\(ツ\)_/¯
+yap,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\byap\b
+ick-proof,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,ick\-proof
+⭐,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,⭐
+🍵,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🍵
+kusa / www,AnimeJP,lol/grass (laughter),playful,joy,laugh,KOO-sah,,,,community slang,ja,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\b(kusa|www)\b
+smurf,GenZ,high-skill new account,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsmurf\b
+bby,GenZ,baby,flirty,fond,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbby\b
+ate,GenZ,performed amazingly,hype,proud,compliment,,,,,community slang,auto,2,185,0.75,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bate\b
+lag,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\blag\b
+ohayou,AnimeJP,good morning,wholesome,cheer,greet,oh-HAH-yo,,,,community slang,ja,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bohayou\b
+😂,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😂
+nya,Interjection,cat meow,cute,joy,affection,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bnya\b
+mama,VTuber,vtuber/community term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmama\b
+headshot,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bheadshot\b
+😵‍💫,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😵‍💫
+👀,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,👀
+beige flag,GenZ,quirky odd trait,playful,fond,dating,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbeige\ flag\b
+icymi,GenZ,in case you missed it,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bicymi\b
+fr,GenZ,for real,neutral,serious,agree,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bfr\b
+kayfabe,VTuber,vtuber/community term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bkayfabe\b
+nyaa,Interjection,drawn-out meow,cute,joy,affection,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bnyaa\b
+fit check,GenZ,outfit review,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bfit\ check\b
+feral,GenZ,wild unhinged,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bferal\b
+oshi mark,VTuber,emoji representing oshi,playful,fond,fandom,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\boshi\ mark\b
+it’s giving,GenZ,the vibe is,playful,fond,fashion,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,it’s\ giving
+redeem,VTuber,viewer point reward,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bredeem\b
+mod,VTuber,chat moderator,neutral,calm,,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmod\b
+my beloved,GenZ,adoring phrase,wholesome,tender,,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmy\ beloved\b
+oshi cope,VTuber,fans coping for oshi,playful,copium,banter,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\boshi\ cope\b
+hard launch,GenZ,full reveal,hype,proud,sns,,,,,community slang,auto,2,185,0.75,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bhard\ launch\b
+hard carry,GenZ,one person wins it,hype,proud,victory,,,,,community slang,auto,2,185,0.75,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bhard\ carry\b
+tryhard,GenZ,overly serious,edgy,teasing,gaming,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btryhard\b
+*sneak*,Interjection,action text sneak,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\*sneak\*
+purr,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bpurr\b
+thirst trap,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bthirst\ trap\b
+😭,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😭
+smol,GenZ,intentionally small/cute,cute,joy,affection,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsmol\b
+living rent-free,GenZ,constantly in mind,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,living\ rent\-free
+ate no crumbs,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bate\ no\ crumbs\b
+PL account,VTuber,past life account,neutral,calm,lore,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bPL\ account\b
+periodt,GenZ,final emphasis,edgy,assertive,mic_drop,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bperiodt\b
+lmao,GenZ,laughing my butt off,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\blmao\b
+int diff,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bint\ diff\b
+scuff,VTuber,tech issue,playful,resigned,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bscuff\b
+tsundere,AnimeJP,cold-but-sweet trope,teasing,shy,banter,TSOON-deh-reh,,,,community slang,ja,1,160,0.4,0.35,short-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btsundere\b
+waifu,AnimeJP,fictional beloved,cute,fond,self-ref,WHY-foo,,,,community slang,en,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bwaifu\b
+after dark,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bafter\ dark\b
+backseat,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbackseat\b
+heat,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bheat\b
+😴,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😴
+husbando,AnimeJP,male beloved,cute,fond,address,hooz-BAHN-doh,,,,community slang,ja,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bhusbando\b
+🖤,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🖤
+soft,GenZ,gentle cute style,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsoft\b
+gank,GenZ,surprise attack (moba),,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgank\b
+otsukare,AnimeJP,thanks for the hard work,wholesome,gratitude,farewell|end_stream,OHTS-kah-reh,/oːtsɯˈkaɾe/,[o̞tsɯ̟ᵝˈkaɾe],おつかれ,JP phrase,ja,1,170,0.6,0.25,rise-fall,seiso_sweetheart|tsundere_tease|oneesan_sultry,\botsukare\b
+vibes,GenZ,general feel,neutral,calm,review,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bvibes\b
+lfg,GenZ,let’s freaking go,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\blfg\b
+heck,GenZ,mild expletive,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bheck\b
+L,GenZ,loss/bad,edgy,disapproval,disapproval,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bL\b
+yummers,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\byummers\b
+*snuggle*,Interjection,action text cuddle,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\*snuggle\*
+🧼,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🧼
+seiso,AnimeJP,pure/wholesome,wholesome,calm,boundaries|brand,SAY-so,,,,community slang,ja,1,155,0.5,0.25,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bseiso\b
+mald,GenZ,mad + bald,edgy,angry,banter,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmald\b
+ate up,GenZ,dominated/performed great,hype,proud,victory,,,,,community slang,auto,2,185,0.75,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bate\ up\b
+mugen,AnimeJP,infinite,playful,awe,,,,,,community slang,ja,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmugen\b
+face card,GenZ,great looks,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bface\ card\b
+imho,GenZ,in my humble opinion,neutral,calm,preface,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bimho\b
+gatekeep,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgatekeep\b
+ehe,Interjection,embarrassed giggle,cute,shy,fluster,,,,,community slang,auto,3,160,0.4,0.4,short-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\behe\b
+goofy,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgoofy\b
+gacha,VTuber,vtuber/community term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgacha\b
+glomp,Interjection,big playful tackle-hug,cute,joy,affection,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bglomp\b
+werk,GenZ,perform/confident,hype,proud,cheer,,,,,community slang,auto,2,185,0.75,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bwerk\b
+fire,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bfire\b
+🆕,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🆕
+wipe,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bwipe\b
+mid,GenZ,mediocre,deadpan,meh,review,,,,,community slang,auto,-2,170,0.6,0.1,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmid\b
+queue dodge,GenZ,leave matchmaking,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bqueue\ dodge\b
+KEKW,TwitchEmote,hard laugh,playful,joy,laugh,,,,,community slang,auto,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bKEKW\b
+pog/poggers,TwitchEmote,hype/excited,hype,joy,clutch,,,,,community slang,auto,2,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\b(pog|poggers)\b
+💘,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,💘
+desync,GenZ,out-of-sync state,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdesync\b
+raid,VTuber,send viewers to another,hype,joy,farewell,,,,,community slang,auto,2,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\braid\b
+hotfix,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bhotfix\b
+thicc,GenZ,curvy,edgy,playful,compliment,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bthicc\b
+tasukaru / TSKR,AnimeJP,that helps/thanks (fan grat.),flirty,fond,fan_service,tah-SOO-kah-roo,,,,community slang,ja,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\b(tasukaru|TSKR)\b
+snacc,GenZ,attractive/cute,flirty,fond,compliment,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsnacc\b
+DMs,GenZ,direct messages,neutral,calm,sns,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bDMs\b
+drip check,GenZ,outfit review,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdrip\ check\b
+💢,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,💢
+yandere,AnimeJP,possessive sweet-then-scary,edgy,intense,playful-jealousy,YAN-deh-reh,,,,community slang,ja,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\byandere\b
+brainrot,GenZ,obsessed with a thing,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbrainrot\b
+uwu,Interjection,soft cute emotion,cute,tender,affection,,,,,community slang,mixed,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\buwu\b
+kawaii,AnimeJP,cute/adorable,cute,joy,praise|compliment,kah-wah-EE,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bkawaii\b
+*headpats*,Interjection,action text headpats,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\*headpats\*
+*peek*,Interjection,action text peek,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\*peek\*
+based,GenZ,confidently true/cool,edgy,proud,approval,,,,,community slang,auto,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbased\b
+(￣▽￣)ゞ,Emoji/Kaomoji,salute sheepish,playful,cheeky,oops,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\(￣▽￣\)ゞ
+😰,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😰
+outplay,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\boutplay\b
+btw,GenZ,by the way,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbtw\b
+meta,GenZ,current dominant strategy,neutral,calm,gaming,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmeta\b
+GFE,VTuber,girlfriend-experience vibe,flirty,tender,roleplay,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bGFE\b
+on god,GenZ,I swear/serious,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bon\ god\b
+ngl,GenZ,not gonna lie,neutral,candid,preface,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bngl\b
+big yikes,GenZ,major cringe,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbig\ yikes\b
+fr fr,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bfr\ fr\b
+sugoi,AnimeJP,amazing/wow,cute,surprise,hype|compliment,soo-GOY,,,,community slang,ja,3,200,0.9,0.4,peaky-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsugoi\b
+😈,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😈
+LUL,TwitchEmote,laugh,playful,joy,laugh,,,,,community slang,auto,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bLUL\b
+gochisousama,AnimeJP,thanks for the meal,wholesome,gratitude,,,,,,community slang,ja,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgochisousama\b
+🌸,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🌸
+(ᗒᗩᗕ),Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\(ᗒᗩᗕ\)
+overlay,VTuber,vtuber/community term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\boverlay\b
+😱,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😱
+🎉,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🎉
+oshi no ko,VTuber,lit. 'my fave's child' (title ref),playful,fond,anime_ref,,,,,community slang,ja,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\boshi\ no\ ko\b
+onii-chan,AnimeJP,big brother (playful address),cute,shy,tease|address,oh-NEE chan,,,,community slang,ja,3,160,0.4,0.4,short-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,onii\-chan
+missed me?,Phrase,flirty reentry,flirty,smug,return,,,,,community slang,auto,0,170,0.6,0.2,fall-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,missed\ me\?
+bruh,GenZ,exasperation,deadpan,tired,sigh,,,,,community slang,auto,-2,170,0.6,0.1,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbruh\b
+blorbo,GenZ,beloved character,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bblorbo\b
+tilt,GenZ,frustrated play spiral,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btilt\b
+bb,GenZ,babe/baby,flirty,fond,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbb\b
+bae,GenZ,significant other,flirty,fond,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbae\b
+redebut,VTuber,new model return,hype,joy,milestone,,,,,community slang,auto,2,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bredebut\b
+saucy,GenZ,suggestive tone,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsaucy\b
+smurf,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsmurf\b
+queue dodge,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bqueue\ dodge\b
+FeelsBadMan,TwitchEmote,sad/disappointed,wholesome,sad,loss,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bFeelsBadMan\b
+oshi-katsu,VTuber,supporting your fave,wholesome,proud,fandom,,,,,community slang,ja,1,185,0.75,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,oshi\-katsu
+oyasumi,AnimeJP,good night,wholesome,tender,farewell,oh-yah-SOO-mee,,,,community slang,ja,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\boyasumi\b
+mama / papa,VTuber,model artist/rigger,wholesome,gratitude,credits,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\b(mama|papa)\b
+ate my brain,GenZ,consumed attention,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bate\ my\ brain\b
+no kizzy,GenZ,no lie,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bno\ kizzy\b
+Pepega,TwitchEmote,foolish/dumb,playful,teasing,oops,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bPepega\b
+gaslight,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgaslight\b
+💤,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,💤
+uwuify,GenZ,make text cutesy,playful,joy,,,,,,community slang,auto,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\buwuify\b
+smol bean,GenZ,extra cute person,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsmol\ bean\b
+tracking,VTuber,face/body capture,neutral,calm,,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btracking\b
+heckin,GenZ,emphasis wholesome,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bheckin\b
+drip,GenZ,stylish outfit,playful,admire,fashion,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdrip\b
+*hiss*,Interjection,action text hiss,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\*hiss\*
+one tap,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bone\ tap\b
+yeet,GenZ,throw/energized exclaim,hype,joy,play,,,,,community slang,auto,2,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\byeet\b
+(╯°□°）╯︵ ┻━┻,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\(╯°□°）╯︵\ ┻━┻
+📢,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,📢
+PepeLaugh,TwitchEmote,giggly laugh,playful,joy,banter,,,,,community slang,auto,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bPepeLaugh\b
+bakabaka,AnimeJP,double baka (cute),teasing,teasing,,,,,,community slang,ja,1,170,0.6,0.35,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbakabaka\b
+main character,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmain\ character\b
+sweetie,GenZ,sweet nickname,cute,fond,,,,,,community slang,auto,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsweetie\b
+father,GenZ,iconic man praise,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bfather\b
+bussin,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbussin\b
+ate that,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bate\ that\b
+🤯,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🤯
+jk,GenZ,just kidding,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bjk\b
+ick,GenZ,turn-off detail,edgy,disgust,dating,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bick\b
+graduation,VTuber,retirement from avatar,wholesome,melancholy,farewell,,,,,community slang,auto,1,150,0.35,0.25,flat-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgraduation\b
+simp,GenZ,overly doting admirer,teasing,fond,banter,,,,,community slang,auto,1,170,0.6,0.35,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsimp\b
+baby girl era,GenZ,soft self-care phase,playful,fond,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbaby\ girl\ era\b
+EZ clap,GenZ,easy win flex,edgy,smug,taunt,,,,,community slang,auto,-1,170,0.6,0.15,fall-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bEZ\ clap\b
+stream snipe,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bstream\ snipe\b
+hopium,GenZ,irrational hope fuel,playful,hopeful,waiting,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bhopium\b
+8888,AnimeJP,clap/applause in JP chat,hype,proud,applause,hachi-hachi-hachi-hachi,,,,community slang,ja,2,185,0.75,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\b8888\b
+owo,Interjection,surprised cute,cute,surprise,shock,,,,,community slang,mixed,3,200,0.9,0.4,peaky-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bowo\b
+ping,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bping\b
+afaik,GenZ,as far as I know,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bafaik\b
+(づ｡◕‿‿◕｡)づ,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\(づ｡◕‿‿◕｡\)づ
+sus,GenZ,suspicious,playful,doubt,banter,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsus\b
+💀,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,💀
+erai,AnimeJP,great of you,wholesome,proud,,,,,,community slang,ja,1,185,0.75,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\berai\b
+😮‍💨,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😮‍💨
+(｡•̀ᴗ-)✧,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\(｡•̀ᴗ\-\)✧
+*nuzzle*,Interjection,action text nose rub,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\*nuzzle\*
+ratio,GenZ,dunk via replies,edgy,smug,banter,,,,,community slang,auto,-1,170,0.6,0.15,fall-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bratio\b
+😇,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😇
+egirl,GenZ,online alt-girl vibe,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\begirl\b
+guerilla stream,VTuber,unplanned surprise stream,playful,spontaneous,surprise,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bguerilla\ stream\b
+beta,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbeta\b
+down bad,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdown\ bad\b
+clutch,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bclutch\b
+stan,GenZ,intense fan,neutral,fond,fandom,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bstan\b
+delish,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdelish\b
+green flag,GenZ,good sign,wholesome,hopeful,dating,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgreen\ flag\b
+pat pat,Interjection,headpats,cute,comfort,comfort,,,,,community slang,auto,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bpat\ pat\b
+(>_<),Emoji/Kaomoji,pained face kaomoji,cute,frustrated,fail,,,,,community slang,auto,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\(>_<\)
+cringe,GenZ,awkward/embarrassing,edgy,disgust,disapproval,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bcringe\b
+✨,Emoji/Kaomoji,sparkle emphasis,cute,joy,compliment,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,✨
+solulu,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsolulu\b
+kira kira,AnimeJP,sparkly,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bkira\ kira\b
+donothon,VTuber,vtuber/community term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdonothon\b
+zatsu,VTuber,vtuber/community term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bzatsu\b
+seiso arc,VTuber,period of being wholesome,wholesome,calm,rebrand,,,,,community slang,auto,1,155,0.5,0.25,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bseiso\ arc\b
+tilted,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btilted\b
+⚡,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,⚡
+int,GenZ,intentionally feed (moba),edgy,disapproval,gaming,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bint\b
+copium,GenZ,cope fuel,edgy,salty,loss,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bcopium\b
+slaps,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bslaps\b
+otsu / otsukare,AnimeJP,thanks for the hard work,wholesome,gratitude,farewell|end_stream,OHTS-kah-reh,,,,community slang,ja,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\b(otsu|otsukare)\b
+utawaku,VTuber,singing karaoke stream,hype,joy,sing,,,,,community slang,auto,2,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\butawaku\b
+😏,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😏
+delulu,GenZ,delusional but cute,teasing,playful,banter,,,,,community slang,auto,1,170,0.6,0.35,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdelulu\b
+wdym,GenZ,what do you mean,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bwdym\b
+🥺👉👈,Emoji/Kaomoji,shy pleading,cute,shy,request,,,,,community slang,auto,3,160,0.4,0.4,short-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🥺👉👈
+queen behavior,GenZ,confident excellence,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bqueen\ behavior\b
+yabai,AnimeJP,oh no/too spicy/crazy,edgy,alarm,oops|tease,yah-BAI,/jəˈbaɪ/,[jaˈbai],やばい,JP slang,ja,-1,170,0.6,0.15,rise-fall,seiso_sweetheart|tsundere_tease|oneesan_sultry,\byabai\b
+buff,GenZ,strengthen in patch,neutral,calm,gaming,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbuff\b
+proud of u,Phrase,support praise,wholesome,proud,support,,,,,community slang,auto,1,185,0.75,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bproud\ of\ u\b
+akasupa,VTuber,red superchat (large),wholesome,gratitude,donation,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bakasupa\b
+（＾ω＾）,Emoji/Kaomoji,happy face,cute,joy,greet,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,（＾ω＾）
+PogChamp,TwitchEmote,hype/surprise,hype,surprise,clutch,,,,,community slang,auto,2,200,0.9,0.2,peaky-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bPogChamp\b
+*purr*,Interjection,action text purr,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\*purr\*
+kowai,AnimeJP,scary,neutral,fear,,,,,,community slang,ja,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bkowai\b
+🔥,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🔥
+sumimasen,AnimeJP,sorry/excuse me (polite),wholesome,apology,apology,soo-mee-mah-SEN,,,,community slang,ja,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsumimasen\b
+fit,GenZ,outfit,neutral,calm,fashion,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bfit\b
+core,GenZ,style suffix,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bcore\b
+grr,Interjection,tiny growl,cute,teasing,tease,,,,,community slang,auto,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgrr\b
+eep,Interjection,tiny yelp,cute,surprise,shock,,,,,community slang,auto,3,200,0.9,0.4,peaky-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\beep\b
+clipper,VTuber,edits highlights,neutral,calm,credits,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bclipper\b
+bestie,GenZ,friendly address,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bbestie\b
+micro,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmicro\b
+patch,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bpatch\b
+teehee,Interjection,girlish giggle,cute,joy,banter,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bteehee\b
+🌟,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🌟
+main character energy,GenZ,dramatic confidence,playful,proud,cheer,,,,,community slang,auto,0,185,0.75,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmain\ character\ energy\b
+Kappa,TwitchEmote,sarcasm/jk,playful,smug,sarcasm,,,,,community slang,auto,0,170,0.6,0.2,fall-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bKappa\b
+gg go next,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgg\ go\ next\b
+pfft,Interjection,dismissive laugh,edgy,smug,banter,,,,,community slang,auto,-1,170,0.6,0.15,fall-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bpfft\b
+carry,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bcarry\b
+🤣,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🤣
+AYO,TwitchEmote,surprised 'hey yo',hype,surprise,shock,,,,,community slang,auto,2,200,0.9,0.2,peaky-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bAYO\b
+emote wall,VTuber,vtuber/community term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bemote\ wall\b
+🎀,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🎀
+senpai,AnimeJP,admired senior,cute,shy,address,SEN-pie,,,,community slang,ja,3,160,0.4,0.4,short-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bsenpai\b
+tilt,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\btilt\b
+goated,GenZ,greatest/elite,hype,proud,praise,,,,,community slang,auto,2,185,0.75,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgoated\b
+dang,GenZ,mild surprise,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bdang\b
+muri,AnimeJP,can’t/too much,deadpan,overwhelmed,,,,,,community slang,ja,-2,170,0.6,0.1,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmuri\b
+highkey,GenZ,openly/strongly,neutral,enthused,preface,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bhighkey\b
+shoutout,VTuber,promote creator,wholesome,gratitude,,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bshoutout\b
+AFK check,Gaming,gaming term,edgy,tense,,,,,,community slang,en,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bAFK\ check\b
+😆,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😆
+alpha,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\balpha\b
+😐,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,😐
+slay,GenZ,do great/serve,hype,proud,cheer,,,,,community slang,auto,2,185,0.75,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bslay\b
+idk,GenZ,I don’t know,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bidk\b
+moe,AnimeJP,cute-protective charm,cute,tender,affection,MO-eh,,,,community slang,ja,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmoe\b
+aesthetic,GenZ,visual vibe,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\baesthetic\b
+fax,GenZ,facts/truth,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bfax\b
+girl math,GenZ,funny money logic,playful,smug,banter,,,,,community slang,auto,0,170,0.6,0.2,fall-rise,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgirl\ math\b
+lowkey,GenZ,quietly/subtly,neutral,calm,preface,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\blowkey\b
+oshi,VTuber,your favorite talent,wholesome,fond,fandom,,,,,community slang,auto,1,170,0.6,0.25,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\boshi\b
+ikemen,AnimeJP,handsome guy,flirty,admire,compliment,EE-keh-men,,,,community slang,ja,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bikemen\b
+otaku,AnimeJP,deep fandom nerd,playful,fond,banter,oh-TAH-koo,,,,community slang,ja,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\botaku\b
+PNGtuber,VTuber,static PNG avatar streamer,neutral,calm,,,,,,community slang,auto,0,155,0.5,0.2,level,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bPNGtuber\b
+gosh,GenZ,mild surprise,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgosh\b
+scuffed,VTuber,janky tech/chaos,playful,resigned,tech_issue,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bscuffed\b
+*bonk*,Interjection,action text bonk,,,,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\*bonk\*
+(¬‿¬),Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\(¬‿¬\)
+girlboss,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgirlboss\b
+boing boing,VTuber,jiggle physics joke,edgy,playful,avatar_physics,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bboing\ boing\b
+🫶,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🫶
+Sadge,TwitchEmote,sad but okay,wholesome,melancholy,loss,,,,,community slang,auto,1,150,0.35,0.25,flat-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bSadge\b
+cope,GenZ,rationalize loss,edgy,salty,banter,,,,,community slang,auto,-1,170,0.6,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bcope\b
+chonky,GenZ,adorably plump,cute,fond,pets,,,,,community slang,auto,3,170,0.6,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bchonky\b
+mood,GenZ,relatable feeling,neutral,identify,relate,,,,,community slang,auto,0,170,0.6,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bmood\b
+🤝,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,auto,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,🤝
+genki,AnimeJP,energetic/peppy,hype,joy,greet|hype,GEN-kee,,,,community slang,ja,2,190,0.8,0.2,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\bgenki\b
+yubi-yubi,VTuber,cute catchphrase (Korone),cute,joy,greet,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,yubi\-yubi
+rizz god,GenZ,internet/gen-z slang,edgy,proud,,,,,,community slang,en,-1,185,0.75,0.15,rise-fall,tsundere_tease|seiso_sweetheart|oneesan_sultry|gremlin_chaos,\brizz\ god\b
+LOL,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bLOL\b
+LMAO,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bLMAO\b
+LMFAO,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bLMFAO\b
+ROFL,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bROFL\b
+XD,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bXD\b
+xD,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bxD\b
+lel,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\blel\b
+kek,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bkek\b
+ICYMI,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bICYMI\b
+FTW,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bFTW\b
+WTF,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bWTF\b
+WTH,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bWTH\b
+OMFG,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bOMFG\b
+OMG,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bOMG\b
+OML,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bOML\b
+IDK,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bIDK\b
+IDC,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bIDC\b
+IKR,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bIKR\b
+IMO,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bIMO\b
+IMHO,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bIMHO\b
+TBH,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bTBH\b
+NGL,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bNGL\b
+GTG,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bGTG\b
+GGWP,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bGGWP\b
+GL,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bGL\b
+HF,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bHF\b
+TY,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bTY\b
+NP,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bNP\b
+DM,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bDM\b
+PM,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bPM\b
+GGNORE,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bGGNORE\b
+EZ,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bEZ\b
+EZPZ,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bEZPZ\b
+clapped,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bclapped\b
+peaced out,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bpeaced\s+out\b
+copypasta,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bcopypasta\b
+shitpost,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bshitpost\b
+low-effort,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,low\-effort
+OP (overpowered),GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,OP\ \(overpowered\)
+OP (original poster),GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,OP\ \(original\ poster\)
+TL;DR,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,TL;DR
+cope & seethe,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,cope\ \&\ seethe
+sheesh,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bsheesh\b
+yikes,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\byikes\b
+o7,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bo7\b
+peepo,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bpeepo\b
+susge,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bsusge\b
+pepelaugh,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bpepelaugh\b
+poggies,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bpoggies\b
+peepoglad,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bpeepoglad\b
+widepeepoHappy,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bwidepeepoHappy\b
+kekw,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bkekw\b
+kappa,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bkappa\b
+monkaOMEGA,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bmonkaOMEGA\b
+pepega aim,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bpepega\s+aim\b
+hands,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bhands\b
+widehard,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bwidehard\b
+PepegaPhone,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bPepegaPhone\b
+PagMan,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bPagMan\b
+PogU,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bPogU\b
+otouto,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\botouto\b
+wakaranai,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bwakaranai\b
+daijoubu,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bdaijoubu\b
+yamete,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\byamete\b
+urusai,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\burusai\b
+bikkuri,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bbikkuri\b
+doki-doki,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,doki\-doki
+kira-kira,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,kira\-kira
+waku-waku,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,waku\-waku
+chotto matte,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bchotto\s+matte\b
+hai,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bhai\b
+iie,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\biie\b
+omae,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bomae\b
+kisama,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bkisama\b
+ore,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bore\b
+boku,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bboku\b
+watashi,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bwatashi\b
+anata,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\banata\b
+baka mitai,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bbaka\s+mitai\b
+ikuzo,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bikuzo\b
+tskr,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\btskr\b
+tsukkomi,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\btsukkomi\b
+boke,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bboke\b
+kami,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bkami\b
+kami oshi,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bkami\s+oshi\b
+oshi no mark,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\boshi\s+no\s+mark\b
+oshi badge,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\boshi\s+badge\b
+gachi-koi,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,gachi\-koi
+gachikoi distance,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bgachikoi\s+distance\b
+menhera,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bmenhera\b
+yubi yubi,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\byubi\s+yubi\b
+baubau,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bbaubau\b
+haachama,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bhaachama\b
+RRR (trill),AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,RRR\ \(trill\)
+nani,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bnani\b
+nande,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bnande\b
+sore,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bsore\b
+kore,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bkore\b
+are,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bare\b
+sore wa,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bsore\s+wa\b
+eee,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\beee\b
+etto,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\betto\b
+ano ne,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bano\s+ne\b
+sou desu ka,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bsou\s+desu\s+ka\b
+yoshi,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\byoshi\b
+yoshi yoshi,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\byoshi\s+yoshi\b
+itadaki,AnimeJP,slang/term,cute,joy,,,,,,community slang,ja,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bitadaki\b
+zatsudan,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bzatsudan\b
+superchat train,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bsuperchat\s+train\b
+donowall,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bdonowall\b
+stream delay,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bstream\s+delay\b
+frame drop,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bframe\s+drop\b
+latency,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\blatency\b
+karaoke,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bkaraoke\b
+reverb,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\breverb\b
+acapella,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bacapella\b
+BGM,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bBGM\b
+kayfabe break,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bkayfabe\s+break\b
+model 2.0,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,model\ 2\.0
+alt outfit,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\balt\s+outfit\b
+new costume,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bnew\s+costume\b
+asset drop,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\basset\s+drop\b
+bouncing BGM,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bbouncing\s+BGM\b
+chat delay,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bchat\s+delay\b
+slow mode,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bslow\s+mode\b
+emote-only,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,emote\-only
+members-only,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,members\-only
+gurilla,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bgurilla\b
+watchalong,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bwatchalong\b
+vod,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bvod\b
+archive,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\barchive\b
+unarchive,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bunarchive\b
+redeem TTS,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bredeem\s+TTS\b
+points,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bpoints\b
+channel points,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bchannel\s+points\b
+SC reading,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bSC\s+reading\b
+chat rules,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bchat\s+rules\b
+feesh post,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bfeesh\s+post\b
+gremlin arc,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bgremlin\s+arc\b
+menhera arc,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bmenhera\s+arc\b
+debuffed,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bdebuffed\b
+buffed,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bbuffed\b
+zatsu tangents,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bzatsu\s+tangents\b
+schizo posting,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bschizo\s+posting\b
+room review,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\broom\s+review\b
+hand reveal,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bhand\s+reveal\b
+feet reveal,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bfeet\s+reveal\b
+nsfw tag,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bnsfw\s+tag\b
+clips channel,VTuber,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bclips\s+channel\b
+BM,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bBM\b
+ez farm,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bez\s+farm\b
+macro diff,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bmacro\s+diff\b
+micro diff,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bmicro\s+diff\b
+top diff,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\btop\s+diff\b
+mid diff,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bmid\s+diff\b
+bot diff,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bbot\s+diff\b
+adc,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\badc\b
+jungler,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bjungler\b
+toplaner,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\btoplaner\b
+midlaner,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bmidlaner\b
+roam,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\broam\b
+power spike,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bpower\s+spike\b
+spike,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bspike\b
+timers,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\btimers\b
+ward,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bward\b
+pink ward,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bpink\s+ward\b
+csing,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bcsing\b
+last hit,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\blast\s+hit\b
+peeker's advantage,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,peeker's\ advantage
+prefire,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bprefire\b
+prefire angle,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bprefire\s+angle\b
+spray control,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bspray\s+control\b
+tap strafing,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\btap\s+strafing\b
+bhop,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bbhop\b
+strafe,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bstrafe\b
+ADAD spam,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bADAD\s+spam\b
+hitreg,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bhitreg\b
+hitbox,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bhitbox\b
+hurtbox,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bhurtbox\b
+iframes,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\biframes\b
+parry,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bparry\b
+perfect dodge,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bperfect\s+dodge\b
+roll-catch,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,roll\-catch
+gank squad,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bgank\s+squad\b
+camp fest,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bcamp\s+fest\b
+third party,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bthird\s+party\b
+hot drop,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bhot\s+drop\b
+drop spot,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bdrop\s+spot\b
+circle RNG,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bcircle\s+RNG\b
+tilt queue,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\btilt\s+queue\b
+desk slam,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bdesk\s+slam\b
+mold,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bmold\b
+lag switch,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\blag\s+switch\b
+ddos,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bddos\b
+booster,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bbooster\b
+deranker,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bderanker\b
+sandbag,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bsandbag\b
+smurf queue,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bsmurf\s+queue\b
+dynamic queue,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bdynamic\s+queue\b
+MMR,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bMMR\b
+ELO,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bELO\b
+backfill,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bbackfill\b
+queue sniping,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bqueue\s+sniping\b
+map diff,Gaming,slang/term,edgy,tense,,,,,,community slang,en,-1,190,0.7,0.15,level-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bmap\s+diff\b
+😮,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😮
+🤨,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤨
+🙃,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🙃
+😉,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😉
+🙂,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🙂
+🥰,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🥰
+😍,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😍
+😘,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😘
+😚,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😚
+😝,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😝
+😜,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😜
+🤪,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤪
+🤗,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤗
+🤭,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤭
+🫢,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🫢
+🫣,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🫣
+🤫,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤫
+😬,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😬
+🤤,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤤
+🥵,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🥵
+🥶,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🥶
+🤒,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤒
+🤧,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤧
+🤕,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤕
+🤠,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤠
+🫡,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🫡
+🤥,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤥
+🤑,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤑
+😎,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😎
+🤓,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤓
+🧐,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🧐
+😕,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😕
+😟,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😟
+🙁,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🙁
+☹️,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,☹️
+😣,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😣
+😖,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😖
+😫,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😫
+😩,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😩
+🥱,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🥱
+😪,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😪
+😶‍🌫️,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😶‍🌫️
+😶,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😶
+😑,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😑
+😒,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😒
+🙄,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🙄
+🤔,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤔
+🫥,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🫥
+🫨,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🫨
+😯,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😯
+😲,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,😲
+🤐,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤐
+🙌,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🙌
+👐,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,👐
+👍,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,👍
+👎,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,👎
+✌️,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,✌️
+🤞,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤞
+🤟,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤟
+🤘,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤘
+👌,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,👌
+🫰,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🫰
+🫵,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🫵
+👊,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,👊
+🤛,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤛
+🤜,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤜
+🤌,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🤌
+🙏,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🙏
+💪,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,💪
+💫,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,💫
+🫧,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🫧
+💥,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,💥
+💯,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,💯
+♨️,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,♨️
+🎊,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🎊
+🎈,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🎈
+🪄,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🪄
+🧿,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🧿
+🔮,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🔮
+💎,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,💎
+🪩,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🪩
+🎮,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🎮
+🕹️,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🕹️
+🪫,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🪫
+🔋,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🔋
+⚙️,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,⚙️
+🧩,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🧩
+🌀,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🌀
+🪅,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🪅
+🍀,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍀
+🍓,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍓
+🍒,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍒
+🍬,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍬
+🍭,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍭
+🍪,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍪
+🍰,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍰
+🧁,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🧁
+🍩,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍩
+🍨,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍨
+🍦,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍦
+🍫,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍫
+☕,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,☕
+🧋,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🧋
+🥤,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🥤
+🍹,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍹
+🍸,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍸
+🍻,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍻
+🥂,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🥂
+🍺,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍺
+🍾,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍾
+🥟,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🥟
+🍙,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍙
+🍡,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍡
+🍢,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍢
+🍜,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍜
+🍣,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍣
+🍱,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍱
+🍚,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍚
+🍘,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍘
+🍥,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍥
+🥠,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🥠
+🍧,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🍧
+🌈,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🌈
+🌙,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🌙
+☀️,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,☀️
+🌤️,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🌤️
+🌧️,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🌧️
+⛈️,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,⛈️
+🌪️,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🌪️
+🌊,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🌊
+🌬️,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🌬️
+🪐,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🪐
+🌠,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🌠
+🌌,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🌌
+🌃,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🌃
+🌆,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🌆
+🌇,Emoji/Kaomoji,emoji/kaomoji reaction,cute,joy,,,,,,community slang,en,3,190,0.8,0.4,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,🌇
+smash or pass,GenZ,slang/term,edgy,smug,,,,,,community slang,en,-1,170,0.6,0.15,fall-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bsmash\s+or\s+pass\b
+lewd,GenZ,slang/term,edgy,smug,,,,,,community slang,en,-1,170,0.6,0.15,fall-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\blewd\b
+tease,GenZ,slang/term,edgy,smug,,,,,,community slang,en,-1,170,0.6,0.15,fall-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\btease\b
+sultry,GenZ,slang/term,edgy,smug,,,,,,community slang,en,-1,170,0.6,0.15,fall-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bsultry\b
+NSFW,GenZ,slang/term,edgy,smug,,,,,,community slang,en,-1,170,0.6,0.15,fall-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bNSFW\b
+NSFL,GenZ,slang/term,edgy,smug,,,,,,community slang,en,-1,170,0.6,0.15,fall-rise,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bNSFL\b
+OTP,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bOTP\b
+AU,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bAU\b
+fanon,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bfanon\b
+lore dump,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\blore\s+dump\b
+plot armor,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bplot\s+armor\b
+mc (main character),GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,mc\ \(main\ character\)
+OP main,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bOP\s+main\b
+brain worms,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bbrain\s+worms\b
+rent free,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\brent\s+free\b
+delulu arc,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bdelulu\s+arc\b
+doomscroll,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bdoomscroll\b
+doompost,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bdoompost\b
+ratio farm,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bratio\s+farm\b
+engagement bait,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bengagement\s+bait\b
+main,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bmain\b
+burner,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bburner\b
+stan twt,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bstan\s+twt\b
+fancam,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bfancam\b
+ fancam ,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\b\s+fancam\s+\b
+edits,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bedits\b
+capcut,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bcapcut\b
+greenscreen,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bgreenscreen\b
+vtweeter,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bvtweeter\b
+menhera post,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bmenhera\s+post\b
+callout,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bcallout\b
+twitlonger,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\btwitlonger\b
+priv,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bpriv\b
+lock,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\block\b
+soft block,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bsoft\s+block\b
+hard block,GenZ,slang/term,playful,joy,,,,,,community slang,en,0,190,0.8,0.2,rise-fall,tsundere_tease_v1|seiso_sweetheart_v1|oneesan_sultry_v1|gremlin_chaos_v1,\bhard\s+block\b

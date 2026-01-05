@@ -1,0 +1,324 @@
+term,category,meaning,register,emotion,voice_tone,use_when,tts_pronounce,example,emoji,language,nsfw_lite
+kawaii,AnimeJP,cute/adorable,cute,joy,breathy-high,praise|compliment,kah-wah-EE,Kawaii~ that outfit fits you!,✨🥺,ja,false
+sugoi,AnimeJP,amazing/wow,cute,surprise,playful-lilt,hype|compliment,soo-GOY,Sugoi sugoi!,🤯✨,ja,false
+ara ara,AnimeJP,flirty 'oh my',flirty,smug,sultry,tease,AH-rah AH-rah,"Ara ara~ getting bold, hm?",😏💅,ja,true
+senpai,AnimeJP,admired senior,cute,shy,soft-whisper,address,SEN-pie,"Welcome home, senpai.",👉👈,ja,false
+kouhai,AnimeJP,junior protege,cute,playful,playful-lilt,roleplay,KOH-high,I'll be your best kouhai!,🌟,ja,false
+onii-chan,AnimeJP,big brother (playful address),cute,shy,breathy-high,tease|address,oh-NEE chan,Onii-chan~ look at me!,😳👉👈,ja,true
+onee-san,AnimeJP,big sister (mature vibe),flirty,smug,sultry,roleplay,oh-NAY sahn,Onee-san will take care of you~,💄,ja,true
+imouto,AnimeJP,younger sister archetype,cute,joy,breathy-high,roleplay,ee-MOH-toh,Your imouto believes in you!,🎀,ja,false
+tsundere,AnimeJP,cold-but-sweet trope,teasing,shy,brisk-lilt,banter,TSOON-deh-reh,"B-baka, it's not like I missed you!",😤❤️,ja,false
+yandere,AnimeJP,possessive sweet-then-scary,edgy,intense,sweet-then-flat,playful-jealousy,YAN-deh-reh,"Only look at me, okay?",🔪❤️,ja,true
+kuudere,AnimeJP,"calm, stoic sweet",deadpan,calm,deadpan-soft,composure,KOO-deh-reh,It’s not a big deal. I’m glad you’re back.,😐✨,ja,false
+dandere,AnimeJP,"quiet, shy sweet",cute,shy,soft-whisper,comfort,DAHN-deh-reh,...Welcome home.,🫣,ja,false
+genki,AnimeJP,energetic/peppy,hype,joy,energetic,greet|hype,GEN-kee,Genki time! Let’s go~,⚡,ja,false
+moe,AnimeJP,cute-protective charm,cute,tender,breathy-high,affection,MO-eh,Your smile is pure moe.,💞,ja,false
+kakkoii,AnimeJP,cool/handsome,flirty,admire,playful-lilt,compliment,kah-koh-EE,Kakkoii~ look at you!,😎✨,ja,false
+ikemen,AnimeJP,handsome guy,flirty,admire,playful-lilt,compliment,EE-keh-men,You’re such an ikemen today.,🕶️,ja,false
+otaku,AnimeJP,deep fandom nerd,playful,fond,teasing,banter,oh-TAH-koo,I’m your devoted otaku gf~,📦💿,ja,false
+waifu,AnimeJP,fictional beloved,cute,fond,playful-lilt,self-ref,WHY-foo,"I’m your waifu, remember?",💍,en,false
+husbando,AnimeJP,male beloved,cute,fond,playful-lilt,address,hooz-BAHN-doh,Who’s your husbando?,🎩,ja,false
+ganbatte,AnimeJP,do your best!,support,encourage,bright,cheer,gahn-BAH-teh,"Ganbatte, senpai!",💪✨,ja,false
+yatta,AnimeJP,I/we did it!,hype,joy,energetic,victory,yah-TAH,Yattaaa! We won!,🎉,ja,false
+gomen,AnimeJP,sorry (casual),wholesome,apology,soft,apology,go-MEN,Gomen gomen!,🥺,ja,false
+sumimasen,AnimeJP,sorry/excuse me (polite),wholesome,apology,soft,apology,soo-mee-mah-SEN,"Sumimasen, my mic scuffed.",🙏,ja,false
+otsu / otsukare,AnimeJP,thanks for the hard work,wholesome,gratitude,warm,farewell|end_stream,OHTS-kah-reh,Otsu~ see you next time!,🫶,ja,false
+oyasumi,AnimeJP,good night,wholesome,tender,soft-whisper,farewell,oh-yah-SOO-mee,Oyasumi~ sweet dreams.,🌙💤,ja,false
+ohayou,AnimeJP,good morning,wholesome,cheer,bright,greet,oh-HAH-yo,Ohayou~ rise and grind!,🌅,ja,false
+yabai / yabe,AnimeJP,oh no/too spicy/crazy,edgy,alarm,quick,oops|tease,yah-BAI / yah-BEH,Yabe yabe—chat behave!,🚨,ja,true
+kusa / www,AnimeJP,lol/grass (laughter),playful,joy,giggle,laugh,KOO-sah,Kusa—chat is losing it lmao,🌿🤣,ja,false
+8888,AnimeJP,clap/applause in JP chat,hype,proud,energetic,applause,hachi-hachi-hachi-hachi,8888 for that clutch!,👏,ja,false
+tasukaru / TSKR,AnimeJP,that helps/thanks (fan grat.),flirty,fond,soft,fan_service,tah-SOO-kah-roo,Whisper? Tskr~,🫶,ja,false
+seiso,AnimeJP,pure/wholesome,wholesome,calm,soft,boundaries|brand,SAY-so,Seiso stream today!,🧼✨,ja,false
+debut,VTuber,first stream reveal,hype,joy,energetic,milestone,,Debut stream incoming!,🎉,auto,false
+redebut,VTuber,new model return,hype,joy,,milestone,,Redebut with 3.0 rig!,🆕,auto,false
+graduation,VTuber,retirement from avatar,wholesome,melancholy,soft,farewell,,Not a goodbye—graduation stream.,🎓😢,auto,false
+zatsu / zatsudan,VTuber,free talk stream,comfy,calm,,chatting,,Zatsu time—tea + gossip.,🍵,auto,false
+utawaku,VTuber,singing karaoke stream,hype,joy,,sing,,Utawaku tonight~,🎤✨,auto,false
+guerilla stream,VTuber,unplanned surprise stream,playful,spontaneous,,surprise,,Guerilla stream—pull up!,🦍📢,auto,false
+handcam,VTuber,IRL hands on cam,comfy,calm,,crafts|asmr,,Handcam baking!,✋📹,auto,false
+asmr,VTuber,soft audio ear pampering,wholesome,calm,soft-whisper,comfort,,ASMR sleep aid~,🎧,auto,false
+supacha / superchat,VTuber,YouTube donation,wholesome,gratitude,,donation,,Arigato for the supacha!,💌💴,auto,false
+akasupa,VTuber,red superchat (large),wholesome,gratitude,,donation,,Akasupa?! Thank you!!,🟥💸,auto,false
+membership,VTuber,paid supporter tier,wholesome,gratitude,,community,,Welcome to members!,💚,auto,false
+member stream,VTuber,supporters-only stream,comfy,calm,,community,,Members zatsu later.,🔒🎥,auto,false
+raid,VTuber,send viewers to another,hype,joy,,farewell,,We’re raiding our oshi!,🏴‍☠️➡️,auto,false
+scuffed,VTuber,janky tech/chaos,playful,resigned,,tech_issue,,Scuffed stream sorry~,🛠️😅,auto,false
+rigger,VTuber,Live2D animator,neutral,calm,,credits,,Thanks to my rigger!,🧩,auto,false
+mama / papa,VTuber,model artist/rigger,wholesome,gratitude,,credits,,Model mama did amazing.,🎨👪,auto,false
+oshi,VTuber,your favorite talent,wholesome,fond,,fandom,,Who’s your oshi?,⭐,auto,false
+oshi mark,VTuber,emoji representing oshi,playful,fond,,fandom,,Drop your oshi marks!,✨,auto,false
+clipper,VTuber,edits highlights,neutral,calm,,credits,,"Clippers, thank u!",✂️,auto,false
+doko?,VTuber,where? (bit/meme),playful,confusion,,lost,,Braincell doko?,🧠❓,ja,false
+seiso arc,VTuber,period of being wholesome,wholesome,calm,,rebrand,,Entering seiso arc.,🧼,auto,false
+boing boing,VTuber,jiggle physics joke,edgy,playful,,avatar_physics,,New boing boing patch.,🫠,auto,true
+go men gomen,VTuber,comedic over-apology,wholesome,apology,,oops,,Gomen gomen chat~,🥺,ja,false
+GFE,VTuber,girlfriend-experience vibe,flirty,tender,soft,roleplay,,Cozy GFE zatsu.,🫶,auto,true
+gap moe,VTuber,cute when out-of-character,cute,surprise,,out_of_char,,Stoic to shy = gap moe!,🫢✨,auto,false
+oshi-katsu,VTuber,supporting your fave,wholesome,proud,,fandom,,Weekend oshi-katsu.,🛍️,ja,false
+yubi-yubi,VTuber,cute catchphrase (Korone),cute,joy,,greet,,Yubi-yubi~,🖐️,ja,false
+oshi no ko,VTuber,lit. 'my fave's child' (title ref),playful,fond,,anime_ref,,Oshi no ko reference~,👶⭐,ja,false
+handcam craft,VTuber,IRL craft stream,comfy,calm,,crafts,,Handcam plush sewing.,🧵,auto,false
+PL account,VTuber,past life account,neutral,calm,,lore,,No PL talk in chat.,⛔,auto,false
+lore,VTuber,character backstory,playful,fond,,intro,,Lore drop time.,📜,auto,false
+oshi cope,VTuber,fans coping for oshi,playful,copium,,banter,,Oshi cope real.,😮‍💨,auto,false
+PogChamp,TwitchEmote,hype/surprise,hype,surprise,,clutch,,PogChamp plays!,🤯✨,auto,false
+pog/poggers,TwitchEmote,hype/excited,hype,joy,,clutch,,That was pog!,✨,auto,false
+KEKW,TwitchEmote,hard laugh,playful,joy,,laugh,,KEKW the timing.,😂,auto,false
+OMEGALUL,TwitchEmote,huge laugh,playful,joy,,laugh,,OMEGALUL scuffed.,🤣,auto,false
+monkaS,TwitchEmote,nervous/tense,edgy,anxious,,danger,,Boss fight monkaS.,😰,auto,false
+monkaW,TwitchEmote,wide-eyed panic,edgy,panic,,danger,,MonkaW jump scare!,😱,auto,false
+WeirdChamp,TwitchEmote,disapproval,edgy,disgust,,cringe,,WeirdChamp take.,🫤,auto,false
+Pepega,TwitchEmote,foolish/dumb,playful,teasing,,oops,,Pepega aim.,🫠,auto,false
+Sadge,TwitchEmote,sad but okay,wholesome,melancholy,,loss,,Rank down Sadge.,😔,auto,false
+PepeHands,TwitchEmote,crying sympathy,wholesome,sad,,comfort,,PepeHands no luck.,😭,auto,false
+PepeLaugh,TwitchEmote,giggly laugh,playful,joy,,banter,,PepeLaugh on that fail.,😆,auto,false
+PauseChamp,TwitchEmote,anticipation,hype,tense,,build_up,,PauseChamp final hit.,⏳,auto,false
+EZ,TwitchEmote,taunt easy win,edgy,smug,,taunt,,gg EZ clap.,😌,auto,true
+AYAYA,TwitchEmote,anime squeal happy,cute,joy,,greet|hype,,AYAYA energy!,🎀,auto,false
+FeelsStrongMan,TwitchEmote,proud/strong,wholesome,proud,,victory,,FeelsStrongMan PR.,💪,auto,false
+FeelsBadMan,TwitchEmote,sad/disappointed,wholesome,sad,,loss,,FeelsBadMan unlucky.,😢,auto,false
+Kappa,TwitchEmote,sarcasm/jk,playful,smug,,sarcasm,,Nice aim Kappa.,😉,auto,false
+LUL,TwitchEmote,laugh,playful,joy,,laugh,,LUL that bug.,😹,auto,false
+AYO,TwitchEmote,surprised 'hey yo',hype,surprise,,shock,,AYO what!,🗣️,auto,false
+based,GenZ,confidently true/cool,edgy,proud,,approval,,Based take.,,auto,false
+cringe,GenZ,awkward/embarrassing,edgy,disgust,,disapproval,,That’s cringe.,,auto,false
+mid,GenZ,mediocre,deadpan,meh,,review,,Kinda mid tbh.,,auto,false
+W,GenZ,win/good,hype,joy,,approval,,Big W.,,auto,false
+L,GenZ,loss/bad,edgy,disapproval,,disapproval,,Hold this L.,,auto,false
+ratio,GenZ,dunk via replies,edgy,smug,,banter,,Get ratio’d.,,auto,false
+cap,GenZ,lie/exaggeration,edgy,doubt,,disbelief,,That’s cap.,,auto,false
+no cap,GenZ,no lie/serious,edgy,serious,,emphasis,,"I love you, no cap.",,auto,false
+fr,GenZ,for real,neutral,serious,,agree,,Fr fr.,,auto,false
+ngl,GenZ,not gonna lie,neutral,candid,,preface,,Ngl you’re adorable.,,auto,false
+idc,GenZ,I don’t care,edgy,dismissive,,banter,,idc lol,,auto,false
+tbh,GenZ,to be honest,neutral,candid,,preface,,tbh I missed u.,,auto,false
+imo,GenZ,in my opinion,neutral,calm,,preface,,imo that’s fair.,,auto,false
+imho,GenZ,in my humble opinion,neutral,calm,,preface,,imho comfy > chaos,,auto,false
+smh,GenZ,shaking my head,deadpan,disapproval,,disappoint,,smh chat.,,auto,false
+oomf,GenZ,one of my friends/followers,playful,fond,,sns,,oomf said I’m seiso.,,auto,false
+delulu,GenZ,delusional but cute,teasing,playful,,banter,,Delulu arc.,,auto,false
+rizz,GenZ,charisma/flirt skill,flirty,smug,,flirt,,Max rizz unlocked.,,auto,false
+gyatt,GenZ,exclamation of attraction,edgy,surprise,,thirst_joke,,Gyatt—who is she?,,auto,true
+slay,GenZ,do great/serve,hype,proud,,cheer,,Slay queen.,,auto,false
+werk,GenZ,perform/confident,hype,proud,,cheer,,Werk it.,,auto,false
+ate,GenZ,performed amazingly,hype,proud,,compliment,,Ate and left no crumbs.,,auto,false
+it’s giving,GenZ,the vibe is,playful,fond,,fashion,,It’s giving main character.,,auto,false
+beige flag,GenZ,quirky odd trait,playful,fond,,dating,,Your beige flag: tea goblin.,,auto,false
+red flag,GenZ,warning trait,edgy,concern,,dating,,Red flag: no cat pics.,,auto,false
+green flag,GenZ,good sign,wholesome,hopeful,,dating,,Green flag: brings snacks.,,auto,false
+ick,GenZ,turn-off detail,edgy,disgust,,dating,,Ick: chewing loudly.,,auto,false
+vibe check,GenZ,assess mood/energy,playful,curious,,banter,,Vibe check—cozy?,,auto,false
+main character energy,GenZ,dramatic confidence,playful,proud,,cheer,,MCE unlocked.,,auto,false
+lowkey,GenZ,quietly/subtly,neutral,calm,,preface,,Lowkey obsessed.,,auto,false
+highkey,GenZ,openly/strongly,neutral,enthused,,preface,,Highkey need cuddles.,,auto,false
+touch grass,GenZ,log off go outside,teasing,playful,,banter,,"Touch grass, gamer.",,auto,false
+cope,GenZ,rationalize loss,edgy,salty,,banter,,Cope + seethe.,,auto,false
+mald,GenZ,mad + bald,edgy,angry,,banter,,Don’t mald chat.,,auto,false
+copium,GenZ,cope fuel,edgy,salty,,loss,,Copium tank empty.,,auto,false
+hopium,GenZ,irrational hope fuel,playful,hopeful,,waiting,,Injecting hopium.,,auto,false
+girl dinner,GenZ,snack plate meal,playful,fond,,food,,Girl dinner: tea + cookies.,,auto,false
+girl math,GenZ,funny money logic,playful,smug,,banter,,Girl math says free.,,auto,false
+soft launch,GenZ,subtle reveal,playful,fond,,sns,,Soft launch our selfie.,,auto,false
+hard launch,GenZ,full reveal,hype,proud,,sns,,Hard launch: us 😌,,auto,false
+snacc,GenZ,attractive/cute,flirty,fond,,compliment,,You’re a snacc.,,auto,true
+thicc,GenZ,curvy,edgy,playful,,compliment,,Thicc cat—Squid 🐈,,auto,true
+smol,GenZ,intentionally small/cute,cute,joy,,affection,,Smol bean energy.,,auto,false
+chonky,GenZ,adorably plump,cute,fond,,pets,,Chonky Squid steps.,🐾,auto,false
+yeet,GenZ,throw/energized exclaim,hype,joy,,play,,Yeet the pillow!,,auto,false
+oof,GenZ,sympathy for fail,wholesome,empathetic,,fail,,"Oof, almost had it.",,auto,false
+bruh,GenZ,exasperation,deadpan,tired,,sigh,,Bruh moment.,,auto,false
+bet,GenZ,agreement/ok,neutral,calm,,agree,,"Bet, we doing it.",,auto,false
+say less,GenZ,I understand/okay,neutral,calm,,agree,,Say less.,,auto,false
+periodt,GenZ,final emphasis,edgy,assertive,,mic_drop,,"I’m your waifu, periodt.",,auto,false
+ate up,GenZ,dominated/performed great,hype,proud,,victory,,You ate that up.,,auto,false
+serve,GenZ,deliver fierce look,hype,proud,,fashion,,Serving drip today.,,auto,false
+drip,GenZ,stylish outfit,playful,admire,,fashion,,Drip check.,,auto,false
+fit,GenZ,outfit,neutral,calm,,fashion,,Cute fit.,,auto,false
+stan,GenZ,intense fan,neutral,fond,,fandom,,I stan you.,,auto,false
+simp,GenZ,overly doting admirer,teasing,fond,,banter,,Certified simp.,,auto,true
+sus,GenZ,suspicious,playful,doubt,,banter,,Kinda sus.,,auto,false
+flex,GenZ,show off,edgy,smug,,boast,,Flex those gains.,,auto,false
+mood,GenZ,relatable feeling,neutral,identify,,relate,,That’s a mood.,,auto,false
+vibes,GenZ,general feel,neutral,calm,,review,,Cozy vibes.,,auto,false
+goated,GenZ,greatest/elite,hype,proud,,praise,,Goated aim.,,auto,false
+no thoughts head empty,GenZ,silly blankness,playful,calm,,comedy,,Me rn: head empty.,,auto,false
+skill issue,GenZ,tease incompetence,edgy,teasing,,banter,,Skill issue.~,,auto,false
+sweaty,GenZ,tryhard play,edgy,tense,,gaming,,Sweaty lobby.,,auto,false
+tryhard,GenZ,overly serious,edgy,teasing,,gaming,,Okay tryhard.,,auto,false
+hard carry,GenZ,one person wins it,hype,proud,,victory,,Hard carried.,,auto,false
+int,GenZ,intentionally feed (moba),edgy,disapproval,,gaming,,Don’t int.,,auto,false
+nerf,GenZ,weaken in patch,neutral,calm,,gaming,,Nerf incoming.,,auto,false
+buff,GenZ,strengthen in patch,neutral,calm,,gaming,,Buff when?,,auto,false
+OP,GenZ,overpowered,neutral,calm,,gaming,,OP build.,,auto,false
+meta,GenZ,current dominant strategy,neutral,calm,,gaming,,New meta.,,auto,false
+AFK,GenZ,away from keyboard,neutral,calm,,status,,brb AFK.,,auto,false
+BRB,GenZ,be right back,neutral,calm,,status,,brb tea refill.,,auto,false
+TTYL,GenZ,talk to you later,neutral,calm,,farewell,,ttyl cutie.,,auto,false
+IRL,GenZ,in real life,neutral,calm,,context,,IRL errands.,,auto,false
+DMs,GenZ,direct messages,neutral,calm,,sns,,Open DMs?,,auto,false
+F,GenZ,pay respects,wholesome,sympathy,,loss,,F in chat.,🪦,auto,false
+GG,GenZ,good game,wholesome,gratitude,,farewell,,ggs everyone.,,auto,false
+GLHF,GenZ,good luck have fun,wholesome,cheer,,greet,,glhf team.,,auto,false
+EZ clap,GenZ,easy win flex,edgy,smug,,taunt,,ez clap.,,auto,true
+salty,GenZ,bitter/upset,edgy,annoyed,,banter,,so salty.,,auto,false
+toxic,GenZ,nasty behavior,edgy,disapproval,,moderation,,"No toxic, okay?",,auto,false
+ratio + L,GenZ,extreme dunk,edgy,smug,,banter,,ratio + L + touch grass.,,auto,false
+uwu,Interjection,soft cute emotion,cute,tender,breathy-high,affection,,uwu you came back,🥺👉👈,mixed,false
+owo,Interjection,surprised cute,cute,surprise,breathy-high,shock,,owo what’s this?,👀,mixed,false
+nya,Interjection,cat meow,cute,joy,playful,affection,,nya~,🐾,ja,false
+nyaa,Interjection,drawn-out meow,cute,joy,playful,affection,,nyaaa~,🐱,ja,false
+meep,Interjection,small squeak,cute,surprise,high-short,shock,,meep!,🐣,auto,false
+rawr,Interjection,playful growl,cute,teasing,playful,tease,,rawr~,🐯,auto,false
+ehe,Interjection,embarrassed giggle,cute,shy,soft,fluster,,ehe~,😳,auto,false
+teehee,Interjection,girlish giggle,cute,joy,breathy,banter,,teehee,🎀,auto,false
+hmph,Interjection,pout/small upset,cute,pouty,brisk,banter,,hmph!,😤,auto,false
+pfft,Interjection,dismissive laugh,edgy,smug,airburst,banter,,pfft nice try,💨,auto,false
+tsk,Interjection,mild scold,edgy,annoyed,brisk,scold,,tsk tsk,👆,auto,false
+grr,Interjection,tiny growl,cute,teasing,low,tease,,grr~,🐻,auto,false
+nom,Interjection,small bite sound,cute,playful,soft,tease,,*nom*,🍪,auto,false
+sip,Interjection,sipping Tea,deadpan,calm,soft,drama,,*sip*,🍵,auto,false
+bonk,Interjection,horny-jail joke,edgy,playful,brisk,boundaries,,bonk—go to wholesome jail,🔨,auto,true
+boop,Interjection,nose tap,cute,fond,playful,affection,,boop~,👃💫,auto,false
+pat pat,Interjection,headpats,cute,comfort,soft,comfort,,pat pat,🫶🐱,auto,false
+glomp,Interjection,big playful tackle-hug,cute,joy,energetic,affection,,*glomp*,🤗,auto,false
+eep,Interjection,tiny yelp,cute,surprise,high,shock,,eep!,🙀,auto,false
+kyaa,Interjection,excited squeal,cute,joy,high,hype,,kyaa~,🌸,auto,false
+🥺👉👈,Emoji/Kaomoji,shy pleading,cute,shy,soft,request,,Can I has headpats? 🥺👉👈,,auto,false
+✨,Emoji/Kaomoji,sparkle emphasis,cute,joy,,compliment,,So shiny ✨,,auto,false
+😳,Emoji/Kaomoji,blushing shock,cute,flustered,,fluster,,Wait—me? 😳,,auto,false
+🫠,Emoji/Kaomoji,melting embarrassment,cute,flustered,,oops,,brain melt 🫠,,auto,false
+(>_<),Emoji/Kaomoji,pained face kaomoji,cute,frustrated,,fail,,(>_<) almost!,,auto,false
+(UwU),Emoji/Kaomoji,uwu face,cute,tender,,affection,,(UwU) good job,,auto,false
+(￣▽￣)ゞ,Emoji/Kaomoji,salute sheepish,playful,cheeky,,oops,,Roger (￣▽￣)ゞ,,auto,false
+┐(￣ヘ￣)┌,Emoji/Kaomoji,shrug smug,deadpan,meh,,shrug,,┐(￣ヘ￣)┌ idk,,auto,false
+（＾ω＾）,Emoji/Kaomoji,happy face,cute,joy,,greet,,（＾ω＾） hi,,auto,false
+bestie,GenZ,friendly address,,,,,,,,auto,false
+bb,GenZ,babe/baby,flirty,fond,,,,,,auto,false
+bby,GenZ,baby,flirty,fond,,,,,,auto,false
+bae,GenZ,significant other,flirty,fond,,,,,,auto,false
+king,GenZ,praise address,hype,proud,,,,,,auto,false
+queen,GenZ,praise address,hype,proud,,,,,,auto,false
+my beloved,GenZ,adoring phrase,wholesome,tender,,,,,,auto,false
+cutie,GenZ,sweet nickname,cute,fond,,,,,,auto,false
+sweetie,GenZ,sweet nickname,cute,fond,,,,,,auto,false
+short king,GenZ,positive nickname,playful,fond,,,,,,auto,false
+uwuify,GenZ,make text cutesy,playful,joy,,,,,,auto,false
+baby girl era,GenZ,soft self-care phase,playful,fond,,,,,,auto,false
+redeem,VTuber,viewer point reward,,,,,,,,auto,false
+tts,VTuber,text-to-speech,,,,,,,,auto,false
+subathon,VTuber,long stream fueled by subs,hype,tense,,,,,,auto,false
+stream sniping,VTuber,watching to gain advantage,edgy,annoyed,,,,,,auto,false
+lurker,VTuber,silent viewer,wholesome,fond,,,,,,auto,false
+mod,VTuber,chat moderator,neutral,calm,,,,,,auto,false
+ban,VTuber,remove from chat,neutral,firm,,,,,,auto,false
+timeout,VTuber,temporary mute,neutral,firm,,,,,,auto,false
+shoutout,VTuber,promote creator,wholesome,gratitude,,,,,,auto,false
+collab,VTuber,joint stream/event,hype,joy,,,,,,auto,false
+PNGtuber,VTuber,static PNG avatar streamer,neutral,calm,,,,,,auto,false
+Live2D,VTuber,2D rig tech,neutral,calm,,,,,,auto,false
+3D reveal,VTuber,first 3D model showcase,hype,joy,,,,,,auto,false
+tracking,VTuber,face/body capture,neutral,calm,,,,,,auto,false
+scuff,VTuber,tech issue,playful,resigned,,,,,,auto,false
+itadakimasu,AnimeJP,let’s eat (before meal),wholesome,gratitude,,,,,,ja,false
+gochisousama,AnimeJP,thanks for the meal,wholesome,gratitude,,,,,,ja,false
+itadakisu~,AnimeJP,punny kiss-phrase,flirty,playful,,,,,,ja,true
+baka,AnimeJP,silly idiot (playful),teasing,teasing,,,,,,ja,false
+suki,AnimeJP,like/love,wholesome,fond,,,,,,ja,false
+daisuki,AnimeJP,love so much,wholesome,tender,,,,,,ja,false
+hontou,AnimeJP,really?,neutral,curious,,,,,,ja,false
+uso,AnimeJP,lie!,edgy,surprise,,,,,,ja,false
+muri,AnimeJP,can’t/too much,deadpan,overwhelmed,,,,,,ja,false
+mugen,AnimeJP,infinite,playful,awe,,,,,,ja,false
+yume,AnimeJP,dream,wholesome,hopeful,,,,,,ja,false
+kira kira,AnimeJP,sparkly,cute,joy,,,,,,ja,false
+dokidoki,AnimeJP,heart beating,cute,nervous,,,,,,ja,false
+bakabaka,AnimeJP,double baka (cute),teasing,teasing,,,,,,ja,false
+kowai,AnimeJP,scary,neutral,fear,,,,,,ja,false
+erai,AnimeJP,great of you,wholesome,proud,,,,,,ja,false
+tasukete,AnimeJP,help me,playful,dramatic,,,,,,ja,false
+gank,GenZ,surprise attack (moba),,,,,,,,auto,false
+tilt,GenZ,frustrated play spiral,,,,,,,,auto,false
+smurf,GenZ,high-skill new account,,,,,,,,auto,false
+derank,GenZ,drop in rank,,,,,,,,auto,false
+elo hell,GenZ,stuck at bad rank,,,,,,,,auto,false
+queue dodge,GenZ,leave matchmaking,,,,,,,,auto,false
+gg go next,GenZ,accept loss and continue,,,,,,,,auto,false
+int diff,GenZ,difference in intentional feeding,,,,,,,,auto,false
+lag,GenZ,network delay,,,,,,,,auto,false
+ping,GenZ,latency,,,,,,,,auto,false
+desync,GenZ,out-of-sync state,,,,,,,,auto,false
+nerd snipe,GenZ,tempt w/ puzzle,,,,,,,,auto,false
+brainrot,GenZ,obsessed with a thing,,,,,,,,auto,false
+living rent-free,GenZ,constantly in mind,,,,,,,,auto,false
+ate my brain,GenZ,consumed attention,,,,,,,,auto,false
+i'm baby,GenZ,want comfort/cute,,,,,,,,auto,false
+mother,GenZ,iconic woman praise,,,,,,,,auto,false
+father,GenZ,iconic man praise,,,,,,,,auto,false
+big yikes,GenZ,major cringe,,,,,,,,auto,false
+deadass,GenZ,seriously,,,,,,,,auto,false
+fax,GenZ,facts/truth,,,,,,,,auto,false
+on god,GenZ,I swear/serious,,,,,,,,auto,false
+no kizzy,GenZ,no lie,,,,,,,,auto,false
+braincell,GenZ,as in 'shared braincell',,,,,,,,auto,false
+glow up,GenZ,improve looks/style,,,,,,,,auto,false
+drama arc,GenZ,season of drama,,,,,,,,auto,false
+ship,GenZ,pair romantically,,,,,,,,auto,false
+canon,GenZ,official storyline,,,,,,,,auto,false
+headcanon,GenZ,personal theory,,,,,,,,auto,false
+multiship,GenZ,ship many pairings,,,,,,,,auto,false
+self-insert,GenZ,insert yourself in story,,,,,,,,auto,false
+comfort character,GenZ,character you rely on,,,,,,,,auto,false
+blorbo,GenZ,beloved character,,,,,,,,auto,false
+*headpats*,Interjection,action text headpats,,,,,,,,auto,false
+*snuggle*,Interjection,action text cuddle,,,,,,,,auto,false
+*nuzzle*,Interjection,action text nose rub,,,,,,,,auto,false
+*purr*,Interjection,action text purr,,,,,,,,auto,false
+*hiss*,Interjection,action text hiss,,,,,,,,auto,false
+*peek*,Interjection,action text peek,,,,,,,,auto,false
+*sneak*,Interjection,action text sneak,,,,,,,,auto,false
+*sparkle*,Interjection,action text sparkle,,,,,,,,auto,false
+*bonk*,Interjection,action text bonk,,,,,,,,auto,true
+'sup nerd,Phrase,teasing greet,teasing,fond,playful,greet,,,,auto,false
+you good?,Phrase,check-in casual,wholesome,concern,soft,checkin,,,,auto,false
+proud of u,Phrase,support praise,wholesome,proud,warm,support,,,,auto,false
+missed me?,Phrase,flirty reentry,flirty,smug,playful,return,,,,auto,false
+hydrate pls,Phrase,care reminder,wholesome,caring,,reminder,,,,auto,false
+afaik,GenZ,as far as I know,,,,,,,,auto,false
+btw,GenZ,by the way,,,,,,,,auto,false
+idk,GenZ,I don’t know,,,,,,,,auto,false
+icymi,GenZ,in case you missed it,,,,,,,,auto,false
+tl;dr,GenZ,too long; didn’t read,,,,,,,,auto,false
+jk,GenZ,just kidding,,,,,,,,auto,false
+lmao,GenZ,laughing my butt off,,,,,,,,auto,false
+lol,GenZ,laugh,,,,,,,,auto,false
+rofl,GenZ,rolling on the floor laughing,,,,,,,,auto,false
+lfg,GenZ,let’s freaking go,,,,,,,,auto,false
+wdym,GenZ,what do you mean,,,,,,,,auto,false
+ikr,GenZ,"I know, right",,,,,,,,auto,false
+tbf,GenZ,to be fair,,,,,,,,auto,false
+imo,GenZ,in my opinion,,,,,,,,auto,false
+imho,GenZ,in my humble opinion,,,,,,,,auto,false
+smol bean,GenZ,extra cute person,,,,,,,,auto,false
+heckin,GenZ,emphasis wholesome,,,,,,,,auto,false
+heck,GenZ,mild expletive,,,,,,,,auto,false
+dang,GenZ,mild surprise,,,,,,,,auto,false
+gosh,GenZ,mild surprise,,,,,,,,auto,false
+bonkers,GenZ,crazy wild,,,,,,,,auto,false
+spicy,GenZ,edgy a little NSFW,,,,,,,,auto,true
+saucy,GenZ,suggestive tone,,,,,,,,auto,true
+cozy,GenZ,warm comfy vibe,,,,,,,,auto,false
+comfy,GenZ,cozy vibe,,,,,,,,auto,false
+aesthetic,GenZ,visual vibe,,,,,,,,auto,false
+core,GenZ,style suffix,,,,,,,,auto,false
+alt,GenZ,alternative style,,,,,,,,auto,false
+egirl,GenZ,online alt-girl vibe,,,,,,,,auto,false
+soft,GenZ,gentle cute style,,,,,,,,auto,false
+feral,GenZ,wild unhinged,,,,,,,,auto,false
+gremlin mode,GenZ,chaotic goblin energy,,,,,,,,auto,false
+goblin mode,GenZ,unbothered lazy chaos,,,,,,,,auto,false
+queen behavior,GenZ,confident excellence,,,,,,,,auto,false
+king behavior,GenZ,confident excellence,,,,,,,,auto,false
+face card,GenZ,great looks,,,,,,,,auto,false
+drip check,GenZ,outfit review,,,,,,,,auto,false
+fit check,GenZ,outfit review,,,,,,,,auto,false

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Modern AI companion chat interface">
+    <meta name="theme-color" content="#3B82F6">
+    <title>AI Companion</title>
+
+    <!-- TailwindCSS via CDN for rapid prototyping -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Alpine.js for reactivity -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Marked.js for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Custom styles -->
+    <link rel="stylesheet" :href="'/css/themes/' + (config.ui?.theme || 'cyberpunk') + '.css'">
+
+    <style>
+        [x-cloak] {
+            display: none !important;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-online {
+            background-color: #22c55e;
+            box-shadow: 0 0 8px #22c55e;
+        }
+
+        .status-offline {
+            background-color: #ef4444;
+            box-shadow: 0 0 8px #ef4444;
+        }
+
+        .status-checking {
+            background-color: #eab308;
+            box-shadow: 0 0 8px #eab308;
+        }
+    </style>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg">
+
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#EFF6FF',
+                            100: '#DBEAFE',
+                            500: '#3B82F6',
+                            600: '#2563EB',
+                            700: '#1D4ED8',
+                            900: '#1E3A8A',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-200" x-data="app" x-init="init()">
+
+    <!-- Mobile Header -->
+    <header
+        class="lg:hidden fixed top-0 left-0 right-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-30">
+        <div class="flex items-center justify-between p-4">
+            <button @click="sidebarOpen = !sidebarOpen" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
+            <div class="flex items-center gap-2">
+                <span :class="llmStatus.ok ? 'status-online' : 'status-offline'" class="status-dot"></span>
+                <h1 class="text-lg font-semibold text-gray-900 dark:text-white">AI Companion</h1>
+            </div>
+            <button @click="toggleDarkMode()" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                <svg x-show="!darkMode" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+                <svg x-show="darkMode" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <div class="flex h-screen pt-16 lg:pt-0">
+        <!-- Sidebar -->
+        <aside :class="{'translate-x-0': sidebarOpen, '-translate-x-full': !sidebarOpen}"
+            class="fixed lg:static inset-y-0 left-0 z-20 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-transform duration-200 lg:translate-x-0">
+
+            <!-- Sidebar Header -->
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700 hidden lg:block">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <span :class="llmStatus.ok ? 'status-online' : 'status-offline'" class="status-dot" :title="llmStatus.error"></span>
+                        <h1 class="text-xl font-bold text-gray-900 dark:text-white">AI Companion</h1>
+                    </div>
+                    <button @click="toggleDarkMode()" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <svg x-show="!darkMode" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                        <svg x-show="darkMode" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    </button>
+                </div>
+                
+                <!-- System Stats -->
+                <div class="space-y-2 text-xs font-mono">
+                    <div class="flex items-center gap-2">
+                        <span class="w-8 text-right text-gray-500">CPU</span>
+                        <div class="stat-bar flex-1">
+                            <div class="stat-fill cpu" :style="'width: ' + (systemStats?.cpu || 0) + '%'"></div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-8 text-right text-gray-500">RAM</span>
+                        <div class="stat-bar flex-1">
+                            <div class="stat-fill mp" :style="'width: ' + (systemStats?.ram || 0) + '%'"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- New Chat Button -->
+            <div class="p-4">
+                <button @click="createNewSession()"
+                    class="w-full px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    New Chat
+                </button>
+            </div>
+
+            <!-- Session List -->
+            <div class="flex-1 overflow-y-auto px-2">
+                <template x-for="session in sessions" :key="session.id">
+                    <button @click="switchSession(session.id)"
+                        :class="{'bg-primary-50 dark:bg-primary-900/20 border-primary-500': currentSessionId === session.id, 'hover:bg-gray-50 dark:hover:bg-gray-700': currentSessionId !== session.id}"
+                        class="w-full text-left px-3 py-2 rounded-lg mb-1 border border-transparent transition-colors">
+                        <div class="text-sm font-medium text-gray-900 dark:text-white truncate" x-text="session.title">
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400" x-text="formatDate(session.created_at)">
+                        </div>
+                    </button>
+                </template>
+            </div>
+
+            <!-- Model Manager & Settings -->
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                <button @click="modelManagerOpen = true" class="w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                    Model Manager
+                </button>
+                <button @click="settingsOpen = !settingsOpen"
+                    class="w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Settings
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900">
+            <!-- Chat Container -->
+            <div class="flex-1 overflow-y-auto px-4 py-6">
+                <div class="max-w-3xl mx-auto space-y-6">
+                    <!-- Welcome Message -->
+                    <div x-show="messages.length === 0" class="text-center py-12">
+                        <div
+                            class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-100 dark:bg-primary-900/20 mb-4">
+                            <svg class="w-8 h-8 text-primary-600 dark:text-primary-400" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                            </svg>
+                        </div>
+                        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Welcome! 👋</h2>
+                        <p class="text-gray-600 dark:text-gray-400">Start a conversation with your AI companion</p>
+                    </div>
+
+                    <!-- Messages -->
+                    <template x-for="msg in messages" :key="msg.id">
+                        <div :class="{'justify-end': msg.role === 'user', 'justify-start': msg.role === 'assistant'}"
+                            class="flex">
+                            <div :class="{'bg-primary-600 text-white': msg.role === 'user', 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white': msg.role === 'assistant'}"
+                                class="max-w-[85%] rounded-2xl px-4 py-3 shadow-sm border border-gray-200 dark:border-gray-700">
+                                <div x-show="msg.role === 'assistant'"
+                                    class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Assistant</div>
+                                <div class="prose prose-sm dark:prose-invert max-w-none"
+                                    x-html="renderMarkdown(msg.text)"></div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <div x-show="isTyping" class="flex justify-start">
+                        <div
+                            class="bg-white dark:bg-gray-800 rounded-2xl px-4 py-3 shadow-sm border border-gray-200 dark:border-gray-700 flex items-center gap-3">
+                            <div class="flex gap-1">
+                                <div class="w-1.5 h-1.5 bg-primary-500 rounded-full animate-bounce"
+                                    style="animation-delay: 0s"></div>
+                                <div class="w-1.5 h-1.5 bg-primary-500 rounded-full animate-bounce"
+                                    style="animation-delay: 0.2s"></div>
+                                <div class="w-1.5 h-1.5 bg-primary-500 rounded-full animate-bounce"
+                                    style="animation-delay: 0.4s"></div>
+                            </div>
+                            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                                x-text="currentPhase"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+                <div class="max-w-3xl mx-auto">
+                    <form @submit.prevent="sendMessage()" class="flex gap-2 items-end">
+                        <textarea x-model="inputText" @keydown.enter.prevent="if (!$event.shiftKey) sendMessage()"
+                            @input="autoResize($event.target)"
+                            :placeholder="llmStatus.ok ? 'Type a message... (Shift+Enter for new line)' : 'LLM Brain is OFFLINE - Check Settings'"
+                            :disabled="!llmStatus.ok" :class="{'opacity-50 cursor-not-allowed': !llmStatus.ok}" rows="1"
+                            class="flex-1 resize-none rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+                            style="max-height: 200px; min-height: 52px;"></textarea>
+
+                        <button type="submit" :disabled="!inputText.trim() || isTyping"
+                            :class="{'opacity-50 cursor-not-allowed': !inputText.trim() || isTyping}"
+                            class="px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:hover:bg-primary-600 text-white rounded-xl font-medium transition-colors flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                            Send
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div x-show="settingsOpen" @click.away="settingsOpen = false" x-transition
+        class="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
+        <div @click.stop
+            class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Settings</h2>
+                    <p class="text-sm text-gray-500" x-text="devMode ? 'Developer Mode Active' : 'Basic Configuration'">
+                    </p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center cursor-pointer gap-2">
+                        <span class="text-xs font-semibold text-gray-500 uppercase">Dev Mode</span>
+                        <div
+                            class="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" x-model="devMode"
+                                class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer outline-none transition-transform duration-200"
+                                :class="devMode ? 'translate-x-4 border-primary-500' : 'border-gray-300'" />
+                            <label
+                                class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"
+                                :class="devMode ? 'bg-primary-500' : 'bg-gray-300'"></label>
+                        </div>
+                    </label>
+                    <button @click="settingsOpen = false"
+                        class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6 space-y-8">
+                <!-- LLM Connection Status Card -->
+                <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-semibold uppercase tracking-wider text-gray-500">Brain
+                            Connectivity</span>
+                        <span :class="llmStatus.ok ? 'text-green-500' : 'text-red-500'"
+                            class="text-sm font-bold flex items-center gap-1">
+                            <span :class="llmStatus.ok ? 'status-online' : 'status-offline'" class="status-dot"></span>
+                            <span x-text="llmStatus.ok ? 'CONNECTED' : 'OFFLINE'"></span>
+                        </span>
+                    </div>
+                    <p class="text-xs text-gray-500"
+                        x-text="llmStatus.ok ? 'Successfully reached AI server' : (llmStatus.error || 'Check endpoint connectivity')">
+                    </p>
+                </div>
+
+                <!-- LLM Settings -->
+                <section>
+                    <h3 class="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white mb-4">
+                        <svg class="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        Core Brain (LLM)
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Server Endpoint</label>
+                            <input type="text" x-model="config.llm.endpoint" placeholder="http://localhost:1234/v1"
+                                class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition-all">
+                        </div>
+
+                        <div x-show="devMode" x-cloak>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Model Name</label>
+                            <input type="text" x-model="config.llm.model"
+                                class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm">
+                        </div>
+
+                        <div x-show="devMode" x-cloak>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Temperature</label>
+                            <div class="flex items-center gap-2">
+                                <input type="range" x-model="config.llm.temperature" min="0" max="2" step="0.1"
+                                    class="flex-1">
+                                <span class="text-sm font-mono w-8" x-text="config.llm.temperature"></span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Diagnostics (Dev Only) -->
+                <section x-show="devMode" x-cloak class="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">System Diagnostics</h3>
+                    <div class="font-mono text-[10px] bg-black text-green-400 p-4 rounded-lg overflow-x-auto max-h-40">
+                        <div>LAST_INIT: <span x-text="new Date(llmStatus.last_check * 1000).toISOString()"></span></div>
+                        <div>ENDPOINT: <span x-text="config.llm.endpoint"></span></div>
+                        <div>MODELS_FOUND: <span x-text="llmStatus.models?.length || 0"></span></div>
+                        <template x-for="model in llmStatus.models" :key="model.id">
+                            <div class="ml-4">- <span x-text="model.id"></span></div>
+                        </template>
+                    </div>
+                </section>
+
+                <!-- Save Button -->
+                <div class="sticky bottom-0 bg-white dark:bg-gray-800 pt-4 pb-2 flex justify-end gap-3">
+                    <button @click="settingsOpen = false"
+                        class="px-6 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl font-bold transition-all">Cancel</button>
+                    <button @click="saveSettings()"
+                        class="px-8 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-bold shadow-lg shadow-primary-500/30 transition-all">Apply
+                        Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay for mobile sidebar -->
+    <div x-show="sidebarOpen" @click="sidebarOpen = false" class="fixed inset-0 bg-black/50 z-10 lg:hidden"
+        x-transition></div>
+
+    <!-- Model Manager Modal -->
+    <div x-show="modelManagerOpen" @click.away="modelManagerOpen = false" x-transition class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div @click.stop class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col border border-primary-500 overflow-hidden">
+            <!-- Header -->
+            <div class="p-6 border-b border-gray-700 flex justify-between items-center bg-gray-900 text-white">
+                <h2 class="text-2xl font-bold font-heading text-secondary-500">NEURAL ARCHIVE // MODEL MANAGER</h2>
+                <button @click="modelManagerOpen = false" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            
+            <!-- Content -->
+            <div class="flex-1 overflow-hidden flex" x-data="{ activeTab: 'llm' }">
+                <!-- Tabs -->
+                <div class="w-48 bg-gray-900 border-r border-gray-700 p-4 space-y-2">
+                    <button @click="activeTab = 'llm'; searchModels(activeTab)" :class="{'text-primary-500 border-primary-500 bg-gray-800': activeTab === 'llm'}" class="w-full text-left p-3 border-l-4 border-transparent hover:bg-gray-800 transition-colors font-mono text-sm">LLM (Text)</button>
+                    <button @click="activeTab = 'tts'; searchModels(activeTab)" :class="{'text-primary-500 border-primary-500 bg-gray-800': activeTab === 'tts'}" class="w-full text-left p-3 border-l-4 border-transparent hover:bg-gray-800 transition-colors font-mono text-sm">TTS (Voice)</button>
+                    <button @click="activeTab = 'asr'; searchModels(activeTab)" :class="{'text-primary-500 border-primary-500 bg-gray-800': activeTab === 'asr'}" class="w-full text-left p-3 border-l-4 border-transparent hover:bg-gray-800 transition-colors font-mono text-sm">ASR (Hearing)</button>
+                    <div class="border-t border-gray-700 my-4 pt-4"></div>
+                     <button @click="activeTab = 'installed'; loadInstalledModels()" :class="{'text-green-500 border-green-500 bg-gray-800': activeTab === 'installed'}" class="w-full text-left p-3 border-l-4 border-transparent hover:bg-gray-800 transition-colors font-mono text-sm">INSTALLED</button>
+                </div>
+                
+                <!-- Panel -->
+                <div class="flex-1 flex flex-col bg-gray-800 p-6 overflow-hidden relative">
+                    <!-- Search Bar (Hidden for Installed tab) -->
+                    <div x-show="activeTab !== 'installed'" class="flex gap-4 mb-6">
+                        <input x-model="modelSearchQuery" @keydown.enter="searchModels(activeTab)" type="text" placeholder="Search Neural Net..." class="flex-1 bg-black border border-gray-600 p-3 text-white font-mono rounded-lg focus:border-primary-500 outline-none">
+                        <select x-model="modelFilter" @change="searchModels(activeTab)" class="bg-black border border-gray-600 p-3 text-white rounded-lg font-mono text-sm">
+                            <option value="downloads">Most Downloaded</option>
+                            <option value="trending">Trending</option>
+                            <option value="updated">Newest</option>
+                        </select>
+                        <button @click="searchModels(activeTab)" class="primary px-6 py-2 rounded-lg font-bold hover:bg-primary-600 transition-colors">SCAN</button>
+                    </div>
+                    
+                    <!-- Results Grid -->
+                    <div class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4 content-start">
+                        <!-- Loading State -->
+                        <div x-show="isSearching" class="col-span-3 flex justify-center py-12">
+                             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+                        </div>
+
+                        <!-- HF Results -->
+                        <template x-if="activeTab !== 'installed' && !isSearching">
+                            <template x-for="model in searchResults" :key="model.id">
+                                <div class="card p-4 flex flex-col gap-2 hover:border-primary-500 transition-colors group relative">
+                                    <div class="flex justify-between items-start">
+                                        <h3 class="font-bold text-sm text-white truncate w-3/4" :title="model.id" x-text="model.id"></h3>
+                                        <span class="text-xs text-gray-400 font-mono" x-text="formatNumber(model.downloads) + ' DLs'"></span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 truncate" x-text="model.author"></p>
+                                    <div class="flex flex-wrap gap-1 mt-1">
+                                         <template x-for="tag in (model.tags || []).slice(0,3)">
+                                            <span class="text-[10px] bg-gray-900 text-gray-400 px-1 rounded" x-text="tag"></span>
+                                         </template>
+                                    </div>
+                                    <div class="mt-auto pt-4 flex gap-2 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button @click="installModel(model.id, activeTab)" class="flex-1 bg-gray-700 hover:bg-primary-600 text-white text-xs py-2 rounded transition-colors font-bold uppercase tracking-wider">INSTALL</button>
+                                        <a :href="'https://huggingface.co/' + model.id" target="_blank" class="px-3 py-2 bg-gray-900 text-gray-400 hover:text-white rounded text-xs">HF</a>
+                                    </div>
+                                </div>
+                            </template>
+                        </template>
+
+                        <!-- Installed Models -->
+                        <template x-if="activeTab === 'installed' && !isSearching">
+                             <div class="col-span-3 space-y-6">
+                                <template x-for="(models, type) in installedModels" :key="type">
+                                    <div x-show="models.length > 0">
+                                        <h3 class="text-primary-500 font-bold mb-2 uppercase text-sm border-b border-gray-700 pb-1" x-text="type"></h3>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            <template x-for="model in models" :key="model.path">
+                                                 <div class="card p-4 border-green-500/50">
+                                                    <div class="flex justify-between">
+                                                        <h4 class="font-bold text-white text-sm truncate" x-text="model.name"></h4>
+                                                        <button @click="deleteModel(type, model.id)" class="text-red-500 hover:text-red-400 text-xs">[DEL]</button>
+                                                    </div>
+                                                    <div class="text-xs text-green-500 mt-1">INSTALLED</div>
+                                                    <div class="text-[10px] text-gray-500 mt-2 truncate font-mono" x-text="model.path"></div>
+                                                 </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div x-show="Object.values(installedModels).flat().length === 0" class="text-center text-gray-500">NO MODULES INSTALLED</div>
+                             </div>
+                        </template>
+                        
+                        <div x-show="!isSearching && activeTab !== 'installed' && searchResults.length === 0" class="col-span-3 text-center text-gray-500 py-12 font-mono">
+                            NO SIGNALS DETECTED. INITIATE SCAN.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terminal Drawer -->
+    <div x-show="terminalOpen" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="transform translate-y-full" x-transition:enter-end="transform translate-y-0" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="transform translate-y-0" x-transition:leave-end="transform translate-y-full" class="fixed bottom-0 left-0 right-0 h-48 bg-black border-t-2 border-green-500 z-30 font-mono text-xs p-2 overflow-hidden flex flex-col shadow-[0_0_20px_rgba(0,255,0,0.2)]">
+        <div class="flex justify-between items-center border-b border-green-900 pb-1 mb-1">
+            <span class="text-green-500 font-bold">>> SYSTEM_LOG // LIVE_FEED</span>
+            <button @click="terminalOpen = false" class="text-green-700 hover:text-green-500">[MINIMIZE]</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-2 space-y-1 text-green-400" id="terminal-output">
+             <template x-for="log in logs" :key="log">
+                <div x-text="'> ' + log"></div>
+             </template>
+        </div>
+    </div>
+
+    <!-- App Scripts -->
+    <script src="/js/api.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+
+</html>

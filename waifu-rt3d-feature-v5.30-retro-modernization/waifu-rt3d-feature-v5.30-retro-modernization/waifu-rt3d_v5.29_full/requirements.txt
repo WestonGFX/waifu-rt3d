@@ -1,0 +1,31 @@
+# waifu-rt3d v5.30 - Python Dependencies
+# Generated: 2025-11-25
+
+# Core Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# HTTP Client
+requests==2.31.0
+
+# Database (built-in with Python)
+# sqlite3 - included in Python standard library
+
+# Optional: Development
+# pytest==7.4.3          # For unit tests
+# black==23.11.0         # Code formatting
+# flake8==6.1.0          # Linting
+
+# Optional: Production
+# gunicorn==21.2.0       # Production WSGI server
+# python-dotenv==1.0.0   # Environment variables
+
+# Notes:
+# - Python 3.8+ required
+# - For TTS providers, install provider-specific packages
+# - For ASR, may need additional packages (whisper, etc.)
+# - For GPU support (XTTS), install torch with CUDA
+
+# Installation:
+# pip install -r requirements.txt

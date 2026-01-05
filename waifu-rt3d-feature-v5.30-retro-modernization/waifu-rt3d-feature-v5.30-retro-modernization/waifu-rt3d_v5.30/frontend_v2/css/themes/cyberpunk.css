@@ -1,0 +1,132 @@
+/* Cyberpunk / Synthwave Theme */
+:root {
+    --bg-color: #050510;
+    --text-color: #e0f0ff;
+    --primary-color: #ff00ff;
+    --secondary-color: #00ffff;
+    --accent-color: #bf00ff;
+    --border-color: #00ffff;
+    --panel-bg: rgba(10, 10, 20, 0.95);
+    
+    --font-heading: 'Press Start 2P', cursive;
+    --font-body: 'VT323', monospace;
+    
+    --scanline-opacity: 0.15;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: var(--font-body);
+    font-size: 1.2rem;
+    background-image: 
+        linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    background-size: 100% 2px, 3px 100%;
+}
+
+/* CRT Scanline Overlay */
+body::after {
+    content: " ";
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    z-index: 9999;
+    background-size: 100% 2px, 3px 100%;
+    pointer-events: none;
+    opacity: var(--scanline-opacity);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    text-transform: uppercase;
+    color: var(--secondary-color);
+    text-shadow: 2px 2px 0px #ff00ff;
+    letter-spacing: 2px;
+}
+
+.card, .panel, .modal-content {
+    background-color: var(--panel-bg);
+    border: 2px solid var(--border-color);
+    box-shadow: 0 0 10px var(--border-color), inset 0 0 20px rgba(0, 255, 255, 0.2);
+    border-radius: 4px; /* Slight rounding but mostly boxy */
+}
+
+button.primary {
+    background: transparent;
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    padding: 1rem 2rem;
+    text-transform: uppercase;
+    box-shadow: 0 0 5px var(--primary-color);
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+button.primary:hover {
+    background: var(--primary-color);
+    color: #fff;
+    box-shadow: 0 0 20px var(--primary-color);
+    text-shadow: none;
+}
+
+input, textarea, select {
+    background: #000;
+    border: 1px solid var(--secondary-color);
+    color: var(--secondary-color);
+    font-family: var(--font-body);
+    font-size: 1.2rem;
+    padding: 0.5rem;
+}
+
+input:focus, textarea:focus {
+    outline: none;
+    box-shadow: 0 0 10px var(--secondary-color);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+    width: 10px;
+}
+::-webkit-scrollbar-track {
+    background: #000;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border: 1px solid #000;
+}
+
+/* Status Bars */
+.stat-bar {
+    background: #333;
+    border: 1px solid #555;
+    height: 20px;
+    width: 100%;
+    position: relative;
+}
+
+.stat-fill {
+    height: 100%;
+    transition: width 0.5s;
+}
+
+.stat-fill.hp { background: #ff0000; box-shadow: 0 0 10px #ff0000; }
+.stat-fill.mp { background: #0000ff; box-shadow: 0 0 10px #0000ff; }
+.stat-fill.cpu { background: #00ff00; box-shadow: 0 0 10px #00ff00; }
+
+/* Terminal / Log Viewer */
+.terminal {
+    background: #000;
+    color: #0f0;
+    font-family: 'VT323', monospace;
+    padding: 1rem;
+    border-top: 2px solid #0f0;
+}

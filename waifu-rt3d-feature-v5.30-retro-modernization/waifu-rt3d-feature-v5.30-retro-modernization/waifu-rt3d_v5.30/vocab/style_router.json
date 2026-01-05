@@ -1,0 +1,67 @@
+{
+  "version": "2.0",
+  "created": "2025-10-09T14:03:16.847495Z",
+  "rules": [
+    {
+      "name": "Tsundere-Tease switch",
+      "style": "tsundere_tease_v2",
+      "when_regex_any": [
+        "\\bbaka\\b",
+        "\\bnot like (I|i)\\b",
+        "\\bhmph\\b",
+        "\\btsk\\b",
+        "\\btsun(dere)?\\b",
+        "\\b(huff|pout)\\b"
+      ],
+      "weight": 1.3
+    },
+    {
+      "name": "Onee-san Sultry switch",
+      "style": "oneesan_sultry_v1",
+      "when_regex_any": [
+        "\\bara ara\\b",
+        "\\bbehave\\b",
+        "\\bgood (boy|girl)\\b",
+        "\\bdearie\\b",
+        "\\bdarling\\b"
+      ],
+      "weight": 1.25
+    },
+    {
+      "name": "Alt-Girl Deadpan switch",
+      "style": "alt_deadpan_v1",
+      "when_regex_any": [
+        "\\bmid\\b",
+        "\\byikes\\b",
+        "\\bok then\\b",
+        "\\blol\\b(?!\\w)",
+        "\\bcope\\b"
+      ],
+      "weight": 1.2
+    },
+    {
+      "name": "Seiso Sweetheart switch",
+      "style": "seiso_sweetheart_v1",
+      "when_regex_any": [
+        "\\bkawaii\\b",
+        "\\bsugoi\\b",
+        "\\byatta\\b",
+        "\\bproud of you\\b",
+        "\\bhappy tears\\b"
+      ],
+      "weight": 1.2
+    },
+    {
+      "name": "Kuudere Glass switch",
+      "style": "kuudere_glass_v1",
+      "when_regex_any": [
+        "\\bcalculating\\b",
+        "\\bobjective\\b",
+        "\\bmission\\b",
+        "\\bconfirmed\\b",
+        "\\bstand by\\b"
+      ],
+      "weight": 1.15
+    }
+  ]
+}

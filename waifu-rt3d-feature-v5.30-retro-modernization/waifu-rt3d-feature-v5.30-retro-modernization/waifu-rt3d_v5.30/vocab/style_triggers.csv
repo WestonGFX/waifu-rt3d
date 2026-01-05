@@ -1,0 +1,27 @@
+style,name,regex
+tsundere_tease_v2,Tsundere-Tease switch,\bbaka\b
+tsundere_tease_v2,Tsundere-Tease switch,\bnot like (I|i)\b
+tsundere_tease_v2,Tsundere-Tease switch,\bhmph\b
+tsundere_tease_v2,Tsundere-Tease switch,\btsk\b
+tsundere_tease_v2,Tsundere-Tease switch,\btsun(dere)?\b
+tsundere_tease_v2,Tsundere-Tease switch,\b(huff|pout)\b
+oneesan_sultry_v1,Onee-san Sultry switch,\bara ara\b
+oneesan_sultry_v1,Onee-san Sultry switch,\bbehave\b
+oneesan_sultry_v1,Onee-san Sultry switch,\bgood (boy|girl)\b
+oneesan_sultry_v1,Onee-san Sultry switch,\bdearie\b
+oneesan_sultry_v1,Onee-san Sultry switch,\bdarling\b
+alt_deadpan_v1,Alt-Girl Deadpan switch,\bmid\b
+alt_deadpan_v1,Alt-Girl Deadpan switch,\byikes\b
+alt_deadpan_v1,Alt-Girl Deadpan switch,\bok then\b
+alt_deadpan_v1,Alt-Girl Deadpan switch,\blol\b(?!\w)
+alt_deadpan_v1,Alt-Girl Deadpan switch,\bcope\b
+seiso_sweetheart_v1,Seiso Sweetheart switch,\bkawaii\b
+seiso_sweetheart_v1,Seiso Sweetheart switch,\bsugoi\b
+seiso_sweetheart_v1,Seiso Sweetheart switch,\byatta\b
+seiso_sweetheart_v1,Seiso Sweetheart switch,\bproud of you\b
+seiso_sweetheart_v1,Seiso Sweetheart switch,\bhappy tears\b
+kuudere_glass_v1,Kuudere Glass switch,\bcalculating\b
+kuudere_glass_v1,Kuudere Glass switch,\bobjective\b
+kuudere_glass_v1,Kuudere Glass switch,\bmission\b
+kuudere_glass_v1,Kuudere Glass switch,\bconfirmed\b
+kuudere_glass_v1,Kuudere Glass switch,\bstand by\b

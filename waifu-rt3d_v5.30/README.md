@@ -11,29 +11,34 @@ A full-stack web application that brings AI companions to life with voice synthe
 ## ✨ Features
 
 ### 🌟 New in v5.30 (Retro-Modern Update)
+
 - **Model Manager**: Built-in interface to search and install models directly from HuggingFace (LLM, TTS, ASR).
 - **Themes**: Choose between "Cyberpunk" (Neon/Dark) and "Anime Pop" (Pastel/Light) styles.
 - **System Monitoring**: Live CPU/RAM usage stats in the sidebar.
 - **Terminal Log**: Real-time server log viewer accessible from the UI.
 
 ### 🤖 AI Integration
+
 - **Local LLM Support** via LM Studio (privacy-first, no API costs)
 - **Conversation Memory** with configurable history length
 - **Persistent Chat History** stored in SQLite with full-text search
 
 ### 🎤 Multi-Provider TTS
+
 - **Fish Audio** (cloud/self-host) - Default provider with E-girl voice
 - **Piper** (local CLI) - Fully offline, ONNX models
 - **XTTS Server** (local) - Community server support
 - **ElevenLabs** (API) - Premium quality with paid keys
 
 ### 🎨 3D Avatar Viewer
+
 - Support for **VRM**, **GLB**, and **GLTF** models
 - Upload and manage multiple avatars
 - Real-time 3D rendering with Three.js
 - Automatic CDN fallback for offline libraries
 
 ### 💾 Storage & Caching
+
 - Audio files cached in `backend/storage/audio/`
 - SQLite database with WAL mode for performance
 - FTS5 full-text search on conversations
@@ -41,6 +46,7 @@ A full-stack web application that brings AI companions to life with voice synthe
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - **Python 3.8+**
 - **LM Studio** running locally (or compatible OpenAI API endpoint)
 - Optional: Piper TTS for offline voices
@@ -118,25 +124,30 @@ waifu-rt3d_v5.30
 ## 🔧 API Endpoints
 
 ### Configuration
+
 - `GET /api/config` - Get current configuration
 - `PUT /api/config` - Update configuration
 
 ### Avatar Management
+
 - `GET /api/avatars` - List uploaded avatars
 - `POST /api/avatars/upload` - Upload new avatar (.vrm/.glb/.gltf)
 - `DELETE /api/avatars/{name}` - Delete avatar
 
 ### Chat
+
 - `POST /api/chat` - Send message and get AI response
   - Query param: `session_id` (default: 1)
   - Body: `{"text": "message", "speak": true/false}`
   - Returns: `{"ok": true, "reply": "...", "audio": "/files/audio/..."}`
 
 ### TTS
+
 - `POST /api/tts` - Generate TTS audio
   - Body: `{"text": "...", "provider": "...", "voice_id": "..."}`
 
 ### System
+
 - `GET /api/healthcheck` - Check system status (LLM, libraries, etc.)
 
 ## 🎯 Architecture
@@ -154,6 +165,7 @@ The project uses a flexible adapter pattern for extensibility:
   - Error handling and fallback support
 
 ### Frontend Architecture
+
 - **Vanilla JavaScript** - No build step required
 - **Single-page tabs** - Setup, Viewer, Chat, System
 - **Dynamic module imports** - Three.js loaded on-demand
@@ -164,6 +176,7 @@ The project uses a flexible adapter pattern for extensibility:
 ### Adding a New TTS Provider
 
 1. Create `backend/tts/adapters/myprovider.py`:
+
 ```python
 from .base import TTSAdapter
 
@@ -175,6 +188,7 @@ class MyProviderAdapter(TTSAdapter):
 ```
 
 2. Register in `backend/tts/registry.py`:
+
 ```python
 from .adapters.myprovider import MyProviderAdapter
 
@@ -204,6 +218,7 @@ Similar process - create adapter in `backend/llm/adapters/` and register in `reg
 See [ROADMAP.md](ROADMAP.md) for detailed development plans.
 
 ### High Priority
+
 - [ ] Add session management UI
 - [ ] Implement error handling in UI
 - [ ] Add unit tests
@@ -211,6 +226,7 @@ See [ROADMAP.md](ROADMAP.md) for detailed development plans.
 - [ ] Implement ASR (speech-to-text input)
 
 ### Medium Priority
+
 - [ ] Avatar animation sync with TTS
 - [ ] Character profiles/personalities
 - [ ] Export/import conversations
@@ -218,6 +234,7 @@ See [ROADMAP.md](ROADMAP.md) for detailed development plans.
 - [ ] Voice activity detection
 
 ### Low Priority
+
 - [ ] Multi-user support
 - [ ] Cloud deployment guide
 - [ ] Docker containerization
@@ -226,6 +243,7 @@ See [ROADMAP.md](ROADMAP.md) for detailed development plans.
 ## 🤝 Contributing
 
 Contributions welcome! Please:
+
 1. Fork the repository
 2. Create a feature branch
 3. Add tests for new features
@@ -238,12 +256,14 @@ MIT License - See LICENSE file for details
 ## 🙏 Credits
 
 Built with:
+
 - [FastAPI](https://fastapi.tiangolo.com/) - Web framework
 - [Three.js](https://threejs.org/) - 3D rendering
 - [SQLite](https://www.sqlite.org/) - Database
 - [Uvicorn](https://www.uvicorn.org/) - ASGI server
 
 TTS Providers:
+
 - [Fish Audio](https://fish.audio/)
 - [Piper TTS](https://github.com/rhasspy/piper)
 - [Coqui XTTS](https://github.com/coqui-ai/TTS)

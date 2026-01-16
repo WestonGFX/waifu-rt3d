@@ -1,10 +1,10 @@
 {
   "onboarded": true,
   "llm": {
-    "provider": "lmstudio",
-    "endpoint": "http://10.0.0.17:1234/v1",
-    "model": "wizardlm-1.0-uncensored-llama2-13b",
-    "api_key": "lm-studio",
+    "provider": "jan",
+    "endpoint": "http://127.0.0.1:1339/v1",
+    "model": "Dark-Desires-12B-v1_0-Q6_K",
+    "api_key": "hcw6t7mp4jdv8",
     "temperature": 0.5,
     "history_limit": 20
   },

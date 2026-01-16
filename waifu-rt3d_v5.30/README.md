@@ -190,7 +190,7 @@ class MyProviderAdapter(TTSAdapter):
         return {'ok': True, 'filename': name, 'meta': {...}}
 ```
 
-2. Register in `backend/tts/registry.py`:
+1. Register in `backend/tts/registry.py`:
 
 ```python
 from .adapters.myprovider import MyProviderAdapter
@@ -202,7 +202,7 @@ def get_tts(cfg):
     # ... existing providers
 ```
 
-3. Add to frontend dropdown in `frontend/index.html`
+1. Add to frontend dropdown in `frontend/index.html`
 
 ### Adding a New LLM Provider
 

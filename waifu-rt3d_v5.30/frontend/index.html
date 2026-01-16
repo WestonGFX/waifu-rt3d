@@ -199,40 +199,55 @@ the
   <!-- SETUP WIZARD MODAL -->
   <div id="wizard-overlay"
     style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.9); z-index:2000; justify-content:center; align-items:center;">
+    <!-- ... (Initial Setup Content) ... -->
     <div class="settings-card"
       style="width:500px; border:2px solid var(--neon-blue); box-shadow: 0 0 30px var(--neon-blue);">
       <h2
         style="font-family:var(--font-pixel); font-size:0.8rem; color:var(--neon-blue); border-bottom:1px solid var(--neon-blue); padding-bottom:10px;">
         INITIAL_DYN_SETUP</h2>
       <div id="wizard-steps">
-        <!-- Step 1: LLM -->
         <div class="wizard-step" data-step="1">
-          <p style="font-size:0.7rem; color:var(--neon-green); margin-bottom:20px;">[ STEP_01 ] CONNECTING TO
-            NEURAL_BRAIN...</p>
-          <div class="form-group">
-            <label>LLM_ENDPOINT (LM Studio / Ollama / OpenAI)</label>
-            <input id="wiz_endpoint" value="http://127.0.0.1:1234/v1" />
+          <p style="font-size:0.8rem; line-height:1.5;">Welcome to WAIFU_LINK. Proceed to unified setup.</p>
+          <button class="next-step" id="intro-next"
+            style="background:var(--neon-blue); border:none; padding:10px; font-family:var(--font-pixel); font-size:0.5rem; width:100%; cursor:pointer;">
+            INITIALIZE UPLINK >>
+          </button>
           </div>
-          <div class="form-group">
-            <label>API_KEY (Optional for local)</label>
-            <input id="wiz_api_key" value="lm-studio" />
-          </div>
-          <button class="next-step"
-            style="background:var(--neon-blue); border:none; padding:10px; font-family:var(--font-pixel); font-size:0.5rem; width:100%; cursor:pointer;">NEXT_MODULE
-            >></button>
-        </div>
-        <!-- Step 2: Welcome -->
-        <div class="wizard-step" data-step="2" style="display:none;">
-          <p style="font-size:0.7rem; color:var(--neon-green); margin-bottom:20px;">[ STEP_02 ] SYSTEM CALIBRATION
-            COMPLETE.</p>
-          <p style="font-size:0.8rem; line-height:1.5;">Welcome to WAIFU_LINK. Your companion is ready to be
-            initialized.</p>
-          <button id="finish-wizard"
-            style="background:var(--neon-green); border:none; padding:10px; font-family:var(--font-pixel); font-size:0.5rem; width:100%; cursor:pointer; margin-top:20px;">EXECUTE_UPLINK</button>
-        </div>
       </div>
     </div>
   </div>
+<!-- MODEL MANAGER WIZARD MODAL -->
+<div id="wizard-modal" class="modal">
+  <div class="modal-content" style="width:600px; height:500px">
+    <button onclick="document.getElementById('wizard-modal').style.display='none'"
+      style="float:right; border:none; background:none; color:var(--neon-pink); cursor:pointer;">[X] ABORT</button>
+    <h2 style="font-family:var(--font-pixel); color:var(--neon-blue);">AI_MODEL_MANAGER v1.0</h2>
+    <div id="wizard-content" style="margin-top:20px;"></div>
+    </div>
+    </div>
+<!-- MODULE IMPORTS -->
+<script type="module">
+  import { ConfigUI } from './js/config_ui.js';
+  import { ModelManagerUI } from './js/model_manager.js';
+
+  window.uiState = {
+    config: new ConfigUI(),
+    models: new ModelManagerUI()
+  };
+
+  // Init Config UI
+  window.uiState.config.load();
+
+  // Bind Buttons
+  document.getElementById('saveCfg').onclick = async () => {
+    await window.uiState.config.save();
+    alert("CONFIG SAVED // DAEMON RESTART MAY BE REQUIRED");
+  };
+
+  document.getElementById('openModelWizard').onclick = () => {
+    window.uiState.models.toggleModal(true);
+  };
+</script>
 
   <div class="app-container">
     <!-- SIDEBAR -->
@@ -357,72 +372,29 @@ the
             <div class="settings-card">
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h3>[ 01 ] LLM_MODULE</h3>
-                <label style="font-size:0.45rem; color:var(--neon-pink); cursor:pointer;">
-                  [DEV_MODE] <input type="checkbox" id="dev_mode" style="width:auto; vertical-align:middle;" />
-                </label>
               </div>
-              <div class="form-group">
-                <label>ENDPOINT_URL</label>
-                <input id="endpoint" value="http://127.0.0.1:1234/v1" />
-              </div>
-              <div class="form-group">
-                <label>ACTIVE_MODEL</label>
-                <div style="display:flex; gap:5px;">
-                  <input id="model" placeholder="Model ID..." style="flex:1;" />
-                  <button id="discoverModels"
-                    style="background:var(--neon-blue); border:none; padding:5px; font-family:var(--font-pixel); font-size:0.4rem; cursor:pointer;">SCAN</button>
-                </div>
-              </div>
-
-              <div id="dev-params"
-                style="display:none; margin-top:10px; border-top:1px dashed var(--neon-purple); padding-top:10px;">
-                <div class="form-group">
-                  <label>HISTORY_LIMIT</label>
-                  <input type="number" id="history_limit" value="20" />
-                </div>
-                <div class="form-group">
-                  <label>TEMPERATURE</label>
-                  <input type="range" id="temp" min="0" max="2" step="0.1" value="0.7" />
-                </div>
-              </div>
+              <div id="cfg_llm_container"></div> <!-- DYNAMIC LOAD -->
             </div>
 
             <!-- TTS CONFIG -->
             <div class="settings-card">
               <h3>[ 02 ] VOICE_SYNTH</h3>
-              <div class="form-group">
+              <div id="cfg_tts_container"></div> <!-- DYNAMIC LOAD -->
+              <div class="form-group" style="margin-top:10px; border-top:1px dashed var(--neon-purple); padding-top:10px;">
                 <label>ENABLED</label>
                 <input type="checkbox" id="tts_enabled" checked />
-              </div>
-              <div class="form-group">
-                <label>PROVIDER</label>
-                <select id="tts_provider">
-                  <option value="local">XTTS_v2 (Local)</option>
-                  <option value="openai">OpenAI (Cloud)</option>
-                  <option value="elevenlabs">ElevenLabs (Cloud)</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>VOICE_ID</label>
-                <input id="tts_voice_id" placeholder="Voice ID..." />
               </div>
             </div>
 
             <!-- ASR CONFIG -->
             <div class="settings-card">
               <h3>[ 03 ] SPEECH_REC</h3>
-              <div class="form-group">
+              <div id="cfg_asr_container"></div> <!-- DYNAMIC LOAD -->
+              <div class="form-group" style="margin-top:10px; border-top:1px dashed var(--neon-purple); padding-top:10px;">
                 <label>ENABLED</label>
                 <select id="asr_enabled">
-                  <option value="false">OFF (DEFAULT)</option>
+                  <option value="false">OFF</option>
                   <option value="true">ON</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>PROVIDER</label>
-                <select id="asr_provider">
-                  <option value="web_speech">Web Speech API</option>
-                  <option value="whisper">Faster-Whisper (Local)</option>
                 </select>
               </div>
             </div>
@@ -443,19 +415,23 @@ the
               </div>
             </div>
 
-            <!-- CHARACTER MANAGEMENT -->
+            <!-- MANAGEMENT -->
             <div class="settings-card">
-              <h3>[ 05 ] CHARACTER_DATABASE</h3>
+              <h3>[ 05 ] SYSTEM_MANAGEMENT</h3>
               <button id="openCharModal"
-                style="background:var(--neon-purple);border:none;padding:15px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;width:100%;color:#000;">
+                style="background:var(--neon-purple);border:none;padding:15px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;width:100%;color:#000; margin-bottom:10px;">
                 MANAGE_CHARACTERS
+              </button>
+              <button id="openModelWizard"
+                style="background:var(--neon-blue);border:none;padding:15px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;width:100%;">
+                AI_MODEL_MANAGER
               </button>
             </div>
           </div>
 
           <div style="display:flex; gap:20px;">
             <button id="saveCfg"
-              style="background:var(--neon-blue);border:none;padding:20px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;flex:1;margin-top:20px;">COMMIT_CHANGES</button>
+              style="background:var(--neon-green);border:none;padding:20px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;flex:1;margin-top:20px;">COMMIT_CHANGES</button>
             <button id="resetCfg"
               style="background:var(--neon-pink);border:none;padding:20px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;width:150px;margin-top:20px;color:#000;">FACTORY_RESET</button>
           </div>

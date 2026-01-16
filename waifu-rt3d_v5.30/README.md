@@ -54,19 +54,21 @@ A full-stack web application that brings AI companions to life with voice synthe
 ### Installation
 
 #### Windows
+
 ```cmd
 install.bat
 run.bat
 ```
 
 #### macOS/Linux
+
 ```bash
 chmod +x install.sh run.sh
 ./install.sh
 ./run.sh
 ```
 
-Then open: **http://127.0.0.1:8000**
+Then open: **[http://127.0.0.1:8000](http://127.0.0.1:8000)**
 
 ### Configuration
 
@@ -83,7 +85,7 @@ Then open: **http://127.0.0.1:8000**
 
 ## 📁 Project Structure
 
-``` 
+```text
 waifu-rt3d_v5.30
 ├── backend/
 │   ├── server.py              # FastAPI application
@@ -123,7 +125,7 @@ waifu-rt3d_v5.30
 
 ## 🔧 API Endpoints
 
-### Configuration
+### Config API
 
 - `GET /api/config` - Get current configuration
 - `PUT /api/config` - Update configuration
@@ -134,25 +136,26 @@ waifu-rt3d_v5.30
 - `POST /api/avatars/upload` - Upload new avatar (.vrm/.glb/.gltf)
 - `DELETE /api/avatars/{name}` - Delete avatar
 
-### Chat
+### Chat API
 
 - `POST /api/chat` - Send message and get AI response
   - Query param: `session_id` (default: 1)
   - Body: `{"text": "message", "speak": true/false}`
   - Returns: `{"ok": true, "reply": "...", "audio": "/files/audio/..."}`
 
-### TTS
+### TTS API
 
 - `POST /api/tts` - Generate TTS audio
   - Body: `{"text": "...", "provider": "...", "voice_id": "..."}`
 
-### System
+### System API
 
 - `GET /api/healthcheck` - Check system status (LLM, libraries, etc.)
 
 ## 🎯 Architecture
 
 ### Adapter Pattern
+
 The project uses a flexible adapter pattern for extensibility:
 
 - **LLM Adapters** (`backend/llm/adapters/`)
@@ -164,7 +167,7 @@ The project uses a flexible adapter pattern for extensibility:
   - Automatic audio file caching with hashed filenames
   - Error handling and fallback support
 
-### Frontend Architecture
+### Frontend Arch
 
 - **Vanilla JavaScript** - No build step required
 - **Single-page tabs** - Setup, Viewer, Chat, System

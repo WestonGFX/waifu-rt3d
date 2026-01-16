@@ -125,19 +125,60 @@ DEFAULT_CONFIG = {
     }
 }
 
+from dotenv import load_dotenv
+
+# Load env vars at module level
+load_dotenv(ROOT / ".env")
+
+def resolve_env_vars(cfg):
+    """Recursively resolve 'env:VAR_NAME' strings in config."""
+    if isinstance(cfg, dict):
+        return {k: resolve_env_vars(v) for k, v in cfg.items()}
+    elif isinstance(cfg, list):
+        return [resolve_env_vars(i) for i in cfg]
+    elif isinstance(cfg, str) and cfg.startswith("env:"):
+        env_key = cfg.split(":", 1)[1]
+        return os.getenv(env_key, "") # Default to empty string if not found
+    return cfg
+
 def load_config():
     cfg = DEFAULT_CONFIG.copy()
     if CONFIG.exists():
         try:
             saved = json.loads(CONFIG.read_text(encoding="utf-8"))
+            
+            # --- MIGRATION: LEGACY CONFIG ADAPTER ---
+            # If old "llm" structure (provider key at top level), move to services
+            if "llm" in saved and "provider" in saved["llm"]:
+                old_llm = saved.pop("llm")
+                # Ensure services structure exists
+                if "services" not in saved: saved["services"] = {}
+                if "llm" not in saved["services"]: saved["services"]["llm"] = {}
+                
+                # Create a temporary 'legacy' provider for it
+                saved["services"]["llm"]["active_provider"] = "legacy_migrated"
+                saved["services"]["llm"]["providers"] = {
+                    "legacy_migrated": {
+                        "type": "openai" if old_llm.get("provider") in ["jan", "lmstudio"] else old_llm.get("provider"),
+                        "endpoint": old_llm.get("endpoint"),
+                        "api_key": old_llm.get("api_key"),
+                        "model": old_llm.get("model")
+                    }
+                }
+            # ----------------------------------------
+            
             for k, v in saved.items():
                 if isinstance(v, dict) and k in cfg:
                     cfg[k].update(v)
                 else:
                     cfg[k] = v
-        except:
+        except Exception as e:
+            logger.error(f"Config load error: {e}")
             pass
-    return cfg
+            
+    # Resolve Environment Variables
+    final_cfg = resolve_env_vars(cfg)
+    return final_cfg
 
 def save_config(cfg):
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
@@ -224,6 +265,12 @@ def list_installed_models():
     if not model_manager: return {}
     return model_manager.list_installed()
 
+@app.get("/api/models/recommend")
+def recommend_models(type: str = "llm"):
+    """Get hardware-aware model recommendations."""
+    if not model_manager: return {"models": []}
+    return {"models": model_manager.recommend_models(type)}
+
 @app.delete("/api/models/{type}/{id}")
 def delete_model(type: str, id: str):
     if not model_manager: return {"ok": False}
@@ -237,10 +284,13 @@ def delete_model(type: str, id: str):
 @app.get("/api/system/stats")
 def get_system_stats():
     """Get real-time system resource usage."""
+    from backend.hardware import HardwareManager
+    hw = HardwareManager.get_system_stats()
     return {
         "cpu": psutil.cpu_percent(interval=None),
         "ram": psutil.virtual_memory().percent,
-        "gpu": 0 # Placeholder for now, requires pynvml or torch
+        "gpu_usage": 0, # Placeholder
+        "hardware": hw
     }
 
 @app.get("/api/healthcheck")

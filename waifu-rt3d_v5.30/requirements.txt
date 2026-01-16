@@ -29,7 +29,7 @@ sentencepiece==0.1.99     # Tokenizer dependency
 
 # Optional: Production
 # gunicorn==21.2.0       # Production WSGI server
-# python-dotenv==1.0.0   # Environment variables
+python-dotenv==1.0.0   # Environment variables
 
 # Notes:
 # - Python 3.8+ required

@@ -9,51 +9,45 @@ ASR_ADAPTERS = {
     "whisper_local": WhisperLocalAdapter,
 }
 
-def get_asr_adapter(config: Dict) -> Optional[ASRAdapter]:
+def get_asr_adapter(cfg: Dict) -> Optional[ASRAdapter]:
     """
-    Factory function to get ASR adapter instance.
-
-    Args:
-        config: ASR configuration dictionary
-               Must include 'provider' key matching ASR_ADAPTERS keys
-
-    Returns:
-        ASRAdapter instance or None if ASR disabled
-
-    Raises:
-        ValueError: If provider not found or config invalid
-
-    Example:
-        config = {
-            "enabled": True,
-            "provider": "whisper_api",
-            "endpoint": "https://api.openai.com/v1",
-            "api_key": "sk-...",
-            "model": "whisper-1"
-        }
-        adapter = get_asr_adapter(config)
-        result = await adapter.transcribe(audio_bytes)
+    Factory to return ASR adapter based on unified services config.
     """
-    # Check if ASR is enabled
-    if not config.get("enabled", False):
+    # Unified Config
+    services = cfg.get("services", {})
+    asr_cfg = services.get("asr", {})
+    
+    provider_name = "browser"
+    provider_config = {}
+
+    if "active_provider" in asr_cfg:
+        provider_name = asr_cfg["active_provider"]
+        provider_config = asr_cfg.get("providers", {}).get(provider_name, {})
+        # Map unified types to adapter keys if needed, or stick to simple mapping
+        # Adapters usage uses 'provider' key in config typically.
+        provider_config["provider"] = provider_config.get("type", "web_speech")
+        
+    else:
+        # Legacy
+        legacy = cfg.get("asr", {})
+        if not legacy.get("enabled", False): return None
+        provider_name = legacy.get("provider", "browser")
+        provider_config = legacy
+
+    # Resolve adapter class
+    # For now mapping types: 'openai' -> 'whisper_api', 'local' -> 'whisper_local'
+    ptype = provider_config.get("type", provider_config.get("provider"))
+    
+    adapter_key = None
+    if ptype == "openai" or ptype == "whisper_api": adapter_key = "whisper_api"
+    elif ptype == "whisper_local": adapter_key = "whisper_local"
+    
+    if not adapter_key: 
+        return None # Browser ASR is client side only
+
+    adapter_class = ASR_ADAPTERS.get(adapter_key)
+    if not adapter_class:
         return None
 
-    # Get provider name
-    provider = config.get("provider", "").lower()
-    if not provider:
-        raise ValueError("ASR config missing 'provider' key")
-
-    # Get adapter class
-    adapter_class = ASR_ADAPTERS.get(provider)
-    if not adapter_class:
-        available = ", ".join(ASR_ADAPTERS.keys())
-        raise ValueError(
-            f"Unknown ASR provider: '{provider}'. "
-            f"Available: {available}"
-        )
-
-    # Create and validate adapter
-    adapter = adapter_class(config)
-    adapter.validate_config()
-
+    adapter = adapter_class(provider_config)
     return adapter

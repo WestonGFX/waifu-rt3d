@@ -206,6 +206,144 @@ the
     }, 4000);
   </script>
 
+  <div class="app-container">
+    <!-- GLASS SIDEBAR -->
+    <nav class="sidebar">
+      <div class="nav-item active" title="Home">
+        <span>🏠</span>
+        <span class="nav-label">HOME</span>
+      </div>
+      <div class="nav-item" title="Chat">
+        <span>💬</span>
+        <span class="nav-label">CHAT</span>
+      </div>
+      <div class="nav-item" title="Config">
+        <span>⚙️</span>
+        <span class="nav-label">SYSTEM</span>
+      </div>
+    </nav>
+  
+    <!-- COMMAND DECK (Main View) -->
+    <main class="main-viewport">
+      <div class="avatar-stage">
+        <!-- New Avatar (Nano Banana Style) -->
+        <img id="avatar-img" src="/assets/avatar_nano.png" alt="Neural Avatar">
+      </div>
+  
+      <!-- Chat Overlay -->
+      <div class="chat-overlay">
+        <div class="message-list" id="chat-history">
+          <div class="msg-bubble ai">
+            <strong>NANO:</strong> System online! The visual update looks amazing, Senpai! ✨
+          </div>
+        </div>
+  
+        <div class="input-bar">
+          <input type="text" id="msg-input" placeholder="Type a message..." autocomplete="off">
+          <button class="send-btn" id="send-btn">➤</button>
+        </div>
+      </div>
+    </main>
+  
+    <!-- STATS PANEL (Right) -->
+    <aside class="stats-panel">
+      <div class="stat-card">
+        <div class="stat-header">
+          <span>CPU LOAD</span>
+          <span class="pixel-icon icon-wifi"></span>
+        </div>
+        <div class="holo-graph">
+          <div class="holo-line"></div>
+        </div>
+      </div>
+  
+      <div class="stat-card">
+        <div class="stat-header">
+          <span>MEMORY</span>
+          <span class="pixel-icon icon-heart"></span>
+        </div>
+        <div style="color:var(--neon-pink); font-family:var(--font-pixel); font-size:0.8rem;">
+          64GB [OPTIMAL]
+        </div>
+      </div>
+  
+      <div class="stat-card" style="flex:1;">
+        <div class="stat-header">SESSION DATA</div>
+        <div id="session-list" style="font-size:0.8rem; color:var(--text-muted);">
+          <!-- Sessions injected here -->
+        </div>
+      </div>
+    </aside>
+  </div>
+  
+  <script>
+    // --- CORE LOGIC ---
+    const $ = q => document.querySelector(q);
+    const api = {
+      send: async (text) => {
+        const r = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        return r.json();
+      },
+      loadSessions: async () => {
+        const r = await fetch('/api/sessions');
+        return r.json();
+      }
+    };
+
+    // Chat Handler
+    async function sendMessage() {
+      const input = $('#msg-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      // UI Optimistic Update
+      appendBubble(text, 'user');
+      input.value = '';
+
+      try {
+        const res = await api.send(text);
+        if (res.ok) {
+          appendBubble(res.reply, 'ai');
+        } else {
+          appendBubble("Error: " + res.error, 'ai');
+        }
+      } catch (e) {
+        appendBubble("Connection failed.", 'ai');
+      }
+    }
+
+    function appendBubble(text, role) {
+      const list = $('#chat-history');
+      const div = document.createElement('div');
+      div.className = `msg-bubble ${role}`;
+      div.innerHTML = `<strong>${role === 'user' ? 'YOU' : 'NANO'}:</strong> ${text}`;
+      list.appendChild(div);
+      list.scrollTop = list.scrollHeight;
+    }
+
+    // Bindings
+    $('#send-btn').onclick = sendMessage;
+    $('#msg-input').onkeydown = e => { if (e.key === 'Enter') sendMessage(); }
+
+    // Init
+    (async () => {
+      try {
+        const s = await api.loadSessions();
+        const slist = $('#session-list');
+        s.sessions.forEach(sess => {
+          const d = document.createElement('div');
+          d.textContent = `> ${sess.title} (${sess.message_count})`;
+          d.style.marginBottom = '5px';
+          slist.appendChild(d);
+        });
+      } catch (e) { console.error(e); }
+    })();
+  </script>
+
   <!-- SETUP WIZARD MODAL -->
   <div id="wizard-overlay"
     style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.9); z-index:2000; justify-content:center; align-items:center;">

@@ -7,7 +7,9 @@ uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 
 # HTTP Client
+psutil
 requests==2.31.0
+huggingface_hub
 
 # System & Model Management
 huggingface_hub==0.19.4     # For model searching and downloading

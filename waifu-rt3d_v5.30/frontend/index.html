@@ -191,10 +191,20 @@ the
 
 <body>
 
-  <!-- BOOT OVERLAY -->
   <div id="boot-overlay">
     <div id="boot-log" class="boot-text"></div>
   </div>
+  <script>
+    // Fail-safe: Force hide boot overlay after 4s if JS crashes
+    setTimeout(() => {
+        const ol = document.getElementById('boot-overlay');
+        if(ol && ol.style.display !== 'none') {
+            console.warn("Boot sequence timed out, forcing UI unlock.");
+            ol.style.opacity = '0';
+            setTimeout(() => ol.style.display = 'none', 500);
+        }
+    }, 4000);
+  </script>
 
   <!-- SETUP WIZARD MODAL -->
   <div id="wizard-overlay"

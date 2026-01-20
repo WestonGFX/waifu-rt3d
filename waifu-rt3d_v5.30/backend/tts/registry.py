@@ -4,6 +4,7 @@ from .adapters.elevenlabs import ElevenLabsAdapter
 from .adapters.piper_local import PiperLocalAdapter
 from .adapters.xtts_server import XTTSAdapter
 from .adapters.pinokio_generic import PinokioGenericAdapter
+from .adapters.edge_tts import EdgeTTSAdapter
 
 def get_tts(cfg):
     audio_dir = Path(__file__).resolve().parents[2] / "storage" / "audio"
@@ -21,6 +22,7 @@ def get_tts(cfg):
         if ptype == "elevenlabs": return ElevenLabsAdapter(audio_dir)
         if ptype == "piper_local": return PiperLocalAdapter(audio_dir)
         if ptype == "xtts_server": return XTTSAdapter(audio_dir)
+        if ptype == "edge_tts": return EdgeTTSAdapter(audio_dir)
         if ptype == "generic_rest": return PinokioGenericAdapter(audio_dir)
         
         # Fallback to generic if we have an endpoint
@@ -28,9 +30,10 @@ def get_tts(cfg):
             return PinokioGenericAdapter(audio_dir)
             
     # Legacy Fallback
-    prov = (cfg.get('tts',{}) or {}).get('provider','fish_audio')
+    prov = (cfg.get('tts',{}) or {}).get('provider','edge-tts') # Default to edge-tts if unspecified
     if prov == 'fish_audio': return FishAudioAdapter(audio_dir)
     if prov == 'elevenlabs': return ElevenLabsAdapter(audio_dir)
     if prov == 'piper_local': return PiperLocalAdapter(audio_dir)
     if prov == 'xtts_server': return XTTSAdapter(audio_dir)
-    return FishAudioAdapter(audio_dir)
+    if prov == 'edge-tts': return EdgeTTSAdapter(audio_dir)
+    return EdgeTTSAdapter(audio_dir) # Ultimate fallback

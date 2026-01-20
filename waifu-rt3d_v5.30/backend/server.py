@@ -230,39 +230,81 @@ async def set_config_route(req: Request):
     return {"ok": True, "config": cfg}
 
 @app.post("/api/chat")
-async def chat(session_id: int = 1, req: Request = None):
+async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
     body = await req.json()
     if not body or "text" not in body: raise HTTPException(400, "missing text")
     text = body["text"]; speak = bool(body.get("speak", False))
     cfg = load_config()
     con = db(); cur = con.cursor()
+    
+    # Ensure session exists
     cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)", (session_id, f"Session {session_id}"))
+    
+    # Log user message
     cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "user", text))
     con.commit()
+    
+    # Fetch Character System Prompt and Voice Params
+    system_prompt = "You are a friendly anime companion."
+    voice_params = {}
+    try:
+        cur.execute("SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate FROM characters WHERE id=?", (char_id,))
+        row = cur.fetchone()
+        if row:
+            if row[0]: system_prompt = row[0]
+            if row[1]: voice_params['voice_id'] = row[1]
+            if row[2]: voice_params['provider'] = row[2]
+            if row[3]: voice_params['tts_pitch'] = row[3]
+            if row[4]: voice_params['tts_rate'] = row[4]
+    except Exception as e:
+        logger.error(f"Error fetching character data: {e}")
+ 
+     # Fetch Conversation History
     cur.execute("SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
                 (session_id, cfg.get("memory",{}).get("max_history",12)))
     hist = [{"role": r, "content": t} for (r,t) in cur.fetchall()][::-1]
-    messages = [{"role":"system","content":"You are a friendly anime companion."}] + hist
+    
+    # Construct Messages Payload
+    messages = [{"role":"system","content": system_prompt}] + hist
+    
     try:
         from .llm.registry import get_client
         adapter = get_client(cfg)
         res = adapter.chat(messages, cfg["llm"]["model"], cfg["llm"]["endpoint"], cfg["llm"]["api_key"])
     except Exception as e:
         return {"ok": False, "error": f"Adapter error: {e}"}
+    
     if not res.get("ok"): return {"ok": False, "error": res.get("error","adapter failed")}
     reply = res["reply"]
+    
+    # Save Assistant Reply
     cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "assistant", reply))
     con.commit(); con.close()
-
+ 
     tts_url = None
     if speak:
         try:
             from .tts.registry import get_tts
+            
+            # Apply character overrides to TTS config
+            tts_cfg = cfg.get("tts", {}).copy()
+            tts_cfg.update(voice_params)
+            
+            # Update main config so get_tts sees the provider change
+            if 'tts' not in cfg: cfg['tts'] = {}
+            cfg['tts'].update(voice_params)
+            
+            # FORCE OVERRIDE: If character specifies a provider, ignore app.json active_provider
+            if 'provider' in voice_params and 'services' in cfg:
+                cfg['services'].get('tts', {}).pop('active_provider', None)
+            
             tts_client = get_tts(cfg)
-            tts_res = tts_client.speak(reply, cfg.get("tts",{}))
+            tts_res = tts_client.speak(reply, tts_cfg)
             if tts_res.get("ok"): tts_url = f"/files/audio/{tts_res['filename']}"
-        except Exception: tts_url = None
-
+        except Exception as e:
+            logger.error(f"TTS Generation failed: {e}")
+            tts_url = None
+ 
     return {"ok": True, "reply": reply, "audio": tts_url, "session_id": session_id}
 
 @app.post("/api/tts")
@@ -271,8 +313,18 @@ async def api_tts(req: Request):
     text = body.get("text","").strip()
     if not text: raise HTTPException(400, "text required")
     cfg = load_config(); cfg_tts = cfg.get("tts",{}).copy()
+    if 'tts' not in cfg: cfg['tts'] = {}
+    
     for k in ("provider","endpoint","api_key","voice_id","format","sample_rate"):
-        if k in body: cfg_tts[k] = body[k]
+        if k in body:
+            cfg_tts[k] = body[k]
+            # Also update main config for get_tts routing
+            cfg['tts'][k] = body[k]
+
+    # FORCE OVERRIDE: If body specifies a provider, ignore app.json active_provider
+    if 'provider' in body and 'services' in cfg:
+        cfg['services'].get('tts', {}).pop('active_provider', None)
+
     try:
         from .tts.registry import get_tts
         tts = get_tts(cfg)

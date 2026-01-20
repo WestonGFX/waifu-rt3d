@@ -18,9 +18,9 @@
 
 ## 🖼️ Assets
 
-| Type | Path | Description |
-|------|------|-------------|
-| **Portrait** | `frontend/assets/characters/nyx/portrait.png` | Hi-res transparent pixel art portrait for chat/dialogue. |
+| Type           | Path                                           | Description                                                     |
+| :------------- | :--------------------------------------------- | :-------------------------------------------------------------- |
+| **Portrait**   | `frontend/assets/characters/nyx/portrait.png`   | Hi-res transparent pixel art portrait for chat/dialogue.        |
 | **Background** | `frontend/assets/characters/nyx/bedroom_bg.png` | Detailed cyberpunk bedroom scene for large display/backgrounds. |
 
 ## 🧠 System Prompt (R-Spec)

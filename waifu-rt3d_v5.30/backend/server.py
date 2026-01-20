@@ -26,7 +26,7 @@ FRONTEND = ROOT / "frontend"
 STORAGE = ROOT / "backend" / "storage"
 DEBUG_LOG = ROOT / "debug.log"
 CONFIG_FILE = ROOT / "backend" / "config" / "app.json"
-DB_PATH = STORAGE / "app.db"
+DB_PATH = STORAGE / "waifu.db"
 
 # Ensure storage exists
 STORAGE.mkdir(parents=True, exist_ok=True)
@@ -247,6 +247,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
     # Fetch Character System Prompt and Voice Params
     system_prompt = "You are a friendly anime companion."
     voice_params = {}
+    row = None
     try:
         cur.execute("SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate FROM characters WHERE id=?", (char_id,))
         row = cur.fetchone()
@@ -258,6 +259,9 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             if row[4]: voice_params['tts_rate'] = row[4]
     except Exception as e:
         logger.error(f"Error fetching character data: {e}")
+        print(f"DEBUG_SERVER: Error fetching char data: {e}")
+ 
+    print(f"DEBUG_SERVER: CharID={char_id} Row={row} Params={voice_params}")
  
      # Fetch Conversation History
     cur.execute("SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",

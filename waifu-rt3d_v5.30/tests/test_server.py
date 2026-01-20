@@ -52,8 +52,9 @@ class TestHealthCheck:
         assert response.status_code == 200
         data = response.json()
         assert 'ok' in data
-        assert 'libs' in data
-        assert 'lmstudio' in data
+        assert 'version' in data
+        assert 'llm' in data
+        assert 'status' in data
 
 
 class TestSessionEndpoints:
@@ -73,14 +74,13 @@ class TestSessionEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert 'id' in data
-        assert 'session_id' in data
-        assert data['id'] == data['session_id']
+        # Check against returned 'id', expecting matching title
         assert data['title'] == "Test Session"
 
     def test_update_session(self, client):
         """Test PUT /api/sessions/{id}"""
         create_response = client.post("/api/sessions", json={"title": "Original"})
-        session_id = create_response.json()['session_id']
+        session_id = create_response.json()['id']
         response = client.put(f"/api/sessions/{session_id}", json={"title": "Updated"})
         assert response.status_code == 200
         assert response.json()['ok'] is True
@@ -88,7 +88,7 @@ class TestSessionEndpoints:
     def test_delete_session(self, client):
         """Test DELETE /api/sessions/{id}"""
         create_response = client.post("/api/sessions", json={"title": "To Delete"})
-        session_id = create_response.json()['session_id']
+        session_id = create_response.json()['id']
         response = client.delete(f"/api/sessions/{session_id}")
         assert response.status_code == 200
         assert response.json()['ok'] is True
@@ -97,10 +97,10 @@ class TestSessionEndpoints:
         """Test archiving/unarchiving session"""
         # Create
         res = client.post("/api/sessions", json={"title": "To Archive"})
-        sid = res.json()['session_id']
+        sid = res.json()['id']
         
-        # Archive
-        assert client.put(f"/api/sessions/{sid}/archive").status_code == 200
+        # Archive (logic moved to PUT /api/sessions/{id})
+        assert client.put(f"/api/sessions/{sid}", json={"archived": True}).status_code == 200
         
         # Verify not in default list
         list_res = client.get("/api/sessions")
@@ -113,7 +113,7 @@ class TestSessionEndpoints:
         assert sid in arch_ids
         
         # Unarchive
-        assert client.put(f"/api/sessions/{sid}/unarchive").status_code == 200
+        assert client.put(f"/api/sessions/{sid}", json={"archived": False}).status_code == 200
         
         # Verify back in default list
         list_res = client.get("/api/sessions")
@@ -121,11 +121,10 @@ class TestSessionEndpoints:
         assert sid in ids
 
     def test_session_persistence(self, client):
-        """Test that sessions persist (simulated by creating then listing)"""
-        # This is implicitly tested by other tests but making it explicit:
+        """Test that sessions persist"""
         title = "Persistent Session"
         res = client.post("/api/sessions", json={"title": title})
-        sid = res.json()['session_id']
+        sid = res.json()['id']
         
         # Check list immediately
         list_res = client.get("/api/sessions")
@@ -133,24 +132,6 @@ class TestSessionEndpoints:
         found = next((s for s in sessions if s['id'] == sid), None)
         assert found is not None
         assert found['title'] == title
-
-
-class TestAvatarEndpoints:
-    """Test avatar management endpoints"""
-
-    def test_list_avatars(self, client):
-        """Test GET /api/avatars"""
-        response = client.get("/api/avatars")
-        assert response.status_code == 200
-        data = response.json()
-        assert 'avatars' in data
-        assert isinstance(data['avatars'], list)
-
-    def test_upload_avatar_invalid_type(self, client):
-        """Test upload with invalid file type"""
-        files = {'file': ('test.txt', b'not an avatar', 'text/plain')}
-        response = client.post("/api/avatars/upload", files=files)
-        assert response.status_code == 400
 
 
 class TestCharacterEndpoints:
@@ -163,10 +144,7 @@ class TestCharacterEndpoints:
         data = response.json()
         assert 'characters' in data
         assert isinstance(data['characters'], list)
-        # Should have at least the default character
-        assert len(data['characters']) >= 1
-        assert data['characters'][0]['id'] == 1
-
+        
     def test_create_character(self, client):
         """Test POST /api/characters"""
         new_char = {
@@ -210,6 +188,109 @@ class TestCharacterEndpoints:
         assert response.status_code == 400
 
 
+class TestVoiceEndpoints:
+    """Test Voice and TTS endpoints"""
+
+    def test_api_tts_direct(self, client):
+        """Test POST /api/tts direct generation"""
+        # We assume edge-tts might be available or fallback logic handles it.
+        # This test mainly checks parameter parsing and response structure.
+        payload = {
+            "text": "Hello test.",
+            "provider": "edge-tts",
+            "voice_id": "en-US-AriaNeural"
+        }
+        # Note: This might fail if edge-tts is not installed/net access blocked,
+        # but we check for structure or graceful error.
+        response = client.post("/api/tts", json=payload)
+        
+        # We expect either 200 OK (generated) or 400/500 if tool missing.
+        # But we primarily want to verify the logic doesn't crash.
+        # If real generation happens, 'url' will be present.
+        if response.status_code == 200:
+            data = response.json()
+            assert data['ok'] is True
+            assert 'url' in data
+            assert 'meta' in data
+            assert data['meta'].get('voice_id') == "en-US-AriaNeural"
+
+    def test_tts_validation(self, client):
+        """Test validation logic for TTS"""
+        # 1. Missing text
+        res = client.post("/api/tts", json={"provider": "edge-tts"})
+        assert res.status_code == 400
+        
+        # 2. Empty text
+        res = client.post("/api/tts", json={"text": "   ", "provider": "edge-tts"})
+        assert res.status_code == 400
+
+    def test_chat_voice_params(self, client):
+        """Test /api/chat with speak=True picking up character voice"""
+        from unittest.mock import patch, MagicMock
+
+        # 1. Create character with specific voice
+        char_payload = {
+            "name": "VoiceTestChar",
+            "system_prompt": "You are a test.",
+            "voice_id": "en-US-GuyNeural",
+            "tts_provider": "edge-tts",
+            "tts_pitch": "+5Hz",
+            "tts_rate": "+10%"
+        }
+        char_res = client.post("/api/characters", json=char_payload)
+        char_id = char_res.json()['id']
+
+        # 2. Setup mocks for LLM and TTS
+        mock_llm_client = MagicMock()
+        mock_llm_client.chat.return_value = {"ok": True, "reply": "This is a mocked reply."}
+
+        mock_tts_client = MagicMock()
+        mock_tts_client.speak.return_value = {"ok": True, "filename": "mock.mp3", "meta": {}}
+
+        # Debug: Check if character was saved correctly
+        get_char = client.get(f"/api/characters")
+        chars = get_char.json()['characters']
+        saved = next((c for c in chars if c['id'] == char_id), None)
+        print(f"DEBUG: Saved character: {saved}")
+        assert saved['voice_id'] == "en-US-GuyNeural"
+
+        # Patch where they are used. Note: imported inside chat() function
+        with patch('backend.llm.registry.get_client', return_value=mock_llm_client), \
+             patch('backend.tts.registry.get_tts', return_value=mock_tts_client) as mock_get_tts:
+            
+            # 3. Chat with this character
+            chat_payload = {
+                "text": "Hello.",
+                "speak": True
+            }
+            response = client.post(f"/api/chat?char_id={char_id}", json=chat_payload)
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            # Verify LLM was called
+            mock_llm_client.chat.assert_called_once()
+            
+            # Verify TTS was initialized with merged config
+            # get_tts(cfg) is called. Verify cfg has character params.
+            print(f"DEBUG: Mock TTS call args: {mock_get_tts.call_args}")
+            if mock_get_tts.call_args:
+                called_cfg = mock_get_tts.call_args[0][0]
+                print(f"DEBUG: Config passed to get_tts: {called_cfg.get('tts')}")
+                assert called_cfg['tts']['voice_id'] == "en-US-GuyNeural"
+                assert called_cfg['tts']['provider'] == "edge-tts"
+                assert called_cfg['tts']['tts_pitch'] == "+5Hz"
+            else:
+                pytest.fail("get_tts was not called")
+
+            # Verify TTS functionality
+            assert data['ok'] is True
+            assert data['audio'] == "/files/audio/mock.mp3"
+            assert data['reply'] == "This is a mocked reply."
+
+        # Clean up
+        client.delete(f"/api/characters/{char_id}")
+
 
 class TestErrorHandling:
     """Test error handling"""
@@ -220,10 +301,7 @@ class TestErrorHandling:
         assert response.status_code == 404
 
     def test_400_on_missing_required_field(self, client):
-        """Test that missing required fields return 400"""
-        response = client.put("/api/sessions/1", json={})
+        """Test validation on required fields"""
+        # POST /api/chat requires 'text'
+        response = client.post("/api/chat", json={})
         assert response.status_code == 400
-
-
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])

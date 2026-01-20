@@ -7,7 +7,7 @@ from .adapters.pinokio_generic import PinokioGenericAdapter
 from .adapters.edge_tts import EdgeTTSAdapter
 
 def get_tts(cfg):
-    audio_dir = Path(__file__).resolve().parents[2] / "storage" / "audio"
+    audio_dir = Path(__file__).resolve().parents[2] / "backend" / "storage" / "audio"
     
     # New Config Structure "services.tts"
     services = cfg.get("services", {})

@@ -30,7 +30,7 @@ CONFIG_DIR = ROOT / "backend" / "config"
 STORAGE = ROOT / "backend" / "storage"
 AVATARS = STORAGE / "avatars"
 AUDIO = STORAGE / "audio"
-DB_PATH = STORAGE / "app.db"
+DB_PATH = STORAGE / "waifu.db"
 APP_JSON = CONFIG_DIR / "app.json"
 
 DEFAULT_CFG = {
@@ -158,16 +158,16 @@ def migrate_to_v4(con: sqlite3.Connection) -> bool:
         >>> if migrate_to_v4(con):
         ...     print("Migrated to v4")
         ... else:
-        ...     print("Already at v4+")
+            print("Already at v4+")
     """
     cur = con.cursor()
 
-    # Check if already at v4+ (characters table exists)
+    # Check if already at v4+ (schema_version table exists)
     cur.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='characters'"
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
     )
     if cur.fetchone():
-        logger.info("Schema v4 already applied (characters table exists)")
+        logger.info("Schema v4 already applied (schema_version table exists)")
         return False
 
     logger.info("Applying schema v4 migration...")

@@ -10,9 +10,9 @@ CHARACTERS = [
     {
         "name": "Nyx",
         "description": "Cyberpunk hacker and security specialist.",
-        "avatar_image": "frontend/assets/characters/nyx/nyx_portrait.png", 
+        "avatar_url": "frontend/assets/characters/nyx/nyx_portrait.png", 
         "background_image": "frontend/assets/characters/nyx/nyx_bedroom_bg.png",
-        "personality": "Rebellious, Tech-savvy, Cool",
+        "personality_traits": "Rebellious, Tech-savvy, Cool",
         "voice_id": "en-US-JennyNeural",
         "tts_provider": "edge-tts",
         "tts_pitch": "-5Hz",
@@ -21,9 +21,9 @@ CHARACTERS = [
     {
         "name": "Tsuki",
         "description": "Mystical moon goddess and data seer.",
-        "avatar_image": "frontend/assets/characters/tsuki/tsuki_portrait.png",
+        "avatar_url": "frontend/assets/characters/tsuki/tsuki_portrait.png",
         "background_image": "frontend/assets/characters/tsuki/tsuki_bedroom_bg.png",
-        "personality": "Mystic, Calm, Ethereal",
+        "personality_traits": "Mystic, Calm, Ethereal",
         "voice_id": "en-US-MichelleNeural",
         "tts_provider": "edge-tts",
         "tts_pitch": "+10Hz",
@@ -32,9 +32,9 @@ CHARACTERS = [
     {
         "name": "Panicandy",
         "description": "Hyper-active digital pop idol.",
-        "avatar_image": "frontend/assets/characters/panicandy/panicandy_portrait.png",
+        "avatar_url": "frontend/assets/characters/panicandy/panicandy_portrait.png",
         "background_image": "frontend/assets/characters/panicandy/panicandy_bedroom_bg.png",
-        "personality": "Energetic, Loud, Kawaii",
+        "personality_traits": "Energetic, Loud, Kawaii",
         "voice_id": "en-US-AnaNeural",
         "tts_provider": "edge-tts",
         "tts_pitch": "+20Hz",
@@ -43,9 +43,9 @@ CHARACTERS = [
      {
         "name": "Viper",
         "description": "Hardcore toxic gamer girl.",
-        "avatar_image": "frontend/assets/characters/viper/viper_portrait.png",
+        "avatar_url": "frontend/assets/characters/viper/viper_portrait.png",
         "background_image": "frontend/assets/characters/viper/viper_bedroom_bg.png",
-        "personality": "Toxic, Sarcastic, Gamer",
+        "personality_traits": "Toxic, Sarcastic, Gamer",
         "voice_id": "en-US-AriaNeural",
         "tts_provider": "edge-tts",
         "tts_pitch": "+5Hz",
@@ -54,9 +54,9 @@ CHARACTERS = [
     {
         "name": "Seraph",
         "description": "Angelic medical and optimization AI.",
-        "avatar_image": "frontend/assets/characters/seraph/seraph_portrait.png",
+        "avatar_url": "frontend/assets/characters/seraph/seraph_portrait.png",
         "background_image": "frontend/assets/characters/seraph/seraph_bedroom_bg.png",
-        "personality": "Clinical, Angelic, Perfectionist",
+        "personality_traits": "Clinical, Angelic, Perfectionist",
         "voice_id": "en-GB-SoniaNeural",
         "tts_provider": "edge-tts",
         "tts_pitch": "0Hz",
@@ -65,9 +65,9 @@ CHARACTERS = [
     {
         "name": "Glitch",
         "description": "Fragmented rogue AI.",
-        "avatar_image": "frontend/assets/characters/glitch/glitch_portrait.png",
+        "avatar_url": "frontend/assets/characters/glitch/glitch_portrait.png",
         "background_image": "frontend/assets/characters/glitch/glitch_bedroom_bg.png",
-        "personality": "Chaotic, Glitchy, Curious",
+        "personality_traits": "Chaotic, Glitchy, Curious",
         "voice_id": "en-US-AvaNeural",
         "tts_provider": "edge-tts",
         "tts_pitch": "-10Hz",
@@ -76,9 +76,9 @@ CHARACTERS = [
      {
         "name": "Kitsune",
         "description": "Cybernetic shrine maiden.",
-        "avatar_image": "frontend/assets/characters/kitsune/kitsune_portrait.png",
+        "avatar_url": "frontend/assets/characters/kitsune/kitsune_portrait.png",
         "background_image": "frontend/assets/characters/kitsune/kitsune_bedroom_bg.png",
-        "personality": "Traditional, Playful, Mystical",
+        "personality_traits": "Traditional, Playful, Mystical",
         "voice_id": "en-GB-MaisieNeural",
         "tts_provider": "edge-tts",
         "tts_pitch": "+5Hz",
@@ -87,9 +87,9 @@ CHARACTERS = [
      {
         "name": "Raine",
         "description": "Lo-fi companion for rainy days.",
-        "avatar_image": "frontend/assets/characters/raine/raine_portrait.png",
+        "avatar_url": "frontend/assets/characters/raine/raine_portrait.png",
         "background_image": "frontend/assets/characters/raine/raine_bedroom_bg.png",
-        "personality": "Melancholic, Cozy, Quiet",
+        "personality_traits": "Melancholic, Cozy, Quiet",
         "voice_id": "en-US-AnaNeural",
         "tts_provider": "edge-tts",
         "tts_pitch": "-10Hz",
@@ -124,6 +124,7 @@ def load_system_prompt(char_name):
         return f"You are {char_name}, a helpful assistant."
 
 def seed_db():
+    import json
     # Ensure DB directory exists
     db_dir = os.path.dirname(DB_PATH)
     if not os.path.exists(db_dir):
@@ -139,10 +140,10 @@ def seed_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE,
             description TEXT,
-            avatar_image TEXT,
+            avatar_url TEXT,
             background_image TEXT,
             system_prompt TEXT,
-            personality TEXT,
+            personality_traits TEXT,
             voice_id TEXT,
             tts_provider TEXT,
             tts_pitch TEXT,
@@ -150,7 +151,8 @@ def seed_db():
         )
     ''')
     
-    # Migration check for new columns
+    # Migration check for new columns -- Simplistic/Manual check
+    # Note: Since we are likely recreating on clean DB, this is just legacy safety
     cursor.execute("PRAGMA table_info(characters)")
     columns = [info[1] for info in cursor.fetchall()]
     
@@ -161,9 +163,12 @@ def seed_db():
         cursor.execute("ALTER TABLE characters ADD COLUMN tts_pitch TEXT")
         cursor.execute("ALTER TABLE characters ADD COLUMN tts_rate TEXT")
 
-    if 'personality' not in columns:
-        print("Migrating: Adding personality column...")
-        cursor.execute("ALTER TABLE characters ADD COLUMN personality TEXT")
+    if 'personality_traits' not in columns and 'personality' not in columns:
+        print("Migrating: Adding personality_traits column...")
+        cursor.execute("ALTER TABLE characters ADD COLUMN personality_traits TEXT")
+    
+    # Fallback to handle legacy 'personality' -> 'personality_traits' if we didn't wipe DB
+    # For now, simplistic
 
     for char in CHARACTERS:
         print(f"Seeding {char['name']}...")
@@ -171,15 +176,23 @@ def seed_db():
         # Hydrate system prompt from file
         prompt = load_system_prompt(char['name'])
         
+        # Convert personality string "A, B, C" to JSON list ["A", "B", "C"]
+        traits = char.get('personality_traits', "")
+        if isinstance(traits, str):
+            traits_list = [t.strip() for t in traits.split(',') if t.strip()]
+            traits_json = json.dumps(traits_list)
+        else:
+            traits_json = json.dumps(traits)
+
         cursor.execute('''
-            INSERT INTO characters (name, description, avatar_image, background_image, system_prompt, personality, voice_id, tts_provider, tts_pitch, tts_rate)
+            INSERT INTO characters (name, description, avatar_url, background_image, system_prompt, personality_traits, voice_id, tts_provider, tts_pitch, tts_rate)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(name) DO UPDATE SET
                 description=excluded.description,
-                avatar_image=excluded.avatar_image,
+                avatar_url=excluded.avatar_url,
                 background_image=excluded.background_image,
                 system_prompt=excluded.system_prompt,
-                personality=excluded.personality,
+                personality_traits=excluded.personality_traits,
                 voice_id=excluded.voice_id,
                 tts_provider=excluded.tts_provider,
                 tts_pitch=excluded.tts_pitch,
@@ -187,10 +200,10 @@ def seed_db():
         ''', (
             char['name'], 
             char['description'], 
-            char['avatar_image'], 
+            char['avatar_url'], 
             char['background_image'], 
             prompt,
-            char['personality'],
+            traits_json,
             char.get('voice_id', 'en-US-AriaNeural'),
             char.get('tts_provider', 'edge-tts'),
             char.get('tts_pitch', '+0Hz'),

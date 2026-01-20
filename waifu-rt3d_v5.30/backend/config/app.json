@@ -1,5 +1,18 @@
 {
   "onboarded": true,
+  "llm": {
+    "provider": "local",
+    "endpoint": "http://127.0.0.1:1234/v1",
+    "model": "test-model",
+    "api_key": "lm-studio",
+    "history_limit": 20
+  },
+  "tts": {
+    "enabled": true,
+    "provider": "local",
+    "voice_id": "fox_v1",
+    "auto_speak": true
+  },
   "profile": "auto",
   "input_mode": "text",
   "output_mode": "text+voice",
@@ -18,13 +31,13 @@
         "local_jan": {
           "type": "openai",
           "endpoint": "http://127.0.0.1:1339/v1",
-          "api_key": "env:JAN_API_KEY",
+          "api_key": "",
           "model": "Dark-Desires-12B-v1_0-Q6_K"
         },
         "local_lmstudio": {
           "type": "openai",
           "endpoint": "http://127.0.0.1:1234/v1",
-          "api_key": "env:LMSTUDIO_API_KEY",
+          "api_key": "",
           "model": "local-model"
         },
         "local_ollama": {
@@ -35,13 +48,13 @@
         "cloud_openai": {
           "type": "openai",
           "endpoint": "https://api.openai.com/v1",
-          "api_key": "env:OPENAI_API_KEY",
+          "api_key": "",
           "model": "gpt-4o"
         },
         "cloud_liquid": {
           "type": "openai",
           "endpoint": "https://api.liquid.ai/v1",
-          "api_key": "env:LIQUID_API_KEY",
+          "api_key": "",
           "model": "liquid-model"
         }
       }
@@ -60,7 +73,7 @@
         },
         "cloud_elevenlabs": {
           "type": "elevenlabs",
-          "api_key": "env:ELEVEN_API_KEY"
+          "api_key": ""
         }
       }
     },

@@ -11,92 +11,8 @@
 </head>
 
 <body>
-
-  <div id="boot-overlay">
-    <div id="boot-log" class="boot-text"></div>
-  </div>
-  <script>
-    // Fail-safe: Force hide boot overlay after 4s if JS crashes
-    setTimeout(() => {
-        const ol = document.getElementById('boot-overlay');
-        if(ol && ol.style.display !== 'none') {
-            console.warn("Boot sequence timed out, forcing UI unlock.");
-            ol.style.opacity = '0';
-            setTimeout(() => ol.style.display = 'none', 500);
-        }
-    }, 4000);
-  </script>
-
-
-
-  <!-- SETUP WIZARD MODAL -->
-  <div id="wizard-overlay"
-    style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.9); z-index:2000; justify-content:center; align-items:center;">
-    <!-- ... (Initial Setup Content) ... -->
-    <div class="settings-card"
-      style="width:500px; border:2px solid var(--neon-blue); box-shadow: 0 0 30px var(--neon-blue);">
-      <h2
-        style="font-family:var(--font-pixel); font-size:0.8rem; color:var(--neon-blue); border-bottom:1px solid var(--neon-blue); padding-bottom:10px;">
-        INITIAL_DYN_SETUP</h2>
-      <div id="wizard-steps">
-        <div class="wizard-step" data-step="1">
-          <p style="font-size:0.8rem; line-height:1.5;">Welcome to WAIFU_LINK. Proceed to unified setup.</p>
-          <button class="next-step" id="intro-next"
-            style="background:var(--neon-blue); border:none; padding:10px; font-family:var(--font-pixel); font-size:0.5rem; width:100%; cursor:pointer;">
-            INITIALIZE UPLINK >>
-          </button>
-        </div>
-        <div class="wizard-step" data-step="2" style="display:none;">
-          <div class="form-group">
-            <label style="color:var(--neon-green); font-size:0.6rem;">LLM_ENDPOINT</label>
-            <input type="text" id="wiz_endpoint" value="http://127.0.0.1:1234/v1"
-              style="width:100%; padding:5px; background:rgba(0,0,0,0.5); border:1px solid var(--neon-green); color:var(--neon-green); font-family:var(--font-mono); font-size:0.6rem;" />
-          </div>
-          <div class="form-group">
-            <label style="color:var(--neon-green); font-size:0.6rem;">API_KEY (OPTIONAL)</label>
-            <input type="text" id="wiz_api_key" value="lm-studio"
-              style="width:100%; padding:5px; background:rgba(0,0,0,0.5); border:1px solid var(--neon-green); color:var(--neon-green); font-family:var(--font-mono); font-size:0.6rem;" />
-          </div>
-          <button id="finish-wizard"
-            style="background:var(--neon-green); border:none; padding:10px; font-family:var(--font-pixel); font-size:0.6rem; width:100%; cursor:pointer; color:#000; margin-top:10px;">
-            ESTABLISH_CONNECTION >>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-<!-- MODEL MANAGER WIZARD MODAL -->
-<div id="wizard-modal" class="modal">
-  <div class="modal-content" style="width:600px; height:500px">
-    <button onclick="document.getElementById('wizard-modal').style.display='none'"
-      style="float:right; border:none; background:none; color:var(--neon-pink); cursor:pointer;">[X] ABORT</button>
-    <h2 style="font-family:var(--font-pixel); color:var(--neon-blue);">AI_MODEL_MANAGER v1.0</h2>
-    <div id="wizard-content" style="margin-top:20px;"></div>
-    </div>
-    </div>
-<!-- MODULE IMPORTS -->
-<script type="module">
-  import { ConfigUI } from './js/config_ui.js';
-  import { ModelManagerUI } from './js/model_manager.js';
-
-  window.uiState = {
-    config: new ConfigUI(),
-    models: new ModelManagerUI()
-  };
-
-  // Init Config UI
-  window.uiState.config.load();
-
-  // Bind Buttons
-  document.getElementById('saveCfg').onclick = async () => {
-    await window.uiState.config.save();
-    alert("CONFIG SAVED // DAEMON RESTART MAY BE REQUIRED");
-  };
-
-  document.getElementById('openModelWizard').onclick = () => {
-    window.uiState.models.toggleModal(true);
-  };
-</script>
+  <!-- REPLACED LEGACY OVERLAYS -->
+  <div id="toast-container" style="position:fixed; top:20px; right:20px; z-index:9999;"></div>
 
   <div class="app-container">
     <!-- 1. SIDEBAR -->
@@ -119,7 +35,7 @@
         <!-- Sessions injected here -->
       </div>
 <div class="sidebar-footer">
-  <div class="session-item" id="settings-trigger">
+  <div class="session-item" id="settings-trigger" onclick="loadCfg()">
     <svg class="icon" viewBox="0 0 24 24">
       <path
         d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L3.15 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.58 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
@@ -210,7 +126,61 @@
     </div>
   </div>
 
+
   <div id="toast-container" style="position:fixed; top:20px; right:20px; z-index:9999;"></div>
+
+  <script type="module">
+    import { ConfigUI } from './js/config_ui.js';
+
+    // Initialize UI State immediately
+    window.uiState = {
+      config: new ConfigUI()
+      // models: new ModelManagerUI() // ModelManagerUI not yet fully integrated/imported
+    };
+
+    // Global config functions required by HTML buttons
+    window.loadCfg = async () => {
+      await window.uiState.config.load();
+      // Open modal logic
+      const modal = document.getElementById('settings-modal');
+      if (modal) {
+        modal.className = 'modal open settings-modal'; // Ensure correct classes
+        modal.style.display = 'flex'; // Force display flex locally if needed or rely on CSS
+        // Also handle section switching if needed, defaulting to LLM
+        showSettingsSection('llm');
+      }
+    };
+
+    window.saveCfg = async () => {
+      await window.uiState.config.save();
+      alert("Configuration Saved!");
+      closeSettings();
+    };
+
+    window.closeSettings = () => {
+      const modal = document.getElementById('settings-modal');
+      if (modal) {
+        modal.classList.remove('open');
+        // setTimeout(() => modal.style.display = 'none', 200);
+      }
+    };
+
+    // Settings Navigation Logic
+    window.showSettingsSection = (secId) => {
+      // Hide all sections
+      document.querySelectorAll('.settings-section').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('.settings-nav-item').forEach(el => el.classList.remove('active'));
+
+      // Show target
+      const target = document.getElementById('sec-' + secId);
+      if (target) target.style.display = 'block';
+
+      // Highlight nav
+      const nav = document.getElementById('nav-' + secId);
+      if (nav) nav.classList.add('active');
+    };
+
+  </script>
 
   <script type="module">
     const $ = (q) => document.querySelector(q);
@@ -550,7 +520,7 @@
         const res = await fetchWithRetry(`/api/chat?session_id=${currentSessionId}&char_id=${currentCharacterId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: txt, speak: true }) // Defaulting speak to true for now
+          body: JSON.stringify({ text: txt, speak: true })
         });
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -558,28 +528,29 @@
 
         if (j.ok) {
           addBubble(j.reply, false);
-                          handleAvatarResponse(j);
-                        } else {
-                          addBubble("Error: " + j.error, false);
-                        }
-                      } catch (e) {
-                        addBubble("Transmission Error: " + e.message, false);
-                      }
-                    }
+          handleAvatarResponse(j);
+        } else {
+          addBubble("Error: " + j.error, false);
+        }
+      } catch (e) {
+        addBubble("Transmission Error: " + e.message, false);
+        console.error('send() error:', e);
+      }
+    }
 
-                    function handleAvatarResponse(j) {
-                      const iframe = $('#vrm-iframe');
-                      if (!iframe) return;
+                function handleAvatarResponse(j) {
+                  const iframe = $('#vrm-iframe');
+                  if (!iframe) return;
 
               // Expression
               if (j.emotion && j.emotion !== 'neutral') {
         iframe.contentWindow.postMessage({
-                type: 'setExpression',
-                emotion: j.emotion,
-                intensity: j.intensity || 1.0
-          }, '*');
+          type: 'setExpression',
+          emotion: j.emotion,
+          intensity: j.intensity || 1.0
+        }, '*');
               }
-      
+
               // Gesture
               if (j.gesture) {
                 iframe.contentWindow.postMessage({ type: 'playGesture', gesture: j.gesture }, '*');
@@ -591,14 +562,8 @@
               }
             }
 
-        // Initialize
-        loadCharacters();
-
-        addBubble("UPLINK_ERR: " + e.message, false);
-        showToast('Failed to send message: ' + e.message);
-        console.error('send() error:', e);
-      }
-    }
+                // Initialize
+                loadCharacters();
 
     // --- EMOTION INDICATOR ---
     /**
@@ -872,7 +837,7 @@
   </script>
 
   <!-- Character Management Modal -->
-  <div id="charModal" class="modal">
+  <div id="charModal" class="modal" style="display:none;">
     <div class="modal-content" style="width:600px;">
       <div style="display:flex; justify-content:space-between; margin-bottom:20px; align-items:center;">
         <h2 style="font-family:var(--font-pixel); font-size:0.8rem; color:var(--neon-blue); margin:0;">

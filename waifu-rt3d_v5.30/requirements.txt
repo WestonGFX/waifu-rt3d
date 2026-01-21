@@ -18,7 +18,8 @@ aiofiles==23.2.1            # For async file operations
 
 # AI/ML - Emotion Detection (v5.4+)
 transformers==4.36.0      # HuggingFace transformers for advanced sentiment analysis
-torch==2.1.0              # PyTorch (CPU version, use torch with CUDA for GPU)
+numpy<2.0                 # Pin numpy to <2.0 for chromadb compatibility
+torch>=2.1.0              # PyTorch (CPU version, use torch with CUDA for GPU)
 sentencepiece==0.1.99     # Tokenizer dependency
 
 # Database (built-in with Python)
@@ -39,5 +40,10 @@ python-dotenv==1.0.0   # Environment variables
 # - For ASR, may need additional packages (whisper, etc.)
 # - For GPU support (XTTS), install torch with CUDA
 
+# AI/ML - Memory (v5.30+)
+chromadb==0.4.18
+sentence-transformers==2.2.2
+
 # Installation:
 # pip install -r requirements.txt
+

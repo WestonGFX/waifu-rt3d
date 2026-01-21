@@ -187,6 +187,16 @@ async def startup_event():
     except ImportError as e:
         logger.error(f"Failed to load ModelManager (missing dependency?): {e}")
 
+    # 4. Initialize Vector Memory
+    global vector_store
+    try:
+        from .memory.vector_store import VectorStore
+        vector_store = VectorStore()
+    except Exception as e:
+        logger.error(f"Failed to init Vector Store: {e}")
+        vector_store = None
+
+
 # --- API ROUTES ---
 
 @app.get("/", response_class=HTMLResponse)
@@ -244,7 +254,12 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
     cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "user", text))
     con.commit()
     
+    # Store User Memory
+    if vector_store:
+        vector_store.add_memory(session_id, char_id, "user", text)
+    
     # Fetch Character System Prompt and Voice Params
+
     system_prompt = "You are a friendly anime companion."
     voice_params = {}
     row = None
@@ -259,17 +274,35 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             if row[4]: voice_params['tts_rate'] = row[4]
     except Exception as e:
         logger.error(f"Error fetching character data: {e}")
-        print(f"DEBUG_SERVER: Error fetching char data: {e}")
- 
-    print(f"DEBUG_SERVER: CharID={char_id} Row={row} Params={voice_params}")
+
  
      # Fetch Conversation History
     cur.execute("SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
                 (session_id, cfg.get("memory",{}).get("max_history",12)))
     hist = [{"role": r, "content": t} for (r,t) in cur.fetchall()][::-1]
     
+    # RAG Retrieval
+    memory_context = ""
+    if vector_store:
+        memories = vector_store.query_memory(text, char_id=char_id)
+        if memories:
+            memory_context = "\n[MEMORY_CONTEXT]\nRelevant past conversations:\n"
+            for m in memories:
+                memory_context += f"- {m['role'].upper()}: {m['text']}\n"
+    
     # Construct Messages Payload
-    messages = [{"role":"system","content": system_prompt}] + hist
+    # Inject Emotion Instructions & Memory
+    emotion_instruction = (
+        "\n\nVISUAL SYSTEM INSTRUCTIONS:\n"
+
+        "You have a 3D avatar. Express your artificial emotions using tags at the start of your response.\n"
+        "Format: [emotion:happy] or [emotion:sad] or [emotion:surprised] or [emotion:angry] or [emotion:neutral]\n"
+        "You can also use gestures: [gesture:nod] or [gesture:wave] or [gesture:shake] or [gesture:shrug]\n"
+        "Example: [emotion:happy] [gesture:wave] Hello! It's great to see you!\n"
+        "Do not output these tags if you are being neutral."
+    )
+    messages = [{"role":"system","content": system_prompt + memory_context + emotion_instruction}] + hist
+
     
     try:
         from .llm.registry import get_client
@@ -279,13 +312,35 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         return {"ok": False, "error": f"Adapter error: {e}"}
     
     if not res.get("ok"): return {"ok": False, "error": res.get("error","adapter failed")}
-    reply = res["reply"]
+    raw_reply = res["reply"]
+
+    # Parse Emotions and Gestures
+    import re
+    emotion_match = re.search(r'\[emotion:(\w+)\]', raw_reply)
+    gesture_match = re.search(r'\[gesture:(\w+)\]', raw_reply)
     
-    # Save Assistant Reply
-    cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "assistant", reply))
+    emotion = emotion_match.group(1) if emotion_match else "neutral"
+    gesture = gesture_match.group(1) if gesture_match else None
+    
+    # specific intensity inference (simple logic for now)
+    intensity = 1.0
+    
+    # Strip tags from reply for TTS and Display
+    clean_reply = re.sub(r'\[emotion:\w+\]', '', raw_reply)
+    clean_reply = re.sub(r'\[gesture:\w+\]', '', clean_reply).strip()
+    
+    if not clean_reply: clean_reply = raw_reply # Fallback if strip went wrong
+    
+    # Save Assistant Reply (Cleaned)
+    cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "assistant", clean_reply))
     con.commit(); con.close()
+
+    # Store AI Memory
+    if vector_store:
+        vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
  
     tts_url = None
+
     if speak:
         try:
             from .tts.registry import get_tts
@@ -303,13 +358,22 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 cfg['services'].get('tts', {}).pop('active_provider', None)
             
             tts_client = get_tts(cfg)
-            tts_res = tts_client.speak(reply, tts_cfg)
+            tts_res = tts_client.speak(clean_reply, tts_cfg)  # Speak cleaned text
             if tts_res.get("ok"): tts_url = f"/files/audio/{tts_res['filename']}"
         except Exception as e:
             logger.error(f"TTS Generation failed: {e}")
             tts_url = None
  
-    return {"ok": True, "reply": reply, "audio": tts_url, "session_id": session_id}
+    return {
+        "ok": True, 
+        "reply": clean_reply, 
+        "audio": tts_url, 
+        "session_id": session_id,
+        "emotion": emotion,
+        "intensity": intensity,
+        "gesture": gesture
+    }
+
 
 @app.post("/api/tts")
 async def api_tts(req: Request):
@@ -477,17 +541,21 @@ async def create_character(req: Request):
     avatar_url = body.get("avatar_url", "")
     voice_id = body.get("voice_id", "")
     tts_provider = body.get("tts_provider", "")
+    tts_pitch = body.get("tts_pitch", "")
+    tts_rate = body.get("tts_rate", "")
     personality_traits = json.dumps(body.get("personality_traits", []))
+    
     conn = db()
     cur = conn.cursor()
     try:
-        cur.execute("INSERT INTO characters (name, system_prompt, avatar_url, voice_id, tts_provider, personality_traits) VALUES (?, ?, ?, ?, ?, ?)", 
-                    (name, system_prompt, avatar_url, voice_id, tts_provider, personality_traits))
+        cur.execute("""
+            INSERT INTO characters (name, system_prompt, avatar_url, voice_id, tts_provider, tts_pitch, tts_rate, personality_traits) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (name, system_prompt, avatar_url, voice_id, tts_provider, tts_pitch, tts_rate, personality_traits))
         char_id = cur.lastrowid
         conn.commit()
     except Exception as e:
         conn.close()
-        print(f"DEBUG_SERVER: create DB Error: {e}")
         raise HTTPException(500, f"DB Error: {e}")
     conn.close()
     return {
@@ -497,6 +565,8 @@ async def create_character(req: Request):
         "avatar_url": avatar_url,
         "voice_id": voice_id,
         "tts_provider": tts_provider,
+        "tts_pitch": tts_pitch,
+        "tts_rate": tts_rate,
         "personality_traits": json.loads(personality_traits)
     }
 
@@ -508,24 +578,17 @@ async def update_character(character_id: int, req: Request):
     cur = conn.cursor()
     updates = []
     params = []
-    if "name" in body:
-        updates.append("name=?")
-        params.append(body["name"])
-    if "system_prompt" in body:
-        updates.append("system_prompt=?")
-        params.append(body["system_prompt"])
-    if "avatar_url" in body:
-        updates.append("avatar_url=?")
-        params.append(body["avatar_url"])
-    if "voice_id" in body:
-        updates.append("voice_id=?")
-        params.append(body["voice_id"])
-    if "tts_provider" in body:
-        updates.append("tts_provider=?")
-        params.append(body["tts_provider"])
+    
+    fields = ["name", "system_prompt", "avatar_url", "voice_id", "tts_provider", "tts_pitch", "tts_rate"]
+    for field in fields:
+        if field in body:
+            updates.append(f"{field}=?")
+            params.append(body[field])
+            
     if "personality_traits" in body:
         updates.append("personality_traits=?")
         params.append(json.dumps(body["personality_traits"]))
+        
     if not updates:
         conn.close()
         return {"ok": True} # No updates needed

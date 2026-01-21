@@ -1,4 +1,3 @@
-the
 <!doctype html>
 <html>
 
@@ -8,185 +7,7 @@ the
   <title>WAIFU_LINK // v5.31.0</title>
   <link rel="stylesheet" href="/assets/css/theme.css?v=cyber" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <style>
-    /* Toast Notifications */
-    .toast {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      padding: 15px 20px;
-      border-radius: 4px;
-      font-family: var(--font-pixel);
-      font-size: 0.6rem;
-      z-index: 10000;
-      animation: slideIn 0.3s ease-out;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-      max-width: 400px;
-      word-wrap: break-word;
-    }
 
-    .toast-error {
-      background: var(--neon-pink);
-      color: #000;
-      border: 2px solid var(--neon-pink);
-    }
-
-    .toast-success {
-      background: var(--neon-green);
-      color: #000;
-      border: 2px solid var(--neon-green);
-    }
-
-    .toast-info {
-      background: var(--neon-blue);
-      color: #000;
-      border: 2px solid var(--neon-blue);
-    }
-
-    @keyframes slideIn {
-      from {
-        transform: translateX(400px);
-        opacity: 0;
-      }
-
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-
-    @keyframes fadeOut {
-      from {
-        opacity: 1;
-      }
-
-      to {
-        opacity: 0;
-      }
-    }
-
-    /* Loading Spinner */
-    .spinner {
-      padding: 20px;
-      text-align: center;
-      color: var(--neon-green);
-      font-family: var(--font-pixel);
-      font-size: 0.5rem;
-      animation: pulse 1s infinite;
-    }
-
-    @keyframes pulse {
-
-      0%,
-      100% {
-        opacity: 0.3;
-      }
-
-      50% {
-        opacity: 1;
-      }
-    }
-
-    /* Session filter buttons */
-    .filter-btn {
-      background: rgba(185, 103, 255, 0.2);
-      border: 1px solid var(--neon-purple);
-      color: var(--neon-purple);
-      padding: 6px;
-      font-family: var(--font-pixel);
-      font-size: 0.5rem;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .filter-btn:hover {
-      background: rgba(185, 103, 255, 0.4);
-    }
-
-    .filter-btn.active {
-      background: var(--neon-green);
-      color: #000;
-      border-color: var(--neon-green);
-      box-shadow: 0 0 5px var(--neon-green);
-    }
-
-    /* Session action buttons */
-    .session-action-btn {
-      background: var(--neon-yellow);
-      color: #000;
-      border: none;
-      padding: 2px 5px;
-      font-size: 0.4rem;
-      font-family: var(--font-pixel);
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .session-action-btn:hover {
-      box-shadow: 0 0 5px currentColor;
-    }
-
-    .session-action-btn.delete {
-      background: var(--neon-pink);
-    }
-
-    /* Modal styles */
-    .modal {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: rgba(0, 0, 0, 0.95);
-      display: none;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-    }
-
-    .modal.open {
-      display: flex;
-    }
-
-    .modal-content {
-      background: var(--bg-dark);
-      border: 2px solid var(--neon-purple);
-      max-width: 90vw;
-      max-height: 90vh;
-      overflow-y: auto;
-      padding: 20px;
-      box-shadow: 0 0 20px rgba(185, 103, 255, 0.5);
-    }
-
-    .form-group {
-      margin-bottom: 15px;
-    }
-
-    .form-group label {
-      display: block;
-      color: var(--neon-blue);
-      font-family: var(--font-pixel);
-      font-size: 0.6rem;
-      margin-bottom: 5px;
-    }
-
-    .form-group input,
-    .form-group textarea,
-    .form-group select {
-      width: 100%;
-      padding: 8px;
-      background: rgba(0, 0, 0, 0.5);
-      border: 1px solid var(--neon-purple);
-      color: var(--neon-green);
-      font-family: var(--font-mono);
-      font-size: 0.6rem;
-    }
-
-    .form-group textarea {
-      resize: vertical;
-      min-height: 80px;
-    }
-  </style>
 </head>
 
 <body>
@@ -206,150 +27,7 @@ the
     }, 4000);
   </script>
 
-  <div class="app-container">
-    <!-- GLASS SIDEBAR -->
-    <nav class="sidebar">
-      <div class="nav-item active" title="Home">
-        <span>🏠</span>
-        <span class="nav-label">HOME</span>
-      </div>
-      <div class="nav-item" title="Chat">
-        <span>💬</span>
-        <span class="nav-label">CHAT</span>
-      </div>
-      <div class="nav-item" title="Config">
-        <span>⚙️</span>
-        <span class="nav-label">SYSTEM</span>
-      </div>
-    </nav>
-  
-    <!-- COMMAND DECK (Main View) -->
-    <main class="main-viewport">
-      <div class="avatar-stage">
-        <!-- New Avatar (Nano Banana Style) -->
-        <img id="avatar-img" src="/assets/avatar_nano.png" alt="Neural Avatar">
-      </div>
-  
-      <!-- Chat Overlay -->
-      <div class="chat-overlay">
-        <div class="message-list" id="chat-history">
-          <div class="msg-bubble ai">
-            <strong>NANO:</strong> System online! The visual update looks amazing, Senpai! ✨
-          </div>
-        </div>
-  
-        <div class="input-bar">
-          <input type="text" id="msg-input" placeholder="Type a message..." autocomplete="off">
-          <button class="send-btn" id="send-btn">➤</button>
-        </div>
-      </div>
-    </main>
-  
-    <!-- STATS PANEL (Right) -->
-    <aside class="stats-panel">
-      <div class="stat-card">
-        <div class="stat-header">
-          <span>CPU LOAD</span>
-          <span class="pixel-icon icon-wifi"></span>
-        </div>
-        <div class="holo-graph">
-          <div class="holo-line"></div>
-        </div>
-      </div>
-  
-      <div class="stat-card">
-        <div class="stat-header">
-          <span>MEMORY</span>
-          <span class="pixel-icon icon-heart"></span>
-        </div>
-        <div style="color:var(--neon-pink); font-family:var(--font-pixel); font-size:0.8rem;">
-          64GB [OPTIMAL]
-        </div>
-      </div>
-  
-      <div class="stat-card" style="flex:1;">
-        <div class="stat-header">SESSION DATA</div>
-        <div id="session-list" style="font-size:0.8rem; color:var(--text-muted);">
-          <!-- Sessions injected here -->
-        </div>
-      </div>
-    </aside>
-  </div>
-  
-  <script>
-      (function () {
-      // --- CORE LOGIC ---
-      const $ = q => document.querySelector(q);
-      const api = {
-        send: async (text) => {
-          const r = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text })
-          });
-          return r.json();
-        },
-        loadSessions: async () => {
-          const r = await fetch('/api/sessions');
-          return r.json();
-        }
-      };
 
-      // Chat Handler
-      async function sendMessage() {
-        const input = $('#msg-input');
-        const text = input.value.trim();
-        if (!text) return;
-
-        // UI Optimistic Update
-        appendBubble(text, 'user');
-        input.value = '';
-
-        try {
-          const res = await api.send(text);
-          if (res.ok) {
-            appendBubble(res.reply, 'ai');
-          } else {
-            appendBubble("Error: " + res.error, 'ai');
-          }
-        } catch (e) {
-          appendBubble("Connection failed.", 'ai');
-        }
-      }
-
-      function appendBubble(text, role) {
-        const list = $('#chat-history');
-        const div = document.createElement('div');
-        div.className = `msg-bubble ${role}`;
-        div.innerHTML = `<strong>${role === 'user' ? 'YOU' : 'NANO'}:</strong> ${text}`;
-        list.appendChild(div);
-        list.scrollTop = list.scrollHeight;
-      }
-
-      // Bindings
-      const sendBtn = $('#send-btn');
-      if (sendBtn) sendBtn.onclick = sendMessage;
-
-      const msgInput = $('#msg-input');
-      if (msgInput) msgInput.onkeydown = e => { if (e.key === 'Enter') sendMessage(); }
-
-      // Init
-      (async () => {
-        try {
-          const s = await api.loadSessions();
-          const slist = $('#session-list');
-          if (slist) {
-            s.sessions.forEach(sess => {
-              const d = document.createElement('div');
-              d.textContent = `> ${sess.title} (${sess.message_count})`;
-              d.style.marginBottom = '5px';
-              slist.appendChild(d);
-            });
-          }
-        } catch (e) { console.error(e); }
-      })();
-    })();
-  </script>
 
   <!-- SETUP WIZARD MODAL -->
   <div id="wizard-overlay"
@@ -458,9 +136,9 @@ the
       <div class="scanlines"></div>
 
       <header class="tab-nav">
-        <button class="tabbtn active" data-tab="dashboard">DASHBOARD</button>
-        <button class="tabbtn" data-tab="setup">CONF</button>
-        <button class="tabbtn" data-tab="system">DIAG</button>
+        <button class="tabbtn active" data-tab="dashboard">DASHBOARD <small>ダッシュボード</small></button>
+        <button class="tabbtn" data-tab="setup">CONF <small>設定</small></button>
+        <button class="tabbtn" data-tab="system">DIAG <small>診断</small></button>
       </header>
 
       <div class="screen-frame">
@@ -482,8 +160,8 @@ the
 
               <div class="chat-history">
                 <div id="log">
-                  <div class="bubble ai"
-                    style="border-bottom: 1px solid rgba(185, 103, 255, 0.2); margin-bottom: 2rem;">
+                  <div class="bubble ai">
+
                     <pre style="color:var(--neon-green);font-size:0.5rem;line-height:1;margin:0;">
 _ __ _ ____ ____ _______ _____ ____
 | | / /___ (_)/ __/_ _ | _ \__ __| |___ \| _ \
@@ -494,9 +172,9 @@ _ __ _ ____ ____ _______ _____ ____
                   </div>
                 </div>
 
-                <div id="typing"
-                  style="padding:0 2rem; color:var(--neon-yellow); font-family:var(--font-pixel); font-size:0.4rem; display:none; max-width: 800px; margin: 0 auto; width: 100%;">
+                <div id="typing">
                   AI_PROCESSING...</div>
+
 
                 <div class="input-pane">
                   <div class="input-box-wrapper">
@@ -535,23 +213,25 @@ _ __ _ ____ ____ _______ _____ ____
             <div class="settings-card">
               <h3>[ 02 ] VOICE_SYNTH</h3>
               <div id="cfg_tts_container"></div> <!-- DYNAMIC LOAD -->
-              <div class="form-group" style="margin-top:10px; border-top:1px dashed var(--neon-purple); padding-top:10px;">
+              <div class="form-group">
                 <label>ENABLED</label>
                 <input type="checkbox" id="tts_enabled" checked />
               </div>
+
             </div>
 
             <!-- ASR CONFIG -->
             <div class="settings-card">
               <h3>[ 03 ] SPEECH_REC</h3>
               <div id="cfg_asr_container"></div> <!-- DYNAMIC LOAD -->
-              <div class="form-group" style="margin-top:10px; border-top:1px dashed var(--neon-purple); padding-top:10px;">
+              <div class="form-group">
                 <label>ENABLED</label>
                 <select id="asr_enabled">
                   <option value="false">OFF</option>
                   <option value="true">ON</option>
                 </select>
               </div>
+
             </div>
 
             <!-- UI CONFIG -->
@@ -634,6 +314,8 @@ _ __ _ ____ ____ _______ _____ ____
     const $$ = (q) => document.querySelectorAll(q);
     let currentSessionId = 1;
     let currentCharacterId = 1;
+      let characterCache = []; // Store char data
+
 
     // ========================
     // ERROR HANDLING UTILITIES
@@ -861,11 +543,18 @@ _ __ _ ____ ____ _______ _____ ____
 
     // Initialize Dashboard VRM
     function initDashboard() {
-      if ($('#vrm-iframe').src === 'about:blank') {
-        $('#vrm-iframe').src = `/frontend/viewer/viewer.html?url=/files/avatars/Panicandy.vrm`;
+      // Find current character name
+      const char = characterCache.find(c => c.id === currentCharacterId);
+      const charName = char ? char.name : 'Panicandy';
+      const vrmUrl = `/files/avatars/${charName}.vrm`;
+
+      const iframe = $('#vrm-iframe');
+      // Only reload if URL changed or blank
+      if (iframe.src === 'about:blank' || !iframe.src.includes(charName)) {
+        iframe.src = `/frontend/viewer/viewer.html?url=${vrmUrl}`;
       }
     }
-    initDashboard();
+
 
     // --- SESSIONS ---
     let currentFilter = 'active'; // 'active' or 'archived'
@@ -903,13 +592,8 @@ _ __ _ ____ ____ _______ _____ ____
 
       sessions.forEach(s => {
         const d = document.createElement('div');
-        d.className = `session-item`;
-        d.style.cssText = 'padding:8px 12px; border:1px solid rgba(185,103,255,0.3); cursor:pointer; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; font-size:0.6rem; color:var(--neon-blue); background:rgba(26,6,40,0.4);';
+        d.className = `session-item` + (s.id === currentSessionId ? ' active' : '');
 
-        if (s.id === currentSessionId) {
-          d.style.borderColor = "var(--neon-green)";
-          d.style.boxShadow = "inset 0 0 5px var(--neon-green)";
-        }
 
         // Title (editable on double-click)
         const titleSpan = document.createElement('span');
@@ -922,7 +606,8 @@ _ __ _ ____ ____ _______ _____ ____
 
         // Action buttons
         const actions = document.createElement('div');
-        actions.style.cssText = 'display:flex; gap:5px;';
+        actions.className = 'session-actions';
+
 
         const archiveBtn = document.createElement('button');
         archiveBtn.className = 'session-action-btn';
@@ -1147,6 +832,8 @@ _ __ _ ____ ____ _______ _____ ____
         if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
 
         const j = await r.json();
+        characterCache = j.characters; // Update cache
+
         const c = $('#charList');
         c.innerHTML = '';
 
@@ -1155,15 +842,23 @@ _ __ _ ____ ____ _______ _____ ____
           d.className = 'char-item' + (char.id === currentCharacterId ? ' active' : '');
           d.title = char.name;
           d.onclick = () => {
+            if (currentCharacterId === char.id) return;
             currentCharacterId = char.id;
-            loadCharacters();
+            loadCharacters(); // Re-render to update active state
+
+            // Switch VRM
+            const vrmUrl = `/files/avatars/${char.name}.vrm`;
+            $('#vrm-iframe').src = `/frontend/viewer/viewer.html?url=${vrmUrl}`;
+            
             addBubble(`[SYSTEM] UPLINK_SWITCH: ${char.name}...`, false);
           };
           d.innerHTML = `<img src="${char.avatar_url || ''}" onerror="this.parentElement.style.display='none'"/>`;
           c.appendChild(d);
         });
 
+        initDashboard(); // Ensure correct VRM is loaded on startup
         showLoading('charList', false);
+
       } catch (e) {
         showLoading('charList', false);
         showToast('Failed to load characters: ' + e.message);
@@ -1187,6 +882,7 @@ _ __ _ ____ ____ _______ _____ ____
           $('#endpoint').value = j.llm.endpoint || '';
           $('#model').value = j.llm.model || '';
           $('#temp').value = j.llm.temperature || 0.7;
+          $('#history_limit').value = j.llm.history_limit || 20;
         }
         if (j.tts) {
           $('#tts_enabled').checked = !!j.tts.enabled;
@@ -1198,11 +894,15 @@ _ __ _ ____ ____ _______ _____ ____
           $('#asr_provider').value = j.asr.provider || 'web_speech';
         }
         if (j.ui) {
-          $('#ui_scanlines').value = j.ui.scanline_opacity || 0.4;
-          $('#ui_flicker').value = j.ui.flicker_enabled ? "true" : "false";
+          if ($('#ui_scanlines')) $('#ui_scanlines').value = j.ui.scanline_opacity || 0.4;
+          if ($('#ui_flicker')) $('#ui_flicker').value = j.ui.flicker_enabled ? "true" : "false";
           updateUIEffects();
         }
 
+        // Reload Dev Mode state
+        if ($('#dev_mode')) {
+          $('#dev_mode').checked = localStorage.getItem('retro_dev_mode') === 'true';
+          $('#dev_mode').onchange();
         updateStatusLights();
       } catch (e) {
         showToast('Failed to load configuration: ' + e.message);
@@ -1309,34 +1009,6 @@ _ __ _ ____ ____ _______ _____ ____
       }
     };
 
-    /**
-     * Load current configuration from backend and populate UI fields.
-     */
-    async function loadCfg() {
-      try {
-        const r = await fetchWithRetry('/api/config');
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-
-        const j = await r.json();
-
-        if (j.llm) {
-          $('#endpoint').value = j.llm.endpoint || '';
-          $('#model').value = j.llm.model || '';
-          $('#temp').value = j.llm.temperature || 0.7;
-          $('#history_limit').value = j.llm.history_limit || 20;
-        }
-        // ... (existing tts/asr/ui loads unchanged in previous steps)
-
-        // Reload Dev Mode state from localStorage if you want, or just default off
-        $('#dev_mode').checked = localStorage.getItem('retro_dev_mode') === 'true';
-        $('#dev_mode').onchange();
-
-        updateStatusLights();
-      } catch (e) {
-        showToast('Failed to load configuration: ' + e.message);
-        console.error('loadCfg error:', e);
-      }
-    }
 
     /**
      * Save configuration changes to backend.
@@ -1422,7 +1094,8 @@ _ __ _ ____ ____ _______ _____ ____
 
     function addBubble(text, isMe) {
       const d = document.createElement('div');
-      d.className = `bubble ${isMe ? 'me' : 'ai'}`;
+      d.className = `msg-bubble ${isMe ? 'user' : 'ai'}`;
+
       d.innerHTML = isMe ? text : `<span class="name">RECV_DATA</span> ${marked.parse(text)}`;
       $('#log').appendChild(d);
       $('#log').scrollTop = $('#log').scrollHeight;

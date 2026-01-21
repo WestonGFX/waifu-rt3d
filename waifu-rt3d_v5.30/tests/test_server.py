@@ -147,19 +147,41 @@ class TestCharacterEndpoints:
         
     def test_create_character(self, client):
         """Test POST /api/characters"""
+        # Ensure cleanup if exists from previous run
+        # We can't easily iterate and delete by name without listing all.
+        # So we use a unique name or try to delete first.
+        
+        char_name = "New Char Unique"
+        
+        # Cleanup potential leftover
+        # This is hacky. Better to list and delete.
+        chars = client.get("/api/characters").json()['characters']
+        for c in chars:
+            if c['name'] == char_name:
+                client.delete(f"/api/characters/{c['id']}")
+
         new_char = {
-            "name": "New Char",
+            "name": char_name,
             "system_prompt": "You are new.",
             "personality_traits": ["new"]
         }
         response = client.post("/api/characters", json=new_char)
         assert response.status_code == 200
         data = response.json()
-        assert data['name'] == "New Char"
+        assert data['name'] == char_name
         assert 'id' in data
+        
+        # Cleanup
+        client.delete(f"/api/characters/{data['id']}")
 
     def test_update_character(self, client):
         """Test PUT /api/characters/{id}"""
+        # Cleanup
+        chars = client.get("/api/characters").json()['characters']
+        for c in chars:
+            if c['name'] == "To Update":
+                client.delete(f"/api/characters/{c['id']}")
+
         # Create
         new_char = {"name": "To Update", "system_prompt": "Prompt"}
         create_res = client.post("/api/characters", json=new_char)
@@ -169,9 +191,18 @@ class TestCharacterEndpoints:
         response = client.put(f"/api/characters/{char_id}", json={"name": "Updated Name"})
         assert response.status_code == 200
         assert response.json()['ok'] is True
+        
+        # Cleanup
+        client.delete(f"/api/characters/{char_id}")
 
     def test_delete_character(self, client):
         """Test DELETE /api/characters/{id}"""
+        # Cleanup
+        chars = client.get("/api/characters").json()['characters']
+        for c in chars:
+            if c['name'] == "To Delete":
+                client.delete(f"/api/characters/{c['id']}")
+
         # Create
         new_char = {"name": "To Delete", "system_prompt": "Prompt"}
         create_res = client.post("/api/characters", json=new_char)
@@ -227,6 +258,12 @@ class TestVoiceEndpoints:
     def test_chat_voice_params(self, client):
         """Test /api/chat with speak=True picking up character voice"""
         from unittest.mock import patch, MagicMock
+
+        # Cleanup
+        chars = client.get("/api/characters").json()['characters']
+        for c in chars:
+            if c['name'] == "VoiceTestChar":
+                client.delete(f"/api/characters/{c['id']}")
 
         # 1. Create character with specific voice
         char_payload = {

@@ -487,6 +487,7 @@ async def create_character(req: Request):
         conn.commit()
     except Exception as e:
         conn.close()
+        print(f"DEBUG_SERVER: create DB Error: {e}")
         raise HTTPException(500, f"DB Error: {e}")
     conn.close()
     return {

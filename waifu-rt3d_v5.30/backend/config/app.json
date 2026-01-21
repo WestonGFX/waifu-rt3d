@@ -3,8 +3,8 @@
   "llm": {
     "provider": "local",
     "endpoint": "http://127.0.0.1:1234/v1",
-    "model": "test-model",
-    "api_key": "lm-studio",
+    "model": "",
+    "api_key": "hcw7t7ymp4jdv8",
     "history_limit": 20
   },
   "tts": {
@@ -12,96 +12,5 @@
     "provider": "local",
     "voice_id": "fox_v1",
     "auto_speak": true
-  },
-  "profile": "auto",
-  "input_mode": "text",
-  "output_mode": "text+voice",
-  "memory": {
-    "max_history": 200
-  },
-  "ui": {
-    "scanline_opacity": 0.1,
-    "flicker_enabled": false,
-    "theme": "cyberpunk"
-  },
-  "services": {
-    "llm": {
-      "active_provider": "local_jan",
-      "providers": {
-        "local_jan": {
-          "type": "openai",
-          "endpoint": "http://127.0.0.1:1339/v1",
-          "api_key": "",
-          "model": "Dark-Desires-12B-v1_0-Q6_K"
-        },
-        "local_lmstudio": {
-          "type": "openai",
-          "endpoint": "http://127.0.0.1:1234/v1",
-          "api_key": "",
-          "model": "local-model"
-        },
-        "local_ollama": {
-          "type": "ollama",
-          "endpoint": "http://127.0.0.1:11434",
-          "model": "llama3"
-        },
-        "cloud_openai": {
-          "type": "openai",
-          "endpoint": "https://api.openai.com/v1",
-          "api_key": "",
-          "model": "gpt-4o"
-        },
-        "cloud_liquid": {
-          "type": "openai",
-          "endpoint": "https://api.liquid.ai/v1",
-          "api_key": "",
-          "model": "liquid-model"
-        }
-      }
-    },
-    "tts": {
-      "active_provider": "local_fish",
-      "providers": {
-        "local_fish": {
-          "type": "fish_audio_local",
-          "endpoint": "http://127.0.0.1:8080",
-          "voice_id": "8ef4a238714b45718ce04243307c57a7"
-        },
-        "local_pinokio": {
-          "type": "generic_rest",
-          "endpoint": "http://127.0.0.1:5050"
-        },
-        "cloud_elevenlabs": {
-          "type": "elevenlabs",
-          "api_key": ""
-        }
-      }
-    },
-    "asr": {
-      "active_provider": "browser",
-      "providers": {
-        "browser": {
-          "type": "web_speech"
-        },
-        "local_whisper": {
-          "type": "openai",
-          "endpoint": "http://127.0.0.1:9000/v1"
-        }
-      }
-    }
-  },
-  "smart_install": {
-    "preferred_quantization": "auto",
-    "allow_cloud_fallback": true
-  },
-  "system": {
-    "huggingface_token": "",
-    "advanced_mode": false,
-    "log_level": "INFO",
-    "model_paths": {
-      "llm": "backend/storage/models/llm",
-      "tts": "backend/storage/models/tts",
-      "asr": "backend/storage/models/asr"
-    }
   }
 }

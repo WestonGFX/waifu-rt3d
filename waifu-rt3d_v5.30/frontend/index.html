@@ -45,7 +45,23 @@
             style="background:var(--neon-blue); border:none; padding:10px; font-family:var(--font-pixel); font-size:0.5rem; width:100%; cursor:pointer;">
             INITIALIZE UPLINK >>
           </button>
+        </div>
+        <div class="wizard-step" data-step="2" style="display:none;">
+          <div class="form-group">
+            <label style="color:var(--neon-green); font-size:0.6rem;">LLM_ENDPOINT</label>
+            <input type="text" id="wiz_endpoint" value="http://127.0.0.1:1234/v1"
+              style="width:100%; padding:5px; background:rgba(0,0,0,0.5); border:1px solid var(--neon-green); color:var(--neon-green); font-family:var(--font-mono); font-size:0.6rem;" />
           </div>
+          <div class="form-group">
+            <label style="color:var(--neon-green); font-size:0.6rem;">API_KEY (OPTIONAL)</label>
+            <input type="text" id="wiz_api_key" value="lm-studio"
+              style="width:100%; padding:5px; background:rgba(0,0,0,0.5); border:1px solid var(--neon-green); color:var(--neon-green); font-family:var(--font-mono); font-size:0.6rem;" />
+          </div>
+          <button id="finish-wizard"
+            style="background:var(--neon-green); border:none; padding:10px; font-family:var(--font-pixel); font-size:0.6rem; width:100%; cursor:pointer; color:#000; margin-top:10px;">
+            ESTABLISH_CONNECTION >>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -83,231 +99,118 @@
 </script>
 
   <div class="app-container">
-    <!-- SIDEBAR -->
+    <!-- 1. SIDEBAR -->
     <aside class="sidebar">
-      <div class="sidebar-header">
-        <span>SESSIONS</span>
-        <button id="newSession"
-          style="background:transparent;border:none;color:var(--neon-blue);cursor:pointer;font-family:var(--font-pixel);font-size:0.6rem;">[+]</button>
+      <div class="brand-header">
+        <svg class="icon" viewBox="0 0 24 24">
+          <path
+            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
+        </svg>
+        <span>Waifu-RT3D</span>
       </div>
-      <div id="sessionList" style="flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;">
-        <!-- Session controls -->
-        <div class="session-controls"
-          style="margin-bottom:10px;position:sticky;top:0;background:var(--bg-dark);z-index:10;padding-bottom:5px;">
-          <input type="text" id="sessionSearch" placeholder="SEARCH_SESSIONS..." style="width:100%;padding:8px;background:rgba(0,0,0,0.5);border:1px solid var(--neon-purple);
-                        color:var(--neon-blue);font-family:var(--font-mono);font-size:0.5rem;margin-bottom:8px;" />
-          <div style="display:flex;gap:5px;">
-            <button id="showActive" class="filter-btn active" style="flex:1;">ACTIVE</button>
-            <button id="showArchived" class="filter-btn" style="flex:1;">ARCHIVED</button>
-          </div>
-        </div>
-        <!-- Session list will go here -->
+      <button class="new-chat-btn" id="new-chat-btn">
+        <svg class="icon" viewBox="0 0 24 24">
+          <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+        </svg>
+        New Chat
+      </button>
+      
+      <div class="session-list" id="session-list">
+        <!-- Sessions injected here -->
       </div>
-      <div class="sidebar-header" style="border-top:1px solid var(--neon-purple); border-bottom:none;">
-        <span>TERMINAL</span>
-      </div>
-      <div id="status-display"
-        style="padding:10px;font-size:0.5rem;color:var(--neon-green);font-family:var(--font-mono);line-height:1.4; border-bottom: 1px solid rgba(185,103,255,0.2);">
-        <div class="flex items-center gap-2">
-          <span id="led-link" class="status-dot status-online" style="transform:scale(0.8)"></span>
-          <span>LINK: NOMINAL</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span id="led-llm" class="status-dot status-checking" style="transform:scale(0.8)"></span>
-          <span id="stat-llm">LLM: OK</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span id="led-tts" class="status-dot status-online" style="transform:scale(0.8)"></span>
-          <span id="stat-tts">TTS: READY</span>
-        </div>
-      </div>
-      <div id="terminal-feed"
-        style="flex:1; overflow-y:auto; padding:10px; font-size:0.45rem; color:var(--neon-blue); font-family:var(--font-mono); opacity:0.8; height: 150px; background: rgba(0,0,0,0.3);">
-        <!-- Logs flow here -->
-      </div>
-      <div id="version-display"
-        style="position:absolute; bottom:10px; left:10px; font-size:0.4rem; color:var(--neon-blue); font-family:var(--font-mono); opacity:0.7;">
-        v5.31.0
+<div class="sidebar-footer">
+  <div class="session-item" id="settings-trigger">
+    <svg class="icon" viewBox="0 0 24 24">
+      <path
+        d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L3.15 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.58 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+    </svg>
+    Settings
+  </div>
       </div>
     </aside>
 
-    <!-- MAIN VIEWPORT -->
-    <main class="main-viewport">
-      <div class="scanlines"></div>
-
-      <header class="tab-nav">
-        <button class="tabbtn active" data-tab="dashboard">DASHBOARD <small>ダッシュボード</small></button>
-        <button class="tabbtn" data-tab="setup">CONF <small>設定</small></button>
-        <button class="tabbtn" data-tab="system">DIAG <small>診断</small></button>
-      </header>
-
-      <div class="screen-frame">
-        <!-- DASHBOARD TAB (Merged VIEW) -->
-        <section id="dashboard" class="tab active">
-          <div class="dashboard-layout">
-            <!-- 3D Viewport Side -->
-            <div class="avatar-viewport">
-              <iframe id="vrm-iframe" src="/frontend/viewer/viewer.html" style="width:100%; height:100%; border:none;"></iframe>
-              <div class="micro-panel status-tr">CAM_LINK: ACTIVE</div>
-              <div class="micro-panel status-bl">VRM_V5.30 // RENDER_OK</div>
-            </div>
-
-            <!-- Chat Side -->
-            <div class="chat-container">
-              <div class="char-tray">
-                <div id="charList"></div>
-              </div>
-
-              <div class="chat-history">
-                <div id="log">
-                  <div class="bubble ai">
-
-                    <pre style="color:var(--neon-green);font-size:0.5rem;line-height:1;margin:0;">
-_ __ _ ____ ____ _______ _____ ____
-| | / /___ (_)/ __/_ _ | _ \__ __| |___ \| _ \
-| | /| / / _ `| | |_| | | | | |_) | | | __) | | | |
-| |/ |/ / (_| | | _| |_| | | _ < | | |__ <| |_| | |__/|__/\__,_|_|_| \__,_| |_| \_\ |_| ___) |____/ |____/
-                    </pre>
-                    <div class="line" style="color:var(--neon-green)">OS v5.35 READY. NEURAL_BRIDGE ACTIVE.</div>
-                  </div>
-                </div>
-
-                <div id="typing">
-                  AI_PROCESSING...</div>
-
-
-                <div class="input-pane">
-                  <div class="input-box-wrapper">
-                    <textarea id="msg" placeholder="Type a message..." rows="1"></textarea>
-                    <div class="input-actions">
-                      <button id="mic-btn" class="action-btn" title="Toggle Speech Recognition">
-                        <span style="font-family:var(--font-pixel); font-size:0.7rem;">MIC</span>
-                      </button>
-                      <button id="audio-btn" class="action-btn active" title="Toggle Audio Output">
-                        <span style="font-family:var(--font-pixel); font-size:0.7rem;">VOL</span>
-                      </button>
-                      <button id="send" class="send-btn-primary">></button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- CONFIG TAB (EXPANDED) -->
-        <section id="setup" class="tab" style="padding:30px;overflow-y:auto;">
-          <h2 style="font-family:var(--font-pixel);font-size:0.8rem;color:var(--neon-yellow);margin-bottom:30px;">
-            SYSTEM_VARIABLES_ARRAY</h2>
-
-          <div class="settings-grid">
-            <!-- LLM CONFIG -->
-            <div class="settings-card">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h3>[ 01 ] LLM_MODULE</h3>
-              </div>
-              <div id="cfg_llm_container"></div> <!-- DYNAMIC LOAD -->
-            </div>
-
-            <!-- TTS CONFIG -->
-            <div class="settings-card">
-              <h3>[ 02 ] VOICE_SYNTH</h3>
-              <div id="cfg_tts_container"></div> <!-- DYNAMIC LOAD -->
-              <div class="form-group">
-                <label>ENABLED</label>
-                <input type="checkbox" id="tts_enabled" checked />
-              </div>
-
-            </div>
-
-            <!-- ASR CONFIG -->
-            <div class="settings-card">
-              <h3>[ 03 ] SPEECH_REC</h3>
-              <div id="cfg_asr_container"></div> <!-- DYNAMIC LOAD -->
-              <div class="form-group">
-                <label>ENABLED</label>
-                <select id="asr_enabled">
-                  <option value="false">OFF</option>
-                  <option value="true">ON</option>
-                </select>
-              </div>
-
-            </div>
-
-            <!-- UI CONFIG -->
-            <div class="settings-card">
-              <h3>[ 04 ] UI_INTERFACE</h3>
-              <div class="form-group">
-                <label>SCANLINE_OPACITY</label>
-                <input type="range" id="ui_scanlines" min="0" max="1" step="0.1" value="0.4" />
-              </div>
-              <div class="form-group">
-                <label>FLICKER_EFX</label>
-                <select id="ui_flicker">
-                  <option value="true">ENABLED</option>
-                  <option value="false">DISABLED</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- MANAGEMENT -->
-            <div class="settings-card">
-              <h3>[ 05 ] SYSTEM_MANAGEMENT</h3>
-              <button id="openCharModal"
-                style="background:var(--neon-purple);border:none;padding:15px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;width:100%;color:#000; margin-bottom:10px;">
-                MANAGE_CHARACTERS
-              </button>
-              <button id="openModelWizard"
-                style="background:var(--neon-blue);border:none;padding:15px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;width:100%;">
-                AI_MODEL_MANAGER
-              </button>
-            </div>
-          </div>
-
-          <div style="display:flex; gap:20px;">
-            <button id="saveCfg"
-              style="background:var(--neon-green);border:none;padding:20px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;flex:1;margin-top:20px;">COMMIT_CHANGES</button>
-            <button id="resetCfg"
-              style="background:var(--neon-pink);border:none;padding:20px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;width:150px;margin-top:20px;color:#000;">FACTORY_RESET</button>
-          </div>
-        </section>
-
-        <!-- DIAG TAB -->
-        <section id="system" class="tab" style="padding:20px; color: var(--neon-green); font-family: var(--font-mono);">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h2 style="font-family:var(--font-pixel);font-size:0.8rem;color:var(--neon-purple);margin-bottom:10px;">
-                CORE_DIAGNOSTICS</h2>
-              <div id="health"
-                style="background:rgba(0,0,0,0.5); padding:20px; border:1px solid var(--neon-purple); font-size:0.7rem; min-height: 200px;">
-                INITIALIZING_SCAN...
-              </div>
-              <button id="refreshHealth"
-                style="background:var(--neon-green);border:none;padding:15px;font-family:var(--font-pixel);font-size:0.4rem;cursor:pointer;margin-top:20px; width:100%;">FORCE_PROBE</button>
-            </div>
-
-            <div>
-              <h2 style="font-family:var(--font-pixel);font-size:0.8rem;color:var(--neon-yellow);margin-bottom:10px;">
-                EMOTION_ENGINES</h2>
-              <div id="emotion-indicator"
-                style="background:rgba(0,0,0,0.5); padding:20px; border:1px solid var(--neon-yellow); font-size:0.7rem;">
-                AWAITING_INPUT_FOR_ANALYSIS...
-              </div>
-
-              <h2 style="font-family:var(--font-pixel);font-size:0.8rem;color:var(--neon-blue);margin:20px 0 10px;">
-                UPLINK_STATUS</h2>
-              <div
-                style="background:rgba(0,0,0,0.5); padding:15px; border:1px solid var(--neon-blue); font-size:0.6rem;">
-                LATENCY: <span id="diag-latency">--ms</span><br>
-                UPLINK_KEY: SHA-256_HIDDEN<br>
-                AUTH: GRANTED
-              </div>
-            </div>
-          </div>
-        </section>
+    <!-- 2. MAIN CHAT -->
+    <main class="main-chat">
+      <div class="chat-header">
+        <span id="current-session-title">New Session</span>
+        <div id="status-indicators" style="display:flex; gap:8px;">
+          <!-- Dynamic Status Icons -->
+        </div>
       </div>
+
+      <div class="chat-history" id="chat-messages">
+        <!-- Bubbles injected here -->
+      </div>
+
+      <div class="input-area">
+        <div class="input-wrapper">
+          <textarea id="msg" class="chat-input" placeholder="Message..." rows="1"></textarea>
+          <button id="send" class="send-btn" disabled>
+            <svg class="icon" viewBox="0 0 24 24" style="fill:white">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+          </button>
+        </div>
+        </div>
     </main>
+
+    <!-- 3. 3D VIEWPORT -->
+    <aside class="viewport-panel">
+      <div id="avatar-canvas-container">
+        <iframe id="vrm-iframe" src="/frontend/viewer/viewer.html" style="width:100%; height:100%; border:none;"></iframe>
+      </div>
+    </aside>
+    </div>
+
+  <!-- SETTINGS MODAL -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="settings-modal">
+      <div class="settings-sidebar">
+        <div class="settings-nav-item active" data-section="llm">LLM Provider</div>
+        <div class="settings-nav-item" data-section="tts">TTS Voice</div>
+        <div class="settings-nav-item" data-section="asr">Voice Input</div>
+        <div class="settings-nav-item" data-section="system">System</div>
+      </div>
+      <div class="settings-content">
+        <!-- LLM SECTION -->
+        <div class="settings-section active" id="sec-llm">
+          <h3 class="settings-title">Large Language Model</h3>
+          <div id="cfg_llm_container"></div> <!-- Rendered by config_ui.js -->
+        </div>
+
+        <!-- TTS SECTION -->
+        <div class="settings-section" id="sec-tts">
+          <h3 class="settings-title">Text-to-Speech</h3>
+          <div id="cfg_tts_container"></div>
+        </div>
+
+        <!-- ASR SECTION -->
+        <div class="settings-section" id="sec-asr">
+          <h3 class="settings-title">Speech Recognition</h3>
+          <div id="cfg_asr_container"></div>
+        </div>
+        <!-- SYSTEM SECTION -->
+        <div class="settings-section" id="sec-system">
+          <h3 class="settings-title">System Settings</h3>
+          <div class="form-group">
+                <label class="form-label">Developer Mode</label>
+                <select class="form-select" id="dev_mode">
+                  <option value="false">Disabled</option>
+                  <option value="true">Enabled</option>
+                </select>
+            </div>
+            <button class="btn" id="resetCfg" style="color:red; border-color:red;">Factory Reset</button>
+            </div>
+
+        <div class="action-bar">
+          <button class="btn" id="cancel-settings">Cancel</button>
+          <button class="btn btn-primary" id="saveCfg">Save Changes</button>
+        </div>
+        </div>
+    </div>
   </div>
+
+  <div id="toast-container" style="position:fixed; top:20px; right:20px; z-index:9999;"></div>
 
   <script type="module">
     const $ = (q) => document.querySelector(q);
@@ -315,6 +218,7 @@ _ __ _ ____ ____ _______ _____ ____
     let currentSessionId = 1;
     let currentCharacterId = 1;
       let characterCache = []; // Store char data
+                      let llmConnected = false; // Track LLM connection state
 
 
     // ========================
@@ -434,769 +338,262 @@ _ __ _ ____ ____ _______ _____ ____
       showToast('SYSTEM_ERROR: ' + (event.error?.message || 'Unknown error'));
     });
 
-    // --- BOOT SEQUENCE ---
-    const bootMessages = [
-      "WAIFU_LINK v5.31.0 BOOTLOADER...",
-      "CPU: NEURAL_ENGINE [DETECTED]",
-      "MEM: 64GB [CHECKING... OK]",
-      "GPU: RT3D_RENDERER [V-LOCKED]",
-      "NET: UPLINK_ENCRYPTED [ESTABLISHED]",
-      "SYSTEM: ALL CORE SERVICES RUNNING",
-      "WELCOME, OPERATOR."
-    ];
-    let bootIdx = 0;
-    function runBoot() {
-      if (bootIdx < bootMessages.length) {
-        const log = $('#boot-log');
-        log.innerHTML += `> ${bootMessages[bootIdx]}<br>`;
-        bootIdx++;
-        setTimeout(runBoot, 100 + Math.random() * 100);
-      } else {
-        setTimeout(() => {
-          $('#boot-overlay').style.opacity = '0';
-          setTimeout(() => {
-            $('#boot-overlay').style.display = 'none';
-            checkOnboarding();
-          }, 500);
-        }, 300);
-      }
+      // --- INITIALIZATION ---
+      async function init() {
+        await displayVersion();
+        // Check connection
+        try {
+          const r = await fetch('/api/healthcheck');
+          if (r.ok) showToast('System Online', 'success', 2000);
+        } catch (e) {
+          showToast('Server Offline', 'error');
+        }
+
+      initAvatar();
     }
-    runBoot();
 
     // --- VERSION DISPLAY ---
     async function displayVersion() {
       try {
-        const r = await fetchWithRetry('/api/healthcheck');
-        if (!r.ok) {
-          console.warn(`Health check failed: HTTP ${r.status}`);
-          return;
-        }
+        const r = await fetch('/api/healthcheck');
+        if (!r.ok) return;
         const j = await r.json();
         if (j.version) {
-          const versionText = `v${j.version}${j.schema_version ? ` | DB v${j.schema_version}` : ''}`;
-          $('#version-display').textContent = versionText;
+          // We might want to put this somewhere in the new UI, 
+          // but for now just log it or put it in title
+          document.title = `Waifu-RT3D v${j.version}`;
         }
       } catch (e) {
-        console.error('Version fetch failed:', e);
-        // Non-critical, don't show toast
+        console.warn('Version check failed');
       }
     }
 
-    // --- SETUP WIZARD ---
-    async function checkOnboarding() {
-      try {
-        const r = await fetchWithRetry('/api/config');
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-        const cfg = await r.json();
-        if (!cfg.onboarded) {
-          $('#wizard-overlay').style.display = 'flex';
-        }
-      } catch (e) {
-        console.error('Onboarding check failed:', e);
-        showToast('Failed to load configuration', 'error');
-      }
-      displayVersion(); // Fetch version after checking onboarding
-    }
-    $('.next-step').onclick = () => {
-      $('.wizard-step[data-step="1"]').style.display = 'none';
-      $('.wizard-step[data-step="2"]').style.display = 'block';
-    };
-    /**
-     * Complete onboarding wizard and save initial configuration.
-     */
-    $('#finish-wizard').onclick = async () => {
-      try {
-        const body = {
-          onboarded: true,
-          llm: { endpoint: $('#wiz_endpoint').value, api_key: $('#wiz_api_key').value }
-        };
-
-        const r = await fetchWithRetry('/api/config', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-
-        $('#wizard-overlay').style.display = 'none';
-        loadCfg();
-        showToast('WAIFU_LINK initialized successfully!', 'success', 3000);
-      } catch (e) {
-        showToast('Failed to complete setup: ' + e.message);
-        console.error('finish-wizard error:', e);
-      }
-    };
-    checkOnboarding();
-
-    // --- TABS ---
-    $$('.tabbtn').forEach(b => {
-      b.onclick = () => {
-        $$('.tab').forEach(t => t.classList.remove('active'));
-        $$('.tabbtn').forEach(btn => btn.classList.remove('active'));
-        const target = $('#' + b.dataset.tab);
-        target.classList.add('active');
-        b.classList.add('active');
-        if (b.dataset.tab === 'system') $('#refreshHealth').click();
-      };
-    });
-
-    // Initialize Dashboard VRM
-    function initDashboard() {
+      // Initialize VRM Viewport
+      function initAvatar() {
       // Find current character name
       const char = characterCache.find(c => c.id === currentCharacterId);
       const charName = char ? char.name : 'Panicandy';
       const vrmUrl = `/files/avatars/${charName}.vrm`;
 
       const iframe = $('#vrm-iframe');
-      // Only reload if URL changed or blank
-      if (iframe.src === 'about:blank' || !iframe.src.includes(charName)) {
+      if (iframe && (iframe.src === 'about:blank' || !iframe.src.includes(charName))) {
         iframe.src = `/frontend/viewer/viewer.html?url=${vrmUrl}`;
       }
     }
 
+      // Start everything
+      init();
+    
+
 
     // --- SESSIONS ---
-    let currentFilter = 'active'; // 'active' or 'archived'
-    let searchTimeout;
+          let currentFilter = 'active'; 
 
-    /**
-     * Load and display chat sessions based on current filter.
-     */
     async function loadSessions() {
       try {
-        showLoading('sessionList', true);
-        const archived = currentFilter === 'archived';
-        const r = await fetchWithRetry(`/api/sessions?archived=${archived}`);
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-
+        const r = await fetchWithRetry(`/api/sessions?archived=${currentFilter === 'archived'}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const j = await r.json();
         renderSessions(j.sessions);
-        showLoading('sessionList', false);
       } catch (e) {
-        showLoading('sessionList', false);
         showToast('Failed to load sessions: ' + e.message);
-        console.error('loadSessions error:', e);
       }
     }
 
-    /**
-     * Render session list with action buttons.
-     * @param {Array} sessions - Array of session objects
-     */
     function renderSessions(sessions) {
-      const list = $('#sessionList');
-      const controls = list.querySelector('.session-controls');
+      const list = $('#session-list');
       list.innerHTML = '';
-      if (controls) list.appendChild(controls); // Preserve search/filter controls
 
       sessions.forEach(s => {
         const d = document.createElement('div');
         d.className = `session-item` + (s.id === currentSessionId ? ' active' : '');
+        d.textContent = s.title.length > 25 ? s.title.substring(0, 25) + '...' : s.title;
+        d.title = s.title;
 
-
-        // Title (editable on double-click)
-        const titleSpan = document.createElement('span');
-        titleSpan.textContent = `> ${s.title.toUpperCase()}`;
-        titleSpan.style.flex = '1';
-        titleSpan.ondblclick = (e) => {
-          e.stopPropagation();
-          renameSession(s.id, s.title);
-        };
-
-        // Action buttons
-        const actions = document.createElement('div');
-        actions.className = 'session-actions';
-
-
-        const archiveBtn = document.createElement('button');
-        archiveBtn.className = 'session-action-btn';
-        archiveBtn.textContent = s.archived ? 'UNARCH' : 'ARCH';
-        archiveBtn.onclick = (e) => {
-          e.stopPropagation();
-          toggleArchive(s.id, !s.archived);
-        };
-
-        const delBtn = document.createElement('button');
-        delBtn.className = 'session-action-btn delete';
-        delBtn.textContent = 'DEL';
-        delBtn.onclick = (e) => {
-          e.stopPropagation();
-          deleteSession(s.id, s.title);
-        };
-
-        actions.appendChild(archiveBtn);
-        actions.appendChild(delBtn);
-        d.appendChild(titleSpan);
-        d.appendChild(actions);
-
-        // Click to select session
         d.onclick = () => {
           if (s.id !== currentSessionId) {
             currentSessionId = s.id;
-            loadSessions();
+            $('#current-session-title').textContent = s.title;
+            // Update active state in UI without reload
+            $$('.session-item').forEach(el => el.classList.remove('active'));
+            d.classList.add('active');
             loadMessages(s.id);
           }
         };
-
         list.appendChild(d);
       });
     }
 
-    /**
-     * Search sessions using FTS5 full-text search.
-     * @param {string} query - Search query
-     */
-    async function searchSessions(query) {
+          // New Chat Button
+          $('#new-chat-btn').onclick = async () => {
       try {
-        showLoading('sessionList', true);
-        const r = await fetchWithRetry(`/api/sessions/search?q=${encodeURIComponent(query)}`);
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-
-        const j = await r.json();
-        renderSessions(j.sessions);
-        showLoading('sessionList', false);
-      } catch (e) {
-        showLoading('sessionList', false);
-        showToast('Search failed: ' + e.message);
-        console.error('searchSessions error:', e);
-      }
-    }
-
-    /**
-     * Rename a session.
-     * @param {number} sessionId - Session ID
-     * @param {string} currentTitle - Current session title
-     */
-    async function renameSession(sessionId, currentTitle) {
-      const newTitle = prompt('RENAME_SESSION:', currentTitle);
-      if (!newTitle || newTitle === currentTitle) return;
-
-      try {
-        const r = await fetchWithRetry(`/api/sessions/${sessionId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: newTitle })
-        });
-
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-
-        showToast('Session renamed', 'success', 3000);
-        loadSessions();
-      } catch (e) {
-        showToast('Rename failed: ' + e.message);
-        console.error('renameSession error:', e);
-      }
-    }
-
-    /**
-     * Toggle session archive status.
-     * @param {number} sessionId - Session ID
-     * @param {boolean} archive - Whether to archive (true) or unarchive (false)
-     */
-    async function toggleArchive(sessionId, archive) {
-      try {
-        const r = await fetchWithRetry(`/api/sessions/${sessionId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ archived: archive })
-        });
-
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-
-        showToast(archive ? 'Session archived' : 'Session restored', 'success', 3000);
-        loadSessions();
-      } catch (e) {
-        showToast('Archive failed: ' + e.message);
-        console.error('toggleArchive error:', e);
-      }
-    }
-
-    /**
-     * Delete a session and all its messages.
-     * @param {number} sessionId - Session ID
-     * @param {string} title - Session title (for confirmation)
-     */
-    async function deleteSession(sessionId, title) {
-      if (!confirm(`DELETE session "${title}"? This cannot be undone.`)) return;
-
-      try {
-        const r = await fetchWithRetry(`/api/sessions/${sessionId}`, { method: 'DELETE' });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-
-        const j = await r.json();
-        showToast(`Session deleted (${j.deleted_messages} messages)`, 'success', 3000);
-
-        // If deleted current session, clear chat log
-        if (sessionId === currentSessionId) {
-          currentSessionId = 1;
-          $('#log').innerHTML = '';
-        }
-
-        loadSessions();
-      } catch (e) {
-        showToast('Delete failed: ' + e.message);
-        console.error('deleteSession error:', e);
-      }
-    }
-
-    // Search input with debouncing
-    $('#sessionSearch').oninput = (e) => {
-      clearTimeout(searchTimeout);
-      const query = e.target.value.trim();
-
-      if (!query) {
-        // Empty search - reload normal sessions
-        loadSessions();
-        return;
-      }
-
-      searchTimeout = setTimeout(() => searchSessions(query), 300);
-    };
-
-    // Filter toggle handlers
-    $('#showActive').onclick = () => {
-      currentFilter = 'active';
-      $('#showActive').classList.add('active');
-      $('#showArchived').classList.remove('active');
-      $('#sessionSearch').value = ''; // Clear search
-      loadSessions();
-    };
-
-    $('#showArchived').onclick = () => {
-      currentFilter = 'archived';
-      $('#showArchived').classList.add('active');
-      $('#showActive').classList.remove('active');
-      $('#sessionSearch').value = ''; // Clear search
-      loadSessions();
-    };
-
-    loadSessions();
-
-    /**
-     * Load and display messages for a specific session.
-     * @param {number} sid - Session ID to load messages from
-     */
-    async function loadMessages(sid) {
-      try {
-        showLoading('log', true);
-        const r = await fetchWithRetry(`/api/sessions/${sid}/messages`);
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-
-        const j = await r.json();
-        $('#log').innerHTML = '';
-        j.messages.forEach(m => addBubble(m.text, m.role === 'user'));
-
-        showLoading('log', false);
-      } catch (e) {
-        showLoading('log', false);
-        showToast('Failed to load messages: ' + e.message);
-        console.error('loadMessages error:', e);
-      }
-    }
-
-    /**
-     * Create a new chat session with timestamped title.
-     */
-    $('#newSession').onclick = async () => {
-      try {
-        const title = `LOG_${new Date().toISOString().slice(11, 19)}`;
+        const title = `Chat ${new Date().toLocaleTimeString()}`;
         const r = await fetchWithRetry('/api/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title })
         });
-
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const j = await r.json();
         currentSessionId = j.id;
         loadSessions();
-        $('#log').innerHTML = '';
-        showToast('New session created', 'success', 3000);
+        $('#chat-messages').innerHTML = ''; // Clear chat
+        $('#current-session-title').textContent = title;
+        showToast('New chat started', 'success', 2000);
       } catch (e) {
         showToast('Failed to create session: ' + e.message);
-        console.error('newSession error:', e);
       }
-    };
-
-    // --- CHARACTERS ---
-    /**
-     * Load and display character avatars in the character tray.
-     * Highlights the currently active character.
-     */
-    async function loadCharacters() {
-      try {
-        showLoading('charList', true);
-        const r = await fetchWithRetry('/api/characters');
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-
-        const j = await r.json();
-        characterCache = j.characters; // Update cache
-
-        const c = $('#charList');
-        c.innerHTML = '';
-
-        j.characters.forEach(char => {
-          const d = document.createElement('div');
-          d.className = 'char-item' + (char.id === currentCharacterId ? ' active' : '');
-          d.title = char.name;
-          d.onclick = () => {
-            if (currentCharacterId === char.id) return;
-            currentCharacterId = char.id;
-            loadCharacters(); // Re-render to update active state
-
-            // Switch VRM
-            const vrmUrl = `/files/avatars/${char.name}.vrm`;
-            $('#vrm-iframe').src = `/frontend/viewer/viewer.html?url=${vrmUrl}`;
-            
-            addBubble(`[SYSTEM] UPLINK_SWITCH: ${char.name}...`, false);
-          };
-          d.innerHTML = `<img src="${char.avatar_url || ''}" onerror="this.src='/assets/avatar_nano.png'"/>`;
-          c.appendChild(d);
-        });
-
-        initDashboard(); // Ensure correct VRM is loaded on startup
-        showLoading('charList', false);
-
-      } catch (e) {
-        showLoading('charList', false);
-        showToast('Failed to load characters: ' + e.message);
-        console.error('loadCharacters error:', e);
-      }
-    }
-    loadCharacters();
-
-    // --- CONFIG ---
-    /**
-     * Load current configuration from backend and populate UI fields.
-     */
-    async function loadCfg() {
-      try {
-        const r = await fetchWithRetry('/api/config');
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-
-        const j = await r.json();
-
-        if (j.llm) {
-          $('#endpoint').value = j.llm.endpoint || '';
-          $('#model').value = j.llm.model || '';
-          $('#temp').value = j.llm.temperature || 0.7;
-          $('#history_limit').value = j.llm.history_limit || 20;
-        }
-        if (j.tts) {
-          $('#tts_enabled').checked = !!j.tts.enabled;
-          $('#tts_provider').value = j.tts.provider || 'local';
-          $('#tts_voice_id').value = j.tts.voice_id || '';
-        }
-        if (j.asr) {
-          $('#asr_enabled').value = j.asr.enabled ? "true" : "false";
-          $('#asr_provider').value = j.asr.provider || 'web_speech';
-        }
-        if (j.ui) {
-          if ($('#ui_scanlines')) $('#ui_scanlines').value = j.ui.scanline_opacity || 0.4;
-          if ($('#ui_flicker')) $('#ui_flicker').value = j.ui.flicker_enabled ? "true" : "false";
-          updateUIEffects();
-        }
-
-        // Reload Dev Mode state
-        if ($('#dev_mode')) {
-          $('#dev_mode').checked = localStorage.getItem('retro_dev_mode') === 'true';
-          $('#dev_mode').onchange();
-        }
-        updateStatusLights();
-      } catch (e) {
-        showToast('Failed to load configuration: ' + e.message);
-        console.error('loadCfg error:', e);
-      }
-    }
-
-    function updateUIEffects() {
-      const opacity = $('#ui_scanlines').value;
-      const flicker = $('#ui_flicker').value === "true";
-      document.documentElement.style.setProperty('--scanline-opacity', opacity);
-      $('.scanlines').style.opacity = opacity;
-    }
-
-    async function pollLogs() {
-      try {
-        const r = await fetch('/api/logs');
-        if (!r.ok) return;
-        const j = await r.json();
-        const feed = $('#terminal-feed');
-        if (j.logs && j.logs.length > 0) {
-          j.logs.forEach(msg => {
-            const div = document.createElement('div');
-            div.textContent = msg;
-            feed.appendChild(div);
-          });
-          feed.scrollTop = feed.scrollHeight;
-          // Keep only last 50 logs
-          while (feed.children.length > 50) feed.removeChild(feed.firstChild);
-        }
-      } catch (e) {
-        console.warn('Logging offline');
-      }
-    }
-
-    /**
-     * Update status indicator lights with neon classes.
-     */
-    async function updateStatusLights() {
-      try {
-        const r = await fetch('/api/healthcheck');
-        if (!r.ok) throw new Error('OFFLINE');
-        const j = await r.json();
-
-        // LLM status
-        const llmOk = j.ok && j.llm && j.llm.ok;
-        const llmLabel = $('#stat-llm');
-        const llmDot = $('#led-llm');
-
-        llmLabel.textContent = `LLM: ${llmOk ? 'CONNECTED' : 'OFFLINE'}`;
-        llmLabel.style.color = llmOk ? 'var(--neon-green)' : 'var(--neon-pink)';
-        llmDot.className = `status-dot ${llmOk ? 'status-online' : 'status-offline'}`;
-
-        // TTS status
-        const ttsOk = j.ttsConfigured;
-        const ttsLabel = $('#stat-tts');
-        const ttsDot = $('#led-tts');
-        ttsLabel.textContent = `TTS: ${ttsOk ? 'READY' : 'OFFLINE'}`;
-        ttsLabel.style.color = ttsOk ? 'var(--neon-green)' : 'var(--neon-pink)';
-        ttsDot.className = `status-dot ${ttsOk ? 'status-online' : 'status-offline'}`;
-
-        // Latency/Uplink
-        if ($('#diag-latency')) {
-          const start = Date.now();
-          await fetch('/api/config');
-          const latency = Date.now() - start;
-          $('#diag-latency').textContent = `${latency}ms`;
-        }
-      } catch (e) {
-        $('#led-llm').className = 'status-dot status-offline';
-        $('#led-tts').className = 'status-dot status-offline';
-        $('#stat-llm').textContent = 'LLM: DISCONNECTED';
-        $('#stat-llm').style.color = 'var(--neon-pink)';
-      }
-    }
-
-    // Auto-polling intervals
-    setInterval(pollLogs, 2000);
-    setInterval(updateStatusLights, 5000);
-
-    // Dev Mode Toggle
-    $('#dev_mode').onchange = () => {
-      $('#dev-params').style.display = $('#dev_mode').checked ? 'block' : 'none';
-    };
-
-    // Model Discovery
-    $('#discoverModels').onclick = async () => {
-      try {
-        const endpoint = $('#endpoint').value.trim();
-        const base = endpoint.replace(/\/v1$/, '').replace(/\/$/, '') + '/v1';
-        showToast('SCANNING_MODELS...', 'info');
-        const r = await fetch(`${base}/models`);
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const j = await r.json();
-        if (j.data && j.data.length > 0) {
-          const modelId = j.data[0].id;
-          $('#model').value = modelId;
-          showToast(`FOUND: ${modelId}`, 'success');
-        } else {
-          showToast('NO_MODELS_FOUND');
-        }
-      } catch (e) {
-        showToast('SCAN_FAILED: ' + e.message);
-      }
-    };
-
-
-    /**
-     * Save configuration changes to backend.
-     */
-    $('#saveCfg').onclick = async () => {
-      try {
-        localStorage.setItem('retro_dev_mode', $('#dev_mode').checked);
-        const body = {
-          llm: {
-            endpoint: $('#endpoint').value,
-            model: $('#model').value,
-            temperature: parseFloat($('#temp').value),
-            history_limit: parseInt($('#history_limit').value) || 20
-          },
-          tts: { enabled: $('#tts_enabled').checked, provider: $('#tts_provider').value, voice_id: $('#tts_voice_id').value },
-          asr: { enabled: $('#asr_enabled').value === "true", provider: $('#asr_provider').value },
-          ui: { scanline_opacity: parseFloat($('#ui_scanlines').value), flicker_enabled: $('#ui_flicker').value === "true" }
         };
 
-        const r = await fetchWithRetry('/api/config', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
 
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+        // --- SETTINGS MODAL LOGIC ---
+        $('#settings-trigger').onclick = () => {
+          $('#settings-modal').classList.add('open');
+          loadCfg(); // Refresh config when opening
+        };
 
-        updateUIEffects();
-        showToast('SYSTEM_RECONFIG_SUCCESS', 'success', 3000);
-      } catch (e) {
-        showToast('Failed to save configuration: ' + e.message);
-        console.error('saveCfg error:', e);
-      }
+        $('#cancel-settings').onclick = () => {
+          $('#settings-modal').classList.remove('open');
     };
 
+        // Settings Sidebar Navigation
+        $$('.settings-nav-item').forEach(item => {
+          item.onclick = () => {
+            $$('.settings-nav-item').forEach(i => i.classList.remove('active'));
+            $$('.settings-section').forEach(s => s.classList.remove('active'));
+
+            item.classList.add('active');
+            const sectionId = 'sec-' + item.dataset.section;
+            $('#' + sectionId).classList.add('active');
+          };
+      });
+
+        // --- CHAT LOGIC ---
     /**
-     * Reset configuration to factory defaults and reload page.
+     * Load and display messages for a specific session.
      */
-    $('#resetCfg').onclick = async () => {
-      if (!confirm("CONFIRM FACTORY_RESET? ALL DATA WILL BE WIPED.")) return;
-
+    async function loadMessages(sid) {
       try {
-        const r = await fetchWithRetry('/api/config/reset', { method: 'POST' });
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-
-        showToast('Configuration reset, reloading...', 'info', 2000);
-        setTimeout(() => location.reload(), 2000);
+        const r = await fetchWithRetry(`/api/sessions/${sid}/messages`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json();
+        $('#chat-messages').innerHTML = '';
+        j.messages.forEach(m => addBubble(m.text, m.role === 'user'));
+        scrollToBottom();
       } catch (e) {
-        showToast('Failed to reset configuration: ' + e.message);
-        console.error('resetCfg error:', e);
+        showToast('Failed to load messages: ' + e.message);
       }
-    };
-    loadCfg();
+    }
 
-    // --- CHAT LOGIC ---
+        function addBubble(text, isMe) {
+          
+          const container = $('#chat-messages');
+          const row = document.createElement('div');
+          row.className = 'msg-row ' + (isMe ? 'user' : 'ai');
+      
+        const contentHtml = marked.parse(text);
+      
+        row.innerHTML = `
+            <div class="msg-container">
+                <div class="msg-avatar">${isMe ? 'U' : 'AI'}</div>
+                <div class="msg-content ${isMe ? 'user-bubble' : ''}">${contentHtml}</div>
+            </div>
+        `;
+      
+        container.appendChild(row);
+        scrollToBottom();
+      }
+
+        function scrollToBottom() {
+          const c = $('#chat-messages');
+          c.scrollTop = c.scrollHeight;
+        }
+
+        // --- INPUT HANDLING ---
     const sendBtn = $('#send');
-    const msgInput = $('#msg');
-    sendBtn.onclick = send;
-    msgInput.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
-
-    let useAudio = true;
-    let useMic = false;
-
-    $('#audio-btn').onclick = () => {
-      useAudio = !useAudio;
-      $('#audio-btn').classList.toggle('active', useAudio);
-    };
-
-    $('#mic-btn').onclick = () => {
-      useMic = !useMic;
-      $('#mic-btn').classList.toggle('active', useMic);
-      if (useMic) startASR(); else stopASR();
-    };
-
-    function startASR() { addBubble("[SYSTEM] ASR_STARTING...", false); }
-    function stopASR() { addBubble("[SYSTEM] ASR_HALTED.", false); }
+        const msgInput = $('#msg');
 
     // Auto-resize textarea
     msgInput.addEventListener('input', () => {
       msgInput.style.height = 'auto';
-      msgInput.style.height = msgInput.scrollHeight + 'px';
+      msgInput.style.height = (msgInput.scrollHeight) + 'px';
+      if (msgInput.value === '') msgInput.style.height = 'auto';
     });
 
-    function addBubble(text, isMe) {
-      const d = document.createElement('div');
-      d.className = `msg-bubble ${isMe ? 'user' : 'ai'}`;
+        // Send on Enter
+        msgInput.onkeydown = e => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            send();
+          } 
+        };
 
-      d.innerHTML = isMe ? text : `<span class="name">RECV_DATA</span> ${marked.parse(text)}`;
-      $('#log').appendChild(d);
-      $('#log').scrollTop = $('#log').scrollHeight;
-    }
+        sendBtn.onclick = send;
 
-    /**
-     * Send user message to chat API and display AI response.
-     * Handles TTS audio playback and avatar lip-sync animation.
-     */
     async function send() {
       const txt = msgInput.value.trim();
       if (!txt) return;
 
+      if (!llmConnected) {
+        showToast("LLM Offline - Check Connection", "error");
+        return;
+      }
+
       msgInput.value = '';
       msgInput.style.height = 'auto';
       addBubble(txt, true);
-      $('#typing').style.display = 'block';
 
       // Avatar Interaction: Nod on send
-      try {
-        $('#vrm-iframe').contentWindow.postMessage({ type: 'nod' }, '*');
-      } catch (e) {
-        console.warn('Avatar interaction failed:', e);
-      }
+      try { $('#vrm-iframe').contentWindow.postMessage({ type: 'nod' }, '*'); } catch (e) { }
 
       try {
         const res = await fetchWithRetry(`/api/chat?session_id=${currentSessionId}&char_id=${currentCharacterId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: txt, speak: useAudio })
+          body: JSON.stringify({ text: txt, speak: true }) // Defaulting speak to true for now
         });
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const j = await res.json();
-        $('#typing').style.display = 'none';
 
         if (j.ok) {
           addBubble(j.reply, false);
+                          handleAvatarResponse(j);
+                        } else {
+                          addBubble("Error: " + j.error, false);
+                        }
+                      } catch (e) {
+                        addBubble("Transmission Error: " + e.message, false);
+                      }
+                    }
 
-          // Send emotion-based expression to viewer
-          if (j.emotion && j.emotion !== 'neutral') {
-            try {
-              $('#vrm-iframe').contentWindow.postMessage({
+                    function handleAvatarResponse(j) {
+                      const iframe = $('#vrm-iframe');
+                      if (!iframe) return;
+
+              // Expression
+              if (j.emotion && j.emotion !== 'neutral') {
+        iframe.contentWindow.postMessage({
                 type: 'setExpression',
                 emotion: j.emotion,
                 intensity: j.intensity || 1.0
-              }, '*');
-
-              // Enhanced logging with confidence scores
-              console.log('EXPRESSION_SENT:', j.emotion, 'intensity:', j.intensity);
-              if (j.secondary_emotion) {
-                console.log('  Secondary emotion:', j.secondary_emotion);
+          }, '*');
               }
-              if (j.emotion_confidence) {
-                console.log('  Confidence scores:', j.emotion_confidence);
+      
+              // Gesture
+              if (j.gesture) {
+                iframe.contentWindow.postMessage({ type: 'playGesture', gesture: j.gesture }, '*');
               }
 
-              // Update emotion indicator in UI
-              updateEmotionIndicator(j);
-            } catch (e) {
-              console.error('Expression message error:', e);
+              // Lip Sync (Audio)
+              if (j.audio) {
+                iframe.contentWindow.postMessage({ type: 'playAudio', audioUrl: j.audio }, '*');
+              }
             }
-          }
 
-          // Send gesture animation to viewer
-          if (j.gesture) {
-            try {
-              $('#vrm-iframe').contentWindow.postMessage({
-                type: 'playGesture',
-                gesture: j.gesture
-              }, '*');
-              console.log('GESTURE_SENT:', j.gesture);
-            } catch (e) {
-              console.error('Gesture message error:', e);
-            }
-          }
+        // Initialize
+        loadCharacters();
 
-          // Handle TTS audio with real-time lip sync
-          if (j.audio && useAudio) {
-            try {
-              // Send audio URL to VRM viewer for audio-driven lip sync
-              $('#vrm-iframe').contentWindow.postMessage({
-                type: 'playAudio',
-                audioUrl: j.audio
-              }, '*');
-
-              console.log('AUDIO_LIPSYNC_TRIGGERED:', j.audio);
-            } catch (e) {
-              console.error('TTS audio error:', e);
-              showToast('TTS audio error: ' + e.message, 'error', 3000);
-            }
-          }
-        } else {
-          const errorMsg = j.error || "UNKNOWN_ERROR";
-          addBubble("CORE_ERR: " + errorMsg, false);
-          showToast('Chat error: ' + errorMsg);
-        }
-      } catch (e) {
-        $('#typing').style.display = 'none';
         addBubble("UPLINK_ERR: " + e.message, false);
         showToast('Failed to send message: ' + e.message);
         console.error('send() error:', e);

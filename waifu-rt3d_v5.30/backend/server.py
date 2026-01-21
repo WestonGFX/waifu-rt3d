@@ -88,7 +88,7 @@ DEFAULT_CONFIG = {
     "onboarded": False,
     "llm": {
         "provider": "local",
-        "endpoint": "http://127.0.0.1:1234/v1",
+        "endpoint": "http://127.0.0.1:1339/v1",
         "model": "",
         "api_key": "lm-studio",
         "history_limit": 20

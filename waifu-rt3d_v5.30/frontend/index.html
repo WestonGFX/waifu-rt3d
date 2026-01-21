@@ -852,7 +852,7 @@ _ __ _ ____ ____ _______ _____ ____
             
             addBubble(`[SYSTEM] UPLINK_SWITCH: ${char.name}...`, false);
           };
-          d.innerHTML = `<img src="${char.avatar_url || ''}" onerror="this.parentElement.style.display='none'"/>`;
+          d.innerHTML = `<img src="${char.avatar_url || ''}" onerror="this.src='/assets/avatar_nano.png'"/>`;
           c.appendChild(d);
         });
 
@@ -903,6 +903,7 @@ _ __ _ ____ ____ _______ _____ ____
         if ($('#dev_mode')) {
           $('#dev_mode').checked = localStorage.getItem('retro_dev_mode') === 'true';
           $('#dev_mode').onchange();
+        }
         updateStatusLights();
       } catch (e) {
         showToast('Failed to load configuration: ' + e.message);

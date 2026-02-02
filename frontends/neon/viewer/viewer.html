@@ -1,0 +1,463 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Viewer</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            background: #0b0c10;
+            overflow: hidden;
+        }
+
+        #loading {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #00f2ff;
+            font-family: monospace;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading">UPLINKING_VISUAL_FEED...</div>
+    <canvas id="c"></canvas>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "/frontend/lib/three.module.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        // RE-INJECTING EVERYTHING IS SAFER TO AVOID CUTTING CLASSES
+        import * as THREE from 'three';
+        import { GLTFLoader } from '/frontend/lib/GLTFLoader.js';
+        import { VRMLoaderPlugin, VRMUtils } from '/frontend/lib/three-vrm.module.min.js';
+
+        let currentVrm = null;
+        let clock = new THREE.Clock();
+        let lipSync = null;
+        let blinkController = null;
+        let headMovement = null;
+        let expressionController = null;
+        let gestureController = null;
+
+        /**
+         * Real-time audio-driven lip sync using Web Audio API.
+         */
+        class AudioLipSync {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.analyser = this.audioContext.createAnalyser();
+                this.analyser.fftSize = 256;
+                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+                this.isPlaying = false;
+                this.currentSource = null;
+            }
+
+            async playAudioWithLipSync(audioUrl) {
+                try {
+                    this.stop();
+                    const response = await fetch(audioUrl);
+                    const arrayBuffer = await response.arrayBuffer();
+                    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+
+                    const source = this.audioContext.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(this.analyser);
+                    this.analyser.connect(this.audioContext.destination);
+
+                    this.currentSource = source;
+                    this.isPlaying = true;
+                    source.start(0);
+
+                    source.onended = () => {
+                        this.isPlaying = false;
+                        this.currentSource = null;
+                        this.setMouthOpen(0);
+                    };
+
+                    this.updateLipSync();
+                } catch (error) {
+                    console.error('LIPSYNC_ERROR:', error);
+                    this.isPlaying = false;
+                    this.setMouthOpen(0);
+                }
+            }
+
+            updateLipSync() {
+                if (!this.isPlaying) return;
+                this.analyser.getByteFrequencyData(this.dataArray);
+                let sum = 0;
+                for (let i = 0; i < this.dataArray.length; i++) sum += this.dataArray[i];
+                const average = sum / this.dataArray.length;
+                const normalized = Math.min(average / 128, 1.0);
+                const smoothed = normalized * 0.7 + (this.lastValue || 0) * 0.3;
+                this.lastValue = smoothed;
+                this.setMouthOpen(smoothed);
+                requestAnimationFrame(() => this.updateLipSync());
+            }
+
+            setMouthOpen(value) {
+                if (!this.vrm) return;
+                if (this.vrm.expressionManager) {
+                    this.vrm.expressionManager.setValue('aa', value);
+                } else if (this.vrm.blendShapeProxy) {
+                    this.vrm.blendShapeProxy.setValue('aa', value);
+                }
+            }
+
+            stop() {
+                if (this.currentSource) {
+                    try { this.currentSource.stop(); } catch (e) {}
+                    this.currentSource = null;
+                }
+                this.isPlaying = false;
+                this.setMouthOpen(0);
+            }
+        }
+
+        class BlinkController {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.nextBlinkTime = this.getNextBlinkDelay();
+                this.isBlinking = false;
+                this.blinkProgress = 0;
+            }
+
+            update(deltaTime) {
+                if (this.isBlinking) {
+                    this.blinkProgress += deltaTime * 10;
+                    if (this.blinkProgress < 0.5) this.setBlinkValue(this.blinkProgress * 2);
+                    else this.setBlinkValue(1.0 - ((this.blinkProgress - 0.5) * 2));
+
+                    if (this.blinkProgress >= 1.0) {
+                        this.isBlinking = false;
+                        this.blinkProgress = 0;
+                        this.setBlinkValue(0);
+                        this.nextBlinkTime = this.getNextBlinkDelay();
+                    }
+                } else {
+                    this.nextBlinkTime -= deltaTime;
+                    if (this.nextBlinkTime <= 0) this.isBlinking = true;
+                }
+            }
+
+            setBlinkValue(value) {
+                if (!this.vrm) return;
+                if (this.vrm.expressionManager) this.vrm.expressionManager.setValue('blink', value);
+                else if (this.vrm.blendShapeProxy) this.vrm.blendShapeProxy.setValue('blink', value);
+            }
+
+            getNextBlinkDelay() { return 2 + Math.random() * 4; }
+        }
+
+        class IdleHeadMovement {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.headTarget = { x: 0, y: 0, z: 0 };
+                this.headCurrent = { x: 0, y: 0, z: 0 };
+                this.nextMoveTime = 5;
+            }
+
+            update(deltaTime) {
+                this.nextMoveTime -= deltaTime;
+                if (this.nextMoveTime <= 0) {
+                    this.headTarget = {
+                        x: (Math.random() - 0.5) * 0.15,
+                        y: (Math.random() - 0.5) * 0.25,
+                        z: (Math.random() - 0.5) * 0.08
+                    };
+                    this.nextMoveTime = 3 + Math.random() * 7;
+                }
+                const lerpSpeed = deltaTime * 0.5;
+                this.headCurrent.x += (this.headTarget.x - this.headCurrent.x) * lerpSpeed;
+                this.headCurrent.y += (this.headTarget.y - this.headCurrent.y) * lerpSpeed;
+                this.headCurrent.z += (this.headTarget.z - this.headCurrent.z) * lerpSpeed;
+
+                // VRM 1.0 vs 0.0 Bone compatibility
+                const head = this.vrm.humanoid.getNormalizedBoneNode ? 
+                             this.vrm.humanoid.getNormalizedBoneNode('head') : 
+                             this.vrm.humanoid.getBoneNode('head');
+                
+                if (head) {
+                    head.rotation.x = this.headCurrent.x;
+                    head.rotation.y = this.headCurrent.y;
+                    head.rotation.z = this.headCurrent.z;
+                }
+            }
+        }
+
+        class ExpressionController {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.currentExpression = "neutral";
+                this.targetExpression = "neutral";
+                this.currentIntensity = 0;
+                this.targetIntensity = 0;
+                this.transitionProgress = 1.0;
+                this.transitionDuration = 0.5;
+            }
+
+            setExpression(emotion, intensity = 1.0, duration = 0.5) {
+                if (emotion === this.targetExpression) return;
+                this.targetExpression = emotion;
+                this.targetIntensity = Math.min(Math.max(intensity, 0), 1);
+                this.transitionDuration = duration;
+                this.transitionProgress = 0;
+            }
+
+            update(deltaTime) {
+                if (this.transitionProgress < 1.0) {
+                    this.transitionProgress += deltaTime / this.transitionDuration;
+                    const t = Math.min(this.transitionProgress, 1.0);
+                    const eased = t * t * (3 - 2 * t);
+                    const blendedIntensity = this.currentIntensity + (this.targetIntensity - this.currentIntensity) * eased;
+                    this.applyExpression(this.targetExpression, blendedIntensity);
+                    if (this.transitionProgress >= 1.0) {
+                        this.currentExpression = this.targetExpression;
+                        this.currentIntensity = this.targetIntensity;
+                    }
+                }
+            }
+
+            applyExpression(emotion, intensity) {
+                if (!this.vrm) return;
+                const em = this.vrm.expressionManager || this.vrm.blendShapeProxy;
+                if (!em) return;
+
+                ['happy', 'sad', 'surprised', 'angry', 'relaxed'].forEach(expr => {
+                    try { em.setValue(expr, 0); } catch(e) {}
+                });
+
+                try {
+                    if (emotion === "happy") em.setValue('happy', intensity);
+                    else if (emotion === "sad") em.setValue('sad', intensity);
+                    else if (emotion === "surprised") em.setValue('surprised', intensity);
+                    else if (emotion === "confused") {
+                        em.setValue('surprised', intensity * 0.4);
+                        const head = this.vrm.humanoid.getNormalizedBoneNode ? 
+                                     this.vrm.humanoid.getNormalizedBoneNode('head') : 
+                                     this.vrm.humanoid.getBoneNode('head');
+                        if (head) head.rotation.z = 0.15 * intensity;
+                    } 
+                    else if (emotion === "thinking") em.setValue('relaxed', intensity * 0.6);
+                } catch (e) { console.warn('Expression not available:', emotion); }
+            }
+        }
+
+        class GestureController {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.currentGesture = null;
+                this.gestureProgress = 0;
+                this.gestureDuration = 0;
+            }
+
+            playGesture(gesture) {
+                if (this.currentGesture) return;
+                this.currentGesture = gesture;
+                this.gestureProgress = 0;
+                this.gestureDuration = 0.6;
+            }
+
+            update(deltaTime) {
+                if (!this.currentGesture) return;
+                this.gestureProgress += deltaTime;
+
+                if (this.gestureProgress >= this.gestureDuration) {
+                    this.resetGesture();
+                    this.currentGesture = null;
+                    return;
+                }
+
+                const t = this.gestureProgress / this.gestureDuration;
+                const eased = Math.sin(t * Math.PI);
+                
+                const getBone = (name) => this.vrm.humanoid.getNormalizedBoneNode ? 
+                                          this.vrm.humanoid.getNormalizedBoneNode(name) : 
+                                          this.vrm.humanoid.getBoneNode(name);
+
+                if (this.currentGesture === "nod") {
+                    const neck = getBone('neck');
+                    if (neck) neck.rotation.x = eased * 0.3;
+                }
+                else if (this.currentGesture === "tilt") {
+                    const head = getBone('head');
+                    if (head) head.rotation.z = eased * 0.35;
+                }
+                else if (this.currentGesture === "wave") {
+                    const rightArm = getBone('rightUpperArm');
+                    const rightHand = getBone('rightHand');
+                    if (rightArm) {
+                        rightArm.rotation.z = -eased * 1.2;
+                        rightArm.rotation.x = eased * 0.3;
+                    }
+                    if (rightHand) rightHand.rotation.z = Math.sin(t * Math.PI * 4) * 0.4;
+                }
+                else if (this.currentGesture === "shrug") {
+                    const lArm = getBone('leftUpperArm');
+                    const rArm = getBone('rightUpperArm');
+                    if (lArm) lArm.rotation.z = eased * 0.3;
+                    if (rArm) rArm.rotation.z = -eased * 0.3;
+                    const head = getBone('head');
+                    if (head) head.rotation.z = Math.sin(t * Math.PI) * 0.1;
+                }
+            }
+
+            resetGesture() {
+                if (!this.vrm) return;
+                const bones = ['neck', 'head', 'leftUpperArm', 'rightUpperArm', 'rightHand'];
+                const getBone = (name) => this.vrm.humanoid.getNormalizedBoneNode ? 
+                                          this.vrm.humanoid.getNormalizedBoneNode(name) : 
+                                          this.vrm.humanoid.getBoneNode(name);
+                                          
+                bones.forEach(boneName => {
+                    const bone = getBone(boneName);
+                    if (bone) {
+                        bone.rotation.x = 0;
+                        bone.rotation.z = 0;
+                    }
+                });
+            }
+        }
+
+        async function init() {
+            const canvas = document.getElementById('c');
+            const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.outputEncoding = THREE.sRGBEncoding; // Required for VRM1.0 colors
+
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0b0c10);
+
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 1.4, 1.2);
+
+            const light = new THREE.DirectionalLight(0xffffff, 1.5);
+            light.position.set(1, 2, 3);
+            const light2 = new THREE.DirectionalLight(0xffffff, 0.5);
+            light2.position.set(-1, 1, -2);
+            scene.add(light, light2, new THREE.AmbientLight(0xffffff, 0.8));
+
+            function animate() {
+                requestAnimationFrame(animate);
+                const delta = clock.getDelta();
+
+                if (currentVrm) {
+                    currentVrm.update(delta);
+                    
+                    // chest breathing
+                    const getBone = (name) => currentVrm.humanoid.getNormalizedBoneNode ? 
+                                              currentVrm.humanoid.getNormalizedBoneNode(name) : 
+                                              currentVrm.humanoid.getBoneNode(name);
+                                              
+                    const breathStrength = Math.sin(clock.elapsedTime * 2) * 0.003;
+                    const chest = getBone('chest') || getBone('spine'); // Fallback
+                    if (chest) {
+                        chest.rotation.x += breathStrength; // Additive
+                        chest.rotation.z += breathStrength * 0.5;
+                    }
+
+                    if (blinkController) blinkController.update(delta);
+                    if (headMovement) headMovement.update(delta);
+                    if (expressionController) expressionController.update(delta);
+                    if (gestureController) gestureController.update(delta);
+                }
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            const url = new URLSearchParams(location.search).get('url');
+            if (url) {
+                console.log("VRM_LOADING:", url);
+                const loader = new GLTFLoader();
+                
+                // VRM 1.0 Plugin Registration
+                loader.register((parser) => {
+                    return new VRMLoaderPlugin(parser);
+                });
+
+                loader.load(url, async (gltf) => {
+                    try {
+                        console.log("GLTF_LOADED, extracting VRM...");
+                        const vrm = gltf.userData.vrm;
+                        
+                        if (!vrm) {
+                            throw new Error("No VRM data found in GLTF user data");
+                        }
+                        
+                        scene.add(vrm.scene);
+                        currentVrm = vrm;
+                        VRMUtils.rotateVRM0(vrm); // Compatibility rotation
+
+                        lipSync = new AudioLipSync(vrm);
+                        blinkController = new BlinkController(vrm);
+                        headMovement = new IdleHeadMovement(vrm);
+                        expressionController = new ExpressionController(vrm);
+                        gestureController = new GestureController(vrm);
+
+                        console.log("ANIMATION_SYSTEMS_INITIALIZED");
+                        document.getElementById('loading').style.display = 'none';
+                        console.log("VRM_READY:", vrm);
+                    } catch (vrmErr) {
+                        console.error("VRM_INIT_ERR:", vrmErr);
+                        scene.add(gltf.scene);
+                        document.getElementById('loading').textContent = "ERROR: " + vrmErr.message;
+                    }
+                }, (progress) => {
+                    const pct = Math.round((progress.loaded / progress.total) * 100);
+                    document.getElementById('loading').textContent = `LOADING... ${pct}%`;
+                }, (err) => {
+                    console.error("LOAD_ERR:", err);
+                    document.getElementById('loading').textContent = "DATA_CORRUPTION: " + err.message;
+                });
+            } else {
+                document.getElementById('loading').textContent = "NO_SIGNAL";
+            }
+
+            window.addEventListener('message', (e) => {
+                if (!currentVrm) return;
+                const { type, state, audioUrl } = e.data;
+                const getBone = (name) => currentVrm.humanoid.getNormalizedBoneNode ? 
+                                          currentVrm.humanoid.getNormalizedBoneNode(name) : 
+                                          currentVrm.humanoid.getBoneNode(name);
+                                          
+                if (type === 'nod') {
+                    const neck = getBone('neck');
+                    if (neck) {
+                        neck.rotation.x = 0.2;
+                        setTimeout(() => neck.rotation.x = 0, 300);
+                    }
+                }
+                else if (type === 'playAudio') { if (lipSync && audioUrl) lipSync.playAudioWithLipSync(audioUrl); }
+                else if (type === 'stopAudio') { if (lipSync) lipSync.stop(); }
+                else if (type === 'setExpression') {
+                    if (expressionController) expressionController.setExpression(e.data.emotion, e.data.intensity || 1.0, e.data.duration || 0.5);
+                }
+                else if (type === 'playGesture') {
+                    if (gestureController) gestureController.playGesture(e.data.gesture);
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+            });
+        }
+        init();
+    </script>
+</body>
+
+</html>

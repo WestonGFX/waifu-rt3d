@@ -1,0 +1,957 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WAIFU_LINK // v5.31.0</title>
+  <link rel="stylesheet" href="/assets/css/glass.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  
+  <!-- MODULE IMPORTS -->
+  <script type="module">
+    import { ConfigUI } from './js/config_ui.js';
+    
+    window.uiState = window.uiState || {};
+    
+    // Initialize ConfigUI when DOM is ready
+    window.addEventListener('DOMContentLoaded', () => {
+        window.uiState.config = new ConfigUI();
+    });
+
+    // Global handler for Settings button
+    window.loadCfg = async () => {
+        if (!window.uiState.config) window.uiState.config = new ConfigUI();
+        await window.uiState.config.load();
+        
+        // Show modal (assuming modal logic is simple CSS display toggle)
+        const modal = document.getElementById('settings-modal');
+        if (modal) modal.style.display = 'block';
+    };
+
+    // Close modal handler being globally accessible
+    window.closeSettings = () => {
+        const modal = document.getElementById('settings-modal');
+        if (modal) modal.style.display = 'none';
+    };
+  </script>
+
+<body>
+  <div id="toast-container" style="position:fixed; top:20px; right:20px; z-index:9999;"></div>
+
+  <div class="app-container">
+    <!-- 1. SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand-header">
+        <svg class="icon" viewBox="0 0 24 24">
+          <path
+            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
+        </svg>
+        <span>Waifu-RT3D</span>
+      </div>
+
+      <button class="new-chat-btn" id="new-chat-btn">
+        <svg class="icon" viewBox="0 0 24 24" style="width:18px;height:18px;fill:var(--text-main)">
+          <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+        </svg>
+        New Chat
+      </button>
+
+      <div class="session-list" id="session-list">
+        <!-- Sessions injected here -->
+      </div>
+
+      <div class="sidebar-footer">
+        <!-- User Profile Card (Open WebUI Style) -->
+        <div class="profile-card" id="settings-trigger" onclick="loadCfg()">
+          <div class="avatar-circle"></div>
+          <div style="flex:1; overflow:hidden;">
+            <div style="font-size:0.85rem; font-weight:600;">User</div>
+            <div style="font-size:0.7rem; color:var(--text-muted);">Settings</div>
+          </div>
+          <svg class="icon" viewBox="0 0 24 24" style="width:18px;height:18px;fill:var(--text-muted)">
+            <path
+              d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L3.15 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.58 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+          </svg>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 2. MAIN CHAT -->
+    <main class="main-chat">
+      <div class="chat-header">
+        <span id="current-session-title">New Session</span>
+        <div id="status-indicators" style="display:flex; gap:8px;">
+          <!-- Dynamic Status Icons -->
+        </div>
+      </div>
+
+      <div class="chat-history" id="chat-messages">
+        <!-- Bubbles injected here -->
+      </div>
+
+      <div class="input-area">
+        <div class="input-wrapper">
+          <textarea id="msg" class="chat-input" placeholder="Message..." rows="1"></textarea>
+          <button id="send" class="send-btn" disabled>
+            <svg class="icon" viewBox="0 0 24 24" style="fill:white">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- 3. 3D VIEWPORT -->
+    <aside class="viewport-panel">
+      <div id="avatar-canvas-container">
+        <iframe id="vrm-iframe" src="/frontend/viewer/viewer.html"
+          style="width:100%; height:100%; border:none;"></iframe>
+      </div>
+    </aside>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="settings-modal">
+      <div class="settings-sidebar">
+        <div class="settings-nav-item active" data-section="llm">LLM Provider</div>
+        <div class="settings-nav-item" data-section="tts">TTS Voice</div>
+        <div class="settings-nav-item" data-section="asr">Voice Input</div>
+        <div class="settings-nav-item" data-section="system">System</div>
+      </div>
+      <div class="settings-content">
+        <!-- LLM SECTION -->
+        <div class="settings-section active" id="sec-llm">
+          <h3 class="settings-title">Large Language Model</h3>
+          <div id="cfg_llm_container"></div> <!-- Rendered by config_ui.js -->
+        </div>
+
+        <!-- TTS SECTION -->
+        <div class="settings-section" id="sec-tts">
+          <h3 class="settings-title">Text-to-Speech</h3>
+          <div id="cfg_tts_container"></div>
+        </div>
+
+        <!-- ASR SECTION -->
+        <div class="settings-section" id="sec-asr">
+          <h3 class="settings-title">Speech Recognition</h3>
+          <div id="cfg_asr_container"></div>
+        </div>
+        <!-- SYSTEM SECTION -->
+        <div class="settings-section" id="sec-system">
+          <h3 class="settings-title">System Settings</h3>
+          <div class="form-group">
+            <label class="form-label">Developer Mode</label>
+            <select class="form-select" id="dev_mode">
+              <option value="false">Disabled</option>
+              <option value="true">Enabled</option>
+            </select>
+          </div>
+          <button class="btn" id="resetCfg" style="color:red; border-color:red;">Factory Reset</button>
+        </div>
+
+        <div class="action-bar">
+          <button class="btn" id="cancel-settings">Cancel</button>
+          <button class="btn btn-primary" id="saveCfg">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="toast-container" style="position:fixed; top:20px; right:20px; z-index:9999;"></div>
+
+  <script type="module">
+    import { ConfigUI } from './js/config_ui.js';
+
+    // Initialize UI State immediately
+    window.uiState = {
+      config: new ConfigUI()
+      // models: new ModelManagerUI() // ModelManagerUI not yet fully integrated/imported
+    };
+
+    // Global config functions required by HTML buttons
+    window.loadCfg = async () => {
+      await window.uiState.config.load();
+      // Open modal logic
+      const modal = document.getElementById('settings-modal');
+      if (modal) {
+        modal.className = 'modal open settings-modal'; // Ensure correct classes
+        modal.style.display = 'flex'; // Force display flex locally if needed or rely on CSS
+        // Also handle section switching if needed, defaulting to LLM
+        showSettingsSection('llm');
+      }
+    };
+
+    window.saveCfg = async () => {
+      await window.uiState.config.save();
+      alert("Configuration Saved!");
+      closeSettings();
+    };
+
+    window.closeSettings = () => {
+      const modal = document.getElementById('settings-modal');
+      if (modal) {
+        modal.classList.remove('open');
+        // setTimeout(() => modal.style.display = 'none', 200);
+      }
+    };
+
+    // Settings Navigation Logic
+    window.showSettingsSection = (secId) => {
+      // Hide all sections
+      document.querySelectorAll('.settings-section').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('.settings-nav-item').forEach(el => el.classList.remove('active'));
+
+      // Show target
+      const target = document.getElementById('sec-' + secId);
+      if (target) target.style.display = 'block';
+
+      // Highlight nav
+      const nav = document.getElementById('nav-' + secId);
+      if (nav) nav.classList.add('active');
+    };
+
+  </script>
+
+  <script type="module">
+    const $ = (q) => document.querySelector(q);
+    const $$ = (q) => document.querySelectorAll(q);
+    let currentSessionId = 1;
+    let currentCharacterId = 1;
+    let characterCache = []; // Store char data
+    let llmConnected = false; // Track LLM connection state
+
+
+    // ========================
+    // ERROR HANDLING UTILITIES
+    // ========================
+
+    /**
+     * Display toast notification to user.
+     *
+     * @param {string} message - Message to display
+     * @param {string} type - 'error', 'success', or 'info'
+     * @param {number} duration - How long to show (ms), default 5000
+     */
+    function showToast(message, type = 'error', duration = 5000) {
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      // Auto-remove after duration
+      setTimeout(() => {
+        toast.style.animation = 'fadeOut 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    }
+
+    /**
+     * Show or hide loading spinner in container.
+     *
+     * @param {string} containerId - ID of container element
+     * @param {boolean} show - True to show, false to hide
+     */
+    function showLoading(containerId, show = true) {
+      const container = document.getElementById(containerId);
+      if (!container) {
+        console.warn(`Container not found: ${containerId}`);
+        return;
+      }
+
+      const spinnerId = `spinner-${containerId}`;
+
+      if (show) {
+        // Remove existing spinner if any
+        const existing = document.getElementById(spinnerId);
+        if (existing) existing.remove();
+
+        const spinner = document.createElement('div');
+        spinner.className = 'spinner';
+        spinner.id = spinnerId;
+        spinner.textContent = 'LOADING...';
+        container.appendChild(spinner);
+      } else {
+        const spinner = document.getElementById(spinnerId);
+        if (spinner) spinner.remove();
+      }
+    }
+
+    /**
+     * Fetch with exponential backoff retry logic.
+     *
+     * @param {string} url - URL to fetch
+     * @param {object} options - Fetch options
+     * @param {number} retries - Number of retry attempts, default 3
+     * @returns {Promise<Response>} Response object
+     * @throws {Error} If all retries fail
+     */
+    async function fetchWithRetry(url, options = {}, retries = 3) {
+      for (let i = 0; i < retries; i++) {
+        try {
+          const response = await fetch(url, options);
+
+          // If response is ok, return immediately
+          if (response.ok) {
+            return response;
+          }
+
+          // If not ok and we have retries left, wait and retry
+          if (i < retries - 1) {
+            const delay = Math.pow(2, i) * 1000; // Exponential backoff: 1s, 2s, 4s
+            console.log(`Request failed (${response.status}), retrying in ${delay}ms...`);
+            await new Promise(r => setTimeout(r, delay));
+            continue;
+          }
+
+          // Last attempt failed, return the failed response
+          return response;
+
+        } catch (err) {
+          // Network error
+          if (i === retries - 1) {
+            // Last retry, throw the error
+            throw err;
+          }
+
+          // Wait before retry
+          const delay = Math.pow(2, i) * 1000;
+          console.log(`Network error, retrying in ${delay}ms...`, err);
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
+    }
+
+    /**
+     * Global error handler for unhandled promise rejections.
+     */
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      showToast('SYSTEM_ERROR: ' + (event.reason?.message || 'Unknown error'));
+      event.preventDefault(); // Prevent default error logging
+    });
+
+    /**
+     * Global error handler for uncaught errors.
+     */
+    window.addEventListener('error', (event) => {
+      console.error('Uncaught error:', event.error);
+      showToast('SYSTEM_ERROR: ' + (event.error?.message || 'Unknown error'));
+    });
+
+    // --- INITIALIZATION ---
+    async function init() {
+      await displayVersion();
+      // Check connection
+      try {
+        const r = await fetch('/api/healthcheck');
+        if (r.ok) showToast('System Online', 'success', 2000);
+      } catch (e) {
+        showToast('Server Offline', 'error');
+      }
+
+      initAvatar();
+    }
+
+    // --- VERSION DISPLAY ---
+    async function displayVersion() {
+      try {
+        const r = await fetch('/api/healthcheck');
+        if (!r.ok) return;
+        const j = await r.json();
+        if (j.version) {
+          // We might want to put this somewhere in the new UI, 
+          // but for now just log it or put it in title
+          document.title = `Waifu-RT3D v${j.version}`;
+        }
+      } catch (e) {
+        console.warn('Version check failed');
+      }
+    }
+
+    // Initialize VRM Viewport
+    function initAvatar() {
+      // Find current character name
+      const char = characterCache.find(c => c.id === currentCharacterId);
+      const charName = char ? char.name : 'Panicandy';
+      const vrmUrl = `/files/avatars/${charName}.vrm`;
+
+      const iframe = $('#vrm-iframe');
+      if (iframe && (iframe.src === 'about:blank' || !iframe.src.includes(charName))) {
+        iframe.src = `/frontend/viewer/viewer.html?url=${vrmUrl}`;
+      }
+    }
+
+    // Start everything
+    init();
+
+
+
+    // --- SESSIONS ---
+    let currentFilter = 'active';
+
+    async function loadSessions() {
+      try {
+        const r = await fetchWithRetry(`/api/sessions?archived=${currentFilter === 'archived'}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json();
+        renderSessions(j.sessions);
+      } catch (e) {
+        showToast('Failed to load sessions: ' + e.message);
+      }
+    }
+
+    function renderSessions(sessions) {
+      const list = $('#session-list');
+      list.innerHTML = '';
+
+      sessions.forEach(s => {
+        const d = document.createElement('div');
+        d.className = `session-item` + (s.id === currentSessionId ? ' active' : '');
+        d.textContent = s.title.length > 25 ? s.title.substring(0, 25) + '...' : s.title;
+        d.title = s.title;
+
+        d.onclick = () => {
+          if (s.id !== currentSessionId) {
+            currentSessionId = s.id;
+            $('#current-session-title').textContent = s.title;
+            // Update active state in UI without reload
+            $$('.session-item').forEach(el => el.classList.remove('active'));
+            d.classList.add('active');
+            loadMessages(s.id);
+          }
+        };
+        list.appendChild(d);
+      });
+    }
+
+    // New Chat Button
+    $('#new-chat-btn').onclick = async () => {
+      try {
+        const title = `Chat ${new Date().toLocaleTimeString()}`;
+        const r = await fetchWithRetry('/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title })
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json();
+        currentSessionId = j.id;
+        loadSessions();
+        $('#chat-messages').innerHTML = ''; // Clear chat
+        $('#current-session-title').textContent = title;
+        showToast('New chat started', 'success', 2000);
+      } catch (e) {
+        showToast('Failed to create session: ' + e.message);
+      }
+    };
+
+
+    // --- SETTINGS MODAL LOGIC ---
+    $('#settings-trigger').onclick = () => {
+      $('#settings-modal').classList.add('open');
+      loadCfg(); // Refresh config when opening
+    };
+
+    $('#cancel-settings').onclick = () => {
+      $('#settings-modal').classList.remove('open');
+    };
+
+    // Settings Sidebar Navigation
+    $$('.settings-nav-item').forEach(item => {
+      item.onclick = () => {
+        $$('.settings-nav-item').forEach(i => i.classList.remove('active'));
+        $$('.settings-section').forEach(s => s.classList.remove('active'));
+
+        item.classList.add('active');
+        const sectionId = 'sec-' + item.dataset.section;
+        $('#' + sectionId).classList.add('active');
+      };
+    });
+
+    // --- CHAT LOGIC ---
+    /**
+     * Load and display messages for a specific session.
+     */
+    async function loadMessages(sid) {
+      try {
+        const r = await fetchWithRetry(`/api/sessions/${sid}/messages`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json();
+        $('#chat-messages').innerHTML = '';
+        j.messages.forEach(m => addBubble(m.text, m.role === 'user'));
+        scrollToBottom();
+      } catch (e) {
+        showToast('Failed to load messages: ' + e.message);
+      }
+    }
+
+    function addBubble(text, isMe) {
+
+      const container = $('#chat-messages');
+      const row = document.createElement('div');
+      row.className = 'msg-row ' + (isMe ? 'user' : 'ai');
+
+      const contentHtml = marked.parse(text);
+
+      row.innerHTML = `
+            <div class="msg-container">
+                <div class="msg-avatar">${isMe ? 'U' : 'AI'}</div>
+                <div class="msg-content ${isMe ? 'user-bubble' : ''}">${contentHtml}</div>
+            </div>
+        `;
+
+      container.appendChild(row);
+      scrollToBottom();
+    }
+
+    function scrollToBottom() {
+      const c = $('#chat-messages');
+      c.scrollTop = c.scrollHeight;
+    }
+
+    // --- INPUT HANDLING ---
+    const sendBtn = $('#send');
+    const msgInput = $('#msg');
+
+    // Auto-resize textarea
+    msgInput.addEventListener('input', () => {
+      msgInput.style.height = 'auto';
+      msgInput.style.height = (msgInput.scrollHeight) + 'px';
+      if (msgInput.value === '') msgInput.style.height = 'auto';
+    });
+
+    // Send on Enter
+    msgInput.onkeydown = e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    };
+
+    sendBtn.onclick = send;
+
+    async function send() {
+      const txt = msgInput.value.trim();
+      if (!txt) return;
+
+      if (!llmConnected) {
+        showToast("LLM Offline - Check Connection", "error");
+        return;
+      }
+
+      msgInput.value = '';
+      msgInput.style.height = 'auto';
+      addBubble(txt, true);
+
+      // Avatar Interaction: Nod on send
+      try { $('#vrm-iframe').contentWindow.postMessage({ type: 'nod' }, '*'); } catch (e) { }
+
+      try {
+        const res = await fetchWithRetry(`/api/chat?session_id=${currentSessionId}&char_id=${currentCharacterId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: txt, speak: true })
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const j = await res.json();
+
+        if (j.ok) {
+          addBubble(j.reply, false);
+          handleAvatarResponse(j);
+        } else {
+          addBubble("Error: " + j.error, false);
+        }
+      } catch (e) {
+        addBubble("Transmission Error: " + e.message, false);
+        console.error('send() error:', e);
+      }
+    }
+
+    function handleAvatarResponse(j) {
+      const iframe = $('#vrm-iframe');
+      if (!iframe) return;
+
+      // Expression
+      if (j.emotion && j.emotion !== 'neutral') {
+        iframe.contentWindow.postMessage({
+          type: 'setExpression',
+          emotion: j.emotion,
+          intensity: j.intensity || 1.0
+        }, '*');
+      }
+
+      // Gesture
+      if (j.gesture) {
+        iframe.contentWindow.postMessage({ type: 'playGesture', gesture: j.gesture }, '*');
+      }
+
+      // Lip Sync (Audio)
+      if (j.audio) {
+        iframe.contentWindow.postMessage({ type: 'playAudio', audioUrl: j.audio }, '*');
+      }
+    }
+
+    // Initialize
+    loadCharacters();
+
+    // --- EMOTION INDICATOR ---
+    /**
+     * Update emotion indicator with current AI emotion state.
+     * Displays primary emotion, intensity, and confidence scores.
+     *
+     * @param {Object} emotionData - Emotion data from API response
+     * @param {string} emotionData.emotion - Primary emotion
+     * @param {number} emotionData.intensity - Emotion intensity (0-1)
+     * @param {string} emotionData.secondary_emotion - Secondary emotion (optional)
+     * @param {Object} emotionData.emotion_confidence - Confidence scores for top emotions
+     */
+    function updateEmotionIndicator(emotionData) {
+      const indicator = $('#emotion-indicator');
+      if (!indicator) return;
+
+      const { emotion, intensity, secondary_emotion, emotion_confidence } = emotionData;
+
+      // Emotion color mapping
+      const emotionColors = {
+        joy: 'var(--neon-green)',
+        sadness: 'var(--neon-blue)',
+        anger: 'var(--neon-pink)',
+        fear: 'var(--neon-purple)',
+        surprise: 'var(--neon-yellow)',
+        disgust: '#8B4513',
+        neutral: '#888888'
+      };
+
+      const color = emotionColors[emotion] || '#888888';
+
+      // Build confidence bars HTML
+      let confidenceBars = '';
+      if (emotion_confidence) {
+        for (const [emo, conf] of Object.entries(emotion_confidence)) {
+          const barWidth = (conf * 100).toFixed(0);
+          confidenceBars += `
+            <div style="display: flex; align-items: center; margin-top: 4px; font-size: 0.45rem;">
+              <span style="width: 60px; text-transform: uppercase;">${emo}:</span>
+              <div style="flex: 1; background: rgba(255,255,255,0.1); height: 8px; margin: 0 5px; border-radius: 2px; overflow: hidden;">
+                <div style="width: ${barWidth}%; height: 100%; background: ${emotionColors[emo] || '#888'}; transition: width 0.3s;"></div>
+              </div>
+              <span style="width: 35px; text-align: right;">${(conf * 100).toFixed(0)}%</span>
+            </div>
+          `;
+        }
+      }
+
+      indicator.innerHTML = `
+        <div style="padding: 10px; border: 1px solid ${color}; border-radius: 4px; background: rgba(0,0,0,0.5);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-family: var(--font-pixel); font-size: 0.6rem; color: ${color}; text-transform: uppercase;">
+              ${emotion}
+            </span>
+            <span style="font-family: var(--font-mono); font-size: 0.5rem; color: ${color};">
+              ${(intensity * 100).toFixed(0)}%
+            </span>
+          </div>
+          ${secondary_emotion ? `
+            <div style="font-size: 0.45rem; color: #aaa; margin-bottom: 4px;">
+              Secondary: ${secondary_emotion.toUpperCase()}
+            </div>
+          ` : ''}
+          ${confidenceBars}
+        </div>
+      `;
+
+      // Auto-hide after 10 seconds
+      setTimeout(() => {
+        if (indicator) {
+          indicator.style.opacity = '0.3';
+          setTimeout(() => { indicator.style.opacity = '1'; }, 300);
+        }
+      }, 10000);
+    }
+
+    // --- CHARACTER LOADING ---
+    async function loadCharacters() {
+      try {
+        const r = await fetchWithRetry('/api/characters');
+        if (r.ok) {
+          const j = await r.json();
+          characterCache = j.characters;
+          console.log('Characters loaded:', characterCache.length);
+          
+          // Re-init avatar if we have cache now
+          initAvatar();
+        }
+      } catch (e) {
+        console.warn('Failed to load characters:', e);
+      }
+    }
+
+    // --- DIAG ---
+    /**
+     * Refresh system health diagnostics and display in SYSTEM tab.
+     */
+    $('#refreshHealth').onclick = async () => {
+      try {
+        showLoading('health', true);
+        const r = await fetchWithRetry('/api/healthcheck');
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+
+        const j = await r.json();
+        $('#health').textContent = JSON.stringify(j, null, 2);
+        showLoading('health', false);
+
+        if (!j.ok) {
+          showToast('System health check failed: ' + (j.issues?.join(', ') || 'Unknown issues'), 'error');
+        } else {
+          showToast('Health check complete', 'success', 2000);
+        }
+      } catch (e) {
+        showLoading('health', false);
+        showToast('Failed to refresh health check: ' + e.message);
+        console.error('refreshHealth error:', e);
+        $('#health').textContent = `ERROR: ${e.message}`;
+      }
+    }
+
+    // --- CHARACTER MANAGEMENT ---
+    /**
+     * Open character management modal and load character list.
+     */
+    function openCharacterManager() {
+      $('#charModal').classList.add('open');
+      loadCharactersManage();
+    }
+
+    /**
+     * Close character management modal.
+     */
+    $('#closeCharModal').onclick = () => {
+      $('#charModal').classList.remove('open');
+    };
+
+    /**
+     * Open modal button handler.
+     */
+    $('#openCharModal').onclick = openCharacterManager;
+
+    /**
+     * Load characters into management modal list.
+     */
+    async function loadCharactersManage() {
+      try {
+        const r = await fetchWithRetry('/api/characters');
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+        const j = await r.json();
+        const list = $('#charListManage');
+        list.innerHTML = '';
+
+        j.characters.forEach(char => {
+          const item = document.createElement('div');
+          item.style.cssText = 'padding:10px; margin-bottom:5px; border:1px solid var(--neon-purple); display:flex; justify-content:space-between; background:rgba(26,6,40,0.3);';
+
+          const info = document.createElement('div');
+          info.innerHTML = `<strong style="color:var(--neon-green); font-size:0.6rem;">${char.name}</strong><br><span style="font-size:0.5rem; color:var(--neon-blue);">${char.system_prompt.substring(0, 50)}...</span>`;
+
+          const actions = document.createElement('div');
+          actions.style.cssText = 'display:flex; gap:5px; align-items:center;';
+
+          const editBtn = document.createElement('button');
+          editBtn.textContent = 'EDIT';
+          editBtn.style.cssText = 'background:var(--neon-blue); color:#000; border:none; padding:5px 10px; cursor:pointer; font-family:var(--font-pixel); font-size:0.5rem;';
+          editBtn.onclick = () => editCharacter(char);
+
+          const delBtn = document.createElement('button');
+          delBtn.textContent = 'DEL';
+          delBtn.style.cssText = 'background:var(--neon-pink); color:#000; border:none; padding:5px 10px; cursor:pointer; font-family:var(--font-pixel); font-size:0.5rem;';
+          delBtn.disabled = (char.id === 1);
+          if (char.id === 1) delBtn.style.opacity = '0.3';
+          delBtn.onclick = () => deleteChar(char.id, char.name);
+
+          actions.appendChild(editBtn);
+          actions.appendChild(delBtn);
+          item.appendChild(info);
+          item.appendChild(actions);
+          list.appendChild(item);
+        });
+      } catch (e) {
+        showToast('Failed to load characters: ' + e.message);
+        console.error('loadCharactersManage error:', e);
+      }
+    }
+
+    /**
+     * Populate form with character data for editing.
+     * @param {Object} char - Character object
+     */
+    function editCharacter(char) {
+      $('#editCharId').value = char.id;
+      $('#charName').value = char.name;
+      $('#charPrompt').value = char.system_prompt;
+      $('#charAvatar').value = char.avatar_url || '';
+      $('#charVoice').value = char.voice_id || '';
+      $('#charTTS').value = char.tts_provider || '';
+      $('#charTraits').value = (char.personality_traits || []).join(', ');
+    }
+
+    /**
+     * Clear character form for new character creation.
+     */
+    $('#newChar').onclick = () => {
+      $('#editCharId').value = '';
+      $('#charName').value = '';
+      $('#charPrompt').value = '';
+      $('#charAvatar').value = '';
+      $('#charVoice').value = '';
+      $('#charTTS').value = '';
+      $('#charTraits').value = '';
+    };
+
+    /**
+     * Save character (create or update).
+     */
+    $('#saveChar').onclick = async () => {
+      const charId = $('#editCharId').value;
+      const isNew = !charId;
+
+      const data = {
+        name: $('#charName').value.trim(),
+        system_prompt: $('#charPrompt').value.trim(),
+        avatar_url: $('#charAvatar').value.trim(),
+        voice_id: $('#charVoice').value.trim(),
+        tts_provider: $('#charTTS').value,
+        personality_traits: $('#charTraits').value.split(',').map(s => s.trim()).filter(s => s)
+      };
+
+      if (!data.name || !data.system_prompt) {
+        showToast('Name and system prompt required');
+        return;
+      }
+
+      try {
+        const url = isNew ? '/api/characters' : `/api/characters/${charId}`;
+        const method = isNew ? 'POST' : 'PUT';
+
+        const r = await fetchWithRetry(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+        showToast(isNew ? 'Character created' : 'Character updated', 'success', 3000);
+        loadCharactersManage();
+        $('#newChar').click();
+        loadCharacters(); // Refresh character tray
+      } catch (e) {
+        showToast('Save failed: ' + e.message);
+        console.error('saveChar error:', e);
+      }
+    };
+
+    /**
+     * Delete a character.
+     * @param {number} charId - Character ID
+     * @param {string} name - Character name (for confirmation)
+     */
+    async function deleteChar(charId, name) {
+      if (charId === 1) {
+        showToast('Cannot delete default character');
+        return;
+      }
+
+      if (!confirm(`DELETE character "${name}"?`)) return;
+
+      try {
+        const r = await fetchWithRetry(`/api/characters/${charId}`, { method: 'DELETE' });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+        showToast('Character deleted', 'success', 3000);
+        loadCharactersManage();
+        loadCharacters(); // Refresh character tray
+
+        // Reset to default if deleted current character
+        if (charId === currentCharacterId) {
+          currentCharacterId = 1;
+        }
+      } catch (e) {
+        showToast('Delete failed: ' + e.message);
+        console.error('deleteChar error:', e);
+      }
+    }
+  </script>
+
+  <!-- Character Management Modal -->
+  <div id="charModal" class="modal" style="display:none;">
+    <div class="modal-content" style="width:600px;">
+      <div style="display:flex; justify-content:space-between; margin-bottom:20px; align-items:center;">
+        <h2 style="font-family:var(--font-pixel); font-size:0.8rem; color:var(--neon-blue); margin:0;">
+          CHARACTER_DATABASE
+        </h2>
+        <button id="closeCharModal"
+          style="background:transparent; border:none; color:var(--neon-pink); cursor:pointer; font-size:1.5rem; padding:0; line-height:1;">&times;</button>
+      </div>
+
+      <!-- Character List -->
+      <div id="charListManage"
+        style="max-height:200px; overflow-y:auto; margin-bottom:20px; border:1px solid var(--neon-purple); padding:10px; background:rgba(0,0,0,0.3);">
+      </div>
+
+      <!-- Character Form -->
+      <div id="charForm">
+        <input type="hidden" id="editCharId" value="" />
+
+        <div class="form-group">
+          <label>NAME</label>
+          <input type="text" id="charName" placeholder="Character Name" />
+        </div>
+
+        <div class="form-group">
+          <label>SYSTEM_PROMPT</label>
+          <textarea id="charPrompt" rows="4" placeholder="You are..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>AVATAR_URL</label>
+          <input type="text" id="charAvatar" placeholder="/files/avatars/character.vrm" />
+        </div>
+
+        <div class="form-group">
+          <label>VOICE_ID</label>
+          <input type="text" id="charVoice" placeholder="Voice identifier" />
+        </div>
+
+        <div class="form-group">
+          <label>TTS_PROVIDER</label>
+          <select id="charTTS">
+            <option value="">Default</option>
+            <option value="fish_audio">Fish Audio</option>
+            <option value="elevenlabs">ElevenLabs</option>
+            <option value="piper_local">Piper Local</option>
+            <option value="xtts_server">XTTS Server</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>PERSONALITY_TRAITS (comma-separated)</label>
+          <input type="text" id="charTraits" placeholder="friendly, energetic" />
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button id="saveChar"
+            style="flex:1; background:var(--neon-green); color:#000; border:none; padding:15px; font-family:var(--font-pixel); font-size:0.6rem; cursor:pointer;">SAVE</button>
+          <button id="newChar"
+            style="flex:1; background:var(--neon-blue); color:#000; border:none; padding:15px; font-family:var(--font-pixel); font-size:0.6rem; cursor:pointer;">NEW</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+
+</html>

@@ -78,7 +78,12 @@ class ModelManager:
             
             # High Spec (12GB+ VRAM)
             {"id": "Dark-Desires-12B-v1_0-Q6_K", "type": "llm", "min_ram": 16, "tags": ["uncensored","roleplay"]},
-            {"id": "deepseek-ai/deepseek-coder-33b-instruct", "type": "llm", "min_ram": 32, "tags": ["coding"]}
+            {"id": "deepseek-ai/deepseek-coder-33b-instruct", "type": "llm", "min_ram": 32, "tags": ["coding"]},
+            
+            # ASR Models (Sherpa-ONNX Compatible)
+            {"id": "csukuangfj/sherpa-onnx-whisper-tiny.en", "type": "asr", "min_ram": 1, "tags": ["fast", "english", "cpu"]},
+            {"id": "csukuangfj/sherpa-onnx-whisper-base.en", "type": "asr", "min_ram": 2, "tags": ["balanced", "english"]},
+            {"id": "csukuangfj/sherpa-onnx-whisper-small.en", "type": "asr", "min_ram": 4, "tags": ["accurate", "english"]}
         ]
         
         valid = []

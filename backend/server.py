@@ -626,6 +626,50 @@ def delete_character(character_id: int):
     conn.close()
     return {"ok": True}
 
+# ==================== FILE UPLOAD HANDLERS ====================
+
+@app.post("/api/upload/avatar")
+async def upload_avatar_endpoint(file: UploadFile = File(...)):
+    """Upload a VRM avatar file."""
+    if not file.filename.endswith(".vrm"):
+        raise HTTPException(400, "File must be .vrm")
+    
+    # Sanitize filename
+    safe_name = "".join([c for c in file.filename if c.isalpha() or c.isdigit() or c in "._-"])
+    file_path = STORAGE / "avatars" / safe_name
+    
+    try:
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        return {"ok": True, "url": f"/files/avatars/{safe_name}", "path": str(file_path)}
+    except Exception as e:
+        logger.error(f"Avatar Upload Failed: {e}")
+        raise HTTPException(500, "Upload failed")
+
+@app.post("/api/upload/image")
+async def upload_image_endpoint(file: UploadFile = File(...)):
+    """Upload a generic image (thumbnail/bg)."""
+    allowed = [".png", ".jpg", ".jpeg", ".webp", ".gif"]
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed:
+        raise HTTPException(400, f"File type not allowed. Use: {allowed}")
+    
+    safe_name = f"img_{int(time.time())}_{ext}" # Unique ID
+    save_dir = STORAGE / "images" 
+    save_dir.mkdir(exist_ok=True)
+    
+    file_path = save_dir / safe_name
+    
+    try:
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        return {"ok": True, "url": f"/files/images/{safe_name}"}
+    except Exception as e:
+        logger.error(f"Image Upload Failed: {e}")
+        raise HTTPException(500, "Upload failed")
+
 # ==================== ASR (SPEECH RECOGNITION) ====================
 
 @app.post("/api/asr")
@@ -654,6 +698,48 @@ async def transcribe_audio(file: UploadFile = File(...)):
         # Log it
         logger.error(f"ASR Fail: {e}")
         raise HTTPException(500, f"Transcription failed: {str(e)}")
+
+# ==================== MODEL MANAGEMENT ====================
+
+@app.on_event("startup")
+async def startup_event():
+    global model_manager
+    cfg = load_config()
+    from backend.models.manager import ModelManager
+    model_manager = ModelManager(cfg)
+    logger.info("Model Manager Initialized")
+
+@app.get("/api/models/recommend")
+def recommend_models(type: str = "llm"):
+    if not model_manager: raise HTTPException(500, "Model Manager not ready")
+    return {"models": model_manager.recommend_models(type)}
+
+@app.get("/api/models/installed")
+def list_installed_models():
+    if not model_manager: raise HTTPException(500, "Model Manager not ready")
+    return {"installed": model_manager.list_installed()}
+
+@app.post("/api/models/install")
+async def install_model(req: Request):
+    if not model_manager: raise HTTPException(500, "Model Manager not ready")
+    body = await req.json()
+    model_id = body.get("id")
+    mtype = body.get("type", "llm")
+    if not model_id: raise HTTPException(400, "Model ID required")
+    
+    # Check if already installed
+    # (Optional logic, but let's just reinstall/update)
+    try:
+        res = await model_manager.install(model_id, mtype)
+        return res
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.delete("/api/models/{mtype}/{model_id:path}")
+def delete_model(mtype: str, model_id: str):
+    if not model_manager: raise HTTPException(500, "Model Manager not ready")
+    success = model_manager.delete(model_id, mtype)
+    return {"ok": success}
 
 # --- EXCEPTION HANDLERS ---
 @app.exception_handler(Exception)

@@ -1,136 +1,136 @@
-/**
- * model_manager.js
- * Handles model searching, installation wizard, and installed model management.
- */
 
 export class ModelManagerUI {
     constructor() {
-        this.modal = document.getElementById('wizard-modal'); // We'll add this to index.html
-        this.container = document.getElementById('wizard-content');
-        this.installing = new Set();
-    }
+        this.modal = document.getElementById('model-manager-modal');
+        this.listContainer = document.getElementById('mm_list');
+        this.typeSelector = document.getElementById('mm_type_select');
 
-    toggleModal(force) {
-        if (!this.modal) return;
-        const isHidden = this.modal.style.display === 'none';
-        if (force !== undefined) {
-             this.modal.style.display = force ? 'flex' : 'none';
-        } else {
-             this.modal.style.display = isHidden ? 'flex' : 'none';
-        }
-        
-        if (this.modal.style.display === 'flex') {
-            this.startWizard();
+        if (this.typeSelector) {
+            this.typeSelector.onchange = (e) => this.load(e.target.value);
         }
     }
 
-    async startWizard() {
-        this.renderStep1_HardwareScan();
+    open() {
+        if (this.modal) this.modal.classList.add('open');
+        this.load('asr'); // Default to ASR for this wizard
     }
 
-    async renderStep1_HardwareScan() {
-        this.container.innerHTML = `
-            <div style="text-align:center; padding: 20px;">
-                <div class="spinner">SCANNING SYSTEM HARDWARE...</div>
-            </div>
-        `;
-        
-        // Fetch recommendations to get hardware stats + models
+    close() {
+        if (this.modal) this.modal.classList.remove('open');
+    }
+
+    async load(type) {
+        if (!this.listContainer) return;
+        this.listContainer.innerHTML = '<div class="spinner">SCANNING_HARDWARE...</div>';
+
         try {
-            const r = await fetch('/api/system/stats');
-            const stats = await r.json();
-            const hw = stats.hardware || {};
+            // Parallel fetch
+            const [recRes, instRes] = await Promise.all([
+                fetch(`/api/models/recommend?type=${type}`),
+                fetch('/api/models/installed')
+            ]);
             
-            this.container.innerHTML = `
-                <h3 style="color:var(--neon-blue); border-bottom:1px solid var(--neon-purple); padding-bottom:10px;">SYSTEM DIAGNOSTICS</h3>
-                <div style="font-size:0.7rem; margin: 15px 0;">
-                    <div style="display:flex; justify-content:space-between;"><span>PLATFORM:</span> <span style="color:var(--neon-green)">${hw.platform}</span></div>
-                    <div style="display:flex; justify-content:space-between;"><span>RAM:</span> <span style="color:var(--neon-green)">${hw.ram_total_gb} GB</span></div>
-                    <div style="display:flex; justify-content:space-between;"><span>GPU:</span> <span style="color:var(--neon-green)">${hw.gpu_name}</span></div>
-                    <div style="display:flex; justify-content:space-between;"><span>VRAM:</span> <span style="color:var(--neon-green)">${hw.vram_total_gb} GB</span></div>
-                    <div style="display:flex; justify-content:space-between;"><span>ACCELERATOR:</span> <span style="color:var(--neon-green)">${hw.accelerator}</span></div>
-                </div>
-                <div style="margin-top:20px; text-align:right;">
-                    <button id="wiz-next-1" style="background:var(--neon-blue); color:white; border:none; padding:10px 20px; font-family:var(--font-pixel); cursor:pointer;">
-                        CHOOSE MODEL >>
-                    </button>
-                </div>
-            `;
+            const recData = await recRes.json();
+            const instData = await instRes.json();
             
-            document.getElementById('wiz-next-1').onclick = () => this.renderStep2_Recommendations(hw);
-
+            this.render(type, recData.models, instData.installed[type] || []);
         } catch (e) {
-            this.container.innerHTML = `<div style="color:red">ERROR: ${e.message}</div>`;
+            console.error("Model load failed", e);
+            this.listContainer.innerHTML = `<div style="color:red">ERROR: ${e.message}</div>`;
         }
     }
 
-    async renderStep2_Recommendations(hw) {
-        this.container.innerHTML = `
-             <div class="spinner">FETCHING RECOMMENDATIONS...</div>
-        `;
+    render(type, recommended, installed) {
+        this.listContainer.innerHTML = '';
+        const installedIds = new Set(installed.map(i => i.id));
 
-        try {
-            const r = await fetch('/api/models/recommend?type=llm');
-            const data = await r.json();
-            const models = data.models || [];
+        // Header
+        const h = document.createElement('div');
+        h.innerHTML = `<h3 style="color:var(--neon-blue)">RECOMMENDED_FOR_YOUR_HARDWARE</h3>`;
+        this.listContainer.appendChild(h);
 
-            let html = `
-                <h3 style="color:var(--neon-yellow); margin-bottom:15px;">RECOMMENDED MODELS</h3>
-                <div style="overflow-y:auto; max-height:300px; padding-right:5px;">
+        if (recommended.length === 0) {
+            this.listContainer.innerHTML += '<div>No recommendations found.</div>';
+        }
+
+        recommended.forEach(model => {
+            const isInstalled = installedIds.has(model.id);
+            const card = document.createElement('div');
+            card.className = 'model-card';
+            card.style.cssText = `
+                border: 1px solid ${isInstalled ? 'var(--neon-green)' : 'var(--glass-border)'};
+                background: rgba(0,0,0,0.3);
+                padding: 10px;
+                margin-bottom: 10px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
             `;
 
-            if (models.length === 0) {
-                html += `<div style="padding:10px; opacity:0.7;">No specific recommendations found.</div>`;
-            } else {
-                models.forEach(m => {
-                    const statusColor = m.compatible ? 'var(--neon-green)' : 'var(--neon-pink)';
-                    html += `
-                        <div style="border:1px solid ${statusColor}; background:rgba(0,0,0,0.3); padding:10px; margin-bottom:10px;">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <span style="font-weight:bold; color:var(--neon-blue); font-size:0.7rem;">${m.id}</span>
-                                <span style="font-size:0.5rem; background:${statusColor}; color:black; padding:2px 5px;">${m.compatible ? 'OPTIMAL' : 'WARNING'}</span>
-                            </div>
-                            <div style="font-size:0.6rem; margin:5px 0;">
-                                MIN RAM: ${m.min_ram}GB | TAGS: ${m.tags.join(', ')}
-                            </div>
-                            ${!m.compatible ? `<div style="color:var(--neon-pink); font-size:0.5rem;">⚠️ ${m.compatibility_issue || 'Resource mismatch'}</div>` : ''}
-                            <button class="install-btn" data-id="${m.id}" style="width:100%; margin-top:5px; background:rgba(255,255,255,0.1); border:1px solid ${statusColor}; color:${statusColor}; cursor:pointer;">
-                                INSTALL
-                            </button>
-                        </div>
-                    `;
-                });
-            }
-            html += `</div>`;
-            this.container.innerHTML = html;
+            card.innerHTML = `
+                <div>
+                    <div style="color:var(--text-main); font-weight:bold;">${model.id}</div>
+                    <div style="font-size:0.8rem; color:${model.compatible ? 'var(--neon-green)' : 'red'}">
+                        RAM: ${model.min_ram}GB | ${model.tags.join(', ')}
+                    </div>
+                </div>
+                <div id="action-${model.id.replace(/[^a-zA-Z0-9]/g, '')}">
+                    ${isInstalled
+                    ? `<button class="btn" style="border-color:red; color:red; font-size:0.7rem;" onclick="window.mmUI.uninstall('${model.id}', '${type}')">UNINSTALL</button>`
+                    : `<button class="btn btn-primary" style="font-size:0.7rem;" onclick="window.mmUI.install('${model.id}', '${type}')">INSTALL</button>`
+                }
+                </div>
+            `;
+            this.listContainer.appendChild(card);
+        });
 
-            this.container.querySelectorAll('.install-btn').forEach(btn => {
-                btn.onclick = (e) => this.installModel(e.target.dataset.id, 'llm');
-            });
-
-        } catch (e) {
-             this.container.innerHTML = `<div style="color:red">ERROR: ${e.message}</div>`;
-        }
+        // Installed but not recommended section?
+        // For simplicity, just listing recommendations + status.
+        // Or we can list "Other Installed" below.
     }
 
-    async installModel(id, type) {
-        if (this.installing.has(id)) return;
-        this.installing.add(id);
-        
-        // Show status
-        const btn = this.container.querySelector(`button[data-id="${id}"]`);
-        if (btn) btn.textContent = "INSTALLING... (Check Logs)";
+    async install(id, type) {
+        const btnContainer = document.getElementById(`action-${id.replace(/[^a-zA-Z0-9]/g, '')}`);
+        if (btnContainer) btnContainer.innerHTML = '<span class="blink">DOWNLOADING...</span>';
 
         try {
-            await fetch('/api/models/install', {
+            const r = await fetch('/api/models/install', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id, type })
             });
-            // Background install started
-            alert("Installation started in background. Check terminal logs for progress.");
+            const j = await r.json();
+            if (j.ok) {
+                // Reload list
+                this.load(type);
+                // Also show global toast
+                const toast = document.createElement('div');
+                toast.textContent = "INSTALL COMPLETE";
+                toast.className = "toast toast-success";
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 3000);
+            } else {
+                throw new Error(j.error);
+            }
         } catch (e) {
-            alert("Install failed: " + e.message);
+            if (btnContainer) btnContainer.innerHTML = `<span style="color:red">FAILED</span>`;
+            alert("Install Failed: " + e.message);
+        }
+    }
+
+    async uninstall(id, type) {
+        if (!confirm(`Delete ${id}?`)) return;
+        try {
+            const r = await fetch(`/api/models/${type}/${id}`, { method: 'DELETE' }); // Issue: Slashes in ID
+            // Actually server handles path param, but we need to encode? 
+            // The server route is /api/models/{mtype}/{model_id:path}
+            // So default fetch should work if ID is appended correctly.
+            // But if ID starts with slash, might be issue. Typically HF IDs are author/repo.
+            const j = await r.json();
+            if (j.ok) this.load(type);
+        } catch (e) {
+            console.error(e);
+            alert("Delete failed");
         }
     }
 }

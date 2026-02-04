@@ -7,32 +7,32 @@
   <title>WAIFU_LINK // v5.31.0</title>
   <link rel="stylesheet" href="/assets/css/glass.css" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  
+
   <!-- MODULE IMPORTS -->
   <script type="module">
     import { ConfigUI } from './js/config_ui.js';
-    
+
     window.uiState = window.uiState || {};
-    
+
     // Initialize ConfigUI when DOM is ready
     window.addEventListener('DOMContentLoaded', () => {
-        window.uiState.config = new ConfigUI();
+      window.uiState.config = new ConfigUI();
     });
 
     // Global handler for Settings button
     window.loadCfg = async () => {
-        if (!window.uiState.config) window.uiState.config = new ConfigUI();
-        await window.uiState.config.load();
-        
-        // Show modal (assuming modal logic is simple CSS display toggle)
-        const modal = document.getElementById('settings-modal');
-        if (modal) modal.style.display = 'block';
+      if (!window.uiState.config) window.uiState.config = new ConfigUI();
+      await window.uiState.config.load();
+
+      // Show modal (assuming modal logic is simple CSS display toggle)
+      const modal = document.getElementById('settings-modal');
+      if (modal) modal.style.display = 'block';
     };
 
     // Close modal handler being globally accessible
     window.closeSettings = () => {
-        const modal = document.getElementById('settings-modal');
-        if (modal) modal.style.display = 'none';
+      const modal = document.getElementById('settings-modal');
+      if (modal) modal.style.display = 'none';
     };
   </script>
 
@@ -56,6 +56,12 @@
         </svg>
         New Chat
       </button>
+
+      <!-- ROSTER -->
+      <div id="roster-section" style="padding:0 0 15px 0; border-bottom:1px solid var(--glass-border); margin-bottom:10px;">
+        <div style="font-size:0.6rem; color:var(--text-muted); padding:0 15px 8px; letter-spacing:1px;">ACTIVE ROSTER</div>
+        <div id="mini-roster" style="display:flex; gap:8px; padding:0 15px; overflow-x:auto;"></div>
+      </div>
 
       <div class="session-list" id="session-list">
         <!-- Sessions injected here -->
@@ -118,6 +124,7 @@
         <div class="settings-nav-item active" data-section="llm">LLM Provider</div>
         <div class="settings-nav-item" data-section="tts">TTS Voice</div>
         <div class="settings-nav-item" data-section="asr">Voice Input</div>
+        <div class="settings-nav-item" data-section="visuals">Visuals</div>
         <div class="settings-nav-item" data-section="system">System</div>
       </div>
       <div class="settings-content">
@@ -137,7 +144,43 @@
         <div class="settings-section" id="sec-asr">
           <h3 class="settings-title">Speech Recognition</h3>
           <div id="cfg_asr_container"></div>
+          <div style="margin-top:20px; border-top:1px solid var(--glass-border); padding-top:20px;">
+            <button class="btn btn-primary"
+              style="width:100%; display:flex; justify-content:center; gap:10px; align-items:center;"
+              onclick="window.mmUI.open()">
+              <span>⚡</span> OPEN SMART MODEL WIZARD
+            </button>
+          </div>
         </div>
+        <!-- VISUALS SECTION -->
+        <div class="settings-section" id="sec-visuals">
+          <h3 class="settings-title">Visual Customization</h3>
+          <div class="form-group">
+            <label class="form-label">Background Experience</label>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">
+              <button class="btn" style="flex:1; border:1px solid var(--neon-blue);" onclick="window.setBg('null')">
+                🌆 Cyber City (Default)
+              </button>
+              <button class="btn" style="flex:1; border:1px solid #000; background:#000;" onclick="window.setBg('void')">
+                ⬛ Void (Black)
+              </button>
+              <button class="btn" style="flex:1; border:1px solid #0f0; background:#0a0;" onclick="window.setBg('green')">
+                🟩 Green Screen
+              </button>
+            </div>
+        
+            <label class="form-label">Custom Image Background</label>
+            <div style="display:flex; gap:5px;">
+              <input type="text" id="bg-custom-url" placeholder="https://example.com/bg.jpg"
+                style="flex:1; padding:8px; background:rgba(0,0,0,0.5); border:1px solid var(--neon-purple); color:var(--text-main); font-family:var(--font-mono);">
+              <button class="btn btn-primary" onclick="window.setBg('custom')">Apply</button>
+            </div>
+            <p style="font-size:0.7rem; color:var(--text-muted); margin-top:5px;">
+              Note: "Cyber City" relies on the main app background showing through the transparent 3D canvas.
+            </p>
+          </div>
+        </div>
+
         <!-- SYSTEM SECTION -->
         <div class="settings-section" id="sec-system">
           <h3 class="settings-title">System Settings</h3>
@@ -148,7 +191,14 @@
               <option value="true">Enabled</option>
             </select>
           </div>
-          <button class="btn" id="resetCfg" style="color:red; border-color:red;">Factory Reset</button>
+          <div class="form-group">
+            <label class="form-label">Frontend Selection</label>
+            <button class="btn" onclick="window.location.href='/classic/index.html'"
+              style="width:100%; border:1px solid var(--neon-blue); color:var(--neon-blue);">
+              Switch to Classic Dashboard
+            </button>
+          </div>
+          <button class="btn" id="resetCfg" style="color:red; border-color:red; margin-top:10px;">Factory Reset</button>
         </div>
 
         <div class="action-bar">
@@ -164,12 +214,21 @@
 
   <script type="module">
     import { ConfigUI } from './js/config_ui.js';
+      import { ModelManagerUI } from './js/model_manager.js';
+      import { CharacterManagerUI } from './js/character_manager.js';
+      import { RosterUI } from './js/roster.js';
 
-    // Initialize UI State immediately
-    window.uiState = {
-      config: new ConfigUI()
-      // models: new ModelManagerUI() // ModelManagerUI not yet fully integrated/imported
-    };
+      // Initialize UI State
+      window.uiState = window.uiState || {};
+
+      // Ensure DOM is ready before init
+      window.addEventListener('DOMContentLoaded', () => {
+        console.log("DOM_READY: Initializing ConfigUI, ModelManager, CharacterManager, Roster...");
+        window.uiState.config = new ConfigUI();
+        window.mmUI = new ModelManagerUI();
+        window.charUI = new CharacterManagerUI();
+        window.rosterUI = new RosterUI();
+      });
 
     // Global config functions required by HTML buttons
     window.loadCfg = async () => {
@@ -209,9 +268,48 @@
       if (target) target.style.display = 'block';
 
       // Highlight nav
-      const nav = document.getElementById('nav-' + secId);
+      // Note: We use querySelector for robust matching if IDs aren't set on nav items
+      const nav = document.querySelector(`.settings-nav-item[data-section="${secId}"]`);
       if (nav) nav.classList.add('active');
     };
+
+            /**
+             * Background Switcher Logic
+             * Sends message to 3D Viewer iframe.
+             */
+            window.setBg = (type) => {
+              const iframe = document.getElementById('vrm-iframe');
+              if (!iframe || !iframe.contentWindow) {
+                showToast("Viewer not active", "error");
+                return;
+              }
+
+              console.log("SET_BG:", type);
+              let mode = 'transparent';
+              let value = null;
+
+              if (type === 'void') {
+                mode = 'color';
+                value = 0x000000;
+              }
+              else if (type === 'green') {
+                mode = 'color';
+                value = 0x00ff00;
+              }
+              else if (type === 'custom') {
+                mode = 'image';
+                value = document.getElementById('bg-custom-url').value;
+                if (!value) {
+                  showToast("Please enter an Image URL", "error");
+                  return;
+                }
+              }
+
+              iframe.contentWindow.postMessage({ type: 'updateBackground', mode, value }, '*');
+
+              const labels = { 'null': 'Cyber City', 'void': 'Void Black', 'green': 'Green Screen', 'custom': 'Custom Image' };
+              showToast(`Background set to: ${labels[type]}`, 'success');
+            };
 
   </script>
 
@@ -348,9 +446,9 @@
       try {
         const r = await fetch('/api/healthcheck');
         if (r.ok) {
-            llmConnected = true; // FIX: Allow sending messages
-            showToast('System Online', 'success', 2000);
-            $('#send').disabled = false; // Visually enable
+          llmConnected = true; // FIX: Allow sending messages
+          showToast('System Online', 'success', 2000);
+          $('#send').disabled = false; // Visually enable
         }
       } catch (e) {
         showToast('Server Offline', 'error');
@@ -685,7 +783,7 @@
           const j = await r.json();
           characterCache = j.characters;
           console.log('Characters loaded:', characterCache.length);
-          
+
           // Re-init avatar if we have cache now
           initAvatar();
         }
@@ -722,172 +820,7 @@
     }
 
     // --- CHARACTER MANAGEMENT ---
-    /**
-     * Open character management modal and load character list.
-     */
-    function openCharacterManager() {
-      $('#charModal').classList.add('open');
-      loadCharactersManage();
-    }
-
-    /**
-     * Close character management modal.
-     */
-    $('#closeCharModal').onclick = () => {
-      $('#charModal').classList.remove('open');
-    };
-
-    /**
-     * Open modal button handler.
-     */
-    $('#openCharModal').onclick = openCharacterManager;
-
-    /**
-     * Load characters into management modal list.
-     */
-    async function loadCharactersManage() {
-      try {
-        const r = await fetchWithRetry('/api/characters');
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-
-        const j = await r.json();
-        const list = $('#charListManage');
-        list.innerHTML = '';
-
-        j.characters.forEach(char => {
-          const item = document.createElement('div');
-          item.style.cssText = 'padding:10px; margin-bottom:5px; border:1px solid var(--neon-purple); display:flex; justify-content:space-between; background:rgba(26,6,40,0.3);';
-
-          const info = document.createElement('div');
-          info.innerHTML = `<strong style="color:var(--neon-green); font-size:0.6rem;">${char.name}</strong><br><span style="font-size:0.5rem; color:var(--neon-blue);">${char.system_prompt.substring(0, 50)}...</span>`;
-
-          const actions = document.createElement('div');
-          actions.style.cssText = 'display:flex; gap:5px; align-items:center;';
-
-          const editBtn = document.createElement('button');
-          editBtn.textContent = 'EDIT';
-          editBtn.style.cssText = 'background:var(--neon-blue); color:#000; border:none; padding:5px 10px; cursor:pointer; font-family:var(--font-pixel); font-size:0.5rem;';
-          editBtn.onclick = () => editCharacter(char);
-
-          const delBtn = document.createElement('button');
-          delBtn.textContent = 'DEL';
-          delBtn.style.cssText = 'background:var(--neon-pink); color:#000; border:none; padding:5px 10px; cursor:pointer; font-family:var(--font-pixel); font-size:0.5rem;';
-          delBtn.disabled = (char.id === 1);
-          if (char.id === 1) delBtn.style.opacity = '0.3';
-          delBtn.onclick = () => deleteChar(char.id, char.name);
-
-          actions.appendChild(editBtn);
-          actions.appendChild(delBtn);
-          item.appendChild(info);
-          item.appendChild(actions);
-          list.appendChild(item);
-        });
-      } catch (e) {
-        showToast('Failed to load characters: ' + e.message);
-        console.error('loadCharactersManage error:', e);
-      }
-    }
-
-    /**
-     * Populate form with character data for editing.
-     * @param {Object} char - Character object
-     */
-    function editCharacter(char) {
-      $('#editCharId').value = char.id;
-      $('#charName').value = char.name;
-      $('#charPrompt').value = char.system_prompt;
-      $('#charAvatar').value = char.avatar_url || '';
-      $('#charVoice').value = char.voice_id || '';
-      $('#charTTS').value = char.tts_provider || '';
-      $('#charTraits').value = (char.personality_traits || []).join(', ');
-    }
-
-    /**
-     * Clear character form for new character creation.
-     */
-    $('#newChar').onclick = () => {
-      $('#editCharId').value = '';
-      $('#charName').value = '';
-      $('#charPrompt').value = '';
-      $('#charAvatar').value = '';
-      $('#charVoice').value = '';
-      $('#charTTS').value = '';
-      $('#charTraits').value = '';
-    };
-
-    /**
-     * Save character (create or update).
-     */
-    $('#saveChar').onclick = async () => {
-      const charId = $('#editCharId').value;
-      const isNew = !charId;
-
-      const data = {
-        name: $('#charName').value.trim(),
-        system_prompt: $('#charPrompt').value.trim(),
-        avatar_url: $('#charAvatar').value.trim(),
-        voice_id: $('#charVoice').value.trim(),
-        tts_provider: $('#charTTS').value,
-        personality_traits: $('#charTraits').value.split(',').map(s => s.trim()).filter(s => s)
-      };
-
-      if (!data.name || !data.system_prompt) {
-        showToast('Name and system prompt required');
-        return;
-      }
-
-      try {
-        const url = isNew ? '/api/characters' : `/api/characters/${charId}`;
-        const method = isNew ? 'POST' : 'PUT';
-
-        const r = await fetchWithRetry(url, {
-          method: method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-
-        showToast(isNew ? 'Character created' : 'Character updated', 'success', 3000);
-        loadCharactersManage();
-        $('#newChar').click();
-        loadCharacters(); // Refresh character tray
-      } catch (e) {
-        showToast('Save failed: ' + e.message);
-        console.error('saveChar error:', e);
-      }
-    };
-
-    /**
-     * Delete a character.
-     * @param {number} charId - Character ID
-     * @param {string} name - Character name (for confirmation)
-     */
-    async function deleteChar(charId, name) {
-      if (charId === 1) {
-        showToast('Cannot delete default character');
-        return;
-      }
-
-      if (!confirm(`DELETE character "${name}"?`)) return;
-
-      try {
-        const r = await fetchWithRetry(`/api/characters/${charId}`, { method: 'DELETE' });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-
-        showToast('Character deleted', 'success', 3000);
-        loadCharactersManage();
-        loadCharacters(); // Refresh character tray
-
-        // Reset to default if deleted current character
-        if (charId === currentCharacterId) {
-          currentCharacterId = 1;
-        }
-      } catch (e) {
-        showToast('Delete failed: ' + e.message);
-        console.error('deleteChar error:', e);
-      }
-    }
+          // Moved to js/character_manager.js
   </script>
 
   <!-- Character Management Modal -->
@@ -921,8 +854,13 @@
         </div>
 
         <div class="form-group">
-          <label>AVATAR_URL</label>
-          <input type="text" id="charAvatar" placeholder="/files/avatars/character.vrm" />
+          <label>AVATAR (VRM 3D Model)</label>
+          <div style="display:flex; gap:5px;">
+            <input type="text" id="charAvatar" placeholder="/files/avatars/character.vrm" style="flex:1; font-size:0.8rem;" />
+            <label class="btn" style="padding:10px; cursor:pointer;" title="Upload VRM">
+              📂 <input type="file" id="uploadAvatarBtn" accept=".vrm" style="display:none;">
+            </label>
+          </div>
         </div>
 
         <div class="form-group">
@@ -952,6 +890,25 @@
           <button id="newChar"
             style="flex:1; background:var(--neon-blue); color:#000; border:none; padding:15px; font-family:var(--font-pixel); font-size:0.6rem; cursor:pointer;">NEW</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODEL MANAGER MODAL -->
+  <div id="model-manager-modal" class="modal-overlay" style="display:none; z-index:10000;">
+    <div class="settings-modal" style="flex-direction:column; padding:20px;">
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--glass-border); padding-bottom:10px;">
+        <h2 class="settings-title" style="margin:0; border:none; font-size:1.2rem;">SMART_MODEL_WIZARD</h2>
+        <button onclick="window.mmUI.close()" class="btn" style="border:none; color:red;">X</button>
+      </div>
+      <div style="display:flex; gap:10px; margin:10px 0;">
+        <select id="mm_type_select" class="form-select" style="width:150px;">
+          <option value="asr">ASR (Voice)</option>
+          <option value="llm">LLM (Brain)</option>
+        </select>
+      </div>
+      <div id="mm_list" style="flex:1; overflow-y:auto; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;">
       </div>
     </div>
   </div>

@@ -4,7 +4,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>WAIFU_LINK // v5.31.0</title>
+  <title>WAIFU_LINK // RETRO</title>
+  
+  <!-- RETRO FONTS -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Courier+Prime&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="/assets/css/glass.css" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
@@ -71,112 +77,6 @@
         <!-- User Profile Card (Open WebUI Style) -->
         <div class="profile-card" id="settings-trigger" onclick="loadCfg()">
           <div class="avatar-circle"></div>
-          <div style="flex:1; overflow:hidden;">
-            <div style="font-size:0.85rem; font-weight:600;">User</div>
-            <div style="font-size:0.7rem; color:var(--text-muted);">Settings</div>
-          </div>
-          <svg class="icon" viewBox="0 0 24 24" style="width:18px;height:18px;fill:var(--text-muted)">
-            <path
-              d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L3.15 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.58 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
-          </svg>
-        </div>
-      </div>
-    </aside>
-
-    <!-- 2. MAIN CHAT -->
-    <main class="main-chat">
-      <div class="chat-header">
-        <span id="current-session-title">New Session</span>
-        <div id="status-indicators" style="display:flex; gap:8px;">
-          <!-- Dynamic Status Icons -->
-        </div>
-      </div>
-
-      <div class="chat-history" id="chat-messages">
-        <!-- Bubbles injected here -->
-      </div>
-
-      <div class="input-area">
-        <div class="input-wrapper">
-          <textarea id="msg" class="chat-input" placeholder="Message..." rows="1"></textarea>
-          <button id="send" class="send-btn" disabled>
-            <svg class="icon" viewBox="0 0 24 24" style="fill:white">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </main>
-
-    <!-- 3. 3D VIEWPORT -->
-    <aside class="viewport-panel">
-      <div id="avatar-canvas-container">
-        <iframe id="vrm-iframe" src="/frontend/viewer/viewer.html"
-          style="width:100%; height:100%; border:none;"></iframe>
-      </div>
-    </aside>
-  </div>
-
-  <!-- SETTINGS MODAL -->
-  <div class="modal-overlay" id="settings-modal">
-    <div class="settings-modal">
-      <div class="settings-sidebar">
-        <div class="settings-nav-item active" data-section="llm">LLM Provider</div>
-        <div class="settings-nav-item" data-section="tts">TTS Voice</div>
-        <div class="settings-nav-item" data-section="asr">Voice Input</div>
-        <div class="settings-nav-item" data-section="visuals">Visuals</div>
-        <div class="settings-nav-item" data-section="system">System</div>
-      </div>
-      <div class="settings-content">
-        <!-- LLM SECTION -->
-        <div class="settings-section active" id="sec-llm">
-          <h3 class="settings-title">Large Language Model</h3>
-          <div id="cfg_llm_container"></div> <!-- Rendered by config_ui.js -->
-        </div>
-
-        <!-- TTS SECTION -->
-        <div class="settings-section" id="sec-tts">
-          <h3 class="settings-title">Text-to-Speech</h3>
-          <div id="cfg_tts_container"></div>
-        </div>
-
-        <!-- ASR SECTION -->
-        <div class="settings-section" id="sec-asr">
-          <h3 class="settings-title">Speech Recognition</h3>
-          <div id="cfg_asr_container"></div>
-          <div style="margin-top:20px; border-top:1px solid var(--glass-border); padding-top:20px;">
-            <button class="btn btn-primary"
-              style="width:100%; display:flex; justify-content:center; gap:10px; align-items:center;"
-              onclick="window.mmUI.open()">
-              <span>⚡</span> OPEN SMART MODEL WIZARD
-            </button>
-          </div>
-        </div>
-        <!-- VISUALS SECTION -->
-        <div class="settings-section" id="sec-visuals">
-          <h3 class="settings-title">Visual Customization</h3>
-          <div class="form-group">
-            <label class="form-label">Background Experience</label>
-            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">
-              <button class="btn" style="flex:1; border:1px solid var(--neon-blue);" onclick="window.setBg('null')">
-                🌆 Cyber City (Default)
-              </button>
-              <button class="btn" style="flex:1; border:1px solid #000; background:#000;" onclick="window.setBg('void')">
-                ⬛ Void (Black)
-              </button>
-              <button class="btn" style="flex:1; border:1px solid #0f0; background:#0a0;" onclick="window.setBg('green')">
-                🟩 Green Screen
-              </button>
-            </div>
-        
-            <label class="form-label">Custom Image Background</label>
-            <div style="display:flex; gap:5px;">
-              <input type="text" id="bg-custom-url" placeholder="https://example.com/bg.jpg"
-                style="flex:1; padding:8px; background:rgba(0,0,0,0.5); border:1px solid var(--neon-purple); color:var(--text-main); font-family:var(--font-mono);">
-              <button class="btn btn-primary" onclick="window.setBg('custom')">Apply</button>
-            </div>
-            <p style="font-size:0.7rem; color:var(--text-muted); margin-top:5px;">
-              Note: "Cyber City" relies on the main app background showing through the transparent 3D canvas.
             </p>
           </div>
         </div>
@@ -184,6 +84,16 @@
         <!-- SYSTEM SECTION -->
         <div class="settings-section" id="sec-system">
           <h3 class="settings-title">System Settings</h3>
+          <div class="form-group" style="padding:15px; border:2px dashed var(--s); margin-bottom:20px;">
+            <label class="form-label">System Health</label>
+            <div id="health"
+              style="font-family:monospace; font-size:0.8rem; margin-bottom:10px; white-space:pre-wrap; color:#aaa;">Status:
+              Unknown</div>
+            <button class="btn" id="refreshHealth" style="width:100%;">
+              🔄 REFRESH STATUS
+            </button>
+          </div>
+
           <div class="form-group">
             <label class="form-label">Developer Mode</label>
             <select class="form-select" id="dev_mode">
@@ -194,7 +104,7 @@
           <div class="form-group">
             <label class="form-label">Frontend Selection</label>
             <button class="btn" onclick="window.location.href='/classic/index.html'"
-              style="width:100%; border:1px solid var(--neon-blue); color:var(--neon-blue);">
+              style="width:100%; border:1px solid var(--s); color:var(--s);">
               Switch to Classic Dashboard
             </button>
           </div>
@@ -792,7 +702,7 @@
       }
     }
 
-    // --- DIAG ---
+                  // --- DIAG ---
     /**
      * Refresh system health diagnostics and display in SYSTEM tab.
      */
@@ -824,7 +734,7 @@
   </script>
 
   <!-- Character Management Modal -->
-  <div id="charModal" class="modal" style="display:none;">
+  <div id="charModal" class="modal-overlay">
     <div class="modal-content" style="width:600px;">
       <div style="display:flex; justify-content:space-between; margin-bottom:20px; align-items:center;">
         <h2 style="font-family:var(--font-pixel); font-size:0.8rem; color:var(--neon-blue); margin:0;">
@@ -895,17 +805,19 @@
   </div>
 
   <!-- MODEL MANAGER MODAL -->
-  <div id="model-manager-modal" class="modal-overlay" style="display:none; z-index:10000;">
+  <div id="model-manager-modal" class="modal-overlay" style="z-index:10000;">
     <div class="settings-modal" style="flex-direction:column; padding:20px;">
       <div
         style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--glass-border); padding-bottom:10px;">
         <h2 class="settings-title" style="margin:0; border:none; font-size:1.2rem;">SMART_MODEL_WIZARD</h2>
         <button onclick="window.mmUI.close()" class="btn" style="border:none; color:red;">X</button>
       </div>
-      <div style="display:flex; gap:10px; margin:10px 0;">
-        <select id="mm_type_select" class="form-select" style="width:150px;">
-          <option value="asr">ASR (Voice)</option>
-          <option value="llm">LLM (Brain)</option>
+      <div style="display:flex; gap:10px; margin-bottom:15px;">
+        <select id="mm_type_select" class="form-select" style="flex:1;">
+          <option value="llm">LLM (Chat Intelligence)</option>
+          <option value="coding">Coding (Dev)</option>
+          <option value="tts">TTS (Voice Synthesis)</option>
+          <option value="asr">ASR (Speech Recognition)</option>
         </select>
       </div>
       <div id="mm_list" style="flex:1; overflow-y:auto; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;">

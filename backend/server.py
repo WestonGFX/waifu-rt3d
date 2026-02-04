@@ -714,6 +714,11 @@ def recommend_models(type: str = "llm"):
     if not model_manager: raise HTTPException(500, "Model Manager not ready")
     return {"models": model_manager.recommend_models(type)}
 
+@app.get("/api/models/details")
+def get_model_details(id: str):
+    if not model_manager: raise HTTPException(500, "Model Manager not ready")
+    return model_manager.get_model_details(id)
+
 @app.get("/api/models/installed")
 def list_installed_models():
     if not model_manager: raise HTTPException(500, "Model Manager not ready")
@@ -725,12 +730,14 @@ async def install_model(req: Request):
     body = await req.json()
     model_id = body.get("id")
     mtype = body.get("type", "llm")
+    quantization = body.get("quantization") # Optional
+    
     if not model_id: raise HTTPException(400, "Model ID required")
     
     # Check if already installed
     # (Optional logic, but let's just reinstall/update)
     try:
-        res = await model_manager.install(model_id, mtype)
+        res = await model_manager.install(model_id, mtype, quantization=quantization)
         return res
     except Exception as e:
         raise HTTPException(500, str(e))

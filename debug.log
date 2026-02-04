@@ -1290,3 +1290,24 @@ sqlite3.OperationalError: no such table: sessions
 2026-02-02 00:50:22,803 [INFO] Attempting to bind to port 8080...
 2026-02-02 00:50:22,842 [ERROR] Preflight failed: Migration failed: expected v5, got v4
 2026-02-02 00:50:25,728 [ERROR] Failed to init Vector Store: numpy.core.multiarray failed to import
+2026-02-03 20:09:34,861 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-03 20:09:34,896 [INFO] Attempting to bind to port 8080...
+2026-02-03 20:09:37,566 [ERROR] Failed to init Vector Store: numpy.core.multiarray failed to import
+2026-02-03 20:09:37,566 [INFO] Model Manager Initialized
+2026-02-03 20:14:07,308 [INFO] Installing csukuangfj/sherpa-onnx-whisper-tiny.en to backend/storage/models/asr/csukuangfj_sherpa-onnx-whisper-tiny.en
+2026-02-03 20:17:48,838 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-03 20:17:48,886 [INFO] Attempting to bind to port 8080...
+2026-02-03 20:17:51,569 [ERROR] Failed to init Vector Store: numpy.core.multiarray failed to import
+2026-02-03 20:17:51,570 [INFO] Model Manager Initialized
+2026-02-03 20:22:13,970 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-03 20:22:14,006 [INFO] Attempting to bind to port 8080...
+2026-02-03 20:23:14,679 [INFO] Model Manager Initialized
+2026-02-03 20:37:20,391 [INFO] Installing TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF to backend/storage/models/llm/TheBloke_TinyLlama-1.1B-Chat-v1.0-GGUF
+2026-02-03 21:50:37,988 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-03 21:50:38,524 [INFO] Attempting to bind to port 8080...
+2026-02-03 21:51:23,637 [ERROR] Failed to init Vector Store: no such column: collections.topic
+2026-02-03 21:51:23,639 [INFO] Model Manager Initialized
+2026-02-03 22:04:23,886 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-03 22:04:23,929 [INFO] Attempting to bind to port 8080...
+2026-02-03 22:04:33,081 [ERROR] Failed to init Vector Store: no such column: collections.topic
+2026-02-03 22:04:33,083 [INFO] Model Manager Initialized

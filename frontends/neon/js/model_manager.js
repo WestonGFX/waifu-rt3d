@@ -21,83 +21,114 @@ export class ModelManagerUI {
 
     async load(type) {
         if (!this.listContainer) return;
-        this.listContainer.innerHTML = '<div class="spinner">SCANNING_HARDWARE...</div>';
+
+        // --- SEARCH BAR HEADER ---
+        this.listContainer.innerHTML = `
+            <div style="display:flex; gap:10px; margin-bottom:15px; background:var(--surface-main); padding:10px; border:2px solid var(--border-color);">
+                <input type="text" id="mm_search" placeholder="Enter Repo ID (e.g. TheBloke/Mistral-7B-v0.1-GGUF)" 
+                    style="flex:1; background:black; border:1px solid #555; colorm:white; padding:8px; font-family:var(--font-pixel);"
+                    value="TheBloke/Mistral-7B-Instruct-v0.2-GGUF">
+                <button id="mm_search_btn" class="btn btn-primary" style="font-size:0.8rem;">SCAN REPO</button>
+            </div>
+            <div id="mm_results"></div>
+        `;
+
+        document.getElementById('mm_search_btn').onclick = () => {
+            const query = document.getElementById('mm_search').value.trim();
+            if (query) this.scanRepo(query, type);
+        };
+
+        // Load initial recommendations into results
+        this.scanRepo('TheBloke/Mistral-7B-Instruct-v0.2-GGUF', type); // Default
+    }
+
+    async scanRepo(repoId, type) {
+        const container = document.getElementById('mm_results');
+        container.innerHTML = '<div class="spinner" style="color:var(--p)">SCANNING FILES & ESTIMATING VRAM...</div>';
 
         try {
-            // Parallel fetch
-            const [recRes, instRes] = await Promise.all([
-                fetch(`/api/models/recommend?type=${type}`),
-                fetch('/api/models/installed')
-            ]);
+            const r = await fetch(`/api/models/details?id=${repoId}`);
+            const data = await r.json();
             
-            const recData = await recRes.json();
-            const instData = await instRes.json();
+            if (data.error) throw new Error(data.error);
             
-            this.render(type, recData.models, instData.installed[type] || []);
+            this.renderDetails(data, type);
         } catch (e) {
-            console.error("Model load failed", e);
-            this.listContainer.innerHTML = `<div style="color:red">ERROR: ${e.message}</div>`;
+            container.innerHTML = `<div style="color:red; font-family:var(--font-pixel); padding:20px; border:2px solid red;">ERROR: ${e.message}</div>`;
         }
     }
 
-    render(type, recommended, installed) {
-        this.listContainer.innerHTML = '';
-        const installedIds = new Set(installed.map(i => i.id));
+    renderDetails(data, type) {
+        const container = document.getElementById('mm_results');
+        const availableVram = data.hardware_check.vram_total_gb || 0;
 
-        // Header
-        const h = document.createElement('div');
-        h.innerHTML = `<h3 style="color:var(--neon-blue)">RECOMMENDED_FOR_YOUR_HARDWARE</h3>`;
-        this.listContainer.appendChild(h);
+        let html = `
+            <div style="margin-bottom:10px; font-family:var(--font-pixel); color:var(--text-muted);">
+                REPO: <strong style="color:var(--p)">${data.id}</strong> | 
+                PARAMS: ${data.params}B | 
+                SYSTEM VRAM: ${availableVram.toFixed(1)} GB
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-family:var(--font-pixel); font-size:0.8rem;">
+                <tr style="background:var(--surface-light); color:var(--p); text-align:left;">
+                    <th style="padding:10px;">FILENAME</th>
+                    <th style="padding:10px;">QUANT</th>
+                    <th style="padding:10px;">EST. VRAM</th>
+                    <th style="padding:10px;">STATUS</th>
+                    <th style="padding:10px;">ACTION</th>
+                </tr>
+        `;
 
-        if (recommended.length === 0) {
-            this.listContainer.innerHTML += '<div>No recommendations found.</div>';
-        }
+        data.files.forEach(f => {
+            const vramOk = f.estimated_vram_gb < availableVram;
+            const rowColor = vramOk ? 'var(--text-main)' : '#ff5555';
 
-        recommended.forEach(model => {
-            const isInstalled = installedIds.has(model.id);
-            const card = document.createElement('div');
-            card.className = 'model-card';
-            card.style.cssText = `
-                border: 1px solid ${isInstalled ? 'var(--neon-green)' : 'var(--glass-border)'};
-                background: rgba(0,0,0,0.3);
-                padding: 10px;
-                margin-bottom: 10px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
+        // Extract pure quantization string for the API
+        // Heuristic: If filename contains "Q4_K_M", use that.
+        // Simple extraction for now: Just pass the quantization tag (e.g. Q4) is NOT enough for specific file.
+        // Wait, previous backend logic uses hf_hub_download filename=target_file.
+        // We need to pass the "Quantization String" that helps backend FIND this file.
+        // Actually, if we pass the FILENAME as quantization arg, backend can use it directly?
+        // Backend logic: `candidates = [f for f in files if quantization.lower() in f.lower() ...]`
+        // So if we pass unique part of filename, it works.
+
+            html += `
+                <tr style="border-bottom:1px solid #333; color:${rowColor};">
+                    <td style="padding:8px;">${f.filename}</td>
+                    <td style="padding:8px;">${f.quantization}</td>
+                    <td style="padding:8px;">${f.estimated_vram_gb} GB</td>
+                    <td style="padding:8px;">
+                        ${vramOk ? '<span style="color:var(--s)">OK</span>' : '⚠️ LOW VRAM'}
+                    </td>
+                    <td style="padding:8px;">
+                        <button class="btn ${vramOk ? 'btn-primary' : ''}" 
+                            style="font-size:0.7rem; padding:5px 10px; opacity:${vramOk ? 1 : 0.5}"
+                            onclick="window.mmUI.installRaw('${data.id}', '${type}', '${f.quantization}')">
+                            INSTALL
+                        </button>
+                    </td>
+                </tr>
             `;
-
-            card.innerHTML = `
-                <div>
-                    <div style="color:var(--text-main); font-weight:bold;">${model.id}</div>
-                    <div style="font-size:0.8rem; color:${model.compatible ? 'var(--neon-green)' : 'red'}">
-                        RAM: ${model.min_ram}GB | ${model.tags.join(', ')}
-                    </div>
-                </div>
-                <div id="action-${model.id.replace(/[^a-zA-Z0-9]/g, '')}">
-                    ${isInstalled
-                    ? `<button class="btn" style="border-color:red; color:red; font-size:0.7rem;" onclick="window.mmUI.uninstall('${model.id}', '${type}')">UNINSTALL</button>`
-                    : `<button class="btn btn-primary" style="font-size:0.7rem;" onclick="window.mmUI.install('${model.id}', '${type}')">INSTALL</button>`
-                }
-                </div>
-            `;
-            this.listContainer.appendChild(card);
         });
 
-        // Installed but not recommended section?
-        // For simplicity, just listing recommendations + status.
-        // Or we can list "Other Installed" below.
+        html += '</table>';
+        container.innerHTML = html;
     }
 
-    async install(id, type) {
-        const btnContainer = document.getElementById(`action-${id.replace(/[^a-zA-Z0-9]/g, '')}`);
-        if (btnContainer) btnContainer.innerHTML = '<span class="blink">DOWNLOADING...</span>';
+    async installRaw(id, type, quant) {
+        if (!confirm(`Install ${id} (${quant})?`)) return;
+        this.install(id, type, quant);
+    }
+
+    async install(id, type, quantization) {
+        const saneId = id.replace(/[^a-zA-Z0-9]/g, '');
+        const btnContainer = document.getElementById(`action-${saneId}`);
+        if (btnContainer) btnContainer.innerHTML = '<span class="blink" style="color:var(--p)">DOWNLOADING...</span>';
 
         try {
             const r = await fetch('/api/models/install', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, type })
+                body: JSON.stringify({ id, type, quantization })
             });
             const j = await r.json();
             if (j.ok) {
@@ -105,7 +136,7 @@ export class ModelManagerUI {
                 this.load(type);
                 // Also show global toast
                 const toast = document.createElement('div');
-                toast.textContent = "INSTALL COMPLETE";
+                toast.textContent = `INSTALLED ${quantization || 'MODEL'}`;
                 toast.className = "toast toast-success";
                 document.body.appendChild(toast);
                 setTimeout(() => toast.remove(), 3000);

@@ -220,7 +220,9 @@ def migrate_to_v5(con: sqlite3.Connection) -> bool:
     columns = [row[1] for row in cur.fetchall()]
 
     if 'archived' in columns:
-        logger.info("Schema v5 already applied (archived column exists)")
+        logger.info("Schema v5 logic: 'archived' column exists. Ensuring version is 5.")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (5)")
+        con.commit()
         return False
 
     logger.info("Applying schema v5 migration...")
@@ -283,25 +285,32 @@ def ensure_db():
             version = 4
 
         # Upgrade from v3 to v4
+        # Upgrade from v3 to v4 (Adds characters table)
         if version < 4:
-            logger.info("Upgrading from v3 to v4...")
+            logger.info("Upgrading database schema from v3 to v4...")
+            logger.info("  - Creating 'characters' table")
+            logger.info("  - Adding default character 'Rin'")
             if migrate_to_v4(con):
                 version = 4
-
-        # Upgrade from v4 to v5
-        if version < 5:
-            logger.info("Upgrading from v4 to v5...")
-            if migrate_to_v5(con):
-                version = 5
-
-        # Verify final state
+        
+        # We are intentionally STOPPING at v4.
+        # v5 (Archives) has been deprecated/reverted by user request.
+        
+        # Verify final state is v4
         final_version = get_schema_version(con)
-        if final_version != 5:
-            raise RuntimeError(
-                f"Migration failed: expected v5, got v{final_version}"
-            )
+        
+        # If the database was previously on v5, we might need to manual intervention 
+        # or just accept it (v5 is superset of v4 usually), but for now we enforce v4 check.
+        # If user has v5, 'get_schema_version' would return 5. 
+        # We will log a warning if it is > 4 but proceed if it is at least 4.
+        
+        if final_version < 4:
+             raise RuntimeError(f"Database initialization failed: Expected v4, got v{final_version}")
+             
+        if final_version > 4:
+            logger.warning(f"Database is newer than application (v{final_version} > v4). Some features might be unused.")
 
-        logger.info(f"✅ Database ready (schema v{final_version})")
+        logger.info(f"✅ Database ready (schema v{final_version} active)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

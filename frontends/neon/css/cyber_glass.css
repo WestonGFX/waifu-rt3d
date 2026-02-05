@@ -1,0 +1,178 @@
+:root {
+    /* --- PALETTE: SYNTHWAVE UI (Default / Dark) --- */
+    --bg-void: #030305;
+    --bg-deep: #0a0b14;
+    --text-main: #e0e6ed;
+    --text-muted: #94a3b8;
+    /* Lighter for better contrast on dark */
+
+    /* Neon Accents */
+    --neon-cyan: #00f0ff;
+    --neon-magenta: #ff003c;
+    --neon-yellow: #fcee0a;
+    --neon-green: #39ff14;
+
+    /* Glass Surfaces */
+    --glass-panel: rgba(22, 23, 33, 0.75);
+    /* Increased opacity for readability */
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-highlight: rgba(255, 255, 255, 0.05);
+    --glass-blur: 24px;
+
+    /* Typography */
+    --font-display: 'Rajdhani', sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* Spacing & Layout */
+    --radius-sm: 8px;
+    --radius-md: 16px;
+    --radius-lg: 24px;
+    --radius-xl: 32px;
+
+    /* Animation */
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --anim-fast: 0.2s;
+    --anim-med: 0.4s;
+}
+
+/* LIGHT THEME */
+[data-theme="light"] {
+    --bg-void: #f0f2f5;
+    --bg-deep: #ffffff;
+    --text-main: #1a1b1e;
+    --text-muted: #4b5563;
+
+    --glass-panel: rgba(255, 255, 255, 0.65);
+    --glass-border: rgba(0, 0, 0, 0.08);
+    --glass-highlight: rgba(255, 255, 255, 0.4);
+
+    --neon-cyan: #0070f3;
+    /* Darker blue for light mode */
+    --neon-magenta: #d9004c;
+}
+
+/* ANIME POP THEME */
+[data-theme="pop"] {
+    --bg-void: #fff0f5;
+    /* Lavender Blush */
+    --bg-deep: #ffe4e1;
+    /* Misty Rose */
+    --text-main: #4a044e;
+    /* Dark Purple */
+    --text-muted: #86198f;
+
+    --glass-panel: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(255, 105, 180, 0.3);
+    /* Hot Pink Border */
+
+    --neon-cyan: #ff69b4;
+    /* Hot Pink */
+    --neon-magenta: #9333ea;
+    /* Purple */
+}
+
+/* BUBBLEGUM THEME */
+[data-theme="bubblegum"] {
+    --bg-void: #ffecf2;
+    /* Light Pink */
+    --bg-deep: #fff0f5;
+    /* Lavender Blush */
+    --text-main: #2d3436;
+    --text-muted: #636e72;
+
+    --glass-panel: rgba(255, 255, 255, 0.6);
+    --glass-border: rgba(255, 119, 255, 0.4);
+
+    --neon-cyan: #ff77ff;
+    /* Vivid Pink */
+    --neon-magenta: #00cec9;
+    /* Roboto Cyan */
+    --neon-yellow: #fdcb6e;
+    --neon-green: #55efc4;
+}
+
+/* DRACULA THEME */
+[data-theme="dracula"] {
+    --bg-void: #282a36;
+    --bg-deep: #44475a;
+    --text-main: #f8f8f2;
+    --text-muted: #bd93f9;
+
+    --glass-panel: rgba(40, 42, 54, 0.85);
+    --glass-border: rgba(189, 147, 249, 0.3);
+
+    --neon-cyan: #8be9fd;
+    --neon-magenta: #ff79c6;
+    --neon-yellow: #f1fa8c;
+    --neon-green: #50fa7b;
+}
+
+/* NORD THEME */
+[data-theme="nord"] {
+    --bg-void: #2e3440;
+    --bg-deep: #3b4252;
+    --text-main: #eceff4;
+    --text-muted: #d8dee9;
+
+    --glass-panel: rgba(46, 52, 64, 0.8);
+    --glass-border: rgba(136, 192, 208, 0.2);
+
+    --neon-cyan: #88c0d0;
+    --neon-magenta: #bf616a;
+    --neon-yellow: #ebcb8b;
+    --neon-green: #a3be8c;
+}
+
+/* Base Body Override */
+body {
+    background-color: var(--bg-void);
+    /* Subtle Mesh Gradient */
+    background-image:
+        radial-gradient(circle at 10% 20%, rgba(0, 240, 255, 0.1) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(255, 0, 60, 0.08) 0%, transparent 40%);
+    color: var(--text-main);
+    font-family: var(--font-body);
+}
+
+/* The Bento Grid Shell */
+.bento-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    /* Sidebar | Viewport/Chat | Context */
+    gap: 16px;
+    padding: 16px;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Standard Glass Panel */
+.glass-panel {
+    background: var(--glass-panel);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-panel, var(--radius-lg));
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    position: relative;
+    transition: border-color var(--anim-fast);
+}
+
+.glass-panel:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Scrollbar Polish */
+::-webkit-scrollbar {
+    width: 4px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--neon-cyan);
+    border-radius: 2px;
+}

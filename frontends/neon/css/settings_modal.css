@@ -1,0 +1,135 @@
+/* Settings Modal Overlay */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(5px);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.settings-box {
+    width: 900px;
+    height: 700px;
+    display: flex;
+    flex-direction: row;
+    box-shadow: 0 0 50px rgba(0, 240, 255, 0.1);
+}
+
+/* Sidebar */
+.settings-sidebar {
+    width: 250px;
+    background: rgba(255,255,255,0.02);
+    border-right: 1px solid var(--glass-border);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-header {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    color: var(--neon-cyan);
+    margin-bottom: 30px;
+    letter-spacing: 2px;
+}
+
+.tab-btn {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    margin-bottom: 5px;
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    background: rgba(255,255,255,0.05);
+    color: #fff;
+}
+
+.tab-btn.active {
+    background: rgba(0, 240, 255, 0.1);
+    color: var(--neon-cyan);
+    border-left: 3px solid var(--neon-cyan);
+}
+
+/* Content Area */
+.settings-content {
+    flex: 1;
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#settings-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.settings-actions {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--glass-border);
+    text-align: right;
+}
+
+/* Form Elements */
+.setting-row {
+    margin-bottom: 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.setting-label {
+    font-weight: 600;
+    color: #fff;
+}
+
+.setting-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.val-display {
+    font-family: var(--font-mono);
+    color: var(--neon-yellow);
+    width: 40px;
+    text-align: right;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    width: 50px;
+    height: 26px;
+    background: #333;
+    border-radius: 13px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 20px; height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.3s;
+}
+
+.toggle-switch.on {
+    background: var(--neon-cyan);
+}
+
+.toggle-switch.on::after {
+    transform: translateX(24px);
+}

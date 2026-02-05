@@ -1,0 +1,26 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "hoshinonya_skiyoshi.moc3",
+		"Textures": [
+			"hoshinonya_skiyoshi.4096/texture_00.png"
+		],
+		"Physics": "hoshinonya_skiyoshi.physics3.json",
+		"DisplayInfo": "hoshinonya_skiyoshi.cdi3.json"
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": []
+		},
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeLOpen",
+				"ParamEyeROpen"
+			]
+		}
+	]
+}

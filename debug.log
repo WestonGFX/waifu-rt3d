@@ -1311,3 +1311,24 @@ sqlite3.OperationalError: no such table: sessions
 2026-02-03 22:04:23,929 [INFO] Attempting to bind to port 8080...
 2026-02-03 22:04:33,081 [ERROR] Failed to init Vector Store: no such column: collections.topic
 2026-02-03 22:04:33,083 [INFO] Model Manager Initialized
+2026-02-04 01:27:30,155 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-04 01:27:30,192 [INFO] Attempting to bind to port 8080...
+2026-02-04 01:27:38,683 [INFO] Model Manager Initialized
+2026-02-04 03:01:46,245 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-04 03:01:46,324 [INFO] Attempting to bind to port 8080...
+2026-02-04 03:02:01,946 [INFO] Model Manager Initialized
+2026-02-04 03:06:58,671 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-04 03:06:58,710 [INFO] Attempting to bind to port 8080...
+2026-02-04 03:07:07,131 [INFO] Model Manager Initialized
+2026-02-04 03:13:09,067 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-04 03:13:09,191 [INFO] Attempting to bind to port 8080...
+2026-02-04 03:13:19,004 [ERROR] Failed to init Vector Store: no such column: collections.topic
+2026-02-04 03:13:19,006 [INFO] Model Manager Initialized
+2026-02-04 03:24:11,027 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-04 03:24:11,059 [INFO] Attempting to bind to port 8080...
+2026-02-04 03:24:14,335 [ERROR] Failed to init Vector Store: no such column: collections.topic
+2026-02-04 03:24:14,336 [INFO] Model Manager Initialized
+2026-02-04 07:32:11,192 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-04 07:32:11,234 [INFO] Attempting to bind to port 8080...
+2026-02-04 07:32:15,416 [ERROR] Failed to init Vector Store: no such column: collections.topic
+2026-02-04 07:32:15,417 [INFO] Model Manager Initialized

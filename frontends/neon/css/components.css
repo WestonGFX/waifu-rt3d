@@ -1,0 +1,74 @@
+/* --- BUTTONS --- */
+.btn {
+    background: var(--glass-highlight);
+    border: 1px solid var(--glass-border);
+    color: var(--text-main);
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.15);
+}
+
+.btn-primary {
+    background: rgba(0, 243, 255, 0.1);
+    border-color: var(--brand-primary);
+    color: var(--brand-primary);
+}
+
+.btn-icon-small {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 4px;
+}
+
+/* --- CARDS (Roster) --- */
+.card-roster {
+    background: var(--glass-highlight);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 10px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, border 0.2s;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.card-roster:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255,255,255,0.3);
+}
+
+.card-roster.active {
+    border-color: var(--brand-primary);
+    box-shadow: var(--shadow-glow);
+    background: linear-gradient(135deg, rgba(0, 243, 255, 0.1), transparent);
+}
+
+/* --- INPUTS --- */
+.input-field {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--glass-border);
+    color: var(--text-main);
+    padding: 10px;
+    border-radius: var(--radius-sm);
+    width: 100%;
+    outline: none;
+    font-family: var(--font-mono);
+}
+
+.input-field:focus {
+    border-color: var(--brand-primary);
+}

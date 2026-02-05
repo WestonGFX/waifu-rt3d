@@ -39,6 +39,7 @@ DB_PATH = STORAGE / "waifu.db"
 STORAGE.mkdir(parents=True, exist_ok=True)
 (STORAGE / "avatars").mkdir(exist_ok=True)
 (STORAGE / "audio").mkdir(exist_ok=True)
+(STORAGE / "live2d").mkdir(exist_ok=True)
 
 # Load Environment Variables
 load_dotenv(ROOT / ".env")
@@ -94,10 +95,10 @@ _sentiment_analyzer = None
 DEFAULT_CONFIG = {
     "onboarded": False,
     "llm": {
-        "provider": "local",
-        "endpoint": "http://10.0.0.17:1234/v1",
-        "model": "google/gemma-3-12b",
-        "api_key": "",
+        "provider": "lmstudio-rest",
+        "endpoint": "http://10.0.0.17:1234",
+        "model": "glm-4.7-flash-uncensored-heretic-neo-code-imatrix-max",
+        "api_key": "sk-lm-HhhBXSeX:qaqsGLDXX6ekXfQRo2D2",
         "history_limit": 1000
     },
     "tts": {
@@ -215,6 +216,8 @@ app.mount("/assets", StaticFiles(directory=str(FRONTEND / "assets")), name="asse
 app.mount("/files", StaticFiles(directory=str(STORAGE)), name="files")
 app.mount("/frontend", StaticFiles(directory=str(FRONTEND)), name="frontend")
 app.mount("/js", StaticFiles(directory=str(FRONTEND / "js")), name="js")
+app.mount("/css", StaticFiles(directory=str(FRONTEND / "css")), name="css")
+app.mount("/live2d", StaticFiles(directory=str(STORAGE / "live2d")), name="live2d")
 
 # Gallery Mounts
 if (FRONTEND_LIB / "classic").exists():
@@ -515,7 +518,7 @@ def list_characters():
     cur = conn.cursor()
     # Check if table exists/has correct columns by trying select
     try:
-        cur.execute("SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider, personality_traits FROM characters ORDER BY id ASC")
+        cur.execute("SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider, personality_traits, live2d_model, model_type FROM characters ORDER BY id ASC")
     except:
         # Fallback if schema is old or columns missing
         conn.close()
@@ -536,7 +539,9 @@ def list_characters():
             "avatar_url": row[3],
             "voice_id": row[4],
             "tts_provider": row[5],
-            "personality_traits": traits
+            "personality_traits": traits,
+            "live2d_model": row[7] if len(row) > 7 else "",
+            "model_type": row[8] if len(row) > 8 else "3d"
         })
     conn.close()
     return {"characters": characters}
@@ -560,9 +565,9 @@ async def create_character(req: Request):
     cur = conn.cursor()
     try:
         cur.execute("""
-            INSERT INTO characters (name, system_prompt, avatar_url, voice_id, tts_provider, tts_pitch, tts_rate, personality_traits) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (name, system_prompt, avatar_url, voice_id, tts_provider, tts_pitch, tts_rate, personality_traits))
+            INSERT INTO characters (name, system_prompt, avatar_url, voice_id, tts_provider, tts_pitch, tts_rate, personality_traits, live2d_model, model_type) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (name, system_prompt, avatar_url, voice_id, tts_provider, tts_pitch, tts_rate, personality_traits, "", "3d"))
         char_id = cur.lastrowid
         conn.commit()
     except Exception as e:
@@ -590,7 +595,7 @@ async def update_character(character_id: int, req: Request):
     updates = []
     params = []
     
-    fields = ["name", "system_prompt", "avatar_url", "voice_id", "tts_provider", "tts_pitch", "tts_rate"]
+    fields = ["name", "system_prompt", "avatar_url", "voice_id", "tts_provider", "tts_pitch", "tts_rate", "live2d_model", "model_type"]
     for field in fields:
         if field in body:
             updates.append(f"{field}=?")
@@ -669,6 +674,39 @@ async def upload_image_endpoint(file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Image Upload Failed: {e}")
         raise HTTPException(500, "Upload failed")
+
+@app.get("/api/scan/live2d")
+def scan_live2d_models():
+    """Recursively find all .model3.json files in live2d storage."""
+    base = STORAGE / "live2d"
+    models = []
+    if not base.exists(): return {"models": []}
+    
+    for path in base.rglob("*.model3.json"):
+        # Rel path from base, e.g. "ariu/ariu.model3.json"
+        rel = path.relative_to(base)
+        # URL path: /live2d/ariu/ariu.model3.json
+        models.append({
+            "name": path.parent.name, # Folder name as ID
+            "file": path.name,
+            "url": f"/live2d/{rel}",
+            "rel_path": str(rel)
+        })
+    return {"models": models}
+
+@app.get("/api/scan/vrm")
+def scan_vrm_models():
+    """List all VRM files in avatars storage."""
+    base = STORAGE / "avatars"
+    models = []
+    if not base.exists(): return {"models": []}
+    
+    for path in base.glob("*.vrm"):
+        models.append({
+            "name": path.stem,
+            "url": f"/files/avatars/{path.name}"
+        })
+    return {"models": models}
 
 # ==================== ASR (SPEECH RECOGNITION) ====================
 

@@ -1,6 +1,6 @@
 from .adapters.openai_compat import OpenAICompatAdapter
 from .adapters.ollama import OllamaAdapter
-# from .adapters.lmstudio import LMStudioAdapter # Legacy, now covered by OpenAICompat
+from .adapters.lmstudio_rest import LMStudioRESTAdapter
 
 def get_client(cfg):
     """
@@ -20,9 +20,20 @@ def get_client(cfg):
             return OpenAICompatAdapter()
         elif ptype == "ollama":
             return OllamaAdapter()
+        elif ptype == "lmstudio-rest":
+            return LMStudioRESTAdapter()
         else:
             # Fallback to generic openai compat for unknown types as safe bet
             return OpenAICompatAdapter()
             
+    # Legacy / Fallback [Update default logic if needed, but usually config drives this]
+    # If legacy config uses "local" and endpoint is generic, default to OpenAICompat.
+    # But if user specifically asked for defaults, they are likely in app.json.
     # Legacy / Fallback
+    simple_provider = cfg.get("llm", {}).get("provider", "local")
+    if simple_provider == "lmstudio-rest":
+        return LMStudioRESTAdapter()
+    elif simple_provider == "ollama":
+        return OllamaAdapter()
+        
     return OpenAICompatAdapter()

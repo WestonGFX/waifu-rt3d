@@ -49,7 +49,7 @@ const PROVIDER_SCHEMAS = {
         },
         cloud_elevenlabs: {
             name: "ElevenLabs",
-            fields: [
+            fields: [w
                 { id: "api_key", name: "API Key", type: "password" },
                 { id: "voice_id", name: "Voice ID", type: "text" },
                 { id: "stability", name: "Stability", type: "slider", min: 0, max: 1.0, step: 0.1, default: 0.5 }

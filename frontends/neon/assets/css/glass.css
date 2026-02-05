@@ -1,105 +1,98 @@
 :root {
-  /* RETRO PIXEL ANIME PALETTE */
-    --p: #ff90b3;
-    /* Primary: Pastel Pink */
-    --s: #78dce8;
-    /* Secondary: Pastel Cyan */
-    --accent: #ffd700;
-    /* Accent: Gold/Yellow */
-    --bc: #2d2b55;
-    /* Background: Deep Purple */
+  /* PREMIUM NEON PALETTE */
+    --p: #ff6ac1;
+    /* Neon Pink */
+    --s: #4deeea;
+    /* Neon Cyan */
+    --accent: #f9f871;
+    /* Neon Yellow */
+    /* Backgrounds */
+      --bc: #0b0c15;
+      /* Deep Space Black */
+      --surface-main: rgba(23, 25, 41, 0.85);
+      /* Glassy Dark */
+      --surface-light: rgba(45, 49, 74, 0.6);
+    --border-color: rgba(255, 255, 255, 0.15);
+      --border-highlight: rgba(255, 255, 255, 0.4);
+    --font-pixel: 'Courier Prime', monospace;
+      --font-ui: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   
-  --surface-main: #1f1d36;
-    /* Darker purple for panels */
-    --surface-light: #3a365e;
-    /* Lighter purple for inputs/active items */
-  
-  --border-color: #ffffff;
-    /* High contrast white borders */
-    --border-width: 2px;
-  
-  --font-pixel: 'Courier New', Courier, monospace;
-    /* Fallback for pixel feel */
-    --font-ui: 'Verdana', sans-serif;
-  
-    --radius-sm: 0px;
-    /* BLOCKY */
-    --radius-md: 4px;
-    /* Slight rounded for softness */
+    --radius-sm: 4px;
+      --radius-md: 8px;
   
   /* Text */
-  --text-main: #ffffff;
-  --text-muted: #b3b3d4;
+  --text-main: #e0e6ed;
+    --text-muted: #94a3b8;
   
-    --shadow-hard: 4px 4px 0px rgba(0, 0, 0, 0.5);
+    --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.3);
+      --glow-p: 0 0 10px rgba(255, 106, 193, 0.4);
+      --glow-s: 0 0 10px rgba(77, 238, 234, 0.4);
 }
 
 body {
   background-color: var(--bc);
-  /* Optional: Dot pattern overlay */
   background-image: 
-    radial-gradient(var(--surface-light) 1px, transparent 1px);
-      background-size: 20px 20px;
+    linear-gradient(145deg, #0f111a 0%, #1a1c2e 100%);
   color: var(--text-main);
   font-family: var(--font-ui);
   margin: 0;
   height: 100vh;
   overflow: hidden;
-  image-rendering: pixelated;
-    /* Enhance retro feel */
 }
 
 /* --- SCROLLBARS --- */
 ::-webkit-scrollbar {
-  width: 12px;
-    height: 12px;
-    background: var(--surface-main);
+  width: 8px;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.2);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--p);
-  border: 2px solid var(--surface-main);
+  background: var(--surface-light);
+    border-radius: 4px;
   }
   
-  ::-webkit-scrollbar-corner {
-    background: var(--surface-main);
-}
 /* --- LAYOUT --- */
-/* --- DASHBOARD LAYOUT (GRID) --- */
 .dashboard-grid {
   display: grid;
     grid-template-columns: 280px 1fr;
-      /* Left Sidebar | Main Content */
-      grid-template-rows: 100vh;
+    grid-template-rows: 100vh;
       height: 100vh;
       width: 100vw;
     overflow: hidden;
-      gap: 0;
+    gap: 1px;
+      /* Separation line */
+      background: rgba(255, 255, 255, 0.05);
+      /* Grid line color */
 }
 
 .panel {
   background: var(--surface-main);
-  border-right: 2px solid var(--border-color);
+  backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
 }
 
 .left-panel {
   z-index: 10;
-    box-shadow: 4px 0 10px rgba(0, 0, 0, 0.5);
+  border-right: 1px solid var(--border-color);
+    background: rgba(18, 20, 32, 0.95);
 }
 
 .center-panel {
-  background: #000;
-  /* Viewport needs dark bg */
-  border: none;
+  background: transparent;
 }
 
-/* --- ROSTER GRID --- */
-.roster-grid-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px;
+/* --- HEADERS --- */
+.panel-header {
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.02), transparent);
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+.logo-text {
+  text-shadow: 0 0 8px rgba(255, 106, 193, 0.6);
+  letter-spacing: 1px;
 }
 
 .roster-card {

@@ -11,6 +11,8 @@ export const microcopy = {
     memorySession: 'Session graph mode',
     memoryRag: 'RAG memory mode',
     memoryOffline: 'Semantic memory offline',
+    memorySyncing: 'Memory graph syncing',
+    memoryEmpty: 'No graph links yet',
     syncing: 'Syncing protocol'
   },
   input: {
@@ -29,6 +31,7 @@ export const microcopy = {
   },
   actions: {
     retry: 'Retry',
+    refresh: 'Refresh',
     openSettings: 'HUD',
     apply: 'Apply protocol',
     close: 'Close'

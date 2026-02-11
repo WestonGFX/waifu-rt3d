@@ -47,6 +47,7 @@ FRONTEND = Path(ROOT_DIR) / "frontends" / "neon"
 FRONTEND_V2_DIST = Path(ROOT_DIR) / "frontends" / "v2" / "dist"
 STORAGE  = Path(ROOT_DIR) / "backend" / "storage"
 CONFIG   = Path(ROOT_DIR) / "backend" / "config" / "app.json"
+DEFAULT_FRONTEND_ENV = "WAIFU_DEFAULT_FRONTEND"
 
 def load_config():
     if CONFIG.exists():
@@ -127,6 +128,19 @@ async def telemetry_middleware(request: Request, call_next):
 # Root route — serve the frontend
 @app.get("/", response_class=HTMLResponse)
 def index():
+    target = str(os.environ.get(DEFAULT_FRONTEND_ENV, "neon")).strip().lower()
+    if target == "v2":
+        index_file = FRONTEND_V2_DIST / "index.html"
+        if index_file.exists():
+            return index_file.read_text(encoding="utf-8")
+        logger.warning(
+            "Requested default frontend=v2 but dist is missing; falling back to neon at /"
+        )
+    return (FRONTEND / "index.html").read_text(encoding="utf-8")
+
+
+@app.get("/legacy", response_class=HTMLResponse)
+def legacy_index():
     return (FRONTEND / "index.html").read_text(encoding="utf-8")
 
 

@@ -35,6 +35,9 @@ This is the live status board for Hybrid cutover gates.
 12. One-shot local evidence workflow: PASS
 - command: `./tools/v2_hybrid_collect_gate_evidence.sh`
 - behavior: runs preflight then telemetry capture without background scheduling
+13. Default-route cutover guard: PASS
+- env: `WAIFU_DEFAULT_FRONTEND=v2` switches `/` to v2
+- rollback: `/legacy` always serves Neon and `/` falls back to Neon if v2 dist is missing
 
 ## What is blocking Hybrid cutover now
 1. Fill named owners and accountable roles in:

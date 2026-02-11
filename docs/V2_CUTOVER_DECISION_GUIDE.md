@@ -7,6 +7,9 @@ Choose between:
 3. Hybrid cutover (recommended in practice): core + reliability slice, then switch default.
 
 For full scope and stage-based feature boundaries, see `docs/V2_IMPLEMENTATION_TRACKS.md`.
+For the selected Hybrid execution sequence and ticket template, see:
+1. `docs/V2_HYBRID_EXECUTION_PLAN.md`
+2. `docs/V2_HYBRID_CUTOVER_TICKET_TEMPLATE.md`
 
 ## Recommendation
 Use core-first cutover unless one of these is true:

@@ -1,50 +1,67 @@
 # V2 Default-Cutover Decision Guide
 
-## Decision Modes
-1. Keep preview-gated (`/v2` only).
-2. Promote v2 to default (`/`).
-3. Roll back to Neon v1 if instability appears.
+## Goal
+Choose between:
+1. Core-first cutover (recommended): promote after core flow + hardening gates pass.
+2. Full-feature cutover: hold default switch until near-complete feature parity.
 
-## Required Cutover Gates
-Promote v2 only when all gates pass.
+## Recommendation
+Use core-first cutover unless one of these is true:
+1. You are contractually blocked from shipping partial capability.
+2. You cannot support a temporary `/legacy` fallback.
+3. You have enough capacity to absorb a longer stabilization window.
 
-1. Core Flow Parity
-- Chat send/receive works with retries.
-- Character switching updates viewer context.
-- Settings HUD persists key config.
-- Memory Bank graph renders with RAG fallback.
-- Voice visualizer works with TTS and mic toggle.
+## Fast Decision Tree
+1. Is chat/character/settings/memory/viewer your primary user path?
+- No: use full-feature cutover.
+- Yes: continue.
 
-2. Stability Window
-- 7 consecutive days without P0/P1 defects.
-- No data-loss bug in sessions/messages.
+2. Can `/v2` and legacy run side-by-side for 1 release cycle?
+- No: use full-feature cutover.
+- Yes: continue.
 
-3. Performance
-- Desktop median interaction feels smooth.
-- No repeated browser lockups or GPU crashes.
+3. Can you monitor and rollback within 30 minutes?
+- No: use full-feature cutover.
+- Yes: core-first cutover.
 
-4. Safe Rollback
-- `/` can return to Neon v1 quickly.
-- No irreversible schema migration is required for rollback.
+## Scorecard (0-2 each)
+Score both options and pick the higher total.
 
-## Fast Scoring Rubric
-Score each category 0-2.
+1. Time-to-value
+- 0: 6+ weeks to visible value
+- 1: 3-5 weeks
+- 2: 1-2 weeks
 
-1. Functional parity
-2. Stability
-3. Performance
-4. Observability
-5. Rollback confidence
+2. Delivery risk
+- 0: high integration uncertainty
+- 1: moderate uncertainty
+- 2: low uncertainty with safe fallback
+
+3. Team load
+- 0: context-switch heavy, high burnout risk
+- 1: manageable with some crunch
+- 2: sustainable weekly pace
+
+4. Rollback safety
+- 0: rollback unclear or costly
+- 1: rollback possible with manual steps
+- 2: rollback is quick and rehearsed
+
+5. User impact
+- 0: users blocked if a feature is missing
+- 1: mild disruption
+- 2: core value intact
 
 Interpretation:
-- 9-10: Promote to default.
-- 7-8: Stay preview-gated, fix high-impact gaps.
-- <=6: Do not cut over.
+- 9-10: pick this option confidently.
+- 7-8: valid, but add mitigation before commit.
+- <=6: avoid this option.
 
-## Recommended Strategy
-Use `core + hardening` rather than waiting for complete feature parity.
-
-1. Keep `/v2` as default candidate.
-2. Run gate checks daily.
-3. Cut over only when score is >=9 and no open P0/P1 issues.
-4. Keep `/legacy` or equivalent fallback route available for at least one release cycle.
+## Practical Defaults
+1. Keep `/` as current Neon until cutover gate passes.
+2. Keep `/v2` as preview and test surface.
+3. Promote `/v2` to default only when:
+- Core flow parity passes.
+- 7-day stability window has no P0/P1 defects.
+- Rollback drill is tested.
+4. Keep legacy route available for at least one release cycle after cutover.

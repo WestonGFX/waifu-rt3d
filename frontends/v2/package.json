@@ -8,8 +8,11 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "e2e": "playwright test",
-    "e2e:headed": "playwright test --headed",
+    "e2e": "npm run e2e:mock",
+    "e2e:mock": "playwright test e2e/v2-core-flow.spec.ts",
+    "e2e:headed": "playwright test e2e/v2-core-flow.spec.ts --headed",
+    "e2e:live": "E2E_LIVE_BACKEND=1 playwright test e2e/v2-live-backend.spec.ts",
+    "e2e:live:headed": "E2E_LIVE_BACKEND=1 playwright test e2e/v2-live-backend.spec.ts --headed",
     "test": "vitest run",
     "test:watch": "vitest"
   },

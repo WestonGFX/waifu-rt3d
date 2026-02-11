@@ -11,7 +11,7 @@ import { ViewerPanel } from './components/ViewerPanel';
 import { VoiceVisualizer } from './components/VoiceVisualizer';
 import { useVoiceLevels } from './hooks/useVoiceLevels';
 import { useChatStore } from './stores/chatStore';
-import type { Character } from './types';
+import type { Character, VoiceSource } from './types';
 
 export default function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -27,7 +27,7 @@ export default function App() {
   const setContext = useChatStore((state) => state.setContext);
   const lastAudioUrl = useChatStore((state) => state.lastAudioUrl);
 
-  const { level, micEnabled, micError, toggleMic } = useVoiceLevels(audioRef);
+  const { level, sample, micEnabled, micError, toggleMic } = useVoiceLevels(audioRef);
 
   useEffect(() => {
     fetchCharacters()
@@ -55,6 +55,16 @@ export default function App() {
     return characters.find((character) => character.id === activeCharId);
   }, [characters, activeCharId]);
 
+  const voiceStatus = useMemo(() => {
+    const statusBySource: Record<VoiceSource, string> = {
+      idle: microcopy.status.voiceIdle,
+      mic: microcopy.status.voiceMic,
+      tts: microcopy.status.voiceTts,
+      mixed: microcopy.status.voiceMixed
+    };
+    return statusBySource[sample.source];
+  }, [sample.source]);
+
   return (
     <div className="v2-root">
       <motion.div
@@ -81,13 +91,13 @@ export default function App() {
             speakingEnabled={speakingEnabled}
             setSpeakingEnabled={setSpeakingEnabled}
           />
-          <VoiceVisualizer level={level} />
+          <VoiceVisualizer level={level} source={sample.source} />
         </main>
 
         <aside className="v2-panel v2-memory">
           <MemoryGraph sessionId={sessionId} charId={charId} />
-          {micError ? <p className="v2-warning">{microcopy.errors.micDenied}</p> : null}
-          <p className="v2-hint">{microcopy.status.stable} · Preview route `/v2`</p>
+          {micError ? <p className="v2-warning">{micError}</p> : null}
+          <p className="v2-hint">{voiceStatus} · Preview route `/v2`</p>
         </aside>
       </motion.div>
 

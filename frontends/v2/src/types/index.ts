@@ -53,6 +53,14 @@ export interface MemoryGraphPayload {
   };
 }
 
+export type VoiceSource = 'idle' | 'mic' | 'tts' | 'mixed';
+
+export interface VoiceLevelSample {
+  level: number;
+  source: VoiceSource;
+  timestamp: number;
+}
+
 export interface ChatResponse {
   ok: boolean;
   reply: string;

@@ -29,6 +29,9 @@ This is the live status board for Hybrid cutover gates.
 10. Daily telemetry evidence automation: PASS
 - command: `./tools/v2_hybrid_capture_telemetry.sh`
 - outputs: `docs/telemetry/v2_hybrid_daily_snapshots.csv` and `docs/telemetry/V2_HYBRID_7DAY_REPORT.md`
+11. Local scheduler helper: PASS
+- command: `./tools/v2_hybrid_launchd.sh`
+- modes: install/status/run-now/uninstall
 
 ## What is blocking Hybrid cutover now
 1. Fill named owners and accountable roles in:

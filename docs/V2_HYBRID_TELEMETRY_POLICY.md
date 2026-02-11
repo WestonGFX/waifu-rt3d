@@ -56,6 +56,14 @@ Daily telemetry evidence capture:
 ./tools/v2_hybrid_capture_telemetry.sh
 ```
 
+macOS launchd automation (recommended):
+```bash
+./tools/v2_hybrid_launchd.sh install --hour 18 --minute 0
+./tools/v2_hybrid_launchd.sh status
+./tools/v2_hybrid_launchd.sh run-now
+./tools/v2_hybrid_launchd.sh uninstall
+```
+
 Override thresholds if needed:
 ```bash
 WAIFU_PREFLIGHT_MAX_API_ERROR_RATE=0.03 \

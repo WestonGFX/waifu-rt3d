@@ -45,8 +45,10 @@ Checklist:
 - chat API failures
 - memory fallback (`rag` -> `session`)
 - settings save failures
-3. Resolve any flaky tests in v2 unit/integration/E2E.
-4. Confirm rollback route plan is documented and owned.
+3. Lock threshold policy for telemetry gates:
+- `docs/V2_HYBRID_TELEMETRY_POLICY.md`
+4. Resolve any flaky tests in v2 unit/integration/E2E.
+5. Confirm rollback route plan is documented and owned.
 
 Exit criteria:
 1. `npm run lint` passes.

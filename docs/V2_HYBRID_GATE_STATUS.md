@@ -21,11 +21,17 @@ This is the live status board for Hybrid cutover gates.
 7. Telemetry instrumentation: PASS
 - endpoint: `GET /api/v2/telemetry/summary`
 - captures: API error rate + memory fallback frequency
+8. Telemetry policy document: PASS
+- policy: `docs/V2_HYBRID_TELEMETRY_POLICY.md`
+9. Telemetry threshold enforcement in preflight: PASS
+- command: `./tools/v2_hybrid_preflight.sh`
+- supports threshold overrides via `WAIFU_PREFLIGHT_*` env vars
 
 ## What is blocking Hybrid cutover now
-1. Telemetry threshold policy confirmation for:
-- acceptable API error rate at cutover
-- acceptable memory fallback frequency at cutover
+1. Fill named owners and accountable roles in:
+- `docs/V2_HYBRID_EXECUTION_PLAN.md`
+2. Run the 7-day P0/P1 + telemetry threshold window and record evidence:
+- policy: `docs/V2_HYBRID_TELEMETRY_POLICY.md`
 
 ## Next 5 Actions
 1. CI preflight workflow added:
@@ -33,4 +39,4 @@ This is the live status board for Hybrid cutover gates.
 2. Wire dashboard/reporting query around `/api/v2/telemetry/summary`.
 3. Fill owner fields in `docs/V2_HYBRID_EXECUTION_PLAN.md`.
 4. Create cutover issue from `docs/V2_HYBRID_CUTOVER_TICKET_TEMPLATE.md`.
-5. Run 7-day P0/P1 stability window tracking for cutover approval.
+5. Run 7-day P0/P1 + telemetry threshold window for cutover approval.

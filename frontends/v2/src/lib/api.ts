@@ -1,4 +1,4 @@
-import type { Character, ChatResponse, MemoryGraphPayload } from '../types';
+import type { AppConfig, Character, ChatResponse, MemoryGraphPayload } from '../types';
 
 interface ChatRequest {
   text: string;
@@ -71,6 +71,10 @@ export async function searchMemory(charId: number, query: string, nResults = 5) 
   );
 }
 
-export async function saveUiConfig(payload: Record<string, unknown>) {
-  return apiPut<{ ok: boolean }>('/api/config', payload);
+export async function fetchUiConfig(): Promise<AppConfig> {
+  return apiGet<AppConfig>('/api/config');
+}
+
+export async function saveUiConfig(payload: Partial<AppConfig>) {
+  return apiPut<{ ok: boolean; config: AppConfig }>('/api/config', payload);
 }

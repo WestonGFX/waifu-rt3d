@@ -8,6 +8,7 @@ on:
       - "tools/v2_hybrid_preflight.sh"
       - "tools/v2_hybrid_capture_telemetry.sh"
       - "tools/v2_hybrid_collect_gate_evidence.sh"
+      - "tools/v2_hybrid_cutover_rehearsal.sh"
       - "docs/V2_*.md"
   push:
     branches:
@@ -19,6 +20,7 @@ on:
       - "tools/v2_hybrid_preflight.sh"
       - "tools/v2_hybrid_capture_telemetry.sh"
       - "tools/v2_hybrid_collect_gate_evidence.sh"
+      - "tools/v2_hybrid_cutover_rehearsal.sh"
       - "docs/V2_*.md"
 
 jobs:

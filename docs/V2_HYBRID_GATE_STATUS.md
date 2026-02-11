@@ -38,6 +38,9 @@ This is the live status board for Hybrid cutover gates.
 13. Default-route cutover guard: PASS
 - env: `WAIFU_DEFAULT_FRONTEND=v2` switches `/` to v2
 - rollback: `/legacy` always serves Neon and `/` falls back to Neon if v2 dist is missing
+14. Cutover rehearsal command: PASS
+- command: `./tools/v2_hybrid_cutover_rehearsal.sh`
+- validates root route cutover + legacy rollback + live e2e via `/`
 
 ## What is blocking Hybrid cutover now
 1. Fill named owners and accountable roles in:
@@ -51,5 +54,7 @@ This is the live status board for Hybrid cutover gates.
 2. Wire dashboard/reporting query around `/api/v2/telemetry/summary`.
 3. Fill owner fields in `docs/V2_HYBRID_EXECUTION_PLAN.md`.
 4. Create cutover issue from `docs/V2_HYBRID_CUTOVER_TICKET_TEMPLATE.md`.
-5. Run 7-day window with:
+5. Rehearse route switch and rollback with:
+- `./tools/v2_hybrid_cutover_rehearsal.sh`
+6. Run 7-day window with:
 - CI artifacts + manual `./tools/v2_hybrid_capture_telemetry.sh` checkpoints and track P0/P1 status.

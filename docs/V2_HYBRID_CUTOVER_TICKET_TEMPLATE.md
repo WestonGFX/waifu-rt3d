@@ -54,6 +54,8 @@ Switch frontend default to v2 using the Hybrid track while preserving rollback s
 
 ## Rollout Safety
 - [ ] Legacy fallback route confirmed and tested.
+- [ ] Cutover rehearsal completed:
+`./tools/v2_hybrid_cutover_rehearsal.sh`
 - [ ] Rollback procedure dry-run completed.
 - [ ] Post-switch 72-hour staffing plan approved.
 - [ ] Telemetry thresholds from `docs/V2_HYBRID_TELEMETRY_POLICY.md` are met.

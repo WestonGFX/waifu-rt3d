@@ -2,8 +2,9 @@ import { expect, test } from '@playwright/test';
 
 test('v2 live backend smoke: app loads and chat handles response or failure', async ({ page }) => {
   const probeMessage = `playwright-live-${Date.now()}`;
+  const entryPath = process.env.E2E_LIVE_ENTRY_PATH || '/v2/';
 
-  await page.goto('/v2/');
+  await page.goto(entryPath);
 
   await expect(page.getByRole('heading', { name: 'Neural Roster' })).toBeVisible();
   const ttsToggle = page.locator('.v2-tts-toggle input[type="checkbox"]');

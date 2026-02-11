@@ -55,6 +55,8 @@ Use this checklist for go/no-go when deciding whether `/v2` becomes default `/`.
 
 ## E. Rollout Safety (must pass for all tracks)
 - [ ] `/` remains available or quickly restorable during rollout.
+- [ ] Cutover rehearsal passes:
+`./tools/v2_hybrid_cutover_rehearsal.sh`
 - [ ] Rollback steps are documented and rehearsed.
 - [ ] Release owner + rollback owner are named.
 - [ ] 72-hour post-switch monitoring window is staffed.

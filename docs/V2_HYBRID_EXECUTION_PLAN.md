@@ -65,11 +65,14 @@ Checklist:
 1. Route strategy:
 - default `/` -> v2
 - keep legacy route addressable (for example `/legacy`).
-2. Freeze net-new feature work for first 72 hours after switch.
-3. Staff monitoring and rollback owner coverage.
-4. Run cutover checklist in `docs/V2_CUTOVER_CHECKLIST.md` with `Hybrid` profile.
-5. Capture daily telemetry evidence during the 7-day window:
-- `./tools/v2_hybrid_capture_telemetry.sh`
+2. Rehearse cutover + rollback before switch:
+- `./tools/v2_hybrid_cutover_rehearsal.sh`
+3. Freeze net-new feature work for first 72 hours after switch.
+4. Staff monitoring and rollback owner coverage.
+5. Run cutover checklist in `docs/V2_CUTOVER_CHECKLIST.md` with `Hybrid` profile.
+6. Capture telemetry evidence during the 7-day window:
+- CI artifacts from `.github/workflows/v2-hybrid-preflight.yml`
+- manual checkpoints: `./tools/v2_hybrid_capture_telemetry.sh`
 
 Exit criteria:
 1. 72-hour post-switch period has no unresolved P0/P1.

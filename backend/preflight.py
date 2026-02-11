@@ -17,6 +17,8 @@ from pathlib import Path
 import json
 import sqlite3
 import logging
+import shutil
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
@@ -30,7 +32,9 @@ CONFIG_DIR = ROOT / "backend" / "config"
 STORAGE = ROOT / "backend" / "storage"
 AVATARS = STORAGE / "avatars"
 AUDIO = STORAGE / "audio"
-DB_PATH = STORAGE / "waifu.db"
+IMAGES = STORAGE / "images"
+DB_PATH = STORAGE / "app.db"
+LEGACY_DB_PATH = STORAGE / "waifu.db"
 APP_JSON = CONFIG_DIR / "app.json"
 
 DEFAULT_CFG = {
@@ -59,9 +63,54 @@ def ensure_dirs():
         >>> ensure_dirs()
         # Creates all directories with parents
     """
-    for p in (CONFIG_DIR, STORAGE, AVATARS, AUDIO):
+    for p in (CONFIG_DIR, STORAGE, AVATARS, AUDIO, IMAGES):
         p.mkdir(parents=True, exist_ok=True)
     logger.info("✅ Directory structure verified")
+
+
+def _is_empty_db(path: Path) -> bool:
+    """Return True when DB does not exist or is effectively empty."""
+    if not path.exists():
+        return True
+    if path.stat().st_size == 0:
+        return True
+    return False
+
+
+def _validate_db(path: Path) -> bool:
+    """Validate that a SQLite DB contains the core tables required by the app."""
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    con = sqlite3.connect(path)
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = {row[0] for row in cur.fetchall()}
+        required = {"sessions", "messages"}
+        return required.issubset(tables)
+    finally:
+        con.close()
+
+
+def migrate_legacy_db_if_needed():
+    """Migrate legacy waifu.db to app.db when app.db is missing or empty."""
+    if not _is_empty_db(DB_PATH):
+        return
+
+    if _is_empty_db(LEGACY_DB_PATH):
+        logger.info("No legacy waifu.db found for migration; initializing fresh app.db")
+        return
+
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    backup_path = STORAGE / f"waifu.db.bak.{timestamp}"
+
+    shutil.copy2(LEGACY_DB_PATH, backup_path)
+    shutil.copy2(LEGACY_DB_PATH, DB_PATH)
+
+    if not _validate_db(DB_PATH):
+        raise RuntimeError("Legacy DB migration produced invalid app.db")
+
+    logger.info(f"✅ Migrated legacy database to app.db; backup saved at {backup_path.name}")
 
 
 def ensure_config():
@@ -272,6 +321,7 @@ def ensure_db():
         INFO:__main__:✅ Database ready (schema v5)
     """
     logger.info("Initializing database...")
+    migrate_legacy_db_if_needed()
     con = sqlite3.connect(DB_PATH)
 
     try:

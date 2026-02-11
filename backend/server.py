@@ -13,6 +13,7 @@ if ROOT_DIR not in sys.path:
 import json
 import sqlite3
 import psutil
+from typing import Optional
 
 # ... (Previous imports) ...
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
@@ -41,6 +42,7 @@ app.add_middleware(
 # --- CONFIGURATION (Load early) ---
 from pathlib import Path
 FRONTEND = Path(ROOT_DIR) / "frontends" / "neon"
+FRONTEND_V2_DIST = Path(ROOT_DIR) / "frontends" / "v2" / "dist"
 STORAGE  = Path(ROOT_DIR) / "backend" / "storage"
 CONFIG   = Path(ROOT_DIR) / "backend" / "config" / "app.json"
 
@@ -59,10 +61,36 @@ def db():
     return sqlite3.connect(DB_PATH)
 
 
+model_manager = None
+vector_store = None
+
+
 # Root route — serve the frontend
 @app.get("/", response_class=HTMLResponse)
 def index():
     return (FRONTEND / "index.html").read_text(encoding="utf-8")
+
+
+@app.get("/v2", response_class=HTMLResponse)
+def v2_index():
+    index_file = FRONTEND_V2_DIST / "index.html"
+    if not index_file.exists():
+        return HTMLResponse(
+            "<h1>V2 preview not built</h1><p>Run `npm run build` inside frontends/v2.</p>",
+            status_code=503
+        )
+    return index_file.read_text(encoding="utf-8")
+
+
+@app.get("/v2/{full_path:path}", response_class=HTMLResponse)
+def v2_spa(full_path: str):
+    index_file = FRONTEND_V2_DIST / "index.html"
+    if not index_file.exists():
+        return HTMLResponse(
+            "<h1>V2 preview not built</h1><p>Run `npm run build` inside frontends/v2.</p>",
+            status_code=503
+        )
+    return index_file.read_text(encoding="utf-8")
 
 # Mount Static Files
 app.mount("/assets", StaticFiles(directory=str(FRONTEND / "assets")), name="assets")
@@ -74,6 +102,8 @@ app.mount("/viewer", StaticFiles(directory=str(FRONTEND / "viewer")), name="view
 app.mount("/lib", StaticFiles(directory=str(FRONTEND / "lib")), name="lib")
 app.mount("/live2d", StaticFiles(directory=str(STORAGE / "live2d")), name="live2d")
 app.mount("/images", StaticFiles(directory=str(STORAGE / "images")), name="images") # Mounted for portraits
+if (FRONTEND_V2_DIST / "assets").exists():
+    app.mount("/v2/assets", StaticFiles(directory=str(FRONTEND_V2_DIST / "assets")), name="v2-assets")
 
 # ... (Previous mounts) ...
 
@@ -122,137 +152,160 @@ async def set_config_route(req: Request):
 @app.post("/api/chat")
 async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
     body = await req.json()
-    if not body or "text" not in body: raise HTTPException(400, "missing text")
-    text = body["text"]; speak = bool(body.get("speak", False))
-    cfg = load_config()
-    con = db(); cur = con.cursor()
-    
-    # Ensure session exists
-    cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)", (session_id, f"Session {session_id}"))
-    
-    # Log user message
-    cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "user", text))
-    con.commit()
-    
-    # Store User Memory
-    if vector_store:
-        vector_store.add_memory(session_id, char_id, "user", text)
-    
-    # Fetch Character System Prompt and Voice Params
+    if not body or "text" not in body:
+        raise HTTPException(400, "missing text")
 
-    system_prompt = "You are a friendly anime companion."
-    voice_params = {}
-    row = None
+    text = str(body["text"]).strip()
+    if not text:
+        raise HTTPException(400, "missing text")
+
+    speak = bool(body.get("speak", False))
+    session_id = int(body.get("session_id", session_id))
+    char_id = int(body.get("char_id", char_id))
+    client_message_id: Optional[str] = body.get("client_message_id")
+
+    cfg = load_config() or {}
+    con = db()
+    cur = con.cursor()
+
     try:
-        cur.execute("SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate FROM characters WHERE id=?", (char_id,))
-        row = cur.fetchone()
-        if row:
-            if row[0]: system_prompt = row[0]
-            if row[1]: voice_params['voice_id'] = row[1]
-            if row[2]: voice_params['provider'] = row[2]
-            if row[3]: voice_params['tts_pitch'] = row[3]
-            if row[4]: voice_params['tts_rate'] = row[4]
-    except Exception as e:
-        logger.error(f"Error fetching character data: {e}")
+        cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)", (session_id, f"Session {session_id}"))
+        cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "user", text))
+        user_message_id = cur.lastrowid
+        con.commit()
 
- 
-     # Fetch Conversation History
-    cur.execute("SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
-                (session_id, cfg.get("memory",{}).get("max_history",12)))
-    hist = [{"role": r, "content": t} for (r,t) in cur.fetchall()][::-1]
-    
-    # RAG Retrieval
-    memory_context = ""
-    if vector_store:
-        memories = vector_store.query_memory(text, char_id=char_id)
-        if memories:
-            memory_context = "\n[MEMORY_CONTEXT]\nRelevant past conversations:\n"
-            for m in memories:
-                memory_context += f"- {m['role'].upper()}: {m['text']}\n"
-    
-    # Construct Messages Payload
-    # Inject Emotion Instructions & Memory
-    emotion_instruction = (
-        "\n\nVISUAL SYSTEM INSTRUCTIONS:\n"
+        if vector_store:
+            vector_store.add_memory(session_id, char_id, "user", text)
 
-        "You have a 3D avatar. Express your artificial emotions using tags at the start of your response.\n"
-        "Format: [emotion:happy] or [emotion:sad] or [emotion:surprised] or [emotion:angry] or [emotion:neutral]\n"
-        "You can also use gestures: [gesture:nod] or [gesture:wave] or [gesture:shake] or [gesture:shrug]\n"
-        "Example: [emotion:happy] [gesture:wave] Hello! It's great to see you!\n"
-        "Do not output these tags if you are being neutral."
-    )
-    messages = [{"role":"system","content": system_prompt + memory_context + emotion_instruction}] + hist
-
-    
-    try:
-        from backend.llm.registry import get_client
-        adapter = get_client(cfg)
-        res = adapter.chat(messages, cfg["llm"]["model"], cfg["llm"]["endpoint"], cfg["llm"]["api_key"])
-    except Exception as e:
-        return {"ok": False, "error": f"Adapter error: {e}"}
-    
-    if not res.get("ok"): return {"ok": False, "error": res.get("error","adapter failed")}
-    raw_reply = res["reply"]
-
-    # Parse Emotions and Gestures
-    import re
-    emotion_match = re.search(r'\[emotion:(\w+)\]', raw_reply)
-    gesture_match = re.search(r'\[gesture:(\w+)\]', raw_reply)
-    
-    emotion = emotion_match.group(1) if emotion_match else "neutral"
-    gesture = gesture_match.group(1) if gesture_match else None
-    
-    # specific intensity inference (simple logic for now)
-    intensity = 1.0
-    
-    # Strip tags from reply for TTS and Display
-    clean_reply = re.sub(r'\[emotion:\w+\]', '', raw_reply)
-    clean_reply = re.sub(r'\[gesture:\w+\]', '', clean_reply).strip()
-    
-    if not clean_reply: clean_reply = raw_reply # Fallback if strip went wrong
-    
-    # Save Assistant Reply (Cleaned)
-    cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "assistant", clean_reply))
-    con.commit(); con.close()
-
-    # Store AI Memory
-    if vector_store:
-        vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
- 
-    tts_url = None
-
-    if speak:
+        system_prompt = "You are a friendly anime companion."
+        voice_params = {}
         try:
-            from backend.tts.registry import get_tts
-            
-            # Apply character overrides to TTS config
-            tts_cfg = cfg.get("tts", {}).copy()
-            tts_cfg.update(voice_params)
-            
-            # Update main config so get_tts sees the provider change
-            if 'tts' not in cfg: cfg['tts'] = {}
-            cfg['tts'].update(voice_params)
-            
-            # FORCE OVERRIDE: If character specifies a provider, ignore app.json active_provider
-            if 'provider' in voice_params and 'services' in cfg:
-                cfg['services'].get('tts', {}).pop('active_provider', None)
-            
-            tts_client = get_tts(cfg)
-            tts_res = tts_client.speak(clean_reply, tts_cfg)  # Speak cleaned text
-            if tts_res.get("ok"): tts_url = f"/files/audio/{tts_res['filename']}"
+            cur.execute(
+                "SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate FROM characters WHERE id=?",
+                (char_id,)
+            )
+            row = cur.fetchone()
+            if row:
+                if row[0]:
+                    system_prompt = row[0]
+                if row[1]:
+                    voice_params['voice_id'] = row[1]
+                if row[2]:
+                    voice_params['provider'] = row[2]
+                if row[3]:
+                    voice_params['tts_pitch'] = row[3]
+                if row[4]:
+                    voice_params['tts_rate'] = row[4]
         except Exception as e:
-            logger.error(f"TTS Generation failed: {e}")
-            tts_url = None
- 
-    return {
-        "ok": True, 
-        "reply": clean_reply, 
-        "audio": tts_url, 
-        "session_id": session_id,
-        "emotion": emotion,
-        "intensity": intensity,
-        "gesture": gesture
-    }
+            logger.error(f"Error fetching character data: {e}")
+
+        cur.execute(
+            "SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
+            (session_id, cfg.get("memory", {}).get("max_history", 12))
+        )
+        hist = [{"role": r, "content": t} for (r, t) in cur.fetchall()][::-1]
+
+        memories = []
+        memory_context = ""
+        if vector_store:
+            memories = vector_store.query_memory(text, char_id=char_id)
+            if memories:
+                memory_context = "\n[MEMORY_CONTEXT]\nRelevant past conversations:\n"
+                for memory in memories:
+                    memory_context += f"- {memory['role'].upper()}: {memory['text']}\n"
+
+        emotion_instruction = (
+            "\n\nVISUAL SYSTEM INSTRUCTIONS:\n"
+            "You have a 3D avatar. Express your artificial emotions using tags at the start of your response.\n"
+            "Format: [emotion:happy] or [emotion:sad] or [emotion:surprised] or [emotion:angry] or [emotion:neutral]\n"
+            "You can also use gestures: [gesture:nod] or [gesture:wave] or [gesture:shake] or [gesture:shrug]\n"
+            "Example: [emotion:happy] [gesture:wave] Hello! It's great to see you!\n"
+            "Do not output these tags if you are being neutral."
+        )
+
+        messages = [{"role": "system", "content": system_prompt + memory_context + emotion_instruction}] + hist
+
+        try:
+            from backend.llm.registry import get_client
+            adapter = get_client(cfg)
+            res = adapter.chat(messages, cfg["llm"]["model"], cfg["llm"]["endpoint"], cfg["llm"]["api_key"])
+        except Exception as e:
+            return {"ok": False, "error": f"Adapter error: {e}"}
+
+        if not res.get("ok"):
+            return {"ok": False, "error": res.get("error", "adapter failed")}
+
+        raw_reply = res["reply"]
+        import re
+
+        emotion_match = re.search(r'\[emotion:(\w+)\]', raw_reply)
+        gesture_match = re.search(r'\[gesture:(\w+)\]', raw_reply)
+        emotion = emotion_match.group(1) if emotion_match else "neutral"
+        gesture = gesture_match.group(1) if gesture_match else None
+        intensity = 1.0
+
+        clean_reply = re.sub(r'\[emotion:\w+\]', '', raw_reply)
+        clean_reply = re.sub(r'\[gesture:\w+\]', '', clean_reply).strip()
+        if not clean_reply:
+            clean_reply = raw_reply
+
+        cur.execute("INSERT INTO messages(session_id,role,text) VALUES (?,?,?)", (session_id, "assistant", clean_reply))
+        assistant_message_id = cur.lastrowid
+        con.commit()
+
+        if vector_store:
+            vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
+
+        tts_url = None
+        if speak:
+            try:
+                from backend.tts.registry import get_tts
+
+                tts_cfg = cfg.get("tts", {}).copy()
+                tts_cfg.update(voice_params)
+
+                if 'tts' not in cfg:
+                    cfg['tts'] = {}
+                cfg['tts'].update(voice_params)
+
+                if 'provider' in voice_params and 'services' in cfg:
+                    cfg['services'].get('tts', {}).pop('active_provider', None)
+
+                tts_client = get_tts(cfg)
+                tts_res = tts_client.speak(clean_reply, tts_cfg)
+                if tts_res.get("ok"):
+                    tts_url = f"/files/audio/{tts_res['filename']}"
+            except Exception as e:
+                logger.error(f"TTS Generation failed: {e}")
+                tts_url = None
+
+        memory_hits = [
+            {
+                "text": memory.get("text", ""),
+                "role": memory.get("role", ""),
+                "score": max(0.0, 1.0 - float(memory.get("dist", 0.0))),
+                "session_id": memory.get("session_id"),
+                "timestamp": memory.get("timestamp")
+            }
+            for memory in memories
+        ]
+
+        return {
+            "ok": True,
+            "status": "ok",
+            "reply": clean_reply,
+            "audio": tts_url,
+            "session_id": session_id,
+            "emotion": emotion,
+            "intensity": intensity,
+            "gesture": gesture,
+            "client_message_id": client_message_id,
+            "user_message_id": user_message_id,
+            "assistant_message_id": assistant_message_id,
+            "memory_hits": memory_hits
+        }
+    finally:
+        con.close()
 
 
 @app.post("/api/tts")
@@ -373,6 +426,118 @@ def get_session_messages(session_id: int):
     messages = [{"id": r[0], "role": r[1], "text": r[2], "ts": r[3]} for r in cur.fetchall()]
     conn.close()
     return {"messages": messages}
+
+
+@app.get("/api/v2/memory/search")
+def v2_memory_search(char_id: int, query: str, n_results: int = 5):
+    """Semantic memory search with graceful fallback when vector store is unavailable."""
+    if not query.strip():
+        return {"results": []}
+
+    if not vector_store:
+        return {"results": []}
+
+    try:
+        memories = vector_store.query_memory(query, n_results=max(1, min(n_results, 20)), char_id=char_id)
+        results = [
+            {
+                "id": memory.get("id"),
+                "text": memory.get("text", ""),
+                "role": memory.get("role", ""),
+                "score": max(0.0, 1.0 - float(memory.get("dist", 0.0))),
+                "session_id": memory.get("session_id"),
+                "timestamp": memory.get("timestamp")
+            }
+            for memory in memories
+        ]
+        return {"results": results}
+    except Exception as e:
+        logger.error(f"Memory search failed: {e}")
+        return {"results": []}
+
+
+@app.get("/api/v2/memory/graph")
+def v2_memory_graph(session_id: int = 1, char_id: int = 1, limit: int = 40):
+    """Conversation graph with retrieval links for Memory Bank visualization."""
+    graph_limit = max(6, min(limit, 100))
+
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, role, text, ts FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
+        (session_id, graph_limit)
+    )
+    rows = cur.fetchall()[::-1]
+    conn.close()
+
+    nodes = []
+    edges = []
+
+    spacing_x = 90
+    spacing_y = 56
+    x = 32
+    y_user = 84
+    y_assistant = 180
+
+    for index, row in enumerate(rows):
+        message_id, role, text, ts = row
+        node_id = f"m-{message_id}"
+        nodes.append({
+            "id": node_id,
+            "label": (text or "")[:40],
+            "role": role if role in {"user", "assistant"} else "assistant",
+            "x": x + index * spacing_x,
+            "y": y_user if role == "user" else y_assistant
+        })
+
+        if index > 0:
+            prev = rows[index - 1][0]
+            edges.append({
+                "id": f"seq-{prev}-{message_id}",
+                "source": f"m-{prev}",
+                "target": node_id,
+                "kind": "sequence"
+            })
+
+    memory_hits = []
+    mode = "session"
+
+    if vector_store and rows:
+        try:
+            latest_text = rows[-1][2] or ""
+            memory_hits = vector_store.query_memory(latest_text, n_results=5, char_id=char_id)
+            if memory_hits:
+                mode = "rag"
+                anchor_id = f"m-{rows[-1][0]}"
+                for i, memory in enumerate(memory_hits):
+                    mem_node_id = f"r-{i}"
+                    nodes.append({
+                        "id": mem_node_id,
+                        "label": (memory.get("text", "") or "")[:36],
+                        "role": "memory",
+                        "x": 40 + i * 68,
+                        "y": 252,
+                        "score": max(0.0, 1.0 - float(memory.get("dist", 0.0)))
+                    })
+                    edges.append({
+                        "id": f"ret-{i}",
+                        "source": anchor_id,
+                        "target": mem_node_id,
+                        "kind": "retrieval"
+                    })
+        except Exception as e:
+            logger.error(f"Memory graph retrieval failed: {e}")
+
+    return {
+        "mode": mode,
+        "nodes": nodes,
+        "edges": edges,
+        "stats": {
+            "sessionMessages": len(rows),
+            "memoryHits": len(memory_hits),
+            "ragAvailable": vector_store is not None
+        }
+    }
 
 
 # ==================== CHARACTER MANAGEMENT ====================
@@ -639,7 +804,22 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
 @app.on_event("startup")
 async def startup_event():
-    global model_manager
+    global model_manager, vector_store
+
+    try:
+        from backend import preflight
+        preflight.run()
+    except Exception as e:
+        logger.error(f"Preflight failed: {e}")
+
+    try:
+        from backend.memory.vector_store import VectorStore
+        vector_store = VectorStore(storage_path=str(STORAGE / "memory"))
+        logger.info("Vector Store Initialized")
+    except Exception as e:
+        vector_store = None
+        logger.warning(f"Vector Store unavailable, session-only memory mode active: {e}")
+
     cfg = load_config()
     from backend.models.manager import ModelManager
     model_manager = ModelManager(cfg)

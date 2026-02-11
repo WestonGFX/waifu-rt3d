@@ -47,8 +47,10 @@ class VectorStore:
                 ids=[mem_id]
             )
             logger.info(f"Memory stored: {mem_id}")
+            return mem_id
         except Exception as e:
             logger.error(f"Failed to store memory: {e}")
+            return None
 
     def query_memory(self, text: str, n_results=3, char_id=None):
         """Retrieve relevant past memories."""
@@ -67,13 +69,17 @@ class VectorStore:
             
             # Format results
             memories = []
-            if results['documents']:
+            if results.get('documents'):
                 for i, doc in enumerate(results['documents'][0]):
                     meta = results['metadatas'][0][i]
                     memories.append({
+                        "id": results['ids'][0][i] if results.get('ids') else None,
                         "text": doc,
                         "role": meta['role'],
-                        "dist": results['distances'][0][i] if 'distances' in results else 0
+                        "dist": results['distances'][0][i] if 'distances' in results else 0,
+                        "char_id": meta.get('char_id'),
+                        "session_id": meta.get('session_id'),
+                        "timestamp": meta.get('timestamp')
                     })
             
             return memories

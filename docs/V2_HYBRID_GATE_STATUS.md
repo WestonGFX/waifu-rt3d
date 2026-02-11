@@ -32,10 +32,7 @@ This is the live status board for Hybrid cutover gates.
 11. CI telemetry artifact collection: PASS
 - workflow: `.github/workflows/v2-hybrid-preflight.yml`
 - result: each workflow run uploads telemetry CSV + report artifacts
-12. Optional local scheduler helper: PASS (not required)
-- command: `./tools/v2_hybrid_launchd.sh`
-- modes: install/status/run-now/uninstall (legacy convenience only)
-13. One-shot local evidence workflow: PASS
+12. One-shot local evidence workflow: PASS
 - command: `./tools/v2_hybrid_collect_gate_evidence.sh`
 - behavior: runs preflight then telemetry capture without background scheduling
 

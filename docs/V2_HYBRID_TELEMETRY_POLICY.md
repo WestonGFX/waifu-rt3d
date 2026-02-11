@@ -101,11 +101,6 @@ WAIFU_TELEMETRY_DISABLE_VECTOR_STORE=1 \
 ./tools/v2_hybrid_capture_telemetry.sh
 ```
 
-Optional local scheduler (not required):
-```bash
-./tools/v2_hybrid_launchd.sh install --hour 18 --minute 0
-```
-
 ## Ownership
 1. Observability owner sets dashboard queries and alerting.
 2. Release owner confirms threshold compliance before cutover sign-off.

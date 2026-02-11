@@ -76,6 +76,11 @@ WAIFU_CUTOVER_MIN_MEMORY_GRAPH_REQUESTS=50 \
 ./tools/v2_hybrid_capture_telemetry.sh
 ```
 
+Optional local daily schedule example (cron):
+```bash
+0 18 * * * cd /Users/chris/Code/waifu-rt3d && ./tools/v2_hybrid_capture_telemetry.sh >> /tmp/v2_hybrid_telemetry_cron.log 2>&1
+```
+
 ## Ownership
 1. Observability owner sets dashboard queries and alerting.
 2. Release owner confirms threshold compliance before cutover sign-off.

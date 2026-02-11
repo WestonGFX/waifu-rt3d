@@ -51,6 +51,11 @@ Default smoke policy:
 ./tools/v2_hybrid_preflight.sh
 ```
 
+Daily telemetry evidence capture:
+```bash
+./tools/v2_hybrid_capture_telemetry.sh
+```
+
 Override thresholds if needed:
 ```bash
 WAIFU_PREFLIGHT_MAX_API_ERROR_RATE=0.03 \
@@ -59,6 +64,16 @@ WAIFU_PREFLIGHT_MAX_CHAT_FAILURE_RATE=0.10 \
 WAIFU_PREFLIGHT_MIN_API_REQUESTS=5 \
 WAIFU_PREFLIGHT_MIN_MEMORY_GRAPH_REQUESTS=2 \
 ./tools/v2_hybrid_preflight.sh
+```
+
+Override cutover telemetry thresholds/sampling for capture script:
+```bash
+WAIFU_CUTOVER_MAX_API_ERROR_RATE=0.03 \
+WAIFU_CUTOVER_MAX_MEMORY_FALLBACK_RATE=0.35 \
+WAIFU_CUTOVER_MAX_CHAT_FAILURE_RATE=0.10 \
+WAIFU_CUTOVER_MIN_API_REQUESTS=200 \
+WAIFU_CUTOVER_MIN_MEMORY_GRAPH_REQUESTS=50 \
+./tools/v2_hybrid_capture_telemetry.sh
 ```
 
 ## Ownership

@@ -68,6 +68,8 @@ Checklist:
 2. Freeze net-new feature work for first 72 hours after switch.
 3. Staff monitoring and rollback owner coverage.
 4. Run cutover checklist in `docs/V2_CUTOVER_CHECKLIST.md` with `Hybrid` profile.
+5. Capture daily telemetry evidence during the 7-day window:
+- `./tools/v2_hybrid_capture_telemetry.sh`
 
 Exit criteria:
 1. 72-hour post-switch period has no unresolved P0/P1.

@@ -26,6 +26,9 @@ This is the live status board for Hybrid cutover gates.
 9. Telemetry threshold enforcement in preflight: PASS
 - command: `./tools/v2_hybrid_preflight.sh`
 - supports threshold overrides via `WAIFU_PREFLIGHT_*` env vars
+10. Daily telemetry evidence automation: PASS
+- command: `./tools/v2_hybrid_capture_telemetry.sh`
+- outputs: `docs/telemetry/v2_hybrid_daily_snapshots.csv` and `docs/telemetry/V2_HYBRID_7DAY_REPORT.md`
 
 ## What is blocking Hybrid cutover now
 1. Fill named owners and accountable roles in:
@@ -39,4 +42,5 @@ This is the live status board for Hybrid cutover gates.
 2. Wire dashboard/reporting query around `/api/v2/telemetry/summary`.
 3. Fill owner fields in `docs/V2_HYBRID_EXECUTION_PLAN.md`.
 4. Create cutover issue from `docs/V2_HYBRID_CUTOVER_TICKET_TEMPLATE.md`.
-5. Run 7-day P0/P1 + telemetry threshold window for cutover approval.
+5. Run 7-day window with:
+- `./tools/v2_hybrid_capture_telemetry.sh` once per day and track P0/P1 status.

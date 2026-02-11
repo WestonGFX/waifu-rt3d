@@ -57,6 +57,8 @@ Switch frontend default to v2 using the Hybrid track while preserving rollback s
 - [ ] Rollback procedure dry-run completed.
 - [ ] Post-switch 72-hour staffing plan approved.
 - [ ] Telemetry thresholds from `docs/V2_HYBRID_TELEMETRY_POLICY.md` are met.
+- [ ] 7-day telemetry evidence captured:
+`docs/telemetry/v2_hybrid_daily_snapshots.csv` and `docs/telemetry/V2_HYBRID_7DAY_REPORT.md`
 
 ## Exclusions Logged
 - [ ] Exclusion #1 owner + target milestone recorded.

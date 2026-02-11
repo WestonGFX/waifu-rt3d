@@ -14,3 +14,5 @@ backend/storage/models/llm/TheBloke_TinyLlama-1.1B-Chat-v1.0-GGUF/config.json
 backend/storage/models/llm/TheBloke_TinyLlama-1.1B-Chat-v1.0-GGUF/model_card.json
 backend/storage/models/llm/TheBloke_TinyLlama-1.1B-Chat-v1.0-GGUF/README.md
 backend/storage/models/llm/TheBloke_TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q5_K_M.gguf
+docs/telemetry/v2_hybrid_daily_snapshots.csv
+docs/telemetry/V2_HYBRID_7DAY_REPORT.md

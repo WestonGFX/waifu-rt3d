@@ -18,6 +18,7 @@ describe('microcopy', () => {
     expect(microcopy.errors.sendFailed).toBeTruthy();
     expect(microcopy.errors.micDenied).toBeTruthy();
     expect(microcopy.errors.micUnavailable).toBeTruthy();
+    expect(microcopy.errors.settingsSyncFailed).toBeTruthy();
     expect(microcopy.status.memoryOffline).toBeTruthy();
     expect(microcopy.actions.retry).toBeTruthy();
   });

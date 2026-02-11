@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import { fetchCharacters } from './lib/api';
+import { fetchCharacters, fetchUiConfig } from './lib/api';
 import { microcopy } from './lib/microcopy';
+import { defaultHudSettings, hudSettingsFromConfig } from './lib/settings';
 import { ChatPanel } from './components/ChatPanel';
 import { MemoryGraph } from './components/MemoryGraph';
 import { RosterPanel } from './components/RosterPanel';
@@ -11,7 +12,7 @@ import { ViewerPanel } from './components/ViewerPanel';
 import { VoiceVisualizer } from './components/VoiceVisualizer';
 import { useVoiceLevels } from './hooks/useVoiceLevels';
 import { useChatStore } from './stores/chatStore';
-import type { Character, VoiceSource } from './types';
+import type { Character, HudSettings, VoiceSource } from './types';
 
 export default function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -20,6 +21,7 @@ export default function App() {
   const [activeCharId, setActiveCharId] = useState<number>(1);
   const [hudOpen, setHudOpen] = useState(false);
   const [speakingEnabled, setSpeakingEnabled] = useState(true);
+  const [hudSettings, setHudSettings] = useState<HudSettings>(defaultHudSettings);
 
   const loading = useChatStore((state) => state.loading);
   const sessionId = useChatStore((state) => state.sessionId);
@@ -42,6 +44,22 @@ export default function App() {
         setCharacters([]);
       });
   }, [setContext, sessionId]);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchUiConfig()
+      .then((config) => {
+        if (!mounted) return;
+        const settings = hudSettingsFromConfig(config);
+        setHudSettings(settings);
+        setSpeakingEnabled(settings.speechAuto);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!lastAudioUrl || !audioRef.current) return;
@@ -107,9 +125,12 @@ export default function App() {
         {hudOpen ? (
           <SettingsHud
             open={hudOpen}
+            settings={hudSettings}
             onClose={() => setHudOpen(false)}
-            onApplyVoicePitch={() => undefined}
-            onApplyCreativity={() => undefined}
+            onApplySettings={(settings) => {
+              setHudSettings(settings);
+              setSpeakingEnabled(settings.speechAuto);
+            }}
           />
         ) : null}
       </AnimatePresence>

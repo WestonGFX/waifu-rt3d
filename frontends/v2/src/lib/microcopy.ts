@@ -10,7 +10,8 @@ export const microcopy = {
     voiceMixed: 'Voice scope tracking dual stream',
     memorySession: 'Session graph mode',
     memoryRag: 'RAG memory mode',
-    memoryOffline: 'Semantic memory offline'
+    memoryOffline: 'Semantic memory offline',
+    syncing: 'Syncing protocol'
   },
   input: {
     placeholder: 'Transmit to neural channel...',
@@ -23,7 +24,8 @@ export const microcopy = {
     memoryFailed: 'Memory bank unavailable. Running session fallback.',
     micDenied: 'Audio stream permission denied.',
     micUnavailable: 'Audio capture is unavailable on this device.',
-    micFailed: 'Audio stream initialization failed.'
+    micFailed: 'Audio stream initialization failed.',
+    settingsSyncFailed: 'Protocol sync failed. Settings kept local until retry.'
   },
   actions: {
     retry: 'Retry',

@@ -61,6 +61,28 @@ export interface VoiceLevelSample {
   timestamp: number;
 }
 
+export interface AppConfig {
+  llm?: {
+    temperature?: number;
+    [key: string]: unknown;
+  };
+  tts?: {
+    tts_pitch?: number;
+    [key: string]: unknown;
+  };
+  ui?: {
+    speech_auto?: boolean;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+export interface HudSettings {
+  voicePitch: number;
+  creativity: number;
+  speechAuto: boolean;
+}
+
 export interface ChatResponse {
   ok: boolean;
   reply: string;

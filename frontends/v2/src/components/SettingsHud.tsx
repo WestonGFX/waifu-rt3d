@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 
 import { saveUiConfig } from '../lib/api';
 import { microcopy } from '../lib/microcopy';
+import { hudSettingsToConfigPayload } from '../lib/settings';
+import type { HudSettings } from '../types';
 
 interface SettingsHudProps {
   open: boolean;
+  settings: HudSettings;
   onClose: () => void;
-  onApplyVoicePitch: (pitch: number) => void;
-  onApplyCreativity: (temperature: number) => void;
+  onApplySettings: (settings: HudSettings) => void;
 }
 
 interface RingSliderProps {
@@ -49,11 +51,20 @@ function RingSlider({ label, value, min, max, step, onChange }: RingSliderProps)
   );
 }
 
-export function SettingsHud({ open, onClose, onApplyVoicePitch, onApplyCreativity }: SettingsHudProps) {
-  const [voicePitch, setVoicePitch] = useState(1);
-  const [creativity, setCreativity] = useState(0.7);
-  const [speechAuto, setSpeechAuto] = useState(true);
+export function SettingsHud({ open, settings, onClose, onApplySettings }: SettingsHudProps) {
+  const [voicePitch, setVoicePitch] = useState(settings.voicePitch);
+  const [creativity, setCreativity] = useState(settings.creativity);
+  const [speechAuto, setSpeechAuto] = useState(settings.speechAuto);
   const [loading, setLoading] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setVoicePitch(settings.voicePitch);
+    setCreativity(settings.creativity);
+    setSpeechAuto(settings.speechAuto);
+    setSaveError(null);
+  }, [open, settings.voicePitch, settings.creativity, settings.speechAuto]);
 
   if (!open) return null;
 
@@ -90,27 +101,33 @@ export function SettingsHud({ open, onClose, onApplyVoicePitch, onApplyCreativit
           </div>
         </div>
 
+        {saveError ? <p className="v2-hud-error">{saveError}</p> : null}
+
         <footer>
           <button
             type="button"
             disabled={loading}
             onClick={async () => {
               setLoading(true);
+              setSaveError(null);
+              const nextSettings: HudSettings = {
+                voicePitch,
+                creativity,
+                speechAuto
+              };
+
               try {
-                await saveUiConfig({
-                  tts: { tts_pitch: voicePitch },
-                  llm: { temperature: creativity },
-                  ui: { speech_auto: speechAuto }
-                });
-                onApplyVoicePitch(voicePitch);
-                onApplyCreativity(creativity);
+                await saveUiConfig(hudSettingsToConfigPayload(nextSettings));
+                onApplySettings(nextSettings);
                 onClose();
+              } catch {
+                setSaveError(microcopy.errors.settingsSyncFailed);
               } finally {
                 setLoading(false);
               }
             }}
           >
-            {loading ? 'Syncing...' : microcopy.actions.apply}
+            {loading ? `${microcopy.status.syncing}...` : microcopy.actions.apply}
           </button>
         </footer>
       </motion.section>

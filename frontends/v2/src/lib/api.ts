@@ -9,6 +9,7 @@ interface ChatRequest {
 }
 
 const jsonHeaders = { 'Content-Type': 'application/json' };
+const CHAT_REQUEST_TIMEOUT_MS = 20_000;
 
 async function apiGet<T>(url: string): Promise<T> {
   const response = await fetch(url);
@@ -18,16 +19,36 @@ async function apiGet<T>(url: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function apiPost<T>(url: string, body: unknown): Promise<T> {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: jsonHeaders,
-    body: JSON.stringify(body)
-  });
-  if (!response.ok) {
-    throw new Error(`POST ${url} failed: ${response.status}`);
+async function apiPost<T>(url: string, body: unknown, timeoutMs?: number): Promise<T> {
+  const controller = timeoutMs ? new AbortController() : undefined;
+  const timeoutId =
+    timeoutMs && controller
+      ? globalThis.setTimeout(() => {
+          controller.abort();
+        }, timeoutMs)
+      : undefined;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+      signal: controller?.signal
+    });
+    if (!response.ok) {
+      throw new Error(`POST ${url} failed: ${response.status}`);
+    }
+    return response.json() as Promise<T>;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`POST ${url} timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    if (timeoutId !== undefined) {
+      globalThis.clearTimeout(timeoutId);
+    }
   }
-  return response.json() as Promise<T>;
 }
 
 async function apiPut<T>(url: string, body: unknown): Promise<T> {
@@ -48,7 +69,7 @@ export async function fetchCharacters(): Promise<Character[]> {
 }
 
 export async function sendChat(request: ChatRequest): Promise<ChatResponse> {
-  return apiPost<ChatResponse>('/api/chat', request);
+  return apiPost<ChatResponse>('/api/chat', request, CHAT_REQUEST_TIMEOUT_MS);
 }
 
 export async function fetchMemoryGraph(sessionId: number, charId: number, limit = 40): Promise<MemoryGraphPayload> {

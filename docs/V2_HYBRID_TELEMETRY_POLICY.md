@@ -96,7 +96,7 @@ WAIFU_CUTOVER_MIN_MEMORY_GRAPH_REQUESTS=50 \
 Optional backend auto-start flags for capture script:
 ```bash
 WAIFU_TELEMETRY_AUTOSTART_BACKEND=1 \
-WAIFU_TELEMETRY_BACKEND_CMD="python3 backend/server.py" \
+WAIFU_TELEMETRY_BACKEND_CMD="python backend/server.py" \
 WAIFU_TELEMETRY_DISABLE_VECTOR_STORE=1 \
 ./tools/v2_hybrid_capture_telemetry.sh
 ```

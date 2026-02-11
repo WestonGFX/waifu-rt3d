@@ -6,6 +6,12 @@ test('v2 live backend smoke: app loads and chat handles response or failure', as
   await page.goto('/v2/');
 
   await expect(page.getByRole('heading', { name: 'Neural Roster' })).toBeVisible();
+  const ttsToggle = page.locator('.v2-tts-toggle input[type="checkbox"]');
+  await expect(ttsToggle).toBeVisible();
+  if (await ttsToggle.isChecked()) {
+    await ttsToggle.uncheck();
+  }
+
   const composer = page.getByPlaceholder('Transmit to neural channel...');
   await expect(composer).toBeVisible();
 
@@ -13,13 +19,15 @@ test('v2 live backend smoke: app loads and chat handles response or failure', as
   await composer.press('Enter');
   await expect(page.locator('.v2-bubble.user p').last()).toHaveText(probeMessage);
 
-  const aiBubble = page.locator('.v2-bubble.ai p').last();
+  const aiBubbleSent = page.locator('.v2-bubble.ai.sent p').last();
+  const aiBubbleFailed = page.locator('.v2-bubble.ai.failed p').last();
   const chatError = page.locator('.v2-chat-error');
 
   await expect
     .poll(
       async () => {
-        if ((await aiBubble.count()) > 0) return 'assistant';
+        if ((await aiBubbleSent.count()) > 0) return 'assistant-sent';
+        if ((await aiBubbleFailed.count()) > 0) return 'assistant-failed';
         if ((await chatError.count()) > 0) return 'error';
         return 'pending';
       },

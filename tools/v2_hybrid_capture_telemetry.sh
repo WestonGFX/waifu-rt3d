@@ -15,11 +15,12 @@ MIN_API_REQUESTS="${WAIFU_CUTOVER_MIN_API_REQUESTS:-200}"
 MIN_MEMORY_GRAPH_REQUESTS="${WAIFU_CUTOVER_MIN_MEMORY_GRAPH_REQUESTS:-50}"
 FAIL_ON_BREACH="${WAIFU_TELEMETRY_FAIL_ON_BREACH:-0}"
 AUTOSTART_BACKEND="${WAIFU_TELEMETRY_AUTOSTART_BACKEND:-0}"
-BACKEND_START_CMD="${WAIFU_TELEMETRY_BACKEND_CMD:-python3 backend/server.py}"
+BACKEND_START_CMD="${WAIFU_TELEMETRY_BACKEND_CMD:-}"
 BACKEND_DISABLE_VECTOR_STORE="${WAIFU_TELEMETRY_DISABLE_VECTOR_STORE:-1}"
 BACKEND_STARTUP_TIMEOUT_SEC="${WAIFU_TELEMETRY_BACKEND_STARTUP_TIMEOUT_SEC:-90}"
 BACKEND_LOG="${WAIFU_TELEMETRY_BACKEND_LOG:-/tmp/waifu_v2_capture_backend.log}"
 STARTED_BACKEND_PID=""
+RESOLVED_BACKEND_START_CMD=""
 
 cleanup() {
   if [[ -n "$STARTED_BACKEND_PID" ]] && kill -0 "$STARTED_BACKEND_PID" 2>/dev/null; then
@@ -43,6 +44,35 @@ backend_ready() {
   curl --max-time 3 -fsS "$TELEMETRY_HEALTH_URL" >/dev/null 2>&1
 }
 
+python_runtime_ready() {
+  local py_bin="$1"
+  "$py_bin" - <<'PY' >/dev/null 2>&1
+import importlib
+for module in ("psutil", "fastapi", "uvicorn"):
+    importlib.import_module(module)
+PY
+}
+
+resolve_backend_start_cmd() {
+  if [[ -n "$BACKEND_START_CMD" ]]; then
+    echo "$BACKEND_START_CMD"
+    return 0
+  fi
+
+  if command -v python >/dev/null 2>&1 && python_runtime_ready python; then
+    echo "python backend/server.py"
+    return 0
+  fi
+
+  if command -v python3 >/dev/null 2>&1 && python_runtime_ready python3; then
+    echo "python3 backend/server.py"
+    return 0
+  fi
+
+  echo "python backend/server.py"
+  return 0
+}
+
 ensure_backend_ready() {
   if backend_ready; then
     return 0
@@ -54,10 +84,11 @@ ensure_backend_ready() {
     return 1
   fi
 
-  echo "[v2-hybrid-telemetry] backend not reachable, auto-starting with command: $BACKEND_START_CMD"
+  RESOLVED_BACKEND_START_CMD="$(resolve_backend_start_cmd)"
+  echo "[v2-hybrid-telemetry] backend not reachable, auto-starting with command: $RESOLVED_BACKEND_START_CMD"
   (
     cd "$ROOT_DIR"
-    WAIFU_DISABLE_VECTOR_STORE="$BACKEND_DISABLE_VECTOR_STORE" bash -lc "$BACKEND_START_CMD" >"$BACKEND_LOG" 2>&1 &
+    WAIFU_DISABLE_VECTOR_STORE="$BACKEND_DISABLE_VECTOR_STORE" bash -lc "$RESOLVED_BACKEND_START_CMD" >"$BACKEND_LOG" 2>&1 &
     echo $! > "$OUTPUT_DIR/.v2_hybrid_backend_pid"
   )
   STARTED_BACKEND_PID="$(cat "$OUTPUT_DIR/.v2_hybrid_backend_pid" 2>/dev/null || true)"

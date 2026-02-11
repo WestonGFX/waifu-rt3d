@@ -18,6 +18,7 @@ from typing import Optional
 
 # ... (Previous imports) ...
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
@@ -294,7 +295,13 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         try:
             from backend.llm.registry import get_client
             adapter = get_client(cfg)
-            res = adapter.chat(messages, cfg["llm"]["model"], cfg["llm"]["endpoint"], cfg["llm"]["api_key"])
+            res = await run_in_threadpool(
+                adapter.chat,
+                messages,
+                cfg["llm"]["model"],
+                cfg["llm"]["endpoint"],
+                cfg["llm"]["api_key"],
+            )
         except Exception as e:
             _telemetry_inc("chat.failures_total")
             return {"ok": False, "status": "error", "error": f"Adapter error: {e}"}
@@ -340,7 +347,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                     cfg['services'].get('tts', {}).pop('active_provider', None)
 
                 tts_client = get_tts(cfg)
-                tts_res = tts_client.speak(clean_reply, tts_cfg)
+                tts_res = await run_in_threadpool(tts_client.speak, clean_reply, tts_cfg)
                 if tts_res.get("ok"):
                     tts_url = f"/files/audio/{tts_res['filename']}"
             except Exception as e:

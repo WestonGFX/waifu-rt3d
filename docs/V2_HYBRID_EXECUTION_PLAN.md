@@ -73,6 +73,8 @@ Checklist:
 6. Capture telemetry evidence during the 7-day window:
 - CI artifacts from `.github/workflows/v2-hybrid-preflight.yml`
 - manual checkpoints: `./tools/v2_hybrid_capture_telemetry.sh`
+7. Run explicit go/no-go decision command:
+- `./tools/v2_hybrid_cutover_decision.sh`
 
 Exit criteria:
 1. 72-hour post-switch period has no unresolved P0/P1.

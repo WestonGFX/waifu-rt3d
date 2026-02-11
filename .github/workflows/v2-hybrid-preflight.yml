@@ -9,6 +9,7 @@ on:
       - "tools/v2_hybrid_capture_telemetry.sh"
       - "tools/v2_hybrid_collect_gate_evidence.sh"
       - "tools/v2_hybrid_cutover_rehearsal.sh"
+      - "tools/v2_hybrid_cutover_decision.sh"
       - "docs/V2_*.md"
   push:
     branches:
@@ -21,6 +22,7 @@ on:
       - "tools/v2_hybrid_capture_telemetry.sh"
       - "tools/v2_hybrid_collect_gate_evidence.sh"
       - "tools/v2_hybrid_cutover_rehearsal.sh"
+      - "tools/v2_hybrid_cutover_decision.sh"
       - "docs/V2_*.md"
 
 jobs:

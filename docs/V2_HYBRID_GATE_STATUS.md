@@ -41,6 +41,9 @@ This is the live status board for Hybrid cutover gates.
 14. Cutover rehearsal command: PASS
 - command: `./tools/v2_hybrid_cutover_rehearsal.sh`
 - validates root route cutover + legacy rollback + live e2e via `/`
+15. Cutover decision command: PASS
+- command: `./tools/v2_hybrid_cutover_decision.sh`
+- output: `docs/V2_HYBRID_READINESS_REPORT.md` with GO/NO-GO and blocking gates
 
 ## What is blocking Hybrid cutover now
 1. Fill named owners and accountable roles in:
@@ -48,7 +51,7 @@ This is the live status board for Hybrid cutover gates.
 2. Run the 7-day P0/P1 + telemetry threshold window and record evidence:
 - policy: `docs/V2_HYBRID_TELEMETRY_POLICY.md`
 
-## Next 5 Actions
+## Next Actions
 1. CI preflight workflow added:
 - `.github/workflows/v2-hybrid-preflight.yml`
 2. Wire dashboard/reporting query around `/api/v2/telemetry/summary`.
@@ -58,3 +61,5 @@ This is the live status board for Hybrid cutover gates.
 - `./tools/v2_hybrid_cutover_rehearsal.sh`
 6. Run 7-day window with:
 - CI artifacts + manual `./tools/v2_hybrid_capture_telemetry.sh` checkpoints and track P0/P1 status.
+7. Run explicit go/no-go check with:
+- `./tools/v2_hybrid_cutover_decision.sh`

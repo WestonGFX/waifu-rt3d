@@ -57,6 +57,8 @@ Use this checklist for go/no-go when deciding whether `/v2` becomes default `/`.
 - [ ] `/` remains available or quickly restorable during rollout.
 - [ ] Cutover rehearsal passes:
 `./tools/v2_hybrid_cutover_rehearsal.sh`
+- [ ] GO/NO-GO report generated:
+`./tools/v2_hybrid_cutover_decision.sh`
 - [ ] Rollback steps are documented and rehearsed.
 - [ ] Release owner + rollback owner are named.
 - [ ] 72-hour post-switch monitoring window is staffed.

@@ -49,6 +49,8 @@ Switch frontend default to v2 using the Hybrid track while preserving rollback s
 `npm run e2e:live`
 - [ ] Backend contract checks pass:
 `pytest -q backend/tests`
+- [ ] Unified preflight script passes:
+`./tools/v2_hybrid_preflight.sh`
 
 ## Rollout Safety
 - [ ] Legacy fallback route confirmed and tested.

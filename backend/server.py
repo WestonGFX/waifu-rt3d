@@ -1,6 +1,7 @@
 import logging
 import logging.handlers
 import queue
+from threading import Lock
 
 import os
 import sys
@@ -63,6 +64,63 @@ def db():
 
 model_manager = None
 vector_store = None
+
+_telemetry_lock = Lock()
+_telemetry = {
+    "window_started_at": int(time.time()),
+    "api.requests_total": 0,
+    "api.errors_4xx": 0,
+    "api.errors_5xx": 0,
+    "chat.requests_total": 0,
+    "chat.failures_total": 0,
+    "memory.graph_requests_total": 0,
+    "memory.graph_rag_mode_total": 0,
+    "memory.graph_session_mode_total": 0,
+    "memory.graph_fallback_total": 0,
+}
+
+
+def reset_telemetry_metrics():
+    with _telemetry_lock:
+        _telemetry["window_started_at"] = int(time.time())
+        for key in _telemetry:
+            if key == "window_started_at":
+                continue
+            _telemetry[key] = 0
+
+
+def _telemetry_inc(key: str, amount: int = 1):
+    with _telemetry_lock:
+        _telemetry[key] = _telemetry.get(key, 0) + amount
+
+
+def _telemetry_snapshot():
+    with _telemetry_lock:
+        return dict(_telemetry)
+
+
+@app.middleware("http")
+async def telemetry_middleware(request: Request, call_next):
+    path = request.url.path
+    track = path.startswith("/api/") and path != "/api/v2/telemetry/summary"
+
+    if track:
+        _telemetry_inc("api.requests_total")
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        if track:
+            _telemetry_inc("api.errors_5xx")
+        raise
+
+    if track:
+        if 400 <= response.status_code < 500:
+            _telemetry_inc("api.errors_4xx")
+        elif response.status_code >= 500:
+            _telemetry_inc("api.errors_5xx")
+
+    return response
 
 
 # Root route — serve the frontend
@@ -158,6 +216,7 @@ async def set_config_route(req: Request):
 
 @app.post("/api/chat")
 async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
+    _telemetry_inc("chat.requests_total")
     body = await req.json()
     if not body or "text" not in body:
         raise HTTPException(400, "missing text")
@@ -237,10 +296,12 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             adapter = get_client(cfg)
             res = adapter.chat(messages, cfg["llm"]["model"], cfg["llm"]["endpoint"], cfg["llm"]["api_key"])
         except Exception as e:
-            return {"ok": False, "error": f"Adapter error: {e}"}
+            _telemetry_inc("chat.failures_total")
+            return {"ok": False, "status": "error", "error": f"Adapter error: {e}"}
 
         if not res.get("ok"):
-            return {"ok": False, "error": res.get("error", "adapter failed")}
+            _telemetry_inc("chat.failures_total")
+            return {"ok": False, "status": "error", "error": res.get("error", "adapter failed")}
 
         raw_reply = res["reply"]
         import re
@@ -466,6 +527,7 @@ def v2_memory_search(char_id: int, query: str, n_results: int = 5):
 @app.get("/api/v2/memory/graph")
 def v2_memory_graph(session_id: int = 1, char_id: int = 1, limit: int = 40):
     """Conversation graph with retrieval links for Memory Bank visualization."""
+    _telemetry_inc("memory.graph_requests_total")
     graph_limit = max(6, min(limit, 100))
 
     conn = db()
@@ -534,6 +596,14 @@ def v2_memory_graph(session_id: int = 1, char_id: int = 1, limit: int = 40):
                     })
         except Exception as e:
             logger.error(f"Memory graph retrieval failed: {e}")
+            _telemetry_inc("memory.graph_fallback_total")
+    elif vector_store is None:
+        _telemetry_inc("memory.graph_fallback_total")
+
+    if mode == "rag":
+        _telemetry_inc("memory.graph_rag_mode_total")
+    else:
+        _telemetry_inc("memory.graph_session_mode_total")
 
     return {
         "mode": mode,
@@ -543,6 +613,38 @@ def v2_memory_graph(session_id: int = 1, char_id: int = 1, limit: int = 40):
             "sessionMessages": len(rows),
             "memoryHits": len(memory_hits),
             "ragAvailable": vector_store is not None
+        }
+    }
+
+
+@app.get("/api/v2/telemetry/summary")
+def v2_telemetry_summary():
+    snapshot = _telemetry_snapshot()
+    api_total = snapshot["api.requests_total"]
+    chat_total = snapshot["chat.requests_total"]
+    memory_total = snapshot["memory.graph_requests_total"]
+    fallback_total = snapshot["memory.graph_fallback_total"]
+    return {
+        "window_started_at": snapshot["window_started_at"],
+        "api": {
+            "requests_total": api_total,
+            "errors_4xx": snapshot["api.errors_4xx"],
+            "errors_5xx": snapshot["api.errors_5xx"],
+            "error_rate": round(
+                (snapshot["api.errors_4xx"] + snapshot["api.errors_5xx"]) / api_total, 4
+            ) if api_total else 0.0
+        },
+        "chat": {
+            "requests_total": chat_total,
+            "failures_total": snapshot["chat.failures_total"],
+            "failure_rate": round(snapshot["chat.failures_total"] / chat_total, 4) if chat_total else 0.0
+        },
+        "memory": {
+            "graph_requests_total": memory_total,
+            "graph_rag_mode_total": snapshot["memory.graph_rag_mode_total"],
+            "graph_session_mode_total": snapshot["memory.graph_session_mode_total"],
+            "graph_fallback_total": fallback_total,
+            "fallback_rate": round(fallback_total / memory_total, 4) if memory_total else 0.0
         }
     }
 
@@ -819,13 +921,18 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Preflight failed: {e}")
 
-    try:
-        from backend.memory.vector_store import VectorStore
-        vector_store = VectorStore(storage_path=str(STORAGE / "memory"))
-        logger.info("Vector Store Initialized")
-    except Exception as e:
+    disable_vector_store = os.getenv("WAIFU_DISABLE_VECTOR_STORE", "").strip().lower() in {"1", "true", "yes"}
+    if disable_vector_store:
         vector_store = None
-        logger.warning(f"Vector Store unavailable, session-only memory mode active: {e}")
+        logger.info("Vector Store initialization skipped by WAIFU_DISABLE_VECTOR_STORE")
+    else:
+        try:
+            from backend.memory.vector_store import VectorStore
+            vector_store = VectorStore(storage_path=str(STORAGE / "memory"))
+            logger.info("Vector Store Initialized")
+        except Exception as e:
+            vector_store = None
+            logger.warning(f"Vector Store unavailable, session-only memory mode active: {e}")
 
     cfg = load_config()
     from backend.models.manager import ModelManager

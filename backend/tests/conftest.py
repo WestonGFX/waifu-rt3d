@@ -136,6 +136,8 @@ def server_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setattr(server, "DB_PATH", db_path)
     monkeypatch.setattr(server, "load_config", lambda: DEFAULT_CONFIG.copy())
     monkeypatch.setattr(server, "vector_store", None)
+    if hasattr(server, "reset_telemetry_metrics"):
+        server.reset_telemetry_metrics()
 
     return server
 

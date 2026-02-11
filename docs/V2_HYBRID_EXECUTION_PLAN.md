@@ -113,6 +113,8 @@ Exit criteria:
 - retry flow
 - settings persist across refresh
 - memory fallback rendering
+4. Unified preflight command (local/CI):
+- `./tools/v2_hybrid_preflight.sh`
 
 ## Beta/RC
 1. Expanded Playwright scenarios for network failure, degraded backend, and settings rollback.

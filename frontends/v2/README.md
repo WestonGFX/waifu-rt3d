@@ -40,6 +40,11 @@ Optional custom backend URL:
 E2E_LIVE_BACKEND=1 E2E_BASE_URL=http://127.0.0.1:8080 npx playwright test e2e/v2-live-backend.spec.ts
 ```
 
+Hybrid gate preflight from repo root:
+```bash
+./tools/v2_hybrid_preflight.sh
+```
+
 ## Architecture
 1. `src/stores/chatStore.ts`: optimistic Zustand chat state with retry.
 2. `src/components/MemoryGraph.tsx`: live memory graph UI fed by `/api/v2/memory/graph`.

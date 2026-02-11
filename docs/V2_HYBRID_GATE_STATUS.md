@@ -15,19 +15,18 @@ This is the live status board for Hybrid cutover gates.
 - command: `npm run e2e` in `frontends/v2`
 5. Backend API contracts: PASS
 - command: `pytest -q backend/tests`
-6. Live backend E2E smoke: BLOCKED
+6. Live backend E2E smoke: PASS
 - command: `npm run e2e:live` in `frontends/v2`
-- latest result: `ERR_CONNECTION_REFUSED` on `http://127.0.0.1:8080/v2/`
+- latest result: pass when backend was running on `http://127.0.0.1:8080`
 
 ## What is blocking Hybrid cutover now
-1. Running backend instance for live smoke path (must serve `/v2`).
-2. Telemetry baseline confirmation for:
+1. Telemetry baseline confirmation for:
 - API error rate
 - memory fallback frequency
 
 ## Next 5 Actions
-1. Start backend locally and rerun `npm run e2e:live`.
-2. Wire `npm run e2e:live` into CI or release preflight.
-3. Validate telemetry events and dashboard query.
-4. Fill owner fields in `docs/V2_HYBRID_EXECUTION_PLAN.md`.
-5. Create cutover issue from `docs/V2_HYBRID_CUTOVER_TICKET_TEMPLATE.md`.
+1. Wire `npm run e2e:live` into CI or release preflight.
+2. Validate telemetry events and dashboard query.
+3. Fill owner fields in `docs/V2_HYBRID_EXECUTION_PLAN.md`.
+4. Create cutover issue from `docs/V2_HYBRID_CUTOVER_TICKET_TEMPLATE.md`.
+5. Run 7-day P0/P1 stability window tracking for cutover approval.

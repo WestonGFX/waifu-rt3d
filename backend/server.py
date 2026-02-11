@@ -17,7 +17,7 @@ from typing import Optional
 
 # ... (Previous imports) ...
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 import time
@@ -90,6 +90,13 @@ def v2_spa(full_path: str):
             "<h1>V2 preview not built</h1><p>Run `npm run build` inside frontends/v2.</p>",
             status_code=503
         )
+    requested = (FRONTEND_V2_DIST / full_path).resolve()
+    try:
+        requested.relative_to(FRONTEND_V2_DIST.resolve())
+    except ValueError:
+        return HTMLResponse("invalid path", status_code=400)
+    if requested.is_file():
+        return FileResponse(requested)
     return index_file.read_text(encoding="utf-8")
 
 # Mount Static Files

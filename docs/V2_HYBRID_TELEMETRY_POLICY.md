@@ -51,17 +51,26 @@ Default smoke policy:
 ./tools/v2_hybrid_preflight.sh
 ```
 
-Daily telemetry evidence capture:
+One-shot gate evidence (recommended local workflow):
+```bash
+./tools/v2_hybrid_collect_gate_evidence.sh
+```
+
+On-demand local telemetry evidence capture:
 ```bash
 ./tools/v2_hybrid_capture_telemetry.sh
 ```
 
-macOS launchd automation (recommended):
+CI telemetry evidence capture (default automation path):
 ```bash
-./tools/v2_hybrid_launchd.sh install --hour 18 --minute 0
-./tools/v2_hybrid_launchd.sh status
-./tools/v2_hybrid_launchd.sh run-now
-./tools/v2_hybrid_launchd.sh uninstall
+GitHub Actions workflow:
+.github/workflows/v2-hybrid-preflight.yml
+```
+
+Write telemetry output to a custom folder (useful for CI/local dry runs):
+```bash
+WAIFU_TELEMETRY_OUTPUT_DIR=/tmp/v2-telemetry \
+./tools/v2_hybrid_capture_telemetry.sh
 ```
 
 Override thresholds if needed:
@@ -84,9 +93,17 @@ WAIFU_CUTOVER_MIN_MEMORY_GRAPH_REQUESTS=50 \
 ./tools/v2_hybrid_capture_telemetry.sh
 ```
 
-Optional local daily schedule example (cron):
+Optional backend auto-start flags for capture script:
 ```bash
-0 18 * * * cd /Users/chris/Code/waifu-rt3d && ./tools/v2_hybrid_capture_telemetry.sh >> /tmp/v2_hybrid_telemetry_cron.log 2>&1
+WAIFU_TELEMETRY_AUTOSTART_BACKEND=1 \
+WAIFU_TELEMETRY_BACKEND_CMD="python3 backend/server.py" \
+WAIFU_TELEMETRY_DISABLE_VECTOR_STORE=1 \
+./tools/v2_hybrid_capture_telemetry.sh
+```
+
+Optional local scheduler (not required):
+```bash
+./tools/v2_hybrid_launchd.sh install --hour 18 --minute 0
 ```
 
 ## Ownership

@@ -2,25 +2,86 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TELEMETRY_DIR="$ROOT_DIR/docs/telemetry"
-CSV_FILE="$TELEMETRY_DIR/v2_hybrid_daily_snapshots.csv"
-REPORT_FILE="$TELEMETRY_DIR/V2_HYBRID_7DAY_REPORT.md"
+OUTPUT_DIR="${WAIFU_TELEMETRY_OUTPUT_DIR:-$ROOT_DIR/docs/telemetry}"
+CSV_FILE="${WAIFU_TELEMETRY_CSV_FILE:-$OUTPUT_DIR/v2_hybrid_daily_snapshots.csv}"
+REPORT_FILE="${WAIFU_TELEMETRY_REPORT_FILE:-$OUTPUT_DIR/V2_HYBRID_7DAY_REPORT.md}"
 
 TELEMETRY_URL="${WAIFU_TELEMETRY_URL:-http://127.0.0.1:8080/api/v2/telemetry/summary}"
+TELEMETRY_HEALTH_URL="${WAIFU_TELEMETRY_HEALTH_URL:-http://127.0.0.1:8080/v2/}"
 MAX_API_ERROR_RATE="${WAIFU_CUTOVER_MAX_API_ERROR_RATE:-0.03}"
 MAX_MEMORY_FALLBACK_RATE="${WAIFU_CUTOVER_MAX_MEMORY_FALLBACK_RATE:-0.35}"
 MAX_CHAT_FAILURE_RATE="${WAIFU_CUTOVER_MAX_CHAT_FAILURE_RATE:-0.10}"
 MIN_API_REQUESTS="${WAIFU_CUTOVER_MIN_API_REQUESTS:-200}"
 MIN_MEMORY_GRAPH_REQUESTS="${WAIFU_CUTOVER_MIN_MEMORY_GRAPH_REQUESTS:-50}"
 FAIL_ON_BREACH="${WAIFU_TELEMETRY_FAIL_ON_BREACH:-0}"
+AUTOSTART_BACKEND="${WAIFU_TELEMETRY_AUTOSTART_BACKEND:-0}"
+BACKEND_START_CMD="${WAIFU_TELEMETRY_BACKEND_CMD:-python3 backend/server.py}"
+BACKEND_DISABLE_VECTOR_STORE="${WAIFU_TELEMETRY_DISABLE_VECTOR_STORE:-1}"
+BACKEND_STARTUP_TIMEOUT_SEC="${WAIFU_TELEMETRY_BACKEND_STARTUP_TIMEOUT_SEC:-90}"
+BACKEND_LOG="${WAIFU_TELEMETRY_BACKEND_LOG:-/tmp/waifu_v2_capture_backend.log}"
+STARTED_BACKEND_PID=""
 
-mkdir -p "$TELEMETRY_DIR"
+cleanup() {
+  if [[ -n "$STARTED_BACKEND_PID" ]] && kill -0 "$STARTED_BACKEND_PID" 2>/dev/null; then
+    kill "$STARTED_BACKEND_PID" >/dev/null 2>&1 || true
+    wait "$STARTED_BACKEND_PID" >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
+mkdir -p "$OUTPUT_DIR"
+mkdir -p "$(dirname "$CSV_FILE")"
+mkdir -p "$(dirname "$REPORT_FILE")"
 
 if [[ ! -f "$CSV_FILE" ]]; then
   cat > "$CSV_FILE" <<'CSV'
 captured_at_utc,window_started_at,api_requests_total,api_error_rate,memory_graph_requests_total,memory_fallback_rate,chat_requests_total,chat_failure_rate,pass,reason,telemetry_url
 CSV
 fi
+
+backend_ready() {
+  curl --max-time 3 -fsS "$TELEMETRY_HEALTH_URL" >/dev/null 2>&1
+}
+
+ensure_backend_ready() {
+  if backend_ready; then
+    return 0
+  fi
+
+  if [[ "$AUTOSTART_BACKEND" != "1" ]]; then
+    echo "[v2-hybrid-telemetry] backend is not reachable at $TELEMETRY_HEALTH_URL"
+    echo "[v2-hybrid-telemetry] set WAIFU_TELEMETRY_AUTOSTART_BACKEND=1 to auto-start backend for capture"
+    return 1
+  fi
+
+  echo "[v2-hybrid-telemetry] backend not reachable, auto-starting with command: $BACKEND_START_CMD"
+  (
+    cd "$ROOT_DIR"
+    WAIFU_DISABLE_VECTOR_STORE="$BACKEND_DISABLE_VECTOR_STORE" bash -lc "$BACKEND_START_CMD" >"$BACKEND_LOG" 2>&1 &
+    echo $! > "$OUTPUT_DIR/.v2_hybrid_backend_pid"
+  )
+  STARTED_BACKEND_PID="$(cat "$OUTPUT_DIR/.v2_hybrid_backend_pid" 2>/dev/null || true)"
+  rm -f "$OUTPUT_DIR/.v2_hybrid_backend_pid"
+
+  for ((i=1; i<=BACKEND_STARTUP_TIMEOUT_SEC; i++)); do
+    if backend_ready; then
+      echo "[v2-hybrid-telemetry] backend became ready after ${i}s"
+      return 0
+    fi
+    if [[ -n "$STARTED_BACKEND_PID" ]] && ! kill -0 "$STARTED_BACKEND_PID" 2>/dev/null; then
+      echo "[v2-hybrid-telemetry] backend process exited during startup"
+      tail -n 120 "$BACKEND_LOG" || true
+      return 1
+    fi
+    sleep 1
+  done
+
+  echo "[v2-hybrid-telemetry] backend did not become ready within ${BACKEND_STARTUP_TIMEOUT_SEC}s"
+  tail -n 120 "$BACKEND_LOG" || true
+  return 1
+}
+
+ensure_backend_ready
 
 TELEMETRY_JSON=""
 for attempt in {1..5}; do

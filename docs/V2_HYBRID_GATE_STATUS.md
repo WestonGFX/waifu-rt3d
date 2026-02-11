@@ -26,12 +26,18 @@ This is the live status board for Hybrid cutover gates.
 9. Telemetry threshold enforcement in preflight: PASS
 - command: `./tools/v2_hybrid_preflight.sh`
 - supports threshold overrides via `WAIFU_PREFLIGHT_*` env vars
-10. Daily telemetry evidence automation: PASS
+10. Telemetry evidence capture script: PASS
 - command: `./tools/v2_hybrid_capture_telemetry.sh`
-- outputs: `docs/telemetry/v2_hybrid_daily_snapshots.csv` and `docs/telemetry/V2_HYBRID_7DAY_REPORT.md`
-11. Local scheduler helper: PASS
+- outputs: local default in `docs/telemetry/*`, configurable via `WAIFU_TELEMETRY_OUTPUT_DIR`
+11. CI telemetry artifact collection: PASS
+- workflow: `.github/workflows/v2-hybrid-preflight.yml`
+- result: each workflow run uploads telemetry CSV + report artifacts
+12. Optional local scheduler helper: PASS (not required)
 - command: `./tools/v2_hybrid_launchd.sh`
-- modes: install/status/run-now/uninstall
+- modes: install/status/run-now/uninstall (legacy convenience only)
+13. One-shot local evidence workflow: PASS
+- command: `./tools/v2_hybrid_collect_gate_evidence.sh`
+- behavior: runs preflight then telemetry capture without background scheduling
 
 ## What is blocking Hybrid cutover now
 1. Fill named owners and accountable roles in:
@@ -46,4 +52,4 @@ This is the live status board for Hybrid cutover gates.
 3. Fill owner fields in `docs/V2_HYBRID_EXECUTION_PLAN.md`.
 4. Create cutover issue from `docs/V2_HYBRID_CUTOVER_TICKET_TEMPLATE.md`.
 5. Run 7-day window with:
-- `./tools/v2_hybrid_capture_telemetry.sh` once per day and track P0/P1 status.
+- CI artifacts + manual `./tools/v2_hybrid_capture_telemetry.sh` checkpoints and track P0/P1 status.

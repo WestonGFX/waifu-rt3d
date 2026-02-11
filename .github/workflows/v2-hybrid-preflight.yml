@@ -6,6 +6,8 @@ on:
       - "backend/**"
       - "frontends/v2/**"
       - "tools/v2_hybrid_preflight.sh"
+      - "tools/v2_hybrid_capture_telemetry.sh"
+      - "tools/v2_hybrid_collect_gate_evidence.sh"
       - "docs/V2_*.md"
   push:
     branches:
@@ -15,6 +17,8 @@ on:
       - "backend/**"
       - "frontends/v2/**"
       - "tools/v2_hybrid_preflight.sh"
+      - "tools/v2_hybrid_capture_telemetry.sh"
+      - "tools/v2_hybrid_collect_gate_evidence.sh"
       - "docs/V2_*.md"
 
 jobs:
@@ -53,3 +57,25 @@ jobs:
 
       - name: Run hybrid preflight
         run: ./tools/v2_hybrid_preflight.sh
+
+      - name: Capture telemetry evidence artifact
+        env:
+          WAIFU_TELEMETRY_AUTOSTART_BACKEND: "1"
+          WAIFU_TELEMETRY_BACKEND_CMD: "python backend/server.py"
+          WAIFU_TELEMETRY_DISABLE_VECTOR_STORE: "1"
+          WAIFU_TELEMETRY_OUTPUT_DIR: "${{ github.workspace }}/tmp/v2-telemetry"
+          WAIFU_CUTOVER_MAX_API_ERROR_RATE: "0.05"
+          WAIFU_CUTOVER_MAX_MEMORY_FALLBACK_RATE: "1.00"
+          WAIFU_CUTOVER_MAX_CHAT_FAILURE_RATE: "1.00"
+          WAIFU_CUTOVER_MIN_API_REQUESTS: "1"
+          WAIFU_CUTOVER_MIN_MEMORY_GRAPH_REQUESTS: "1"
+          WAIFU_TELEMETRY_FAIL_ON_BREACH: "0"
+        run: ./tools/v2_hybrid_capture_telemetry.sh
+
+      - name: Upload telemetry evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-hybrid-telemetry-${{ github.run_number }}
+          path: |
+            tmp/v2-telemetry/v2_hybrid_daily_snapshots.csv
+            tmp/v2-telemetry/V2_HYBRID_7DAY_REPORT.md

@@ -9,7 +9,7 @@ LOG_PATH_DEFAULT="/tmp/v2_hybrid_telemetry_launchd.log"
 usage() {
   cat <<'EOF'
 Usage:
-  ./tools/v2_hybrid_launchd.sh install [--hour 18] [--minute 0] [--log /tmp/file.log]
+  ./tools/v2_hybrid_launchd.sh install [--hour 18] [--minute 0] [--log /tmp/file.log] [--autostart-backend]
   ./tools/v2_hybrid_launchd.sh uninstall
   ./tools/v2_hybrid_launchd.sh status
   ./tools/v2_hybrid_launchd.sh run-now
@@ -28,8 +28,14 @@ write_plist() {
   local hour="$1"
   local minute="$2"
   local log_path="$3"
+  local autostart_backend="$4"
 
   ensure_launchagents_dir
+
+  local capture_command="cd '${ROOT_DIR}' && ./tools/v2_hybrid_capture_telemetry.sh >> '${log_path}' 2>&1"
+  if [[ "$autostart_backend" == "1" ]]; then
+    capture_command="cd '${ROOT_DIR}' && WAIFU_TELEMETRY_AUTOSTART_BACKEND=1 ./tools/v2_hybrid_capture_telemetry.sh >> '${log_path}' 2>&1"
+  fi
 
   cat >"$PLIST_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -43,7 +49,7 @@ write_plist() {
   <array>
     <string>/bin/zsh</string>
     <string>-lc</string>
-    <string>cd '${ROOT_DIR}' && ./tools/v2_hybrid_capture_telemetry.sh >> '${log_path}' 2>&1</string>
+    <string>${capture_command}</string>
   </array>
 
   <key>StartCalendarInterval</key>
@@ -80,6 +86,7 @@ cmd_install() {
   local hour=18
   local minute=0
   local log_path="$LOG_PATH_DEFAULT"
+  local autostart_backend=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -94,6 +101,10 @@ cmd_install() {
       --log)
         log_path="$2"
         shift 2
+        ;;
+      --autostart-backend)
+        autostart_backend=1
+        shift 1
         ;;
       *)
         echo "Unknown option: $1"
@@ -116,13 +127,18 @@ cmd_install() {
     exit 2
   fi
 
-  write_plist "$hour" "$minute" "$log_path"
+  write_plist "$hour" "$minute" "$log_path" "$autostart_backend"
   launchd_unload
   launchd_load
 
   echo "Installed launchd job: ${LABEL}"
   echo "Plist: ${PLIST_PATH}"
   echo "Schedule: daily at $(printf "%02d:%02d" "$hour" "$minute") (local time)"
+  if [[ "$autostart_backend" == "1" ]]; then
+    echo "Auto-start backend mode: enabled (WAIFU_TELEMETRY_AUTOSTART_BACKEND=1)"
+  else
+    echo "Auto-start backend mode: disabled"
+  fi
   echo "Log file: ${log_path}"
 }
 

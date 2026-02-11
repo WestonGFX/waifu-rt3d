@@ -4,6 +4,9 @@
 Choose between:
 1. Core-first cutover (recommended): promote after core flow + hardening gates pass.
 2. Full-feature cutover: hold default switch until near-complete feature parity.
+3. Hybrid cutover (recommended in practice): core + reliability slice, then switch default.
+
+For full scope and stage-based feature boundaries, see `docs/V2_IMPLEMENTATION_TRACKS.md`.
 
 ## Recommendation
 Use core-first cutover unless one of these is true:

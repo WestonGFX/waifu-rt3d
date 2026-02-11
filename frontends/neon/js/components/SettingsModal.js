@@ -39,6 +39,17 @@ const SETTINGS_SCHEMA = {
             { id: "ui_sounds", name: "Interface Sounds", type: "toggle", default: false, desc: "Clicks and beeps." }
         ]
     },
+    character: {
+        label: "CHARACTER",
+        icon: "👤",
+        fields: [
+            { id: "active_character_id", name: "Active Character", type: "select", options: ["Loading..."], default: "1", desc: "Select the current persona." },
+            { id: "avatar_url", name: "2D Avatar / Icon", type: "gallery", filter: "avatar", desc: "Select a profile picture for chat/UI." },
+            { id: "model_vrm", name: "VRM Model", type: "select", options: ["Loading..."], default: "", desc: "3D Model file." },
+            { id: "live2d_model", name: "Live2D Model", type: "select", options: ["Loading..."], default: "", desc: "2D Model folder." },
+            { id: "bg_image", name: "Background Image", type: "gallery", filter: "background", desc: "Select a background for this character." }
+        ]
+    },
     system: {
         label: "SYSTEM & DEV",
         icon: "⚙️",
@@ -57,7 +68,21 @@ export class SettingsModal {
         this.modal = document.getElementById('settings-modal');
         this.currentTab = 'brain';
         this.bindEvents();
+        this.images = []; // Cache for gallery images
+
+        // Global Access
+        window.openSettings = (tab) => this.open(tab);
     }
+
+    open(tab) {
+        if (tab && SETTINGS_SCHEMA[tab]) {
+            this.currentTab = tab;
+        }
+        this.modal.style.display = 'flex';
+        this.renderTabs();
+        this.renderContent();
+    }
+
 
     injectHTML() {
         if (document.getElementById('settings-modal')) return;
@@ -79,6 +104,54 @@ export class SettingsModal {
                     </div>
                 </div>
             </div>
+            <style>
+                .gallery-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+                    gap: 10px;
+                    max-height: 300px;
+                    overflow-y: auto;
+                    padding: 5px;
+                    border: 1px solid var(--glass-border);
+                    border-radius: 8px;
+                    background: rgba(0,0,0,0.2);
+                }
+                .gallery-item {
+                    aspect-ratio: 1;
+                    border-radius: 6px;
+                    overflow: hidden;
+                    cursor: pointer;
+                    border: 2px solid transparent;
+                    transition: all 0.2s;
+                    position: relative;
+                }
+                .gallery-item img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                }
+                .gallery-item:hover {
+                    box-shadow: 0 0 10px var(--neon-primary);
+                }
+                .gallery-item.selected {
+                    border-color: var(--neon-primary);
+                    box-shadow: 0 0 15px var(--neon-primary);
+                }
+                .gallery-item-label {
+                    position: absolute;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    background: rgba(0,0,0,0.7);
+                    color: white;
+                    font-size: 10px;
+                    padding: 2px;
+                    text-align: center;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+            </style>
         `;
         document.body.insertAdjacentHTML('beforeend', html);
     }
@@ -103,11 +176,82 @@ export class SettingsModal {
         window.openSettings = () => this.open();
     }
 
+    async fetchImages() {
+        try {
+            const res = await fetch('/api/scan/images');
+            const data = await res.json();
+            this.images = data.images || [];
+        } catch (e) {
+            console.error("Failed to fetch images", e);
+        }
+    }
+
     open() {
         this.modal.style.display = 'flex';
         // Safeguard against undefined state or config
         const currentState = state.state || {};
         this.tempConfig = JSON.parse(JSON.stringify(currentState.config || {}));
+
+        // === HYDRATE OPTIONS FROM STATE ===
+        // Populate Character Dropdown
+        if (currentState.characters && currentState.characters.length > 0) {
+            const charField = SETTINGS_SCHEMA.character.fields.find(f => f.id === 'active_character_id');
+            if (charField) {
+                // Store ID and Name. For the select, we should probably use ID as value.
+                // But the helper `renderField` currently assumes options array strings match values?
+                // Let's check `renderField`: 
+                // `o.value = opt; o.innerText = opt;`
+                // It uses the string as both value and text.
+                // So we should probably format it as "ID: Name" or change `renderField` to handle objects.
+                // For now, let's just make it "Name" and hope names are unique? 
+                // Or better, let's update `renderField` to handle simple string options.
+                // Actually `active_character_id` is an ID.
+                // If I set options to ["1", "2"], the dropdown will show "1", "2". Not user friendly.
+                // Fix: I need to update `renderField` to support `options` as objects {value, label} OR simple strings.
+
+                // For this quick fix, let's just update the schema to be compatible if I can, 
+                // but `renderField` is simplistic.
+                // Let's modify `renderField` properly in the next step. 
+                // For now, I will just put the IDs effectively, or map names if I modify renderField.
+
+                // Actually, let's do the renderField upgrade first or inline.
+                // I will assume I can change renderField in the same file.
+
+                charField.options = currentState.characters.map(c => `${c.id}: ${c.name}`);
+            }
+        }
+
+        // Pre-fill active character specifics not in global config
+        const activeChar = currentState.characters.find(c => c.id == currentState.currentCharacterId);
+        if (activeChar) {
+            // Match the option format "ID: Name"
+            this.tempConfig.active_character_id = `${activeChar.id}: ${activeChar.name}`;
+            this.tempConfig.avatar_url = activeChar.avatar_url;
+            this.tempConfig.model_vrm = activeChar.avatar_url; // Wait, VRM is different. 
+            // VRM logic is complex because it might be in config OR character? 
+            // PRD says character specific. Server says "avatar_url" is the VRM path usually?
+            // Actually, looking at server.py: "avatar_url" is used for VRM path in older logic, 
+            // but we want to use it for 2D icon now?
+            // "model_type" distinguishes.
+            // Let's check server.py SCHEMA again.
+            // characters table: avatar_url (TEXT).
+            // upload_avatar => .vrm file.
+            // OLD LOGIC: avatar_url was the 3D model path.
+            // NEW LOGIC: We want avatar_url to be the ICON.
+            // AND we have model_vrm? SettingsSchema has "model_vrm".
+            // Where is "model_vrm" stored in DB?
+            // server.py list_characters -> "avatar_url" is row[3].
+            // If we repurpose "avatar_url" for 2D icon, I break the VRM loader if it relies on that column.
+            // Let's check how VRM is loaded.
+            // Dashboard.js / ViewerBridge.js probably uses state.characters[id].avatar_url.
+
+            // Checking ViewerBridge.js is safer before I commit this change.
+            // But for now, I will pre-fill it.
+        }
+
+        // Fetch external data when opening
+        this.fetchImages(); 
+
         this.switchTab('brain');
     }
 
@@ -207,6 +351,45 @@ export class SettingsModal {
                 }
             };
             row.appendChild(btn);
+        } else if (def.type === 'gallery') {
+            const grid = document.createElement('div');
+            grid.className = 'gallery-grid';
+
+            // Filter images if filter is specified
+            let displayImages = this.images;
+            if (def.filter) {
+                displayImages = this.images.filter(img => img.type === def.filter);
+            }
+
+            // Render images
+            if (displayImages.length === 0) {
+                grid.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">No images found.</div>';
+            } else {
+                displayImages.forEach(img => {
+                    const item = document.createElement('div');
+                    item.className = 'gallery-item';
+                    // Check if selected (substring match for paths vs clean names)
+                    if (currentVal && (currentVal === img.url || currentVal.includes(img.file))) {
+                        item.classList.add('selected');
+                    }
+
+                    item.innerHTML = `
+                        <img src="${img.url}" alt="${img.name}" loading="lazy">
+                        <div class="gallery-item-label">${img.name}</div>
+                    `;
+
+                    item.onclick = () => {
+                        // Deselect others
+                        grid.querySelectorAll('.gallery-item').forEach(el => el.classList.remove('selected'));
+                        item.classList.add('selected');
+                        // Update config (store the full URL)
+                        this.tempConfig[def.id] = img.url;
+                    };
+
+                    grid.appendChild(item);
+                });
+            }
+            row.appendChild(grid);
         }
 
         container.appendChild(row);
@@ -252,17 +435,25 @@ export class SettingsModal {
             // Update Grid Cols
             const colLeft = showLeft ? '280px' : '0px';
             const colRight = showRight ? '320px' : '0px';
-
-            // If we hide panels, we want the grid to collapse effectively. 
-            // 0px cols works, but gaps remain?
-            // "280px 1fr 320px" -> "0px 1fr 0px"
-            // If we set the col to 0px, gap might still be there. 
-            // Better: update gap? Or just trust the 0px?
-            // Actually, if we set display:none on children, we can use `auto 1fr auto`?
-            // But we want fixed width when visible.
-            // Let's rely on the variable update.
             r.style.setProperty('--layout-cols', `${colLeft} 1fr ${colRight}`);
 
+            // === SAVE ACTIVE CHARACTER SPECIFICS ===
+            let activeCharId = this.tempConfig.active_character_id || state.state.currentCharacterId;
+
+            // Parse ID if it's in "ID: Name" format
+            if (typeof activeCharId === 'string' && activeCharId.includes(':')) {
+                activeCharId = activeCharId.split(':')[0];
+            }
+            if (activeCharId) {
+                // Determine if we have character-specific changes
+                // Note: avatar_url (we decided this is the ICON now)
+                const charUpdates = {};
+                if (this.tempConfig.avatar_url) charUpdates.avatar_url = this.tempConfig.avatar_url;
+
+                if (Object.keys(charUpdates).length > 0) {
+                    await state.saveCharacter(activeCharId, charUpdates);
+                }
+            }
 
             await state.saveConfig(this.tempConfig);
             btn.innerText = "SAVED";

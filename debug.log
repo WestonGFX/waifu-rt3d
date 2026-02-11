@@ -1332,3 +1332,57 @@ sqlite3.OperationalError: no such table: sessions
 2026-02-04 07:32:11,234 [INFO] Attempting to bind to port 8080...
 2026-02-04 07:32:15,416 [ERROR] Failed to init Vector Store: no such column: collections.topic
 2026-02-04 07:32:15,417 [INFO] Model Manager Initialized
+2026-02-09 18:36:11,636 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-09 18:36:12,369 [INFO] Attempting to bind to port 8080...
+2026-02-09 18:36:13,738 [ERROR] Failed to init Vector Store: `BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.12/migration/#basesettings-has-moved-to-pydantic-settings for more details.
+
+For further information visit https://errors.pydantic.dev/2.12/u/import-error
+2026-02-09 18:36:13,738 [INFO] Model Manager Initialized
+2026-02-09 18:41:05,798 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-09 18:41:05,897 [INFO] Attempting to bind to port 8080...
+2026-02-09 18:41:06,413 [ERROR] Failed to init Vector Store: `BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.12/migration/#basesettings-has-moved-to-pydantic-settings for more details.
+
+For further information visit https://errors.pydantic.dev/2.12/u/import-error
+2026-02-09 18:41:06,413 [INFO] Model Manager Initialized
+2026-02-09 18:43:52,683 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-09 18:43:52,786 [INFO] Attempting to bind to port 8080...
+2026-02-09 18:43:53,202 [ERROR] Failed to init Vector Store: `BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.12/migration/#basesettings-has-moved-to-pydantic-settings for more details.
+
+For further information visit https://errors.pydantic.dev/2.12/u/import-error
+2026-02-09 18:43:53,203 [INFO] Model Manager Initialized
+2026-02-09 18:55:32,149 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-09 18:55:32,338 [INFO] Attempting to bind to port 8080...
+2026-02-09 18:55:32,681 [ERROR] Failed to init Vector Store: `BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.12/migration/#basesettings-has-moved-to-pydantic-settings for more details.
+
+For further information visit https://errors.pydantic.dev/2.12/u/import-error
+2026-02-09 18:55:32,682 [INFO] Model Manager Initialized
+2026-02-09 19:05:47,816 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-09 19:05:47,911 [INFO] Attempting to bind to port 8080...
+2026-02-09 19:05:48,249 [ERROR] Failed to init Vector Store: `BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.12/migration/#basesettings-has-moved-to-pydantic-settings for more details.
+
+For further information visit https://errors.pydantic.dev/2.12/u/import-error
+2026-02-09 19:05:48,249 [INFO] Model Manager Initialized
+2026-02-09 19:12:06,611 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-09 19:12:06,698 [INFO] Attempting to bind to port 8080...
+2026-02-09 19:12:07,017 [ERROR] Failed to init Vector Store: `BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.12/migration/#basesettings-has-moved-to-pydantic-settings for more details.
+
+For further information visit https://errors.pydantic.dev/2.12/u/import-error
+2026-02-09 19:12:07,018 [INFO] Model Manager Initialized
+2026-02-09 19:23:04,963 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-09 19:23:05,071 [INFO] Attempting to bind to port 8080...
+2026-02-09 19:23:05,291 [ERROR] Failed to init Vector Store: `BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.12/migration/#basesettings-has-moved-to-pydantic-settings for more details.
+
+For further information visit https://errors.pydantic.dev/2.12/u/import-error
+2026-02-09 19:23:05,292 [INFO] Model Manager Initialized
+2026-02-09 19:27:09,284 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-09 19:27:09,362 [INFO] Attempting to bind to port 8080...
+2026-02-09 19:27:09,570 [ERROR] Failed to init Vector Store: `BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.12/migration/#basesettings-has-moved-to-pydantic-settings for more details.
+
+For further information visit https://errors.pydantic.dev/2.12/u/import-error
+2026-02-09 19:27:09,571 [INFO] Model Manager Initialized
+2026-02-09 19:34:34,694 [INFO] --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+2026-02-09 19:34:34,774 [INFO] Attempting to bind to port 8080...
+2026-02-09 19:34:34,959 [ERROR] Failed to init Vector Store: `BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.12/migration/#basesettings-has-moved-to-pydantic-settings for more details.
+
+For further information visit https://errors.pydantic.dev/2.12/u/import-error
+2026-02-09 19:34:34,960 [INFO] Model Manager Initialized

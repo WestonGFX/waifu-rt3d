@@ -64,7 +64,6 @@
     color: var(--text-main);
     padding: 10px;
     border-radius: var(--radius-sm);
-    width: 100%;
     outline: none;
     font-family: var(--font-mono);
 }

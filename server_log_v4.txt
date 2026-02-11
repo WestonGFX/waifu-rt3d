@@ -1,0 +1,84 @@
+[94mINFO[0m: --- WAIFU_LINK BOOT SEQUENCE v5.31.0 ---
+/Users/chris/Code/waifu-rt3d/backend/server.py:178: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+/Users/chris/Code/waifu-rt3d/backend/server.py:774: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+[94mINFO[0m: Attempting to bind to port 8080...
+INFO:     Started server process [75865]
+INFO:     Waiting for application startup.
+2026-02-09 19:12:06,752 - backend.preflight - INFO - Running preflight checks...
+2026-02-09 19:12:06,752 - backend.preflight - INFO - ✅ Directory structure verified
+2026-02-09 19:12:06,753 - backend.preflight - INFO - ✅ Configuration file exists
+2026-02-09 19:12:06,753 - backend.preflight - INFO - Initializing database...
+2026-02-09 19:12:06,755 - backend.preflight - INFO - Current schema version: v5
+2026-02-09 19:12:06,755 - backend.preflight - INFO - Current database schema version: v5
+2026-02-09 19:12:06,755 - backend.preflight - INFO - Current schema version: v5
+2026-02-09 19:12:06,755 - backend.preflight - WARNING - Database is newer than application (v5 > v4). Some features might be unused.
+2026-02-09 19:12:06,755 - backend.preflight - INFO - ✅ Database ready (schema v5 active)
+2026-02-09 19:12:06,757 - backend.preflight - INFO - ✅ All preflight checks complete
+[94mERROR[0m: Failed to init Vector Store: `BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.12/migration/#basesettings-has-moved-to-pydantic-settings for more details.
+
+For further information visit https://errors.pydantic.dev/2.12/u/import-error
+2026-02-09 19:12:07,017 - waifu - ERROR - Failed to init Vector Store: `BaseSettings` has been moved to the `pydantic-settings` package. See https://docs.pydantic.dev/2.12/migration/#basesettings-has-moved-to-pydantic-settings for more details.
+
+For further information visit https://errors.pydantic.dev/2.12/u/import-error
+[94mINFO[0m: Model Manager Initialized
+2026-02-09 19:12:07,018 - waifu - INFO - Model Manager Initialized
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+INFO:     127.0.0.1:63631 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63631 - "GET /lib/live2dcubismcore.min.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63633 - "GET /lib/pixi.min.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63635 - "GET /lib/live2d.min.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63635 - "GET /viewer/viewer.html HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63635 - "GET /js/core/StateManager.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63633 - "GET /js/components/SettingsModal.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63631 - "GET /js/components/ChatInterface.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63633 - "GET /viewer/viewer.html HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63631 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63635 - "GET /api/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63658 - "GET /api/scan/images HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63679 - "PUT /api/characters/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63679 - "GET /api/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63679 - "PUT /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63679 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63687 - "GET /assets/user_avatar.png HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63732 - "GET /api/scan/images HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63763 - "GET /files/images/seraph_sky_garden.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63762 - "GET /files/images/kitsune_live_concert.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63770 - "PUT /api/characters/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63770 - "GET /api/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63770 - "PUT /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63770 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63796 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63796 - "GET /lib/live2dcubismcore.min.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63798 - "GET /lib/pixi.min.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63800 - "GET /lib/live2d.min.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63800 - "GET /viewer/viewer.html HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63798 - "GET /js/components/SettingsModal.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63798 - "GET /viewer/viewer.html HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63800 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63796 - "GET /api/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63796 - "GET /assets/user_avatar.png HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63821 - "GET /api/scan/images HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63835 - "GET /files/images/rin_street_race.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63836 - "GET /files/images/shiori_library.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63839 - "GET /files/images/sable_data_room.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63840 - "GET /files/images/ayane_server_core.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63861 - "PUT /api/characters/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63861 - "GET /api/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63861 - "PUT /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63861 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63870 - "GET /assets/user_avatar.png HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63899 - "GET /js/components/ChatInterface.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63941 - "GET /api/scan/images HTTP/1.1" 200 OK

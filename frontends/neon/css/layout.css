@@ -38,13 +38,4 @@
     position: relative;
 }
 
-/* Chat Layer (Bottom Overlay or Split) */
-.chat-layer {
-    height: 35%;
-    min-height: 250px;
-    background: linear-gradient(to top, var(--bg-deep) 0%, transparent 100%);
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    border-top: 1px solid var(--glass-border);
-}
+/* Chat Layer — Positioned by cyber_glass.css */

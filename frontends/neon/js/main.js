@@ -13,8 +13,10 @@ window.onerror = (msg, url, line) => {
     logger.error("Global", `${msg} (${url}:${line})`);
 };
 
-document.addEventListener('DOMContentLoaded', async () => {
+// Main Initialization Logic
+async function initApp() {
     try {
+        console.log("Initializing App...");
         // 1. Init Shell
         const dashboard = new Dashboard();
 
@@ -24,7 +26,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         const chat = new ChatInterface();
         const viewer = new ViewerBridge();
 
-        logger.success("System", "Components Initialized");
+        // 3. Expose Global API for HTML Event Handlers
+        window.app = {
+            dashboard,
+            charGrid,
+            settings,
+            chat,
+            viewer,
+            state
+        };
+
+        logger.success("System", "Components Initialized & Exposed to Window");
 
         // 3. Hydrate State
         await state.init();
@@ -41,4 +53,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         logger.error("Boot", "Critical Failure: " + e.message);
         document.body.innerHTML += `<div style="color:red; padding:20px;">CRITICAL SYSTEM FAILURE: ${e.message}</div>`;
     }
-});
+}
+
+// Check if DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
+}

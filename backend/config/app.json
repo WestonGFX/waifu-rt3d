@@ -25,5 +25,15 @@
         }
       }
     }
-  }
+  },
+  "bg_image": "/files/images/rin_pixel_portrait.png",
+  "dev_mode": true,
+  "save_logs_auto": true,
+  "log_limit": 1000,
+  "theme": "Dracula",
+  "active_character_id": "1: Fox (Rin)",
+  "avatar_url": "/files/images/sable_pixel_portrait.png",
+  "model_vrm": "/files/images/sable_pixel_portrait.png",
+  "layout_show_left": false,
+  "layout_show_right": false
 }

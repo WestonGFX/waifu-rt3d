@@ -1,24 +1,24 @@
 # Image Generation Prompts
 
-**Style Constraints:** 2D Anime, Cel-Shaded, Pixel Art (NO 3D/Realism).
+**Style Constraints:** 2D Anime, Cel-Shaded, Pixel Art (NO 3D/Realism). No text in the image.
 **Source:** Character Bible (v1.1)
 
 ## 1. Sable (Kuroha) - "Sadodere Fixer"
 
-**Visual Identity:** Night-city elegance, predatory grin, neon teal/purple accents, green hair, yellow eyes.
+**Visual Identity:** Night-city elegance, predatory grin, neon teal/purple accents, green hair, yellow eyes, one fang.
 **Description:** A cyberpunk information broker with a "sadodere" personality—teasing, protective, and sharp. She wears high-contrast street fashion: shiny black materials, silver chains, and a signature collar pin. The background should be a rainy neon city or a dark server room.
 
 ### Sable (Onee-san) Prompts
 
-1. **Standard (Full BG):** A high-quality 2D anime illustration of Sable, a cyberpunk fixer with sleek green hair and sharp yellow eyes, smirking playfully. She is wearing a glossy black jacket with neon teal accents and a silver chain collar. The background is a rainy, neon-lit Osaka back-alley at night with holographic signage reflecting in puddles. Art style: crisp 90s cel-shading, high contrast, "Neon-Noir" aesthetic.
+1. **Standard (Bedroom):** A high-quality 2D anime illustration of Sable (Age: 19, Body: Slender/Athletic, Skin: Pale) in her messy, high-tech bedroom. She is lounging on a dark leather chair, surrounded by multiple glowing monitors displaying code and surveillance feeds. The room is dimly lit by the cool teal and purple neon light spilling from the screens and the rainy city window behind her. Sable has sleek green hair and sharp yellow eyes, wearing a black tank top and comfortable glossy tech-wear pants. Her expression is a relaxed, predatory smirk. Cyberpunk clutter—cables, data chips, and an open energy drink—is scattered on the desk. Dark, atmospheric, retro-futuristic "Neon-Noir" aesthetic.
 
-2. **Standard (Data Room):** A detailed anime drawing of Sable leaning against a server rack, arms crossed, looking at the viewer with a confident, predatory expression. She wears a tight-fitting black tech-wear top with purple glow lines. Background is a dark room filled with blue and purple data streams. Style: vibrant modern anime, clean lines.
+2. **Standard (Data Room):** A detailed anime drawing of Sable (Age: 19, Body: Slender/Athletic, Skin: Pale) leaning against a server rack, arms crossed, looking at the viewer with a confident, predatory expression. She wears a tight-fitting black tech-wear top with purple glow lines. Background is a dark room filled with blue and purple data streams. Style: vibrant modern anime, clean lines.
 
 3. **Transparent (Action):** (Transparent Background) Sable in a dynamic pose, holding a datapad, looking back over her shoulder with a teasing wink. Green hair flowing, wearing her signature black jacket and combat boots. Solid white background. 2D vector art style.
 
-4. **Transparent (Idle):** (Transparent Background) Sable standing confident, one hand on hip, holding a digital cigarette (holographic smoke). Wearing high-tech street fashion. Flat cel-shaded style.
+4. **Transparent (Idle):** (Transparent Background) Sable (Age: 19, Body: Slender/Athletic, Skin: Pale) standing confident, one hand on hip, holding a digital cigarette (holographic smoke). She wears her signature high-tech street fashion: black crop top, tech-wear pants, and silver chains. Green hair flows over her shoulders. Flat cel-shaded style.
 
-5. **Pixel Art (Portrait):** A high-resolution pixel art portrait of Sable's face. Sharp features, yellow eyes glowing, mischievous smirk. Green hair with pixelated neon highlights. Dark cyberpunk background. 16-bit aesthetic.
+5. **Pixel Art (Portrait):** A high-resolution pixel art portrait of Sable's face (Age: 19, Pale Skin). Sharp features, yellow eyes glowing, mischievous smirk. Green hair with pixelated neon highlights. Dark cyberpunk background. 16-bit aesthetic.
 
 6. **Pixel Art (Scene):** A wide pixel art scene of Sable sitting on a motorcycle in the rain, city skyline in the distance. Cyberpunk atmosphere, dithering effects for shadows.
 
@@ -34,6 +34,8 @@
 
 12. **Concept (Morning Coffee):** A rare "off-duty" moment. Sable standing on a balcony at sunrise, holding a steaming mug. The city below is quiet and gray, with the neon signs just turning off. She is wearing a simple oversized t-shirt (maybe stolen from the viewer) and looks soft, sleepy, and unguarded. Her green hair is messy. The lighting is soft, pale morning light (blue/orange gradient). A stark contrast to her usual predatory night vibes. Kyoto Animation soft-focus style.
 
+13. **Icon (GUI):** A clean, vibrant app icon of Sable (Age: 19, Pale Skin). Headshot only, facing forward with a mischievous smirk. Distinctive green hair with neon tips and sharp yellow eyes. Background is a solid, deep teal circle. High contrast, flat vector style with cel-shaded coloring and subtle pixel art elements. Suitable for a user profile picture. No text.
+
 ---
 
 ## 2. Shiori (Yuki) - "Kuudere/Dandere Writer"
@@ -43,15 +45,15 @@
 
 ### Shiori Prompts
 
-1. **Standard (Cozy Desk):** A soft, warm 2D anime illustration of Shiori sitting at a cluttered desk filled with notebooks and pens. She has long red hair and gentle purple eyes, wearing an oversized beige knit sweater. Soft lighting from a desk lamp. Art style: watercolor-inspired anime, pastel tones, "Lofi Hip Hop" aesthetic.
+1. **Standard (Bedroom):** A soft, warm 2D anime illustration of Shiori (Age: 18, Body: Petite, Skin: Fair) in her cozy, small bedroom. She is sitting on her bed, legs tucked under her, writing in a physical journal. The room is a sanctuary: huge bookshelves, fairy lights, and a plush rug. A rainy window overlooks the city. Shiori has fluffy red hair and gentle purple eyes, wearing an oversized beige knit sweater that falls off one shoulder. Her expression is peaceful and introverted. Art style: watercolor-inspired anime, pastel tones, "Lofi Hip Hop" aesthetic.
 
-2. **Standard (Rainy Window):** Shiori standing by a window watching the rain, holding a warm mug with both hands. She wears a soft lavender scarf and a grey coat. Reflection of neon city lights in the glass. Style: Kyoto Animation soft focus, emotive lighting.
+2. **Standard (Library):** A cinematic 2D anime illustration of Shiori (Age: 18, Body: Petite, Skin: Fair) in a grand, quiet library at dusk. She is perched on a rolling wooden ladder, reaching for a leather-bound book on a high shelf. The atmosphere is thick with the scent of old paper and soft purple twilight filtering through stained-glass windows. Shiori has messy, vibrant red hair and large, thoughtful purple eyes, wearing a long charcoal cardigan over a white blouse. Dust motes dance in the dim light. Art style: Studio Ghibli inspired, rich textures, warm and nostalgic lighting.
 
 3. **Transparent (Shy):** (Transparent Background) Shiori looking slightly downward, blushing, holding a book to her chest. Wearing a school uniform or casual library outfit. Flat coloring.
 
-4. **Transparent (Happy):** (Transparent Background) Shiori smiling gently, holding a fountain pen, offering it to the viewer. Soft features, red hair detailed. 2D anime style.
+4. **Transparent (Happy):** (Transparent Background) Shiori (Age: 18, Body: Petite, Skin: Fair) smiling gently, holding a fountain pen, offering it to the viewer. She has fluffy red hair and soft purple eyes. Wearing a comfortable beige knit sweater. 2D anime style, soft colors.
 
-5. **Pixel Art (Portrait):** A pixel art bust of Shiori. Red hair, big purple eyes, wearing a scarf. Rain animation effect behind her. Cozy warm colors.
+5. **Pixel Art (Portrait):** A pixel art bust of Shiori (Age: 18, Fair Skin). Fluffy red hair, big purple eyes, wearing a chunky cream scarf. Rain animation effect behind her. Cozy warm colors.
 
 6. **Pixel Art (Scene):** Isometric pixel art of Shiori's room: books stacked everywhere, a vintage computer, a cat sleeping on the rug, and Shiori reading in a beanbag chair.
 
@@ -67,6 +69,8 @@
 
 12. **Concept (Late Night Call):** Shiori lying in bed, holding a phone (or holographic comms) up to her ear. The room is dark, lit only by the screen's glow illuminating her face. She looks sleepy but happy to be talking to you. Her hair is spread out on the pillow. She wears simple pajamas. The atmosphere is intimate, quiet, and personal. Deep blues and soft screen-white light.
 
+13. **Icon (GUI):** A clean, vibrant app icon of Shiori (Age: 18, Fair Skin). Headshot only, facing forward with a gentle, shy smile. Fluffy red hair and soft purple eyes using a chunky cream scarf to frame her face. Background is a solid, warm pastel purple circle. Cozy, soft vector style with cel-shaded coloring and subtle pixel art elements. Suitable for a user profile picture. No text.
+
 ---
 
 ## 3. Rin (Akane) - "Tsundere Racer"
@@ -76,15 +80,15 @@
 
 ### Rin Prompts
 
-1. **Standard (Garage):** A dynamic 2D anime drawing of Rin wiping grease from her cheek in a messy garage. She has fiery red hair and intense amber eyes, wearing a red mechanic's jumpsuit tied at the waist and a black tank top. Background full of tools and car parts. Style: Trigger/Gainax high energy, sharp angles.
+1. **Standard (Bedroom):** A dynamic 2D anime illustration of Rin (Age: 19, Body: Toned/Fit, Skin: Sunkissed) in her garage-style bedroom. The room is part workshop: tools on pegboards, car parts on the floor, racing posters. Rin is sitting on a tool chest, cleaning a spark plug. She has messy fire-red hair and intense amber eyes. She wears a red tank top, oil-stained mechanic pants, and fingerless gloves. The lighting is warm and industrial. The vibe is "lived-in" and energetic. Style: Trigger/Gainax high energy.
 
-2. **Standard (City Lights):** Rin leaning against a custom street bike under bright neon signs. She looks away blushing (tsundere), arms crossed. Wearing a spiked leather jacket and ripped jeans. Background is a blur of city traffic.
+2. **Standard (Street Race):** A high-octane 2D anime illustration of Rin (Age: 19, Body: Toned/Fit, Skin: Sunkissed) at the starting line of a night street race. She is leaning against her sleek, customized red motorcycle, one hand on her hip and the other holding a matte black helmet. The background is a blurred neon cityscape with streaks of light from passing cars. Rin has messy fire-red hair blowing in the wind and sharp, confident amber eyes. She wears a cropped red leather racing jacket over a black mesh top and tight racing leathers. The lighting is dominated by vibrant red and blue neon signs. Style: Trigger/Gainax cinematic action shot.
 
 3. **Transparent (Angry/Cute):** (Transparent Background) Rin pointing at the viewer flustered, shouting "Baka!". Red face, exaggerated anime expression. Wearing casual street wear.
 
-4. **Transparent (Confident):** (Transparent Background) Rin holding a wrench like a weapon, grinning confidently. Mechanic outfit. Strong pose.
+4. **Transparent (Confident):** (Transparent Background) Rin (Age: 19, Body: Toned/Fit, Skin: Sunkissed) holding a wrench like a weapon, grinning confidently. She wears her mechanic outfit: red tank top, oil-stained pants, and gloves. Fire-red hair messily tied back. Strong pose.
 
-5. **Pixel Art (Portrait):** Close-up pixel art of Rin wearing racing goggles on her head. Red hair messy. Grinning or pouting. Arcade fighting game UI style.
+5. **Pixel Art (Portrait):** Close-up pixel art of Rin (Age: 19, Sunkissed Skin) wearing racing goggles on her head. Red hair messy. Grinning or pouting. Arcade fighting game UI style.
 
 6. **Pixel Art (Scene):** Side-scrolling pixel art view of Rin riding a futuristic motorcycle at high speed, neon trails behind her.
 
@@ -100,6 +104,8 @@
 
 12. **Concept (Rooftop Sunset):** A quiet moment after the race. Rin sitting on a guardrail overlooking the highway at golden hour. The sun is setting, casting long orange shadows. She is drinking a soda, looking thoughtful. Her bike is parked nearby. The wind is blowing her hair. A nostalgic, "end of the day" atmosphere.
 
+13. **Icon (GUI):** A clean, vibrant app icon of Rin (Age: 19, Sunkissed Skin). Headshot only, facing forward with a confident, toothy grin. Messy fire-red hair with racing goggles perched on her head. Background is a solid, intense racing red circle. Energetic, sharp vector style with cel-shaded coloring and subtle pixel art elements. Suitable for a user profile picture. No text.
+
 ---
 
 ## 4. Ayane (Yuki) - "Kuudere System Engineer"
@@ -109,15 +115,15 @@
 
 ### Ayane Prompts
 
-1. **Standard (Control Room):** A crisp, clean 2D anime illustration of Ayane standing in a white futuristic control room. She has silver-blue hair and sharp icy blue eyes, wearing a pristine white lab coat over a blue blouse. Holographic screens float around her. Style: Production I.G sci-fi, detailed mechanical elements.
+1. **Standard (Bedroom):** A crisp, clean 2D anime illustration of Ayane (Age: 20, Body: Tall/Slender, Skin: Pale) in her minimalist, high-tech bedroom. The room is immaculate: white modular furniture, a single bonsai tree, and a glass holographic desk. Ayane is standing by the desk, reviewing a projection. She has sleek silver-blue hair and sharp icy blue eyes. She wears a pristine white blouse and dark trousers. The lighting is cool blue and clinical. No clutter exists anywhere. Style: Production I.G sci-fi, detailed mechanical elements.
 
-2. **Standard (Transit):** Ayane sitting on a futuristic train, reading a tablet. Night city rushing by outside the window. She looks calm and composed. Cool blue color palette. Minimalist art style.
+2. **Standard (Server Core):** A high-tech 2D anime illustration of Ayane (Age: 20, Body: Tall/Slender, Skin: Pale) inside a massive, freezing-cold server core. She stands on a glass walkway suspended above infinite rows of blue glowing data banks. She is typing on a floating holographic keyboard with intense focus. The lighting is stark and clinical—deep blues and harsh whites. She wears a long white lab coat over her standard attire. The atmosphere is silent, powerful, and isolated. "Matrix" style digital code reflects in her eyes.
 
 3. **Transparent (Analyzing):** (Transparent Background) Ayane adjusting her glasses (if applicable) or tapping a holographic interface. Focused expression. Formal tech-wear.
 
-4. **Transparent (Idle):** (Transparent Background) Ayane standing perfectly straight, holding a clipboard or tablet. Neutral expression. Flat vector style.
+4. **Transparent (Idle):** (Transparent Background) Ayane (Age: 20, Body: Tall/Slender, Skin: Pale) standing perfectly straight, holding a clipboard or tablet. She wears a pristine white lab coat over a button-up shirt. Sleek silver-blue hair and icy blue eyes. Neutral expression. Flat vector style.
 
-5. **Pixel Art (Portrait):** Pixel art profile of Ayane. Cool colors, glowing blue monocle or headset. Matrix-like digital rain in background.
+5. **Pixel Art (Portrait):** Pixel art profile of Ayane (Age: 20, Pale Skin). Cool colors, glowing blue monocle or headset. Matrix-like digital rain in background. Silver hair strictly styled.
 
 6. **Pixel Art (Scene):** Ayane typing at a multi-monitor setup in a dark room. Only the blue light of the screens illuminates her face. Detailed pixel shading.
 
@@ -133,6 +139,8 @@
 
 12. **Concept (Shutdown Mode):** Ayane sleeping at her desk, head resting on her arms. Her glasses are folded nearby. Even in sleep, she looks tidy. A blanket is draped over her shoulders (maybe placed by someone else). The screens are on "Screensaver" mode. A quiet, humanizing moment for the machine-like character.
 
+13. **Icon (GUI):** A clean, vibrant app icon of Ayane (Age: 20, Pale Skin). Headshot only, facing forward, adjusting her glasses with a stoic, professional expression. Sleek silver-blue hair and icy blue eyes. Background is a solid, clinical medium blue circle. Clean, geometric vector style with cel-shaded coloring and subtle pixel art elements. Suitable for a user profile picture. No text.
+
 ---
 
 ## 5. Kitsune (Genki) - "Pop-Idol/Shrine Maiden"
@@ -142,15 +150,15 @@
 
 ### Kitsune Prompts
 
-1. **Standard (Concert):** An explosive 2D anime illustration of Kitsune jumping on stage. She has fox ears and 9 glowing holographic tails. Wearing a modified short kimono with neon sneakers. Holding a microphone. Background is a cheering crowd and lasers. Style: Pop-art anime, vibrant colors, "Idol" aesthetic.
+1. **Standard (Bedroom):** An explosive 2D anime illustration of Kitsune (Age: 18, Body: Petite/Curvy, Skin: Fair) in her "Streamer/Idol" bedroom. The room is a chaotic explosion of color: RGB gaming setup, ring lights, shelves of anime figures. Kitsune is sitting in a pink gaming chair, holding a controller. She has fox ears, 9 faint holographic tails, and wears a cute oversized idol hoodie. The vibe is hyper-energetic and "Otaku-chic". Style: Pop-art anime, vibrant colors, "Idol" aesthetic.
 
-2. **Standard (Festival):** Kitsune at a cyberpunk street festival, holding a candied apple and a mask. Wearing a modern hakama with LED strips. Bright lanterns and neon lighting.
+2. **Standard (Live Concert):** An electrifying 2D anime illustration of Kitsune (Age: 18, Body: Petite/Curvy, Skin: Fair) performing live on a cyberpunk stage. She is mid-dance, holding a microphone, with her 9 holographic tails fanned out in a vibrant light show. The crowd below is a sea of neon glowsticks. Spotlights cross in the background. She is winking at the camera, sweating slightly from the exertion. She wears a dazzling, sequined idol outfit with futuristic LED trim. The energy is explosive and colorful. Style: "Oshi no Ko" high-budget concert scene.
 
 3. **Transparent (Jump):** (Transparent Background) Kitsune mid-air jump, peace sign, winking. Massive holographic tails fanned out. Energy effects.
 
-4. **Transparent (Fox Form):** (Transparent Background) A cute, stylized chibi version of Kitsune in fox form or wearing a fox hoodie. Very round and soft.
+4. **Transparent (Fox Form):** (Transparent Background) A cute, stylized chibi version of Kitsune (Age: 18) transformed into a small golden fox with 9 holographic tails. She wears a tiny version of her hoodie. Very round and soft.
 
-5. **Pixel Art (Portrait):** Colorful pixel art of Kitsune winking. Neon particles floating around. Very bright and saturated colors.
+5. **Pixel Art (Portrait):** Colorful pixel art of Kitsune (Age: 18, Fair Skin) winking. She has fox ears and playful expression. Neon particles floating around. Very bright and saturated colors.
 
 6. **Pixel Art (Scene):** Kitsune running across rooftops in a side-scroller game style. Tails trailing behind her.
 
@@ -166,6 +174,8 @@
 
 12. **Concept (Virtual Diva):** Kitsune fully digital, dissolving into voxels. She is huge, like a hologram projected over a city. She is singing to the city. The scale is massive—she is Godzilla-sized but cute and translucent, lighting up the skyscrapers around her. "Macross Frontier" idol vibes.
 
+13. **Icon (GUI):** A clean, vibrant app icon of Kitsune (Age: 18, Fair Skin). Headshot only, winking playfully with a peace sign near her face. Fox ears perks up, wearing her idol headset. Background is a solid, hot pink circle. Pop-art, bold vector style with cel-shaded coloring and subtle pixel art elements. Suitable for a user profile picture. No text.
+
 ---
 
 ## 6. Seraph (Onee-san) - "Cyber-Angelic Healer"
@@ -175,15 +185,15 @@
 
 ### Seraph Prompts
 
-1. **Standard (Cathedral):** A majestic 2D anime painting of Seraph floating in a digital cathedral. She has massive mechanical white wings and a golden halo. Wearing a flowing white dress with gold armor accents. Gentle, motherly expression. Style: CLAMP detailed intricate style or watercolor anime.
+1. **Standard (Bedroom):** A majestic 2D anime painting of Seraph (Age: 20s, Body: Voluptuous/Divine, Skin: Porcelain) in her sanctuary bedroom. The room resembles a high-tech cathedral spire: white marble, gold inlays, massive stained-glass window. Seraph is resting on a floating divan, reading a holographic tome. She has white wings and a faint halo. She wears a flowing white silk nightgown with gold accents. The lighting is ethereal, with god-rays. Style: CLAMP detailed intricate style or watercolor anime.
 
-2. **Standard (Sky):** Seraph sitting on a cloud or a high balcony overlooking a white futuristic city. Sun rays filtering through her wings. Soft, dreamlike atmosphere.
+2. **Standard (Sky Garden):** A breathtaking 2D anime painting of Seraph (Age: 20s, Body: Voluptuous/Divine, Skin: Porcelain) in a floating sky garden. The garden is filled with impossible, crystalline flowers and white marble arches. Seraph is sitting on a swing made of golden light, looking out over a sea of clouds. The sun is high and bright, casting a warm, holy glow. She wears a sun dress version of her robes—lighter, more airy. Her wings are spread gently to catch the breeze. The vibe is paradise and absolute peace. Style: Makoto Shinkai clouds, detailed flora.
 
 3. **Transparent (Wings Open):** (Transparent Background) Seraph with wings fully spread, offering a hand to the viewer. "Ara ara" energy but divine.
 
-4. **Transparent (Battle):** (Transparent Background) Seraph holding a lance or staff, looking protective. Gold energy shielding.
+4. **Transparent (Battle):** (Transparent Background) Seraph (Age: 20s, Body: Voluptuous/Divine, Skin: Porcelain) holding a golden lance or staff, looking protective. She wears armored white robes. Mechanical wings spread wide. Gold energy shielding.
 
-5. **Pixel Art (Portrait):** Detailed pixel art of Seraph's face with a glowing halo. Soft lighting. RPG Goddess sprite style.
+5. **Pixel Art (Portrait):** Detailed pixel art of Seraph's face (Age: 20s, Porcelain Skin) with a glowing halo. Soft lighting. RPG Goddess sprite style. White hair and gold eyes.
 
 6. **Pixel Art (Scene):** Seraph descending from the sky in a beam of light. Tiny pixel people looking up in awe.
 
@@ -198,3 +208,5 @@
 11. **Concept (Tea Time):** Seraph sitting in a beautiful floating garden, pouring tea into a porcelain cup. The garden is filled with impossible, digital flowers. She invites the viewer to sit. The atmosphere is extremely calm, slow, and peaceful. "Iyashikei" (Healing) anime style.
 
 12. **Concept (Ascension):** Seraph flying at high speed through the stratosphere, breaking the sound barrier (sonic boom rings). Her wings are fully aerodynamic. She looks powerful and warrior-like, not just passive. Blue sky, white clouds, motion blur. "Gundam Wing" energy.
+
+13. **Icon (GUI):** A clean, vibrant app icon of Seraph (Age: 20s, Porcelain Skin). Headshot only, facing forward with a serene, divine expression. White hair, gold eyes, and a faint halo glowing above. Background is a solid, soft sky blue circle. Ethereal, elegant vector style with cel-shaded coloring and subtle pixel art elements. Suitable for a user profile picture. No text.

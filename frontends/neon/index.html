@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WAIFU.EXE // NEURAL LINK</title>
+
     <!-- FONTS -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,73 +12,96 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400&family=Rajdhani:wght@500;700&display=swap"
       rel="stylesheet">
 
-    <!-- STYLES (CyberGlass System) -->
-    <link rel="stylesheet" href="css/cyber_glass.css">
+    <!-- STYLES (Order matters: base → layout → components → theme override) -->
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/component_grid.css">
     <link rel="stylesheet" href="css/settings_modal.css">
+    <link rel="stylesheet" href="css/cyber_glass.css">
+
     <!-- CORE LIBS -->
     <script src="lib/live2dcubismcore.min.js"></script>
     <script src="lib/pixi.min.js"></script>
     <script src="lib/live2d.min.js"></script>
-    </head>
+</head>
 <body>
 
-    <!-- BENTO GRID LAYOUT -->
-    <div class="bento-grid">
-      <!-- COL 1: SIDEBAR (Character Select) -->
-      <aside id="panel-left" class="glass-panel" style="display:flex; flex-direction:column;">
-        <div style="padding: 20px; border-bottom: 1px solid var(--glass-border);">
-          <h1 style="font-family:var(--font-display); font-size:1.5rem; color:var(--neon-cyan); margin:0;">WAIFU LINK //
-            V3.0</h1>
-          <div style="font-family:var(--font-mono); font-size:0.7rem; color:var(--text-muted);">Neural Link: ACTIVE</div>
+    <!-- ═══ BENTO GRID (3-Column Dashboard) ═══ -->
+    <div class="bento-grid right-open">
+    
+      <!-- COL 1: LEFT SIDEBAR — Character Roster -->
+      <aside id="panel-left" class="glass-panel">
+        <div class="sidebar-header">
+          <h1>WAIFU LINK // V4.0</h1>
+          <div class="subtitle">Neural Link: ACTIVE</div>
         </div>
-            <div style="flex:1; overflow-y:auto;" id="roster-panel-content">
-              <!-- CharacterGrid renders here -->
-              <div style="padding:20px; color:var(--text-muted)">CONNECTING...</div>
-            </div>
+<div id="roster-panel-content">
+  <!-- CharacterGrid.js renders cards here -->
+  <div style="padding:20px; color:var(--text-muted); font-family:var(--font-mono); font-size:0.75rem;">CONNECTING...
+  </div>
+</div>
 
-            <div style="padding:20px; border-top:1px solid var(--glass-border);">
-              <button class="btn" style="width:100%" onclick="window.openSettings()">SYSTEM CONFIG</button>
-            </div>
+        <div class="sidebar-footer">
+          <button class="btn-config" id="btn-system-config">SYSTEM CONFIG</button>
+        </div>
         </aside>
 
-        <!-- COL 2: MAIN VIEWPORT (3D + Chat Overlay) -->
-        <main class="glass-panel" style="position:relative; display:flex; flex-direction:column;">
-          <!-- 3D Layer -->
-          <div style="flex:1; position:relative; z-index:1;">
-            <iframe id="vrm-iframe" src="viewer/viewer.html" style="width:100%; height:100%; border:none;"></iframe>
-            <canvas id="live2d-canvas"
-              style="display:none; width:100%; height:100%; position:absolute; top:0; left:0; pointer-events:auto;"></canvas>
-          </div>
-            <!-- Chat Overlay (Bottom) -->
-            <div class="chat-layer"
-              style="position:absolute; bottom:0; left:0; width:100%; height:300px; background:linear-gradient(to top, rgba(0,0,0,0.95), transparent); z-index:2; border-top:none;">
-              <div id="chat-messages" style="flex:1; overflow-y:auto; padding:20px;">
-                <!-- Messages Bubble Up -->
-              </div>
-                <div style="padding:20px; display:flex; gap:10px;">
-                  <input type="text" class="input-field" placeholder="Broadcasting on secure channel..."
-                    style="background:rgba(0,0,0,0.5); border:1px solid var(--glass-border);">
-                  <button class="btn btn-primary">SEND</button>
-                </div>
-            </div>
-        </main>
+<!-- COL 2: MAIN VIEWPORT — 3D/Live2D + Chat Overlay -->
+<main class="glass-panel main-view">
 
-        <!-- COL 3: CONTEXT / MEMORY (Future Expansion) -->
-        <aside id="panel-right" class="glass-panel" style="display:flex; flex-direction:column; padding:20px;">
-          <h3 style="font-family:var(--font-display); color:var(--neon-magenta);">MEMORY BANK</h3>
-          <div
-            style="flex:1; border:1px dashed var(--glass-border); border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-family:var(--font-mono); font-size:0.8rem;">
-            NO ACTIVE CONTEXT
+  <!-- Status Bar -->
+  <div class="status-bar">UPLINKING_VISUAL_FEED...</div>
+
+  <!-- 3D Layer (Full size behind chat) -->
+  <div class="viewport-layer">
+    <iframe id="vrm-iframe" src="viewer/viewer.html"></iframe>
+    <canvas id="live2d-canvas" style="display:none; position:absolute; inset:0; pointer-events:auto;"></canvas>
+  </div>
+  <!-- AI Status Indicator -->
+  <div class="ai-status-container">
+    <div class="status-dot"></div>
+    <span class="ai-status-label">NEURAL_LINK: STABLE</span>
+  </div>
+<!-- Chat Overlay (Bottom half, gradient fade) -->
+<div class="chat-layer">
+  <div id="chat-messages">
+    <!-- Messages render here -->
+  </div>
+<div class="input-area">
+  <button id="btn-toggle-left" class="btn-icon" title="Toggle Roster">&#x00AB;</button>
+
+  <textarea id="chat-input" class="input-field" rows="1" placeholder="Broadcasting on secure channel..."></textarea>
+
+  <button id="btn-send" class="btn-send">SEND</button>
+  <button id="btn-toggle-right" class="btn-icon" title="Toggle Memory Bank">&#x00BB;</button>
+</div>
+</div>
+</main>
+
+<!-- COL 3: RIGHT SIDEBAR — Memory Bank -->
+<aside id="panel-right" class="glass-panel">
+  <div class="panel-header">
+    <span>MEMORY BANK</span>
+  </div>
+
+  <div class="sidebar-content">
+    <div class="memory-section">
+      <div class="memory-header">Active Context</div>
+      <div id="mem-active" class="memory-content active">NO ACTIVE CONTEXT</div>
+    </div>
+
+    <div class="memory-section" style="flex:1;">
+      <div class="memory-header">RAG Archive</div>
+      <div id="mem-archive" class="memory-content">Index empty.</div>
+    </div>
+
+    <div class="telemetry-panel">
+      <div class="stat-row"><span>System Load:</span><span id="stat-load" class="stat-value">--</span></div>
+      <div class="stat-row"><span>VRAM:</span><span id="stat-vram" class="stat-value">--</span></div>
+      <div class="stat-row"><span>Ping:</span><span id="stat-ping" class="stat-value">--</span></div>
           </div>
-            <div style="margin-top:20px; font-family:var(--font-mono); font-size:0.7rem; color:var(--text-muted);">
-              System Load: 12%<br>
-              VRAM: 4.2GB / 24GB<br>
-              Ping: 4ms
-            </div>
+        </div>
         </aside>
 
     </div>

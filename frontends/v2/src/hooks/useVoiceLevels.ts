@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
+import { microcopy } from '../lib/microcopy';
+import type { VoiceLevelSample, VoiceSource } from '../types';
+
 function avg(data: Uint8Array) {
   if (data.length === 0) return 0;
   let sum = 0;
@@ -10,8 +13,39 @@ function avg(data: Uint8Array) {
   return sum / data.length;
 }
 
+function resolveVoiceSource(ttsLevel: number, micLevel: number): VoiceSource {
+  const ttsActive = ttsLevel >= 0.05;
+  const micActive = micLevel >= 0.05;
+
+  if (ttsActive && micActive) return 'mixed';
+  if (micActive) return 'mic';
+  if (ttsActive) return 'tts';
+  return 'idle';
+}
+
+function mapMicError(error: unknown) {
+  if (error instanceof DOMException) {
+    if (error.name === 'NotAllowedError') {
+      return microcopy.errors.micDenied;
+    }
+    if (error.name === 'NotFoundError' || error.name === 'NotReadableError') {
+      return microcopy.errors.micFailed;
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return microcopy.errors.micFailed;
+}
+
 export function useVoiceLevels(ttsAudioRef: RefObject<HTMLAudioElement | null>) {
-  const [level, setLevel] = useState(0);
+  const [sample, setSample] = useState<VoiceLevelSample>({
+    level: 0,
+    source: 'idle',
+    timestamp: 0
+  });
   const [micEnabled, setMicEnabled] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
 
@@ -21,9 +55,12 @@ export function useVoiceLevels(ttsAudioRef: RefObject<HTMLAudioElement | null>) 
   const micStreamRef = useRef<MediaStream | null>(null);
   const ttsSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const rafRef = useRef<number | null>(null);
+  const smoothedLevelRef = useRef(0);
 
   useEffect(() => {
-    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextClass) return;
 
     if (!contextRef.current) {
@@ -32,6 +69,7 @@ export function useVoiceLevels(ttsAudioRef: RefObject<HTMLAudioElement | null>) 
 
     const context = contextRef.current;
     const ttsAudio = ttsAudioRef.current;
+
     if (!context || !ttsAudio || ttsSourceRef.current) {
       return;
     }
@@ -44,8 +82,18 @@ export function useVoiceLevels(ttsAudioRef: RefObject<HTMLAudioElement | null>) 
       analyser.connect(context.destination);
       ttsSourceRef.current = source;
       ttsAnalyserRef.current = analyser;
+
+      const resume = () => {
+        if (context.state === 'suspended') {
+          void context.resume().catch(() => undefined);
+        }
+      };
+
+      ttsAudio.addEventListener('play', resume);
+      return () => ttsAudio.removeEventListener('play', resume);
     } catch {
       // Ignore duplicate source creation errors.
+      return undefined;
     }
   }, [ttsAudioRef]);
 
@@ -62,14 +110,24 @@ export function useVoiceLevels(ttsAudioRef: RefObject<HTMLAudioElement | null>) 
       return;
     }
 
+    if (!navigator.mediaDevices?.getUserMedia) {
+      return;
+    }
+
     let cancelled = false;
-    navigator.mediaDevices
-      .getUserMedia({ audio: true })
-      .then((stream) => {
+
+    const startMic = async () => {
+      try {
+        if (context.state === 'suspended') {
+          await context.resume();
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
+
         micStreamRef.current = stream;
         const source = context.createMediaStreamSource(stream);
         const analyser = context.createAnalyser();
@@ -77,11 +135,13 @@ export function useVoiceLevels(ttsAudioRef: RefObject<HTMLAudioElement | null>) 
         source.connect(analyser);
         micAnalyserRef.current = analyser;
         setMicError(null);
-      })
-      .catch((error: Error) => {
-        setMicError(error.message || 'Microphone unavailable');
+      } catch (error) {
+        setMicError(mapMicError(error));
         setMicEnabled(false);
-      });
+      }
+    };
+
+    void startMic();
 
     return () => {
       cancelled = true;
@@ -109,7 +169,31 @@ export function useVoiceLevels(ttsAudioRef: RefObject<HTMLAudioElement | null>) 
         micLevel = avg(micBuffer) / 255;
       }
 
-      setLevel(Math.max(ttsLevel, micLevel));
+      const rawLevel = Math.max(ttsLevel, micLevel);
+      const prevLevel = smoothedLevelRef.current;
+      const smoothing = rawLevel > prevLevel ? 0.35 : 0.18;
+      const smoothed = prevLevel + (rawLevel - prevLevel) * smoothing;
+      const clampedLevel = Math.max(0, Math.min(1, smoothed));
+      smoothedLevelRef.current = clampedLevel;
+
+      const source = resolveVoiceSource(ttsLevel, micLevel);
+      const now = Date.now();
+
+      setSample((previous) => {
+        if (
+          Math.abs(previous.level - clampedLevel) < 0.01 &&
+          previous.source === source &&
+          now - previous.timestamp < 120
+        ) {
+          return previous;
+        }
+        return {
+          level: clampedLevel,
+          source,
+          timestamp: now
+        };
+      });
+
       rafRef.current = requestAnimationFrame(tick);
     };
 
@@ -131,10 +215,16 @@ export function useVoiceLevels(ttsAudioRef: RefObject<HTMLAudioElement | null>) 
   }, []);
 
   return {
-    level,
+    level: sample.level,
+    sample,
     micEnabled,
     micError,
     toggleMic: () => {
+      if (!micEnabled && !navigator.mediaDevices?.getUserMedia) {
+        setMicError(microcopy.errors.micUnavailable);
+        return;
+      }
+
       setMicError(null);
       setMicEnabled((value) => !value);
     }

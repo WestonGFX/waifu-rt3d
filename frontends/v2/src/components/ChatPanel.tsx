@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { motion } from 'framer-motion';
 
@@ -23,10 +23,12 @@ export function ChatPanel({
     draft,
     isTyping,
     loading,
+    lastError,
     setDraft,
     sendMessage,
     retryMessage
   } = useChatStore();
+  const logRef = useRef<HTMLDivElement | null>(null);
 
   const sortedMessages = useMemo(() => {
     return [...messages].sort((a, b) => a.createdAt - b.createdAt);
@@ -37,9 +39,15 @@ export function ChatPanel({
     await sendMessage(draft, speakingEnabled);
   };
 
+  useEffect(() => {
+    const node = logRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [sortedMessages.length, loading]);
+
   return (
     <section className="v2-chat-wrap">
-      <div className="v2-chat-messages" role="log" aria-live="polite">
+      <div ref={logRef} className="v2-chat-messages" role="log" aria-live="polite">
         {sortedMessages.map((message) => {
           const isUser = message.role === 'user';
           return (
@@ -56,7 +64,11 @@ export function ChatPanel({
                 <div className="v2-bubble-meta">
                   <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   {message.status === 'failed' ? (
-                    <button onClick={() => retryMessage(message.id, speakingEnabled)} type="button">
+                    <button
+                      onClick={() => retryMessage(message.id, speakingEnabled)}
+                      disabled={loading}
+                      type="button"
+                    >
                       {microcopy.actions.retry}
                     </button>
                   ) : null}
@@ -67,6 +79,8 @@ export function ChatPanel({
         })}
 
         {isTyping ? <div className="v2-typing">{microcopy.status.typing}</div> : null}
+        {loading ? <div className="v2-typing">{microcopy.status.sending}</div> : null}
+        {lastError ? <div className="v2-chat-error">{lastError}</div> : null}
       </div>
 
       <form className="v2-chat-input" onSubmit={onSubmit}>
@@ -86,6 +100,12 @@ export function ChatPanel({
         <textarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              void sendMessage(draft, speakingEnabled);
+            }
+          }}
           rows={1}
           placeholder={microcopy.input.placeholder}
         />

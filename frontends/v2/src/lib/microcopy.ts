@@ -3,6 +3,11 @@ export const microcopy = {
     stable: 'Uplink stable',
     thinking: 'Neural link processing',
     typing: 'Signal composing',
+    sending: 'Transmission in progress',
+    voiceIdle: 'Voice scope idle',
+    voiceMic: 'Voice scope tracking mic',
+    voiceTts: 'Voice scope tracking synth',
+    voiceMixed: 'Voice scope tracking dual stream',
     memorySession: 'Session graph mode',
     memoryRag: 'RAG memory mode',
     memoryOffline: 'Semantic memory offline'
@@ -17,6 +22,7 @@ export const microcopy = {
     sendFailed: 'Transmission failed. Retry protocol available.',
     memoryFailed: 'Memory bank unavailable. Running session fallback.',
     micDenied: 'Audio stream permission denied.',
+    micUnavailable: 'Audio capture is unavailable on this device.',
     micFailed: 'Audio stream initialization failed.'
   },
   actions: {

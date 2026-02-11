@@ -11,6 +11,7 @@ interface ChatStoreState {
   draft: string;
   isTyping: boolean;
   loading: boolean;
+  lastError: string | null;
   sessionId: number;
   charId: number;
   lastAudioUrl: string | null;
@@ -22,6 +23,7 @@ interface ChatStoreState {
 }
 
 let typingTimer: ReturnType<typeof setTimeout> | null = null;
+const maxHistoryMessages = 240;
 const noopStorage: StateStorage = {
   getItem: () => null,
   setItem: () => undefined,
@@ -49,6 +51,14 @@ function markMessage(
   });
 }
 
+function appendWithLimit(messages: ChatMessage[], ...next: ChatMessage[]) {
+  const merged = [...messages, ...next];
+  if (merged.length <= maxHistoryMessages) {
+    return merged;
+  }
+  return merged.slice(merged.length - maxHistoryMessages);
+}
+
 export const useChatStore = create<ChatStoreState>()(
   persist(
     (set, get) => ({
@@ -56,6 +66,7 @@ export const useChatStore = create<ChatStoreState>()(
       draft: '',
       isTyping: false,
       loading: false,
+      lastError: null,
       sessionId: 1,
       charId: 1,
       lastAudioUrl: null,
@@ -67,20 +78,22 @@ export const useChatStore = create<ChatStoreState>()(
         }
         typingTimer = setTimeout(() => {
           set({ isTyping: false });
-        }, 320);
+        }, 420);
       },
 
       setContext: (sessionId, charId) => {
         set({ sessionId, charId });
       },
 
-      clear: () => set({ messages: [], draft: '', lastAudioUrl: null }),
+      clear: () => set({ messages: [], draft: '', lastAudioUrl: null, lastError: null }),
 
       sendMessage: async (text, speak = true) => {
         const trimmed = text.trim();
         if (!trimmed) return;
 
         const current = get();
+        if (current.loading) return;
+
         const userMessageId = id();
         const assistantMessageId = id();
 
@@ -103,10 +116,11 @@ export const useChatStore = create<ChatStoreState>()(
         };
 
         set((state) => ({
-          messages: [...state.messages, optimisticUser, optimisticAssistant],
+          messages: appendWithLimit(state.messages, optimisticUser, optimisticAssistant),
           loading: true,
           draft: '',
-          isTyping: false
+          isTyping: false,
+          lastError: null
         }));
 
         try {
@@ -127,7 +141,8 @@ export const useChatStore = create<ChatStoreState>()(
               serverMessageId: response.assistant_message_id
             })),
             lastAudioUrl: response.audio ?? null,
-            loading: false
+            loading: false,
+            lastError: response.ok ? null : microcopy.errors.sendFailed
           }));
         } catch {
           set((state) => ({
@@ -136,13 +151,18 @@ export const useChatStore = create<ChatStoreState>()(
               status: 'failed',
               text: microcopy.errors.sendFailed
             })),
-            loading: false
+            loading: false,
+            lastError: microcopy.errors.sendFailed
           }));
         }
       },
 
       retryMessage: async (messageId, speak = true) => {
         const current = get();
+        if (current.loading) {
+          return;
+        }
+
         const message = current.messages.find((entry) => entry.id === messageId);
         if (!message || message.status !== 'failed' || !message.requestText) {
           return;
@@ -150,6 +170,7 @@ export const useChatStore = create<ChatStoreState>()(
 
         set((state) => ({
           loading: true,
+          lastError: null,
           messages: markMessage(state.messages, messageId, (entry) => ({
             ...entry,
             status: 'pending',
@@ -175,7 +196,8 @@ export const useChatStore = create<ChatStoreState>()(
               serverMessageId: response.assistant_message_id
             })),
             lastAudioUrl: response.audio ?? null,
-            loading: false
+            loading: false,
+            lastError: response.ok ? null : microcopy.errors.sendFailed
           }));
         } catch {
           set((state) => ({
@@ -184,7 +206,8 @@ export const useChatStore = create<ChatStoreState>()(
               status: 'failed',
               text: microcopy.errors.sendFailed
             })),
-            loading: false
+            loading: false,
+            lastError: microcopy.errors.sendFailed
           }));
         }
       }

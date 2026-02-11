@@ -16,11 +16,16 @@ MIN_MEMORY_GRAPH_REQUESTS="${WAIFU_CUTOVER_MIN_MEMORY_GRAPH_REQUESTS:-50}"
 FAIL_ON_BREACH="${WAIFU_TELEMETRY_FAIL_ON_BREACH:-0}"
 AUTOSTART_BACKEND="${WAIFU_TELEMETRY_AUTOSTART_BACKEND:-0}"
 BACKEND_START_CMD="${WAIFU_TELEMETRY_BACKEND_CMD:-}"
-BACKEND_DISABLE_VECTOR_STORE="${WAIFU_TELEMETRY_DISABLE_VECTOR_STORE:-1}"
+BACKEND_DISABLE_VECTOR_STORE="${WAIFU_TELEMETRY_DISABLE_VECTOR_STORE:-0}"
 BACKEND_STARTUP_TIMEOUT_SEC="${WAIFU_TELEMETRY_BACKEND_STARTUP_TIMEOUT_SEC:-90}"
 BACKEND_LOG="${WAIFU_TELEMETRY_BACKEND_LOG:-/tmp/waifu_v2_capture_backend.log}"
 STARTED_BACKEND_PID=""
 RESOLVED_BACKEND_START_CMD=""
+SEED_TRAFFIC="${WAIFU_TELEMETRY_SEED_TRAFFIC:-0}"
+SEED_API_REQUESTS="${WAIFU_TELEMETRY_SEED_API_REQUESTS:-220}"
+SEED_MEMORY_REQUESTS="${WAIFU_TELEMETRY_SEED_MEMORY_REQUESTS:-60}"
+SEED_SESSION_ID="${WAIFU_TELEMETRY_SEED_SESSION_ID:-1}"
+SEED_CHAR_ID="${WAIFU_TELEMETRY_SEED_CHAR_ID:-1}"
 
 cleanup() {
   if [[ -n "$STARTED_BACKEND_PID" ]] && kill -0 "$STARTED_BACKEND_PID" 2>/dev/null; then
@@ -113,6 +118,31 @@ ensure_backend_ready() {
 }
 
 ensure_backend_ready
+
+seed_traffic() {
+  if [[ "$SEED_TRAFFIC" != "1" ]]; then
+    return 0
+  fi
+
+  echo "[v2-hybrid-telemetry] seeding telemetry traffic (api=${SEED_API_REQUESTS}, memory=${SEED_MEMORY_REQUESTS})"
+
+  local i
+  for ((i=1; i<=SEED_API_REQUESTS; i++)); do
+    if (( i % 2 == 0 )); then
+      curl --max-time 5 -fsS "http://127.0.0.1:8080/api/config" >/dev/null
+    else
+      curl --max-time 5 -fsS "http://127.0.0.1:8080/api/characters" >/dev/null
+    fi
+  done
+
+  for ((i=1; i<=SEED_MEMORY_REQUESTS; i++)); do
+    curl --max-time 5 -fsS \
+      "http://127.0.0.1:8080/api/v2/memory/graph?session_id=${SEED_SESSION_ID}&char_id=${SEED_CHAR_ID}&limit=20" \
+      >/dev/null
+  done
+}
+
+seed_traffic
 
 TELEMETRY_JSON=""
 for attempt in {1..5}; do

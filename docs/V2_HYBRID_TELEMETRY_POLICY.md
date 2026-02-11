@@ -97,7 +97,15 @@ Optional backend auto-start flags for capture script:
 ```bash
 WAIFU_TELEMETRY_AUTOSTART_BACKEND=1 \
 WAIFU_TELEMETRY_BACKEND_CMD="python backend/server.py" \
-WAIFU_TELEMETRY_DISABLE_VECTOR_STORE=1 \
+WAIFU_TELEMETRY_DISABLE_VECTOR_STORE=0 \
+./tools/v2_hybrid_capture_telemetry.sh
+```
+
+Optional telemetry seeding mode for rehearsal/staging (not for production decision):
+```bash
+WAIFU_TELEMETRY_SEED_TRAFFIC=1 \
+WAIFU_TELEMETRY_SEED_API_REQUESTS=220 \
+WAIFU_TELEMETRY_SEED_MEMORY_REQUESTS=60 \
 ./tools/v2_hybrid_capture_telemetry.sh
 ```
 

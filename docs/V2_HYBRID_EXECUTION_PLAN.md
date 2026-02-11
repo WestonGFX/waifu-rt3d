@@ -131,12 +131,12 @@ Exit criteria:
 3. Accessibility checks and keyboard-only path validation.
 
 ## Roles and Ownership (fill before M2 starts)
-1. Release owner: `<name>`
-2. Rollback owner: `<name>`
-3. Frontend quality owner: `<name>`
-4. Backend/API owner: `<name>`
-5. QA lead: `<name>`
-6. Observability owner: `<name>`
+1. Release owner: `Chris`
+2. Rollback owner: `Chris`
+3. Frontend quality owner: `Chris`
+4. Backend/API owner: `Chris`
+5. QA lead: `Chris`
+6. Observability owner: `Chris`
 
 ## Risks and Mitigations
 1. Risk: lingering dual-route complexity.

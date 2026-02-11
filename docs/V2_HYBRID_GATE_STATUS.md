@@ -29,6 +29,7 @@ This is the live status board for Hybrid cutover gates.
 10. Telemetry evidence capture script: PASS
 - command: `./tools/v2_hybrid_capture_telemetry.sh`
 - outputs: local default in `docs/telemetry/*`, configurable via `WAIFU_TELEMETRY_OUTPUT_DIR`
+- rehearsal option: `WAIFU_TELEMETRY_SEED_TRAFFIC=1` to validate threshold mechanics with synthetic load
 11. CI telemetry artifact collection: PASS
 - workflow: `.github/workflows/v2-hybrid-preflight.yml`
 - result: each workflow run uploads telemetry CSV + report artifacts
@@ -46,20 +47,19 @@ This is the live status board for Hybrid cutover gates.
 - output: `docs/V2_HYBRID_READINESS_REPORT.md` with GO/NO-GO and blocking gates
 
 ## What is blocking Hybrid cutover now
-1. Fill named owners and accountable roles in:
-- `docs/V2_HYBRID_EXECUTION_PLAN.md`
-2. Run the 7-day P0/P1 + telemetry threshold window and record evidence:
+1. Run the 7-day P0/P1 + telemetry threshold window and record evidence:
 - policy: `docs/V2_HYBRID_TELEMETRY_POLICY.md`
+2. Keep running explicit decision check and reach GO:
+- `./tools/v2_hybrid_cutover_decision.sh`
 
 ## Next Actions
 1. CI preflight workflow added:
 - `.github/workflows/v2-hybrid-preflight.yml`
 2. Wire dashboard/reporting query around `/api/v2/telemetry/summary`.
-3. Fill owner fields in `docs/V2_HYBRID_EXECUTION_PLAN.md`.
-4. Create cutover issue from `docs/V2_HYBRID_CUTOVER_TICKET_TEMPLATE.md`.
-5. Rehearse route switch and rollback with:
+3. Create cutover issue from `docs/V2_HYBRID_CUTOVER_TICKET_TEMPLATE.md`.
+4. Rehearse route switch and rollback with:
 - `./tools/v2_hybrid_cutover_rehearsal.sh`
-6. Run 7-day window with:
+5. Run 7-day window with:
 - CI artifacts + manual `./tools/v2_hybrid_capture_telemetry.sh` checkpoints and track P0/P1 status.
-7. Run explicit go/no-go check with:
+6. Run explicit go/no-go check with:
 - `./tools/v2_hybrid_cutover_decision.sh`

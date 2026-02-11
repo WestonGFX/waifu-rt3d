@@ -52,6 +52,11 @@ latest_reason_match = re.search(r"reason:\s*`([^`]+)`", telemetry_text)
 if latest_reason_match:
     latest_reason = latest_reason_match.group(1)
 
+pass_count = "unknown"
+pass_count_match = re.search(r"pass_count:\s*`([^`]+)`", telemetry_text)
+if pass_count_match:
+    pass_count = pass_count_match.group(1)
+
 required_gates = []
 
 required_gates.append(
@@ -73,7 +78,10 @@ required_gates.append(
         "detail": (
             "Telemetry window passed thresholds."
             if telemetry_ready
-            else f"Telemetry cutover gate is false. Latest reason: {latest_reason}."
+            else (
+                "Telemetry cutover gate is false. "
+                f"Rolling pass_count={pass_count}. Latest reason: {latest_reason}."
+            )
         ),
     }
 )

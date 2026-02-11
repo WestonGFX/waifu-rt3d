@@ -14,6 +14,9 @@ Local on-demand run:
 Optional output override:
 `WAIFU_TELEMETRY_OUTPUT_DIR=/tmp/v2-telemetry ./tools/v2_hybrid_capture_telemetry.sh`
 
+Optional rehearsal traffic seeding:
+`WAIFU_TELEMETRY_SEED_TRAFFIC=1 ./tools/v2_hybrid_capture_telemetry.sh`
+
 One-shot gates + telemetry:
 `./tools/v2_hybrid_collect_gate_evidence.sh`
 

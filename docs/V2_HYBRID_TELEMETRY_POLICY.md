@@ -39,11 +39,17 @@ Recommended thresholds:
 4. Minimum traffic for valid sample:
 - `api.requests_total >= 200` per evaluation window
 - `memory.graph_requests_total >= 50` per evaluation window
+5. Window quality rule:
+- 7 passing snapshots must span 7 distinct UTC calendar days.
 
 Hard no-go conditions:
 1. Any P0 defect related to data loss.
 2. Telemetry unavailable for more than one evaluation window.
 3. Any threshold breach sustained across two consecutive windows.
+
+Window progress indicators (from report):
+1. `pass_days_in_window`
+2. `remaining_pass_days_needed`
 
 ## Commands
 Default smoke policy:
@@ -90,6 +96,12 @@ WAIFU_CUTOVER_MAX_MEMORY_FALLBACK_RATE=0.35 \
 WAIFU_CUTOVER_MAX_CHAT_FAILURE_RATE=0.10 \
 WAIFU_CUTOVER_MIN_API_REQUESTS=200 \
 WAIFU_CUTOVER_MIN_MEMORY_GRAPH_REQUESTS=50 \
+./tools/v2_hybrid_capture_telemetry.sh
+```
+
+Control distinct-day enforcement (default enabled):
+```bash
+WAIFU_TELEMETRY_REQUIRE_DISTINCT_DAYS=1 \
 ./tools/v2_hybrid_capture_telemetry.sh
 ```
 

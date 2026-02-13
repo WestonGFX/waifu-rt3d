@@ -23,3 +23,5 @@ One-shot gates + telemetry:
 Files:
 1. `v2_hybrid_daily_snapshots.csv`: append-only daily snapshot log.
 2. `V2_HYBRID_7DAY_REPORT.md`: rolling report built from the latest snapshots.
+
+Cutover readiness requires 7 passing snapshots across 7 distinct UTC dates.

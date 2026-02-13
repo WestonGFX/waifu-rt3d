@@ -57,6 +57,23 @@ pass_count_match = re.search(r"pass_count:\s*`([^`]+)`", telemetry_text)
 if pass_count_match:
     pass_count = pass_count_match.group(1)
 
+distinct_days = "unknown"
+distinct_days_match = re.search(r"distinct_days_in_window:\s*`([^`]+)`", telemetry_text)
+if distinct_days_match:
+    distinct_days = distinct_days_match.group(1)
+
+pass_days = "unknown"
+pass_days_match = re.search(r"pass_days_in_window:\s*`([^`]+)`", telemetry_text)
+if pass_days_match:
+    pass_days = pass_days_match.group(1)
+
+remaining_days_needed = "unknown"
+remaining_days_needed_match = re.search(
+    r"remaining_pass_days_needed:\s*`([^`]+)`", telemetry_text
+)
+if remaining_days_needed_match:
+    remaining_days_needed = remaining_days_needed_match.group(1)
+
 required_gates = []
 
 required_gates.append(
@@ -80,7 +97,9 @@ required_gates.append(
             if telemetry_ready
             else (
                 "Telemetry cutover gate is false. "
-                f"Rolling pass_count={pass_count}. Latest reason: {latest_reason}."
+                f"Rolling pass_count={pass_count}, distinct_days={distinct_days}, "
+                f"pass_days={pass_days}, remaining_days_needed={remaining_days_needed}. "
+                f"Latest reason: {latest_reason}."
             )
         ),
     }

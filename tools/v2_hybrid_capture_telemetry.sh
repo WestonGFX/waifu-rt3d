@@ -26,6 +26,7 @@ SEED_API_REQUESTS="${WAIFU_TELEMETRY_SEED_API_REQUESTS:-220}"
 SEED_MEMORY_REQUESTS="${WAIFU_TELEMETRY_SEED_MEMORY_REQUESTS:-60}"
 SEED_SESSION_ID="${WAIFU_TELEMETRY_SEED_SESSION_ID:-1}"
 SEED_CHAR_ID="${WAIFU_TELEMETRY_SEED_CHAR_ID:-1}"
+REQUIRE_DISTINCT_DAYS="${WAIFU_TELEMETRY_REQUIRE_DISTINCT_DAYS:-1}"
 
 cleanup() {
   if [[ -n "$STARTED_BACKEND_PID" ]] && kill -0 "$STARTED_BACKEND_PID" 2>/dev/null; then
@@ -171,6 +172,7 @@ MAX_CHAT_FAILURE_RATE="$MAX_CHAT_FAILURE_RATE" \
 MIN_API_REQUESTS="$MIN_API_REQUESTS" \
 MIN_MEMORY_GRAPH_REQUESTS="$MIN_MEMORY_GRAPH_REQUESTS" \
 FAIL_ON_BREACH="$FAIL_ON_BREACH" \
+REQUIRE_DISTINCT_DAYS="$REQUIRE_DISTINCT_DAYS" \
 python3 - <<'PY'
 import csv
 import json
@@ -204,6 +206,7 @@ max_chat_failure = as_float(os.environ["MAX_CHAT_FAILURE_RATE"])
 min_api_requests = as_int(os.environ["MIN_API_REQUESTS"])
 min_memory_requests = as_int(os.environ["MIN_MEMORY_GRAPH_REQUESTS"])
 fail_on_breach = os.environ["FAIL_ON_BREACH"] == "1"
+require_distinct_days = os.environ.get("REQUIRE_DISTINCT_DAYS", "1") == "1"
 
 window_started_at = str(payload.get("window_started_at", ""))
 
@@ -269,7 +272,30 @@ with csv_file.open("r", newline="", encoding="utf-8") as f:
 last7 = rows[-7:]
 last7_pass_count = sum(1 for row in last7 if row["pass"] == "true")
 last7_total = len(last7)
-cutover_ready = last7_total == 7 and last7_pass_count == 7
+distinct_days_count = len(
+    {
+        str(row.get("captured_at_utc", ""))[:10]
+        for row in last7
+        if str(row.get("captured_at_utc", ""))
+    }
+)
+pass_days_count = len(
+    {
+        str(row.get("captured_at_utc", ""))[:10]
+        for row in last7
+        if row.get("pass") == "true" and str(row.get("captured_at_utc", ""))
+    }
+)
+cutover_ready = (
+    last7_total == 7
+    and last7_pass_count == 7
+    and (not require_distinct_days or distinct_days_count >= 7)
+)
+remaining_days_needed = (
+    max(0, 7 - pass_days_count)
+    if require_distinct_days
+    else max(0, 7 - last7_pass_count)
+)
 
 consecutive_breaches = 0
 for row in reversed(last7):
@@ -299,8 +325,12 @@ lines = [
     "## Rolling 7-Day Decision",
     f"1. snapshots_in_window: `{last7_total}`",
     f"2. pass_count: `{last7_pass_count}`",
-    f"3. consecutive_breaches: `{consecutive_breaches}`",
-    f"4. cutover_ready_by_telemetry: `{str(cutover_ready).lower()}`",
+    f"3. distinct_days_in_window: `{distinct_days_count}`",
+    f"4. pass_days_in_window: `{pass_days_count}`",
+    f"5. remaining_pass_days_needed: `{remaining_days_needed}`",
+    f"6. require_distinct_days: `{str(require_distinct_days).lower()}`",
+    f"7. consecutive_breaches: `{consecutive_breaches}`",
+    f"8. cutover_ready_by_telemetry: `{str(cutover_ready).lower()}`",
     "",
     "## Last 7 Snapshots",
     "| captured_at_utc | pass | api.error_rate | memory.fallback_rate | chat.failure_rate | api.requests_total | memory.graph_requests_total | reason |",

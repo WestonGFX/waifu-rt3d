@@ -29,7 +29,9 @@ This is the live status board for Hybrid cutover gates.
 10. Telemetry evidence capture script: PASS
 - command: `./tools/v2_hybrid_capture_telemetry.sh`
 - outputs: local default in `docs/telemetry/*`, configurable via `WAIFU_TELEMETRY_OUTPUT_DIR`
+- cutover guard: enforces 7 passing snapshots across 7 distinct UTC days by default
 - rehearsal option: `WAIFU_TELEMETRY_SEED_TRAFFIC=1` to validate threshold mechanics with synthetic load
+- progress counters in report: `pass_days_in_window` and `remaining_pass_days_needed`
 11. CI telemetry artifact collection: PASS
 - workflow: `.github/workflows/v2-hybrid-preflight.yml`
 - result: each workflow run uploads telemetry CSV + report artifacts

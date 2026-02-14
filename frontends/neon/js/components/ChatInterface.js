@@ -1,22 +1,242 @@
 import { state } from '../core/StateManager.js';
+import { bus } from '../core/EventBus.js';
+import { API } from '../core/API.js';
+import { toast } from '../utils/Toast.js';
+import { PushToTalk } from '../utils/PushToTalk.js';
+import { VAD } from '../utils/VAD.js';
 
 export class ChatInterface {
     constructor() {
         this.container = document.getElementById('chat-messages');
-        // Replace input with textarea if not already done, or handle both
         this.inputWrapper = document.querySelector('.chat-layer');
         this.setupInput();
-        this.sendBtn = document.querySelector('.chat-layer button:last-child');
-        this.toggleBtn = document.getElementById('btn-toggle-right'); // Ref to toggle for layout check
+        this.sendBtn = document.getElementById('btn-send');
 
         this.bindEvents();
         this.isThinking = false;
+        this.currentRequestAbortController = null;
+        this.timeoutWarningTimer = null;
+
+        // Listen for session changes to load history
+        bus.on('session:selected', (data) => this.loadHistory(data));
+        bus.on('sessions:updated', (sessions) => this.renderSessionList(sessions));
+        bus.on('character:selected', (char) => this._showGreeting(char));
+
+        // New chat button
+        const newChatBtn = document.getElementById('btn-new-chat');
+        if (newChatBtn) {
+            newChatBtn.onclick = async () => {
+                await state.createSession();
+                this.container.innerHTML = '';
+                toast.info('New chat started', 2000);
+                // Show greeting for current character in new session
+                const char = state.state.characters?.find(c => c.id == state.state.currentCharacterId);
+                if (char) this._showGreeting(char);
+            };
+        }
+
+        // Initialize Push-to-Talk if browser supports it
+        this.initPushToTalk();
+
+        // Initialize Voice Activity Detection (hands-free mode)
+        this.initVAD();
+
+        // Inject export button into chat header
+        this._injectExportButton();
     }
 
     setupInput() {
         // Now using existing textarea from HTML
         this.input = document.getElementById('chat-input');
         if (!this.input) console.error("Chat Input not found!");
+    }
+
+    /**
+     * Initialize push-to-talk voice input.
+     * Attaches to #btn-mic, inserts transcribed text into the chat input.
+     */
+    initPushToTalk() {
+        const micBtn = document.getElementById('btn-mic');
+        if (!micBtn) return;
+
+        if (!PushToTalk.isSupported()) {
+            micBtn.style.display = 'none';
+            return;
+        }
+
+        this.ptt = new PushToTalk({
+            mode: 'toggle',
+            maxDuration: 30000,
+            onTranscript: (text) => {
+                // Insert transcribed text into chat input
+                if (this.input) {
+                    const current = this.input.value;
+                    const separator = current && !current.endsWith(' ') ? ' ' : '';
+                    this.input.value = current + separator + text;
+                    // Trigger auto-expand
+                    this.input.dispatchEvent(new Event('input'));
+                    this.input.focus();
+                }
+            },
+            onStateChange: (pttState) => {
+                micBtn.classList.remove('recording', 'processing');
+                if (pttState === 'recording') {
+                    micBtn.classList.add('recording');
+                    micBtn.title = 'Recording... Click to stop';
+                } else if (pttState === 'processing') {
+                    micBtn.classList.add('processing');
+                    micBtn.title = 'Transcribing...';
+                } else {
+                    micBtn.title = 'Voice Input (Push-to-Talk)';
+                }
+            }
+        });
+
+        this.ptt.attachToButton(micBtn);
+    }
+
+    /**
+     * Initialize Voice Activity Detection for hands-free voice input.
+     * Injects a VAD toggle button next to the mic button. When active,
+     * continuously monitors microphone and auto-transcribes detected speech.
+     */
+    initVAD() {
+        const micBtn = document.getElementById('btn-mic');
+        if (!micBtn) return;
+
+        // Inject VAD toggle button after the mic button
+        const vadBtn = document.createElement('button');
+        vadBtn.id = 'btn-vad';
+        vadBtn.className = 'btn-icon btn-vad';
+        vadBtn.title = 'Hands-Free Mode (Voice Activity Detection)';
+        vadBtn.innerHTML = '&#x1F50A;'; // speaker icon
+        vadBtn.style.cssText = 'font-size:0.9rem; opacity:0.6; transition:all 0.2s;';
+        micBtn.parentNode.insertBefore(vadBtn, micBtn.nextSibling);
+
+        this.vadActive = false;
+        this.vad = null;
+
+        vadBtn.onclick = () => this._toggleVAD(vadBtn);
+    }
+
+    /**
+     * Toggle VAD on/off.
+     * When activated, creates a VAD instance that monitors mic volume
+     * and auto-sends transcribed speech to the chat.
+     * @private
+     * @param {HTMLButtonElement} btn - The VAD toggle button
+     */
+    async _toggleVAD(btn) {
+        if (this.vadActive) {
+            // Turn off VAD
+            if (this.vad) {
+                this.vad.stop();
+                this.vad = null;
+            }
+            this.vadActive = false;
+            btn.style.opacity = '0.6';
+            btn.style.color = '';
+            btn.style.textShadow = '';
+            btn.title = 'Hands-Free Mode (Voice Activity Detection)';
+            toast.info('Hands-free mode OFF', 1500);
+            // Remove volume indicator
+            const indicator = document.getElementById('vad-volume-indicator');
+            if (indicator) indicator.remove();
+            return;
+        }
+
+        // Turn on VAD — stop PTT if active
+        if (this.ptt?.isRecording) {
+            this.ptt.stop();
+        }
+
+        try {
+            this.vad = new VAD({
+                threshold: 0.015,
+                silenceTimeout: 1500,
+                activationDelay: 200,
+                onSpeechStart: () => {
+                    btn.classList.add('recording');
+                    const indicator = document.getElementById('vad-volume-indicator');
+                    if (indicator) indicator.style.background = 'var(--neon-magenta)';
+                },
+                onSpeechEnd: async (blob) => {
+                    btn.classList.remove('recording');
+                    const indicator = document.getElementById('vad-volume-indicator');
+                    if (indicator) indicator.style.background = 'var(--neon-green)';
+                    await this._processVADAudio(blob);
+                },
+                onVolumeChange: (vol) => {
+                    const indicator = document.getElementById('vad-volume-indicator');
+                    if (indicator) {
+                        indicator.style.width = `${Math.min(vol * 200, 100)}%`;
+                    }
+                },
+            });
+
+            await this.vad.start();
+            this.vadActive = true;
+            btn.style.opacity = '1';
+            btn.style.color = 'var(--neon-green)';
+            btn.style.textShadow = '0 0 8px var(--neon-green)';
+            btn.title = 'Hands-Free Mode: ACTIVE (click to stop)';
+            toast.success('Hands-free mode ON — speak naturally', 2000);
+
+            // Add volume indicator bar
+            this._injectVADIndicator();
+        } catch (err) {
+            toast.error(`Mic access denied: ${err.message}`, 3000);
+        }
+    }
+
+    /**
+     * Inject a small volume indicator bar above the input area.
+     * Shows real-time mic volume when VAD is active.
+     * @private
+     */
+    _injectVADIndicator() {
+        if (document.getElementById('vad-volume-indicator')) return;
+
+        const inputArea = document.querySelector('.input-area');
+        if (!inputArea) return;
+
+        const bar = document.createElement('div');
+        bar.id = 'vad-volume-indicator';
+        bar.style.cssText = `
+            position:absolute; top:-3px; left:0; height:3px; width:0%;
+            background:var(--neon-green); border-radius:2px;
+            transition:width 0.05s linear, background 0.2s;
+            pointer-events:none; z-index:5;
+        `;
+        inputArea.style.position = 'relative';
+        inputArea.appendChild(bar);
+    }
+
+    /**
+     * Process audio from VAD — send to ASR endpoint and insert transcription.
+     * @private
+     * @param {Blob} audioBlob - Recorded audio blob
+     */
+    async _processVADAudio(audioBlob) {
+        try {
+            const formData = new FormData();
+            formData.append('file', audioBlob, 'vad_recording.webm');
+
+            const result = await API.upload('asr', formData);
+            const text = result?.text?.trim();
+            if (text) {
+                // Insert transcribed text into chat input
+                if (this.input) {
+                    const current = this.input.value;
+                    const separator = current && !current.endsWith(' ') ? ' ' : '';
+                    this.input.value = current + separator + text;
+                    this.input.dispatchEvent(new Event('input'));
+                    this.input.focus();
+                }
+            }
+        } catch (err) {
+            console.warn('[VAD] ASR transcription failed:', err.message);
+        }
     }
 
     bindEvents() {
@@ -40,102 +260,692 @@ export class ChatInterface {
         }
     }
 
+    /**
+     * Set the thinking state — updates status indicator and shows/hides thinking bubble.
+     * Three distinct phases during streaming:
+     *   1. PROCESSING INPUT... (prefill — LM Studio ingesting the prompt)
+     *   2. GENERATING: N tokens | X.X tok/s (real tokens arriving)
+     *   3. DONE: N tokens | X.X tok/s (stream complete)
+     *
+     * @param {boolean} thinking - Whether the AI is currently generating
+     * @param {string|null} avatarUrl - Avatar URL for the thinking bubble
+     */
     setThinking(thinking, avatarUrl) {
         this.isThinking = thinking;
+        this.tokenCount = 0;
+        this.streamStartTime = null;
+        this.prefillStartTime = performance.now();
+        this.inputTokens = 0;
 
-        // Update Header Indicator
         const dot = document.querySelector('.status-dot');
-        const label = document.querySelector('.ai-status-label');
+        const label = document.getElementById('neural-link-status');
 
-        if (dot && label) {
-            if (thinking) {
-                dot.style.background = '#ff00ff'; // Magenta
+        if (thinking) {
+            this._showThinkingBubble(avatarUrl);
+
+            if (dot && label) {
+                dot.style.background = '#ff00ff';
                 dot.style.boxShadow = '0 0 15px #ff00ff';
-                label.innerText = 'UPLINKING_NEURAL_DATA...';
+                dot.classList.add('thinking');
+                label.innerText = 'CONNECTING TO LLM...';
                 label.style.color = '#ff00ff';
-            } else {
-                dot.style.background = '#00ffff'; // Cyan
+            }
+        } else {
+            this._removeThinkingBubble();
+
+            if (dot && label) {
+                dot.style.background = '#00ffff';
                 dot.style.boxShadow = '0 0 15px #00ffff';
-                label.innerText = 'NEURAL_LINK: STABLE';
-                label.style.color = '#00ffff';
+                dot.classList.remove('thinking');
+
+                // Show final stats — persists until next message (no revert to idle)
+                this._lastGenTime = this.streamStartTime
+                    ? (performance.now() - this.streamStartTime) / 1000
+                    : 0;
+                this._lastTotalTime = (performance.now() - this.prefillStartTime) / 1000;
+                this._lastSpeed = this._lastGenTime > 0
+                    ? (this.tokenCount / this._lastGenTime).toFixed(1) : '0';
+                label.innerText = `${this.tokenCount} tok | ${this._lastSpeed} tok/s | ${this._lastTotalTime.toFixed(1)}s`;
+                label.style.color = '#00ff88';
             }
         }
     }
 
+    /**
+     * Show "PROCESSING INPUT..." status during LLM prefill phase.
+     * Called when the backend sends the 'processing' SSE event.
+     *
+     * @param {number} inputTokens - Estimated input token count
+     */
+    _setProcessingPhase(inputTokens) {
+        this.inputTokens = inputTokens || 0;
+        const label = document.getElementById('neural-link-status');
+        if (label && this.isThinking) {
+            const tokenInfo = this.inputTokens > 0 ? ` (~${this.inputTokens} tokens)` : '';
+            label.innerText = `PROCESSING INPUT${tokenInfo}...`;
+        }
+    }
+
+    /**
+     * Transition from prefill to generation phase.
+     * Called when the first token arrives from the LLM stream.
+     */
+    _setGeneratingPhase() {
+        this.streamStartTime = performance.now();
+        const label = document.getElementById('neural-link-status');
+        if (label && this.isThinking) {
+            label.innerText = 'GENERATING: 0 tokens';
+        }
+    }
+
+    /**
+     * Update the status label with real token count and speed during streaming.
+     * Called each time a new token arrives from the SSE stream.
+     *
+     * @private
+     */
+    _updateTokenProgress() {
+        const label = document.getElementById('neural-link-status');
+        if (!label || !this.isThinking) return;
+
+        const elapsed = this.streamStartTime
+            ? (performance.now() - this.streamStartTime) / 1000
+            : 0;
+        const speed = elapsed > 0.2 ? (this.tokenCount / elapsed).toFixed(1) : '--';
+        label.innerText = `GENERATING: ${this.tokenCount} tok | ${speed} tok/s`;
+    }
+
+    /**
+     * Show animated thinking bubble with bouncing dots and glowing avatar.
+     * @private
+     * @param {string|null} avatarUrl - Avatar image URL
+     */
+    _showThinkingBubble(avatarUrl) {
+        this._removeThinkingBubble(); // Clean up any stale one
+        const row = document.createElement('div');
+        row.className = 'message-thinking';
+        row.id = 'thinking-bubble';
+
+        row.innerHTML = `
+            <div class="chat-avatar" style="
+                width: 2.2rem; height: 2.2rem;
+                margin-right: 0.625rem;
+                border-radius: 50%;
+                overflow: hidden;
+                flex-shrink: 0;
+            ">
+                <img src="${avatarUrl || 'assets/default_avatar.png'}"
+                     onerror="this.src='assets/default_avatar.png'"
+                     style="width: 100%; height: 100%; object-fit: cover;">
+            </div>
+            <div class="bubble-content" style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,0,255,0.15); border-radius:14px 14px 14px 2px;">
+                <div class="thinking-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            </div>
+        `;
+
+        this.container.appendChild(row);
+        this.container.scrollTop = this.container.scrollHeight;
+    }
+
+    /**
+     * Remove the thinking bubble from the chat.
+     * @private
+     */
+    _removeThinkingBubble() {
+        const existing = document.getElementById('thinking-bubble');
+        if (existing) existing.remove();
+    }
+
+    /**
+     * Resolve the current character's 2D avatar URL for chat bubbles.
+     * Uses avatar_2d_url first, falls back to name-based path.
+     *
+     * @returns {string|null} Avatar URL or null if no character selected
+     */
+    _getCharacterAvatarUrl() {
+        if (!state.state.currentCharacterId) return null;
+        const char = state.state.characters.find(c => c.id == state.state.currentCharacterId);
+        if (!char) return null;
+
+        const primaryUrl = char.avatar_2d_url || char.avatar_url;
+        if (primaryUrl && !primaryUrl.includes('default') && !primaryUrl.endsWith('.vrm')) {
+            return primaryUrl;
+        }
+        // Extract parenthetical name e.g. "Fox (Rin)" → "rin"
+        const parenMatch = char.name.match(/\((\w+)\)/);
+        const cleanName = parenMatch ? parenMatch[1].toLowerCase() : char.name.toLowerCase().split(' ')[0];
+        return `/images/${cleanName}_pixel_portrait.png`;
+    }
+
+    /**
+     * Send a message using the streaming SSE endpoint (/api/chat/stream).
+     * Tokens appear in real-time in the chat bubble, and the status bar
+     * shows actual token count and generation speed (tok/s).
+     */
     async sendMessage() {
         const text = this.input.value.trim();
-        if (!text) return;
+        if (!text || this.isThinking) return;
 
-        // Reset height
+        // Disable controls
+        if (this.sendBtn) this.sendBtn.disabled = true;
+        this.input.disabled = true;
         this.input.value = '';
-        this.input.style.height = 'auto'; // Reset to default CSS height
+        this.input.style.height = '';
 
-        // 1. Show User Message
-        this.addBubble(text, true, null); // User doesn't need avatar img in this design
+        // Show user message
+        this.addBubble(text, true, null);
 
-        // 2. Identify Character Avatar logic
+        const avatarUrl = this._getCharacterAvatarUrl();
+
+        // Start thinking indicator
+        this.setThinking(true, avatarUrl);
+
+        // Abort controller for cancellation
+        this.currentRequestAbortController = new AbortController();
+
+        // Timeout warning at 120s
+        this.timeoutWarningTimer = setTimeout(() => {
+            if (!this.isThinking) return;
+            const shouldCancel = confirm(
+                "The AI is taking longer than usual (2+ minutes).\n\n" +
+                "Continue waiting or cancel?"
+            );
+            if (!shouldCancel && this.currentRequestAbortController) {
+                this.currentRequestAbortController.abort();
+                toast.warning("Request cancelled by user", 3000);
+            }
+        }, 120000);
+
+        const startTime = performance.now();
+
+        try {
+            // Build streaming request
+            const payload = {
+                text,
+                character_id: state.state.currentCharacterId,
+                session_id: state.state.currentSessionId,
+            };
+
+            const response = await fetch('/api/chat/stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: this.currentRequestAbortController.signal,
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+            }
+
+            // Create the AI bubble early so we can stream text into it
+            const { row, contentEl } = this._addStreamingBubble(avatarUrl);
+            let fullText = '';
+            let metadata = null;
+
+            // Read the SSE stream
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // Process complete SSE events (delimited by double newlines)
+                const events = buffer.split('\n\n');
+                buffer = events.pop(); // Keep incomplete chunk in buffer
+
+                for (const eventBlock of events) {
+                    if (!eventBlock.trim()) continue;
+
+                    const lines = eventBlock.split('\n');
+                    let eventType = 'message';
+                    let eventData = '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) {
+                            eventType = line.slice(7).trim();
+                        } else if (line.startsWith('data: ')) {
+                            eventData = line.slice(6);
+                        }
+                    }
+
+                    if (!eventData) continue;
+
+                    try {
+                        const parsed = JSON.parse(eventData);
+
+                        if (eventType === 'processing') {
+                            // LLM is ingesting the prompt (prefill phase)
+                            this._setProcessingPhase(parsed.input_tokens);
+
+                        } else if (eventType === 'generating') {
+                            // First token is about to arrive — switch to generation phase
+                            this._setGeneratingPhase();
+
+                        } else if (eventType === 'token') {
+                            // Real token arrived — append to bubble
+                            fullText += parsed.t;
+                            contentEl.innerText = fullText;
+                            this.tokenCount++;
+                            this._updateTokenProgress();
+
+                            // Auto-scroll as text streams in
+                            this.container.scrollTop = this.container.scrollHeight;
+
+                        } else if (eventType === 'done') {
+                            metadata = parsed;
+
+                        } else if (eventType === 'error') {
+                            throw new Error(parsed.error || 'Stream error');
+                        }
+                    } catch (parseErr) {
+                        if (parseErr.message !== 'Stream error' &&
+                            !parseErr.message.startsWith('Stream error')) {
+                            console.warn('[Chat] SSE parse error:', parseErr, eventData);
+                        } else {
+                            throw parseErr;
+                        }
+                    }
+                }
+            }
+
+            // Stream complete — finalize
+            clearTimeout(this.timeoutWarningTimer);
+
+            // Track total time in dashboard
+            const responseTimeMs = Math.round(performance.now() - startTime);
+            if (window.llmTimeEl) {
+                window.llmTimeEl.innerText = responseTimeMs + 'ms';
+                window.llmTimeEl.classList.toggle('crit', responseTimeMs > 5000);
+            }
+
+            // Use cleaned reply from server metadata if available
+            if (metadata && metadata.reply) {
+                contentEl.innerText = metadata.reply;
+            }
+
+            // Add info line with real token stats (left) and time (right)
+            const genTime = this.streamStartTime
+                ? ((performance.now() - this.streamStartTime) / 1000).toFixed(1)
+                : '0';
+            const elapsed = this.streamStartTime
+                ? (performance.now() - this.streamStartTime) / 1000 : 0;
+            const speed = elapsed > 0.2
+                ? (this.tokenCount / elapsed).toFixed(1) : '0';
+            const tokenCount = metadata?.token_count || this.tokenCount;
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const infoLine = document.createElement('div');
+            infoLine.className = 'bubble-info';
+            infoLine.innerHTML = `<span class="bubble-info-stats">${tokenCount} tok · ${speed} tok/s · ${genTime}s</span><span class="bubble-info-time">${time}</span>`;
+            contentEl.appendChild(infoLine);
+
+            this.setThinking(false, null);
+
+            // Play TTS audio if enabled and attach visualizer
+            if (metadata?.reply && state.config?.tts?.enabled) {
+                this._playTTSWithVisualizer(metadata.reply, row);
+            }
+
+            // Update Memory Bank + session state
+            if (metadata) {
+                this.updateMemoryBank(metadata);
+                // Notify dashboard to refresh relationship + emotion widgets
+                bus.emit('chat:completed', metadata);
+                if (metadata.session_id && metadata.session_id !== state.state.currentSessionId) {
+                    state.state.currentSessionId = metadata.session_id;
+                    state.loadSessions();
+                }
+            }
+
+        } catch (err) {
+            clearTimeout(this.timeoutWarningTimer);
+            this.setThinking(false, null);
+            console.error('[Chat] Stream error:', err);
+
+            if (err.name === 'AbortError') {
+                this.addBubble("Request cancelled", false, null);
+            } else {
+                this.addBubble(`Error: ${err.message}`, false, null);
+                toast.error(`Chat error: ${err.message}`, 5000);
+            }
+        } finally {
+            this.input.disabled = false;
+            this.input.focus();
+            if (this.sendBtn) this.sendBtn.disabled = false;
+            this.currentRequestAbortController = null;
+        }
+    }
+
+    /**
+     * Request TTS for a reply, play it, and show an audio visualizer canvas.
+     * Uses POST /api/tts to generate audio, then plays it with a waveform
+     * rendered on a small canvas inside the chat bubble.
+     *
+     * @param {string} text - The AI reply text to speak
+     * @param {HTMLElement} bubbleRow - The .message-ai row element
+     */
+    async _playTTSWithVisualizer(text, bubbleRow) {
+        try {
+            const res = await fetch('/api/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+            });
+            if (!res.ok) return;
+
+            const data = await res.json();
+            if (!data.url) return;
+
+            // Create audio element
+            const audio = new Audio(data.url);
+
+            // Create visualizer canvas inside the bubble
+            const canvas = document.createElement('canvas');
+            canvas.width = 200;
+            canvas.height = 40;
+            canvas.style.cssText = `
+                width:100%; max-width:300px; height:40px; margin-top:8px;
+                border-radius:6px; background:rgba(0,0,0,0.3);
+                display:block;
+            `;
+            const contentEl = bubbleRow.querySelector('.bubble-text, .message-text');
+            if (contentEl) {
+                contentEl.appendChild(canvas);
+            } else {
+                bubbleRow.appendChild(canvas);
+            }
+
+            // Set up Web Audio API for visualization
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioCtx.createMediaElementSource(audio);
+            const analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 128;
+            analyser.smoothingTimeConstant = 0.85;
+
+            source.connect(analyser);
+            analyser.connect(audioCtx.destination);
+
+            const ctx = canvas.getContext('2d');
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            let animFrame = null;
+
+            /**
+             * Draw waveform bars on the canvas each frame.
+             */
+            const draw = () => {
+                analyser.getByteFrequencyData(dataArray);
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                const barCount = 32;
+                const barWidth = canvas.width / barCount;
+                const step = Math.floor(bufferLength / barCount);
+
+                for (let i = 0; i < barCount; i++) {
+                    const value = dataArray[i * step] / 255;
+                    const barHeight = value * canvas.height * 0.9;
+                    const x = i * barWidth;
+                    const y = canvas.height - barHeight;
+
+                    // Gradient from cyan to magenta based on frequency
+                    const hue = 180 + (i / barCount) * 120; // cyan→magenta range
+                    ctx.fillStyle = `hsla(${hue}, 100%, 65%, ${0.5 + value * 0.5})`;
+                    ctx.fillRect(x + 1, y, barWidth - 2, barHeight);
+                }
+
+                animFrame = requestAnimationFrame(draw);
+            };
+
+            audio.onplay = () => draw();
+            audio.onended = () => {
+                if (animFrame) cancelAnimationFrame(animFrame);
+                // Fade out canvas
+                canvas.style.transition = 'opacity 0.5s';
+                canvas.style.opacity = '0.3';
+                audioCtx.close().catch(() => {});
+            };
+            audio.onerror = () => {
+                canvas.remove();
+                audioCtx.close().catch(() => {});
+            };
+
+            // Also pipe audio to ViewerBridge for lip sync
+            bus.emit('chat:audioPlay', { url: data.url });
+
+            audio.play().catch(() => canvas.remove());
+
+        } catch (err) {
+            console.warn('[Chat] TTS playback failed:', err.message);
+        }
+    }
+
+    /**
+     * Create an AI chat bubble pre-wired for streaming text into.
+     * Returns the row element and the content div for appending tokens.
+     *
+     * @param {string|null} avatarUrl - Avatar image URL
+     * @returns {{row: HTMLElement, contentEl: HTMLElement}}
+     */
+    _addStreamingBubble(avatarUrl) {
+        const row = document.createElement('div');
+        row.className = 'message-ai';
+
+        const avatarHtml = `
+            <div class="chat-avatar" style="
+                width: 2.2rem; height: 2.2rem;
+                margin-right: 0.625rem;
+                border-radius: 50%;
+                overflow: hidden;
+                border: 1px solid var(--neon-cyan);
+                flex-shrink: 0;
+            ">
+                <img src="${avatarUrl || 'assets/default_avatar.png'}"
+                     onerror="this.src='assets/default_avatar.png'"
+                     style="width: 100%; height: 100%; object-fit: cover;">
+            </div>`;
+
+        const contentEl = document.createElement('div');
+        contentEl.className = 'bubble-content';
+
+        row.innerHTML = avatarHtml;
+        row.appendChild(contentEl);
+        this.container.appendChild(row);
+        this.container.scrollTop = this.container.scrollHeight;
+
+        return { row, contentEl };
+    }
+
+    /**
+     * Load chat history from a session into the chat container.
+     * Called when a session is selected (on startup or from session list).
+     *
+     * @param {Object} data - {sessionId, messages: [{id, role, text, ts}]}
+     */
+    loadHistory(data) {
+        const { messages } = data;
+        this.container.innerHTML = ''; // Clear current chat
+
+        if (!messages || messages.length === 0) return;
+
+        // Resolve current character avatar for AI messages
         let avatarUrl = null;
         if (state.state.currentCharacterId) {
             const char = state.state.characters.find(c => c.id == state.state.currentCharacterId);
             if (char) {
-                // Use same fallback logic as Grid
-                if (char.avatar_url && !char.avatar_url.includes('default')) {
-                    avatarUrl = char.avatar_url;
+                const primaryUrl = char.avatar_2d_url || char.avatar_url;
+                if (primaryUrl && !primaryUrl.includes('default') && !primaryUrl.endsWith('.vrm')) {
+                    avatarUrl = primaryUrl;
                 } else {
-                    const cleanName = char.name.toLowerCase().split(' ')[0];
+                    const parenMatch = char.name.match(/\((\w+)\)/);
+                    const cleanName = parenMatch ? parenMatch[1].toLowerCase() : char.name.toLowerCase().split(' ')[0];
                     avatarUrl = `/images/${cleanName}_pixel_portrait.png`;
                 }
             }
         }
 
-        // 3. Set Thinking State
-        this.setThinking(true, avatarUrl);
+        // Render each message with IDs for edit/regen actions
+        messages.forEach(msg => {
+            const isUser = msg.role === 'user';
+            this.addBubble(msg.text, isUser, isUser ? null : avatarUrl, { messageId: msg.id });
+        });
 
-        // 4. Send to Backend
-        try {
-            const response = await state.sendMessage(text);
+        // Scroll to bottom after loading
+        requestAnimationFrame(() => {
+            this.container.scrollTop = this.container.scrollHeight;
+        });
+    }
 
-            this.setThinking(false, null); // Clear thinking
+    /**
+     * Render the session list in the left sidebar.
+     * Highlights the currently active session.
+     *
+     * @param {Array} sessions - [{id, title, created_ts, message_count}]
+     */
+    renderSessionList(sessions) {
+        const listEl = document.getElementById('session-list');
+        if (!listEl) return;
 
-            if (response && (response.text || response.reply)) {
-                this.addBubble(response.text || response.reply, false, avatarUrl);
-            } else {
-                this.addBubble("(No response received from Neural Link)", false, avatarUrl);
+        if (!sessions || sessions.length === 0) {
+            listEl.innerHTML = '<div style="padding:8px; color:var(--text-muted); font-size:0.7rem;">No chat threads yet.</div>';
+            return;
+        }
+
+        listEl.innerHTML = sessions.slice(0, 20).map(s => {
+            const isActive = s.id === state.state.currentSessionId;
+            const date = s.created_ts
+                ? new Date(s.created_ts * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })
+                : '';
+            const title = s.title || `Session ${s.id}`;
+            const msgCount = s.message_count || 0;
+
+            return `
+                <div class="session-item ${isActive ? 'active' : ''}"
+                     data-session-id="${s.id}"
+                     style="
+                        padding: 6px 10px;
+                        cursor: pointer;
+                        border-radius: 6px;
+                        margin-bottom: 2px;
+                        font-size: 0.7rem;
+                        color: ${isActive ? 'var(--neon-cyan)' : 'var(--text-muted)'};
+                        background: ${isActive ? 'rgba(0,240,255,0.08)' : 'transparent'};
+                        border: 1px solid ${isActive ? 'rgba(0,240,255,0.15)' : 'transparent'};
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        transition: all 0.15s;
+                     "
+                     onmouseenter="this.style.background='rgba(255,255,255,0.04)'"
+                     onmouseleave="this.style.background='${isActive ? 'rgba(0,240,255,0.08)' : 'transparent'}'"
+                >
+                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">${title}</span>
+                    <span style="font-size:0.6rem; opacity:0.5; margin-left:8px; flex-shrink:0;">${msgCount}msg ${date}</span>
+                </div>
+            `;
+        }).join('');
+
+        // Bind click handlers
+        listEl.querySelectorAll('[data-session-id]').forEach(el => {
+            el.onclick = () => {
+                const sessionId = parseInt(el.dataset.sessionId);
+                state.selectSession(sessionId);
+            };
+        });
+    }
+
+    /**
+     * Update the Memory Bank panel with data from the chat response.
+     * Populates "Active Context" with current session info and
+     * "RAG Archive" with semantic memory hits from the vector store.
+     *
+     * @param {Object} response - Chat API response containing memory_hits, session_id, etc.
+     */
+    updateMemoryBank(response) {
+        const activeEl = document.getElementById('mem-active');
+        const archiveEl = document.getElementById('mem-archive');
+
+        // Active Context — show current session and character info
+        if (activeEl) {
+            const charName = state.state.characters?.find(
+                c => c.id == state.state.currentCharacterId
+            )?.name || 'Unknown';
+            const sessionId = response.session_id || state.state.currentSessionId || '?';
+            const emotion = response.emotion || 'neutral';
+
+            activeEl.innerHTML = `
+                <div style="font-size:0.75rem; color:var(--text-main); line-height:1.6;">
+                    <div><span style="color:var(--neon-cyan);">ENTITY:</span> ${charName}</div>
+                    <div><span style="color:var(--neon-cyan);">SESSION:</span> #${sessionId}</div>
+                    <div><span style="color:var(--neon-cyan);">EMOTION:</span> ${emotion}</div>
+                </div>
+            `;
+        }
+
+        // RAG Archive — show memory hits with similarity scores
+        if (archiveEl) {
+            const hits = response.memory_hits || [];
+            if (hits.length === 0) {
+                archiveEl.innerHTML = '<div style="font-size:0.7rem; color:var(--text-muted);">No memory matches for this query.</div>';
+                return;
             }
-        } catch (err) {
-            this.setThinking(false, null);
-            console.error(err);
-            this.addBubble(`Error: ${err.message}`, false, null);
+
+            archiveEl.innerHTML = hits.map(hit => {
+                const score = hit.score !== undefined ? (hit.score * 100).toFixed(0) : '?';
+                const role = hit.role || 'unknown';
+                const text = (hit.text || '').slice(0, 120);
+                const roleColor = role === 'user' ? 'var(--neon-cyan)' : 'var(--neon-magenta)';
+
+                return `
+                    <div style="font-size:0.7rem; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.04); line-height:1.5;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span style="color:${roleColor}; text-transform:uppercase; font-size:0.6rem;">${role}</span>
+                            <span style="color:var(--neon-green); font-size:0.6rem;">${score}% match</span>
+                        </div>
+                        <div style="color:var(--text-muted);">${text}${hit.text?.length > 120 ? '...' : ''}</div>
+                    </div>
+                `;
+            }).join('');
         }
     }
 
-    addBubble(text, isUser, avatarUrl) {
+    /**
+     * Add a chat bubble to the message container with edit/regen action icons.
+     *
+     * @param {string} text - Message text
+     * @param {boolean} isUser - Whether the message is from the user
+     * @param {string|null} avatarUrl - Avatar URL for AI messages
+     * @param {Object} [meta] - Optional metadata for the info line
+     * @param {number} [meta.tokenCount] - Token count for AI responses
+     * @param {number} [meta.tokPerSec] - Tokens per second for AI responses
+     * @param {number} [meta.totalTime] - Total response time in seconds
+     * @param {number} [meta.messageId] - Database message ID for edit/regen
+     */
+    addBubble(text, isUser, avatarUrl, meta = {}) {
         const row = document.createElement('div');
         row.className = isUser ? 'message-user' : 'message-ai';
-        row.style.display = 'flex';
-        row.style.marginBottom = '15px';
-        row.style.alignItems = 'flex-end';
-        row.style.width = '100%';
-
-        if (isUser) {
-            row.style.justifyContent = 'flex-end';
-        } else {
-            row.style.justifyContent = 'flex-start';
-        }
+        if (meta.messageId) row.dataset.messageId = meta.messageId;
 
         // Avatar (AI Only)
         let avatarHtml = '';
         if (!isUser) {
             avatarHtml = `
                 <div class="chat-avatar" style="
-                    width: 35px; height: 35px; 
-                    margin-right: 10px; 
-                    border-radius: 50%; 
-                    overflow: hidden; 
+                    width: 35px; height: 35px;
+                    margin-right: 10px;
+                    border-radius: 50%;
+                    overflow: hidden;
                     border: 1px solid var(--neon-cyan);
                     flex-shrink: 0;
                 ">
-                    <img src="${avatarUrl || 'assets/default_avatar.png'}" 
+                    <img src="${avatarUrl || 'assets/default_avatar.png'}"
                          onerror="this.src='assets/default_avatar.png'"
                          style="width: 100%; height: 100%; object-fit: cover;">
                 </div>`;
@@ -143,17 +953,336 @@ export class ChatInterface {
 
         const bubbleContent = document.createElement('div');
         bubbleContent.className = 'bubble-content';
-        bubbleContent.innerText = text;
+        bubbleContent.style.position = 'relative';
 
-        const timestamp = document.createElement('div');
-        timestamp.className = 'bubble-timestamp';
-        timestamp.innerText = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const textEl = document.createElement('span');
+        textEl.className = 'bubble-text';
+        textEl.innerText = text;
+        bubbleContent.appendChild(textEl);
 
-        bubbleContent.appendChild(timestamp);
+        // Action buttons (edit for user, regen for AI) — shown on hover
+        if (meta.messageId) {
+            const actions = document.createElement('div');
+            actions.className = 'bubble-actions';
+            actions.style.cssText = 'position:absolute; top:4px; right:4px; display:none; gap:4px;';
+
+            if (isUser) {
+                actions.innerHTML = `<button class="bubble-action-btn bubble-edit-btn" title="Edit message" data-msg-id="${meta.messageId}">&#x270E;</button>`;
+            } else {
+                actions.innerHTML = `<button class="bubble-action-btn bubble-regen-btn" title="Regenerate response" data-msg-id="${meta.messageId}">&#x21BB;</button>`;
+            }
+
+            bubbleContent.appendChild(actions);
+            bubbleContent.onmouseenter = () => { actions.style.display = 'flex'; };
+            bubbleContent.onmouseleave = () => { actions.style.display = 'none'; };
+        }
+
+        // Info line — stats on the left, time on the right
+        const infoLine = document.createElement('div');
+        infoLine.className = 'bubble-info';
+
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        if (isUser) {
+            const charCount = text.length;
+            infoLine.innerHTML = `<span class="bubble-info-stats">${charCount} chars</span><span class="bubble-info-time">${time}</span>`;
+        } else if (meta.tokenCount) {
+            const speed = meta.tokPerSec ? `${meta.tokPerSec} tok/s` : '';
+            const duration = meta.totalTime ? `${meta.totalTime}s` : '';
+            const stats = [`${meta.tokenCount} tok`, speed, duration].filter(Boolean).join(' · ');
+            infoLine.innerHTML = `<span class="bubble-info-stats">${stats}</span><span class="bubble-info-time">${time}</span>`;
+        } else {
+            infoLine.innerHTML = `<span class="bubble-info-stats"></span><span class="bubble-info-time">${time}</span>`;
+        }
+
+        bubbleContent.appendChild(infoLine);
 
         row.innerHTML = isUser ? '' : avatarHtml;
         row.appendChild(bubbleContent);
 
+        this.container.appendChild(row);
+        this.container.scrollTop = this.container.scrollHeight;
+
+        // Bind action buttons
+        this._bindBubbleActions(row);
+    }
+
+    /**
+     * Bind edit/regen action buttons on a message bubble.
+     * @private
+     * @param {HTMLElement} row - The message row element
+     */
+    _bindBubbleActions(row) {
+        const editBtn = row.querySelector('.bubble-edit-btn');
+        if (editBtn) {
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                this._startInlineEdit(row, parseInt(editBtn.dataset.msgId));
+            };
+        }
+
+        const regenBtn = row.querySelector('.bubble-regen-btn');
+        if (regenBtn) {
+            regenBtn.onclick = async (e) => {
+                e.stopPropagation();
+                await this._regenerateMessage(row, parseInt(regenBtn.dataset.msgId));
+            };
+        }
+    }
+
+    /**
+     * Enable inline editing of a user message.
+     * Replaces the bubble text with a textarea for editing.
+     * @private
+     * @param {HTMLElement} row - The message row element
+     * @param {number} messageId - Database message ID
+     */
+    _startInlineEdit(row, messageId) {
+        const textEl = row.querySelector('.bubble-text');
+        if (!textEl) return;
+
+        const originalText = textEl.innerText;
+        const textarea = document.createElement('textarea');
+        textarea.className = 'input-field';
+        textarea.value = originalText;
+        textarea.style.cssText = 'width:100%; min-height:60px; padding:8px; background:rgba(0,10,20,0.8); border:1px solid var(--neon-cyan); color:var(--text-main); border-radius:6px; resize:vertical; font-size:0.85rem;';
+
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex; gap:6px; margin-top:6px; justify-content:flex-end;';
+        btnRow.innerHTML = `
+            <button class="btn edit-cancel" style="padding:4px 12px; background:transparent; border:1px solid var(--glass-border); color:var(--text-muted); border-radius:4px; cursor:pointer; font-size:0.75rem;">CANCEL</button>
+            <button class="btn edit-save" style="padding:4px 12px; background:rgba(0,240,255,0.1); border:1px solid var(--neon-cyan); color:var(--neon-cyan); border-radius:4px; cursor:pointer; font-size:0.75rem;">SAVE</button>
+        `;
+
+        textEl.replaceWith(textarea);
+        textarea.parentElement.appendChild(btnRow);
+        textarea.focus();
+
+        btnRow.querySelector('.edit-cancel').onclick = () => {
+            const newTextEl = document.createElement('span');
+            newTextEl.className = 'bubble-text';
+            newTextEl.innerText = originalText;
+            textarea.replaceWith(newTextEl);
+            btnRow.remove();
+        };
+
+        btnRow.querySelector('.edit-save').onclick = async () => {
+            const newText = textarea.value.trim();
+            if (!newText) return;
+
+            try {
+                await API.put(`messages/${messageId}`, { text: newText });
+                const newTextEl = document.createElement('span');
+                newTextEl.className = 'bubble-text';
+                newTextEl.innerText = newText;
+                textarea.replaceWith(newTextEl);
+                btnRow.remove();
+                toast.success('Message edited', 2000);
+            } catch (err) {
+                toast.error(`Edit failed: ${err.message}`, 3000);
+            }
+        };
+    }
+
+    /**
+     * Regenerate an AI response via the backend.
+     * @private
+     * @param {HTMLElement} row - The AI message row element
+     * @param {number} messageId - Database message ID to regenerate
+     */
+    async _regenerateMessage(row, messageId) {
+        const textEl = row.querySelector('.bubble-text');
+        if (!textEl) return;
+
+        const originalText = textEl.innerText;
+        textEl.innerText = 'Regenerating...';
+        textEl.style.opacity = '0.5';
+
+        try {
+            const result = await API.post(`messages/${messageId}/regenerate`, {});
+            if (result.ok && result.new_message) {
+                textEl.innerText = result.new_message.text;
+                textEl.style.opacity = '1';
+                row.dataset.messageId = result.new_message.id;
+
+                // Update regen button data-msg-id
+                const regenBtn = row.querySelector('.bubble-regen-btn');
+                if (regenBtn) regenBtn.dataset.msgId = result.new_message.id;
+
+                toast.success('Response regenerated', 2000);
+
+                // Emit emotion/gesture if present
+                if (result.new_message.emotion) {
+                    bus.emit('chat:emotion', { emotion: result.new_message.emotion, gesture: result.new_message.gesture });
+                }
+            } else {
+                throw new Error('Regeneration failed');
+            }
+        } catch (err) {
+            textEl.innerText = originalText;
+            textEl.style.opacity = '1';
+            toast.error(`Regen failed: ${err.message}`, 3000);
+        }
+    }
+
+    /**
+     * Show a character greeting message in an empty session.
+     * Only displays if the character has a greeting_text set and
+     * the current session has no messages.
+     *
+     * @private
+     * @param {Object} char - Character object with greeting_text, greeting_animation
+     */
+    _showGreeting(char) {
+        if (!char || !char.greeting_text) return;
+
+        // Only show greeting if chat is empty (no messages)
+        const hasMessages = this.container.children.length > 0;
+        if (hasMessages) return;
+
+        const avatarUrl = this._getCharacterAvatarUrl();
+        this.addBubble(char.greeting_text, false, avatarUrl);
+
+        // Trigger greeting animation on the 3D viewer if set
+        if (char.greeting_animation) {
+            bus.emit('viewer:gesture', { gesture: char.greeting_animation });
+        }
+    }
+
+    /**
+     * Inject an export button into the AI status container area.
+     * @private
+     */
+    _injectExportButton() {
+        const statusContainer = document.querySelector('.ai-status-container');
+        if (!statusContainer) return;
+
+        const btn = document.createElement('button');
+        btn.id = 'btn-export-chat';
+        btn.className = 'btn-icon';
+        btn.title = 'Export conversation';
+        btn.style.cssText = 'margin-left:auto; width:28px; height:28px; font-size:0.7rem; opacity:0.6; transition:opacity 0.15s;';
+        btn.innerHTML = '&#x2B07;';
+        btn.onmouseenter = () => { btn.style.opacity = '1'; };
+        btn.onmouseleave = () => { btn.style.opacity = '0.6'; };
+        btn.onclick = () => this._showExportDialog();
+
+        statusContainer.appendChild(btn);
+
+        // Recap/Summarize button
+        const recapBtn = document.createElement('button');
+        recapBtn.id = 'btn-recap';
+        recapBtn.className = 'btn-icon';
+        recapBtn.title = 'Recap conversation';
+        recapBtn.style.cssText = 'width:28px; height:28px; font-size:0.7rem; opacity:0.6; transition:opacity 0.15s; margin-left:4px;';
+        recapBtn.innerHTML = '&#x1F4DD;';
+        recapBtn.onmouseenter = () => { recapBtn.style.opacity = '1'; };
+        recapBtn.onmouseleave = () => { recapBtn.style.opacity = '0.6'; };
+        recapBtn.onclick = () => this._showRecap();
+
+        statusContainer.appendChild(recapBtn);
+    }
+
+    /**
+     * Show a format picker and trigger conversation export download.
+     * @private
+     */
+    async _showExportDialog() {
+        const sessionId = state.state.currentSessionId;
+        if (!sessionId) {
+            toast.warning('No active session to export', 2000);
+            return;
+        }
+
+        // Simple format picker via prompt (could be a modal in future)
+        const formats = ['markdown', 'json', 'txt'];
+        const choice = prompt('Export format:\n1. Markdown\n2. JSON\n3. Plain Text\n\nEnter number (1-3):', '1');
+        if (!choice) return;
+
+        const idx = parseInt(choice) - 1;
+        const format = formats[idx] || 'markdown';
+
+        try {
+            toast.info('Exporting conversation...', 2000);
+            const response = await fetch(`/api/sessions/${sessionId}/export?format=${format}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = response.headers.get('Content-Disposition')?.match(/filename="(.+?)"/)?.[1] || `conversation.${format === 'markdown' ? 'md' : format}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            toast.success('Conversation exported!', 2000);
+        } catch (err) {
+            toast.error(`Export failed: ${err.message}`, 3000);
+        }
+    }
+
+    /**
+     * Show a conversation recap/summary. First tries to load a cached summary,
+     * then generates one if none exists.
+     * @private
+     */
+    async _showRecap() {
+        const sessionId = state.state.currentSessionId;
+        if (!sessionId) {
+            toast.warning('No active session', 2000);
+            return;
+        }
+
+        // Try to load existing summary first
+        try {
+            const cached = await API.get(`sessions/${sessionId}/summary`);
+            if (cached.ok && cached.summary) {
+                this._displayRecapBubble(cached.summary);
+                return;
+            }
+        } catch (e) {
+            // No cached summary, generate one
+        }
+
+        // Generate new summary
+        toast.info('Generating recap...', 3000);
+        const recapBtn = document.getElementById('btn-recap');
+        if (recapBtn) {
+            recapBtn.disabled = true;
+            recapBtn.style.opacity = '0.3';
+        }
+
+        try {
+            const result = await API.post(`sessions/${sessionId}/summarize`, {});
+            if (result.ok && result.summary) {
+                this._displayRecapBubble(result.summary);
+                toast.success('Recap generated!', 2000);
+            } else {
+                toast.error('Failed to generate recap', 3000);
+            }
+        } catch (err) {
+            toast.error(`Recap failed: ${err.message}`, 3000);
+        } finally {
+            if (recapBtn) {
+                recapBtn.disabled = false;
+                recapBtn.style.opacity = '0.6';
+            }
+        }
+    }
+
+    /**
+     * Display a recap/summary as a special system bubble in the chat.
+     * @private
+     * @param {string} summary - The summary text
+     */
+    _displayRecapBubble(summary) {
+        const row = document.createElement('div');
+        row.className = 'message-ai';
+        row.style.cssText = 'border-left:2px solid var(--neon-cyan); padding-left:12px; margin:12px 0;';
+        row.innerHTML = `
+            <div style="font-family:var(--font-display); font-size:0.7rem; color:var(--neon-cyan); letter-spacing:1px; margin-bottom:6px;">CONVERSATION RECAP</div>
+            <div style="color:var(--text-main); font-size:0.85rem; line-height:1.5; white-space:pre-wrap;">${summary}</div>
+        `;
         this.container.appendChild(row);
         this.container.scrollTop = this.container.scrollHeight;
     }

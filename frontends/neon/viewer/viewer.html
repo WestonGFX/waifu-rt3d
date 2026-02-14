@@ -9,24 +9,29 @@
         body {
             margin: 0;
             height: 100%;
-            background: transparent; /* Allow transparency for AR/Overlay modes */
+            background: transparent;
             overflow: hidden;
         }
 
         #loading {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: #00f2ff;
-            font-family: monospace;
-            font-size: 10px;
-            text-transform: uppercase;
+            display: none;
+        }
+
+        /* Video background layer (behind canvas) */
+        #bg-video {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: -1;
+            display: none;
         }
     </style>
 </head>
 
 <body>
     <div id="loading">UPLINKING_VISUAL_FEED...</div>
+    <video id="bg-video" loop muted playsinline></video>
     <canvas id="c"></canvas>
     <script type="importmap">
         {
@@ -37,7 +42,6 @@
     </script>
 
     <script type="module">
-        // RE-INJECTING EVERYTHING IS SAFER TO AVOID CUTTING CLASSES
         import * as THREE from 'three';
         import { GLTFLoader } from '/frontend/lib/GLTFLoader.js';
         import { VRMLoaderPlugin, VRMUtils } from '/frontend/lib/three-vrm.module.min.js';
@@ -49,9 +53,236 @@
         let headMovement = null;
         let expressionController = null;
         let gestureController = null;
+        let proceduralAnimator = null;
+
+        // ══════════════════════════════════════════════════════════
+        // Inline OrbitControls (minimal implementation)
+        // Provides: left-drag orbit, scroll zoom, right-drag pan
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Minimal orbit camera controller for Three.js.
+         * Supports left-click orbit, right-click pan, scroll zoom.
+         * No external dependency — written inline to avoid missing lib issues.
+         */
+        class SimpleOrbitControls {
+            constructor(camera, domElement) {
+                this.camera = camera;
+                this.domElement = domElement;
+                this.enabled = true;
+
+                // Orbit state
+                this.target = new THREE.Vector3(0, 1.2, 0);
+                this.spherical = new THREE.Spherical();
+                this.sphericalDelta = new THREE.Spherical();
+                this.panOffset = new THREE.Vector3();
+
+                // Limits
+                this.minDistance = 0.3;
+                this.maxDistance = 5;
+                this.minPolarAngle = 0.1;
+                this.maxPolarAngle = Math.PI - 0.1;
+                this.rotateSpeed = 1.0;
+                this.panSpeed = 1.0;
+                this.zoomSpeed = 1.0;
+
+                // Internal state
+                this._rotateStart = new THREE.Vector2();
+                this._panStart = new THREE.Vector2();
+                this._isRotating = false;
+                this._isPanning = false;
+
+                this._bindEvents();
+                this._updateSpherical();
+            }
+
+            /** Sync internal spherical from current camera position. */
+            _updateSpherical() {
+                const offset = new THREE.Vector3().copy(this.camera.position).sub(this.target);
+                this.spherical.setFromVector3(offset);
+            }
+
+            _bindEvents() {
+                const el = this.domElement;
+                el.addEventListener('pointerdown', (e) => this._onPointerDown(e));
+                el.addEventListener('pointermove', (e) => this._onPointerMove(e));
+                el.addEventListener('pointerup', () => this._onPointerUp());
+                el.addEventListener('pointerleave', () => this._onPointerUp());
+                el.addEventListener('wheel', (e) => this._onWheel(e), { passive: false });
+                el.addEventListener('contextmenu', (e) => e.preventDefault());
+            }
+
+            _onPointerDown(e) {
+                if (!this.enabled) return;
+                if (e.button === 0) {
+                    this._isRotating = true;
+                    this._rotateStart.set(e.clientX, e.clientY);
+                } else if (e.button === 2) {
+                    this._isPanning = true;
+                    this._panStart.set(e.clientX, e.clientY);
+                }
+            }
+
+            _onPointerMove(e) {
+                if (!this.enabled) return;
+                if (this._isRotating) {
+                    const dx = (e.clientX - this._rotateStart.x) / this.domElement.clientHeight * Math.PI * this.rotateSpeed;
+                    const dy = (e.clientY - this._rotateStart.y) / this.domElement.clientHeight * Math.PI * this.rotateSpeed;
+                    this.sphericalDelta.theta -= dx;
+                    this.sphericalDelta.phi -= dy;
+                    this._rotateStart.set(e.clientX, e.clientY);
+                }
+                if (this._isPanning) {
+                    const dx = (e.clientX - this._panStart.x) * this.panSpeed * 0.002;
+                    const dy = (e.clientY - this._panStart.y) * this.panSpeed * 0.002;
+                    // Pan relative to camera orientation
+                    const right = new THREE.Vector3();
+                    const up = new THREE.Vector3();
+                    right.setFromMatrixColumn(this.camera.matrix, 0);
+                    up.setFromMatrixColumn(this.camera.matrix, 1);
+                    this.panOffset.addScaledVector(right, -dx);
+                    this.panOffset.addScaledVector(up, dy);
+                    this._panStart.set(e.clientX, e.clientY);
+                }
+            }
+
+            _onPointerUp() {
+                this._isRotating = false;
+                this._isPanning = false;
+            }
+
+            _onWheel(e) {
+                if (!this.enabled) return;
+                e.preventDefault();
+                if (e.deltaY > 0) {
+                    this.spherical.radius *= (1 + 0.05 * this.zoomSpeed);
+                } else {
+                    this.spherical.radius *= (1 - 0.05 * this.zoomSpeed);
+                }
+                this.spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this.spherical.radius));
+            }
+
+            /** Call each frame to apply accumulated deltas. */
+            update() {
+                if (!this.enabled) return;
+
+                // Apply pan
+                this.target.add(this.panOffset);
+                this.panOffset.set(0, 0, 0);
+
+                // Apply rotation
+                this.spherical.theta += this.sphericalDelta.theta;
+                this.spherical.phi += this.sphericalDelta.phi;
+                this.spherical.phi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, this.spherical.phi));
+                this.sphericalDelta.set(0, 0, 0);
+
+                // Compute new camera position
+                const offset = new THREE.Vector3().setFromSpherical(this.spherical);
+                this.camera.position.copy(this.target).add(offset);
+                this.camera.lookAt(this.target);
+            }
+
+            /** Reset camera to a specific position + target. */
+            reset(position, target) {
+                this.target.copy(target || new THREE.Vector3(0, 1.2, 0));
+                this.camera.position.copy(position || new THREE.Vector3(0, 1.4, 1.2));
+                this._updateSpherical();
+            }
+
+            /** Get serializable camera state for presets. */
+            getState() {
+                return {
+                    position: this.camera.position.toArray(),
+                    target: this.target.toArray(),
+                    radius: this.spherical.radius
+                };
+            }
+
+            /** Restore camera state from preset. */
+            setState(preset) {
+                if (preset.position) this.camera.position.fromArray(preset.position);
+                if (preset.target) this.target.fromArray(preset.target);
+                this._updateSpherical();
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Procedural Animation — emotion-driven idle modifiers
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Emotion-driven idle animation modifiers.
+         * Blends with existing blink/breathing controllers to make the
+         * character feel more alive based on current emotion.
+         */
+        class ProceduralAnimator {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.currentEmotion = 'neutral';
+                this.breathScale = 1.0;
+                this.bounceOffset = 0;
+                this.swayAmount = 0;
+                this.time = 0;
+            }
+
+            /**
+             * Set the current emotion to adjust idle behavior.
+             * @param {string} emotion - Emotion name (happy, sad, angry, excited, neutral)
+             */
+            setEmotion(emotion) {
+                this.currentEmotion = emotion || 'neutral';
+            }
+
+            /**
+             * Per-frame update — applies subtle procedural motion to bones.
+             * @param {number} deltaTime - Seconds since last frame
+             */
+            update(deltaTime) {
+                this.time += deltaTime;
+                const getBone = (name) => this.vrm.humanoid.getNormalizedBoneNode ?
+                    this.vrm.humanoid.getNormalizedBoneNode(name) :
+                    this.vrm.humanoid.getBoneNode(name);
+
+                const spine = getBone('spine');
+                const hips = getBone('hips');
+
+                switch (this.currentEmotion) {
+                    case 'happy':
+                    case 'excited':
+                        // Subtle bounce + wider sway
+                        if (hips) hips.position.y = Math.sin(this.time * 3) * 0.008;
+                        if (spine) spine.rotation.z = Math.sin(this.time * 1.5) * 0.02;
+                        break;
+                    case 'sad':
+                        // Droopy posture, slow breathing
+                        if (spine) {
+                            spine.rotation.x += 0.03;  // lean forward slightly
+                            spine.rotation.z = Math.sin(this.time * 0.5) * 0.005;
+                        }
+                        break;
+                    case 'angry':
+                        // Tense, minimal movement, subtle tremor
+                        if (spine) spine.rotation.z = Math.sin(this.time * 8) * 0.003;
+                        break;
+                    case 'thinking':
+                        // Slow tilt
+                        if (spine) spine.rotation.z = Math.sin(this.time * 0.8) * 0.015;
+                        break;
+                    default:
+                        // Neutral — very subtle sway
+                        if (spine) spine.rotation.z = Math.sin(this.time * 0.7) * 0.005;
+                        break;
+                }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Audio Lip Sync
+        // ══════════════════════════════════════════════════════════
 
         /**
          * Real-time audio-driven lip sync using Web Audio API.
+         * Analyzes audio frequency data to drive the 'aa' blend shape.
          */
         class AudioLipSync {
             constructor(vrm) {
@@ -62,8 +293,13 @@
                 this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
                 this.isPlaying = false;
                 this.currentSource = null;
+                this.lastValue = 0;
             }
 
+            /**
+             * Play audio and drive lip sync from volume analysis.
+             * @param {string} audioUrl - URL of the audio file to play
+             */
             async playAudioWithLipSync(audioUrl) {
                 try {
                     this.stop();
@@ -101,7 +337,7 @@
                 for (let i = 0; i < this.dataArray.length; i++) sum += this.dataArray[i];
                 const average = sum / this.dataArray.length;
                 const normalized = Math.min(average / 128, 1.0);
-                const smoothed = normalized * 0.7 + (this.lastValue || 0) * 0.3;
+                const smoothed = normalized * 0.7 + this.lastValue * 0.3;
                 this.lastValue = smoothed;
                 this.setMouthOpen(smoothed);
                 requestAnimationFrame(() => this.updateLipSync());
@@ -125,6 +361,10 @@
                 this.setMouthOpen(0);
             }
         }
+
+        // ══════════════════════════════════════════════════════════
+        // Blink Controller
+        // ══════════════════════════════════════════════════════════
 
         class BlinkController {
             constructor(vrm) {
@@ -161,6 +401,10 @@
             getNextBlinkDelay() { return 2 + Math.random() * 4; }
         }
 
+        // ══════════════════════════════════════════════════════════
+        // Idle Head Movement
+        // ══════════════════════════════════════════════════════════
+
         class IdleHeadMovement {
             constructor(vrm) {
                 this.vrm = vrm;
@@ -184,11 +428,10 @@
                 this.headCurrent.y += (this.headTarget.y - this.headCurrent.y) * lerpSpeed;
                 this.headCurrent.z += (this.headTarget.z - this.headCurrent.z) * lerpSpeed;
 
-                // VRM 1.0 vs 0.0 Bone compatibility
-                const head = this.vrm.humanoid.getNormalizedBoneNode ? 
-                             this.vrm.humanoid.getNormalizedBoneNode('head') : 
+                const head = this.vrm.humanoid.getNormalizedBoneNode ?
+                             this.vrm.humanoid.getNormalizedBoneNode('head') :
                              this.vrm.humanoid.getBoneNode('head');
-                
+
                 if (head) {
                     head.rotation.x = this.headCurrent.x;
                     head.rotation.y = this.headCurrent.y;
@@ -196,6 +439,10 @@
                 }
             }
         }
+
+        // ══════════════════════════════════════════════════════════
+        // Expression Controller
+        // ══════════════════════════════════════════════════════════
 
         class ExpressionController {
             constructor(vrm) {
@@ -243,17 +490,22 @@
                     if (emotion === "happy") em.setValue('happy', intensity);
                     else if (emotion === "sad") em.setValue('sad', intensity);
                     else if (emotion === "surprised") em.setValue('surprised', intensity);
+                    else if (emotion === "angry") em.setValue('angry', intensity);
                     else if (emotion === "confused") {
                         em.setValue('surprised', intensity * 0.4);
-                        const head = this.vrm.humanoid.getNormalizedBoneNode ? 
-                                     this.vrm.humanoid.getNormalizedBoneNode('head') : 
+                        const head = this.vrm.humanoid.getNormalizedBoneNode ?
+                                     this.vrm.humanoid.getNormalizedBoneNode('head') :
                                      this.vrm.humanoid.getBoneNode('head');
                         if (head) head.rotation.z = 0.15 * intensity;
-                    } 
+                    }
                     else if (emotion === "thinking") em.setValue('relaxed', intensity * 0.6);
                 } catch (e) { console.warn('Expression not available:', emotion); }
             }
         }
+
+        // ══════════════════════════════════════════════════════════
+        // Gesture Controller (expanded with new gestures)
+        // ══════════════════════════════════════════════════════════
 
         class GestureController {
             constructor(vrm) {
@@ -261,13 +513,40 @@
                 this.currentGesture = null;
                 this.gestureProgress = 0;
                 this.gestureDuration = 0;
+                this.gestureQueue = [];
             }
 
+            /**
+             * Play a gesture animation on the VRM model.
+             * Supports: nod, tilt, wave, shrug, bow, clap, think, point, celebrate, shy, dance
+             * @param {string} gesture - Gesture name
+             */
             playGesture(gesture) {
-                if (this.currentGesture) return;
+                if (this.currentGesture) {
+                    this.gestureQueue.push(gesture);
+                    return;
+                }
                 this.currentGesture = gesture;
                 this.gestureProgress = 0;
-                this.gestureDuration = 0.6;
+                // Duration varies per gesture
+                const durations = {
+                    nod: 0.6, tilt: 0.5, wave: 1.0, shrug: 0.8,
+                    bow: 1.2, clap: 0.8, think: 1.5, point: 0.7,
+                    celebrate: 1.2, shy: 1.0, dance: 2.0
+                };
+                this.gestureDuration = durations[gesture] || 0.6;
+            }
+
+            /**
+             * Play a sequence of gestures with timing.
+             * @param {Array<{gesture: string, delay?: number}>} sequence
+             */
+            playSequence(sequence) {
+                if (!Array.isArray(sequence) || sequence.length === 0) return;
+                this.playGesture(sequence[0].gesture);
+                for (let i = 1; i < sequence.length; i++) {
+                    this.gestureQueue.push(sequence[i].gesture);
+                }
             }
 
             update(deltaTime) {
@@ -277,107 +556,332 @@
                 if (this.gestureProgress >= this.gestureDuration) {
                     this.resetGesture();
                     this.currentGesture = null;
+                    // Check queue
+                    if (this.gestureQueue.length > 0) {
+                        this.playGesture(this.gestureQueue.shift());
+                    }
                     return;
                 }
 
                 const t = this.gestureProgress / this.gestureDuration;
                 const eased = Math.sin(t * Math.PI);
-                
-                const getBone = (name) => this.vrm.humanoid.getNormalizedBoneNode ? 
-                                          this.vrm.humanoid.getNormalizedBoneNode(name) : 
+
+                const getBone = (name) => this.vrm.humanoid.getNormalizedBoneNode ?
+                                          this.vrm.humanoid.getNormalizedBoneNode(name) :
                                           this.vrm.humanoid.getBoneNode(name);
 
-                if (this.currentGesture === "nod") {
-                    const neck = getBone('neck');
-                    if (neck) neck.rotation.x = eased * 0.3;
-                }
-                else if (this.currentGesture === "tilt") {
-                    const head = getBone('head');
-                    if (head) head.rotation.z = eased * 0.35;
-                }
-                else if (this.currentGesture === "wave") {
-                    const rightArm = getBone('rightUpperArm');
-                    const rightHand = getBone('rightHand');
-                    if (rightArm) {
-                        rightArm.rotation.z = -eased * 1.2;
-                        rightArm.rotation.x = eased * 0.3;
+                switch (this.currentGesture) {
+                    case 'nod': {
+                        const neck = getBone('neck');
+                        if (neck) neck.rotation.x = eased * 0.3;
+                        break;
                     }
-                    if (rightHand) rightHand.rotation.z = Math.sin(t * Math.PI * 4) * 0.4;
-                }
-                else if (this.currentGesture === "shrug") {
-                    const lArm = getBone('leftUpperArm');
-                    const rArm = getBone('rightUpperArm');
-                    if (lArm) lArm.rotation.z = eased * 0.3;
-                    if (rArm) rArm.rotation.z = -eased * 0.3;
-                    const head = getBone('head');
-                    if (head) head.rotation.z = Math.sin(t * Math.PI) * 0.1;
+                    case 'tilt': {
+                        const head = getBone('head');
+                        if (head) head.rotation.z = eased * 0.35;
+                        break;
+                    }
+                    case 'wave': {
+                        const rightArm = getBone('rightUpperArm');
+                        const rightHand = getBone('rightHand');
+                        if (rightArm) {
+                            rightArm.rotation.z = -eased * 1.2;
+                            rightArm.rotation.x = eased * 0.3;
+                        }
+                        if (rightHand) rightHand.rotation.z = Math.sin(t * Math.PI * 4) * 0.4;
+                        break;
+                    }
+                    case 'shrug': {
+                        const lArm = getBone('leftUpperArm');
+                        const rArm = getBone('rightUpperArm');
+                        if (lArm) lArm.rotation.z = eased * 0.3;
+                        if (rArm) rArm.rotation.z = -eased * 0.3;
+                        const headBone = getBone('head');
+                        if (headBone) headBone.rotation.z = Math.sin(t * Math.PI) * 0.1;
+                        break;
+                    }
+                    case 'bow': {
+                        const spine = getBone('spine');
+                        const neck = getBone('neck');
+                        if (spine) spine.rotation.x = eased * 0.4;
+                        if (neck) neck.rotation.x = eased * 0.2;
+                        break;
+                    }
+                    case 'clap': {
+                        const lArm = getBone('leftUpperArm');
+                        const rArm = getBone('rightUpperArm');
+                        const lForearm = getBone('leftLowerArm');
+                        const rForearm = getBone('rightLowerArm');
+                        const clapCycle = Math.sin(t * Math.PI * 6); // 3 claps
+                        if (lArm) lArm.rotation.z = 0.5 + clapCycle * 0.15;
+                        if (rArm) rArm.rotation.z = -0.5 - clapCycle * 0.15;
+                        if (lForearm) lForearm.rotation.y = -0.8 + clapCycle * 0.2;
+                        if (rForearm) rForearm.rotation.y = 0.8 - clapCycle * 0.2;
+                        break;
+                    }
+                    case 'think': {
+                        const rArm = getBone('rightUpperArm');
+                        const rForearm = getBone('rightLowerArm');
+                        const head = getBone('head');
+                        if (rArm) rArm.rotation.z = -eased * 0.3;
+                        if (rForearm) rForearm.rotation.y = eased * 1.2;
+                        if (head) {
+                            head.rotation.z = eased * 0.12;
+                            head.rotation.x = eased * 0.08;
+                        }
+                        break;
+                    }
+                    case 'point': {
+                        const rArm = getBone('rightUpperArm');
+                        const rForearm = getBone('rightLowerArm');
+                        if (rArm) {
+                            rArm.rotation.z = -eased * 0.8;
+                            rArm.rotation.x = eased * 0.3;
+                        }
+                        if (rForearm) rForearm.rotation.y = eased * 0.4;
+                        break;
+                    }
+                    case 'celebrate': {
+                        const lArm = getBone('leftUpperArm');
+                        const rArm = getBone('rightUpperArm');
+                        const lHand = getBone('leftHand');
+                        const rHand = getBone('rightHand');
+                        if (lArm) lArm.rotation.z = eased * 1.5;
+                        if (rArm) rArm.rotation.z = -eased * 1.5;
+                        if (lHand) lHand.rotation.z = Math.sin(t * Math.PI * 6) * 0.4;
+                        if (rHand) rHand.rotation.z = Math.sin(t * Math.PI * 6 + 1) * 0.4;
+                        break;
+                    }
+                    case 'shy': {
+                        const lArm = getBone('leftUpperArm');
+                        const rArm = getBone('rightUpperArm');
+                        const head = getBone('head');
+                        const spine = getBone('spine');
+                        if (lArm) lArm.rotation.z = eased * 0.3;
+                        if (rArm) rArm.rotation.z = -eased * 0.3;
+                        if (head) head.rotation.x = eased * 0.2;
+                        if (spine) spine.rotation.z = eased * 0.05;
+                        break;
+                    }
+                    case 'dance': {
+                        const hips = getBone('hips');
+                        const lArm = getBone('leftUpperArm');
+                        const rArm = getBone('rightUpperArm');
+                        const danceBeat = Math.sin(t * Math.PI * 4);
+                        if (hips) hips.position.y = danceBeat * 0.02;
+                        if (lArm) lArm.rotation.z = 0.3 + danceBeat * 0.4;
+                        if (rArm) rArm.rotation.z = -0.3 - danceBeat * 0.4;
+                        break;
+                    }
                 }
             }
 
             resetGesture() {
                 if (!this.vrm) return;
-                const bones = ['neck', 'head', 'leftUpperArm', 'rightUpperArm', 'rightHand'];
-                const getBone = (name) => this.vrm.humanoid.getNormalizedBoneNode ? 
-                                          this.vrm.humanoid.getNormalizedBoneNode(name) : 
+                const bones = ['neck', 'head', 'spine', 'hips',
+                               'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm',
+                               'leftHand', 'rightHand'];
+                const getBone = (name) => this.vrm.humanoid.getNormalizedBoneNode ?
+                                          this.vrm.humanoid.getNormalizedBoneNode(name) :
                                           this.vrm.humanoid.getBoneNode(name);
-                                          
+
                 bones.forEach(boneName => {
                     const bone = getBone(boneName);
                     if (bone) {
                         bone.rotation.x = 0;
+                        bone.rotation.y = 0;
                         bone.rotation.z = 0;
+                        if (bone.position) {
+                            bone.position.x = 0;
+                            bone.position.y = 0;
+                            bone.position.z = 0;
+                        }
                     }
                 });
             }
         }
 
+        // ══════════════════════════════════════════════════════════
+        // Lighting Presets
+        // ══════════════════════════════════════════════════════════
+
+        const LIGHT_PRESETS = {
+            studio: {
+                key: { color: 0xffffff, intensity: 1.5, position: [1, 2, 3] },
+                fill: { color: 0xffffff, intensity: 0.5, position: [-1, 1, -2] },
+                ambient: { color: 0xffffff, intensity: 0.8 }
+            },
+            warm_sunset: {
+                key: { color: 0xffaa44, intensity: 1.8, position: [2, 1, 1] },
+                fill: { color: 0xff6633, intensity: 0.4, position: [-2, 0.5, -1] },
+                ambient: { color: 0xffddbb, intensity: 0.6 }
+            },
+            cool_moonlight: {
+                key: { color: 0x6688ff, intensity: 1.2, position: [-1, 3, 2] },
+                fill: { color: 0x4466cc, intensity: 0.3, position: [1, 0.5, -1] },
+                ambient: { color: 0x334488, intensity: 0.5 }
+            },
+            dramatic: {
+                key: { color: 0xff0044, intensity: 2.0, position: [3, 2, 0] },
+                fill: { color: 0x0044ff, intensity: 0.6, position: [-3, 1, 0] },
+                ambient: { color: 0x111122, intensity: 0.3 }
+            },
+            neon: {
+                key: { color: 0x00ffcc, intensity: 1.6, position: [1, 2, 2] },
+                fill: { color: 0xff00ff, intensity: 0.8, position: [-1, 1, -1] },
+                ambient: { color: 0x220033, intensity: 0.4 }
+            }
+        };
+
+        // ══════════════════════════════════════════════════════════
+        // Main Init
+        // ══════════════════════════════════════════════════════════
+
         async function init() {
             const canvas = document.getElementById('c');
-            // ENABLE ALPHA for transparency
+            const bgVideo = document.getElementById('bg-video');
+
             const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.outputEncoding = THREE.sRGBEncoding; 
+            renderer.outputEncoding = THREE.sRGBEncoding;
 
             const scene = new THREE.Scene();
-            // Default to Transparent (null) so the CSS background shows through
-            scene.background = null; 
+            scene.background = null;
 
             const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
             camera.position.set(0, 1.4, 1.2);
 
-            const light = new THREE.DirectionalLight(0xffffff, 1.5);
-            light.position.set(1, 2, 3);
-            const light2 = new THREE.DirectionalLight(0xffffff, 0.5);
-            light2.position.set(-1, 1, -2);
-            scene.add(light, light2, new THREE.AmbientLight(0xffffff, 0.8));
+            // Orbit controls
+            const controls = new SimpleOrbitControls(camera, canvas);
 
+            // Lighting (stored as refs for dynamic updates)
+            const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            keyLight.position.set(1, 2, 3);
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            fillLight.position.set(-1, 1, -2);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(keyLight, fillLight, ambientLight);
+
+            /**
+             * Apply a lighting configuration to the scene.
+             * @param {Object} config - Lighting config with key/fill/ambient properties
+             */
+            function setLighting(config) {
+                if (config.key) {
+                    if (config.key.color !== undefined) keyLight.color.set(config.key.color);
+                    if (config.key.intensity !== undefined) keyLight.intensity = config.key.intensity;
+                    if (config.key.position) keyLight.position.fromArray(config.key.position);
+                }
+                if (config.fill) {
+                    if (config.fill.color !== undefined) fillLight.color.set(config.fill.color);
+                    if (config.fill.intensity !== undefined) fillLight.intensity = config.fill.intensity;
+                    if (config.fill.position) fillLight.position.fromArray(config.fill.position);
+                }
+                if (config.ambient) {
+                    if (config.ambient.color !== undefined) ambientLight.color.set(config.ambient.color);
+                    if (config.ambient.intensity !== undefined) ambientLight.intensity = config.ambient.intensity;
+                }
+                console.log('[Viewer] Lighting updated');
+            }
+
+            /**
+             * Set the scene background.
+             * @param {string} mode - 'color', 'image', 'video', 'gradient', or 'transparent'
+             * @param {string|number} value - Color hex, image URL, video URL, or gradient CSS
+             */
             function setBackground(mode, value) {
-                console.log("BG_MODE:", mode, value);
+                console.log("[Viewer] BG_MODE:", mode, value);
+                // Hide video by default
+                bgVideo.style.display = 'none';
+                bgVideo.pause();
+
                 if (mode === 'color') {
-                    scene.background = new THREE.Color(value); // e.g. 0x000000 or 0x00ff00
+                    scene.background = new THREE.Color(value);
+                    renderer.setClearAlpha(1);
                 } else if (mode === 'image') {
                     new THREE.TextureLoader().load(value, (tex) => {
                         scene.background = tex;
+                        renderer.setClearAlpha(1);
                     });
-                } else {
-                    // Transparent / Null
+                } else if (mode === 'video') {
+                    // Use HTML video element behind canvas
                     scene.background = null;
+                    renderer.setClearAlpha(0);
+                    bgVideo.src = value;
+                    bgVideo.style.display = 'block';
+                    bgVideo.play().catch(e => console.warn('[Viewer] Video autoplay blocked:', e));
+                } else if (mode === 'gradient') {
+                    // Apply CSS gradient to body, keep scene transparent
+                    scene.background = null;
+                    renderer.setClearAlpha(0);
+                    document.body.style.background = value;
+                } else {
+                    // transparent
+                    scene.background = null;
+                    renderer.setClearAlpha(0);
+                    document.body.style.background = 'transparent';
                 }
             }
+
+            /**
+             * Capture the current viewport as a PNG data URL.
+             * @returns {string} Base64 PNG data URL
+             */
+            function captureScreenshot() {
+                renderer.render(scene, camera);
+                return renderer.domElement.toDataURL('image/png');
+            }
+
+            /**
+             * Get all available blend shape / expression names from the loaded VRM.
+             * @returns {string[]} Array of expression names
+             */
+            function getAvailableBlendShapes() {
+                if (!currentVrm) return [];
+                const em = currentVrm.expressionManager || currentVrm.blendShapeProxy;
+                if (!em) return [];
+
+                // VRM 1.0: expressionManager has _expressionMap
+                if (em._expressionMap) return Array.from(em._expressionMap.keys());
+                // VRM 0.x: blendShapeProxy has _blendShapeGroups
+                if (em._blendShapeGroups) return em._blendShapeGroups.map(g => g.name);
+                return [];
+            }
+
+            /**
+             * Set a single blend shape to a specific value (0-1).
+             * @param {string} name - Blend shape name
+             * @param {number} value - Value between 0 and 1
+             */
+            function setBlendShape(name, value) {
+                if (!currentVrm) return;
+                const em = currentVrm.expressionManager || currentVrm.blendShapeProxy;
+                if (!em) return;
+                try {
+                    em.setValue(name, Math.max(0, Math.min(1, value)));
+                } catch (e) {
+                    console.warn('[Viewer] Blend shape not found:', name);
+                }
+            }
+
+            // ── Animation Loop ──────────────────────────────────
 
             function animate() {
                 requestAnimationFrame(animate);
                 const delta = clock.getDelta();
 
+                controls.update();
+
                 if (currentVrm) {
                     currentVrm.update(delta);
-                    // ... (breathing logic preserved) ...
-                    const getBone = (name) => currentVrm.humanoid.getNormalizedBoneNode ? 
-                                              currentVrm.humanoid.getNormalizedBoneNode(name) : 
+
+                    // Breathing
+                    const getBone = (name) => currentVrm.humanoid.getNormalizedBoneNode ?
+                                              currentVrm.humanoid.getNormalizedBoneNode(name) :
                         currentVrm.humanoid.getBoneNode(name);
                     const breathStrength = Math.sin(clock.elapsedTime * 2) * 0.003;
-                    const chest = getBone('chest') || getBone('spine'); 
+                    const chest = getBone('chest') || getBone('spine');
                     if (chest) {
                         chest.rotation.x += breathStrength;
                         chest.rotation.z += breathStrength * 0.5;
@@ -387,45 +891,191 @@
                     if (headMovement) headMovement.update(delta);
                     if (expressionController) expressionController.update(delta);
                     if (gestureController) gestureController.update(delta);
+                    if (proceduralAnimator) proceduralAnimator.update(delta);
                 }
                 renderer.render(scene, camera);
             }
             animate();
 
-            // ... (Loader logic preserved) ...
-            const url = new URLSearchParams(location.search).get('url');
-            if (url) {
-                // ... (Load VRM logic is standard, no change needed here usually) ... 
-                // BUT I need to preserve the loader code.
-                // Since I am replacing the 'init' function, I must check if I can just target the TOP part.
-                // I will target only the top part of init() to avoid rewriting the loader.
+            // Load VRM from URL parameter if provided (direct link mode)
+            const urlParam = new URLSearchParams(location.search).get('url');
+            if (urlParam) {
+                loadVRM(urlParam, scene, camera);
             }
 
+            /**
+             * Load a VRM model from URL into the scene.
+             * Notifies parent window on success or failure via postMessage.
+             *
+             * @param {string} modelUrl - Path to the .vrm file
+             * @param {THREE.Scene} scene - Three.js scene
+             * @param {THREE.PerspectiveCamera} camera - Camera to frame the model
+             */
+            function loadVRM(modelUrl, scene, camera) {
+                const loader = new GLTFLoader();
+                loader.register((parser) => new VRMLoaderPlugin(parser));
+
+                console.log('[Viewer] Loading VRM:', modelUrl);
+                loader.load(
+                    modelUrl,
+                    (gltf) => {
+                        // Remove previous model
+                        if (currentVrm && currentVrm.scene) {
+                            scene.remove(currentVrm.scene);
+                            VRMUtils.deepDispose(currentVrm.scene);
+                        }
+
+                        const vrm = gltf.userData.vrm;
+                        if (!vrm) {
+                            console.error('[Viewer] No VRM data in GLTF');
+                            window.parent.postMessage({ type: 'modelFailed', reason: 'no VRM data' }, '*');
+                            return;
+                        }
+
+                        VRMUtils.rotateVRM0(vrm);
+                        scene.add(vrm.scene);
+                        currentVrm = vrm;
+
+                        // Initialize controllers
+                        lipSync = new AudioLipSync(vrm);
+                        blinkController = new BlinkController(vrm);
+                        headMovement = new IdleHeadMovement(vrm);
+                        expressionController = new ExpressionController(vrm);
+                        gestureController = new GestureController(vrm);
+                        proceduralAnimator = new ProceduralAnimator(vrm);
+
+                        // Reset camera to frame model
+                        controls.reset(
+                            new THREE.Vector3(0, 1.4, 1.2),
+                            new THREE.Vector3(0, 1.2, 0)
+                        );
+
+                        console.log('[Viewer] VRM loaded successfully');
+                        window.parent.postMessage({ type: 'modelLoaded' }, '*');
+                    },
+                    (progress) => {
+                        // Optional: report loading progress
+                    },
+                    (error) => {
+                        console.error('[Viewer] VRM load error:', error);
+                        window.parent.postMessage({ type: 'modelFailed', reason: String(error) }, '*');
+                    }
+                );
+            }
+
+            // ── PostMessage API ─────────────────────────────────
+
             window.addEventListener('message', (e) => {
-                if (!currentVrm && e.data.type !== 'updateBackground') return; // Allow BG update even if no VRM
-            
-                const { type, state, audioUrl } = e.data;
-                
+                const { type, payload } = e.data || {};
+                const audioUrl = e.data?.audioUrl;
+
+                // Commands that work without a VRM loaded
+                if (type === 'loadCharacter') {
+                    const p = payload || {};
+                    if (p.modelUrl) loadVRM(p.modelUrl, scene, camera);
+                    return;
+                }
                 if (type === 'updateBackground') {
                     setBackground(e.data.mode, e.data.value);
+                    return;
                 }
-                // ... (rest of messages) ...
-                else if (currentVrm) {
-                    // logic for nod, expression etc
+                if (type === 'setLighting') {
+                    if (e.data.preset && LIGHT_PRESETS[e.data.preset]) {
+                        setLighting(LIGHT_PRESETS[e.data.preset]);
+                    } else if (payload) {
+                        setLighting(payload);
+                    }
+                    return;
+                }
+                if (type === 'getLightingPresets') {
+                    window.parent.postMessage({
+                        type: 'lightingPresets',
+                        presets: Object.keys(LIGHT_PRESETS)
+                    }, '*');
+                    return;
+                }
+                if (type === 'captureScreenshot') {
+                    const dataUrl = captureScreenshot();
+                    window.parent.postMessage({ type: 'screenshotReady', dataUrl }, '*');
+                    return;
+                }
+                if (type === 'setCameraPosition') {
+                    if (payload) controls.setState(payload);
+                    return;
+                }
+                if (type === 'getCameraPosition') {
+                    window.parent.postMessage({
+                        type: 'cameraPosition',
+                        state: controls.getState()
+                    }, '*');
+                    return;
+                }
+                if (type === 'resetCamera') {
+                    controls.reset();
+                    return;
+                }
+                if (type === 'setCameraEnabled') {
+                    controls.enabled = !!e.data.enabled;
+                    return;
+                }
+
+                // Commands that require a loaded VRM
+                if (!currentVrm) return;
+
+                if (type === 'nod') {
                     const getBone = (name) => currentVrm.humanoid.getNormalizedBoneNode ?
                         currentVrm.humanoid.getNormalizedBoneNode(name) :
                         currentVrm.humanoid.getBoneNode(name);
-                    if (type === 'nod' && getBone('neck')) {
-                        getBone('neck').rotation.x = 0.2;
-                        setTimeout(() => getBone('neck').rotation.x = 0, 300);
+                    const neck = getBone('neck');
+                    if (neck) {
+                        neck.rotation.x = 0.2;
+                        setTimeout(() => neck.rotation.x = 0, 300);
                     }
-                    else if (type === 'playAudio') { if (lipSync && audioUrl) lipSync.playAudioWithLipSync(audioUrl); }
-                    else if (type === 'stopAudio') { if (lipSync) lipSync.stop(); }
-                    else if (type === 'setExpression') {
-                        if (expressionController) expressionController.setExpression(e.data.emotion, e.data.intensity || 1.0, e.data.duration || 0.5);
+                }
+                else if (type === 'playAudio') {
+                    if (lipSync && audioUrl) lipSync.playAudioWithLipSync(audioUrl);
+                }
+                else if (type === 'stopAudio') {
+                    if (lipSync) lipSync.stop();
+                }
+                else if (type === 'setExpression') {
+                    if (expressionController) {
+                        expressionController.setExpression(e.data.emotion, e.data.intensity || 1.0, e.data.duration || 0.5);
                     }
-                    else if (type === 'playGesture') {
-                        if (gestureController) gestureController.playGesture(e.data.gesture);
+                    if (proceduralAnimator && e.data.emotion) {
+                        proceduralAnimator.setEmotion(e.data.emotion);
+                    }
+                }
+                else if (type === 'setEmotion') {
+                    // Alias for setExpression — sent by ViewerBridge
+                    const emo = payload?.emotion || e.data.emotion;
+                    if (expressionController && emo) {
+                        expressionController.setExpression(emo, e.data.intensity || 1.0, e.data.duration || 0.5);
+                    }
+                    if (proceduralAnimator && emo) {
+                        proceduralAnimator.setEmotion(emo);
+                    }
+                }
+                else if (type === 'playGesture') {
+                    const gesture = payload?.gesture || e.data.gesture;
+                    if (gestureController && gesture) gestureController.playGesture(gesture);
+                }
+                else if (type === 'playGestureSequence') {
+                    if (gestureController && payload) gestureController.playSequence(payload);
+                }
+                else if (type === 'getAvailableBlendShapes') {
+                    const shapes = getAvailableBlendShapes();
+                    window.parent.postMessage({ type: 'blendShapeList', shapes }, '*');
+                }
+                else if (type === 'setBlendShape') {
+                    if (payload) setBlendShape(payload.name, payload.value);
+                }
+                else if (type === 'setBlendShapes') {
+                    // Batch set multiple blend shapes at once
+                    if (payload && typeof payload === 'object') {
+                        Object.entries(payload).forEach(([name, value]) => {
+                            setBlendShape(name, value);
+                        });
                     }
                 }
             });

@@ -1,16 +1,84 @@
 import { state } from '../core/StateManager.js';
 import { logger } from '../core/Logger.js';
+import { toast } from '../utils/Toast.js';
 
 const SETTINGS_SCHEMA = {
     brain: {
         label: "BRAIN (LLM)",
         icon: "🧠",
         fields: [
-            { id: "system_prompt", name: "System Prompt Override", type: "textarea", desc: "Rewrite the AI's core instructions." },
-            { id: "context_limit", name: "Context Window", type: "slider", min: 2048, max: 32768, step: 1024, default: 4096, desc: "Max tokens for memory." },
-            { id: "temperature", name: "Temperature (Creativity)", type: "slider", min: 0.1, max: 2.0, step: 0.1, default: 0.7, desc: "Higher = More Creative, Lower = More Logical." },
-            { id: "repeat_penalty", name: "Repetition Penalty", type: "slider", min: 1.0, max: 2.0, step: 0.05, default: 1.1, desc: "Prevent looping phrases." },
-            { id: "thinking_visible", name: "Show Thinking <think>", type: "toggle", default: true, desc: "Show the AI's Chain-of-Thought." }
+            {
+                id: "active_llm",
+                name: "Active LLM",
+                type: "select",
+                options: ["Loading..."],
+                default: "",
+                desc: "Select the model loaded in LM Studio.",
+                tooltip: "💡 Shows models from LM Studio. The loaded model is marked (Active)."
+            },
+            {
+                id: "system_prompt",
+                name: "System Prompt Override",
+                type: "textarea",
+                desc: "Rewrite the AI's core instructions.",
+                tooltip: "⚠️ Advanced: Overrides character personality. Leave empty to use default persona.",
+                validate: (val) => val.length <= 5000 || "System prompt too long (max 5000 chars)"
+            },
+            {
+                id: "context_limit",
+                name: "Context Window",
+                type: "slider",
+                min: 2048,
+                max: 131072,
+                step: 1024,
+                default: 131072,
+                desc: "Max tokens for memory. Match your model's context length.",
+                tooltip: "💡 Set to your model's max context. Gemma3-12b supports 131072. Use Auto-Detect to query LM Studio.",
+                validate: (val) => val >= 2048 && val <= 131072 || "Must be between 2048 and 131072",
+                autoDetect: true
+            },
+            {
+                id: "history_limit",
+                name: "Chat History Limit",
+                type: "slider",
+                min: 0,
+                max: 500,
+                step: 10,
+                default: 0,
+                desc: "Max messages to include. 0 = unlimited.",
+                tooltip: "💡 0 = send all history (recommended for large context models). Set a limit if you hit token limits.",
+                validate: (val) => val >= 0 && val <= 500 || "Must be between 0 and 500"
+            },
+            {
+                id: "temperature",
+                name: "Temperature (Creativity)",
+                type: "slider",
+                min: 0.1,
+                max: 2.0,
+                step: 0.1,
+                default: 0.7,
+                desc: "Higher = More Creative, Lower = More Logical.",
+                tooltip: "💡 0.7 recommended for chat. Lower (0.3) for factual, higher (1.2) for creative writing."
+            },
+            {
+                id: "repeat_penalty",
+                name: "Repetition Penalty",
+                type: "slider",
+                min: 1.0,
+                max: 2.0,
+                step: 0.05,
+                default: 1.1,
+                desc: "Prevent looping phrases.",
+                tooltip: "💡 1.1 is usually perfect. Higher values may make responses feel forced."
+            },
+            {
+                id: "thinking_visible",
+                name: "Show Thinking <think>",
+                type: "toggle",
+                default: true,
+                desc: "Show the AI's Chain-of-Thought.",
+                tooltip: "🔍 Shows reasoning process in <think> tags. Useful for debugging."
+            }
         ]
     },
     voice: {
@@ -36,7 +104,10 @@ const SETTINGS_SCHEMA = {
             { id: "ui_font_size", name: "Base Font Size", type: "slider", min: 12, max: 20, step: 1, default: 14, desc: "Text size scaling (px)." },
             { id: "layout_show_left", name: "Show Left Panel (Character)", type: "toggle", default: true, desc: "Toggle Character List." },
             { id: "layout_show_right", name: "Show Right Panel (Memory)", type: "toggle", default: true, desc: "Toggle Context/Debug." },
-            { id: "ui_sounds", name: "Interface Sounds", type: "toggle", default: false, desc: "Clicks and beeps." }
+            { id: "chat_layout", name: "Chat Layout", type: "select", options: ["Auto (Recommended)", "Full Chat", "Toggle View"], default: "Auto (Recommended)", desc: "How chat and 3D viewport share the center panel." },
+            { id: "ui_sounds", name: "Interface Sounds", type: "toggle", default: false, desc: "Clicks and beeps." },
+            { id: "lighting_preset", name: "Scene Lighting", type: "select", options: ["studio", "warm_sunset", "cool_moonlight", "dramatic", "neon"], default: "studio", desc: "Lighting mood for the 3D viewport." },
+            { id: "_open_theme_editor", name: "Theme Editor", type: "button", action: "theme_editor", desc: "Fine-tune CSS variables, create and export custom themes." }
         ]
     },
     character: {
@@ -47,13 +118,22 @@ const SETTINGS_SCHEMA = {
             { id: "avatar_url", name: "2D Avatar / Icon", type: "gallery", filter: "avatar", desc: "Select a profile picture for chat/UI." },
             { id: "model_vrm", name: "VRM Model", type: "select", options: ["Loading..."], default: "", desc: "3D Model file." },
             { id: "live2d_model", name: "Live2D Model", type: "select", options: ["Loading..."], default: "", desc: "2D Model folder." },
-            { id: "bg_image", name: "Background Image", type: "gallery", filter: "background", desc: "Select a background for this character." }
+            { id: "bg_image", name: "Background Image", type: "gallery", filter: "background", desc: "Select a background for this character." },
+            { id: "background_mode", name: "Background Mode", type: "select", options: ["transparent", "image", "color", "video", "gradient"], default: "transparent", desc: "How the 3D viewport background is rendered." }
+        ]
+    },
+    templates: {
+        label: "TEMPLATES",
+        icon: "📋",
+        fields: [
+            { id: "_templates_ui", name: "Prompt Template Library", type: "custom", desc: "Manage reusable system prompts for characters." }
         ]
     },
     system: {
         label: "SYSTEM & DEV",
         icon: "⚙️",
         fields: [
+            { id: "auto_start_lmstudio", name: "Auto-Start LM Studio (Headless)", type: "toggle", default: true, desc: "Start LM Studio daemon automatically on server boot.", tooltip: "💡 Runs 'lms daemon up' + 'lms server start' if LM Studio is not reachable." },
             { id: "dev_mode", name: "Developer Mode", type: "toggle", default: false, desc: "Show Debug Log Overlay." },
             { id: "log_limit", name: "Log Buffer Size", type: "slider", min: 100, max: 1000, step: 100, default: 200, desc: "Lines to keep in memory." },
             { id: "save_logs_auto", name: "Auto-Save Logs", type: "toggle", default: false, desc: "Save logs on exit." },
@@ -69,42 +149,70 @@ export class SettingsModal {
         this.currentTab = 'brain';
         this.bindEvents();
         this.images = []; // Cache for gallery images
+        this.galleryPage = 0; // Current page for gallery pagination
+        this.galleryPageSize = 20; // Images per page
+
+        /** @type {string[]} Config snapshots for undo/redo (JSON strings) */
+        this.undoStack = [];
+        /** @type {string[]} Redo stack (cleared on new changes) */
+        this.redoStack = [];
+        /** @type {number} Max undo history depth */
+        this.maxUndoDepth = 20;
 
         // Global Access
         window.openSettings = (tab) => this.open(tab);
     }
-
-    open(tab) {
-        if (tab && SETTINGS_SCHEMA[tab]) {
-            this.currentTab = tab;
-        }
-        this.modal.style.display = 'flex';
-        this.renderTabs();
-        this.renderContent();
-    }
-
 
     injectHTML() {
         if (document.getElementById('settings-modal')) return;
         const html = `
             <div id="settings-modal" class="modal-overlay" style="display:none;">
                 <div class="glass-panel settings-box">
+                    <button id="btn-close-settings" class="settings-close-x" title="Close (Esc)">&times;</button>
                     <div class="settings-sidebar">
                         <div class="settings-header">CONFIG V3.0</div>
                         <div id="settings-tabs"></div>
-                        <div class="settings-footer">
-                            <button class="btn" id="btn-close-settings">CLOSE</button>
-                        </div>
                     </div>
                     <div class="settings-content">
                         <div id="settings-scroll-area"></div>
-                        <div class="settings-actions">
+                        <div class="settings-actions" style="display:flex; justify-content:space-between; align-items:center;">
+                            <div style="display:flex; gap:0.5rem;">
+                                <button class="btn btn-sm" id="btn-undo-settings" title="Undo (Ctrl+Z)" disabled style="opacity:0.4; padding:0.375rem 0.75rem; font-size:0.75rem;">UNDO</button>
+                                <button class="btn btn-sm" id="btn-redo-settings" title="Redo (Ctrl+Y)" disabled style="opacity:0.4; padding:0.375rem 0.75rem; font-size:0.75rem;">REDO</button>
+                            </div>
                             <button class="btn btn-primary" id="btn-save-settings">APPLY CHANGES</button>
                         </div>
                     </div>
                 </div>
             </div>
             <style>
+                .setting-label {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .setting-tooltip {
+                    cursor: help;
+                    font-size: 0.9rem;
+                    opacity: 0.7;
+                    transition: opacity 0.2s;
+                }
+                .setting-tooltip:hover {
+                    opacity: 1;
+                }
+                .setting-row.validation-error {
+                    border-left: 3px solid var(--neon-pink, #ff00ff);
+                    padding-left: 10px;
+                    background: rgba(255, 0, 255, 0.1);
+                }
+                .setting-row.validation-error::after {
+                    content: attr(data-error);
+                    display: block;
+                    color: var(--neon-pink, #ff00ff);
+                    font-size: 0.75rem;
+                    margin-top: 5px;
+                    font-family: var(--font-mono, monospace);
+                }
                 .gallery-grid {
                     display: grid;
                     grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
@@ -159,6 +267,8 @@ export class SettingsModal {
     bindEvents() {
         document.getElementById('btn-close-settings').onclick = () => this.close();
         document.getElementById('btn-save-settings').onclick = () => this.save();
+        document.getElementById('btn-undo-settings').onclick = () => this.undo();
+        document.getElementById('btn-redo-settings').onclick = () => this.redo();
 
         // Render Tabs
         const tabContainer = document.getElementById('settings-tabs');
@@ -172,8 +282,8 @@ export class SettingsModal {
             tabContainer.appendChild(btn);
         });
 
-        // Global trigger
-        window.openSettings = () => this.open();
+        // Global trigger (supports optional tab parameter)
+        window.openSettings = (tab) => this.open(tab);
     }
 
     async fetchImages() {
@@ -186,8 +296,85 @@ export class SettingsModal {
         }
     }
 
-    open() {
+    /**
+     * Fetch VRM model files from the backend and populate the schema dropdown.
+     * Updates SETTINGS_SCHEMA.character in place so renderField sees real options.
+     */
+    async fetchVrmModels() {
+        try {
+            const res = await fetch('/api/scan/vrm');
+            const data = await res.json();
+            const models = data.models || [];
+            const vrmField = SETTINGS_SCHEMA.character.fields.find(f => f.id === 'model_vrm');
+            if (vrmField) {
+                vrmField.options = ['(None)', ...models.map(m => m.url)];
+                // Store mapping for display labels
+                vrmField._labelMap = { '(None)': '(None)' };
+                models.forEach(m => { vrmField._labelMap[m.url] = m.name; });
+            }
+        } catch (e) {
+            console.error("Failed to fetch VRM models", e);
+        }
+    }
+
+    /**
+     * Fetch Live2D model files from the backend and populate the schema dropdown.
+     */
+    async fetchLive2dModels() {
+        try {
+            const res = await fetch('/api/scan/live2d');
+            const data = await res.json();
+            const models = data.models || [];
+            const l2dField = SETTINGS_SCHEMA.character.fields.find(f => f.id === 'live2d_model');
+            if (l2dField) {
+                l2dField.options = ['(None)', ...models.map(m => m.url)];
+                l2dField._labelMap = { '(None)': '(None)' };
+                models.forEach(m => { l2dField._labelMap[m.url] = m.name; });
+            }
+        } catch (e) {
+            console.error("Failed to fetch Live2D models", e);
+        }
+    }
+
+    /**
+     * Fetch loaded/available models from LM Studio for the Active LLM dropdown.
+     * Marks the currently loaded model with "(Active)" suffix.
+     */
+    async fetchLmStudioModels() {
+        try {
+            const res = await fetch('/api/lm-studio/models');
+            const data = await res.json();
+            if (!data.ok) return;
+
+            const models = data.models || [];
+            const activeId = data.active_model?.id || '';
+            const llmField = SETTINGS_SCHEMA.brain.fields.find(f => f.id === 'active_llm');
+            if (llmField) {
+                llmField.options = models.map(m => m.id);
+                llmField._labelMap = {};
+                models.forEach(m => {
+                    const state = m.state === 'loaded' ? ' (Active)' : '';
+                    llmField._labelMap[m.id] = m.id.split('/').pop() + state;
+                });
+            }
+
+            // Pre-fill with currently configured model
+            const cfgModel = this.tempConfig?.llm?.model || '';
+            if (cfgModel && models.some(m => m.id === cfgModel || m.id.includes(cfgModel) || cfgModel.includes(m.id))) {
+                const match = models.find(m => m.id === cfgModel || m.id.includes(cfgModel) || cfgModel.includes(m.id));
+                if (match) this.tempConfig.active_llm = match.id;
+            } else if (activeId) {
+                this.tempConfig.active_llm = activeId;
+            }
+        } catch (e) {
+            console.error("Failed to fetch LM Studio models", e);
+        }
+    }
+
+    open(tab) {
         this.modal.style.display = 'flex';
+        this.galleryPage = 0; // Reset pagination when opening modal
+
         // Safeguard against undefined state or config
         const currentState = state.state || {};
         this.tempConfig = JSON.parse(JSON.stringify(currentState.config || {}));
@@ -222,46 +409,170 @@ export class SettingsModal {
         }
 
         // Pre-fill active character specifics not in global config
-        const activeChar = currentState.characters.find(c => c.id == currentState.currentCharacterId);
+        const activeChar = currentState.characters?.find(c => c.id == currentState.currentCharacterId);
         if (activeChar) {
             // Match the option format "ID: Name"
             this.tempConfig.active_character_id = `${activeChar.id}: ${activeChar.name}`;
-            this.tempConfig.avatar_url = activeChar.avatar_url;
-            this.tempConfig.model_vrm = activeChar.avatar_url; // Wait, VRM is different. 
-            // VRM logic is complex because it might be in config OR character? 
-            // PRD says character specific. Server says "avatar_url" is the VRM path usually?
-            // Actually, looking at server.py: "avatar_url" is used for VRM path in older logic, 
-            // but we want to use it for 2D icon now?
-            // "model_type" distinguishes.
-            // Let's check server.py SCHEMA again.
-            // characters table: avatar_url (TEXT).
-            // upload_avatar => .vrm file.
-            // OLD LOGIC: avatar_url was the 3D model path.
-            // NEW LOGIC: We want avatar_url to be the ICON.
-            // AND we have model_vrm? SettingsSchema has "model_vrm".
-            // Where is "model_vrm" stored in DB?
-            // server.py list_characters -> "avatar_url" is row[3].
-            // If we repurpose "avatar_url" for 2D icon, I break the VRM loader if it relies on that column.
-            // Let's check how VRM is loaded.
-            // Dashboard.js / ViewerBridge.js probably uses state.characters[id].avatar_url.
-
-            // Checking ViewerBridge.js is safer before I commit this change.
-            // But for now, I will pre-fill it.
+            // 2D avatar icon (gallery-selected image)
+            this.tempConfig.avatar_url = activeChar.avatar_2d_url || activeChar.avatar_url || '';
+            // 3D VRM model URL (from dedicated DB column)
+            this.tempConfig.model_vrm = activeChar.vrm_model_url || '';
+            // Live2D model path
+            this.tempConfig.live2d_model = activeChar.live2d_model || '';
+            // Background image
+            this.tempConfig.bg_image = activeChar.bg_image || '';
         }
 
-        // Fetch external data when opening
-        this.fetchImages(); 
+        // Flatten nested config values for toggle fields
+        // auto_start_lmstudio lives in system.auto_start_lmstudio
+        if (this.tempConfig.system?.auto_start_lmstudio !== undefined) {
+            this.tempConfig.auto_start_lmstudio = this.tempConfig.system.auto_start_lmstudio;
+        }
 
-        this.switchTab('brain');
+        // Fetch external data in parallel when opening
+        Promise.all([
+            this.fetchImages(),
+            this.fetchVrmModels(),
+            this.fetchLive2dModels(),
+            this.fetchLmStudioModels()
+        ]).then(() => {
+            // Re-render current tab so dropdowns reflect fetched data
+            this.switchTab(this.currentTab);
+        });
+
+        // Use requested tab, or default to 'brain'
+        if (tab && SETTINGS_SCHEMA[tab]) {
+            this.currentTab = tab;
+        }
+        this.switchTab(this.currentTab || 'brain');
     }
 
     close() {
         this.modal.style.display = 'none';
         this.tempConfig = null;
+        this.galleryPage = 0;
+        this.undoStack = [];
+        this.redoStack = [];
+
+        // Layout is managed by CSS classes (.right-open, .left-collapsed)
+        // on .bento-grid — no need to set inline styles or CSS variables here.
+        // The grid's class state persists correctly across modal open/close.
+    }
+
+    /**
+     * Push current config state onto the undo stack.
+     * Called before each field change to enable reverting.
+     */
+    pushUndoState() {
+        if (!this.tempConfig) return;
+        const snapshot = JSON.stringify(this.tempConfig);
+
+        // Don't push if identical to last snapshot
+        if (this.undoStack.length > 0 && this.undoStack[this.undoStack.length - 1] === snapshot) {
+            return;
+        }
+
+        this.undoStack.push(snapshot);
+        this.redoStack = []; // New change clears redo history
+
+        // Limit stack depth
+        if (this.undoStack.length > this.maxUndoDepth) {
+            this.undoStack.shift();
+        }
+
+        this._updateUndoRedoButtons();
+    }
+
+    /**
+     * Undo the last settings change.
+     */
+    undo() {
+        if (this.undoStack.length === 0) return;
+
+        // Save current state to redo stack
+        this.redoStack.push(JSON.stringify(this.tempConfig));
+
+        // Restore previous state
+        const previous = this.undoStack.pop();
+        this.tempConfig = JSON.parse(previous);
+
+        // Re-render current tab to reflect changes
+        this.switchTab(this.currentTab);
+        this._updateUndoRedoButtons();
+        toast.info('Change undone', 1500);
+    }
+
+    /**
+     * Redo the last undone change.
+     */
+    redo() {
+        if (this.redoStack.length === 0) return;
+
+        // Save current state to undo stack
+        this.undoStack.push(JSON.stringify(this.tempConfig));
+
+        // Restore redo state
+        const next = this.redoStack.pop();
+        this.tempConfig = JSON.parse(next);
+
+        // Re-render current tab
+        this.switchTab(this.currentTab);
+        this._updateUndoRedoButtons();
+        toast.info('Change redone', 1500);
+    }
+
+    /**
+     * Update undo/redo button enabled state and opacity.
+     * @private
+     */
+    _updateUndoRedoButtons() {
+        const undoBtn = document.getElementById('btn-undo-settings');
+        const redoBtn = document.getElementById('btn-redo-settings');
+        if (undoBtn) {
+            undoBtn.disabled = this.undoStack.length === 0;
+            undoBtn.style.opacity = this.undoStack.length > 0 ? '1' : '0.4';
+        }
+        if (redoBtn) {
+            redoBtn.disabled = this.redoStack.length === 0;
+            redoBtn.style.opacity = this.redoStack.length > 0 ? '1' : '0.4';
+        }
+    }
+
+    /**
+     * Apply a chat layout mode by setting the appropriate CSS class
+     * on the .main-view element and persisting to localStorage.
+     *
+     * @param {string} layoutOption - One of "Auto (Recommended)", "Full Chat", "Toggle View"
+     */
+    _applyChatLayout(layoutOption) {
+        const mainView = document.querySelector('.main-view');
+        if (!mainView) return;
+
+        /** @type {Record<string, string>} Maps settings option to CSS class suffix */
+        const layoutMap = {
+            'Auto (Recommended)': 'layout-auto',
+            'Full Chat': 'layout-fullchat',
+            'Toggle View': 'layout-toggle'
+        };
+
+        const layoutClass = layoutMap[layoutOption] || 'layout-auto';
+
+        // Remove all layout-* classes, then add the selected one
+        mainView.classList.remove('layout-auto', 'layout-fullchat', 'layout-toggle', 'show-viewport');
+        mainView.classList.add(layoutClass);
+
+        // Auto mode starts with no-model (viewer.html will remove it on VRM load)
+        if (layoutClass === 'layout-auto' && !mainView.classList.contains('no-model')) {
+            mainView.classList.add('no-model');
+        }
+
+        // Persist for instant restore on page load
+        localStorage.setItem('waifu-chat-layout', layoutClass);
     }
 
     switchTab(tabId) {
         this.currentTab = tabId;
+        this.galleryPage = 0; // Reset pagination when switching tabs
 
         // Update Sidebar UI
         document.querySelectorAll('.tab-btn').forEach(b => {
@@ -281,9 +592,16 @@ export class SettingsModal {
         const row = document.createElement('div');
         row.className = 'setting-row';
 
-        // Label & Desc
+        // Label & Desc with Tooltip
         const info = document.createElement('div');
-        info.innerHTML = `<div class="setting-label">${def.name}</div><div class="setting-desc">${def.desc}</div>`;
+        const tooltipHtml = def.tooltip ? `<div class="setting-tooltip" title="${def.tooltip}">ℹ️</div>` : '';
+        info.innerHTML = `
+            <div class="setting-label">
+                ${def.name}
+                ${tooltipHtml}
+            </div>
+            <div class="setting-desc">${def.desc}</div>
+        `;
         row.appendChild(info);
 
         // Input Control
@@ -307,16 +625,72 @@ export class SettingsModal {
             disp.innerText = currentVal; // initial
 
             input.oninput = (e) => {
-                disp.innerText = e.target.value;
-                this.tempConfig[def.id] = Number(e.target.value);
+                this.pushUndoState();
+                const value = Number(e.target.value);
+                disp.innerText = value;
+                this.tempConfig[def.id] = value;
+
+                // Run validation if provided
+                if (def.validate) {
+                    const validationResult = def.validate(value);
+                    if (validationResult !== true) {
+                        row.classList.add('validation-error');
+                        row.dataset.error = validationResult;
+                    } else {
+                        row.classList.remove('validation-error');
+                        delete row.dataset.error;
+                    }
+                }
             };
 
             wrap.appendChild(input); wrap.appendChild(disp);
+
+            // Auto-Detect button for fields that support it (e.g. context_limit)
+            if (def.autoDetect) {
+                const detectBtn = document.createElement('button');
+                detectBtn.className = 'btn btn-sm';
+                detectBtn.innerText = 'AUTO';
+                detectBtn.title = 'Auto-detect from loaded LM Studio model';
+                detectBtn.style.cssText = 'padding:2px 8px; font-size:0.65rem; color:var(--neon-cyan); border:1px solid var(--neon-cyan); background:rgba(0,240,255,0.06); cursor:pointer; border-radius:4px; white-space:nowrap;';
+                detectBtn.onclick = async () => {
+                    detectBtn.innerText = '...';
+                    detectBtn.disabled = true;
+                    try {
+                        // Use cached model info from Dashboard, or fetch fresh
+                        let model = window.activeModelInfo;
+                        if (!model) {
+                            const data = await (await fetch('/api/lm-studio/models')).json();
+                            model = data.active_model;
+                        }
+                        if (model && model.max_context_length) {
+                            const ctx = model.max_context_length;
+                            input.value = ctx;
+                            input.max = Math.max(def.max, ctx); // Expand slider if needed
+                            disp.innerText = ctx;
+                            this.pushUndoState();
+                            this.tempConfig[def.id] = ctx;
+                            const shortName = model.id.includes('/') ? model.id.split('/').pop() : model.id;
+                            detectBtn.innerText = `✓ ${shortName}`;
+                            setTimeout(() => { detectBtn.innerText = 'AUTO'; detectBtn.disabled = false; }, 3000);
+                        } else {
+                            detectBtn.innerText = 'N/A';
+                            setTimeout(() => { detectBtn.innerText = 'AUTO'; detectBtn.disabled = false; }, 2000);
+                        }
+                    } catch (e) {
+                        detectBtn.innerText = 'ERR';
+                        console.error('[Settings] Auto-detect failed:', e);
+                        setTimeout(() => { detectBtn.innerText = 'AUTO'; detectBtn.disabled = false; }, 2000);
+                    }
+                };
+                wrap.appendChild(detectBtn);
+            }
+
             row.appendChild(wrap);
         } else if (def.type === 'toggle') {
             const toggle = document.createElement('div');
             toggle.className = `toggle-switch ${currentVal ? 'on' : 'off'}`;
             toggle.onclick = () => {
+                this.pushUndoState();
                 const newVal = !this.tempConfig[def.id];
                 this.tempConfig[def.id] = newVal;
                 toggle.className = `toggle-switch ${newVal ? 'on' : 'off'}`;
@@ -327,31 +701,134 @@ export class SettingsModal {
             input.className = 'input-field';
             input.rows = 4;
             input.value = currentVal || '';
-            input.onchange = (e) => this.tempConfig[def.id] = e.target.value;
+            input.onchange = (e) => {
+                this.pushUndoState();
+                const value = e.target.value;
+                this.tempConfig[def.id] = value;
+
+                // Run validation if provided
+                if (def.validate) {
+                    const validationResult = def.validate(value);
+                    if (validationResult !== true) {
+                        row.classList.add('validation-error');
+                        row.dataset.error = validationResult;
+                    } else {
+                        row.classList.remove('validation-error');
+                        delete row.dataset.error;
+                    }
+                }
+            };
             row.appendChild(input);
         } else if (def.type === 'select') {
+            const selectWrap = document.createElement('div');
+            selectWrap.style.display = 'flex';
+            selectWrap.style.alignItems = 'center';
+            selectWrap.style.gap = '8px';
+
             input = document.createElement('select');
             input.className = 'input-field';
             def.options.forEach(opt => {
                 const o = document.createElement('option');
-                o.value = opt; o.innerText = opt;
+                o.value = opt;
+                // Use friendly label from _labelMap if available
+                o.innerText = (def._labelMap && def._labelMap[opt]) || opt;
                 if (opt === currentVal) o.selected = true;
                 input.appendChild(o);
             });
-            input.onchange = (e) => this.tempConfig[def.id] = e.target.value;
-            row.appendChild(input);
-        } else if (def.type === 'button') {
-            const btn = document.createElement('button');
-            btn.className = 'btn btn-danger';
-            btn.innerText = "EXECUTE";
-            btn.onclick = () => {
-                if (confirm("Are you sure?")) {
-                    console.log("Resetting config...");
-                    // TODO: call reset API
+            input.onchange = (e) => {
+                this.pushUndoState();
+                this.tempConfig[def.id] = e.target.value;
+
+                // Live-apply lighting preset changes
+                if (def.id === 'lighting_preset' && window.app?.viewer) {
+                    window.app.viewer.setLightingPreset(e.target.value);
                 }
             };
+            selectWrap.appendChild(input);
+
+            // Upload button for VRM fields
+            if (def.id === 'model_vrm') {
+                const uploadBtn = document.createElement('button');
+                uploadBtn.className = 'btn btn-sm';
+                uploadBtn.innerText = 'UPLOAD';
+                uploadBtn.title = 'Upload a .vrm file';
+                uploadBtn.style.cssText = 'padding:4px 10px; font-size:0.68rem; color:var(--neon-cyan); border:1px solid var(--neon-cyan); background:rgba(0,240,255,0.06); cursor:pointer; border-radius:4px; white-space:nowrap;';
+                uploadBtn.onclick = () => {
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = '.vrm';
+                    fileInput.onchange = async (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        uploadBtn.innerText = '...';
+                        uploadBtn.disabled = true;
+                        try {
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            const res = await fetch('/api/upload/avatar', { method: 'POST', body: formData });
+                            const data = await res.json();
+                            if (data.ok) {
+                                toast.success(`Uploaded ${file.name}`);
+                                // Refresh VRM list and re-render
+                                await this.fetchVrmModels();
+                                this.tempConfig.model_vrm = data.url;
+                                this.switchTab(this.currentTab);
+                            } else {
+                                toast.error(data.detail || 'Upload failed');
+                            }
+                        } catch (err) {
+                            toast.error(`Upload failed: ${err.message}`);
+                        } finally {
+                            uploadBtn.innerText = 'UPLOAD';
+                            uploadBtn.disabled = false;
+                        }
+                    };
+                    fileInput.click();
+                };
+                selectWrap.appendChild(uploadBtn);
+            }
+
+            row.appendChild(selectWrap);
+        } else if (def.type === 'button') {
+            const btn = document.createElement('button');
+
+            if (def.action === 'theme_editor') {
+                btn.className = 'btn-config';
+                btn.style.cssText = 'padding:6px 14px; color:var(--neon-cyan); border-color:rgba(0,240,255,0.2);';
+                btn.innerText = "OPEN THEME EDITOR";
+                btn.onclick = () => {
+                    if (window.app?.themeEditor) window.app.themeEditor.open();
+                };
+            } else {
+                // Default: Factory Reset
+                btn.className = 'btn btn-danger';
+                btn.innerText = "EXECUTE";
+                btn.onclick = async () => {
+                    if (confirm("Factory Reset will restore all settings to defaults. This cannot be undone.\n\nContinue?")) {
+                        btn.innerText = "RESETTING...";
+                        btn.disabled = true;
+                        try {
+                            const response = await fetch('/api/config/reset', { method: 'POST' });
+                            const data = await response.json();
+                            if (data.ok) {
+                                toast.success("Settings reset! Reloading...", 2000);
+                                setTimeout(() => window.location.reload(), 2000);
+                            } else {
+                                throw new Error("Reset failed");
+                            }
+                        } catch (e) {
+                            toast.error(`Reset failed: ${e.message}`, 5000);
+                            btn.innerText = "EXECUTE";
+                            btn.disabled = false;
+                        }
+                    }
+                };
+            }
             row.appendChild(btn);
         } else if (def.type === 'gallery') {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'gallery-wrapper';
+
             const grid = document.createElement('div');
             grid.className = 'gallery-grid';
 
@@ -361,14 +838,54 @@ export class SettingsModal {
                 displayImages = this.images.filter(img => img.type === def.filter);
             }
 
-            // Render images
-            if (displayImages.length === 0) {
+            // Calculate pagination
+            const totalPages = Math.ceil(displayImages.length / this.galleryPageSize);
+            const startIdx = this.galleryPage * this.galleryPageSize;
+            const endIdx = startIdx + this.galleryPageSize;
+            const pageImages = displayImages.slice(startIdx, endIdx);
+
+            // Render images with upload tile and delete buttons
+            if (displayImages.length === 0 && !def.filter) {
                 grid.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">No images found.</div>';
             } else {
-                displayImages.forEach(img => {
+                // ── Upload "+" tile (always first) ──
+                const uploadTile = document.createElement('div');
+                uploadTile.className = 'gallery-item';
+                uploadTile.title = 'Upload new image';
+                uploadTile.style.cssText = 'display:flex; align-items:center; justify-content:center; border:2px dashed var(--neon-cyan); background:rgba(0,240,255,0.03); cursor:pointer;';
+                uploadTile.innerHTML = `<span style="font-size:2rem; color:var(--neon-cyan);">+</span>`;
+                uploadTile.onclick = () => {
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = '.png,.jpg,.jpeg,.webp,.gif';
+                    fileInput.onchange = async (ev) => {
+                        const file = ev.target.files[0];
+                        if (!file) return;
+                        const category = def.filter || '';
+                        try {
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            const res = await fetch(`/api/upload/image?category=${category}`, { method: 'POST', body: formData });
+                            const data = await res.json();
+                            if (data.ok) {
+                                toast.success(`Uploaded ${file.name}`);
+                                await this.fetchImages();
+                                this.tempConfig[def.id] = data.url;
+                                this.switchTab(this.currentTab);
+                            } else {
+                                toast.error(data.detail || 'Upload failed');
+                            }
+                        } catch (err) {
+                            toast.error(`Upload failed: ${err.message}`);
+                        }
+                    };
+                    fileInput.click();
+                };
+                grid.appendChild(uploadTile);
+
+                pageImages.forEach(img => {
                     const item = document.createElement('div');
                     item.className = 'gallery-item';
-                    // Check if selected (substring match for paths vs clean names)
                     if (currentVal && (currentVal === img.url || currentVal.includes(img.file))) {
                         item.classList.add('selected');
                     }
@@ -378,32 +895,340 @@ export class SettingsModal {
                         <div class="gallery-item-label">${img.name}</div>
                     `;
 
+                    // Delete button (only for user-uploaded images, not presets)
+                    if (img.source === 'uploaded') {
+                        const delBtn = document.createElement('button');
+                        delBtn.className = 'gallery-delete-btn';
+                        delBtn.innerHTML = '&times;';
+                        delBtn.title = 'Delete image';
+                        delBtn.style.cssText = 'position:absolute; top:2px; right:2px; width:20px; height:20px; border-radius:50%; border:none; background:rgba(255,0,60,0.8); color:white; font-size:14px; line-height:20px; text-align:center; cursor:pointer; display:none; padding:0; z-index:2;';
+                        delBtn.onclick = async (e) => {
+                            e.stopPropagation();
+                            if (!confirm(`Delete "${img.name}"? This permanently removes the file.`)) return;
+                            try {
+                                const res = await fetch(`/api/images/${img.file}`, { method: 'DELETE' });
+                                const data = await res.json();
+                                if (data.ok) {
+                                    toast.success(`Deleted ${img.name}`);
+                                    await this.fetchImages();
+                                    // Clear selection if we deleted the selected image
+                                    if (this.tempConfig[def.id] === img.url) {
+                                        this.tempConfig[def.id] = '';
+                                    }
+                                    this.switchTab(this.currentTab);
+                                } else {
+                                    toast.error('Delete failed');
+                                }
+                            } catch (err) {
+                                toast.error(`Delete failed: ${err.message}`);
+                            }
+                        };
+                        item.appendChild(delBtn);
+                        // Show on hover
+                        item.onmouseenter = () => { delBtn.style.display = 'block'; };
+                        item.onmouseleave = () => { delBtn.style.display = 'none'; };
+                    }
+
                     item.onclick = () => {
-                        // Deselect others
+                        this.pushUndoState();
                         grid.querySelectorAll('.gallery-item').forEach(el => el.classList.remove('selected'));
                         item.classList.add('selected');
-                        // Update config (store the full URL)
                         this.tempConfig[def.id] = img.url;
                     };
 
                     grid.appendChild(item);
                 });
+
+                // Add pagination controls if needed
+                if (totalPages > 1) {
+                    const controls = document.createElement('div');
+                    controls.className = 'gallery-pagination';
+                    controls.style.cssText = `
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-top: 10px;
+                        font-size: 0.85rem;
+                        color: var(--text-muted);
+                    `;
+
+                    const prevBtn = document.createElement('button');
+                    prevBtn.className = 'btn btn-sm';
+                    prevBtn.innerText = '← Prev';
+                    prevBtn.disabled = this.galleryPage === 0;
+                    prevBtn.onclick = () => {
+                        if (this.galleryPage > 0) {
+                            this.galleryPage--;
+                            this.switchTab(this.currentTab); // Re-render
+                        }
+                    };
+
+                    const pageInfo = document.createElement('span');
+                    pageInfo.innerText = `Page ${this.galleryPage + 1} of ${totalPages} (${displayImages.length} total)`;
+
+                    const nextBtn = document.createElement('button');
+                    nextBtn.className = 'btn btn-sm';
+                    nextBtn.innerText = 'Next →';
+                    nextBtn.disabled = this.galleryPage >= totalPages - 1;
+                    nextBtn.onclick = () => {
+                        if (this.galleryPage < totalPages - 1) {
+                            this.galleryPage++;
+                            this.switchTab(this.currentTab); // Re-render
+                        }
+                    };
+
+                    controls.appendChild(prevBtn);
+                    controls.appendChild(pageInfo);
+                    controls.appendChild(nextBtn);
+                    wrapper.appendChild(grid);
+                    wrapper.appendChild(controls);
+                } else {
+                    wrapper.appendChild(grid);
+                }
             }
-            row.appendChild(grid);
+
+            row.appendChild(wrapper);
+        } else if (def.type === 'custom' && def.id === '_templates_ui') {
+            // Render the Prompt Template Library UI inline
+            const wrapper = document.createElement('div');
+            wrapper.id = 'templates-ui-container';
+            wrapper.innerHTML = '<div style="padding:12px; color:var(--text-muted); font-size:0.8rem;">Loading templates...</div>';
+            row.appendChild(wrapper);
+
+            // Load templates after DOM insertion
+            requestAnimationFrame(() => this._loadTemplatesUI(wrapper));
         }
 
         container.appendChild(row);
     }
 
+    /**
+     * Render the Prompt Template Library inside the Settings modal.
+     * Shows a list of templates with create, edit, delete, apply, import/export.
+     * @private
+     * @param {HTMLElement} wrapper - Container element
+     */
+    async _loadTemplatesUI(wrapper) {
+        try {
+            const res = await fetch('/api/templates');
+            const data = await res.json();
+            const templates = data.templates || [];
+
+            wrapper.innerHTML = `
+                <div style="display:flex; gap:8px; margin-bottom:12px;">
+                    <button id="tpl-create-btn" class="btn" style="padding:6px 14px; background:rgba(0,240,255,0.08); border:1px solid var(--neon-cyan); color:var(--neon-cyan); border-radius:6px; cursor:pointer; font-size:0.75rem;">+ NEW TEMPLATE</button>
+                    <button id="tpl-import-btn" class="btn" style="padding:6px 14px; background:transparent; border:1px solid var(--glass-border); color:var(--text-muted); border-radius:6px; cursor:pointer; font-size:0.75rem;">IMPORT</button>
+                    <button id="tpl-export-btn" class="btn" style="padding:6px 14px; background:transparent; border:1px solid var(--glass-border); color:var(--text-muted); border-radius:6px; cursor:pointer; font-size:0.75rem;">EXPORT ALL</button>
+                </div>
+                <div id="tpl-list" style="max-height:300px; overflow-y:auto;"></div>
+            `;
+
+            const list = wrapper.querySelector('#tpl-list');
+            if (templates.length === 0) {
+                list.innerHTML = '<div style="padding:12px; color:var(--text-muted); font-size:0.8rem;">No templates yet. Create one to get started.</div>';
+            } else {
+                list.innerHTML = templates.map(tpl => `
+                    <div class="tpl-row" style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.04); display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+                        <div style="flex:1; min-width:0;">
+                            <div style="color:var(--neon-cyan); font-family:var(--font-display); font-size:0.85rem;">${this._escapeHtml(tpl.name)}</div>
+                            <div style="color:var(--text-muted); font-size:0.7rem; margin-top:2px;">${this._escapeHtml(tpl.category || 'custom')} — ${this._escapeHtml((tpl.system_prompt || '').slice(0, 80))}...</div>
+                        </div>
+                        <div style="display:flex; gap:4px; flex-shrink:0;">
+                            <button class="tpl-apply-btn btn" data-tpl-id="${tpl.id}" style="padding:4px 10px; font-size:0.65rem; color:var(--neon-green); border:1px solid rgba(57,255,20,0.2); background:transparent; border-radius:4px; cursor:pointer;">APPLY</button>
+                            <button class="tpl-delete-btn btn" data-tpl-id="${tpl.id}" style="padding:4px 10px; font-size:0.65rem; color:var(--neon-magenta); border:1px solid rgba(255,0,60,0.2); background:transparent; border-radius:4px; cursor:pointer;">DEL</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            // Bind create button
+            wrapper.querySelector('#tpl-create-btn').onclick = () => this._createTemplate(wrapper);
+
+            // Bind export button
+            wrapper.querySelector('#tpl-export-btn').onclick = async () => {
+                try {
+                    const expRes = await fetch('/api/templates/export');
+                    const expData = await expRes.json();
+                    const blob = new Blob([JSON.stringify(expData, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'prompt_templates.json';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                    toast.success('Templates exported!', 2000);
+                } catch (err) {
+                    toast.error(`Export failed: ${err.message}`, 3000);
+                }
+            };
+
+            // Bind import button
+            wrapper.querySelector('#tpl-import-btn').onclick = () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = async () => {
+                    const file = input.files[0];
+                    if (!file) return;
+                    try {
+                        const text = await file.text();
+                        const importData = JSON.parse(text);
+                        const impRes = await fetch('/api/templates/import', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(importData)
+                        });
+                        const impResult = await impRes.json();
+                        toast.success(`Imported ${impResult.imported} templates (${impResult.skipped} skipped)`, 3000);
+                        this._loadTemplatesUI(wrapper);
+                    } catch (err) {
+                        toast.error(`Import failed: ${err.message}`, 3000);
+                    }
+                };
+                input.click();
+            };
+
+            // Bind apply buttons
+            wrapper.querySelectorAll('.tpl-apply-btn').forEach(btn => {
+                btn.onclick = async () => {
+                    const tplId = btn.dataset.tplId;
+                    const tpl = templates.find(t => t.id == tplId);
+                    if (!tpl) return;
+
+                    // Apply to current character's system_prompt
+                    const charId = this.tempConfig.currentCharacterId || state.state.currentCharacterId;
+                    if (!charId) {
+                        toast.warning('No character selected', 2000);
+                        return;
+                    }
+
+                    try {
+                        await fetch(`/api/characters/${charId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ system_prompt: tpl.system_prompt })
+                        });
+                        toast.success(`Template "${tpl.name}" applied to character!`, 2000);
+                        await state.loadCharacters();
+                    } catch (err) {
+                        toast.error(`Apply failed: ${err.message}`, 3000);
+                    }
+                };
+            });
+
+            // Bind delete buttons
+            wrapper.querySelectorAll('.tpl-delete-btn').forEach(btn => {
+                btn.onclick = async () => {
+                    const tplId = btn.dataset.tplId;
+                    if (!confirm('Delete this template?')) return;
+                    try {
+                        await fetch(`/api/templates/${tplId}`, { method: 'DELETE' });
+                        toast.success('Template deleted', 2000);
+                        this._loadTemplatesUI(wrapper);
+                    } catch (err) {
+                        toast.error(`Delete failed: ${err.message}`, 3000);
+                    }
+                };
+            });
+        } catch (err) {
+            wrapper.innerHTML = `<div style="padding:12px; color:var(--neon-magenta);">Failed to load templates: ${err.message}</div>`;
+        }
+    }
+
+    /**
+     * Show inline form to create a new prompt template.
+     * @private
+     * @param {HTMLElement} wrapper - Parent container for the templates UI
+     */
+    _createTemplate(wrapper) {
+        const form = document.createElement('div');
+        form.style.cssText = 'padding:12px; border:1px solid var(--neon-cyan); border-radius:8px; margin-bottom:12px; background:rgba(0,240,255,0.03);';
+        form.innerHTML = `
+            <div style="margin-bottom:8px;">
+                <input id="new-tpl-name" type="text" placeholder="Template name" class="input-field" style="width:100%; padding:8px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:6px; font-size:0.8rem;">
+            </div>
+            <div style="margin-bottom:8px;">
+                <select id="new-tpl-category" class="input-field" style="width:100%; padding:8px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:6px; font-size:0.8rem;">
+                    <option value="custom">Custom</option>
+                    <option value="roleplay">Roleplay</option>
+                    <option value="assistant">Assistant</option>
+                    <option value="creative">Creative</option>
+                </select>
+            </div>
+            <div style="margin-bottom:8px;">
+                <textarea id="new-tpl-prompt" placeholder="System prompt..." rows="4" class="input-field" style="width:100%; padding:8px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:6px; font-size:0.8rem; resize:vertical;"></textarea>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <button id="new-tpl-cancel" class="btn" style="padding:6px 12px; font-size:0.75rem; background:transparent; border:1px solid var(--glass-border); color:var(--text-muted); border-radius:6px; cursor:pointer;">CANCEL</button>
+                <button id="new-tpl-save" class="btn" style="padding:6px 12px; font-size:0.75rem; background:rgba(0,240,255,0.1); border:1px solid var(--neon-cyan); color:var(--neon-cyan); border-radius:6px; cursor:pointer;">SAVE</button>
+            </div>
+        `;
+
+        wrapper.prepend(form);
+
+        form.querySelector('#new-tpl-cancel').onclick = () => form.remove();
+        form.querySelector('#new-tpl-save').onclick = async () => {
+            const name = form.querySelector('#new-tpl-name').value.trim();
+            const category = form.querySelector('#new-tpl-category').value;
+            const prompt = form.querySelector('#new-tpl-prompt').value.trim();
+
+            if (!name || !prompt) {
+                toast.error('Name and prompt are required', 2000);
+                return;
+            }
+
+            try {
+                await fetch('/api/templates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, category, system_prompt: prompt })
+                });
+                toast.success(`Template "${name}" created!`, 2000);
+                form.remove();
+                this._loadTemplatesUI(wrapper);
+            } catch (err) {
+                toast.error(`Create failed: ${err.message}`, 3000);
+            }
+        };
+    }
+
+    /**
+     * Escape HTML to prevent XSS in template rendering.
+     * @private
+     * @param {string} str
+     * @returns {string}
+     */
+    _escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
     async save() {
         const btn = document.getElementById('btn-save-settings');
+
+        // Check for validation errors
+        const errors = document.querySelectorAll('.setting-row.validation-error');
+        if (errors.length > 0) {
+            const errorMessages = Array.from(errors)
+                .map(el => el.dataset.error)
+                .filter(msg => msg)
+                .join('\n');
+            toast.error(`Cannot save: Please fix validation errors\n${errorMessages}`, 6000);
+            return;
+        }
+
         btn.innerText = "SAVING...";
+        btn.disabled = true;
 
         // Handle Dev Mode Toggle Side Effect
         logger.toggle(this.tempConfig.dev_mode);
 
         try {
-            // Apply Theme immediately
+            // Apply Theme immediately and persist to localStorage
             const themeMap = {
                 "Synthwave UI (Dark)": "dark",
                 "Zen (Light)": "light",
@@ -414,7 +1239,9 @@ export class SettingsModal {
                 "Hacker": "hacker",
                 "Blurple": "blurple"
             };
-            document.body.dataset.theme = themeMap[this.tempConfig.theme] || "dark";
+            const themeName = themeMap[this.tempConfig.theme] || "dark";
+            document.body.dataset.theme = themeName;
+            localStorage.setItem('waifu-theme', themeName);
 
             // Apply Granular Visuals
             const r = document.documentElement;
@@ -422,20 +1249,17 @@ export class SettingsModal {
             if (this.tempConfig.ui_blur !== undefined) r.style.setProperty('--glass-blur', `${this.tempConfig.ui_blur}px`);
             if (this.tempConfig.ui_font_size !== undefined) document.body.style.fontSize = `${this.tempConfig.ui_font_size}px`;
 
-            // Apply Layout (MVP)
-            const showLeft = this.tempConfig.layout_show_left !== false; // default true
-            const showRight = this.tempConfig.layout_show_right !== false; // default true
+            // Apply Layout via CSS classes (matches bento grid system)
+            const grid = document.querySelector('.bento-grid');
+            if (grid) {
+                const showLeft = this.tempConfig.layout_show_left !== false;
+                const showRight = this.tempConfig.layout_show_right !== false;
+                grid.classList.toggle('left-collapsed', !showLeft);
+                grid.classList.toggle('right-open', showRight);
+            }
 
-            // Toggle Display
-            const pLeft = document.getElementById('panel-left');
-            const pRight = document.getElementById('panel-right');
-            if (pLeft) pLeft.style.display = showLeft ? 'flex' : 'none';
-            if (pRight) pRight.style.display = showRight ? 'flex' : 'none';
-
-            // Update Grid Cols
-            const colLeft = showLeft ? '280px' : '0px';
-            const colRight = showRight ? '320px' : '0px';
-            r.style.setProperty('--layout-cols', `${colLeft} 1fr ${colRight}`);
+            // Apply Chat Layout Mode
+            this._applyChatLayout(this.tempConfig.chat_layout);
 
             // === SAVE ACTIVE CHARACTER SPECIFICS ===
             let activeCharId = this.tempConfig.active_character_id || state.state.currentCharacterId;
@@ -445,24 +1269,54 @@ export class SettingsModal {
                 activeCharId = activeCharId.split(':')[0];
             }
             if (activeCharId) {
-                // Determine if we have character-specific changes
-                // Note: avatar_url (we decided this is the ICON now)
+                // Map UI field names → DB column names for character-specific settings
                 const charUpdates = {};
-                if (this.tempConfig.avatar_url) charUpdates.avatar_url = this.tempConfig.avatar_url;
+                if (this.tempConfig.avatar_url) charUpdates.avatar_2d_url = this.tempConfig.avatar_url;
+                const vrm = this.tempConfig.model_vrm;
+                if (vrm && vrm !== '(None)') {
+                    charUpdates.vrm_model_url = vrm;
+                } else if (vrm === '(None)') {
+                    charUpdates.vrm_model_url = '';
+                }
+                const l2d = this.tempConfig.live2d_model;
+                if (l2d && l2d !== '(None)') {
+                    charUpdates.live2d_model = l2d;
+                } else if (l2d === '(None)') {
+                    charUpdates.live2d_model = '';
+                }
 
                 if (Object.keys(charUpdates).length > 0) {
                     await state.saveCharacter(activeCharId, charUpdates);
                 }
             }
 
+            // Map flat UI fields back to nested config structure before saving
+            // active_llm → llm.model
+            if (this.tempConfig.active_llm) {
+                if (!this.tempConfig.llm) this.tempConfig.llm = {};
+                this.tempConfig.llm.model = this.tempConfig.active_llm;
+                delete this.tempConfig.active_llm;
+            }
+            // auto_start_lmstudio → system.auto_start_lmstudio
+            if (this.tempConfig.auto_start_lmstudio !== undefined) {
+                if (!this.tempConfig.system) this.tempConfig.system = {};
+                this.tempConfig.system.auto_start_lmstudio = this.tempConfig.auto_start_lmstudio;
+                delete this.tempConfig.auto_start_lmstudio;
+            }
+
             await state.saveConfig(this.tempConfig);
-            btn.innerText = "SAVED";
+            btn.innerText = "✅ SAVED";
+            toast.success("Settings saved successfully!");
             setTimeout(() => this.close(), 500);
         } catch (e) {
-            btn.innerText = "ERROR";
+            btn.innerText = "❌ ERROR";
             logger.error("Settings", "Failed to save: " + e.message);
+            toast.error(`Failed to save settings: ${e.message}`, 6000);
         } finally {
-            setTimeout(() => btn.innerText = "APPLY CHANGES", 2000);
+            setTimeout(() => {
+                btn.innerText = "APPLY CHANGES";
+                btn.disabled = false;
+            }, 2000);
         }
     }
 }

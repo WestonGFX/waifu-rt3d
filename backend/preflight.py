@@ -4,11 +4,13 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → v5)
+- Database schema migrations (v3 → v4 → v5 → v6 → v7)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
     - v4 → v5: Adds archived column to sessions table
+    - v5 → v6: Separates 2D/3D avatar fields
+    - v6 → v7: Phase 3 data foundation (branching, greetings, templates, docs, relationships)
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -220,7 +222,7 @@ def migrate_to_v4(con: sqlite3.Connection) -> bool:
         return False
 
     logger.info("Applying schema v4 migration...")
-    schema_v4 = ROOT / 'backend' / 'db' / 'schema_v4.sql'
+    schema_v4 = ROOT / 'backend' / 'db' / 'legacy' / 'schema_v4.sql'
 
     if not schema_v4.exists():
         raise FileNotFoundError(f"Migration file not found: {schema_v4}")
@@ -275,7 +277,7 @@ def migrate_to_v5(con: sqlite3.Connection) -> bool:
         return False
 
     logger.info("Applying schema v5 migration...")
-    schema_v5 = ROOT / 'backend' / 'db' / 'schema_v5.sql'
+    schema_v5 = ROOT / 'backend' / 'db' / 'legacy' / 'schema_v5.sql'
 
     if not schema_v5.exists():
         raise FileNotFoundError(f"Migration file not found: {schema_v5}")
@@ -293,14 +295,130 @@ def migrate_to_v5(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v6(con: sqlite3.Connection) -> bool:
+    """Upgrade database from v5 to v6 (separates 2D/3D avatar fields).
+
+    Changes in v6:
+        - Adds avatar_2d_url TEXT column to characters table
+        - Adds vrm_model_url TEXT column to characters table
+        - Migrates existing avatar_url data to appropriate new field
+        - Updates schema_version to 6
+
+    Args:
+        con: Active SQLite database connection
+
+    Returns:
+        bool: True if migration was applied, False if already at v6
+
+    Raises:
+        FileNotFoundError: If schema_v6.sql file is missing
+        sqlite3.Error: If migration SQL execution fails
+
+    Example:
+        >>> con = sqlite3.connect('app.db')
+        >>> if migrate_to_v6(con):
+        ...     print("Migrated to v6")
+        ... else:
+        ...     print("Already at v6")
+    """
+    cur = con.cursor()
+
+    # Check if new columns already exist
+    cur.execute("PRAGMA table_info(characters)")
+    columns = [row[1] for row in cur.fetchall()]
+
+    if 'avatar_2d_url' in columns and 'vrm_model_url' in columns:
+        logger.info("Schema v6 logic: avatar_2d_url and vrm_model_url columns exist. Ensuring version is 6.")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (6)")
+        con.commit()
+        return False
+
+    logger.info("Applying schema v6 migration...")
+    schema_v6 = ROOT / 'backend' / 'db' / 'schema_v6.sql'
+
+    if not schema_v6.exists():
+        raise FileNotFoundError(f"Migration file not found: {schema_v6}")
+
+    # Apply migration
+    try:
+        sql = schema_v6.read_text(encoding='utf-8')
+        con.executescript(sql)
+        con.commit()
+        logger.info("✅ Schema v6 migration complete (separated 2D/3D avatar fields)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v6 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v7(con: sqlite3.Connection) -> bool:
+    """Upgrade database from v6 to v7 (Phase 3 data foundation).
+
+    Changes in v7:
+        - Characters: greeting_text, greeting_animation, background_url, background_mode, voice_sample_path
+        - Messages: parent_id, is_active, emotion, char_id (branching + emotion tracking)
+        - Sessions: summary column
+        - New tables: prompt_templates, character_docs, character_relationships
+        - Seeds relationship rows for existing characters
+
+    Args:
+        con: Active SQLite database connection
+
+    Returns:
+        bool: True if migration was applied, False if already at v7
+
+    Raises:
+        FileNotFoundError: If schema_v7.sql file is missing
+        sqlite3.Error: If migration SQL execution fails
+
+    Example:
+        >>> con = sqlite3.connect('app.db')
+        >>> if migrate_to_v7(con):
+        ...     print("Migrated to v7")
+        ... else:
+        ...     print("Already at v7")
+    """
+    cur = con.cursor()
+
+    # Check if v7 columns already exist (use greeting_text as sentinel)
+    cur.execute("PRAGMA table_info(characters)")
+    columns = [row[1] for row in cur.fetchall()]
+
+    if 'greeting_text' in columns:
+        logger.info("Schema v7 logic: greeting_text column exists. Ensuring version is 7.")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (7)")
+        con.commit()
+        return False
+
+    logger.info("Applying schema v7 migration...")
+    schema_v7 = ROOT / 'backend' / 'db' / 'schema_v7.sql'
+
+    if not schema_v7.exists():
+        raise FileNotFoundError(f"Migration file not found: {schema_v7}")
+
+    try:
+        sql = schema_v7.read_text(encoding='utf-8')
+        con.executescript(sql)
+        con.commit()
+        logger.info("✅ Schema v7 migration complete (Phase 3 data foundation)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v7 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
     Migration Paths:
-        - v0 (empty) → v4 → v5
-        - v3 → v4 → v5
-        - v4 → v5
-        - v5 → no-op (already current)
+        - v0 (empty) → v4 → v5 → v6 → v7
+        - v3 → v4 → v5 → v6 → v7
+        - v4 → v5 → v6 → v7
+        - v5 → v6 → v7
+        - v6 → v7
+        - v7 → no-op (already current)
 
     The function is idempotent - safe to run multiple times.
     Will log all migration steps and verify final state.
@@ -313,12 +431,10 @@ def ensure_db():
     Example:
         >>> ensure_db()
         # Automatically detects current version and applies necessary migrations
-        INFO:__main__:Current schema version: v3
-        INFO:__main__:Upgrading from v3 to v4...
-        INFO:__main__:✅ Schema v4 migration complete
-        INFO:__main__:Upgrading from v4 to v5...
-        INFO:__main__:✅ Schema v5 migration complete
-        INFO:__main__:✅ Database ready (schema v5)
+        INFO:__main__:Current schema version: v6
+        INFO:__main__:Upgrading from v6 to v7...
+        INFO:__main__:✅ Schema v7 migration complete
+        INFO:__main__:✅ Database ready (schema v7)
     """
     logger.info("Initializing database...")
     migrate_legacy_db_if_needed()
@@ -334,7 +450,6 @@ def ensure_db():
             migrate_to_v4(con)
             version = 4
 
-        # Upgrade from v3 to v4
         # Upgrade from v3 to v4 (Adds characters table)
         if version < 4:
             logger.info("Upgrading database schema from v3 to v4...")
@@ -342,23 +457,38 @@ def ensure_db():
             logger.info("  - Adding default character 'Rin'")
             if migrate_to_v4(con):
                 version = 4
-        
-        # We are intentionally STOPPING at v4.
-        # v5 (Archives) has been deprecated/reverted by user request.
-        
-        # Verify final state is v4
+
+        # Upgrade from v4 to v5 (Adds TTS pitch/rate controls)
+        if version < 5:
+            logger.info("Upgrading database schema from v4 to v5...")
+            logger.info("  - Adding tts_pitch and tts_rate to characters")
+            if migrate_to_v5(con):
+                version = 5
+
+        # Upgrade from v5 to v6 (Separates 2D/3D avatar fields)
+        if version < 6:
+            logger.info("Upgrading database schema from v5 to v6...")
+            logger.info("  - Separating avatar_2d_url and vrm_model_url fields")
+            if migrate_to_v6(con):
+                version = 6
+
+        # Upgrade from v6 to v7 (Phase 3 data foundation)
+        if version < 7:
+            logger.info("Upgrading database schema from v6 to v7...")
+            logger.info("  - Adding message branching (parent_id, is_active)")
+            logger.info("  - Adding emotion tracking, character greetings")
+            logger.info("  - Creating prompt_templates, character_docs, character_relationships tables")
+            if migrate_to_v7(con):
+                version = 7
+
+        # Verify final state
         final_version = get_schema_version(con)
-        
-        # If the database was previously on v5, we might need to manual intervention 
-        # or just accept it (v5 is superset of v4 usually), but for now we enforce v4 check.
-        # If user has v5, 'get_schema_version' would return 5. 
-        # We will log a warning if it is > 4 but proceed if it is at least 4.
-        
-        if final_version < 4:
-             raise RuntimeError(f"Database initialization failed: Expected v4, got v{final_version}")
-             
-        if final_version > 4:
-            logger.warning(f"Database is newer than application (v{final_version} > v4). Some features might be unused.")
+
+        if final_version < 7:
+            raise RuntimeError(f"Database initialization failed: Expected v7, got v{final_version}")
+
+        if final_version > 7:
+            logger.warning(f"Database is newer than application (v{final_version} > v7). Some features might be unused.")
 
         logger.info(f"✅ Database ready (schema v{final_version} active)")
 

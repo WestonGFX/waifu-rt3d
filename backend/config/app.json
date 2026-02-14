@@ -1,11 +1,32 @@
 {
+  "context_limit": 131072,
+  "temperature": 0.7,
+  "repeat_penalty": 1.1,
+  "thinking_visible": true,
+  "speech_rate": 1.0,
+  "pitch_shift": 0,
+  "voice_stability": 0.5,
+  "interrupt_mode": true,
+  "visual_mode": "3D (VRM)",
+  "theme": "Dracula",
+  "bg_mode": "Bento Gradient",
+  "glow_intensity": 50,
+  "ui_border_radius": 12,
+  "ui_blur": 10,
+  "ui_font_size": 14,
+  "layout_show_left": true,
+  "layout_show_right": false,
+  "ui_sounds": false,
+  "dev_mode": false,
+  "log_limit": 200,
+  "save_logs_auto": false,
   "onboarded": true,
   "llm": {
     "provider": "openai",
     "endpoint": "http://localhost:1234/v1",
     "model": "google/gemma-3-12b",
     "api_key": "lm-studio",
-    "history_limit": 20
+    "history_limit": 0
   },
   "tts": {
     "enabled": true,
@@ -13,27 +34,8 @@
     "voice_id": "fox_v1",
     "auto_speak": true
   },
-  "services": {
-    "llm": {
-      "active_provider": "openai",
-      "providers": {
-        "openai": {
-          "enabled": true,
-          "base_url": "http://localhost:1234/v1",
-          "api_key": "lm-studio",
-          "default_model": "google/gemma-3-12b"
-        }
-      }
-    }
-  },
-  "bg_image": "/files/images/rin_pixel_portrait.png",
-  "dev_mode": true,
-  "save_logs_auto": true,
-  "log_limit": 1000,
-  "theme": "Dracula",
-  "active_character_id": "1: Fox (Rin)",
-  "avatar_url": "/files/images/sable_pixel_portrait.png",
-  "model_vrm": "/files/images/sable_pixel_portrait.png",
-  "layout_show_left": false,
-  "layout_show_right": false
+  "system": {
+    "auto_start_lmstudio": true,
+    "lms_path": "lms"
+  }
 }

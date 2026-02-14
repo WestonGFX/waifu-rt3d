@@ -97,50 +97,58 @@
 
 
 /* ═══ BENTO GRID — 3 Column Layout ═══ */
+/* Sidebar widths use clamp() for responsive sizing:
+   min 180px, preferred 16vw, max 280px */
 
 .bento-grid {
     display: grid !important;
-    grid-template-columns: 260px 1fr 300px;
-    gap: var(--space-md);
-    padding: var(--space-md);
+    grid-template-columns: clamp(180px, 16vw, 280px) 1fr clamp(180px, 15vw, 260px);
+    gap: var(--space-sm);
+    padding: 0;
     height: 100vh;
+    height: 100dvh; /* dynamic viewport height — respects mobile browser chrome */
     width: 100vw;
     overflow: hidden;
     background: var(--bg-void);
     transition: grid-template-columns 0.4s var(--ease-out-expo);
 }
 
-/* Right panel hidden when not open */
+/* Right panel hidden when not open — use visibility (not display:none)
+   to keep it in grid flow and avoid reflow bugs during column transitions */
 .bento-grid:not(.right-open) {
-    grid-template-columns: 260px 1fr 0px;
+    grid-template-columns: clamp(180px, 16vw, 280px) 1fr 0px;
 }
 
 .bento-grid:not(.right-open)>#panel-right {
-    display: none !important;
-    width: 0 !important;
+    visibility: hidden;
+    overflow: hidden !important;
     padding: 0 !important;
     border: none !important;
-    overflow: hidden !important;
+    pointer-events: none;
+    min-width: 0;
 }
 
 /* Right panel visible when open */
 .bento-grid.right-open>#panel-right {
-    display: flex !important;
+    visibility: visible;
+    pointer-events: auto;
 }
 
-/* Left collapsed */
+/* Left collapsed — use visibility to stay in grid flow */
 .bento-grid.left-collapsed {
-    grid-template-columns: 60px 1fr 300px;
+    grid-template-columns: 0px 1fr clamp(180px, 15vw, 260px);
 }
 
 .bento-grid.left-collapsed:not(.right-open) {
-    grid-template-columns: 60px 1fr 0px;
+    grid-template-columns: 0px 1fr 0px;
 }
 
-.bento-grid.left-collapsed>#panel-left .sidebar-header,
-.bento-grid.left-collapsed>#panel-left #roster-panel-content,
-.bento-grid.left-collapsed>#panel-left .sidebar-footer {
-    display: none;
+.bento-grid.left-collapsed>#panel-left {
+    visibility: hidden;
+    overflow: hidden !important;
+    padding: 0 !important;
+    pointer-events: none;
+    min-width: 0;
 }
 
 
@@ -157,10 +165,12 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transition: border-color 0.35s ease;
 }
 
-.glass-panel:hover {
+/* Hover glow only on inner cards/widgets, not layout-level panels.
+   Layout panels (#panel-left, .main-view, #panel-right) shouldn't
+   flash borders on mouseover — it looks like a rendering glitch. */
+.glass-panel:hover:not(#panel-left):not(.main-view):not(#panel-right):not(.modal-overlay .glass-panel) {
     border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
@@ -170,6 +180,8 @@
 #panel-left {
     display: flex;
     flex-direction: column;
+    visibility: visible;
+    min-width: 0;
 }
 
 #panel-left .sidebar-header {
@@ -183,7 +195,7 @@
     font-weight: 700;
     color: var(--neon-cyan);
     margin: 0;
-    letter-spacing: 2px;
+    letter-spacing: 0.125em;
     text-transform: uppercase;
 }
 
@@ -191,8 +203,8 @@
     font-family: var(--font-mono);
     font-size: 0.7rem;
     color: var(--text-muted);
-    margin-top: 2px;
-    letter-spacing: 1px;
+    margin-top: 0.125rem;
+    letter-spacing: 0.0625em;
 }
 
 #roster-panel-content {
@@ -208,14 +220,14 @@
 
 .btn-config {
     width: 100%;
-    padding: 10px;
+    padding: 0.625rem;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
     color: var(--text-main);
     font-family: var(--font-display);
     font-size: 0.85rem;
-    letter-spacing: 1.5px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     cursor: pointer;
     transition: all 0.2s;
@@ -254,41 +266,45 @@ main.main-view>.viewport-layer canvas {
     display: block;
 }
 
-/* Status bar overlay */
-main.main-view>.status-bar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 10;
-    padding: var(--space-sm) var(--space-md);
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    letter-spacing: 1px;
-    color: var(--neon-magenta);
-    text-transform: uppercase;
-    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent);
-}
-
-/* AI Status Indicator */
+/* AI Status Indicator — positioned top-left, stacked lines */
 main.main-view .ai-status-container {
     position: absolute;
     top: var(--space-md);
-    right: var(--space-md);
+    left: var(--space-md);
     z-index: 10;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-sm);
     background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(8px);
-    padding: 6px 14px;
-    border-radius: 20px;
+    backdrop-filter: blur(0.5rem);
+    padding: 0.375rem 0.875rem;
+    border-radius: 0.75rem;
     border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.ai-status-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.ai-status-feed {
+    opacity: 0.6;
+}
+
+/* Thinking animation for status dot */
+@keyframes pulse-thinking {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+.status-dot.thinking {
+    animation: pulse-thinking 1s ease-in-out infinite;
+}
+
 .status-dot {
-    width: 7px;
-    height: 7px;
+    width: 0.4375rem;
+    height: 0.4375rem;
     background: var(--neon-cyan);
     border-radius: 50%;
     box-shadow: 0 0 8px var(--neon-cyan);
@@ -344,8 +360,9 @@ main.main-view .chat-layer #chat-messages {
     pointer-events: auto;
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
     gap: var(--space-sm);
+    /* Push messages to bottom initially, but allow scrolling up */
+    justify-content: flex-start;
 }
 
 /* INPUT AREA — Single horizontal row (critical fix) */
@@ -371,12 +388,12 @@ main.main-view .chat-layer .input-area textarea.input-field {
     color: var(--text-main);
     font-family: var(--font-mono);
     font-size: 0.85rem;
-    padding: 10px 14px;
+    padding: 0.625rem 0.875rem;
     border-radius: var(--radius-sm);
     outline: none;
     resize: none;
-    min-height: 40px;
-    max-height: 120px;
+    min-height: 4.375rem;
+    max-height: 12.5rem;
     transition: border-color 0.2s;
 }
 
@@ -391,38 +408,56 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
 
 /* Buttons in input area */
 .btn-icon {
-    width: 40px !important;
-    height: 40px;
-    flex: 0 0 40px !important;
+    width: 2.5rem !important;
+    height: 2.5rem;
+    flex: 0 0 2.5rem !important;
     display: flex !important;
     align-items: center;
     justify-content: center;
     background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.08);
-        color: var(--text-muted);
-        border-radius: var(--radius-sm);
-        cursor: pointer;
-        font-size: 0.9rem;
-        transition: all 0.2s;
-    }
-    
-    .btn-icon:hover {
-        color: var(--neon-cyan);
-        border-color: var(--neon-cyan);
-        background: rgba(0, 240, 255, 0.06);
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.btn-icon:hover {
+    color: var(--neon-cyan);
+    border-color: var(--neon-cyan);
+    background: rgba(0, 240, 255, 0.06);
+}
+
+/* Mic button states */
+.btn-mic.recording {
+    background: rgba(255, 0, 60, 0.2) !important;
+    border-color: var(--neon-magenta) !important;
+    color: var(--neon-magenta) !important;
+    animation: pulse-mic 1s infinite;
+}
+
+.btn-mic.processing {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+@keyframes pulse-mic {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 0, 60, 0.4); }
+    50% { box-shadow: 0 0 12px 4px rgba(255, 0, 60, 0.2); }
 }
 
 .btn-send {
-    height: 40px;
+    height: 2.5rem;
     flex: 0 0 auto !important;
-    padding: 0 20px;
+    padding: 0 1.25rem;
     background: rgba(0, 240, 255, 0.12);
     border: 1px solid var(--neon-cyan);
     color: var(--neon-cyan);
     font-family: var(--font-display);
     font-size: 0.9rem;
     font-weight: 700;
-    letter-spacing: 2px;
+    letter-spacing: 0.125em;
     text-transform: uppercase;
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -430,83 +465,304 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
     white-space: nowrap;
 }
 
-.btn-send:hover {
+.btn-send:hover:not(:disabled) {
     background: var(--neon-cyan);
     color: #000;
-        box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
-    }
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+}
+
+.btn-send:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
     
     
+    /* ═══ CHAT LAYOUT MODES ═══════════════════════════════════════
+   Three configurable modes control how chat and 3D viewport
+   share the center panel. Applied via class on .main-view:
+   - layout-auto (default): chat expands when no VRM model loaded
+   - layout-fullchat: viewport hidden, chat takes 100%
+   - layout-toggle: button switches between chat-only and split
+   ════════════════════════════════════════════════════════════ */
+
+/* --- Auto Mode (default) --- */
+/* With model loaded: standard 55% chat overlay */
+.main-view.layout-auto .chat-layer {
+    height: 55%;
+}
+
+/* No model loaded: chat expands to fill entire panel */
+.main-view.layout-auto.no-model .chat-layer {
+    height: 100%;
+    background: var(--glass-panel);
+}
+
+.main-view.layout-auto.no-model .viewport-layer {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* --- Full Chat Mode --- */
+/* Viewport completely hidden, chat owns the panel */
+.main-view.layout-fullchat .viewport-layer {
+    display: none;
+}
+
+.main-view.layout-fullchat .chat-layer {
+    height: 100%;
+    background: var(--glass-panel);
+}
+
+/* --- Toggle View Mode --- */
+/* Default: chat-only. Button toggles .show-viewport to reveal 3D */
+.main-view.layout-toggle .chat-layer {
+    height: 100%;
+    background: var(--glass-panel);
+}
+
+.main-view.layout-toggle:not(.show-viewport) .viewport-layer {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.main-view.layout-toggle.show-viewport .chat-layer {
+    height: 55%;
+    background: linear-gradient(to top, rgba(5, 5, 16, 0.95) 0%, rgba(5, 5, 16, 0.6) 50%, transparent 100%);
+}
+
+.main-view.layout-toggle.show-viewport .viewport-layer {
+    visibility: visible;
+    pointer-events: auto;
+}
+
+/* --- Toggle View Button --- */
+.btn-toggle-view {
+    position: absolute;
+    top: var(--space-sm);
+    right: var(--space-sm);
+    z-index: 15;
+    display: none;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.3rem 0.6rem;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(0.5rem);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-toggle-view:hover {
+    color: var(--neon-cyan);
+    border-color: var(--neon-cyan);
+    background: rgba(0, 240, 255, 0.08);
+}
+
+/* Only show toggle button in Toggle View mode */
+.main-view.layout-toggle .btn-toggle-view {
+    display: flex;
+}
+
+/* ═══ VIEWPORT TOOLBAR (top-right of 3D viewport) ═══ */
+.viewport-toolbar {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.main-view:hover .viewport-toolbar {
+    opacity: 1;
+}
+
+.btn-viewport-tool {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--glass-border);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    padding: 0;
+    line-height: 1;
+}
+
+.btn-viewport-tool:hover {
+    color: var(--neon-cyan);
+    border-color: var(--neon-cyan);
+    background: rgba(0, 240, 255, 0.1);
+    transform: scale(1.1);
+}
+
+
     /* ═══ CHAT BUBBLES ═══ */
     
     .message-user,
     .message-ai {
-        max-width: 75%;
+        width: 100%;
         display: flex;
         margin-bottom: var(--space-xs);
     }
-    
+
     .message-user {
-        align-self: flex-end;
         justify-content: flex-end;
     }
-    
+
     .message-ai {
-        align-self: flex-start;
         justify-content: flex-start;
     }
-    
+
     .bubble-content {
-        padding: 10px 16px;
+        padding: 0.75rem 1.125rem;
         font-size: 0.9rem;
-        line-height: 1.55;
+        line-height: 1.6;
         border-radius: var(--radius-md);
+        white-space: pre-wrap;
+        word-break: break-word;
     }
     
     .message-user .bubble-content {
         background: rgba(0, 240, 255, 0.08);
         border: 1px solid rgba(0, 240, 255, 0.2);
         color: var(--text-main);
-        border-radius: 14px 14px 2px 14px;
+        border-radius: 0.875rem 0.875rem 0.125rem 0.875rem;
     }
     
     .message-ai .bubble-content {
         background: rgba(255, 255, 255, 0.04);
         border: 1px solid rgba(255, 255, 255, 0.06);
         color: var(--text-main);
-        border-radius: 14px 14px 14px 2px;
+        border-radius: 0.875rem 0.875rem 0.875rem 0.125rem;
     }
     
     .ai-avatar {
-        width: 28px;
-        height: 28px;
+        width: 1.75rem;
+        height: 1.75rem;
         border-radius: 50%;
         margin-right: var(--space-sm);
         flex-shrink: 0;
         align-self: flex-end;
     }
     
-    .bubble-timestamp {
+    .bubble-timestamp,
+    .bubble-info {
+        font-family: var(--font-mono);
         font-size: 0.6rem;
         color: var(--text-muted);
-        opacity: 0;
-        margin-top: 3px;
-        text-align: right;
-        transition: opacity 0.2s;
+        opacity: 0.5;
+        margin-top: 0.25em;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .bubble-info-stats {
+        color: var(--neon-cyan);
+        opacity: 0.8;
+    }
+
+    .bubble-info-time {
+        color: var(--text-muted);
+    }
+
+    /* Thinking bubble — shows while AI is generating */
+    .message-thinking {
+        width: 100%;
+        display: flex;
+        justify-content: flex-start;
+    }
+
+    .message-thinking .chat-avatar {
+        border: 2px solid var(--neon-magenta);
+        animation: avatar-spin 2s linear infinite;
+    }
+
+    @keyframes avatar-spin {
+        0% { border-color: var(--neon-magenta); box-shadow: 0 0 8px var(--neon-magenta); }
+        50% { border-color: var(--neon-cyan); box-shadow: 0 0 12px var(--neon-cyan); }
+        100% { border-color: var(--neon-magenta); box-shadow: 0 0 8px var(--neon-magenta); }
+    }
+
+    .thinking-dots {
+        display: inline-flex;
+        gap: 0.25rem;
+        padding: 0.75rem 1.125rem;
+    }
+
+    .thinking-dots span {
+        width: 0.5rem;
+        height: 0.5rem;
+        background: var(--neon-cyan);
+        border-radius: 50%;
+        animation: dot-bounce 1.4s ease-in-out infinite;
+    }
+
+    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes dot-bounce {
+        0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+        40% { transform: scale(1); opacity: 1; }
     }
     
-    #chat-messages>div:hover .bubble-timestamp {
-        opacity: 0.7;
+    #chat-messages>div:hover .bubble-timestamp,
+    #chat-messages>div:hover .bubble-info {
+        opacity: 0.8;
     }
-    
-    
+
+    /* Bubble action buttons (edit/regen) — visible on hover */
+    .bubble-action-btn {
+        width: 24px;
+        height: 24px;
+        border: 1px solid var(--glass-border);
+        background: rgba(13, 14, 28, 0.9);
+        color: var(--text-muted);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.7rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+    }
+
+    .bubble-action-btn:hover {
+        color: var(--neon-cyan);
+        border-color: var(--neon-cyan);
+        background: rgba(0, 240, 255, 0.08);
+    }
+
+    .bubble-regen-btn:hover {
+        color: var(--neon-magenta);
+        border-color: var(--neon-magenta);
+        background: rgba(255, 0, 60, 0.08);
+    }
+
+
     /* ═══ RIGHT PANEL — Memory Bank ═══ */
     
     #panel-right {
         display: flex;
         flex-direction: column;
+        visibility: visible;
+        min-width: 0;
     }
-    
+
     #panel-right>.panel-header {
         padding: var(--space-md) var(--space-lg);
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -517,7 +773,7 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
         font-size: 1.1rem;
         font-weight: 700;
         color: var(--neon-magenta);
-        letter-spacing: 2px;
+        letter-spacing: 0.125em;
         text-transform: uppercase;
     }
     
@@ -551,7 +807,7 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
         background: rgba(0, 0, 0, 0.2);
         padding: var(--space-md);
         border-radius: var(--radius-sm);
-        min-height: 80px;
+        min-height: 5rem;
         border: 1px dashed rgba(255, 255, 255, 0.06);
     }
     
@@ -575,7 +831,7 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
         font-family: var(--font-mono);
         font-size: 0.7rem;
         color: var(--text-muted);
-        padding: 4px 0;
+        padding: 0.25rem 0;
     }
     
     .stat-value {
@@ -609,37 +865,174 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
     
     
     /* ═══ RESPONSIVE ═══ */
-    
+
+    /* Tablet (768–1024px): Narrower sidebar, collapsible panels */
     @media (max-width: 1024px) {
         .bento-grid {
-            grid-template-columns: 200px 1fr 0px;
-            gap: 10px;
-            padding: 10px;
+            grid-template-columns: clamp(150px, 22vw, 200px) 1fr 0px;
+            gap: 0.375rem;
+            padding: 0;
         }
-    
+
         .bento-grid.right-open {
-            grid-template-columns: 200px 1fr 260px;
+            grid-template-columns: clamp(150px, 22vw, 200px) 1fr clamp(150px, 20vw, 220px);
+        }
+
+        .bento-grid.left-collapsed {
+            grid-template-columns: 0px 1fr 0px;
+        }
+
+        .bento-grid.left-collapsed.right-open {
+            grid-template-columns: 0px 1fr clamp(150px, 20vw, 200px);
+        }
+
+        /* Larger touch targets for tablet */
+        .btn-icon {
+            width: 2.75rem !important;
+            height: 2.75rem;
+            flex: 0 0 2.75rem !important;
+        }
+
+        .btn-send {
+            height: 2.75rem;
+            padding: 0 1rem;
+        }
+
+        .settings-box {
+            width: 95vw;
+            max-width: none;
         }
     }
-    
+
+    /* Mobile (< 768px): Single column, stacked layout */
     @media (max-width: 768px) {
         .bento-grid {
             display: flex !important;
             flex-direction: column !important;
             height: auto;
-            min-height: 100vh;
+            min-height: 100dvh;
+            padding: 0;
+            gap: 0.25rem;
         }
-    
+
+        /* Left panel becomes a collapsible drawer at top */
         #panel-left {
-            max-height: 280px;
+            max-height: 12.5rem;
+            overflow-y: auto;
         }
-    
+
+        #panel-left .sidebar-header h1 {
+            font-size: 1rem;
+        }
+
+        /* Main viewport fills most of the screen */
         main.main-view {
-            height: 60vh;
+            height: 65dvh;
             flex: none;
+            min-height: 25rem;
         }
-    
+
+        /* Chat layer takes more vertical space on mobile */
+        main.main-view>.chat-layer {
+            height: 65%;
+        }
+
+        /* Input area: full width, larger touch targets */
+        main.main-view .chat-layer .input-area {
+            padding: var(--space-sm);
+            gap: 0.25rem;
+        }
+
+        main.main-view .chat-layer .input-area textarea.input-field {
+            font-size: 1rem;
+            padding: 0.75rem;
+            min-height: 2.75rem;
+        }
+
+        .btn-icon {
+            width: 2.75rem !important;
+            height: 2.75rem;
+            flex: 0 0 2.75rem !important;
+            font-size: 1rem;
+        }
+
+        .btn-send {
+            height: 2.75rem;
+            padding: 0 0.75rem;
+            font-size: 0.8rem;
+            letter-spacing: 0.0625em;
+        }
+
+        /* Right panel hidden on mobile */
         #panel-right {
+            display: none !important;
+        }
+
+        /* Settings modal: full screen on mobile */
+        .settings-box {
+            width: 100vw;
+            height: 100dvh;
+            max-width: none;
+            max-height: none;
+            border-radius: 0;
+        }
+
+        .settings-sidebar {
+            width: 100%;
+            flex-direction: row;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 0.625rem;
+            border-right: none;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .settings-sidebar .settings-header {
+            display: none;
+        }
+
+        .settings-sidebar .tab-btn {
+            white-space: nowrap;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+        }
+
+        .settings-sidebar .settings-footer {
+            display: none;
+        }
+
+        /* Chat bubbles: full width on mobile */
+        .message-user,
+        .message-ai {
+            width: 100%;
+        }
+
+        .ai-status-container {
+            padding: 0.25rem 0.5rem;
+        }
+
+        .ai-status-label {
+            font-size: 0.55rem;
+        }
+    }
+
+    /* Small mobile (< 480px): Ultra compact */
+    @media (max-width: 480px) {
+        #panel-left {
+            max-height: 9.375rem;
+        }
+
+        #panel-left .sidebar-header {
+            padding: var(--space-sm);
+        }
+
+        main.main-view {
+            height: 70dvh;
+        }
+
+        /* Hide toggle buttons on very small screens to save space */
+        #btn-toggle-left,
+        #btn-toggle-right {
             display: none !important;
         }
     }
@@ -648,8 +1041,21 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
         0% {
             transform: rotate(0deg);
         }
-    
+
         100% {
             transform: rotate(360deg);
         }
+}
+
+/* ═══ MODEL MANAGER & PERSONA CREATOR ANIMATIONS ═══ */
+
+@keyframes pulse-border {
+    0%, 100% { border-color: var(--neon-yellow); box-shadow: 0 0 8px rgba(252, 238, 10, 0.1); }
+    50% { border-color: rgba(252, 238, 10, 0.4); box-shadow: 0 0 16px rgba(252, 238, 10, 0.2); }
+}
+
+@keyframes progress-indeterminate {
+    0% { transform: translateX(-100%); }
+    50% { transform: translateX(0%); }
+    100% { transform: translateX(100%); }
 }

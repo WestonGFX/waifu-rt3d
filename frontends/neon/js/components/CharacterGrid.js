@@ -21,8 +21,29 @@ import { toast } from '../utils/Toast.js';
 export class CharacterGrid {
     constructor() {
         this.container = document.getElementById('roster-panel-content');
+        /** @type {Set<number>} Multi-select character IDs */
+        this.multiSelected = new Set();
         bus.on('characters:updated', (chars) => this.render(chars));
         bus.on('character:selected', (char) => this.highlight(char));
+    }
+
+    /**
+     * Get the currently multi-selected character IDs.
+     * @returns {number[]} Array of selected character IDs
+     */
+    getMultiSelected() {
+        return Array.from(this.multiSelected);
+    }
+
+    /**
+     * Clear multi-selection state and update visual indicators.
+     */
+    clearMultiSelect() {
+        this.multiSelected.clear();
+        this.container?.querySelectorAll('.char-card').forEach(c => {
+            c.classList.remove('multi-selected');
+        });
+        this._updateMultiSelectBanner();
     }
 
     /**
@@ -56,23 +77,6 @@ export class CharacterGrid {
         createCard.onmouseenter = () => createCard.style.opacity = '1';
         createCard.onmouseleave = () => createCard.style.opacity = '0.8';
         this.container.appendChild(createCard);
-
-        // Import button card
-        const importCard = document.createElement('div');
-        importCard.className = 'char-card create-new';
-        importCard.style.cssText = 'border: 1px dashed var(--neon-magenta); opacity: 0.7; transition: all 0.2s;';
-        importCard.innerHTML = `
-            <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;">
-                <div style="text-align: center; color: var(--neon-magenta);">
-                    <div style="font-size: 1.2rem; line-height: 1;">&#x2B06;</div>
-                    <div style="font-family: var(--font-display); font-size: 0.6rem; margin-top: 2px;">IMPORT</div>
-                </div>
-            </div>
-        `;
-        importCard.onclick = () => this._importCharacter();
-        importCard.onmouseenter = () => importCard.style.opacity = '1';
-        importCard.onmouseleave = () => importCard.style.opacity = '0.7';
-        this.container.appendChild(importCard);
 
         if (!characters || characters.length === 0) {
             const msg = document.createElement('div');
@@ -117,9 +121,27 @@ export class CharacterGrid {
                 </div>
             `;
 
-            // Bind card click → select character (ignore clicks on action buttons)
+            // Bind card click → select character (Ctrl+click for multi-select)
             card.addEventListener('click', async (e) => {
                 if (e.target.closest('.card-action-btn')) return;
+
+                // Ctrl+Click → toggle multi-select
+                if (e.ctrlKey || e.metaKey) {
+                    if (this.multiSelected.has(char.id)) {
+                        this.multiSelected.delete(char.id);
+                        card.classList.remove('multi-selected');
+                    } else {
+                        this.multiSelected.add(char.id);
+                        card.classList.add('multi-selected');
+                    }
+                    this._updateMultiSelectBanner();
+                    return;
+                }
+
+                // Normal click → single select (clear multi-select)
+                if (this.multiSelected.size > 0) {
+                    this.clearMultiSelect();
+                }
 
                 card.style.opacity = '0.5';
                 card.style.pointerEvents = 'none';
@@ -267,5 +289,53 @@ export class CharacterGrid {
         if (n.includes('viper') || n.includes('goth')) return 'anime';
 
         return 'anime';
+    }
+
+    /**
+     * Update or create the multi-select banner showing selected count and action button.
+     * @private
+     */
+    _updateMultiSelectBanner() {
+        let banner = document.getElementById('multi-select-banner');
+
+        if (this.multiSelected.size === 0) {
+            if (banner) banner.remove();
+            return;
+        }
+
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'multi-select-banner';
+            banner.style.cssText = `
+                padding: 6px 10px; margin: 4px 0;
+                background: rgba(0, 240, 255, 0.08);
+                border: 1px solid rgba(0, 240, 255, 0.2);
+                border-radius: 6px;
+                display: flex; align-items: center; justify-content: space-between;
+                font-size: 0.7rem; color: var(--neon-cyan);
+            `;
+            this.container?.parentElement?.insertBefore(banner, this.container);
+        }
+
+        const names = [];
+        this.multiSelected.forEach(id => {
+            const char = state.state.characters?.find(c => c.id === id);
+            if (char) names.push(char.name);
+        });
+
+        banner.innerHTML = `
+            <span>${this.multiSelected.size} selected: ${names.join(', ')}</span>
+            <div style="display:flex; gap:4px;">
+                <button id="btn-multi-chat" style="padding:3px 8px; background:rgba(0,240,255,0.15); border:1px solid var(--neon-cyan); color:var(--neon-cyan); border-radius:4px; cursor:pointer; font-size:0.65rem;">GROUP CHAT</button>
+                <button id="btn-multi-clear" style="padding:3px 8px; background:none; border:1px solid rgba(255,255,255,0.1); color:var(--text-muted); border-radius:4px; cursor:pointer; font-size:0.65rem;">CLEAR</button>
+            </div>
+        `;
+
+        banner.querySelector('#btn-multi-clear').onclick = () => this.clearMultiSelect();
+        banner.querySelector('#btn-multi-chat').onclick = () => {
+            // Emit event for ChatInterface to handle
+            bus.emit('multi-chat:start', this.getMultiSelected());
+            toast.info(`Group chat with ${this.multiSelected.size} characters — type a message!`, 3000);
+        };
     }
 }

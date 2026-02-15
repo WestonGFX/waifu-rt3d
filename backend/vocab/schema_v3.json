@@ -1,0 +1,59 @@
+{
+  "version": "3.0",
+  "about": "Rich lexicon for e-girl/anime-waifu/VTuber persona with TTS-ready prosody & regex triggers.",
+  "entry_fields": {
+    "eg_id": "Stable ID per (term, category).",
+    "term": "The surface form (slang, emoji, kaomoji, word).",
+    "aliases": "Alternate spellings/cases.",
+    "category": "High-level grouping (GenZ, AnimeJP, Gaming, VTuber, Emoji/Kaomoji, etc.)",
+    "subcategories": "Optional finer labels.",
+    "meaning": "Short gloss for NLP or UI hints.",
+    "pos": "Part of speech or type: interjection | noun | verb | adj | emoji | kaomoji | emote | abbrev | particle | suffix.",
+    "register": "Style shading: cute | playful | edgy | hype | wholesome | teasing | deadpan | support | comfy | tense.",
+    "emotion": "Intended emotion for TTS contouring: joy | surprise | smug | flirt | shy | panic | melancholy | proud | calm | tense.",
+    "language": "en | ja | auto | mixed. Controls code-switching and kana expectations.",
+    "origin": "Etymology or source culture when useful.",
+    "pronunciation": {
+      "respelling_en": "Readable English-like respelling, e.g., 'kah-WA-ee' for kawaii.",
+      "ipa_phonemic": "Broad IPA in /slashes/, e.g., /kəˈwaɪ.i/ vs /kaˈwa.i/ (JP).",
+      "ipa_phonetic": "Narrower [brackets] when needed.",
+      "jp_kana": "If applicable (e.g., カワイイ).",
+      "stress": "Optional stress pattern (e.g., '10' for trochee).",
+      "syllables": "Integer."
+    },
+    "semantics": {
+      "sense": "Core sense; akin to dictionary gloss.",
+      "reference": "Concrete referent if any (e.g., 'YouTube Super Chat').",
+      "connotation": "Affective or stylistic vibe.",
+      "semantic_domain": "Topical bucket (compliment, tease, hype, etc.)."
+    },
+    "pragmatics": {
+      "illocution": "Speech act intent (react, tease, hype, soothe, command, etc.).",
+      "politeness_strategy": "Brown & Levinson-ish: casual, honorific-light, playful-mock, etc.",
+      "topic_tags": "Open tag list for routing."
+    },
+    "prosody": {
+      "pitch_semitones": "Relative shift from neutral; positive = higher.",
+      "pace_wpm": "Words per minute target for TTS baseline.",
+      "energy_0to1": "Overall loudness/drive heuristic.",
+      "breathiness_0to1": "Aspirated/airy voice amount.",
+      "intonation": "Contour keyword (rise-fall, fall-rise, level, gentle-rise, firm-fall...).",
+      "duration_ms_hint": "Recommended min duration in milliseconds."
+    },
+    "valence_arousal": {
+      "valence_-1to1": "Affective polarity.",
+      "arousal_0to1": "Activation/energy."
+    },
+    "style_weights": "Per-style routing bias.",
+    "voice_style_tags": "List of compatible voice styles.",
+    "triggers_regex": "Regex to detect this exact token in chat for on-the-fly routing or SFX.",
+    "cooldown_s": "Soft cooldown to avoid repetition.",
+    "synergy_tags": "For co-occurrence suggestions (e.g., 'AnimeJP', 'Emoji').",
+    "code_switch": "Boolean; flip JP/EN mixing behaviors.",
+    "related": "Optional term IDs for navigation.",
+    "antonyms": "Optional opposite terms.",
+    "source_links": "Optional references.",
+    "notes": "Free-form remarks."
+  },
+  "phonetics_notes": "• Phonemic (/slashes/) vs phonetic [brackets]: Phonemic marks contrastive sounds in a language;\n  phonetic shows finer detail (allophones, aspiration). Broad vs narrow maps directly to TTS models\n  that accept IPA; use phonemic for routing and phonetic to nudge timbre (e.g., devoicing).\n• Morphological transcription: Split into morphemes for compounds (e.g., yo + -ne, sen + -pai).\n• JA terms: Prefer kana in 'jp_kana'; keep romaji lowercased; stress empty (JA is mora-timed).\n"
+}

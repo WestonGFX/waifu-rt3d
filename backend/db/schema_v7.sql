@@ -11,6 +11,7 @@ ALTER TABLE characters ADD COLUMN greeting_animation TEXT;
 ALTER TABLE characters ADD COLUMN background_url TEXT;
 ALTER TABLE characters ADD COLUMN background_mode TEXT DEFAULT 'transparent';
 ALTER TABLE characters ADD COLUMN voice_sample_path TEXT;
+ALTER TABLE characters ADD COLUMN vocab_categories TEXT;
 
 -- ── Messages extensions (branching, emotion, multi-char) ──────
 ALTER TABLE messages ADD COLUMN parent_id INTEGER REFERENCES messages(id);
@@ -20,6 +21,8 @@ ALTER TABLE messages ADD COLUMN char_id INTEGER;
 
 -- ── Sessions extensions ───────────────────────────────────────
 ALTER TABLE sessions ADD COLUMN summary TEXT;
+ALTER TABLE sessions ADD COLUMN is_pinned INTEGER DEFAULT 0;
+ALTER TABLE sessions ADD COLUMN is_archived INTEGER DEFAULT 0;
 
 -- ── Prompt Templates ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS prompt_templates (

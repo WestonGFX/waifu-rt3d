@@ -31,6 +31,28 @@
     box-shadow: 0 0 1rem var(--neon-cyan);
 }
 
+.char-card.multi-selected {
+    border-color: var(--neon-magenta, #ff00ff);
+    box-shadow: 0 0 0.8rem rgba(255, 0, 255, 0.4);
+}
+
+.char-card.multi-selected::after {
+    content: '✓';
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    background: var(--neon-magenta, #ff00ff);
+    color: #fff;
+    font-size: 0.6rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+}
+
 /* Thumbnail Image — fills entire card */
 .card-thumb {
     position: absolute;

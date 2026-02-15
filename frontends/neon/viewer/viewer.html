@@ -741,13 +741,25 @@
             const canvas = document.getElementById('c');
             const bgVideo = document.getElementById('bg-video');
 
-            const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+            const renderer = new THREE.WebGLRenderer({
+                canvas,
+                antialias: true,
+                alpha: true,
+                preserveDrawingBuffer: true   // Required for screenshot toDataURL()
+            });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.outputEncoding = THREE.sRGBEncoding;
+            // Three.js r150+: outputEncoding → outputColorSpace
+            if ('outputColorSpace' in renderer) {
+                renderer.outputColorSpace = THREE.SRGBColorSpace;
+            } else {
+                renderer.outputEncoding = THREE.sRGBEncoding;
+            }
 
             const scene = new THREE.Scene();
-            scene.background = null;
+            // Default dark background so VRM is visible against the UI
+            // (transparent renders as invisible on the dark cyberpunk layout)
+            scene.background = new THREE.Color(0x0a0b14);
 
             const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
             camera.position.set(0, 1.4, 1.2);
@@ -817,10 +829,10 @@
                     renderer.setClearAlpha(0);
                     document.body.style.background = value;
                 } else {
-                    // transparent
-                    scene.background = null;
-                    renderer.setClearAlpha(0);
-                    document.body.style.background = 'transparent';
+                    // "transparent" mode — use dark fallback to match UI theme
+                    scene.background = new THREE.Color(0x0a0b14);
+                    renderer.setClearAlpha(1);
+                    document.body.style.background = '#0a0b14';
                 }
             }
 

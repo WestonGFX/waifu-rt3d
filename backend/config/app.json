@@ -3,7 +3,7 @@
   "temperature": 0.7,
   "repeat_penalty": 1.1,
   "thinking_visible": true,
-  "speech_rate": 1.0,
+  "speech_rate": 1,
   "pitch_shift": 0,
   "voice_stability": 0.5,
   "interrupt_mode": true,
@@ -17,9 +17,9 @@
   "layout_show_left": true,
   "layout_show_right": false,
   "ui_sounds": false,
-  "dev_mode": false,
-  "log_limit": 200,
-  "save_logs_auto": false,
+  "dev_mode": true,
+  "log_limit": 400,
+  "save_logs_auto": true,
   "onboarded": true,
   "llm": {
     "provider": "openai",
@@ -37,5 +37,12 @@
   "system": {
     "auto_start_lmstudio": true,
     "lms_path": "lms"
-  }
+  },
+  "active_character_id": "1: Fox (Rin)",
+  "avatar_url": "/images/rin_pixel_portrait.png",
+  "model_vrm": "/files/avatars/Panicandy.vrm",
+  "live2d_model": "",
+  "bg_image": "",
+  "background_mode": "transparent",
+  "chat_layout": "Full Chat"
 }

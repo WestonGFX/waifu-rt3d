@@ -11,6 +11,8 @@ import { ViewerBridge } from './components/ViewerBridge.js';
 import { ExpressionEditor } from './components/ExpressionEditor.js';
 import { ThemeEditor } from './components/ThemeEditor.js';
 import { DevConsole } from './components/DevConsole.js';
+import { VocabManager } from './components/VocabManager.js';
+import { HotkeyEditor } from './components/HotkeyEditor.js';
 import { keyboard } from './utils/KeyboardShortcuts.js';
 import { toast } from './utils/Toast.js';
 
@@ -75,6 +77,8 @@ async function initApp() {
         const expressionEditor = new ExpressionEditor();
         const themeEditor = new ThemeEditor();
         const devConsole = new DevConsole();
+        const vocabManager = new VocabManager();
+        const hotkeyEditor = new HotkeyEditor();
 
         // 3. Expose Global API for HTML Event Handlers
         window.app = {
@@ -89,6 +93,8 @@ async function initApp() {
             expressionEditor,
             themeEditor,
             devConsole,
+            vocabManager,
+            hotkeyEditor,
             state
         };
 
@@ -193,6 +199,8 @@ function setupKeyboardShortcuts(settings, charGrid, chat) {
             { id: 'dev-console-panel', close: () => window.app?.devConsole?.close() },
             { id: 'expression-editor-modal', close: () => window.app?.expressionEditor?.close() },
             { id: 'theme-editor-modal', close: () => window.app?.themeEditor?.close() },
+            { id: 'hotkey-editor-modal', close: () => window.app?.hotkeyEditor?.close() },
+            { id: 'vocab-manager-modal', close: () => window.app?.vocabManager?.close() },
             { id: 'memory-manager-modal', close: () => window.app?.memoryManager?.close() },
             { id: 'persona-creator-modal', close: () => window.app?.personaCreator?.close() },
             { id: 'model-manager-modal', close: () => window.app?.modelManager?.close() },
@@ -304,6 +312,16 @@ function setupKeyboardShortcuts(settings, charGrid, chat) {
     }, {
         allowInInput: true,
         description: 'Developer Console'
+    });
+
+    // Ctrl+Shift+H - Open Hotkey Editor
+    keyboard.register('Ctrl+Shift+h', () => {
+        if (window.app?.hotkeyEditor) {
+            window.app.hotkeyEditor.open();
+        }
+    }, {
+        allowInInput: true,
+        description: 'Hotkey Editor'
     });
 
     // Ctrl+0 - Reset camera

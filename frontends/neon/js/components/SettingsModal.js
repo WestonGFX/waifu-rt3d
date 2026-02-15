@@ -85,41 +85,41 @@ const SETTINGS_SCHEMA = {
         label: "VOICE (TTS/ASR)",
         icon: "🗣️",
         fields: [
-            { id: "speech_rate", name: "Speech Rate", type: "slider", min: 0.5, max: 2.0, step: 0.1, default: 1.0, desc: "Speed of TTS output." },
-            { id: "pitch_shift", name: "Pitch Shift", type: "slider", min: -10, max: 10, step: 1, default: 0, desc: "Semitone shift for voice." },
-            { id: "voice_stability", name: "Voice Stability", type: "slider", min: 0, max: 1.0, step: 0.1, default: 0.5, desc: "Consistent vs Expressive." },
-            { id: "interrupt_mode", name: "Interrupt Mode", type: "toggle", default: true, desc: "Stop AI talking when you speak." }
+            { id: "speech_rate", name: "Speech Rate", type: "slider", min: 0.5, max: 2.0, step: 0.1, default: 1.0, desc: "Speed of TTS output.", tooltip: "💡 1.0 is normal speed. Lower for dramatic delivery, higher for quick responses." },
+            { id: "pitch_shift", name: "Pitch Shift", type: "slider", min: -10, max: 10, step: 1, default: 0, desc: "Semitone shift for voice.", tooltip: "💡 Adjust the pitch of the AI's voice. Negative = deeper, positive = higher." },
+            { id: "voice_stability", name: "Voice Stability", type: "slider", min: 0, max: 1.0, step: 0.1, default: 0.5, desc: "Consistent vs Expressive.", tooltip: "💡 Low = more expressive and varied. High = more consistent but robotic." },
+            { id: "interrupt_mode", name: "Interrupt Mode", type: "toggle", default: true, desc: "Stop AI talking when you speak.", tooltip: "💡 When enabled, speaking into the mic will stop the AI's current TTS playback." }
         ]
     },
     visuals: {
         label: "APPEARANCE",
         icon: "🎨",
         fields: [
-            { id: "visual_mode", name: "Avatar Engine", type: "select", options: ["3D (VRM)", "2D (Live2D)"], default: "3D (VRM)", desc: "Choose rendering engine." },
-            { id: "theme", name: "Visual Theme", type: "select", options: ["Synthwave UI (Dark)", "Zen (Light)", "Anime Pop", "Bubblegum", "Dracula", "Nord", "Hacker", "Blurple"], default: "Synthwave UI (Dark)", desc: "Global color scheme." },
-            { id: "bg_mode", name: "Dynamic Background", type: "select", options: ["Void", "Bento Gradient", "Digital Rain", "City Video"], default: "Bento Gradient" },
-            { id: "glow_intensity", name: "Neon Glow Intensity", type: "slider", min: 0, max: 100, default: 50, desc: "Brightness of UI elements." },
-            { id: "ui_border_radius", name: "Border Radius", type: "slider", min: 0, max: 20, step: 2, default: 12, desc: "Roundness of panels (px)." },
-            { id: "ui_blur", name: "Glass Blur", type: "slider", min: 0, max: 50, step: 5, default: 10, desc: "Backdrop blur strength (px)." },
-            { id: "ui_font_size", name: "Base Font Size", type: "slider", min: 12, max: 20, step: 1, default: 14, desc: "Text size scaling (px)." },
-            { id: "layout_show_left", name: "Show Left Panel (Character)", type: "toggle", default: true, desc: "Toggle Character List." },
-            { id: "layout_show_right", name: "Show Right Panel (Memory)", type: "toggle", default: true, desc: "Toggle Context/Debug." },
-            { id: "chat_layout", name: "Chat Layout", type: "select", options: ["Auto (Recommended)", "Full Chat", "Toggle View"], default: "Auto (Recommended)", desc: "How chat and 3D viewport share the center panel." },
-            { id: "ui_sounds", name: "Interface Sounds", type: "toggle", default: false, desc: "Clicks and beeps." },
-            { id: "lighting_preset", name: "Scene Lighting", type: "select", options: ["studio", "warm_sunset", "cool_moonlight", "dramatic", "neon"], default: "studio", desc: "Lighting mood for the 3D viewport." },
-            { id: "_open_theme_editor", name: "Theme Editor", type: "button", action: "theme_editor", desc: "Fine-tune CSS variables, create and export custom themes." }
+            { id: "visual_mode", name: "Avatar Engine", type: "select", options: ["3D (VRM)", "2D (Live2D)"], default: "3D (VRM)", desc: "Choose rendering engine.", tooltip: "💡 VRM = 3D models with full body/face animation. Live2D = 2D animated portraits." },
+            { id: "theme", name: "Visual Theme", type: "select", options: ["Synthwave UI (Dark)", "Zen (Light)", "Anime Pop", "Bubblegum", "Dracula", "Nord", "Hacker", "Blurple"], default: "Synthwave UI (Dark)", desc: "Global color scheme.", tooltip: "💡 Changes the entire UI color palette. Use Theme Editor below for fine-grained control." },
+            { id: "bg_mode", name: "Dynamic Background", type: "select", options: ["Void", "Bento Gradient", "Digital Rain", "City Video"], default: "Bento Gradient", desc: "Background animation style.", tooltip: "💡 Decorative background behind the main UI panels." },
+            { id: "glow_intensity", name: "Neon Glow Intensity", type: "slider", min: 0, max: 100, default: 50, desc: "Brightness of UI elements.", tooltip: "💡 Controls the strength of neon glow effects. Set to 0 for a more subtle look." },
+            { id: "ui_border_radius", name: "Border Radius", type: "slider", min: 0, max: 20, step: 2, default: 12, desc: "Roundness of panels (px).", tooltip: "💡 0 = sharp corners, 20 = very rounded. Affects all panels and buttons." },
+            { id: "ui_blur", name: "Glass Blur", type: "slider", min: 0, max: 50, step: 5, default: 10, desc: "Backdrop blur strength (px).", tooltip: "💡 The frosted glass effect on panels. Higher = more blur. May impact performance." },
+            { id: "ui_font_size", name: "Base Font Size", type: "slider", min: 12, max: 20, step: 1, default: 14, desc: "Text size scaling (px).", tooltip: "💡 Scales all text in the UI. Useful for accessibility or high-DPI displays." },
+            { id: "layout_show_left", name: "Show Left Panel (Character)", type: "toggle", default: true, desc: "Toggle Character List.", tooltip: "💡 Hides the left sidebar with character roster and chat threads." },
+            { id: "layout_show_right", name: "Show Right Panel (Memory)", type: "toggle", default: true, desc: "Toggle Context/Debug.", tooltip: "💡 Hides the right sidebar with memory bank, relationship, and system stats." },
+            { id: "chat_layout", name: "Chat Layout", type: "select", options: ["Auto (Recommended)", "Full Chat", "Toggle View"], default: "Auto (Recommended)", desc: "How chat and 3D viewport share the center panel.", tooltip: "💡 Auto: chat expands when no 3D model loaded. Full Chat: no 3D viewport. Toggle View: button switches between modes." },
+            { id: "ui_sounds", name: "Interface Sounds", type: "toggle", default: false, desc: "Clicks and beeps.", tooltip: "💡 Plays subtle cyberpunk sound effects on button clicks and notifications." },
+            { id: "lighting_preset", name: "Scene Lighting", type: "select", options: ["studio", "warm_sunset", "cool_moonlight", "dramatic", "neon"], default: "studio", desc: "Lighting mood for the 3D viewport.", tooltip: "💡 Changes the lighting on your 3D avatar. Studio is neutral, others are atmospheric." },
+            { id: "_open_theme_editor", name: "Theme Editor", type: "button", action: "theme_editor", desc: "Fine-tune CSS variables, create and export custom themes.", tooltip: "🎨 Opens a live editor for every CSS variable. Save custom themes and share them." }
         ]
     },
     character: {
         label: "CHARACTER",
         icon: "👤",
         fields: [
-            { id: "active_character_id", name: "Active Character", type: "select", options: ["Loading..."], default: "1", desc: "Select the current persona." },
-            { id: "avatar_url", name: "2D Avatar / Icon", type: "gallery", filter: "avatar", desc: "Select a profile picture for chat/UI." },
-            { id: "model_vrm", name: "VRM Model", type: "select", options: ["Loading..."], default: "", desc: "3D Model file." },
-            { id: "live2d_model", name: "Live2D Model", type: "select", options: ["Loading..."], default: "", desc: "2D Model folder." },
-            { id: "bg_image", name: "Background Image", type: "gallery", filter: "background", desc: "Select a background for this character." },
-            { id: "background_mode", name: "Background Mode", type: "select", options: ["transparent", "image", "color", "video", "gradient"], default: "transparent", desc: "How the 3D viewport background is rendered." }
+            { id: "active_character_id", name: "Active Character", type: "select", options: ["Loading..."], default: "1", desc: "Select the current persona.", tooltip: "💡 Switch between your created characters. Each has their own personality, avatar, and chat history." },
+            { id: "avatar_url", name: "2D Avatar / Icon", type: "gallery", filter: "avatar", desc: "Select a profile picture for chat/UI.", tooltip: "💡 This image appears in chat bubbles and the character roster. Click to select, use + to upload." },
+            { id: "model_vrm", name: "VRM Model", type: "select", options: ["Loading..."], default: "", desc: "3D Model file.", tooltip: "💡 VRM files are 3D anime models. Place .vrm files in backend/storage/avatars/ to see them here." },
+            { id: "live2d_model", name: "Live2D Model", type: "select", options: ["Loading..."], default: "", desc: "2D Model folder.", tooltip: "💡 Live2D models are 2D animated portraits. Switch Avatar Engine to '2D (Live2D)' in Appearance tab to use." },
+            { id: "bg_image", name: "Background Image", type: "gallery", filter: "background", desc: "Select a background for this character.", tooltip: "💡 Per-character background shown behind the 3D/2D avatar. Click to select, use + to upload." },
+            { id: "background_mode", name: "Background Mode", type: "select", options: ["transparent", "image", "color", "video", "gradient"], default: "transparent", desc: "How the 3D viewport background is rendered.", tooltip: "💡 Transparent blends with the UI. Image/Video shows media behind the avatar. Color is a solid fill." }
         ]
     },
     templates: {
@@ -129,15 +129,24 @@ const SETTINGS_SCHEMA = {
             { id: "_templates_ui", name: "Prompt Template Library", type: "custom", desc: "Manage reusable system prompts for characters." }
         ]
     },
+    vocab: {
+        label: "VOCAB",
+        icon: "📖",
+        fields: [
+            { id: "vocab_enabled", name: "Inject Vocabulary Context", type: "toggle", default: true, desc: "Send vocab context to the LLM so it can use slang/terms naturally.", tooltip: "💡 When on, the AI receives a curated list of slang/vocab so it can use them naturally in conversation." },
+            { id: "vocab_limit", name: "Vocab Context Size", type: "slider", min: 10, max: 100, step: 5, default: 40, desc: "Max vocab entries injected per message.", tooltip: "💡 More entries = richer vocabulary but uses more tokens. 40 is a good balance." },
+            { id: "_vocab_manager_btn", name: "Vocabulary Manager", type: "custom", desc: "Browse, search, and manage all vocabulary entries.", tooltip: "📖 Opens the full vocab browser with 2500+ base entries. Add your own custom terms too." }
+        ]
+    },
     system: {
         label: "SYSTEM & DEV",
         icon: "⚙️",
         fields: [
             { id: "auto_start_lmstudio", name: "Auto-Start LM Studio (Headless)", type: "toggle", default: true, desc: "Start LM Studio daemon automatically on server boot.", tooltip: "💡 Runs 'lms daemon up' + 'lms server start' if LM Studio is not reachable." },
-            { id: "dev_mode", name: "Developer Mode", type: "toggle", default: false, desc: "Show Debug Log Overlay." },
-            { id: "log_limit", name: "Log Buffer Size", type: "slider", min: 100, max: 1000, step: 100, default: 200, desc: "Lines to keep in memory." },
-            { id: "save_logs_auto", name: "Auto-Save Logs", type: "toggle", default: false, desc: "Save logs on exit." },
-            { id: "reset_all", name: "Factory Reset", type: "button", action: "reset", desc: "Wipe all settings." }
+            { id: "dev_mode", name: "Developer Mode", type: "toggle", default: false, desc: "Show Debug Log Overlay.", tooltip: "🔧 Shows a floating debug panel with API calls, errors, and timing. Press Ctrl+Shift+D to toggle." },
+            { id: "log_limit", name: "Log Buffer Size", type: "slider", min: 100, max: 1000, step: 100, default: 200, desc: "Lines to keep in memory.", tooltip: "💡 How many log lines to keep in the developer console. Higher = more history but more memory." },
+            { id: "save_logs_auto", name: "Auto-Save Logs", type: "toggle", default: false, desc: "Save logs on exit.", tooltip: "💡 Automatically saves the debug log to a file when you close the app." },
+            { id: "reset_all", name: "Factory Reset", type: "button", action: "reset", desc: "Wipe all settings.", tooltip: "⚠️ Resets ALL settings to defaults. Characters and chat history are NOT affected." }
         ]
     }
 };
@@ -196,9 +205,31 @@ export class SettingsModal {
                     font-size: 0.9rem;
                     opacity: 0.7;
                     transition: opacity 0.2s;
+                    position: relative;
                 }
                 .setting-tooltip:hover {
                     opacity: 1;
+                }
+                .setting-tooltip:hover::after {
+                    content: attr(data-tip);
+                    position: absolute;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    bottom: calc(100% + 6px);
+                    width: max-content;
+                    max-width: 280px;
+                    padding: 6px 10px;
+                    background: rgba(10, 11, 20, 0.95);
+                    border: 1px solid var(--neon-cyan, #00f0ff);
+                    border-radius: 6px;
+                    color: var(--text-main, #e0e6ed);
+                    font-size: 0.7rem;
+                    font-family: var(--font-body, sans-serif);
+                    line-height: 1.4;
+                    white-space: normal;
+                    z-index: 100;
+                    pointer-events: none;
+                    box-shadow: 0 2px 12px rgba(0, 240, 255, 0.15);
                 }
                 .setting-row.validation-error {
                     border-left: 3px solid var(--neon-pink, #ff00ff);
@@ -428,6 +459,15 @@ export class SettingsModal {
         if (this.tempConfig.system?.auto_start_lmstudio !== undefined) {
             this.tempConfig.auto_start_lmstudio = this.tempConfig.system.auto_start_lmstudio;
         }
+        // vocab.enabled / vocab.limit → flat vocab_enabled / vocab_limit
+        if (this.tempConfig.vocab) {
+            if (this.tempConfig.vocab.enabled !== undefined) {
+                this.tempConfig.vocab_enabled = this.tempConfig.vocab.enabled;
+            }
+            if (this.tempConfig.vocab.limit !== undefined) {
+                this.tempConfig.vocab_limit = this.tempConfig.vocab.limit;
+            }
+        }
 
         // Fetch external data in parallel when opening
         Promise.all([
@@ -594,7 +634,7 @@ export class SettingsModal {
 
         // Label & Desc with Tooltip
         const info = document.createElement('div');
-        const tooltipHtml = def.tooltip ? `<div class="setting-tooltip" title="${def.tooltip}">ℹ️</div>` : '';
+        const tooltipHtml = def.tooltip ? `<div class="setting-tooltip" data-tip="${def.tooltip.replace(/"/g, '&quot;')}">ℹ️</div>` : '';
         info.innerHTML = `
             <div class="setting-label">
                 ${def.name}
@@ -988,6 +1028,18 @@ export class SettingsModal {
             }
 
             row.appendChild(wrapper);
+        } else if (def.type === 'custom' && def.id === '_vocab_manager_btn') {
+            // Render a button that opens the full VocabManager modal
+            const btn = document.createElement('button');
+            btn.className = 'btn-config';
+            btn.style.cssText = 'padding:8px 16px; color:var(--neon-magenta,#ff00ff); border-color:rgba(255,0,255,0.3); font-size:0.82rem; cursor:pointer;';
+            btn.textContent = 'Open Vocabulary Manager';
+            btn.onclick = () => {
+                if (window.app?.vocabManager) {
+                    window.app.vocabManager.open();
+                }
+            };
+            row.appendChild(btn);
         } else if (def.type === 'custom' && def.id === '_templates_ui') {
             // Render the Prompt Template Library UI inline
             const wrapper = document.createElement('div');
@@ -1302,6 +1354,19 @@ export class SettingsModal {
                 if (!this.tempConfig.system) this.tempConfig.system = {};
                 this.tempConfig.system.auto_start_lmstudio = this.tempConfig.auto_start_lmstudio;
                 delete this.tempConfig.auto_start_lmstudio;
+            }
+
+            // vocab_enabled / vocab_limit → vocab.enabled / vocab.limit
+            if (this.tempConfig.vocab_enabled !== undefined || this.tempConfig.vocab_limit !== undefined) {
+                if (!this.tempConfig.vocab) this.tempConfig.vocab = {};
+                if (this.tempConfig.vocab_enabled !== undefined) {
+                    this.tempConfig.vocab.enabled = this.tempConfig.vocab_enabled;
+                    delete this.tempConfig.vocab_enabled;
+                }
+                if (this.tempConfig.vocab_limit !== undefined) {
+                    this.tempConfig.vocab.limit = this.tempConfig.vocab_limit;
+                    delete this.tempConfig.vocab_limit;
+                }
             }
 
             await state.saveConfig(this.tempConfig);

@@ -67,6 +67,14 @@ def db():
 model_manager = None
 vector_store = None
 
+# Vocabulary manager — loaded at startup, provides vocab context for LLM
+from backend.vocab.manager import VocabManager
+vocab_manager = VocabManager()
+try:
+    vocab_manager.load()
+except Exception as e:
+    logger.warning(f"Vocab manager failed to load: {e}")
+
 
 def _chunk_text(text: str, max_chars: int = 500) -> list:
     """Split text into chunks of roughly max_chars at sentence boundaries.
@@ -559,6 +567,122 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         con.close()
 
 
+@app.post("/api/chat/multi")
+async def chat_multi(req: Request):
+    """Send a message to multiple characters and collect all responses.
+
+    Each character receives the same user message and generates an independent
+    response using their own system prompt and personality. Responses are
+    tagged with the responding character's ID and name.
+
+    Args:
+        req: JSON body with:
+            - text (str): User message
+            - session_id (int): Session to use
+            - character_ids (list[int]): Character IDs to respond
+
+    Returns:
+        {"ok": True, "responses": [{char_id, char_name, text, emotion, gesture}, ...]}
+    """
+    body = await req.json()
+    text = str(body.get("text", "")).strip()
+    if not text:
+        raise HTTPException(400, "missing text")
+
+    session_id = int(body.get("session_id", 1))
+    character_ids = body.get("character_ids", [])
+    if not character_ids or not isinstance(character_ids, list):
+        raise HTTPException(400, "'character_ids' must be a non-empty list")
+
+    cfg = load_config() or {}
+    con = db()
+    cur = con.cursor()
+
+    try:
+        # Store user message once (with first char_id)
+        cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)", (session_id, f"Session {session_id}"))
+        cur.execute(
+            "INSERT INTO messages(session_id, role, text, char_id) VALUES (?,?,?,?)",
+            (session_id, "user", text, character_ids[0])
+        )
+        con.commit()
+
+        if vector_store:
+            vector_store.add_memory(session_id, character_ids[0], "user", text)
+
+        responses = []
+
+        for char_id in character_ids:
+            char_id = int(char_id)
+
+            # Get character data
+            cur.execute("SELECT system_prompt, name FROM characters WHERE id=?", (char_id,))
+            row = cur.fetchone()
+            system_prompt = row[0] if row else "You are a friendly anime companion."
+            char_name = row[1] if row else f"Character {char_id}"
+
+            # Build history
+            history_limit = cfg.get("llm", {}).get("history_limit", 20)
+            if history_limit == 0:
+                history_limit = 9999
+            rows = cur.execute(
+                "SELECT role, text FROM messages WHERE session_id=? AND is_active=1 ORDER BY id DESC LIMIT ?",
+                (session_id, history_limit)
+            ).fetchall()
+            hist = [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+
+            # Memory context
+            memory_context = ""
+            if vector_store:
+                hits = vector_store.query_memory(session_id, char_id, text, n_results=3)
+                if hits:
+                    memory_context = "\n[MEMORY_CONTEXT]\n" + "\n".join(
+                        f"- {h['text']}" for h in hits
+                    )
+
+            llm_messages = [{"role": "system", "content": system_prompt + memory_context}] + hist
+
+            # Call LLM
+            endpoint = cfg.get("llm", {}).get("endpoint", "http://localhost:1234/v1")
+            model = cfg.get("llm", {}).get("model", "")
+            api_key = cfg.get("llm", {}).get("api_key", "lm-studio")
+
+            from backend.llm.adapters.openai_compat import OpenAICompatAdapter
+            adapter = OpenAICompatAdapter()
+            result = adapter.chat(llm_messages, model=model, endpoint=endpoint, api_key=api_key)
+            reply = result.get("text", "")
+
+            # Store assistant message
+            cur.execute(
+                "INSERT INTO messages(session_id, role, text, char_id) VALUES (?,?,?,?)",
+                (session_id, "assistant", reply, char_id)
+            )
+            con.commit()
+
+            # Basic emotion detection
+            emotion = "neutral"
+            reply_lower = reply.lower()
+            if any(w in reply_lower for w in ["haha", "lol", "😂", "fun", "happy"]):
+                emotion = "happy"
+            elif any(w in reply_lower for w in ["sorry", "sad", "😢", "miss"]):
+                emotion = "sad"
+            elif any(w in reply_lower for w in ["love", "❤", "blush", "~"]):
+                emotion = "love"
+
+            responses.append({
+                "char_id": char_id,
+                "char_name": char_name,
+                "text": reply,
+                "emotion": emotion,
+                "gesture": "idle"
+            })
+
+        return {"ok": True, "responses": responses}
+
+    finally:
+        con.close()
+
+
 @app.post("/api/chat/stream")
 async def chat_stream(req: Request):
     """
@@ -647,7 +771,26 @@ async def chat_stream(req: Request):
         "Do not output these tags if you are being neutral."
     )
 
-    llm_messages = [{"role": "system", "content": system_prompt + memory_context + emotion_instruction}] + hist
+    # Inject vocabulary context if enabled
+    vocab_context = ""
+    vocab_cfg = cfg.get("vocab", {})
+    if vocab_cfg.get("enabled", True) and vocab_manager._loaded:
+        # Per-character category filter (if character has vocab_categories set)
+        char_vocab_cats = None
+        try:
+            row_vc = cur.execute(
+                "SELECT vocab_categories FROM characters WHERE id=?", (char_id,)
+            ).fetchone()
+            if row_vc and row_vc[0]:
+                char_vocab_cats = json.loads(row_vc[0]) if isinstance(row_vc[0], str) else row_vc[0]
+        except Exception:
+            pass  # Column may not exist yet
+        vocab_limit = vocab_cfg.get("limit", 40)
+        vocab_context = vocab_manager.get_vocab_context(
+            categories=char_vocab_cats, limit=vocab_limit
+        )
+
+    llm_messages = [{"role": "system", "content": system_prompt + memory_context + vocab_context + emotion_instruction}] + hist
 
     from backend.llm.registry import get_client
     from backend.llm.router import get_router
@@ -812,20 +955,54 @@ async def api_tts(req: Request):
 # ==================== SESSION MANAGEMENT ====================
 
 @app.get("/api/sessions")
-def list_sessions(archived: bool = False):
-    """List all chat sessions."""
+def list_sessions(archived: bool = False, search: str = None):
+    """List all chat sessions with pin/archive status.
+
+    Args:
+        archived: If True, return archived sessions. If False (default), return active sessions.
+        search: Optional search string to filter sessions by title.
+
+    Returns:
+        {"sessions": [{id, title, created_ts, message_count, is_pinned, is_archived, last_message_ts}]}
+    """
     conn = db()
     cur = conn.cursor()
-    # Handle archived filtering if column exists, else ignore
+
     try:
+        # Full query with pin/archive support — pinned first, then by most recent activity
+        base_sql = """
+            SELECT s.id, s.title, s.created_ts,
+                   (SELECT COUNT(id) FROM messages WHERE session_id=s.id) as msg_count,
+                   COALESCE(s.is_pinned, 0) as is_pinned,
+                   COALESCE(s.is_archived, 0) as is_archived,
+                   (SELECT MAX(ts) FROM messages WHERE session_id=s.id) as last_msg_ts
+            FROM sessions s
+        """
+        conditions = []
+        params = []
+
         if archived:
-            cur.execute("SELECT id, title, created_ts, (SELECT COUNT(id) FROM messages WHERE session_id=s.id) FROM sessions s WHERE archived=1 ORDER BY created_ts DESC")
+            conditions.append("COALESCE(s.is_archived, 0) = 1")
         else:
-            cur.execute("SELECT id, title, created_ts, (SELECT COUNT(id) FROM messages WHERE session_id=s.id) FROM sessions s WHERE (archived=0 OR archived IS NULL) ORDER BY created_ts DESC")
-    except:
-        # Fallback for v4 schema (no archived col)
-        cur.execute("SELECT id, title, created_ts, (SELECT COUNT(id) FROM messages WHERE session_id=s.id) FROM sessions s ORDER BY created_ts DESC")
-        
+            conditions.append("COALESCE(s.is_archived, 0) = 0")
+
+        if search:
+            conditions.append("s.title LIKE ?")
+            params.append(f"%{search}%")
+
+        where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+        order = " ORDER BY COALESCE(s.is_pinned, 0) DESC, COALESCE(last_msg_ts, s.created_ts) DESC"
+
+        cur.execute(base_sql + where + order, params)
+    except Exception:
+        # Fallback for older schema without is_pinned/is_archived
+        cur.execute("""
+            SELECT s.id, s.title, s.created_ts,
+                   (SELECT COUNT(id) FROM messages WHERE session_id=s.id),
+                   0, 0, NULL
+            FROM sessions s ORDER BY s.created_ts DESC
+        """)
+
     sessions = []
     for row in cur.fetchall():
         sessions.append({
@@ -833,7 +1010,9 @@ def list_sessions(archived: bool = False):
             "title": row[1] or f"Session {row[0]}",
             "created_ts": row[2],
             "message_count": row[3],
-            "archived": False # Default
+            "is_pinned": bool(row[4]),
+            "is_archived": bool(row[5]),
+            "last_message_ts": row[6],
         })
     conn.close()
     return {"sessions": sessions}
@@ -855,19 +1034,36 @@ async def create_session(req: Request):
 
 @app.put("/api/sessions/{session_id}")
 async def update_session(session_id: int, req: Request):
-    """Update session title or archive status."""
+    """Update session title, pin status, or archive status.
+
+    Args:
+        session_id: Session to update.
+        req: JSON body with optional fields: title, is_pinned, is_archived.
+
+    Returns:
+        {"ok": True}
+    """
     body = await req.json()
     updates = []
     params = []
+
     if "title" in body:
         updates.append("title=?")
         params.append(body["title"])
-    if "archived" in body:
-        updates.append("archived=?")
+    if "is_pinned" in body:
+        updates.append("is_pinned=?")
+        params.append(1 if body["is_pinned"] else 0)
+    if "is_archived" in body:
+        updates.append("is_archived=?")
+        params.append(1 if body["is_archived"] else 0)
+    # Legacy compat
+    if "archived" in body and "is_archived" not in body:
+        updates.append("is_archived=?")
         params.append(1 if body["archived"] else 0)
-    
-    if not updates: return {"ok": True}
-    
+
+    if not updates:
+        return {"ok": True}
+
     params.append(session_id)
     conn = db()
     try:
@@ -890,6 +1086,87 @@ def delete_session(session_id: int):
     conn.commit()
     conn.close()
     return {"ok": True, "deleted_messages": 0} # Simplified
+
+@app.post("/api/sessions/{session_id}/duplicate")
+def duplicate_session(session_id: int):
+    """Duplicate a session with all its messages.
+
+    Creates a new session with the same title (suffixed with " (copy)") and
+    copies all active messages into the new session.
+
+    Args:
+        session_id: Source session to duplicate.
+
+    Returns:
+        {"ok": True, "session": {id, title}}
+    """
+    conn = db()
+    cur = conn.cursor()
+
+    # Get original session
+    cur.execute("SELECT title FROM sessions WHERE id=?", (session_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, "Session not found")
+
+    new_title = f"{row[0]} (copy)"
+    cur.execute("INSERT INTO sessions (title) VALUES (?)", (new_title,))
+    new_id = cur.lastrowid
+
+    # Copy active messages
+    cur.execute("""
+        INSERT INTO messages (session_id, role, text, ts, is_active, emotion, char_id)
+        SELECT ?, role, text, ts, is_active, emotion, char_id
+        FROM messages WHERE session_id=? AND is_active=1
+        ORDER BY id
+    """, (new_id, session_id))
+
+    conn.commit()
+    conn.close()
+    return {"ok": True, "session": {"id": new_id, "title": new_title}}
+
+
+@app.post("/api/sessions/import")
+async def import_session(req: Request):
+    """Import a session from JSON data.
+
+    Accepts JSON body with session title and messages array.
+
+    Args:
+        req: JSON body {"title": "...", "messages": [{role, text, ts?}, ...]}
+
+    Returns:
+        {"ok": True, "session": {id, title}, "message_count": int}
+    """
+    body = await req.json()
+    title = body.get("title", f"Imported {time.strftime('%Y-%m-%d')}")
+    messages = body.get("messages", [])
+
+    if not isinstance(messages, list):
+        raise HTTPException(400, "'messages' must be a list")
+
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("INSERT INTO sessions (title) VALUES (?)", (title,))
+    new_id = cur.lastrowid
+
+    count = 0
+    for msg in messages:
+        role = msg.get("role", "user")
+        text = msg.get("text", "")
+        ts = msg.get("ts")
+        if text:
+            cur.execute(
+                "INSERT INTO messages (session_id, role, text, ts) VALUES (?, ?, ?, ?)",
+                (new_id, role, text, ts)
+            )
+            count += 1
+
+    conn.commit()
+    conn.close()
+    return {"ok": True, "session": {"id": new_id, "title": title}, "message_count": count}
+
 
 @app.get("/api/sessions/{session_id}/messages")
 def get_session_messages(session_id: int, include_branches: bool = False):
@@ -1169,7 +1446,7 @@ async def summarize_session(session_id: int, req: Request = None):
 
     max_messages = body.get("max_messages", 50)
 
-    db = _get_db()
+    db = db()
     rows = db.execute(
         "SELECT role, text FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id DESC LIMIT ?",
         (session_id, max_messages)
@@ -1230,7 +1507,7 @@ def get_session_summary(session_id: int):
     Returns:
         {"ok": True, "summary": "..." or null}
     """
-    db = _get_db()
+    db = db()
     row = db.execute("SELECT summary FROM sessions WHERE id = ?", (session_id,)).fetchone()
     if not row:
         raise HTTPException(404, "Session not found")
@@ -1631,7 +1908,7 @@ async def update_character(character_id: int, req: Request):
         "name", "system_prompt", "avatar_url", "voice_id", "tts_provider",
         "tts_pitch", "tts_rate", "live2d_model", "model_type", "avatar_2d_url",
         "vrm_model_url", "greeting_text", "greeting_animation", "background_url",
-        "background_mode", "voice_sample_path"
+        "background_mode", "voice_sample_path", "vocab_categories"
     ]
     for field in fields:
         if field in body:
@@ -2154,7 +2431,7 @@ async def upload_voice_sample(char_id: int, file: UploadFile = File(...)):
 
         # Update character's voice_sample_path in DB
         rel_path = f"/files/voice_samples/{char_id}/{safe_name}"
-        db = _get_db()
+        db = db()
         db.execute("UPDATE characters SET voice_sample_path = ? WHERE id = ?", (rel_path, char_id))
         db.commit()
 
@@ -2175,7 +2452,7 @@ async def delete_voice_sample(char_id: int):
     Returns:
         {"ok": True}
     """
-    db = _get_db()
+    db = db()
     row = db.execute("SELECT voice_sample_path FROM characters WHERE id = ?", (char_id,)).fetchone()
     if not row:
         raise HTTPException(404, "Character not found")
@@ -2214,7 +2491,7 @@ def get_relationship(char_id: int):
     Returns:
         {"ok": True, "relationship": {affinity, mood, trust, interactions, last_updated}}
     """
-    db = _get_db()
+    db = db()
     # Ensure row exists
     db.execute("INSERT OR IGNORE INTO character_relationships (char_id) VALUES (?)", (char_id,))
     db.commit()
@@ -2249,7 +2526,7 @@ def reset_relationship(char_id: int):
     Returns:
         {"ok": True}
     """
-    db = _get_db()
+    db = db()
     db.execute("""
         UPDATE character_relationships SET
             affinity = 0.5, mood = 0.5, trust = 0.5,
@@ -2277,7 +2554,7 @@ def get_emotion_timeline(session_id: int):
     Returns:
         {"ok": True, "emotions": [{id, emotion, ts}, ...]}
     """
-    db = _get_db()
+    db = db()
     rows = db.execute(
         "SELECT id, emotion, ts FROM messages WHERE session_id = ? AND role = 'assistant' AND emotion IS NOT NULL ORDER BY ts ASC",
         (session_id,)
@@ -2778,6 +3055,184 @@ async def lm_studio_models():
     except Exception as e:
         logger.warning(f"Could not query LM Studio models: {e}")
         return {"ok": False, "error": str(e), "models": []}
+
+# ==================== VOCABULARY SYSTEM ====================
+
+@app.get("/api/vocab")
+def get_vocab_entries(
+    category: str = None,
+    register: str = None,
+    emotion: str = None,
+    source: str = None,
+    search: str = None,
+    page: int = 0,
+    size: int = 50,
+):
+    """Get paginated, filtered vocabulary entries.
+
+    Args:
+        category: Filter by category (e.g. "GenZ", "AnimeJP").
+        register: Filter by register (e.g. "cute", "edgy").
+        emotion: Filter by emotion (e.g. "joy", "flirt").
+        source: Filter by source ("base" or "user").
+        search: Search query (substring match on term/meaning/category).
+        page: Page number (0-indexed).
+        size: Page size (default 50).
+
+    Returns:
+        {"ok": True, "entries": [...], "total": int, "page": int, "size": int}
+    """
+    if not vocab_manager._loaded:
+        raise HTTPException(status_code=503, detail="Vocabulary not loaded")
+
+    if search:
+        entries = vocab_manager.search(search, limit=size)
+        return {"ok": True, "entries": entries, "total": len(entries), "page": 0, "size": size}
+
+    entries, total = vocab_manager.get_entries(
+        category=category, register=register, emotion=emotion,
+        source=source, page=page, size=size
+    )
+    return {"ok": True, "entries": entries, "total": total, "page": page, "size": size}
+
+
+@app.get("/api/vocab/categories")
+def get_vocab_categories():
+    """Get list of unique vocabulary categories.
+
+    Returns:
+        {"ok": True, "categories": ["AnimeJP", "Gaming", "GenZ", ...]}
+    """
+    if not vocab_manager._loaded:
+        raise HTTPException(status_code=503, detail="Vocabulary not loaded")
+
+    return {"ok": True, "categories": vocab_manager.categories}
+
+
+@app.get("/api/vocab/stats")
+def get_vocab_stats():
+    """Get vocabulary statistics (counts by source, category breakdown).
+
+    Returns:
+        {"ok": True, "stats": {total, base_count, user_count, categories, category_count}}
+    """
+    if not vocab_manager._loaded:
+        raise HTTPException(status_code=503, detail="Vocabulary not loaded")
+
+    return {"ok": True, "stats": vocab_manager.get_stats()}
+
+
+@app.post("/api/vocab")
+async def add_vocab_entry(req: Request):
+    """Add a user vocabulary entry.
+
+    Args:
+        req: JSON body with at minimum "term" and "meaning" fields.
+            Optional: aliases, category, register, emotion, pos, language.
+
+    Returns:
+        {"ok": True, "entry": {created entry with eg_id}}
+    """
+    if not vocab_manager._loaded:
+        raise HTTPException(status_code=503, detail="Vocabulary not loaded")
+
+    body = await req.json()
+    if not body.get("term") or not body.get("meaning"):
+        raise HTTPException(status_code=400, detail="'term' and 'meaning' are required")
+
+    entry = vocab_manager.add_entry(body)
+    return {"ok": True, "entry": entry}
+
+
+@app.put("/api/vocab/{eg_id}")
+async def update_vocab_entry(eg_id: str, req: Request):
+    """Update a user vocabulary entry.
+
+    Only user-added entries can be edited. Base vocab entries are read-only.
+
+    Args:
+        eg_id: The entry ID to update.
+        req: JSON body with fields to update.
+
+    Returns:
+        {"ok": True, "entry": {updated entry}} or 404 if not found.
+    """
+    if not vocab_manager._loaded:
+        raise HTTPException(status_code=503, detail="Vocabulary not loaded")
+
+    body = await req.json()
+    entry = vocab_manager.update_entry(eg_id, body)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Entry not found or not a user entry")
+
+    return {"ok": True, "entry": entry}
+
+
+@app.delete("/api/vocab/{eg_id}")
+def delete_vocab_entry(eg_id: str):
+    """Delete a user vocabulary entry.
+
+    Only user-added entries can be deleted. Base vocab entries are protected.
+
+    Args:
+        eg_id: The entry ID to delete.
+
+    Returns:
+        {"ok": True} or 404 if not found.
+    """
+    if not vocab_manager._loaded:
+        raise HTTPException(status_code=503, detail="Vocabulary not loaded")
+
+    deleted = vocab_manager.delete_entry(eg_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Entry not found or not a user entry")
+
+    return {"ok": True}
+
+
+@app.get("/api/vocab/export")
+def export_vocab():
+    """Export user vocabulary as a clean JSON array.
+
+    Returns user-added entries only (no internal fields like _source).
+
+    Returns:
+        {"ok": True, "entries": [...], "count": int}
+    """
+    if not vocab_manager._loaded:
+        raise HTTPException(status_code=503, detail="Vocabulary not loaded")
+
+    entries = vocab_manager.export_user_vocab()
+    return {"ok": True, "entries": entries, "count": len(entries)}
+
+
+@app.post("/api/vocab/import")
+async def import_vocab(req: Request):
+    """Import vocabulary entries from a JSON array.
+
+    Entries are added as user entries. Duplicates (by eg_id) are skipped.
+
+    Args:
+        req: JSON body {"entries": [{term, meaning, ...}, ...]}
+
+    Returns:
+        {"ok": True, "imported": int, "total_user": int}
+    """
+    if not vocab_manager._loaded:
+        raise HTTPException(status_code=503, detail="Vocabulary not loaded")
+
+    body = await req.json()
+    entries = body.get("entries", [])
+    if not isinstance(entries, list):
+        raise HTTPException(status_code=400, detail="'entries' must be a list")
+
+    count = vocab_manager.import_user_vocab(entries)
+    return {
+        "ok": True,
+        "imported": count,
+        "total_user": len(vocab_manager.user_entries)
+    }
+
 
 # --- EXCEPTION HANDLERS ---
 @app.exception_handler(Exception)

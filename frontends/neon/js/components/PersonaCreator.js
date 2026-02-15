@@ -143,11 +143,19 @@ export class PersonaCreator {
         document.getElementById('persona-title').textContent = 'CHOOSE ARCHETYPE';
 
         container.innerHTML = `
-            <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">
-                Start with a template or build from scratch.
-            </p>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <p style="color:var(--text-muted); font-size:0.85rem; margin:0;">
+                    Start with a template or build from scratch.
+                </p>
+                <button id="btn-import-character" class="btn-config" style="padding:5px 12px; font-size:0.7rem; color:var(--neon-magenta,#ff00ff); border-color:rgba(255,0,255,0.2); white-space:nowrap;">
+                    IMPORT JSON
+                </button>
+            </div>
             <div class="persona-template-grid"></div>
         `;
+        document.getElementById('btn-import-character')?.addEventListener('click', () => {
+            this._importCharacter();
+        });
 
         const grid = container.querySelector('.persona-template-grid');
         grid.style.cssText = 'display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px;';
@@ -254,6 +262,8 @@ export class PersonaCreator {
 
                 ${isEdit ? this._renderVoiceCloneSection(tpl) : ''}
 
+                ${isEdit ? this._renderVocabCategoriesSection(tpl) : ''}
+
                 <div id="persona-avatar-section" class="persona-field">
                     <label style="color:var(--text-main); font-weight:600; display:block; margin-bottom:4px;">Avatar</label>
                     <div id="persona-avatar-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(60px, 1fr)); gap:8px; max-height:200px; overflow-y:auto; padding:8px; border:1px solid var(--glass-border); border-radius:8px; background:rgba(0,0,0,0.2);">
@@ -296,10 +306,16 @@ export class PersonaCreator {
      */
     _renderEditMode(char) {
         this._renderFormStep(char);
-        // Bind voice clone + knowledge doc handlers after DOM is ready
+        // Bind voice clone + knowledge doc + vocab handlers after DOM is ready
         requestAnimationFrame(() => {
             this._bindVoiceCloneEvents();
             this._loadKnowledgeDocs();
+            // Parse vocab_categories (stored as JSON string or array in DB)
+            let vocabCats = char.vocab_categories || [];
+            if (typeof vocabCats === 'string') {
+                try { vocabCats = JSON.parse(vocabCats); } catch { vocabCats = []; }
+            }
+            this._loadVocabCategories(vocabCats);
         });
     }
 
@@ -462,6 +478,75 @@ export class PersonaCreator {
                 <audio id="voice-preview-audio" style="display:none;"></audio>
             </div>
         `;
+    }
+
+    /**
+     * Render the vocabulary categories multi-select for per-character vocab filtering.
+     *
+     * Fetches available categories from backend and renders checkboxes.
+     * Selected categories are stored in the character's vocab_categories field.
+     *
+     * @param {Object} char - Character data with optional vocab_categories array
+     * @returns {string} HTML string for the vocab categories section
+     * @private
+     */
+    _renderVocabCategoriesSection(char) {
+        const selected = char.vocab_categories || [];
+        return `
+            <div class="persona-field" style="border-top:1px solid var(--glass-border); padding-top:16px; margin-top:8px;">
+                <label style="color:var(--text-main); font-weight:600; display:block; margin-bottom:4px;">Vocab Categories</label>
+                <div style="font-size:0.65rem; color:var(--text-muted); margin-bottom:8px;">Select which vocabulary categories this character should use. Leave empty for all categories.</div>
+                <div id="persona-vocab-cats" style="display:flex; flex-wrap:wrap; gap:6px; max-height:120px; overflow-y:auto; padding:8px; border:1px solid var(--glass-border); border-radius:8px; background:rgba(0,0,0,0.2);">
+                    <span style="color:var(--text-muted); font-size:0.75rem;">Loading categories...</span>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Load vocab categories from backend and populate the checkbox grid.
+     * Called from _renderEditMode after DOM is ready.
+     * @param {string[]} selected - Currently selected category names
+     * @private
+     */
+    async _loadVocabCategories(selected = []) {
+        const container = document.getElementById('persona-vocab-cats');
+        if (!container) return;
+
+        try {
+            const res = await fetch('/api/vocab/categories');
+            const data = await res.json();
+            const categories = data.categories || [];
+
+            if (categories.length === 0) {
+                container.innerHTML = '<span style="color:var(--text-muted); font-size:0.75rem;">No vocab categories available.</span>';
+                return;
+            }
+
+            container.innerHTML = categories.map(cat => {
+                const checked = selected.includes(cat) ? 'checked' : '';
+                return `
+                    <label style="display:flex; align-items:center; gap:4px; padding:3px 8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:4px; cursor:pointer; font-size:0.72rem; color:var(--text-secondary);">
+                        <input type="checkbox" class="vocab-cat-checkbox" value="${cat}" ${checked}
+                               style="accent-color:var(--neon-cyan);">
+                        ${cat}
+                    </label>
+                `;
+            }).join('');
+        } catch (err) {
+            console.warn('[PersonaCreator] Failed to load vocab categories:', err);
+            container.innerHTML = '<span style="color:var(--text-muted); font-size:0.75rem;">Failed to load categories.</span>';
+        }
+    }
+
+    /**
+     * Get the currently selected vocab categories from the checkbox grid.
+     * @returns {string[]} Selected category names
+     * @private
+     */
+    _getSelectedVocabCategories() {
+        const checkboxes = document.querySelectorAll('.vocab-cat-checkbox:checked');
+        return Array.from(checkboxes).map(cb => cb.value);
     }
 
     /**
@@ -727,6 +812,7 @@ export class PersonaCreator {
             avatar_url: this.selectedAvatar || '',
             greeting_text: greeting,
             greeting_animation: greetingAnim,
+            vocab_categories: JSON.stringify(this._getSelectedVocabCategories()),
         };
 
         const saveBtn = document.getElementById('btn-persona-save');
@@ -764,5 +850,47 @@ export class PersonaCreator {
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+
+    /**
+     * Open a file picker and import a character from a JSON file.
+     * Uses the POST /api/characters/import endpoint.
+     * @private
+     */
+    _importCharacter() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.style.display = 'none';
+        document.body.appendChild(input);
+
+        input.onchange = async () => {
+            const file = input.files[0];
+            if (!file) return;
+
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+
+                if (!data.name || !data.system_prompt) {
+                    toast.error('Invalid character file (missing name or system_prompt)', 3000);
+                    return;
+                }
+
+                toast.info(`Importing ${data.name}...`, 2000);
+                const result = await API.post('characters/import', data);
+                if (result.ok) {
+                    toast.success(`${result.name} imported!`, 2000);
+                    await state.loadCharacters();
+                    this.close();
+                }
+            } catch (err) {
+                toast.error(`Import failed: ${err.message}`, 5000);
+            } finally {
+                input.remove();
+            }
+        };
+
+        input.click();
     }
 }

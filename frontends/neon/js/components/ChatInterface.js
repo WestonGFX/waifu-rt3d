@@ -20,7 +20,17 @@ export class ChatInterface {
         // Listen for session changes to load history
         bus.on('session:selected', (data) => this.loadHistory(data));
         bus.on('sessions:updated', (sessions) => this.renderSessionList(sessions));
-        bus.on('character:selected', (char) => this._showGreeting(char));
+        bus.on('character:selected', (char) => {
+            this._showGreeting(char);
+            this._updateStatusTopLine(char);
+        });
+
+        // Multi-character chat mode
+        /** @type {number[]|null} Active multi-chat character IDs */
+        this._multiChatIds = null;
+        bus.on('multi-chat:start', (charIds) => {
+            this._multiChatIds = charIds;
+        });
 
         // New chat button
         const newChatBtn = document.getElementById('btn-new-chat');
@@ -33,6 +43,53 @@ export class ChatInterface {
                 const char = state.state.characters?.find(c => c.id == state.state.currentCharacterId);
                 if (char) this._showGreeting(char);
             };
+        }
+
+        // Import chat button
+        const importBtn = document.getElementById('btn-import-chat');
+        if (importBtn) {
+            importBtn.onclick = () => this._importSession();
+        }
+
+        // Show archived sessions toggle
+        this._showingArchived = false;
+        const archiveBtn = document.getElementById('btn-show-archived');
+        if (archiveBtn) {
+            archiveBtn.onclick = async () => {
+                this._showingArchived = !this._showingArchived;
+                archiveBtn.style.opacity = this._showingArchived ? '1' : '0.6';
+                archiveBtn.title = this._showingArchived ? 'Show Active' : 'Show Archived';
+                try {
+                    const res = await API.get(`sessions?archived=${this._showingArchived}`);
+                    this.renderSessionList(res.sessions || []);
+                } catch (err) {
+                    toast.error('Failed to load sessions');
+                }
+            };
+        }
+
+        // Session search (toggle visible on Ctrl+F when sidebar focused)
+        const searchInput = document.getElementById('session-search');
+        if (searchInput) {
+            let searchTimer = null;
+            searchInput.oninput = () => {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(async () => {
+                    const q = searchInput.value.trim();
+                    try {
+                        const url = q ? `sessions?search=${encodeURIComponent(q)}` : 'sessions';
+                        const res = await API.get(url);
+                        this.renderSessionList(res.sessions || []);
+                    } catch (err) {
+                        console.warn('[Chat] Session search failed:', err);
+                    }
+                }, 300);
+            };
+            // Show search on click of the header
+            const header = document.querySelector('#session-list-panel span[style*="CHAT THREADS"]') ||
+                           document.querySelector('#session-list-panel .font-display');
+            // Just keep it visible for now
+            searchInput.style.display = 'block';
         }
 
         // Initialize Push-to-Talk if browser supports it
@@ -287,7 +344,7 @@ export class ChatInterface {
                 dot.style.background = '#ff00ff';
                 dot.style.boxShadow = '0 0 15px #ff00ff';
                 dot.classList.add('thinking');
-                label.innerText = 'CONNECTING TO LLM...';
+                label.innerText = 'SENDING TO AI...';
                 label.style.color = '#ff00ff';
             }
         } else {
@@ -305,7 +362,7 @@ export class ChatInterface {
                 this._lastTotalTime = (performance.now() - this.prefillStartTime) / 1000;
                 this._lastSpeed = this._lastGenTime > 0
                     ? (this.tokenCount / this._lastGenTime).toFixed(1) : '0';
-                label.innerText = `${this.tokenCount} tok | ${this._lastSpeed} tok/s | ${this._lastTotalTime.toFixed(1)}s`;
+                label.innerText = `DONE: ${this.tokenCount} tok | ${this._lastSpeed} tok/s | ${this._lastTotalTime.toFixed(1)}s`;
                 label.style.color = '#00ff88';
             }
         }
@@ -322,7 +379,7 @@ export class ChatInterface {
         const label = document.getElementById('neural-link-status');
         if (label && this.isThinking) {
             const tokenInfo = this.inputTokens > 0 ? ` (~${this.inputTokens} tokens)` : '';
-            label.innerText = `PROCESSING INPUT${tokenInfo}...`;
+            label.innerText = `AI READING INPUT${tokenInfo}...`;
         }
     }
 
@@ -334,7 +391,7 @@ export class ChatInterface {
         this.streamStartTime = performance.now();
         const label = document.getElementById('neural-link-status');
         if (label && this.isThinking) {
-            label.innerText = 'GENERATING: 0 tokens';
+            label.innerText = 'AI WRITING: 0 tokens';
         }
     }
 
@@ -352,7 +409,24 @@ export class ChatInterface {
             ? (performance.now() - this.streamStartTime) / 1000
             : 0;
         const speed = elapsed > 0.2 ? (this.tokenCount / elapsed).toFixed(1) : '--';
-        label.innerText = `GENERATING: ${this.tokenCount} tok | ${speed} tok/s`;
+        label.innerText = `AI WRITING: ${this.tokenCount} tok | ${speed} tok/s`;
+    }
+
+    /**
+     * Update the top status line with the current character name and model info.
+     * Shows meaningful, user-friendly info about who they're chatting with.
+     *
+     * @private
+     * @param {Object} char - Character object with name and other fields
+     */
+    _updateStatusTopLine(char) {
+        const topLine = document.getElementById('ai-status-top');
+        if (!topLine) return;
+        if (char && char.name) {
+            topLine.innerText = `CHATTING WITH: ${char.name.toUpperCase()}`;
+        } else {
+            topLine.innerText = 'NO CHARACTER SELECTED';
+        }
     }
 
     /**
@@ -434,6 +508,13 @@ export class ChatInterface {
         this.input.value = '';
         this.input.style.height = '';
 
+        // Multi-character chat intercept
+        if (this._multiChatIds && this._multiChatIds.length > 1) {
+            const ids = [...this._multiChatIds];
+            await this.sendMultiMessage(text, ids);
+            return;
+        }
+
         // Show user message
         this.addBubble(text, true, null);
 
@@ -479,8 +560,9 @@ export class ChatInterface {
                 throw new Error(`HTTP ${response.status}: ${await response.text()}`);
             }
 
-            // Create the AI bubble early so we can stream text into it
-            const { row, contentEl } = this._addStreamingBubble(avatarUrl);
+            // Defer bubble creation until first token arrives (avoids blank bubble)
+            let streamRow = null;
+            let streamContentEl = null;
             let fullText = '';
             let metadata = null;
 
@@ -528,9 +610,16 @@ export class ChatInterface {
                             this._setGeneratingPhase();
 
                         } else if (eventType === 'token') {
-                            // Real token arrived — append to bubble
+                            // Create bubble on first token (removes thinking bubble)
+                            if (!streamContentEl) {
+                                this._removeThinkingBubble();
+                                const bubble = this._addStreamingBubble(avatarUrl);
+                                streamRow = bubble.row;
+                                streamContentEl = bubble.contentEl;
+                            }
+                            // Append token to bubble
                             fullText += parsed.t;
-                            contentEl.innerText = fullText;
+                            streamContentEl.innerText = fullText;
                             this.tokenCount++;
                             this._updateTokenProgress();
 
@@ -564,9 +653,16 @@ export class ChatInterface {
                 window.llmTimeEl.classList.toggle('crit', responseTimeMs > 5000);
             }
 
-            // Use cleaned reply from server metadata if available
-            if (metadata && metadata.reply) {
-                contentEl.innerText = metadata.reply;
+            // If no tokens arrived (empty response), create bubble now
+            if (!streamContentEl) {
+                this._removeThinkingBubble();
+                const bubble = this._addStreamingBubble(avatarUrl);
+                streamRow = bubble.row;
+                streamContentEl = bubble.contentEl;
+                streamContentEl.innerText = metadata?.reply || '(empty response)';
+            } else if (metadata && metadata.reply) {
+                // Use cleaned reply from server metadata if available
+                streamContentEl.innerText = metadata.reply;
             }
 
             // Add info line with real token stats (left) and time (right)
@@ -583,13 +679,13 @@ export class ChatInterface {
             const infoLine = document.createElement('div');
             infoLine.className = 'bubble-info';
             infoLine.innerHTML = `<span class="bubble-info-stats">${tokenCount} tok · ${speed} tok/s · ${genTime}s</span><span class="bubble-info-time">${time}</span>`;
-            contentEl.appendChild(infoLine);
+            streamContentEl.appendChild(infoLine);
 
             this.setThinking(false, null);
 
             // Play TTS audio if enabled and attach visualizer
             if (metadata?.reply && state.config?.tts?.enabled) {
-                this._playTTSWithVisualizer(metadata.reply, row);
+                this._playTTSWithVisualizer(metadata.reply, streamRow);
             }
 
             // Update Memory Bank + session state
@@ -620,6 +716,47 @@ export class ChatInterface {
             if (this.sendBtn) this.sendBtn.disabled = false;
             this.currentRequestAbortController = null;
         }
+    }
+
+    /**
+     * Send a message to multiple characters simultaneously.
+     * Each character responds independently with their own personality.
+     *
+     * @param {string} text - User message
+     * @param {number[]} characterIds - Array of character IDs to respond
+     */
+    async sendMultiMessage(text, characterIds) {
+        if (!text || !characterIds?.length || this.isThinking) return;
+
+        this.addBubble(text, true, null);
+        this.setThinking(true);
+
+        try {
+            const sessionId = state.state.currentSessionId || 1;
+            const res = await API.post('chat/multi', {
+                text,
+                session_id: sessionId,
+                character_ids: characterIds
+            });
+
+            this.setThinking(false);
+
+            if (res.ok && res.responses) {
+                for (const r of res.responses) {
+                    // Find character avatar
+                    const char = state.state.characters?.find(c => c.id === r.char_id);
+                    const avatarUrl = char?.avatar_url || char?.avatar_2d_url || 'assets/default_avatar.png';
+                    this.addBubble(r.text, false, avatarUrl, { charName: r.char_name });
+                }
+            }
+        } catch (err) {
+            this.setThinking(false);
+            this.addBubble(`Error: ${err.message}`, false, null);
+        }
+
+        this.input.disabled = false;
+        this.input.focus();
+        if (this.sendBtn) this.sendBtn.disabled = false;
     }
 
     /**
@@ -805,9 +942,9 @@ export class ChatInterface {
 
     /**
      * Render the session list in the left sidebar.
-     * Highlights the currently active session.
+     * Shows pinned sessions first, with context menu for management actions.
      *
-     * @param {Array} sessions - [{id, title, created_ts, message_count}]
+     * @param {Array} sessions - [{id, title, created_ts, message_count, is_pinned, is_archived}]
      */
     renderSessionList(sessions) {
         const listEl = document.getElementById('session-list');
@@ -818,13 +955,19 @@ export class ChatInterface {
             return;
         }
 
-        listEl.innerHTML = sessions.slice(0, 20).map(s => {
+        // Store sessions for context menu actions
+        this._sessionCache = sessions;
+
+        listEl.innerHTML = sessions.map(s => {
             const isActive = s.id === state.state.currentSessionId;
-            const date = s.created_ts
-                ? new Date(s.created_ts * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })
+            const isPinned = s.is_pinned;
+            const ts = s.last_message_ts || s.created_ts;
+            const date = ts
+                ? new Date(ts * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })
                 : '';
             const title = s.title || `Session ${s.id}`;
             const msgCount = s.message_count || 0;
+            const pinIcon = isPinned ? '<span style="color:var(--neon-cyan); font-size:0.55rem; margin-right:3px;" title="Pinned">&#x1F4CC;</span>' : '';
 
             return `
                 <div class="session-item ${isActive ? 'active' : ''}"
@@ -837,28 +980,268 @@ export class ChatInterface {
                         font-size: 0.7rem;
                         color: ${isActive ? 'var(--neon-cyan)' : 'var(--text-muted)'};
                         background: ${isActive ? 'rgba(0,240,255,0.08)' : 'transparent'};
+                        border-left: 2px solid ${isPinned ? 'var(--neon-cyan)' : 'transparent'};
                         border: 1px solid ${isActive ? 'rgba(0,240,255,0.15)' : 'transparent'};
                         display: flex;
                         justify-content: space-between;
                         align-items: center;
                         transition: all 0.15s;
+                        position: relative;
                      "
                      onmouseenter="this.style.background='rgba(255,255,255,0.04)'"
                      onmouseleave="this.style.background='${isActive ? 'rgba(0,240,255,0.08)' : 'transparent'}'"
                 >
-                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">${title}</span>
-                    <span style="font-size:0.6rem; opacity:0.5; margin-left:8px; flex-shrink:0;">${msgCount}msg ${date}</span>
+                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
+                        ${pinIcon}${this._escapeHtml(title)}
+                    </span>
+                    <span style="font-size:0.58rem; opacity:0.5; margin-left:6px; flex-shrink:0; white-space:nowrap;">${msgCount} ${date}</span>
                 </div>
             `;
         }).join('');
 
-        // Bind click handlers
+        // Bind click + right-click handlers
         listEl.querySelectorAll('[data-session-id]').forEach(el => {
-            el.onclick = () => {
-                const sessionId = parseInt(el.dataset.sessionId);
-                state.selectSession(sessionId);
+            const sessionId = parseInt(el.dataset.sessionId);
+
+            el.onclick = () => state.selectSession(sessionId);
+
+            el.oncontextmenu = (e) => {
+                e.preventDefault();
+                this._showSessionContextMenu(e, sessionId);
             };
         });
+    }
+
+    /**
+     * Show a context menu for session management actions.
+     *
+     * @param {MouseEvent} e - The right-click event
+     * @param {number} sessionId - Session ID to act on
+     * @private
+     */
+    _showSessionContextMenu(e, sessionId) {
+        // Remove any existing context menu
+        const existing = document.getElementById('session-context-menu');
+        if (existing) existing.remove();
+
+        const session = (this._sessionCache || []).find(s => s.id === sessionId);
+        if (!session) return;
+
+        const isPinned = session.is_pinned;
+
+        const menu = document.createElement('div');
+        menu.id = 'session-context-menu';
+        menu.style.cssText = `
+            position: fixed;
+            left: ${e.clientX}px;
+            top: ${e.clientY}px;
+            background: rgba(20, 20, 30, 0.95);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            border-radius: 8px;
+            padding: 4px 0;
+            min-width: 160px;
+            z-index: 10000;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+            backdrop-filter: blur(10px);
+            font-size: 0.75rem;
+        `;
+
+        const items = [
+            { label: 'Rename', icon: '✎', action: () => this._renameSession(sessionId, session.title) },
+            { label: isPinned ? 'Unpin' : 'Pin to Top', icon: isPinned ? '✕' : '📌', action: () => this._togglePinSession(sessionId, !isPinned) },
+            { label: 'Duplicate', icon: '⧉', action: () => this._duplicateSession(sessionId) },
+            { label: 'Export', icon: '↓', action: () => this._exportSession(sessionId, session.title) },
+            { divider: true },
+            { label: 'Archive', icon: '📦', action: () => this._archiveSession(sessionId) },
+            { label: 'Delete', icon: '🗑', action: () => this._deleteSession(sessionId), danger: true },
+        ];
+
+        items.forEach(item => {
+            if (item.divider) {
+                const hr = document.createElement('div');
+                hr.style.cssText = 'height:1px; background:rgba(255,255,255,0.06); margin:4px 8px;';
+                menu.appendChild(hr);
+                return;
+            }
+
+            const btn = document.createElement('button');
+            btn.style.cssText = `
+                display: flex; align-items: center; gap: 8px; width: 100%;
+                padding: 6px 12px; background: none; border: none;
+                color: ${item.danger ? 'var(--neon-red, #ff4444)' : 'var(--text-secondary)'};
+                cursor: pointer; font-size: 0.75rem; text-align: left;
+            `;
+            btn.innerHTML = `<span style="width:16px; text-align:center;">${item.icon}</span> ${item.label}`;
+            btn.onmouseenter = () => btn.style.background = 'rgba(0,240,255,0.08)';
+            btn.onmouseleave = () => btn.style.background = 'none';
+            btn.onclick = () => {
+                menu.remove();
+                item.action();
+            };
+            menu.appendChild(btn);
+        });
+
+        document.body.appendChild(menu);
+
+        // Close on click outside
+        const closeMenu = (ev) => {
+            if (!menu.contains(ev.target)) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeMenu), 10);
+    }
+
+    /**
+     * Rename a session via inline prompt.
+     * @param {number} sessionId - Session to rename
+     * @param {string} currentTitle - Current title for pre-fill
+     * @private
+     */
+    async _renameSession(sessionId, currentTitle) {
+        const newTitle = prompt('Rename session:', currentTitle);
+        if (!newTitle || newTitle === currentTitle) return;
+
+        try {
+            await API.put(`sessions/${sessionId}`, { title: newTitle });
+            toast.success('Session renamed');
+            state.loadSessions();
+        } catch (err) {
+            toast.error(`Rename failed: ${err.message}`);
+        }
+    }
+
+    /**
+     * Toggle pin/unpin for a session.
+     * @param {number} sessionId - Session to pin/unpin
+     * @param {boolean} pin - True to pin, false to unpin
+     * @private
+     */
+    async _togglePinSession(sessionId, pin) {
+        try {
+            await API.put(`sessions/${sessionId}`, { is_pinned: pin });
+            toast.success(pin ? 'Session pinned' : 'Session unpinned');
+            state.loadSessions();
+        } catch (err) {
+            toast.error(`Pin toggle failed: ${err.message}`);
+        }
+    }
+
+    /**
+     * Duplicate a session with all its messages.
+     * @param {number} sessionId - Session to duplicate
+     * @private
+     */
+    async _duplicateSession(sessionId) {
+        try {
+            const res = await API.post(`sessions/${sessionId}/duplicate`);
+            toast.success(`Duplicated as "${res.session.title}"`);
+            state.loadSessions();
+        } catch (err) {
+            toast.error(`Duplicate failed: ${err.message}`);
+        }
+    }
+
+    /**
+     * Export a session as JSON download.
+     * @param {number} sessionId - Session to export
+     * @param {string} title - Session title for filename
+     * @private
+     */
+    async _exportSession(sessionId, title) {
+        try {
+            const res = await API.get(`sessions/${sessionId}/export?format=json`);
+            const blob = new Blob([JSON.stringify(res, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${(title || 'session').replace(/[^a-zA-Z0-9]/g, '_')}_${sessionId}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success('Session exported');
+        } catch (err) {
+            toast.error(`Export failed: ${err.message}`);
+        }
+    }
+
+    /**
+     * Archive a session (hide from main list).
+     * @param {number} sessionId - Session to archive
+     * @private
+     */
+    async _archiveSession(sessionId) {
+        try {
+            await API.put(`sessions/${sessionId}`, { is_archived: true });
+            toast.success('Session archived');
+            // If we archived the current session, clear selection
+            if (state.state.currentSessionId === sessionId) {
+                state.state.currentSessionId = null;
+            }
+            state.loadSessions();
+        } catch (err) {
+            toast.error(`Archive failed: ${err.message}`);
+        }
+    }
+
+    /**
+     * Delete a session after confirmation.
+     * @param {number} sessionId - Session to delete
+     * @private
+     */
+    async _deleteSession(sessionId) {
+        if (!confirm('Delete this session and all its messages? This cannot be undone.')) return;
+
+        try {
+            await API.delete(`sessions/${sessionId}`);
+            toast.success('Session deleted');
+            if (state.state.currentSessionId === sessionId) {
+                state.state.currentSessionId = null;
+            }
+            state.loadSessions();
+        } catch (err) {
+            toast.error(`Delete failed: ${err.message}`);
+        }
+    }
+
+    /**
+     * Import a session from a JSON file via file picker.
+     * Accepts the format produced by the export endpoint.
+     * @private
+     */
+    async _importSession() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.style.display = 'none';
+        document.body.appendChild(input);
+
+        input.onchange = async () => {
+            const file = input.files?.[0];
+            if (!file) { input.remove(); return; }
+
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+
+                // Accept both export format and raw {title, messages}
+                const title = data.title || data.session?.title || file.name.replace('.json', '');
+                const messages = data.messages || [];
+
+                const res = await API.post('sessions/import', { title, messages });
+                toast.success(`Imported "${res.session.title}" (${res.message_count} messages)`);
+                state.loadSessions();
+                if (res.session?.id) {
+                    state.selectSession(res.session.id);
+                }
+            } catch (err) {
+                toast.error(`Import failed: ${err.message}`);
+            }
+
+            input.remove();
+        };
+
+        input.click();
     }
 
     /**
@@ -954,6 +1337,14 @@ export class ChatInterface {
         const bubbleContent = document.createElement('div');
         bubbleContent.className = 'bubble-content';
         bubbleContent.style.position = 'relative';
+
+        // Multi-character name label
+        if (!isUser && meta.charName) {
+            const nameLabel = document.createElement('div');
+            nameLabel.style.cssText = 'font-size:0.65rem; color:var(--neon-cyan); font-weight:600; margin-bottom:2px; opacity:0.8;';
+            nameLabel.textContent = meta.charName;
+            bubbleContent.appendChild(nameLabel);
+        }
 
         const textEl = document.createElement('span');
         textEl.className = 'bubble-text';
@@ -1285,6 +1676,18 @@ export class ChatInterface {
         `;
         this.container.appendChild(row);
         this.container.scrollTop = this.container.scrollHeight;
+    }
+
+    /**
+     * Escape HTML special characters for safe rendering.
+     * @param {string} str - Raw string
+     * @returns {string} Escaped string
+     * @private
+     */
+    _escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
     }
 }
 

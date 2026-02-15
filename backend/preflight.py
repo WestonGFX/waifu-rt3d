@@ -387,6 +387,19 @@ def migrate_to_v7(con: sqlite3.Connection) -> bool:
 
     if 'greeting_text' in columns:
         logger.info("Schema v7 logic: greeting_text column exists. Ensuring version is 7.")
+        # Ensure Phase 3E columns exist (added after initial v7 migration)
+        if 'vocab_categories' not in columns:
+            logger.info("  - Adding vocab_categories to characters (Phase 3E)")
+            cur.execute("ALTER TABLE characters ADD COLUMN vocab_categories TEXT")
+
+        # Check sessions table for Phase 3E columns (chat thread manager)
+        cur.execute("PRAGMA table_info(sessions)")
+        session_cols = [row[1] for row in cur.fetchall()]
+        if 'is_pinned' not in session_cols:
+            logger.info("  - Adding is_pinned, is_archived to sessions (Phase 3E)")
+            cur.execute("ALTER TABLE sessions ADD COLUMN is_pinned INTEGER DEFAULT 0")
+            cur.execute("ALTER TABLE sessions ADD COLUMN is_archived INTEGER DEFAULT 0")
+
         cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (7)")
         con.commit()
         return False

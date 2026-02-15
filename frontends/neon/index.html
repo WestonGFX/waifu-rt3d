@@ -46,9 +46,15 @@
         <div id="session-list-panel" style="border-top:1px solid rgba(255,255,255,0.05); padding:8px;">
           <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 8px; margin-bottom:4px;">
             <span style="font-family:var(--font-display); font-size:0.7rem; letter-spacing:1px; color:var(--text-muted);">CHAT THREADS</span>
-            <button id="btn-new-chat" class="btn-icon" style="width:24px; height:24px; flex:0 0 24px; font-size:0.7rem;" title="New Chat">+</button>
+            <div style="display:flex; gap:4px; align-items:center;">
+              <button id="btn-import-chat" class="btn-icon" style="width:22px; height:22px; font-size:0.55rem; opacity:0.6;" title="Import Chat">&#x2191;</button>
+              <button id="btn-show-archived" class="btn-icon" style="width:22px; height:22px; font-size:0.55rem; opacity:0.6;" title="Show Archived">&#x1F4E6;</button>
+              <button id="btn-new-chat" class="btn-icon" style="width:24px; height:24px; flex:0 0 24px; font-size:0.7rem;" title="New Chat">+</button>
+            </div>
           </div>
-          <div id="session-list" style="max-height:150px; overflow-y:auto;">
+          <input id="session-search" type="text" placeholder="Search threads..."
+                 style="width:100%; box-sizing:border-box; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.06); border-radius:4px; padding:4px 8px; color:var(--text-secondary); font-size:0.65rem; margin-bottom:4px; outline:none; display:none;">
+          <div id="session-list" style="max-height:180px; overflow-y:auto;">
             <div style="padding:8px; color:var(--text-muted); font-size:0.7rem;">Loading...</div>
           </div>
         </div>
@@ -58,10 +64,7 @@
             <button class="btn-config" id="btn-system-config" style="flex:1;">SYSTEM CONFIG</button>
             <button class="btn-config" id="btn-model-manager" style="flex:1;">MODEL HUB</button>
           </div>
-          <div style="display:flex; gap:6px;">
-            <button class="btn-config" id="btn-new-persona" style="flex:1; color:var(--neon-cyan); border-color:rgba(0,240,255,0.2);">+ NEW ENTITY</button>
-            <button class="btn-config" id="btn-memory-manager" style="flex:0 0 auto; padding:6px 12px; color:var(--neon-green); border-color:rgba(57,255,20,0.2);" title="Memory Manager (Ctrl+M)">MEMORY</button>
-          </div>
+          <button class="btn-config" id="btn-memory-manager" style="width:100%; color:var(--neon-green); border-color:rgba(57,255,20,0.2);" title="Memory Manager (Ctrl+M)">MEMORY</button>
         </div>
         </aside>
 
@@ -90,8 +93,8 @@
   <div class="ai-status-container">
     <div class="status-dot"></div>
     <div class="ai-status-lines">
-      <span class="ai-status-label ai-status-feed">UPLINKING_VISUAL_FEED...</span>
-      <span id="neural-link-status" class="ai-status-label">NEURAL_LINK: STABLE</span>
+      <span id="ai-status-top" class="ai-status-label ai-status-feed">NO CHARACTER SELECTED</span>
+      <span id="neural-link-status" class="ai-status-label">LLM: READY</span>
     </div>
   </div>
 <!-- Chat Overlay (Bottom half, gradient fade) -->
@@ -113,34 +116,90 @@
 
 <!-- COL 3: RIGHT SIDEBAR — Memory Bank -->
 <aside id="panel-right" class="glass-panel">
-  <div class="panel-header">
+  <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
     <span>MEMORY BANK</span>
+    <button id="btn-widget-picker" class="btn-icon" style="width:22px; height:22px; font-size:0.6rem; opacity:0.5;" title="Configure Widgets">&#x2699;</button>
   </div>
 
-  <div class="sidebar-content">
-    <div class="memory-section">
-      <div class="memory-header">Active Context</div>
-      <div id="mem-active" class="memory-content active">NO ACTIVE CONTEXT</div>
+  <div class="sidebar-content" id="widget-container">
+
+    <div class="dashboard-widget" data-widget-id="context" data-widget-label="Active Context">
+      <div class="widget-header">
+        <span class="widget-grip" title="Drag to reorder">&#x2630;</span>
+        <span>Active Context</span>
+      </div>
+      <div class="widget-body">
+        <div id="mem-active" class="memory-content active">NO ACTIVE CONTEXT</div>
+      </div>
     </div>
 
-    <div class="memory-section" style="flex:1;">
-      <div class="memory-header">RAG Archive</div>
-      <div id="mem-archive" class="memory-content">Index empty.</div>
+    <div class="dashboard-widget" data-widget-id="rag" data-widget-label="RAG Archive">
+      <div class="widget-header">
+        <span class="widget-grip" title="Drag to reorder">&#x2630;</span>
+        <span>RAG Archive</span>
+      </div>
+      <div class="widget-body" style="flex:1;">
+        <div id="mem-archive" class="memory-content">Index empty.</div>
+      </div>
     </div>
 
-    <div class="telemetry-panel">
-      <div class="stat-row"><span>CPU:</span><span id="stat-load" class="stat-value">--</span></div>
-      <div class="stat-row"><span>RAM:</span><span id="stat-vram" class="stat-value">--</span></div>
-      <div class="stat-row"><span>LLM:</span><span id="stat-llm-time" class="stat-value">--</span></div>
-      <div class="stat-row" id="model-info-row" style="display:none;">
-        <span>MODEL:</span><span id="stat-model-name" class="stat-value" style="font-size:0.65rem;">--</span>
+    <div class="dashboard-widget" data-widget-id="relationship" data-widget-label="Relationship">
+      <div class="widget-header">
+        <span class="widget-grip" title="Drag to reorder">&#x2630;</span>
+        <span>Relationship</span>
       </div>
-      <div class="stat-row" id="model-ctx-row" style="display:none;">
-        <span>CTX:</span><span id="stat-model-ctx" class="stat-value">--</span>
-      </div>
-          </div>
+      <div class="widget-body">
+        <div id="relationship-widget" style="padding:4px;">
+          <div style="color:var(--text-muted); font-size:0.7rem;">Select a character...</div>
         </div>
-        </aside>
+      </div>
+    </div>
+
+    <div class="dashboard-widget" data-widget-id="emotion" data-widget-label="Emotion Timeline">
+      <div class="widget-header">
+        <span class="widget-grip" title="Drag to reorder">&#x2630;</span>
+        <span>Emotion Timeline</span>
+      </div>
+      <div class="widget-body">
+        <div id="emotion-timeline-widget" style="padding:4px; max-height:80px; overflow-y:auto;">
+          <div style="color:var(--text-muted); font-size:0.7rem;">No session loaded.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-widget" data-widget-id="vocab" data-widget-label="Vocabulary">
+      <div class="widget-header">
+        <span class="widget-grip" title="Drag to reorder">&#x2630;</span>
+        <span>Vocabulary</span>
+        <button id="btn-vocab-expand" class="btn-icon" style="width:18px; height:18px; font-size:0.5rem; opacity:0.5; margin-left:auto;" title="Open full Vocab Manager">&#x2197;</button>
+      </div>
+      <div class="widget-body">
+        <div id="vocab-widget" style="padding:4px; max-height:120px; overflow-y:auto;">
+          <div style="color:var(--text-muted); font-size:0.7rem;">Loading vocab...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-widget" data-widget-id="telemetry" data-widget-label="System Telemetry">
+      <div class="widget-header">
+        <span class="widget-grip" title="Drag to reorder">&#x2630;</span>
+        <span>System</span>
+      </div>
+      <div class="widget-body telemetry-panel">
+        <div class="stat-row"><span>CPU:</span><span id="stat-load" class="stat-value">--</span></div>
+        <div class="stat-row"><span>RAM:</span><span id="stat-vram" class="stat-value">--</span></div>
+        <div class="stat-row"><span>LLM:</span><span id="stat-llm-time" class="stat-value">--</span></div>
+        <div class="stat-row" id="model-info-row" style="display:none;">
+          <span>MODEL:</span><span id="stat-model-name" class="stat-value" style="font-size:0.65rem;">--</span>
+        </div>
+        <div class="stat-row" id="model-ctx-row" style="display:none;">
+          <span>CTX:</span><span id="stat-model-ctx" class="stat-value">--</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</aside>
 
     </div>
 

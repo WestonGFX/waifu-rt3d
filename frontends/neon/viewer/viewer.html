@@ -55,6 +55,9 @@
         let gestureController = null;
         let proceduralAnimator = null;
         let mouseTracker = null;
+        // Tracks the last emotion that triggered an auto-gesture, preventing
+        // repeat gestures when the same emotion fires on consecutive messages.
+        let lastAutoGestureEmotion = null;
 
         // ══════════════════════════════════════════════════════════
         // Inline OrbitControls (minimal implementation)
@@ -296,20 +299,39 @@
          * Real-time audio-driven lip sync using Web Audio API.
          * Analyzes audio frequency data to drive the 'aa' blend shape.
          */
+        /**
+         * Real-time audio-driven lip sync using Web Audio API FFT analysis.
+         *
+         * Splits the frequency spectrum into three speech-formant bands and maps
+         * each to a distinct VRM viseme for more natural mouth movement than
+         * the previous single-band volume-to-'aa' approach.
+         *
+         * Band → viseme mapping (at 44.1kHz, fftSize=512 → ~86Hz/bin):
+         *   Low  (bins 0–5,   0–430 Hz)  → 'aa'  F1 dominant, open vowels
+         *   Mid  (bins 6–23,  516–1978Hz) → 'ou'  F2/F3 range, rounded vowels
+         *   High (bins 24–63, 2064–5418Hz)→ 'ee'  fricatives / sibilants
+         *
+         * Each viseme has independent EMA smoothing to prevent jitter while
+         * allowing high-frequency content (fricatives) to be more responsive.
+         */
         class AudioLipSync {
             constructor(vrm) {
                 this.vrm = vrm;
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 this.analyser = this.audioContext.createAnalyser();
-                this.analyser.fftSize = 256;
+                // 512-point FFT → 256 bins at ~86Hz/bin (was 256 → 128 bins at ~172Hz/bin)
+                this.analyser.fftSize = 512;
                 this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
                 this.isPlaying = false;
                 this.currentSource = null;
-                this.lastValue = 0;
+                // Per-viseme EMA state (separate smoothing for each shape)
+                this.smoothAa = 0;  // low band  → open mouth
+                this.smoothOu = 0;  // mid band  → rounded lips
+                this.smoothEe = 0;  // high band → spread / fricative
             }
 
             /**
-             * Play audio and drive lip sync from volume analysis.
+             * Play audio and drive multi-viseme lip sync from FFT analysis.
              * @param {string} audioUrl - URL of the audio file to play
              */
             async playAudioWithLipSync(audioUrl) {
@@ -331,46 +353,95 @@
                     source.onended = () => {
                         this.isPlaying = false;
                         this.currentSource = null;
-                        this.setMouthOpen(0);
+                        this._zeroAllVisemes();
                     };
 
                     this.updateLipSync();
                 } catch (error) {
                     console.error('LIPSYNC_ERROR:', error);
                     this.isPlaying = false;
-                    this.setMouthOpen(0);
+                    this._zeroAllVisemes();
                 }
             }
 
+            /**
+             * Per-frame lip sync update — computes band energies and drives visemes.
+             * Called via requestAnimationFrame while audio is playing.
+             */
             updateLipSync() {
                 if (!this.isPlaying) return;
                 this.analyser.getByteFrequencyData(this.dataArray);
-                let sum = 0;
-                for (let i = 0; i < this.dataArray.length; i++) sum += this.dataArray[i];
-                const average = sum / this.dataArray.length;
-                const normalized = Math.min(average / 128, 1.0);
-                const smoothed = normalized * 0.7 + this.lastValue * 0.3;
-                this.lastValue = smoothed;
-                this.setMouthOpen(smoothed);
+
+                // Low band: bins 0–5 (~0–430 Hz), captures F1 for open vowels
+                let lowSum = 0;
+                for (let i = 0; i <= 5; i++) lowSum += this.dataArray[i];
+
+                // Mid band: bins 6–23 (~516–1978 Hz), captures F2/F3 for rounded vowels
+                let midSum = 0;
+                for (let i = 6; i <= 23; i++) midSum += this.dataArray[i];
+
+                // High band: bins 24–63 (~2064–5418 Hz), captures fricatives/sibilants
+                let highSum = 0;
+                for (let i = 24; i <= 63; i++) highSum += this.dataArray[i];
+
+                // Normalize: bin values are 0–255, /128 gives 0–2 range, clamp to 0–1.
+                // The /128 threshold biases toward active speech rather than ambient noise.
+                const aaRaw = Math.min(lowSum  / 6  / 128, 1.0);
+                const ouRaw = Math.min(midSum  / 18 / 128, 1.0);
+                const eeRaw = Math.min(highSum / 40 / 128, 1.0);
+
+                // Per-viseme EMA — alphas tuned to physiological movement speed:
+                //   'aa' (jaw): moderately responsive, alpha=0.4
+                //   'ou' (lip rounding): slowest — sustained posture, alpha=0.35
+                //   'ee' (lip spread): most responsive — tracks fast fricatives, alpha=0.5
+                this.smoothAa = aaRaw * 0.4  + this.smoothAa * 0.6;
+                this.smoothOu = ouRaw * 0.35 + this.smoothOu * 0.65;
+                this.smoothEe = eeRaw * 0.5  + this.smoothEe * 0.5;
+
+                this._applyVisemes(this.smoothAa, this.smoothOu, this.smoothEe);
                 requestAnimationFrame(() => this.updateLipSync());
             }
 
-            setMouthOpen(value) {
+            /**
+             * Apply computed viseme values to the VRM expression manager.
+             * Each viseme uses an individual try/catch so a VRM missing one
+             * blend shape doesn't prevent the others from being applied.
+             *
+             * @param {number} aa - 0–1, open mouth ('aa')
+             * @param {number} ou - 0–1, rounded lips ('ou')
+             * @param {number} ee - 0–1, spread lips / fricative ('ee')
+             */
+            _applyVisemes(aa, ou, ee) {
                 if (!this.vrm) return;
-                if (this.vrm.expressionManager) {
-                    this.vrm.expressionManager.setValue('aa', value);
-                } else if (this.vrm.blendShapeProxy) {
-                    this.vrm.blendShapeProxy.setValue('aa', value);
-                }
+                const em = this.vrm.expressionManager || this.vrm.blendShapeProxy;
+                if (!em) return;
+                try { em.setValue('aa', aa); } catch (e) {}
+                try { em.setValue('ou', ou); } catch (e) {}
+                try { em.setValue('ee', ee); } catch (e) {}
             }
 
+            /**
+             * Zero all viseme blend shapes and reset EMA state.
+             * Resets smoothing state so the next utterance starts from 0,
+             * not from the decayed value of the previous one.
+             */
+            _zeroAllVisemes() {
+                this.smoothAa = 0;
+                this.smoothOu = 0;
+                this.smoothEe = 0;
+                this._applyVisemes(0, 0, 0);
+            }
+
+            /**
+             * Stop audio playback and clear all viseme state.
+             */
             stop() {
                 if (this.currentSource) {
                     try { this.currentSource.stop(); } catch (e) {}
                     this.currentSource = null;
                 }
                 this.isPlaying = false;
-                this.setMouthOpen(0);
+                this._zeroAllVisemes();
             }
         }
 
@@ -829,6 +900,50 @@
         };
 
         // ══════════════════════════════════════════════════════════
+        // Emotion → Auto-Gesture
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Maps emotion names to candidate gesture(s) triggered automatically
+         * when the character's emotion changes. Arrays are randomly sampled
+         * so the character doesn't always use the same motion for the same feeling.
+         * Emotions absent from the map (e.g. 'angry', 'neutral') trigger nothing —
+         * stillness is intentional for those states.
+         */
+        const EMOTION_GESTURE_MAP = {
+            happy:     ['wave', 'clap'],
+            excited:   ['celebrate'],
+            sad:       ['shy'],
+            surprised: ['tilt'],
+            thinking:  ['think'],
+            confused:  ['think'],
+        };
+
+        /**
+         * Conditionally play a contextual gesture when the character's emotion changes.
+         *
+         * Guards (all must pass):
+         *   1. Emotion changed from last auto-gesture trigger — prevents re-firing
+         *   2. No gesture currently playing — avoids interrupting in-progress animation
+         *   3. 40% random chance — keeps gestures spontaneous, not mechanical every message
+         *   4. Emotion has an entry in EMOTION_GESTURE_MAP
+         *
+         * @param {string|null} emotion - Incoming emotion name from setEmotion/setExpression
+         */
+        function _triggerAutoGesture(emotion) {
+            if (!emotion || !gestureController) return;
+            if (emotion === lastAutoGestureEmotion) return;        // dedup
+            if (gestureController.currentGesture !== null) return; // don't interrupt
+            if (Math.random() > 0.4) return;                       // 40% chance
+            const candidates = EMOTION_GESTURE_MAP[emotion];
+            if (!candidates || candidates.length === 0) return;
+            lastAutoGestureEmotion = emotion;
+            const gesture = candidates[Math.floor(Math.random() * candidates.length)];
+            gestureController.playGesture(gesture);
+            console.log(`[Viewer] Auto-gesture: ${emotion} → ${gesture}`);
+        }
+
+        // ══════════════════════════════════════════════════════════
         // Main Init
         // ══════════════════════════════════════════════════════════
 
@@ -1249,6 +1364,8 @@
                     if (proceduralAnimator && e.data.emotion) {
                         proceduralAnimator.setEmotion(e.data.emotion, e.data.intensity || 0.7);
                     }
+                    // Auto-gesture: trigger contextual gesture on emotion change (40% chance)
+                    _triggerAutoGesture(e.data.emotion);
                 }
                 else if (type === 'setEmotion') {
                     // Alias for setExpression — sent by ViewerBridge
@@ -1260,6 +1377,8 @@
                     if (proceduralAnimator && emo) {
                         proceduralAnimator.setEmotion(emo, inten);
                     }
+                    // Auto-gesture: trigger contextual gesture on emotion change (40% chance)
+                    _triggerAutoGesture(emo);
                 }
                 else if (type === 'playGesture') {
                     const gesture = payload?.gesture || e.data.gesture;
@@ -1293,6 +1412,49 @@
         }
         init();
     </script>
+
+    <!-- Fix 8: Camera controls HUD — shown in bottom-left, fades in on canvas hover.
+         pointer-events:none keeps it from blocking orbit/zoom/pan interactions. -->
+    <style>
+        #camera-hud {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            z-index: 10;
+            font-family: monospace;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.25);
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            transition: color 0.3s;
+        }
+        #camera-hud:hover {
+            color: rgba(255, 255, 255, 0.55);
+        }
+        .hud-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .hud-row kbd {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 3px;
+            padding: 0 4px;
+            font-family: monospace;
+            font-size: 9px;
+            min-width: 48px;
+            text-align: center;
+        }
+    </style>
+    <div id="camera-hud">
+        <div class="hud-row"><kbd>L-Drag</kbd> Orbit</div>
+        <div class="hud-row"><kbd>Scroll</kbd> Zoom</div>
+        <div class="hud-row"><kbd>R-Drag</kbd> Pan</div>
+        <div class="hud-row"><kbd>Ctrl+0</kbd> Reset</div>
+    </div>
 </body>
 
 </html>

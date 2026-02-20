@@ -450,8 +450,10 @@ export class SettingsModal {
             this.tempConfig.model_vrm = activeChar.vrm_model_url || '';
             // Live2D model path
             this.tempConfig.live2d_model = activeChar.live2d_model || '';
-            // Background image
-            this.tempConfig.bg_image = activeChar.bg_image || '';
+            // Background image (DB column is background_url, not bg_image)
+            this.tempConfig.bg_image = activeChar.background_url || '';
+            // Background mode for the viewer (Fix 9: pre-fill so gallery shows current selection)
+            this.tempConfig.background_mode = activeChar.background_mode || 'transparent';
         }
 
         // Flatten nested config values for toggle fields
@@ -785,6 +787,45 @@ export class SettingsModal {
                 }
             };
             selectWrap.appendChild(input);
+
+            // Upload button for Live2D zip uploads
+            if (def.id === 'live2d_model') {
+                const uploadBtn = document.createElement('button');
+                uploadBtn.className = 'btn btn-sm';
+                uploadBtn.style.cssText = 'margin-top:4px; width:100%; font-size:0.65rem;';
+                uploadBtn.textContent = '+ Upload Live2D (.zip)';
+                /**
+                 * Opens a hidden file input, POSTs the zip to /api/upload/live2d,
+                 * then refreshes the model list and selects the newly uploaded model.
+                 */
+                uploadBtn.onclick = async () => {
+                    const inp = document.createElement('input');
+                    inp.type = 'file';
+                    inp.accept = '.zip';
+                    inp.onchange = async (ev) => {
+                        const file = ev.target.files[0];
+                        if (!file) return;
+                        try {
+                            const fd = new FormData();
+                            fd.append('file', file);
+                            const res = await fetch('/api/upload/live2d', { method: 'POST', body: fd });
+                            const data = await res.json();
+                            if (data.ok) {
+                                toast.success(`Uploaded: ${data.name}`);
+                                await this.fetchLive2dModels();
+                                this.tempConfig[def.id] = data.url;
+                                this.switchTab(this.currentTab);
+                            } else {
+                                toast.error(data.detail || 'Upload failed');
+                            }
+                        } catch (err) {
+                            toast.error(`Upload failed: ${err.message}`);
+                        }
+                    };
+                    inp.click();
+                };
+                row.appendChild(uploadBtn);
+            }
 
             // Upload button for VRM fields
             if (def.id === 'model_vrm') {
@@ -1337,10 +1378,34 @@ export class SettingsModal {
                     charUpdates.live2d_model = '';
                 }
 
+                // Fix 2: Include background fields — DB column is background_url, not bg_image
+                if (this.tempConfig.bg_image !== undefined) charUpdates.background_url = this.tempConfig.bg_image;
+                if (this.tempConfig.background_mode) charUpdates.background_mode = this.tempConfig.background_mode;
+
                 if (Object.keys(charUpdates).length > 0) {
                     await state.saveCharacter(activeCharId, charUpdates);
+                    // Fix 1: Reload character into viewer immediately so changes take effect without a page reload.
+                    // state.saveCharacter() calls loadCharacters() internally, so state.state.characters
+                    // is already refreshed by the time we read it back here.
+                    const freshChar = state.state.characters.find(c => c.id == activeCharId);
+                    if (freshChar && window.app?.viewer) {
+                        window.app.viewer.loadCharacter(freshChar);
+                    }
+                    // Fix 3: Apply background immediately if background settings changed
+                    if (charUpdates.background_url !== undefined || charUpdates.background_mode) {
+                        window.app?.viewer?.setBackground(
+                            charUpdates.background_mode || 'transparent',
+                            charUpdates.background_url || ''
+                        );
+                    }
                 }
             }
+
+            // Remove character-specific fields before persisting to global app.json.
+            // These were already saved via charUpdates above; leaving them in tempConfig
+            // would clobber unrelated global config keys on the next load.
+            delete this.tempConfig.bg_image;
+            delete this.tempConfig.background_mode;
 
             // Map flat UI fields back to nested config structure before saving
             // active_llm → llm.model

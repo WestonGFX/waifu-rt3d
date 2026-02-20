@@ -2509,6 +2509,70 @@ async def delete_voice_sample(char_id: int):
     return {"ok": True}
 
 
+@app.post("/api/upload/live2d")
+async def upload_live2d_endpoint(file: UploadFile = File(...)):
+    """Upload a Live2D model as a zip archive.
+
+    Extracts the zip to ``backend/storage/live2d/{model_name}/``.
+    The model name is derived from the zip filename (without extension).
+
+    Args:
+        file: A ``.zip`` file containing a Live2D model bundle (must
+            include at least one ``.model3.json`` file plus textures).
+
+    Returns:
+        dict: ``{"ok": True, "name": model_name, "url": "/live2d/{name}/...model3.json"}``
+
+    Raises:
+        HTTPException 400: If the file is not ``.zip``, has an invalid
+            filename, contains path traversal entries (zip-slip), or
+            has no ``.model3.json`` inside.
+        HTTPException 500: If extraction fails for an unexpected reason.
+
+    Example:
+        >>> # POST /api/upload/live2d  multipart body: file=ariu.zip
+        >>> # → {"ok": true, "name": "ariu", "url": "/live2d/ariu/ariu.model3.json"}
+    """
+    import io
+    import zipfile
+
+    if not file.filename.lower().endswith(".zip"):
+        raise HTTPException(400, "File must be .zip")
+
+    # Sanitise the model name: alphanumeric plus underscores and hyphens only
+    safe_name = "".join(c for c in Path(file.filename).stem if c.isalnum() or c in "_-")
+    if not safe_name:
+        raise HTTPException(400, "Invalid filename — use only alphanumeric characters")
+
+    dest = STORAGE / "live2d" / safe_name
+    dest.mkdir(parents=True, exist_ok=True)
+
+    try:
+        content = await file.read()
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            # Security: reject zip-slip path traversal attempts
+            for member in zf.namelist():
+                if ".." in member or member.startswith("/"):
+                    raise HTTPException(400, "Invalid zip path entry — possible path traversal")
+            zf.extractall(dest)
+
+        # Locate the .model3.json to return a usable viewer URL
+        model3_files = list(dest.rglob("*.model3.json"))
+        if not model3_files:
+            import shutil
+            shutil.rmtree(dest, ignore_errors=True)
+            raise HTTPException(400, "Zip contains no .model3.json file")
+
+        rel = model3_files[0].relative_to(STORAGE / "live2d")
+        logger.info(f"Live2D model uploaded: {safe_name} → {rel}")
+        return {"ok": True, "name": safe_name, "url": f"/live2d/{rel}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Live2D upload failed: {e}")
+        raise HTTPException(500, "Upload failed")
+
+
 # ==================== RELATIONSHIP TRACKING ====================
 
 @app.get("/api/characters/{char_id}/relationship")

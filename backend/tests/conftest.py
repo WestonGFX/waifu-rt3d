@@ -54,7 +54,8 @@ def _create_schema(db_path: Path) -> None:
                 id INTEGER PRIMARY KEY,
                 title TEXT,
                 created_ts INTEGER DEFAULT (strftime('%s','now')),
-                archived INTEGER DEFAULT 0
+                archived INTEGER DEFAULT 0,
+                summary TEXT
             );
 
             CREATE TABLE IF NOT EXISTS messages (
@@ -63,6 +64,14 @@ def _create_schema(db_path: Path) -> None:
                 role TEXT NOT NULL,
                 text TEXT NOT NULL,
                 ts INTEGER DEFAULT (strftime('%s','now')),
+                char_id INTEGER,
+                is_active INTEGER DEFAULT 1,
+                emotion TEXT,
+                parent_id INTEGER,
+                token_count INTEGER,
+                input_token_count INTEGER,
+                generation_time_ms INTEGER,
+                tokens_per_second REAL,
                 FOREIGN KEY(session_id) REFERENCES sessions(id)
             );
 
@@ -77,7 +86,15 @@ def _create_schema(db_path: Path) -> None:
                 tts_rate TEXT,
                 personality_traits TEXT,
                 live2d_model TEXT,
-                model_type TEXT
+                model_type TEXT,
+                avatar_2d_url TEXT,
+                vrm_model_url TEXT,
+                greeting_text TEXT,
+                greeting_animation TEXT,
+                background_url TEXT,
+                background_mode TEXT DEFAULT 'transparent',
+                voice_sample_path TEXT,
+                vocab_categories TEXT
             );
             """
         )
@@ -85,8 +102,9 @@ def _create_schema(db_path: Path) -> None:
             """
             INSERT OR REPLACE INTO characters (
                 id, name, system_prompt, avatar_url, voice_id, tts_provider,
-                tts_pitch, tts_rate, personality_traits, live2d_model, model_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                tts_pitch, tts_rate, personality_traits, live2d_model, model_type,
+                avatar_2d_url, vrm_model_url, background_url, background_mode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 1,
@@ -100,6 +118,10 @@ def _create_schema(db_path: Path) -> None:
                 "[]",
                 "",
                 "3d",
+                "",
+                "",
+                "",
+                "transparent",
             ),
         )
         con.commit()
@@ -112,7 +134,8 @@ def _install_fake_llm(monkeypatch: pytest.MonkeyPatch) -> None:
     registry_mod = types.ModuleType("backend.llm.registry")
 
     class StubAdapter:
-        def chat(self, _messages, _model, _endpoint, _api_key):
+        def chat(self, _messages, _model, _endpoint, _api_key, **kwargs):
+            """Return a canned OK response regardless of kwargs (temperature, max_tokens, etc.)."""
             return {
                 "ok": True,
                 "reply": "[emotion:happy] [gesture:wave] Stubbed assistant reply"

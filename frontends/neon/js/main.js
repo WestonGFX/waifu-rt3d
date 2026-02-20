@@ -1,5 +1,7 @@
 import { state } from './core/StateManager.js';
+import { bus } from './core/EventBus.js';
 import { logger } from './core/Logger.js';
+import { live2d } from './live2d/Live2DManager.js';
 import { Dashboard } from './components/Dashboard.js';
 import { CharacterGrid } from './components/CharacterGrid.js';
 import { SettingsModal } from './components/SettingsModal.js';
@@ -22,6 +24,19 @@ console.log("%c[Boot] Initiating CyberDeck V3.0...", "color:#00f0ff; font-weight
 window.onerror = (msg, url, line) => {
     logger.error("Global", `${msg} (${url}:${line})`);
 };
+
+/**
+ * Apply the bg_mode setting from config to the document body.
+ * CSS rules keyed on body[data-bg-mode="..."] control the decorative background.
+ *
+ * @param {string} mode - One of: 'void', 'bento-gradient', 'digital-rain', 'city-video'
+ */
+function applyBgMode(mode) {
+    if (!mode) return;
+    // Normalize display name to a CSS-safe data attribute value (e.g., "Bento Gradient" → "bento-gradient")
+    document.body.dataset.bgMode = mode.toLowerCase().replace(/\s+/g, '-');
+    console.log(`%c[BgMode] Applied: ${document.body.dataset.bgMode}`, 'color:#ff9900;');
+}
 
 // Main Initialization Logic
 async function initApp() {
@@ -124,10 +139,22 @@ async function initApp() {
             };
         }
 
+        // Fix 5: Eagerly init Live2D PIXI canvas so it's ready before any mode switch.
+        // Lazy init inside loadModel() can cause a race when the user switches modes quickly.
+        live2d.init().catch(e => console.warn('[Live2D] Eager init failed:', e));
+
         // 3. Hydrate State
         await state.init();
 
         logger.success("System", "State Hydrated");
+
+        // Fix 10: Apply bg_mode from config immediately after state is loaded.
+        // bg_mode controls the decorative background behind the UI panels.
+        applyBgMode(state.state.config?.bg_mode);
+        // Also re-apply whenever settings are saved (config:updated fires after each saveConfig)
+        bus.on('config:updated', (cfg) => {
+            if (cfg.bg_mode) applyBgMode(cfg.bg_mode);
+        });
 
         // 4. Check Dev Mode Pref
         if (state.state.config && state.state.config.dev_mode) {

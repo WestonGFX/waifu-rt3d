@@ -53,6 +53,13 @@ export class ViewerBridge {
             live2d.hide();
             console.log('[ViewerBridge] Switched to VRM mode');
         }
+        // Fix 4: Reload current character so the new mode takes effect immediately.
+        // Without this, the user would see the old engine's output until next character switch.
+        const currentId = state.state.currentCharacterId;
+        if (currentId) {
+            const char = state.state.characters.find(c => c.id === currentId);
+            if (char) this.loadCharacter(char);
+        }
     }
 
     /** @returns {boolean} True if currently in Live2D mode */
@@ -111,24 +118,34 @@ export class ViewerBridge {
     loadCharacter(char) {
         console.log("[ViewerBridge] Loading Character:", char.name);
 
-        if (this.isLive2D && char.live2d_model) {
-            // Live2D mode — load directly on canvas
-            live2d.loadModel(char.live2d_model);
-        } else {
-            // VRM mode — load via iframe postMessage
-            this._post({
-                type: 'loadCharacter',
-                payload: {
-                    modelUrl: char.vrm_model_url || char.avatar_url || '/files/avatars/default.vrm',
-                    meta: char
-                }
-            });
+        if (this.isLive2D) {
+            // Fix 4: In Live2D mode, never fall through to VRM.
+            // If no live2d_model is set, canvas stays empty — that's intentional UX.
+            if (char.live2d_model) {
+                live2d.loadModel(char.live2d_model);
+            }
+            // Apply per-character background and greeting, then return.
+            if (char.background_url) {
+                this.setBackground(char.background_mode || 'image', char.background_url);
+            }
+            if (char.greeting_animation) {
+                setTimeout(() => this.playGesture(char.greeting_animation), 500);
+            }
+            return;
         }
+
+        // VRM mode — load via iframe postMessage
+        this._post({
+            type: 'loadCharacter',
+            payload: {
+                modelUrl: char.vrm_model_url || char.avatar_url || '/files/avatars/default.vrm',
+                meta: char
+            }
+        });
 
         // Apply per-character background if set
         if (char.background_url) {
-            const mode = char.background_mode || 'image';
-            this.setBackground(mode, char.background_url);
+            this.setBackground(char.background_mode || 'image', char.background_url);
         }
 
         // Play greeting animation if set

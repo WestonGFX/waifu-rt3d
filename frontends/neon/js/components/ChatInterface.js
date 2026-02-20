@@ -336,10 +336,14 @@ export class ChatInterface {
      */
     setThinking(thinking, avatarUrl) {
         this.isThinking = thinking;
-        this.tokenCount = 0;
-        this.streamStartTime = null;
-        this.prefillStartTime = performance.now();
-        this.inputTokens = 0;
+        if (thinking) {
+            // Reset counters only when entering thinking state — not on exit,
+            // so the final "DONE: N tok" label can read the real token count.
+            this.tokenCount = 0;
+            this.streamStartTime = null;
+            this.prefillStartTime = performance.now();
+            this.inputTokens = 0;
+        }
 
         const dot = document.querySelector('.status-dot');
         const label = document.getElementById('neural-link-status');

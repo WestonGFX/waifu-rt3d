@@ -543,6 +543,30 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
     pointer-events: none;
 }
 
+/* Fix 5: Friendly prompt shown inside the viewport when no VRM model is loaded in auto mode.
+   Hidden by default; only surfaces via the .no-model selector on .main-view. */
+.no-model-placeholder {
+    display: none;
+}
+
+.main-view.layout-auto.no-model .no-model-placeholder {
+    display: flex;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 0.4rem;
+    z-index: 2;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    pointer-events: none;
+    opacity: 0.5;
+}
+
 /* --- Full Chat Mode --- */
 /* Viewport completely hidden, chat owns the panel */
 .main-view.layout-fullchat .viewport-layer {
@@ -577,11 +601,15 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
 }
 
 /* --- Toggle View Button --- */
+/* Fix 6: Moved from top-right (conflicted with toast z-index:10000) to bottom-center.
+   The chat-layer starts at 45% from top, so placing the button just above that boundary
+   keeps it visible in both chat-only and split-view states. */
 .btn-toggle-view {
     position: absolute;
-    top: var(--space-sm);
-    right: var(--space-sm);
-    z-index: 15;
+    bottom: calc(45% + var(--space-sm));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
     display: none;
     align-items: center;
     gap: 0.25rem;
@@ -596,6 +624,7 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
     letter-spacing: 0.05em;
     cursor: pointer;
     transition: all 0.2s;
+    white-space: nowrap;
 }
 
 .btn-toggle-view:hover {
@@ -609,10 +638,7 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
     display: flex;
 }
 
-/* Push viewport toolbar down when toggle button is visible */
-.main-view.layout-toggle .viewport-toolbar {
-    top: 42px;
-}
+/* Toggle button is now bottom-center, so viewport toolbar stays at its default top-right position */
 
 /* ═══ VIEWPORT TOOLBAR (top-right of 3D viewport) ═══ */
 /* Positioned below the toggle-view button to avoid overlap */
@@ -1231,6 +1257,29 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
         100% {
             transform: rotate(360deg);
         }
+}
+
+/* ─── Dynamic Background Modes (body[data-bg-mode="..."]) ─── */
+
+/* Default: bento-gradient — inherits existing gradient from base styles */
+body[data-bg-mode="bento-gradient"],
+body:not([data-bg-mode]) {
+    /* Intentionally empty — base stylesheet handles the gradient */
+}
+
+/* Void: pure black, no decoration */
+body[data-bg-mode="void"] {
+    background: #000 !important;
+}
+
+/* Digital Rain: dark with a green tint (CSS-only approximation) */
+body[data-bg-mode="digital-rain"] {
+    background: #000d00 !important;
+}
+
+/* City Video: deep navy placeholder — actual video managed via JS */
+body[data-bg-mode="city-video"] {
+    background: #0a0a1a !important;
 }
 
 /* ═══ MODEL MANAGER & PERSONA CREATOR ANIMATIONS ═══ */

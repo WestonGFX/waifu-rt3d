@@ -77,6 +77,11 @@
   <div class="viewport-layer">
     <iframe id="vrm-iframe" src="viewer/viewer.html"></iframe>
     <canvas id="live2d-canvas" style="display:none; position:absolute; inset:0; pointer-events:auto;"></canvas>
+    <!-- Shown in layout-auto mode when no VRM model is loaded -->
+    <div class="no-model-placeholder">
+      <span>NO MODEL LOADED</span>
+      <small>Settings &rarr; Character &rarr; VRM Model</small>
+    </div>
   </div>
   <!-- Toggle View Button (visible only in Toggle View layout mode) -->
   <button id="btn-toggle-view" class="btn-toggle-view" title="Toggle 3D Viewport">

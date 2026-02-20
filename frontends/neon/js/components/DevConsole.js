@@ -22,14 +22,34 @@ export class DevConsole {
         /** @type {{totalTokens: number, sessions: Object<string, number>}} */
         this.tokenStats = { totalTokens: 0, sessions: {} };
 
+        /** @type {Array<{msg: string, source: string, ts: Date, type: 'error'|'warn'|'backend'}>} */
+        this.errorLog = [];
+
         this._visible = false;
         this._activeTab = 'api';
 
         this._injectHTML();
         this._hookFetch();
+        this._hookConsoleErrors();
 
         // Listen for chat metadata to track tokens
         this._listenForTokens();
+    }
+
+    /**
+     * Open the developer console on a specific tab.
+     * @param {string} [tab='errors'] - Tab name: 'api', 'errors', 'tokens', 'memory', 'config'
+     */
+    openTab(tab = 'errors') {
+        this._activeTab = tab;
+        this.open();
+        // Update tab button active styling after injected HTML exists
+        requestAnimationFrame(() => {
+            document.querySelectorAll('.dev-tab').forEach(b => {
+                b.style.background = b.dataset.tab === tab ? 'rgba(0,240,255,0.1)' : 'transparent';
+                b.style.color = b.dataset.tab === tab ? 'var(--neon-cyan)' : 'var(--text-muted)';
+            });
+        });
     }
 
     /**
@@ -87,6 +107,7 @@ export class DevConsole {
                 ">
                     <span style="color:var(--neon-cyan); font-family:var(--font-display); letter-spacing:1px; font-size:0.7rem; flex:1;">DEV CONSOLE</span>
                     <button class="dev-tab" data-tab="api" style="padding:3px 8px; border:1px solid var(--glass-border); background:rgba(0,240,255,0.1); color:var(--neon-cyan); border-radius:4px; cursor:pointer; font-size:0.65rem;">API</button>
+                    <button class="dev-tab" data-tab="errors" style="padding:3px 8px; border:1px solid var(--glass-border); background:transparent; color:var(--text-muted); border-radius:4px; cursor:pointer; font-size:0.65rem;">ERRORS</button>
                     <button class="dev-tab" data-tab="tokens" style="padding:3px 8px; border:1px solid var(--glass-border); background:transparent; color:var(--text-muted); border-radius:4px; cursor:pointer; font-size:0.65rem;">TOKENS</button>
                     <button class="dev-tab" data-tab="memory" style="padding:3px 8px; border:1px solid var(--glass-border); background:transparent; color:var(--text-muted); border-radius:4px; cursor:pointer; font-size:0.65rem;">MEMORY</button>
                     <button class="dev-tab" data-tab="config" style="padding:3px 8px; border:1px solid var(--glass-border); background:transparent; color:var(--text-muted); border-radius:4px; cursor:pointer; font-size:0.65rem;">CONFIG</button>
@@ -150,6 +171,49 @@ export class DevConsole {
         };
 
         document.onmouseup = () => { isDragging = false; };
+    }
+
+    /**
+     * Hook window.onerror and unhandledrejection to capture client-side errors.
+     * Also polls /api/logs every 30s to surface backend errors.
+     * @private
+     */
+    _hookConsoleErrors() {
+        const self = this;
+
+        const addError = (msg, source, type = 'error') => {
+            self.errorLog.unshift({ msg: String(msg), source: source || '', ts: new Date(), type });
+            if (self.errorLog.length > 200) self.errorLog.pop();
+            if (self._visible && self._activeTab === 'errors') self._render();
+        };
+
+        // Client JS errors
+        window.addEventListener('error', (e) => {
+            addError(e.message || 'Unknown error', e.filename ? `${e.filename}:${e.lineno}` : 'window.onerror');
+        });
+
+        // Unhandled promise rejections
+        window.addEventListener('unhandledrejection', (e) => {
+            addError(e.reason?.message || String(e.reason), 'unhandledrejection');
+        });
+
+        // Poll backend error log
+        const pollBackendLogs = async () => {
+            try {
+                const res = await window._origFetch
+                    ? window._origFetch('/api/logs')
+                    : fetch('/api/logs');
+                const data = await res.json();
+                (data.logs || []).forEach(entry => {
+                    if (entry.level === 'ERROR' || entry.level === 'WARNING') {
+                        addError(entry.message || JSON.stringify(entry), `backend:${entry.level}`, 'backend');
+                    }
+                });
+            } catch (_) { /* Backend unreachable, skip */ }
+        };
+
+        pollBackendLogs();
+        setInterval(pollBackendLogs, 30000);
     }
 
     /**
@@ -233,7 +297,8 @@ export class DevConsole {
         if (!content) return;
 
         switch (this._activeTab) {
-            case 'api': this._renderAPILog(content); break;
+            case 'api':    this._renderAPILog(content); break;
+            case 'errors': this._renderErrors(content); break;
             case 'tokens': this._renderTokens(content); break;
             case 'memory': this._renderMemory(content); break;
             case 'config': this._renderConfig(content); break;
@@ -263,6 +328,45 @@ export class DevConsole {
                 <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${entry.url}">${entry.url}</span>
                 <span style="color:${statusColor}; min-width:28px; text-align:right;">${entry.status || 'ERR'}</span>
                 <span style="color:${timeColor}; min-width:45px; text-align:right;">${entry.time}ms</span>
+            </div>`;
+        }).join('');
+    }
+
+    /**
+     * Render the error log tab — shows client JS errors and backend ERROR/WARNING logs.
+     * Client errors: window.onerror + unhandledrejection.
+     * Backend errors: polled from /api/logs every 30s.
+     * @private
+     * @param {HTMLElement} el
+     */
+    _renderErrors(el) {
+        if (this.errorLog.length === 0) {
+            el.innerHTML = `
+                <div style="color:var(--neon-green); padding:20px; text-align:center; font-size:0.7rem;">
+                    ✓ No errors detected. Backend logs polled every 30s.
+                </div>`;
+            return;
+        }
+
+        el.innerHTML = this.errorLog.map(entry => {
+            const typeColor = entry.type === 'backend' ? '#ffaa00'
+                            : entry.type === 'warn'    ? '#ffaa00'
+                            : 'var(--neon-magenta)';
+            const badge = entry.type === 'backend' ? 'BACKEND'
+                        : entry.type === 'warn'    ? 'WARN'
+                        : 'JS ERROR';
+            const time = entry.ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            return `<div style="
+                padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.04);
+                display:grid; grid-template-columns:55px 60px 1fr; gap:4px; align-items:start;
+            ">
+                <span style="color:var(--text-muted); font-size:0.6rem;">${time}</span>
+                <span style="color:${typeColor}; font-size:0.6rem; font-weight:bold;">${badge}</span>
+                <div>
+                    <div style="color:var(--text-main); word-break:break-word; line-height:1.4;">${entry.msg}</div>
+                    ${entry.source ? `<div style="color:var(--text-muted); font-size:0.6rem; margin-top:1px;">${entry.source}</div>` : ''}
+                </div>
             </div>`;
         }).join('');
     }

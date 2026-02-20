@@ -69,6 +69,10 @@
         let _fpsFrameCount = 0;
         let _fpsLastTime = 0;
         let _fpsDisplay = 0;
+        // FPS cap state — 0 means unlimited (default). Set via setFpsTarget postMessage.
+        // When set, the animate() loop skips rendering until the target interval elapses.
+        let _fpsTargetMs = 0;
+        let _fpsLastRenderTime = 0;
 
         // ══════════════════════════════════════════════════════════
         // Inline OrbitControls (minimal implementation)
@@ -1102,6 +1106,13 @@
 
             function animate() {
                 requestAnimationFrame(animate);
+                // FPS cap: skip rendering if the target frame interval hasn't elapsed.
+                // rAF still fires at ~60Hz; we just do nothing on the skipped frames.
+                if (_fpsTargetMs > 0) {
+                    const _now = performance.now();
+                    if (_now - _fpsLastRenderTime < _fpsTargetMs) return;
+                    _fpsLastRenderTime = _now;
+                }
                 // Cap delta to 100ms to prevent animation pops when tab regains focus.
                 // Browsers throttle rAF to ~1fps while hidden; on resume getDelta() returns
                 // the full elapsed time, causing lerp snap and sin() position jumps.
@@ -1433,6 +1444,25 @@
                             setBlendShape(name, value);
                         });
                     }
+                }
+                else if (type === 'showFpsOverlay') {
+                    // Toggle the in-viewport FPS counter overlay.
+                    // Does NOT require VRM to be loaded — FPS counter runs regardless.
+                    const fpsEl = document.getElementById('fps-overlay');
+                    if (fpsEl) {
+                        fpsEl.style.display = payload?.visible ? 'block' : 'none';
+                    }
+                }
+                else if (type === 'setFpsTarget') {
+                    // Set the render loop FPS cap. 0 = unlimited.
+                    // Converts "30"/"60"/"120"/"Unlimited" labels to millisecond intervals.
+                    const target = payload?.fps;
+                    if (!target || target === 'Unlimited' || target === 0) {
+                        _fpsTargetMs = 0;  // unlimited
+                    } else {
+                        _fpsTargetMs = 1000 / Number(target);
+                    }
+                    _fpsLastRenderTime = 0;  // reset so next frame renders immediately
                 }
             });
 

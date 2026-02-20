@@ -33,7 +33,10 @@
         --font-mono: 'JetBrains Mono', monospace;
     --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
     --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.6);
-        --shadow-glow: 0 0 20px rgba(0, 240, 255, 0.15);
+    /* --glow-intensity: 0–1 float set by the "Neon Glow Intensity" slider.
+       calc() inside rgba() scales glow alpha so all themed shadows react together. */
+    --glow-intensity: 1;
+        --shadow-glow: 0 0 20px rgba(0, 240, 255, calc(0.15 * var(--glow-intensity)));
 }
 
 /* ═══ THEMES ═══ */
@@ -84,9 +87,9 @@
         --neon-magenta: #c44dff;
         --neon-green: #ffd700;
         --neon-yellow: #ff9a3c;
-        --shadow-glow: 0 0 20px rgba(255, 107, 203, 0.15);
+        --shadow-glow: 0 0 20px rgba(255, 107, 203, calc(0.15 * var(--glow-intensity)));
     }
-    
+
     [data-theme="bubblegum"] {
         --bg-void: #ffecf2;
         --bg-deep: #fff0f5;
@@ -111,7 +114,7 @@
         --neon-yellow: #ffff00;
         --glass-panel: rgba(0, 20, 0, 0.85);
         --glass-border: rgba(0, 255, 0, 0.2);
-        --shadow-glow: 0 0 20px rgba(0, 255, 65, 0.15);
+        --shadow-glow: 0 0 20px rgba(0, 255, 65, calc(0.15 * var(--glow-intensity)));
     }
 
     /* Blurple — Discord-inspired purple/blue */
@@ -126,7 +129,7 @@
         --neon-yellow: #fee75c;
         --glass-panel: rgba(30, 31, 46, 0.85);
         --glass-border: rgba(88, 101, 242, 0.3);
-        --shadow-glow: 0 0 20px rgba(88, 101, 242, 0.15);
+        --shadow-glow: 0 0 20px rgba(88, 101, 242, calc(0.15 * var(--glow-intensity)));
     }
 
 
@@ -206,6 +209,7 @@
    flash borders on mouseover — it looks like a rendering glitch. */
 .glass-panel:hover:not(#panel-left):not(.main-view):not(#panel-right):not(.modal-overlay .glass-panel) {
     border-color: rgba(255, 255, 255, 0.12) !important;
+    box-shadow: var(--shadow-panel), var(--shadow-glow);
 }
 
 

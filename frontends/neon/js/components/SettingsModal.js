@@ -107,6 +107,8 @@ const SETTINGS_SCHEMA = {
             { id: "chat_layout", name: "Chat Layout", type: "select", options: ["Auto (Recommended)", "Full Chat", "Toggle View"], default: "Auto (Recommended)", desc: "How chat and 3D viewport share the center panel.", tooltip: "💡 Auto: chat expands when no 3D model loaded. Full Chat: no 3D viewport. Toggle View: button switches between modes." },
             { id: "ui_sounds", name: "Interface Sounds", type: "toggle", default: false, desc: "Clicks and beeps.", tooltip: "💡 Plays subtle cyberpunk sound effects on button clicks and notifications." },
             { id: "lighting_preset", name: "Scene Lighting", type: "select", options: ["studio", "warm_sunset", "cool_moonlight", "dramatic", "neon"], default: "studio", desc: "Lighting mood for the 3D viewport.", tooltip: "💡 Changes the lighting on your 3D avatar. Studio is neutral, others are atmospheric." },
+            { id: "fps_target", name: "FPS Cap (3D Viewport)", type: "select", options: ["30", "60", "120", "Unlimited"], default: "Unlimited", desc: "Limit 3D render frame rate.", tooltip: "💡 Capping FPS reduces GPU load. Useful if the app is running in the background or on battery." },
+            { id: "show_fps_overlay", name: "Show FPS Overlay (in Viewport)", type: "toggle", default: false, desc: "Display live FPS counter inside the 3D model window.", tooltip: "💡 Shows a small FPS readout in the corner of the 3D viewport for quick performance checks." },
             { id: "_open_theme_editor", name: "Theme Editor", type: "button", action: "theme_editor", desc: "Fine-tune CSS variables, create and export custom themes.", tooltip: "🎨 Opens a live editor for every CSS variable. Save custom themes and share them." }
         ]
     },
@@ -146,7 +148,8 @@ const SETTINGS_SCHEMA = {
             { id: "dev_mode", name: "Developer Mode", type: "toggle", default: false, desc: "Show Debug Log Overlay.", tooltip: "🔧 Shows a floating debug panel with API calls, errors, and timing. Press Ctrl+Shift+D to toggle." },
             { id: "log_limit", name: "Log Buffer Size", type: "slider", min: 100, max: 1000, step: 100, default: 200, desc: "Lines to keep in memory.", tooltip: "💡 How many log lines to keep in the developer console. Higher = more history but more memory." },
             { id: "save_logs_auto", name: "Auto-Save Logs", type: "toggle", default: false, desc: "Save logs on exit.", tooltip: "💡 Automatically saves the debug log to a file when you close the app." },
-            { id: "reset_all", name: "Factory Reset", type: "button", action: "reset", desc: "Wipe all settings.", tooltip: "⚠️ Resets ALL settings to defaults. Characters and chat history are NOT affected." }
+            { id: "reset_all", name: "Factory Reset", type: "button", action: "reset", desc: "Wipe all settings.", tooltip: "⚠️ Resets ALL settings to defaults. Characters and chat history are NOT affected." },
+            { id: "_open_error_log", name: "Error Log", type: "button", action: "open_error_log", desc: "View JS errors and backend log output.", tooltip: "🐛 Opens the developer console on the Errors tab. Shows JS exceptions and backend error lines." }
         ]
     }
 };
@@ -880,6 +883,14 @@ export class SettingsModal {
                 btn.onclick = () => {
                     if (window.app?.themeEditor) window.app.themeEditor.open();
                 };
+            } else if (def.action === 'open_error_log') {
+                btn.className = 'btn-config';
+                btn.style.cssText = 'padding:6px 14px; color:var(--neon-magenta); border-color:rgba(255,0,60,0.2);';
+                btn.innerText = "OPEN ERROR LOG";
+                btn.onclick = () => {
+                    // Open DevConsole on the ERRORS tab. DevConsole is attached to window.app.
+                    window.app?.devConsole?.openTab('errors');
+                };
             } else {
                 // Default: Factory Reset
                 btn.className = 'btn btn-danger';
@@ -1341,6 +1352,11 @@ export class SettingsModal {
             if (this.tempConfig.ui_border_radius !== undefined) r.style.setProperty('--radius-panel', `${this.tempConfig.ui_border_radius}px`);
             if (this.tempConfig.ui_blur !== undefined) r.style.setProperty('--glass-blur', `${this.tempConfig.ui_blur}px`);
             if (this.tempConfig.ui_font_size !== undefined) document.body.style.fontSize = `${this.tempConfig.ui_font_size}px`;
+            // glow_intensity: 0–100 slider → --glow-intensity CSS var (0–1).
+            // The CSS --shadow-glow definition uses calc() to scale alpha with this variable.
+            if (this.tempConfig.glow_intensity !== undefined) {
+                r.style.setProperty('--glow-intensity', this.tempConfig.glow_intensity / 100);
+            }
 
             // Apply Layout via CSS classes (matches bento grid system)
             const grid = document.querySelector('.bento-grid');
@@ -1431,6 +1447,22 @@ export class SettingsModal {
                 if (this.tempConfig.vocab_limit !== undefined) {
                     this.tempConfig.vocab.limit = this.tempConfig.vocab_limit;
                     delete this.tempConfig.vocab_limit;
+                }
+            }
+
+            // Relay viewer-specific settings to the iframe via postMessage.
+            // The iframe is a separate document context so CSS/JS vars don't cross the boundary.
+            const viewerIframe = document.querySelector('.viewport-layer iframe');
+            if (viewerIframe?.contentWindow) {
+                if (this.tempConfig.show_fps_overlay !== undefined) {
+                    viewerIframe.contentWindow.postMessage(
+                        { type: 'showFpsOverlay', payload: { visible: !!this.tempConfig.show_fps_overlay } }, '*'
+                    );
+                }
+                if (this.tempConfig.fps_target !== undefined) {
+                    viewerIframe.contentWindow.postMessage(
+                        { type: 'setFpsTarget', payload: { fps: this.tempConfig.fps_target } }, '*'
+                    );
                 }
             }
 

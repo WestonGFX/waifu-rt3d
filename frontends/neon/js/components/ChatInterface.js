@@ -18,7 +18,14 @@ export class ChatInterface {
         this.timeoutWarningTimer = null;
 
         // Listen for session changes to load history
-        bus.on('session:selected', (data) => this.loadHistory(data));
+        bus.on('session:selected', (data) => {
+            this.loadHistory(data);
+            // Re-render session list to update active highlight
+            // (sessions:updated fires before currentSessionId is set)
+            if (state.state.sessions?.length) {
+                this.renderSessionList(state.state.sessions);
+            }
+        });
         bus.on('sessions:updated', (sessions) => this.renderSessionList(sessions));
         bus.on('character:selected', (char) => {
             this._showGreeting(char);
@@ -928,10 +935,28 @@ export class ChatInterface {
             }
         }
 
-        // Render each message with IDs for edit/regen actions
+        // Render each message with IDs and token stats for edit/regen actions
         messages.forEach(msg => {
             const isUser = msg.role === 'user';
-            this.addBubble(msg.text, isUser, isUser ? null : avatarUrl, { messageId: msg.id });
+            const meta = { messageId: msg.id };
+
+            // Pass token stats from DB for historical AI messages
+            if (!isUser && msg.token_count) {
+                meta.tokenCount = msg.token_count;
+                meta.tokPerSec = msg.tokens_per_second
+                    ? msg.tokens_per_second.toFixed(1)
+                    : null;
+                meta.totalTime = msg.generation_time_ms
+                    ? (msg.generation_time_ms / 1000).toFixed(1)
+                    : null;
+            }
+
+            // Use original timestamp if available
+            if (msg.ts) {
+                meta.timestamp = msg.ts;
+            }
+
+            this.addBubble(msg.text, isUser, isUser ? null : avatarUrl, meta);
         });
 
         // Scroll to bottom after loading
@@ -970,27 +995,8 @@ export class ChatInterface {
             const pinIcon = isPinned ? '<span style="color:var(--neon-cyan); font-size:0.55rem; margin-right:3px;" title="Pinned">&#x1F4CC;</span>' : '';
 
             return `
-                <div class="session-item ${isActive ? 'active' : ''}"
-                     data-session-id="${s.id}"
-                     style="
-                        padding: 6px 10px;
-                        cursor: pointer;
-                        border-radius: 6px;
-                        margin-bottom: 2px;
-                        font-size: 0.7rem;
-                        color: ${isActive ? 'var(--neon-cyan)' : 'var(--text-muted)'};
-                        background: ${isActive ? 'rgba(0,240,255,0.08)' : 'transparent'};
-                        border-left: 2px solid ${isPinned ? 'var(--neon-cyan)' : 'transparent'};
-                        border: 1px solid ${isActive ? 'rgba(0,240,255,0.15)' : 'transparent'};
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        transition: all 0.15s;
-                        position: relative;
-                     "
-                     onmouseenter="this.style.background='rgba(255,255,255,0.04)'"
-                     onmouseleave="this.style.background='${isActive ? 'rgba(0,240,255,0.08)' : 'transparent'}'"
-                >
+                <div class="session-item ${isActive ? 'active' : ''} ${isPinned ? 'pinned' : ''}"
+                     data-session-id="${s.id}">
                     <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
                         ${pinIcon}${this._escapeHtml(title)}
                     </span>
@@ -1372,7 +1378,8 @@ export class ChatInterface {
         const infoLine = document.createElement('div');
         infoLine.className = 'bubble-info';
 
-        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const timeDate = meta.timestamp ? new Date(meta.timestamp * 1000) : new Date();
+        const time = timeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         if (isUser) {
             const charCount = text.length;
             infoLine.innerHTML = `<span class="bubble-info-stats">${charCount} chars</span><span class="bubble-info-time">${time}</span>`;

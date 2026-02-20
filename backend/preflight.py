@@ -11,6 +11,7 @@ Migration Strategy:
     - v4 → v5: Adds archived column to sessions table
     - v5 → v6: Separates 2D/3D avatar fields
     - v6 → v7: Phase 3 data foundation (branching, greetings, templates, docs, relationships)
+    - v7 → v8: Token data persistence (generation stats on messages)
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -422,16 +423,71 @@ def migrate_to_v7(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v8(con: sqlite3.Connection) -> bool:
+    """Upgrade database from v7 to v8 (token data persistence).
+
+    Changes in v8:
+        - Messages: token_count, input_token_count, generation_time_ms, tokens_per_second
+        - Enables historical messages to display generation statistics
+
+    Args:
+        con: Active SQLite database connection
+
+    Returns:
+        bool: True if migration was applied, False if already at v8
+
+    Raises:
+        FileNotFoundError: If schema_v8.sql file is missing
+        sqlite3.Error: If migration SQL execution fails
+
+    Example:
+        >>> con = sqlite3.connect('app.db')
+        >>> if migrate_to_v8(con):
+        ...     print("Migrated to v8")
+        ... else:
+        ...     print("Already at v8")
+    """
+    cur = con.cursor()
+
+    # Check if token_count column already exists (idempotent sentinel)
+    cur.execute("PRAGMA table_info(messages)")
+    columns = [row[1] for row in cur.fetchall()]
+
+    if 'token_count' in columns:
+        logger.info("Schema v8 logic: token_count column exists. Ensuring version is 8.")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (8)")
+        con.commit()
+        return False
+
+    logger.info("Applying schema v8 migration...")
+    schema_v8 = ROOT / 'backend' / 'db' / 'schema_v8.sql'
+
+    if not schema_v8.exists():
+        raise FileNotFoundError(f"Migration file not found: {schema_v8}")
+
+    try:
+        sql = schema_v8.read_text(encoding='utf-8')
+        con.executescript(sql)
+        con.commit()
+        logger.info("✅ Schema v8 migration complete (token data persistence)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v8 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
     Migration Paths:
-        - v0 (empty) → v4 → v5 → v6 → v7
-        - v3 → v4 → v5 → v6 → v7
-        - v4 → v5 → v6 → v7
-        - v5 → v6 → v7
-        - v6 → v7
-        - v7 → no-op (already current)
+        - v0 (empty) → v4 → v5 → v6 → v7 → v8
+        - v3 → v4 → v5 → v6 → v7 → v8
+        - v4 → v5 → v6 → v7 → v8
+        - v5 → v6 → v7 → v8
+        - v6 → v7 → v8
+        - v7 → v8
+        - v8 → no-op (already current)
 
     The function is idempotent - safe to run multiple times.
     Will log all migration steps and verify final state.
@@ -494,14 +550,22 @@ def ensure_db():
             if migrate_to_v7(con):
                 version = 7
 
+        # Upgrade from v7 to v8 (Token data persistence)
+        if version < 8:
+            logger.info("Upgrading database schema from v7 to v8...")
+            logger.info("  - Adding token_count, input_token_count to messages")
+            logger.info("  - Adding generation_time_ms, tokens_per_second to messages")
+            if migrate_to_v8(con):
+                version = 8
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 7:
-            raise RuntimeError(f"Database initialization failed: Expected v7, got v{final_version}")
+        if final_version < 8:
+            raise RuntimeError(f"Database initialization failed: Expected v8, got v{final_version}")
 
-        if final_version > 7:
-            logger.warning(f"Database is newer than application (v{final_version} > v7). Some features might be unused.")
+        if final_version > 8:
+            logger.warning(f"Database is newer than application (v{final_version} > v8). Some features might be unused.")
 
         logger.info(f"✅ Database ready (schema v{final_version} active)")
 

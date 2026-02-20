@@ -44,6 +44,7 @@ app.add_middleware(
 # --- CONFIGURATION (Load early) ---
 from pathlib import Path
 FRONTEND = Path(ROOT_DIR) / "frontends" / "neon"
+FRONTEND_DASHBOARD_DIST = Path(ROOT_DIR) / "frontends" / "dashboard" / "dist"
 FRONTEND_V2_DIST = Path(ROOT_DIR) / "frontends" / "v2" / "dist"
 STORAGE  = Path(ROOT_DIR) / "backend" / "storage"
 CONFIG   = Path(ROOT_DIR) / "backend" / "config" / "app.json"
@@ -237,6 +238,10 @@ def v2_spa(full_path: str):
     if requested.is_file():
         return FileResponse(requested)
     return index_file.read_text(encoding="utf-8")
+
+# Mount Dashboard
+if FRONTEND_DASHBOARD_DIST.exists():
+    app.mount("/dashboard", StaticFiles(directory=str(FRONTEND_DASHBOARD_DIST), html=True), name="dashboard")
 
 # Mount Static Files
 app.mount("/assets", StaticFiles(directory=str(FRONTEND / "assets")), name="assets")
@@ -833,6 +838,7 @@ async def chat_stream(req: Request):
         """Async generator yielding SSE events as tokens arrive from the LLM."""
         full_reply = ""
         token_count = 0
+        stream_start_time = None  # Set when first token arrives
 
         # Emit processing event so frontend shows "PROCESSING INPUT..."
         yield f"event: processing\ndata: {json.dumps({'input_tokens': est_input_tokens})}\n\n"
@@ -846,6 +852,7 @@ async def chat_stream(req: Request):
                 msg_type, payload = await token_q.get()
 
                 if msg_type == "generating":
+                    stream_start_time = time.time()
                     yield f"event: generating\ndata: {json.dumps({'status': 'first_token'})}\n\n"
 
                 elif msg_type == "token":
@@ -872,9 +879,20 @@ async def chat_stream(req: Request):
             if not clean_reply:
                 clean_reply = full_reply
 
+            # Calculate generation timing for token stats
+            generation_time_ms = None
+            tokens_per_second = None
+            if stream_start_time and token_count > 0:
+                elapsed = time.time() - stream_start_time
+                generation_time_ms = int(elapsed * 1000)
+                tokens_per_second = round(token_count / elapsed, 1) if elapsed > 0 else None
+
             cur.execute(
-                "INSERT INTO messages(session_id, role, text, emotion, char_id) VALUES (?,?,?,?,?)",
-                (session_id, "assistant", clean_reply, emotion, char_id)
+                "INSERT INTO messages(session_id, role, text, emotion, char_id, "
+                "token_count, input_token_count, generation_time_ms, tokens_per_second) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (session_id, "assistant", clean_reply, emotion, char_id,
+                 token_count, est_input_tokens, generation_time_ms, tokens_per_second)
             )
             assistant_message_id = cur.lastrowid
             con.commit()
@@ -905,6 +923,8 @@ async def chat_stream(req: Request):
                 "memory_hits": memory_hits,
                 "token_count": token_count,
                 "input_tokens": est_input_tokens,
+                "generation_time_ms": generation_time_ms,
+                "tokens_per_second": tokens_per_second,
             }
             yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
@@ -1180,23 +1200,25 @@ def get_session_messages(session_id: int, include_branches: bool = False):
         include_branches: If True, include inactive branched messages.
 
     Returns:
-        dict: {"messages": [{id, role, text, ts, parent_id, is_active, emotion, char_id}, ...]}
+        dict: {"messages": [{id, role, text, ts, parent_id, is_active, emotion, char_id,
+                             token_count, input_token_count, generation_time_ms, tokens_per_second}, ...]}
     """
     conn = db()
     cur = conn.cursor()
     try:
+        cols = ("id, role, text, ts, parent_id, is_active, emotion, char_id, "
+                "token_count, input_token_count, generation_time_ms, tokens_per_second")
         if include_branches:
             cur.execute(
-                "SELECT id, role, text, ts, parent_id, is_active, emotion, char_id "
-                "FROM messages WHERE session_id=? ORDER BY id ASC",
+                f"SELECT {cols} FROM messages WHERE session_id=? ORDER BY id ASC",
                 (session_id,)
             )
         else:
-            # Filter to active path only; fall back gracefully if is_active column missing
+            # Filter to active path only; fall back gracefully if columns missing
             try:
                 cur.execute(
-                    "SELECT id, role, text, ts, parent_id, is_active, emotion, char_id "
-                    "FROM messages WHERE session_id=? AND (is_active=1 OR is_active IS NULL) ORDER BY id ASC",
+                    f"SELECT {cols} FROM messages "
+                    "WHERE session_id=? AND (is_active=1 OR is_active IS NULL) ORDER BY id ASC",
                     (session_id,)
                 )
             except Exception:
@@ -1209,13 +1231,23 @@ def get_session_messages(session_id: int, include_branches: bool = False):
 
         messages = []
         for r in cur.fetchall():
-            messages.append({
+            msg = {
                 "id": r[0], "role": r[1], "text": r[2], "ts": r[3],
                 "parent_id": r[4] if len(r) > 4 else None,
                 "is_active": r[5] if len(r) > 5 else 1,
                 "emotion": r[6] if len(r) > 6 else None,
                 "char_id": r[7] if len(r) > 7 else None,
-            })
+            }
+            # Token stats (v8 columns) — only include if present
+            if len(r) > 8 and r[8] is not None:
+                msg["token_count"] = r[8]
+            if len(r) > 9 and r[9] is not None:
+                msg["input_token_count"] = r[9]
+            if len(r) > 10 and r[10] is not None:
+                msg["generation_time_ms"] = r[10]
+            if len(r) > 11 and r[11] is not None:
+                msg["tokens_per_second"] = r[11]
+            messages.append(msg)
         return {"messages": messages}
     finally:
         conn.close()
@@ -1446,8 +1478,8 @@ async def summarize_session(session_id: int, req: Request = None):
 
     max_messages = body.get("max_messages", 50)
 
-    db = db()
-    rows = db.execute(
+    conn = db()
+    rows = conn.execute(
         "SELECT role, text FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id DESC LIMIT ?",
         (session_id, max_messages)
     ).fetchall()
@@ -1491,8 +1523,8 @@ async def summarize_session(session_id: int, req: Request = None):
     summary = res["reply"].strip()
 
     # Store in DB
-    db.execute("UPDATE sessions SET summary = ? WHERE id = ?", (summary, session_id))
-    db.commit()
+    conn.execute("UPDATE sessions SET summary = ? WHERE id = ?", (summary, session_id))
+    conn.commit()
 
     return {"ok": True, "summary": summary}
 
@@ -1507,8 +1539,8 @@ def get_session_summary(session_id: int):
     Returns:
         {"ok": True, "summary": "..." or null}
     """
-    db = db()
-    row = db.execute("SELECT summary FROM sessions WHERE id = ?", (session_id,)).fetchone()
+    conn = db()
+    row = conn.execute("SELECT summary FROM sessions WHERE id = ?", (session_id,)).fetchone()
     if not row:
         raise HTTPException(404, "Session not found")
     return {"ok": True, "summary": row[0]}
@@ -2431,9 +2463,9 @@ async def upload_voice_sample(char_id: int, file: UploadFile = File(...)):
 
         # Update character's voice_sample_path in DB
         rel_path = f"/files/voice_samples/{char_id}/{safe_name}"
-        db = db()
-        db.execute("UPDATE characters SET voice_sample_path = ? WHERE id = ?", (rel_path, char_id))
-        db.commit()
+        conn = db()
+        conn.execute("UPDATE characters SET voice_sample_path = ? WHERE id = ?", (rel_path, char_id))
+        conn.commit()
 
         logger.info(f"Voice sample uploaded for character {char_id}: {file_path}")
         return {"ok": True, "path": rel_path, "abs_path": str(file_path)}
@@ -2452,8 +2484,8 @@ async def delete_voice_sample(char_id: int):
     Returns:
         {"ok": True}
     """
-    db = db()
-    row = db.execute("SELECT voice_sample_path FROM characters WHERE id = ?", (char_id,)).fetchone()
+    conn = db()
+    row = conn.execute("SELECT voice_sample_path FROM characters WHERE id = ?", (char_id,)).fetchone()
     if not row:
         raise HTTPException(404, "Character not found")
 
@@ -2472,8 +2504,8 @@ async def delete_voice_sample(char_id: int):
         except Exception as e:
             logger.warning(f"Failed to delete voice file: {e}")
 
-    db.execute("UPDATE characters SET voice_sample_path = NULL WHERE id = ?", (char_id,))
-    db.commit()
+    conn.execute("UPDATE characters SET voice_sample_path = NULL WHERE id = ?", (char_id,))
+    conn.commit()
     return {"ok": True}
 
 
@@ -2491,12 +2523,12 @@ def get_relationship(char_id: int):
     Returns:
         {"ok": True, "relationship": {affinity, mood, trust, interactions, last_updated}}
     """
-    db = db()
+    conn = db()
     # Ensure row exists
-    db.execute("INSERT OR IGNORE INTO character_relationships (char_id) VALUES (?)", (char_id,))
-    db.commit()
+    conn.execute("INSERT OR IGNORE INTO character_relationships (char_id) VALUES (?)", (char_id,))
+    conn.commit()
 
-    row = db.execute(
+    row = conn.execute(
         "SELECT affinity, mood, trust, interactions, last_updated FROM character_relationships WHERE char_id = ?",
         (char_id,)
     ).fetchone()
@@ -2526,18 +2558,18 @@ def reset_relationship(char_id: int):
     Returns:
         {"ok": True}
     """
-    db = db()
-    db.execute("""
+    conn = db()
+    conn.execute("""
         UPDATE character_relationships SET
             affinity = 0.5, mood = 0.5, trust = 0.5,
             interactions = 0, last_updated = strftime('%s','now')
         WHERE char_id = ?
     """, (char_id,))
-    if db.execute("SELECT changes()").fetchone()[0] == 0:
-        db.execute(
+    if conn.execute("SELECT changes()").fetchone()[0] == 0:
+        conn.execute(
             "INSERT INTO character_relationships (char_id) VALUES (?)", (char_id,)
         )
-    db.commit()
+    conn.commit()
     return {"ok": True}
 
 
@@ -2554,8 +2586,8 @@ def get_emotion_timeline(session_id: int):
     Returns:
         {"ok": True, "emotions": [{id, emotion, ts}, ...]}
     """
-    db = db()
-    rows = db.execute(
+    conn = db()
+    rows = conn.execute(
         "SELECT id, emotion, ts FROM messages WHERE session_id = ? AND role = 'assistant' AND emotion IS NOT NULL ORDER BY ts ASC",
         (session_id,)
     ).fetchall()

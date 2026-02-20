@@ -54,6 +54,7 @@
         let expressionController = null;
         let gestureController = null;
         let proceduralAnimator = null;
+        let mouseTracker = null;
 
         // ══════════════════════════════════════════════════════════
         // Inline OrbitControls (minimal implementation)
@@ -219,6 +220,8 @@
             constructor(vrm) {
                 this.vrm = vrm;
                 this.currentEmotion = 'neutral';
+                /** @type {number} Amplitude scaling factor (0–1) for all procedural motion */
+                this.intensity = 0.7;
                 this.breathScale = 1.0;
                 this.bounceOffset = 0;
                 this.swayAmount = 0;
@@ -226,11 +229,13 @@
             }
 
             /**
-             * Set the current emotion to adjust idle behavior.
+             * Set the current emotion and intensity to adjust idle behavior.
              * @param {string} emotion - Emotion name (happy, sad, angry, excited, neutral)
+             * @param {number} [intensity=0.7] - Motion amplitude scale (0–1)
              */
-            setEmotion(emotion) {
+            setEmotion(emotion, intensity = 0.7) {
                 this.currentEmotion = emotion || 'neutral';
+                this.intensity = Math.min(Math.max(intensity, 0), 1);
             }
 
             /**
@@ -245,32 +250,39 @@
 
                 const spine = getBone('spine');
                 const hips = getBone('hips');
+                const intensity = this.intensity;
+
+                // Hip sway — slow weight shift, always active (0.3Hz ± noise)
+                if (hips) {
+                    const swayNoise = 1 + Math.sin(this.time * 0.09) * 0.2;
+                    hips.rotation.y = Math.sin(this.time * 0.3) * 0.02 * swayNoise * intensity;
+                }
 
                 switch (this.currentEmotion) {
                     case 'happy':
                     case 'excited':
                         // Subtle bounce + wider sway
-                        if (hips) hips.position.y = Math.sin(this.time * 3) * 0.008;
-                        if (spine) spine.rotation.z = Math.sin(this.time * 1.5) * 0.02;
+                        if (hips) hips.position.y = Math.sin(this.time * 3) * 0.008 * intensity;
+                        if (spine) spine.rotation.z = Math.sin(this.time * 1.5) * 0.02 * intensity;
                         break;
                     case 'sad':
                         // Droopy posture, slow breathing
                         if (spine) {
-                            spine.rotation.x += 0.03;  // lean forward slightly
-                            spine.rotation.z = Math.sin(this.time * 0.5) * 0.005;
+                            spine.rotation.x = 0.03 * intensity;
+                            spine.rotation.z = Math.sin(this.time * 0.5) * 0.005 * intensity;
                         }
                         break;
                     case 'angry':
                         // Tense, minimal movement, subtle tremor
-                        if (spine) spine.rotation.z = Math.sin(this.time * 8) * 0.003;
+                        if (spine) spine.rotation.z = Math.sin(this.time * 8) * 0.003 * intensity;
                         break;
                     case 'thinking':
                         // Slow tilt
-                        if (spine) spine.rotation.z = Math.sin(this.time * 0.8) * 0.015;
+                        if (spine) spine.rotation.z = Math.sin(this.time * 0.8) * 0.015 * intensity;
                         break;
                     default:
                         // Neutral — very subtle sway
-                        if (spine) spine.rotation.z = Math.sin(this.time * 0.7) * 0.005;
+                        if (spine) spine.rotation.z = Math.sin(this.time * 0.7) * 0.005 * intensity;
                         break;
                 }
             }
@@ -437,6 +449,89 @@
                     head.rotation.y = this.headCurrent.y;
                     head.rotation.z = this.headCurrent.z;
                 }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Mouse Tracking Controller (Eyes + Subtle Head Follow)
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Tracks mouse cursor position to drive eye bone rotations
+         * and add subtle additive head rotation for a "looking at you" effect.
+         * Runs AFTER IdleHeadMovement so head follow is additive (+=).
+         */
+        class MouseTrackingController {
+            constructor(vrm, canvas) {
+                this.vrm = vrm;
+                this.canvas = canvas;
+                /** @type {{x: number, y: number}} Normalized cursor -1..1 */
+                this.cursor = { x: 0, y: 0 };
+                /** @type {{x: number, y: number}} Smoothed eye target */
+                this.eyeCurrent = { x: 0, y: 0 };
+                /** @type {{x: number, y: number}} Smoothed head offset */
+                this.headOffset = { x: 0, y: 0 };
+                this.active = true;
+
+                this._onMouseMove = (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    this.cursor.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                    this.cursor.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                    this.active = true;
+                };
+                this._onMouseLeave = () => {
+                    this.active = false;
+                    this.cursor.x = 0;
+                    this.cursor.y = 0;
+                };
+
+                canvas.addEventListener('mousemove', this._onMouseMove);
+                canvas.addEventListener('mouseleave', this._onMouseLeave);
+            }
+
+            /**
+             * Per-frame update — lerp eyes and head toward cursor.
+             * @param {number} deltaTime - Seconds since last frame
+             */
+            update(deltaTime) {
+                const getBone = (name) => this.vrm.humanoid.getNormalizedBoneNode ?
+                    this.vrm.humanoid.getNormalizedBoneNode(name) :
+                    this.vrm.humanoid.getBoneNode(name);
+
+                const targetX = this.active ? this.cursor.x : 0;
+                const targetY = this.active ? this.cursor.y : 0;
+
+                // Eye tracking — fast lerp (responsive feel)
+                const eyeSpeed = deltaTime * 3;
+                this.eyeCurrent.x += (targetX - this.eyeCurrent.x) * eyeSpeed;
+                this.eyeCurrent.y += (targetY - this.eyeCurrent.y) * eyeSpeed;
+
+                const leftEye = getBone('leftEye');
+                const rightEye = getBone('rightEye');
+                if (leftEye) {
+                    leftEye.rotation.y = this.eyeCurrent.x * 0.3;
+                    leftEye.rotation.x = -this.eyeCurrent.y * 0.15;
+                }
+                if (rightEye) {
+                    rightEye.rotation.y = this.eyeCurrent.x * 0.3;
+                    rightEye.rotation.x = -this.eyeCurrent.y * 0.15;
+                }
+
+                // Subtle head follow — slow lerp, ADDITIVE (+=) to blend with idle
+                const headSpeed = deltaTime * 1;
+                this.headOffset.x += (targetX * 0.12 - this.headOffset.x) * headSpeed;
+                this.headOffset.y += (targetY * 0.08 - this.headOffset.y) * headSpeed;
+
+                const head = getBone('head');
+                if (head) {
+                    head.rotation.y += this.headOffset.x;
+                    head.rotation.x += -this.headOffset.y;
+                }
+            }
+
+            dispose() {
+                this.canvas.removeEventListener('mousemove', this._onMouseMove);
+                this.canvas.removeEventListener('mouseleave', this._onMouseLeave);
             }
         }
 
@@ -762,7 +857,7 @@
             scene.background = new THREE.Color(0x0a0b14);
 
             const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, 1.4, 1.2);
+            camera.position.set(0, 1.25, 1.5);
 
             // Orbit controls
             const controls = new SimpleOrbitControls(camera, canvas);
@@ -888,21 +983,46 @@
                 if (currentVrm) {
                     currentVrm.update(delta);
 
-                    // Breathing
+                    // Breathing — varied rate with occasional deep breaths
                     const getBone = (name) => currentVrm.humanoid.getNormalizedBoneNode ?
                                               currentVrm.humanoid.getNormalizedBoneNode(name) :
                         currentVrm.humanoid.getBoneNode(name);
-                    const breathStrength = Math.sin(clock.elapsedTime * 2) * 0.003;
+                    const t = clock.elapsedTime;
+                    // Base rate ~2Hz with ±0.3Hz variation via slow modulator
+                    const rateModulator = 2 + Math.sin(t * 0.13) * 0.3;
+                    // Noise layer at 0.7Hz for organic feel
+                    const noiseLayer = Math.sin(t * 0.7) * 0.0008;
+                    // Deep breath: amplitude triples when slow cycle > 0.95 (~every 20s)
+                    const deepCycle = Math.sin(t * 0.16);
+                    const breathAmp = deepCycle > 0.95 ? 0.009 : 0.003;
+                    const breathStrength = Math.sin(t * rateModulator) * breathAmp + noiseLayer;
                     const chest = getBone('chest') || getBone('spine');
                     if (chest) {
-                        chest.rotation.x += breathStrength;
-                        chest.rotation.z += breathStrength * 0.5;
+                        // Use = (not +=) — breathStrength oscillates around 0,
+                        // so += would cause unbounded drift at 60fps over time.
+                        chest.rotation.x = breathStrength;
+                        chest.rotation.z = breathStrength * 0.5;
                     }
 
                     if (blinkController) blinkController.update(delta);
                     if (headMovement) headMovement.update(delta);
+                    if (mouseTracker) mouseTracker.update(delta);
                     if (expressionController) expressionController.update(delta);
                     if (gestureController) gestureController.update(delta);
+
+                    // Maintain A-pose arm baseline every frame when no gesture is playing.
+                    // resetGesture() zeros all arm bones on gesture completion; this
+                    // immediately restores the ~40° lowered-arm position in the same frame.
+                    // NOTE: Positive Z rotation lifts the arm UP (right-hand rule: +X→+Y).
+                    // Negative Z rotation swings the arm DOWN toward the hip. -0.7 ≈ 40° below
+                    // horizontal, giving a natural A-pose idle stance.
+                    if (gestureController && !gestureController.currentGesture) {
+                        const lArm = getBone('leftUpperArm');
+                        const rArm = getBone('rightUpperArm');
+                        if (lArm) lArm.rotation.z = -0.7;  // ~40° below horizontal — A-pose left arm
+                        if (rArm) rArm.rotation.z = 0.7;   // Mirror for right arm
+                    }
+
                     if (proceduralAnimator) proceduralAnimator.update(delta);
                 }
                 renderer.render(scene, camera);
@@ -913,6 +1033,49 @@
             const urlParam = new URLSearchParams(location.search).get('url');
             if (urlParam) {
                 loadVRM(urlParam, scene, camera);
+            }
+
+            /**
+             * Apply a natural standing pose to a VRM model.
+             * VRM models load in T-pose (arms out). This relaxes the skeleton
+             * into a comfortable A-pose / idle standing position with arms at sides,
+             * slight hand curl, and natural spine posture.
+             *
+             * @param {Object} vrm - Loaded VRM instance
+             */
+            function applyNaturalPose(vrm) {
+                // MUST use normalized bones — three-vrm's vrm.update() propagates
+                // normalized bone transforms to raw bones each frame. Direct raw bone
+                // edits would be overwritten; normalized bone edits persist correctly.
+                const bone = (name) => {
+                    if (vrm.humanoid.getNormalizedBoneNode) {
+                        return vrm.humanoid.getNormalizedBoneNode(name);
+                    }
+                    return vrm.humanoid.getBoneNode(name);
+                };
+
+                // --- Arms: bring down from T-pose to relaxed A-pose ---
+                // In VRM 1.x normalized space: positive Z rotation RAISES the arm
+                // (right-hand rule: arm's local +X toward hand, +Y up → +Z rotates arm tip UP).
+                // Negative Z swings the arm DOWN toward the hip.
+                // Value -0.7 rad ≈ 40° below horizontal — natural standing A-pose.
+                const leftUpperArm = bone('leftUpperArm');
+                const rightUpperArm = bone('rightUpperArm');
+                if (leftUpperArm) leftUpperArm.rotation.z = -0.7;
+                if (rightUpperArm) rightUpperArm.rotation.z = 0.7;
+
+                // --- Spine: very slight natural S-curve ---
+                const spine = bone('spine');
+                if (spine) spine.rotation.x = -0.02;
+
+                const chest = bone('chest');
+                if (chest) chest.rotation.x = 0.02;
+
+                // Head: tiny downward tilt (looking at user, not sky)
+                const head = bone('head');
+                if (head) head.rotation.x = 0.03;
+
+                console.log('[Viewer] Natural pose applied (normalized bones) v=FIX-20260219');
             }
 
             /**
@@ -944,9 +1107,21 @@
                             return;
                         }
 
-                        VRMUtils.rotateVRM0(vrm);
+                        // VRMUtils.rotateVRM0 is only for VRM 0.x assets (sets scene.rotation.y = π).
+                        // VRM 1.x models already face -Z (glTF convention), which is toward our
+                        // camera at +Z — so rotateVRM0 would flip them backwards. Skip it for 1.x.
+                        const vrmMetaVersion = vrm.meta?.metaVersion ?? '0';
+                        if (vrmMetaVersion === '0') {
+                            VRMUtils.rotateVRM0(vrm);
+                        }
                         scene.add(vrm.scene);
                         currentVrm = vrm;
+
+                        // Expose VRM to parent for diagnostics
+                        window._vrm = vrm;
+
+                        // Apply natural idle pose (relax arms from T-pose)
+                        applyNaturalPose(vrm);
 
                         // Initialize controllers
                         lipSync = new AudioLipSync(vrm);
@@ -955,11 +1130,28 @@
                         expressionController = new ExpressionController(vrm);
                         gestureController = new GestureController(vrm);
                         proceduralAnimator = new ProceduralAnimator(vrm);
+                        mouseTracker = new MouseTrackingController(vrm, document.getElementById('c'));
 
-                        // Reset camera to frame model
+                        // Auto-frame camera based on model's actual height
+                        const headBone = vrm.humanoid.getRawBoneNode('head');
+                        const footBone = vrm.humanoid.getRawBoneNode('leftFoot') || vrm.humanoid.getRawBoneNode('rightFoot');
+                        let modelTop = 1.5, modelBottom = 0;
+                        if (headBone) {
+                            const hp = new THREE.Vector3();
+                            headBone.getWorldPosition(hp);
+                            modelTop = hp.y + 0.15; // Above head for hair
+                        }
+                        if (footBone) {
+                            const fp = new THREE.Vector3();
+                            footBone.getWorldPosition(fp);
+                            modelBottom = fp.y;
+                        }
+                        const modelHeight = modelTop - modelBottom;
+                        const targetY = modelBottom + modelHeight * 0.55; // Chest/neck area
+                        const camZ = Math.max(modelHeight * 1.0, 0.8);   // Distance scales with height
                         controls.reset(
-                            new THREE.Vector3(0, 1.4, 1.2),
-                            new THREE.Vector3(0, 1.2, 0)
+                            new THREE.Vector3(0, targetY + 0.05, camZ),
+                            new THREE.Vector3(0, targetY, 0)
                         );
 
                         console.log('[Viewer] VRM loaded successfully');
@@ -1055,17 +1247,18 @@
                         expressionController.setExpression(e.data.emotion, e.data.intensity || 1.0, e.data.duration || 0.5);
                     }
                     if (proceduralAnimator && e.data.emotion) {
-                        proceduralAnimator.setEmotion(e.data.emotion);
+                        proceduralAnimator.setEmotion(e.data.emotion, e.data.intensity || 0.7);
                     }
                 }
                 else if (type === 'setEmotion') {
                     // Alias for setExpression — sent by ViewerBridge
                     const emo = payload?.emotion || e.data.emotion;
+                    const inten = e.data.intensity || 0.7;
                     if (expressionController && emo) {
-                        expressionController.setExpression(emo, e.data.intensity || 1.0, e.data.duration || 0.5);
+                        expressionController.setExpression(emo, inten, e.data.duration || 0.5);
                     }
                     if (proceduralAnimator && emo) {
-                        proceduralAnimator.setEmotion(emo);
+                        proceduralAnimator.setEmotion(emo, inten);
                     }
                 }
                 else if (type === 'playGesture') {

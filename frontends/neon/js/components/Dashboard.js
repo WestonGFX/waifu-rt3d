@@ -156,6 +156,9 @@ export class Dashboard {
                 llmTimeEl.innerText = '--';
             }
 
+            // Update sidebar LLM status indicator
+            this._updateSidebarStatus(true);
+
             // Reset failure count on success; restore normal interval if backed off
             if (this._statsFailCount > 0) {
                 this._statsFailCount = 0;
@@ -165,6 +168,9 @@ export class Dashboard {
                 }, this._statsInterval);
             }
         } catch (e) {
+            // Update sidebar LLM status indicator
+            this._updateSidebarStatus(false);
+
             // Circuit breaker: after 3 failures, back off to 30s polling
             this._statsFailCount = (this._statsFailCount || 0) + 1;
             if (this._statsFailCount === 3) {
@@ -174,6 +180,22 @@ export class Dashboard {
                     this.updateStats(loadEl, vramEl, llmTimeEl);
                 }, this._statsBackoffInterval);
             }
+        }
+    }
+
+    /**
+     * Update the sidebar LLM status badge based on backend connectivity.
+     * @param {boolean} connected - Whether the stats API responded successfully
+     */
+    _updateSidebarStatus(connected) {
+        const el = document.getElementById('sidebar-llm-status');
+        if (!el) return;
+        if (connected) {
+            el.textContent = 'ONLINE';
+            el.className = 'subtitle connected';
+        } else {
+            el.textContent = 'OFFLINE';
+            el.className = 'subtitle disconnected';
         }
     }
 

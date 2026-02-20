@@ -265,23 +265,98 @@ def get_logs():
         logs.append(LOG_QUEUE.get_nowait())
     return {"logs": logs}
 
-@app.get("/api/stats")
-def get_stats():
-    """Return real system telemetry.
+def _get_gpu_info() -> dict:
+    """Best-effort GPU/VRAM info for the system stats endpoint.
+
+    Detection strategy:
+      - macOS (Apple Silicon): flags as unified memory, tries ioreg for total VRAM budget.
+      - NVIDIA GPU: uses py3nvml if installed (optional dependency).
+      - Fallback: returns all None fields silently.
 
     Returns:
-        CPU usage percentage, RAM used/total in GB, and memory percent.
-        LLM response time is tracked client-side via performance.now().
+        dict: {
+            "type": str|None,           # "apple_silicon", "nvidia", or None
+            "vram_used_gb": float|None, # VRAM in use (None for unified / unknown)
+            "vram_total_gb": float|None # Total VRAM budget (None if undetectable)
+        }
+    """
+    import platform
+    info: dict = {"type": None, "vram_used_gb": None, "vram_total_gb": None}
+
+    if platform.system() == "Darwin":
+        info["type"] = "apple_silicon"
+        try:
+            import re
+            import subprocess
+            out = subprocess.check_output(
+                ["ioreg", "-c", "IOGPUDevice", "-l"],
+                timeout=2, stderr=subprocess.DEVNULL
+            ).decode(errors="replace")
+            m = re.search(r'"VRAM,totalMB"\s*=\s*(\d+)', out)
+            if m:
+                info["vram_total_gb"] = round(int(m.group(1)) / 1024, 1)
+        except Exception:
+            pass  # GPU info is non-critical; fail silently
+
+    try:
+        import py3nvml.py3nvml as nvml  # type: ignore[import]
+        nvml.nvmlInit()
+        h = nvml.nvmlDeviceGetHandleByIndex(0)
+        mem_info = nvml.nvmlDeviceGetMemoryInfo(h)
+        info["type"] = "nvidia"
+        info["vram_used_gb"] = round(mem_info.used / 1024 ** 3, 1)
+        info["vram_total_gb"] = round(mem_info.total / 1024 ** 3, 1)
+    except Exception:
+        pass
+
+    return info
+
+
+_PROVIDER_DISPLAY_NAMES: dict = {
+    "lmstudio": "LM Studio",
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+    "ollama": "Ollama",
+}
+
+
+@app.get("/api/stats")
+def get_stats():
+    """Return real system telemetry including LLM provider info and GPU stats.
+
+    Returns:
+        dict: {
+            "cpu": float,             CPU usage %
+            "memory": float,          RAM used in GB
+            "memory_total": float,    Total RAM in GB
+            "memory_percent": float,  RAM usage %
+            "provider": str,          Human-readable LLM provider (e.g. "LM Studio (local)")
+            "llm_model": str,         Configured LLM model name
+            "gpu": dict               GPU/VRAM info (see _get_gpu_info)
+        }
+
+    LLM response time and TTFT are tracked client-side via performance.now().
     """
     try:
         cpu = psutil.cpu_percent(interval=None)
         mem = psutil.virtual_memory()
 
+        cfg_local = load_config()
+        llm_cfg = cfg_local.get("llm", {})
+        provider_key = llm_cfg.get("provider", "")
+        endpoint = llm_cfg.get("endpoint", "")
+        provider_label = _PROVIDER_DISPLAY_NAMES.get(provider_key, provider_key or "Unknown")
+        if "localhost" in endpoint or "127.0.0.1" in endpoint:
+            provider_label += " (local)"
+
         return {
             "cpu": cpu,
-            "memory": round(mem.used / (1024**3), 1),
-            "memory_total": round(mem.total / (1024**3), 1),
-            "memory_percent": mem.percent
+            "memory": round(mem.used / (1024 ** 3), 1),
+            "memory_total": round(mem.total / (1024 ** 3), 1),
+            "memory_percent": mem.percent,
+            "provider": provider_label,
+            "llm_model": llm_cfg.get("model", ""),
+            "gpu": _get_gpu_info(),
         }
     except Exception as e:
         logger.error(f"Stats error: {e}")

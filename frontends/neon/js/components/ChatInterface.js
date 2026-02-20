@@ -397,9 +397,18 @@ export class ChatInterface {
     /**
      * Transition from prefill to generation phase.
      * Called when the first token arrives from the LLM stream.
+     * Records TTFT (Time To First Token) for display in the right panel.
      */
     _setGeneratingPhase() {
         this.streamStartTime = performance.now();
+
+        // TTFT = time from request send (prefillStartTime) to first token
+        if (this.prefillStartTime) {
+            const ttft = ((this.streamStartTime - this.prefillStartTime) / 1000).toFixed(2);
+            const ttftEl = document.getElementById('stat-ttft');
+            if (ttftEl) ttftEl.textContent = ttft + 's';
+        }
+
         const label = document.getElementById('neural-link-status');
         if (label && this.isThinking) {
             label.innerText = 'AI WRITING: 0 tokens';

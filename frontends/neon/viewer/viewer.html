@@ -33,6 +33,13 @@
     <div id="loading">UPLINKING_VISUAL_FEED...</div>
     <video id="bg-video" loop muted playsinline></video>
     <canvas id="c"></canvas>
+    <!-- FPS overlay — hidden by default, shown via showFps postMessage or settings toggle -->
+    <div id="fps-overlay" style="
+        position:fixed; bottom:8px; right:8px; z-index:9999;
+        font-family:monospace; font-size:11px; color:#39ff14;
+        background:rgba(0,0,0,0.55); padding:2px 8px; border-radius:3px;
+        display:none; pointer-events:none; letter-spacing:0.5px;
+    "></div>
     <script type="importmap">
         {
             "imports": {
@@ -58,6 +65,10 @@
         // Tracks the last emotion that triggered an auto-gesture, preventing
         // repeat gestures when the same emotion fires on consecutive messages.
         let lastAutoGestureEmotion = null;
+        // FPS counter state — updated once per second in the render loop
+        let _fpsFrameCount = 0;
+        let _fpsLastTime = 0;
+        let _fpsDisplay = 0;
 
         // ══════════════════════════════════════════════════════════
         // Inline OrbitControls (minimal implementation)
@@ -1091,7 +1102,10 @@
 
             function animate() {
                 requestAnimationFrame(animate);
-                const delta = clock.getDelta();
+                // Cap delta to 100ms to prevent animation pops when tab regains focus.
+                // Browsers throttle rAF to ~1fps while hidden; on resume getDelta() returns
+                // the full elapsed time, causing lerp snap and sin() position jumps.
+                const delta = Math.min(clock.getDelta(), 0.1);
 
                 controls.update();
 
@@ -1141,6 +1155,24 @@
                     if (proceduralAnimator) proceduralAnimator.update(delta);
                 }
                 renderer.render(scene, camera);
+
+                // FPS counter: count frames, update display once per second.
+                // Posts to parent window for the right panel, and updates the
+                // in-viewport overlay if visible (toggled by showFps postMessage).
+                _fpsFrameCount++;
+                const _fpsNow = performance.now();
+                if (_fpsNow - _fpsLastTime >= 1000) {
+                    _fpsDisplay = Math.round(_fpsFrameCount * 1000 / (_fpsNow - _fpsLastTime));
+                    _fpsFrameCount = 0;
+                    _fpsLastTime = _fpsNow;
+                    window.parent?.postMessage({ type: 'fpsUpdate', fps: _fpsDisplay }, '*');
+                    const fpsEl = document.getElementById('fps-overlay');
+                    if (fpsEl && fpsEl.style.display !== 'none') {
+                        fpsEl.textContent = `${_fpsDisplay} FPS`;
+                        fpsEl.style.color = _fpsDisplay >= 55 ? '#39ff14'
+                                          : _fpsDisplay >= 30 ? '#ffcc00' : '#ff4444';
+                    }
+                }
             }
             animate();
 

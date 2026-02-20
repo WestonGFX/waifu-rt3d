@@ -107,6 +107,7 @@ export class Dashboard {
         this.startTelemetryLoop();
         this.fetchModelInfo();
         setInterval(() => this.fetchModelInfo(), 30000);
+        this._initFpsListener();
     }
 
     async startTelemetryLoop() {
@@ -131,7 +132,7 @@ export class Dashboard {
     }
 
     /**
-     * Fetch and update system stats (CPU, RAM).
+     * Fetch and update system stats (CPU, RAM, provider, GPU).
      * Uses raw fetch (not API.get) to avoid retry/toast spam for this
      * non-critical polling endpoint. Backs off after consecutive failures.
      *
@@ -150,14 +151,26 @@ export class Dashboard {
             if (data.cpu > 80) loadEl.classList.add('crit');
             else loadEl.classList.remove('crit');
 
-            vramEl.innerText = data.memory + 'GB';
+            // RAM: show used/total with color coding by percentage
+            const memPct = data.memory_percent || 0;
+            const ramColor = memPct >= 90 ? '#ff4444'
+                           : memPct >= 75 ? '#ff8800'
+                           : memPct >= 50 ? '#ffcc00'
+                           : 'var(--neon-green)';
+            vramEl.innerText = data.memory_total
+                ? `${data.memory}/${data.memory_total}GB`
+                : data.memory + 'GB';
+            vramEl.style.color = ramColor;
+
+            // GPU/VRAM row
+            this._updateGpuStat(data.gpu);
 
             if (!llmTimeEl.innerText || llmTimeEl.innerText === '--') {
                 llmTimeEl.innerText = '--';
             }
 
-            // Update sidebar LLM status indicator
-            this._updateSidebarStatus(true);
+            // Update sidebar LLM status with provider name
+            this._updateSidebarStatus(true, data.provider);
 
             // Reset failure count on success; restore normal interval if backed off
             if (this._statsFailCount > 0) {
@@ -168,7 +181,6 @@ export class Dashboard {
                 }, this._statsInterval);
             }
         } catch (e) {
-            // Update sidebar LLM status indicator
             this._updateSidebarStatus(false);
 
             // Circuit breaker: after 3 failures, back off to 30s polling
@@ -184,13 +196,55 @@ export class Dashboard {
     }
 
     /**
-     * Update the sidebar LLM status badge based on backend connectivity.
-     * @param {boolean} connected - Whether the stats API responded successfully
+     * Update the GPU/VRAM stat row from the stats API gpu object.
+     * Apple Silicon shows "UNIFIED"; NVIDIA shows used/total GB.
+     * @param {Object|null} gpu - GPU info from /api/stats
      */
-    _updateSidebarStatus(connected) {
+    _updateGpuStat(gpu) {
+        const row = document.getElementById('gpu-stat-row');
+        const el = document.getElementById('stat-gpu');
+        if (!row || !el || !gpu || !gpu.type) return;
+        row.style.display = '';
+        if (gpu.type === 'apple_silicon') {
+            el.textContent = gpu.vram_total_gb ? `${gpu.vram_total_gb}GB` : 'UNIFIED';
+            el.style.color = 'var(--neon-green)';
+        } else if (gpu.type === 'nvidia' && gpu.vram_total_gb) {
+            const pct = gpu.vram_used_gb / gpu.vram_total_gb * 100;
+            el.textContent = `${gpu.vram_used_gb}/${gpu.vram_total_gb}GB`;
+            el.style.color = pct >= 90 ? '#ff4444' : pct >= 75 ? '#ff8800' : 'var(--neon-green)';
+        }
+    }
+
+    /**
+     * Listen for FPS updates posted from the viewer iframe.
+     * The viewer posts { type: 'fpsUpdate', fps: number } every second.
+     */
+    _initFpsListener() {
+        window.addEventListener('message', (e) => {
+            if (e.data?.type !== 'fpsUpdate') return;
+            const el = document.getElementById('stat-fps');
+            if (!el) return;
+            el.textContent = e.data.fps;
+            el.style.color = e.data.fps >= 55 ? 'var(--neon-green)'
+                           : e.data.fps >= 30 ? '#ffcc00' : '#ff4444';
+        });
+    }
+
+    /**
+     * Update the sidebar LLM status badge.
+     * Shows provider name (e.g. "LM Studio (local)") when connected,
+     * "OFFLINE" otherwise.
+     *
+     * @param {boolean} connected - Whether the stats API responded successfully
+     * @param {string} [providerLabel] - Human-readable provider name from /api/stats
+     */
+    _updateSidebarStatus(connected, providerLabel) {
         const el = document.getElementById('sidebar-llm-status');
         if (!el) return;
-        if (connected) {
+        if (connected && providerLabel) {
+            el.textContent = providerLabel;
+            el.className = 'subtitle connected';
+        } else if (connected) {
             el.textContent = 'ONLINE';
             el.className = 'subtitle connected';
         } else {
@@ -201,7 +255,9 @@ export class Dashboard {
 
     /**
      * Fetch active model info from LM Studio via our proxy endpoint.
-     * Populates the MODEL and CTX rows in the telemetry widget.
+     * Populates the MODEL and CTX rows in the telemetry widget, and
+     * overrides the sidebar label with the short model name so users can
+     * confirm which model is loaded at a glance.
      */
     async fetchModelInfo() {
         try {
@@ -217,11 +273,12 @@ export class Dashboard {
             const nameRow = document.getElementById('model-info-row');
             const ctxRow = document.getElementById('model-ctx-row');
 
+            const shortName = model.id.includes('/')
+                ? model.id.split('/').pop()
+                : model.id;
+            const quant = model.quantization ? ` (${model.quantization})` : '';
+
             if (nameEl && nameRow) {
-                const shortName = model.id.includes('/')
-                    ? model.id.split('/').pop()
-                    : model.id;
-                const quant = model.quantization ? ` (${model.quantization})` : '';
                 nameEl.innerText = shortName + quant;
                 nameEl.title = model.id;
                 nameRow.style.display = '';
@@ -234,6 +291,9 @@ export class Dashboard {
                     ctxRow.style.display = '';
                 }
             }
+
+            // Override sidebar label with model name — more specific than provider
+            this._updateSidebarStatus(true, shortName);
         } catch (e) {
             console.debug('[Dashboard] Model info unavailable:', e.message);
         }

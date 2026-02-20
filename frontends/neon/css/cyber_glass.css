@@ -305,6 +305,10 @@ main.main-view>.viewport-layer canvas {
     height: 100%;
     border: none;
     display: block;
+    /* Force own GPU compositing layer — prevents WebGL redraws from invalidating
+       the parent page and causing whole-tab flicker on each animation frame */
+    will-change: transform;
+    transform: translateZ(0);
 }
 
 /* AI Status Indicator — positioned top-left, stacked lines */

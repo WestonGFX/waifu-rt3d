@@ -80,5 +80,6 @@ backend/storage/models/llm/TheBloke_TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b
 docs/telemetry/v2_hybrid_daily_snapshots.csv
 docs/telemetry/V2_HYBRID_7DAY_REPORT.md
 
-# ── Archived cleanup staging area (274MB — manual delete pending) ─────────────
-_BACKUP_ROOT/to-delete/
+# ── Archived cleanup staging area + full backup root (large zips, not source) ──
+_BACKUP_ROOT/
+.git.zip

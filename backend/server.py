@@ -12,6 +12,7 @@ if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
 
 import json
+import re
 import sqlite3
 import psutil
 from typing import Optional
@@ -50,9 +51,19 @@ STORAGE  = Path(ROOT_DIR) / "backend" / "storage"
 CONFIG   = Path(ROOT_DIR) / "backend" / "config" / "app.json"
 DEFAULT_FRONTEND_ENV = "WAIFU_DEFAULT_FRONTEND"
 
-def load_config():
-    if CONFIG.exists():
+def load_config() -> dict:
+    """Load app configuration from app.json.
+
+    Returns:
+        Config dict, or empty dict if file missing or malformed.
+    """
+    if not CONFIG.exists():
+        return {}
+    try:
         return json.loads(CONFIG.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"Config load failed: {e} — using defaults")
+        return {}
 
 AVATARS  = STORAGE / "avatars"
 AUDIO    = STORAGE / "audio"
@@ -109,7 +120,6 @@ def _chunk_text(text: str, max_chars: int = 500) -> list:
                 chunks.append(current.strip())
             # If the line itself is too long, split it by sentences
             if len(line) > max_chars:
-                import re
                 sentences = re.split(r'(?<=[.!?])\s+', line)
                 current = ""
                 for sent in sentences:
@@ -265,6 +275,92 @@ def get_logs():
         logs.append(LOG_QUEUE.get_nowait())
     return {"logs": logs}
 
+
+@app.get("/api/health")
+def health_check():
+    """Health check endpoint. Returns server version, LLM reachability, and DB status.
+
+    Returns:
+        dict: {
+            "ok": bool,        Always True (server is up if this responds)
+            "version": str,    Server version string
+            "services": dict   {
+                "db": str,         "connected" or "error"
+                "llm": str,        "connected" or "disconnected"
+                "vector_store": str  "active" or "disabled"
+            }
+        }
+
+    Example:
+        >>> GET /api/health
+        {"ok": true, "version": "5.32.0", "services": {"db": "connected", ...}}
+    """
+    import requests as _requests
+
+    cfg = load_config()
+    llm_endpoint = cfg.get("llm", {}).get("endpoint", "")
+    llm_ok = False
+    if llm_endpoint:
+        try:
+            base = llm_endpoint.rstrip("/")
+            if base.endswith("/v1"):
+                base = base[:-3]
+            r = _requests.get(f"{base}/v1/models", timeout=2)
+            llm_ok = r.status_code == 200
+        except Exception:
+            pass
+
+    db_status = "connected"
+    try:
+        con = db()
+        con.execute("SELECT 1")
+        con.close()
+    except Exception:
+        db_status = "error"
+
+    return {
+        "ok": True,
+        "version": "5.32.0",
+        "services": {
+            "db": db_status,
+            "llm": "connected" if llm_ok else "disconnected",
+            "vector_store": "active" if vector_store else "disabled",
+        },
+    }
+
+def _parse_emotion_gesture(text: str) -> tuple:
+    """Extract [emotion:X] and [gesture:X] tags from an LLM reply.
+
+    The LLM is instructed to prefix replies with optional emotion and gesture
+    tags (e.g. ``[emotion:happy] [gesture:wave] Hello!``).  This helper
+    centralises the extraction logic that was previously copy-pasted across
+    the ``/api/chat``, ``/api/chat/multi``, and ``/api/chat/stream`` routes.
+
+    Args:
+        text: Raw LLM reply text, possibly containing emotion/gesture tags.
+
+    Returns:
+        Tuple of ``(emotion, gesture, clean_reply)`` where:
+          - *emotion* is the tag value or ``"neutral"`` if absent.
+          - *gesture* is the tag value or ``None`` if absent.
+          - *clean_reply* is *text* with both tags stripped and whitespace
+            trimmed; falls back to the original *text* if stripping leaves an
+            empty string.
+
+    Example:
+        >>> e, g, r = _parse_emotion_gesture("[emotion:happy] [gesture:wave] Hi!")
+        >>> e, g, r
+        ('happy', 'wave', 'Hi!')
+    """
+    emotion_match = re.search(r'\[emotion:(\w+)\]', text)
+    gesture_match = re.search(r'\[gesture:(\w+)\]', text)
+    emotion = emotion_match.group(1) if emotion_match else "neutral"
+    gesture = gesture_match.group(1) if gesture_match else None
+    clean = re.sub(r'\[emotion:\w+\]', '', text)
+    clean = re.sub(r'\[gesture:\w+\]', '', clean).strip()
+    return emotion, gesture, clean or text
+
+
 def _get_gpu_info() -> dict:
     """Best-effort GPU/VRAM info for the system stats endpoint.
 
@@ -286,7 +382,6 @@ def _get_gpu_info() -> dict:
     if platform.system() == "Darwin":
         info["type"] = "apple_silicon"
         try:
-            import re
             import subprocess
             out = subprocess.check_output(
                 ["ioreg", "-c", "IOGPUDevice", "-l"],
@@ -569,18 +664,9 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             return {"ok": False, "status": "error", "error": res.get("error", "adapter failed")}
 
         raw_reply = res["reply"]
-        import re
 
-        emotion_match = re.search(r'\[emotion:(\w+)\]', raw_reply)
-        gesture_match = re.search(r'\[gesture:(\w+)\]', raw_reply)
-        emotion = emotion_match.group(1) if emotion_match else "neutral"
-        gesture = gesture_match.group(1) if gesture_match else None
+        emotion, gesture, clean_reply = _parse_emotion_gesture(raw_reply)
         intensity = 1.0
-
-        clean_reply = re.sub(r'\[emotion:\w+\]', '', raw_reply)
-        clean_reply = re.sub(r'\[gesture:\w+\]', '', clean_reply).strip()
-        if not clean_reply:
-            clean_reply = raw_reply
 
         cur.execute(
             "INSERT INTO messages(session_id, role, text, emotion, char_id) VALUES (?,?,?,?,?)",
@@ -602,6 +688,17 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
 
                 tts_cfg = cfg.get("tts", {}).copy()
                 tts_cfg.update(voice_params)
+
+                # Apply global speech_rate / pitch_shift only when the character
+                # hasn't already overridden them via tts_rate / tts_pitch columns.
+                speech_rate = cfg.get("speech_rate", 1.0)
+                pitch_shift = cfg.get("pitch_shift", 0)
+                if speech_rate != 1.0 and 'tts_rate' not in tts_cfg:
+                    rate_pct = int((speech_rate - 1.0) * 100)
+                    tts_cfg['tts_rate'] = f"+{rate_pct}%" if rate_pct >= 0 else f"{rate_pct}%"
+                if pitch_shift != 0 and 'tts_pitch' not in tts_cfg:
+                    pitch_hz = int(pitch_shift * 8)
+                    tts_cfg['tts_pitch'] = f"+{pitch_hz}Hz" if pitch_hz >= 0 else f"{pitch_hz}Hz"
 
                 if 'tts' not in cfg:
                     cfg['tts'] = {}
@@ -701,14 +798,18 @@ async def chat_multi(req: Request):
             system_prompt = row[0] if row else "You are a friendly anime companion."
             char_name = row[1] if row else f"Character {char_id}"
 
-            # Build history
-            history_limit = cfg.get("llm", {}).get("history_limit", 20)
-            if history_limit == 0:
-                history_limit = 9999
-            rows = cur.execute(
-                "SELECT role, text FROM messages WHERE session_id=? AND is_active=1 ORDER BY id DESC LIMIT ?",
-                (session_id, history_limit)
-            ).fetchall()
+            # Build history — 0 = unlimited, matches the streaming endpoint behaviour
+            max_history = cfg.get("llm", {}).get("history_limit", cfg.get("history_limit", 0))
+            if max_history > 0:
+                rows = cur.execute(
+                    "SELECT role, text FROM messages WHERE session_id=? AND is_active=1 ORDER BY id DESC LIMIT ?",
+                    (session_id, max_history)
+                ).fetchall()
+            else:
+                rows = cur.execute(
+                    "SELECT role, text FROM messages WHERE session_id=? AND is_active=1 ORDER BY id DESC",
+                    (session_id,)
+                ).fetchall()
             hist = [{"role": r[0], "content": r[1]} for r in reversed(rows)]
 
             # Memory context
@@ -782,7 +883,6 @@ async def chat_stream(req: Request):
         StreamingResponse: text/event-stream with SSE events
     """
     import asyncio
-    import re
     import threading
 
     _telemetry_inc("chat.requests_total")
@@ -944,15 +1044,7 @@ async def chat_stream(req: Request):
                     return
 
             # Stream complete — parse emotion/gesture, save to DB, emit done event
-            emotion_match = re.search(r'\[emotion:(\w+)\]', full_reply)
-            gesture_match = re.search(r'\[gesture:(\w+)\]', full_reply)
-            emotion = emotion_match.group(1) if emotion_match else "neutral"
-            gesture = gesture_match.group(1) if gesture_match else None
-
-            clean_reply = re.sub(r'\[emotion:\w+\]', '', full_reply)
-            clean_reply = re.sub(r'\[gesture:\w+\]', '', clean_reply).strip()
-            if not clean_reply:
-                clean_reply = full_reply
+            emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
 
             # Calculate generation timing for token stats
             generation_time_ms = None
@@ -1443,17 +1535,8 @@ async def regenerate_message(message_id: int, req: Request):
         if not res.get("ok"):
             raise HTTPException(502, res.get("error", "LLM failed"))
 
-        import re
         raw_reply = res["reply"]
-        emotion_match = re.search(r'\[emotion:(\w+)\]', raw_reply)
-        gesture_match = re.search(r'\[gesture:(\w+)\]', raw_reply)
-        emotion = emotion_match.group(1) if emotion_match else "neutral"
-        gesture = gesture_match.group(1) if gesture_match else None
-
-        clean_reply = re.sub(r'\[emotion:\w+\]', '', raw_reply)
-        clean_reply = re.sub(r'\[gesture:\w+\]', '', clean_reply).strip()
-        if not clean_reply:
-            clean_reply = raw_reply
+        emotion, gesture, clean_reply = _parse_emotion_gesture(raw_reply)
 
         # Insert new message with same parent_id
         cur.execute(

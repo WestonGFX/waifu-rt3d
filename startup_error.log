@@ -1,6 +1,0 @@
-Traceback (most recent call last):
-  File "<frozen runpy>", line 198, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "/Users/chris/Code/waifu-rt3d/waifu-rt3d_v5.30/backend/server.py", line 4, in <module>
-    import json, sqlite3, requests, asyncio, time
-ModuleNotFoundError: No module named 'requests'

@@ -1,0 +1,39 @@
+# Waifu-RT3D — Python Dependencies
+# Install with: pip install -r requirements.txt
+# Optional dependencies are commented out — uncomment what you need.
+
+# ── Core Framework ──────────────────────────────────────────────────────────
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+starlette>=0.36.0
+
+# ── Request Handling ────────────────────────────────────────────────────────
+python-multipart>=0.0.9      # Required for file upload endpoints (ASR audio)
+
+# ── System Monitoring ───────────────────────────────────────────────────────
+psutil>=5.9.0                 # CPU, RAM, process stats (/api/stats)
+
+# ── HTTP Client (LLM / TTS adapters) ────────────────────────────────────────
+requests>=2.31.0              # Sync HTTP (TTS adapters, LM Studio REST API)
+httpx>=0.26.0                 # Async HTTP (optional adapter use)
+
+# ── Vector Store / Memory ───────────────────────────────────────────────────
+chromadb>=0.4.0               # Persistent vector store for RAG memory
+
+# ── TTS Adapters ────────────────────────────────────────────────────────────
+# Uncomment the adapters you intend to use.
+
+edge-tts>=6.1.9               # Microsoft Edge TTS (free, requires internet)
+# elevenlabs>=1.1.0           # ElevenLabs API (API key required)
+# TTS>=0.22.0                 # Coqui TTS / XTTS v2 (local, GPU recommended)
+# piper-tts                   # Piper local TTS (CPU, fast)
+# fish-audio-sdk              # Fish Audio (API key required)
+
+# ── ASR (Speech Recognition) ────────────────────────────────────────────────
+# Uncomment the ASR backend you intend to use.
+# openai-whisper              # OpenAI Whisper (local, GPU recommended)
+# faster-whisper              # Faster Whisper (CUDA, faster than whisper)
+# sherpa-onnx                 # Sherpa-ONNX (CPU / Apple CoreML, no GPU needed)
+
+# ── GPU Monitoring (Optional) ───────────────────────────────────────────────
+# py3nvml                     # NVIDIA GPU VRAM stats (NVIDIA GPU only)

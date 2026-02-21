@@ -8,8 +8,8 @@
   "voice_stability": 0.5,
   "interrupt_mode": true,
   "visual_mode": "3D (VRM)",
-  "theme": "Dracula",
-  "bg_mode": "Bento Gradient",
+  "theme": "Blurple",
+  "bg_mode": "Digital Rain",
   "glow_intensity": 50,
   "ui_border_radius": 12,
   "ui_blur": 10,
@@ -18,7 +18,7 @@
   "layout_show_right": false,
   "ui_sounds": false,
   "dev_mode": true,
-  "log_limit": 400,
+  "log_limit": 300,
   "save_logs_auto": true,
   "onboarded": true,
   "llm": {
@@ -35,14 +35,14 @@
     "auto_speak": true
   },
   "system": {
-    "auto_start_lmstudio": true,
+    "auto_start_lmstudio": false,
     "lms_path": "lms"
   },
   "active_character_id": "1: Fox (Rin)",
   "avatar_url": "/images/rin_pixel_portrait.png",
-  "model_vrm": "/files/avatars/Panicandy.vrm",
-  "live2d_model": "",
-  "bg_image": "",
-  "background_mode": "transparent",
-  "chat_layout": "Full Chat"
+  "model_vrm": "/files/avatars/Nyx.vrm",
+  "live2d_model": "/live2d/Alexia/Alexia.model3.json",
+  "bg_image": "/assets/characters/glitch/glitch_bedroom_bg.png",
+  "background_mode": "image",
+  "chat_layout": "Toggle View"
 }

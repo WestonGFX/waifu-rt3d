@@ -223,6 +223,12 @@ export class ChatInterface {
                     btn.classList.add('recording');
                     const indicator = document.getElementById('vad-volume-indicator');
                     if (indicator) indicator.style.background = 'var(--neon-magenta)';
+                    // interrupt_mode: stop TTS playback when user starts speaking
+                    if (state.state.config?.interrupt_mode !== false && this._currentAudio) {
+                        this._currentAudio.pause();
+                        this._currentAudio.currentTime = 0;
+                        this._currentAudio = null;
+                    }
                 },
                 onSpeechEnd: async (blob) => {
                     btn.classList.remove('recording');
@@ -799,8 +805,9 @@ export class ChatInterface {
             const data = await res.json();
             if (!data.url) return;
 
-            // Create audio element
+            // Create audio element — stored so interrupt_mode can pause it on VAD trigger
             const audio = new Audio(data.url);
+            this._currentAudio = audio;
 
             // Create visualizer canvas inside the bubble
             const canvas = document.createElement('canvas');
@@ -863,6 +870,7 @@ export class ChatInterface {
 
             audio.onplay = () => draw();
             audio.onended = () => {
+                this._currentAudio = null;
                 if (animFrame) cancelAnimationFrame(animFrame);
                 // Fade out canvas
                 canvas.style.transition = 'opacity 0.5s';

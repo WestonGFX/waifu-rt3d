@@ -38,6 +38,36 @@ function applyBgMode(mode) {
     console.log(`%c[BgMode] Applied: ${document.body.dataset.bgMode}`, 'color:#ff9900;');
 }
 
+/**
+ * Apply persisted visual config values to CSS custom properties immediately.
+ * Called once on boot (after state.init()) and again on every config:updated
+ * event so that sliders take effect without a page reload.
+ *
+ * CSS variables modified:
+ *   --radius-panel  ← ui_border_radius (px)
+ *   --glass-blur    ← ui_blur (px)
+ *   --glow-intensity ← glow_intensity (0–100 → 0.0–1.0 normalized)
+ * And body font-size ← ui_font_size (px).
+ *
+ * @param {Object} cfg - Config object from state.state.config
+ */
+function _applyVisualConfig(cfg) {
+    if (!cfg) return;
+    const r = document.documentElement;
+    if (cfg.ui_border_radius !== undefined) {
+        r.style.setProperty('--radius-panel', `${cfg.ui_border_radius}px`);
+    }
+    if (cfg.ui_blur !== undefined) {
+        r.style.setProperty('--glass-blur', `${cfg.ui_blur}px`);
+    }
+    if (cfg.ui_font_size !== undefined) {
+        document.body.style.fontSize = `${cfg.ui_font_size}px`;
+    }
+    if (cfg.glow_intensity !== undefined) {
+        r.style.setProperty('--glow-intensity', cfg.glow_intensity / 100);
+    }
+}
+
 // Main Initialization Logic
 async function initApp() {
     try {
@@ -155,6 +185,12 @@ async function initApp() {
         bus.on('config:updated', (cfg) => {
             if (cfg.bg_mode) applyBgMode(cfg.bg_mode);
         });
+
+        // Apply persisted visual settings as CSS variables immediately on load.
+        // Without this, customizations (glow, blur, font size, radius) reset to
+        // CSS defaults after every page refresh until the user re-saves settings.
+        _applyVisualConfig(state.state.config || {});
+        bus.on('config:updated', (cfg) => _applyVisualConfig(cfg));
 
         // 4. Check Dev Mode Pref
         if (state.state.config && state.state.config.dev_mode) {

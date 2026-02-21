@@ -1,1 +1,0 @@
-export async function loadLib(localPath, cdn){ try{return await import(localPath);}catch(e){return await import(cdn);} }

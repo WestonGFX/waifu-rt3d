@@ -27,7 +27,12 @@ startup_error.log
 
 # ── Database (keep schema files, ignore live data) ───────────────────────────
 backend/storage/app.db
+backend/storage/app.db-shm
+backend/storage/app.db-wal
 waifu.db
+
+# ── Serena MCP workspace ──────────────────────────────────────────────────────
+.serena/
 
 # ── Generated Audio Cache ────────────────────────────────────────────────────
 backend/storage/audio/

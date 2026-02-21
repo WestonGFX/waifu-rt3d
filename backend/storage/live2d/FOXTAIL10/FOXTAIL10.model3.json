@@ -1,0 +1,29 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "FOXTAIL10.moc3",
+		"Textures": [
+			"FOXTAIL10.4096/texture_00.png"
+		],
+		"Physics": "FOXTAIL10.physics3.json",
+		"DisplayInfo": "FOXTAIL10.cdi3.json"
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeLOpen",
+				"ParamEyeROpen"
+			]
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": [
+				"ParamMouthForm",
+				"ParamMouthOpenY"
+			]
+		}
+	]
+}

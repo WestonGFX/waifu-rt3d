@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WAIFU.EXE // NEURAL LINK</title>
+
+    <!-- FONTS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400&family=Rajdhani:wght@500;700&display=swap"
+      rel="stylesheet">
+
+    <!-- STYLES (Order matters: base → layout → components → theme override) -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/component_grid.css">
+    <link rel="stylesheet" href="css/settings_modal.css">
+    <link rel="stylesheet" href="css/cyber_glass.css">
+
+    <!-- CORE LIBS -->
+    <script src="lib/live2dcubismcore.min.js"></script>
+    <script src="lib/pixi.min.js"></script>
+    <script src="lib/live2d.min.js"></script>
+</head>
+<body>
+
+    <!-- ═══ BENTO GRID (3-Column Dashboard) ═══ -->
+    <div class="bento-grid">
+    
+      <!-- COL 1: LEFT SIDEBAR — Character Roster -->
+      <aside id="panel-left" class="glass-panel">
+        <div class="sidebar-header">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h1>WAIFU.EXE</h1>
+            <span id="sidebar-llm-status" class="subtitle" style="margin:0;">LLM: --</span>
+          </div>
+        </div>
+<div id="roster-panel-content">
+  <!-- CharacterGrid.js renders cards here -->
+  <div style="padding:20px; color:var(--text-muted); font-family:var(--font-mono); font-size:0.75rem;">CONNECTING...
+  </div>
+</div>
+
+        <!-- Chat Sessions List -->
+        <div id="session-list-panel" style="border-top:1px solid rgba(255,255,255,0.05); padding:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 8px; margin-bottom:4px;">
+            <span style="font-family:var(--font-display); font-size:0.7rem; letter-spacing:1px; color:var(--text-muted);">CHAT THREADS</span>
+            <div style="display:flex; gap:4px; align-items:center;">
+              <button id="btn-import-chat" class="btn-icon" style="width:22px; height:22px; font-size:0.55rem; opacity:0.6;" title="Import Chat">&#x2191;</button>
+              <button id="btn-show-archived" class="btn-icon" style="width:22px; height:22px; font-size:0.55rem; opacity:0.6;" title="Show Archived">&#x1F4E6;</button>
+              <button id="btn-new-chat" class="btn-icon" style="width:24px; height:24px; flex:0 0 24px; font-size:0.7rem;" title="New Chat">+</button>
+            </div>
+          </div>
+          <input id="session-search" type="text" placeholder="Search threads..."
+                 style="width:100%; box-sizing:border-box; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.06); border-radius:4px; padding:4px 8px; color:var(--text-secondary); font-size:0.65rem; margin-bottom:4px; outline:none; display:none;">
+          <div id="session-list" style="max-height:180px; overflow-y:auto;">
+            <div style="padding:8px; color:var(--text-muted); font-size:0.7rem;">Loading...</div>
+          </div>
+        </div>
+
+        <div class="sidebar-footer" style="display:flex; flex-direction:column; gap:6px; padding:8px;">
+          <div style="display:flex; gap:6px;">
+            <button class="btn-config" id="btn-system-config" style="flex:1;">SYSTEM CONFIG</button>
+            <button class="btn-config" id="btn-model-manager" style="flex:1;">MODEL HUB</button>
+          </div>
+          <button class="btn-config" id="btn-memory-manager" style="width:100%; color:var(--neon-green); border-color:rgba(57,255,20,0.2);" title="Memory Manager (Ctrl+M)">MEMORY</button>
+        </div>
+        </aside>
+
+<!-- COL 2: MAIN VIEWPORT — 3D/Live2D + Chat Overlay -->
+<main class="glass-panel main-view">
+
+  <!-- 3D Layer (Full size behind chat) -->
+  <div class="viewport-layer">
+    <iframe id="vrm-iframe" src="viewer/viewer.html"></iframe>
+    <canvas id="live2d-canvas" style="display:none; position:absolute; inset:0; pointer-events:auto;"></canvas>
+    <!-- Shown in layout-auto mode when no VRM model is loaded -->
+    <div class="no-model-placeholder">
+      <span>NO MODEL LOADED</span>
+      <small>Settings &rarr; Character &rarr; VRM Model</small>
+    </div>
+  </div>
+  <!-- Toggle View Button (visible only in Toggle View layout mode) -->
+  <button id="btn-toggle-view" class="btn-toggle-view" title="Toggle 3D Viewport">
+    <span id="toggle-view-icon">&#x1F441;</span>
+    <span id="toggle-view-label">SHOW 3D</span>
+  </button>
+
+  <!-- Viewport Toolbar (top-right corner) -->
+  <div class="viewport-toolbar">
+    <button id="btn-screenshot" class="btn-viewport-tool" title="Screenshot (Ctrl+Shift+S)">&#x1F4F7;</button>
+    <button id="btn-expression-editor" class="btn-viewport-tool" title="Expression Editor (Ctrl+E)" onclick="window.app?.expressionEditor?.open()">&#x1F3AD;</button>
+    <button id="btn-reset-camera" class="btn-viewport-tool" title="Reset Camera (Ctrl+0)" onclick="window.app?.viewer?.resetCamera()">&#x1F3AF;</button>
+  </div>
+
+  <!-- AI Status Indicator (live — updates via ChatInterface) -->
+  <div class="ai-status-container">
+    <div class="status-dot"></div>
+    <div class="ai-status-lines">
+      <span id="ai-status-top" class="ai-status-label ai-status-feed">NO CHARACTER SELECTED</span>
+      <span id="neural-link-status" class="ai-status-label">LLM: READY</span>
+    </div>
+  </div>
+<!-- Chat Overlay (Bottom half, gradient fade) -->
+<div class="chat-layer">
+  <div id="chat-messages">
+    <!-- Messages render here -->
+  </div>
+<div class="input-area">
+  <button id="btn-toggle-left" class="btn-icon" title="Toggle Roster (Ctrl+K)">&#x00AB;</button>
+
+  <textarea id="chat-input" class="input-field" rows="3" placeholder="Type here to chat..."></textarea>
+
+  <button id="btn-mic" class="btn-icon btn-mic" title="Voice Input (Push-to-Talk)">&#x1F3A4;</button>
+  <button id="btn-send" class="btn-send">SEND</button>
+  <button id="btn-toggle-right" class="btn-icon" title="Toggle Memory Bank">&#x00BB;</button>
+</div>
+</div>
+</main>
+
+<!-- COL 3: RIGHT SIDEBAR — Memory Bank -->
+<aside id="panel-right" class="glass-panel">
+  <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
+    <span>MEMORY BANK</span>
+    <button id="btn-widget-picker" class="btn-icon" style="width:22px; height:22px; font-size:0.6rem; opacity:0.5;" title="Configure Widgets">&#x2699;</button>
+  </div>
+
+  <div class="sidebar-content" id="widget-container">
+
+    <div class="dashboard-widget" data-widget-id="context" data-widget-label="Active Context">
+      <div class="widget-header">
+        <span class="widget-grip" title="Drag to reorder">&#x2630;</span>
+        <span>Active Context</span>
+      </div>
+      <div class="widget-body">
+        <div id="mem-active" class="memory-content active">NO ACTIVE CONTEXT</div>
+      </div>
+    </div>
+
+    <div class="dashboard-widget" data-widget-id="rag" data-widget-label="RAG Archive">
+      <div class="widget-header">
+        <span class="widget-grip" title="Drag to reorder">&#x2630;</span>
+        <span>RAG Archive</span>
+      </div>
+      <div class="widget-body" style="flex:1;">
+        <div id="mem-archive" class="memory-content">Index empty.</div>
+      </div>
+    </div>
+
+    <div class="dashboard-widget" data-widget-id="relationship" data-widget-label="Relationship">
+      <div class="widget-header">
+        <span class="widget-grip" title="Drag to reorder">&#x2630;</span>
+        <span>Relationship</span>
+      </div>
+      <div class="widget-body">
+        <div id="relationship-widget" style="padding:4px;">
+          <div style="color:var(--text-muted); font-size:0.7rem;">Select a character...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-widget" data-widget-id="emotion" data-widget-label="Emotion Timeline">
+      <div class="widget-header">
+        <span class="widget-grip" title="Drag to reorder">&#x2630;</span>
+        <span>Emotion Timeline</span>
+      </div>
+      <div class="widget-body">
+        <div id="emotion-timeline-widget" style="padding:4px; max-height:80px; overflow-y:auto;">
+          <div style="color:var(--text-muted); font-size:0.7rem;">No session loaded.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-widget" data-widget-id="vocab" data-widget-label="Vocabulary">
+      <div class="widget-header">
+        <span class="widget-grip" title="Drag to reorder">&#x2630;</span>
+        <span>Vocabulary</span>
+        <button id="btn-vocab-expand" class="btn-icon" style="width:18px; height:18px; font-size:0.5rem; opacity:0.5; margin-left:auto;" title="Open full Vocab Manager">&#x2197;</button>
+      </div>
+      <div class="widget-body">
+        <div id="vocab-widget" style="padding:4px; max-height:120px; overflow-y:auto;">
+          <div style="color:var(--text-muted); font-size:0.7rem;">Loading vocab...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-widget" data-widget-id="telemetry" data-widget-label="System Telemetry">
+      <div class="widget-header">
+        <span class="widget-grip" title="Drag to reorder">&#x2630;</span>
+        <span>System</span>
+      </div>
+      <div class="widget-body telemetry-panel">
+        <div class="stat-row"><span>CPU:</span><span id="stat-load" class="stat-value">--</span></div>
+        <div class="stat-row"><span>RAM:</span><span id="stat-vram" class="stat-value">--</span></div>
+        <div class="stat-row" id="gpu-stat-row" style="display:none;">
+          <span>GPU:</span><span id="stat-gpu" class="stat-value">--</span>
+        </div>
+        <div class="stat-row"><span>FPS:</span><span id="stat-fps" class="stat-value">--</span></div>
+        <div class="stat-row"><span>LLM:</span><span id="stat-llm-time" class="stat-value">--</span></div>
+        <div class="stat-row"><span>TTFT:</span><span id="stat-ttft" class="stat-value">--</span></div>
+        <div class="stat-row" id="model-info-row" style="display:none;">
+          <span>MODEL:</span><span id="stat-model-name" class="stat-value" style="font-size:0.65rem;">--</span>
+        </div>
+        <div class="stat-row" id="model-ctx-row" style="display:none;">
+          <span>CTX:</span><span id="stat-model-ctx" class="stat-value">--</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</aside>
+
+    </div>
+
+    <!-- ENTRY POINT -->
+    <script type="module" src="js/main.js"></script>
+
+</body>
+</html>

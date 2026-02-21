@@ -1,0 +1,1304 @@
+/* ═══════════════════════════════════════════════════════════════════
+   CYBER GLASS — Design System for WAIFU.EXE // NEURAL LINK v4.0
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+    --bg-void: #050510;
+    --bg-deep: #0a0b14;
+    --text-main: #e0e6ed;
+    --text-muted: #94a3b8;
+
+    --neon-cyan: #00f0ff;
+    --neon-magenta: #ff003c;
+    --neon-yellow: #fcee0a;
+        --neon-green: #39ff14;
+        --brand-primary: var(--neon-cyan);
+
+    --glass-panel: rgba(13, 14, 28, 0.82);
+        --glass-border: rgba(255, 255, 255, 0.08);
+        --glass-highlight: rgba(255, 255, 255, 0.04);
+        --glass-blur: 18px;
+
+    --space-xs: 4px;
+        --space-sm: 8px;
+        --space-md: 16px;
+        --space-lg: 24px;
+        --space-xl: 32px;
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+        --radius-lg: 16px;
+
+    --font-display: 'Rajdhani', sans-serif;
+        --font-body: 'Inter', system-ui, sans-serif;
+        --font-mono: 'JetBrains Mono', monospace;
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.6);
+    /* --glow-intensity: 0–1 float set by the "Neon Glow Intensity" slider.
+       calc() inside rgba() scales glow alpha so all themed shadows react together. */
+    --glow-intensity: 1;
+        --shadow-glow: 0 0 20px rgba(0, 240, 255, calc(0.15 * var(--glow-intensity)));
+}
+
+/* ═══ THEMES ═══ */
+[data-theme="light"] {
+    --bg-void: #f0f2f5;
+        --bg-deep: #ffffff;
+        --text-main: #1a1b1e;
+        --text-muted: #4b5563;
+        --glass-panel: rgba(255, 255, 255, 0.65);
+        --glass-border: rgba(0, 0, 0, 0.08);
+        --neon-cyan: #0070f3;
+        --neon-magenta: #d9004c;
+    }
+    
+    [data-theme="dracula"] {
+        --bg-void: #282a36;
+        --bg-deep: #44475a;
+        --text-main: #f8f8f2;
+        --text-muted: #bd93f9;
+        --glass-panel: rgba(40, 42, 54, 0.85);
+        --glass-border: rgba(189, 147, 249, 0.3);
+        --neon-cyan: #8be9fd;
+        --neon-magenta: #ff79c6;
+        --neon-green: #50fa7b;
+    }
+    
+    [data-theme="nord"] {
+        --bg-void: #2e3440;
+        --bg-deep: #3b4252;
+        --text-main: #eceff4;
+        --text-muted: #d8dee9;
+        --glass-panel: rgba(46, 52, 64, 0.8);
+        --glass-border: rgba(136, 192, 208, 0.2);
+        --neon-cyan: #88c0d0;
+        --neon-magenta: #bf616a;
+        --neon-green: #a3be8c;
+    }
+    
+    /* Anime Pop — Dark vibrant candy neon (distinct from Bubblegum's pastel) */
+    [data-theme="pop"] {
+        --bg-void: #1a0525;
+        --bg-deep: #2d0a3e;
+        --text-main: #f0e6ff;
+        --text-muted: #c49edb;
+        --glass-panel: rgba(26, 5, 37, 0.85);
+        --glass-border: rgba(255, 107, 203, 0.3);
+        --neon-cyan: #ff6bcb;
+        --neon-magenta: #c44dff;
+        --neon-green: #ffd700;
+        --neon-yellow: #ff9a3c;
+        --shadow-glow: 0 0 20px rgba(255, 107, 203, calc(0.15 * var(--glow-intensity)));
+    }
+
+    [data-theme="bubblegum"] {
+        --bg-void: #ffecf2;
+        --bg-deep: #fff0f5;
+        --text-main: #2d3436;
+        --text-muted: #636e72;
+        --glass-panel: rgba(255, 255, 255, 0.6);
+        --glass-border: rgba(255, 119, 255, 0.4);
+        --neon-cyan: #ff77ff;
+        --neon-magenta: #00cec9;
+        --neon-green: #55efc4;
+    }
+
+    /* Hacker — Green-on-black terminal aesthetic */
+    [data-theme="hacker"] {
+        --bg-void: #0a0a0a;
+        --bg-deep: #111111;
+        --text-main: #00ff00;
+        --text-muted: #00aa00;
+        --neon-cyan: #00ff41;
+        --neon-magenta: #ff0000;
+        --neon-green: #00ff00;
+        --neon-yellow: #ffff00;
+        --glass-panel: rgba(0, 20, 0, 0.85);
+        --glass-border: rgba(0, 255, 0, 0.2);
+        --shadow-glow: 0 0 20px rgba(0, 255, 65, calc(0.15 * var(--glow-intensity)));
+    }
+
+    /* Blurple — Discord-inspired purple/blue */
+    [data-theme="blurple"] {
+        --bg-void: #1e1f2e;
+        --bg-deep: #2c2f44;
+        --text-main: #dcddde;
+        --text-muted: #72767d;
+        --neon-cyan: #5865f2;
+        --neon-magenta: #eb459e;
+        --neon-green: #57f287;
+        --neon-yellow: #fee75c;
+        --glass-panel: rgba(30, 31, 46, 0.85);
+        --glass-border: rgba(88, 101, 242, 0.3);
+        --shadow-glow: 0 0 20px rgba(88, 101, 242, calc(0.15 * var(--glow-intensity)));
+    }
+
+
+/* ═══ BENTO GRID — 3 Column Layout ═══ */
+/* Sidebar widths use clamp() for responsive sizing:
+   min 180px, preferred 16vw, max 280px */
+
+.bento-grid {
+    display: grid !important;
+    grid-template-columns: clamp(180px, 16vw, 280px) 1fr clamp(180px, 15vw, 260px);
+    gap: var(--space-sm);
+    padding: 0;
+    height: 100vh;
+    height: 100dvh; /* dynamic viewport height — respects mobile browser chrome */
+    width: 100vw;
+    overflow: hidden;
+    background: var(--bg-void);
+    transition: grid-template-columns 0.4s var(--ease-out-expo);
+}
+
+/* Right panel hidden when not open — use visibility (not display:none)
+   to keep it in grid flow and avoid reflow bugs during column transitions */
+.bento-grid:not(.right-open) {
+    grid-template-columns: clamp(180px, 16vw, 280px) 1fr 0px;
+}
+
+.bento-grid:not(.right-open)>#panel-right {
+    visibility: hidden;
+    overflow: hidden !important;
+    padding: 0 !important;
+    border: none !important;
+    pointer-events: none;
+    min-width: 0;
+}
+
+/* Right panel visible when open */
+.bento-grid.right-open>#panel-right {
+    visibility: visible;
+    pointer-events: auto;
+}
+
+/* Left collapsed — use visibility to stay in grid flow */
+.bento-grid.left-collapsed {
+    grid-template-columns: 0px 1fr clamp(180px, 15vw, 260px);
+}
+
+.bento-grid.left-collapsed:not(.right-open) {
+    grid-template-columns: 0px 1fr 0px;
+}
+
+.bento-grid.left-collapsed>#panel-left {
+    visibility: hidden;
+    overflow: hidden !important;
+    padding: 0 !important;
+    pointer-events: none;
+    min-width: 0;
+}
+
+
+/* ═══ GLASS PANELS ═══ */
+
+.glass-panel {
+    background: var(--glass-panel) !important;
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border) !important;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-panel);
+    color: var(--text-main);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Hover glow only on inner cards/widgets, not layout-level panels.
+   Layout panels (#panel-left, .main-view, #panel-right) shouldn't
+   flash borders on mouseover — it looks like a rendering glitch. */
+.glass-panel:hover:not(#panel-left):not(.main-view):not(#panel-right):not(.modal-overlay .glass-panel) {
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    box-shadow: var(--shadow-panel), var(--shadow-glow);
+}
+
+
+/* ═══ LEFT SIDEBAR ═══ */
+
+#panel-left {
+    display: flex;
+    flex-direction: column;
+    visibility: visible;
+    min-width: 0;
+}
+
+#panel-left .sidebar-header {
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+#panel-left .sidebar-header h1 {
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--neon-cyan);
+    margin: 0;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#panel-left .sidebar-header .subtitle {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+}
+
+#panel-left .sidebar-header .subtitle.connected {
+    color: var(--neon-green);
+}
+
+#panel-left .sidebar-header .subtitle.disconnected {
+    color: var(--neon-magenta);
+}
+
+#roster-panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-sm);
+}
+
+#panel-left .sidebar-footer {
+    padding: var(--space-sm) var(--space-md);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.btn-config {
+    width: 100%;
+    padding: 0.625rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-main);
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-config:hover {
+    background: rgba(0, 240, 255, 0.08);
+    border-color: var(--neon-cyan);
+    color: var(--neon-cyan);
+}
+
+
+/* ═══ CENTER — Main Viewport ═══ */
+
+main.main-view {
+    position: relative !important;
+    overflow: hidden !important;
+    min-height: 0;
+}
+
+/* 3D Viewport fills entire panel */
+main.main-view>.viewport-layer {
+    position: absolute !important;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+}
+
+main.main-view>.viewport-layer iframe,
+main.main-view>.viewport-layer canvas {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block;
+    /* Force own GPU compositing layer — prevents WebGL redraws from invalidating
+       the parent page and causing whole-tab flicker on each animation frame */
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+/* AI Status Indicator — positioned top-left, stacked lines */
+main.main-view .ai-status-container {
+    position: absolute;
+    top: var(--space-md);
+    left: var(--space-md);
+    z-index: 10;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(0.5rem);
+    padding: 0.375rem 0.875rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ai-status-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.ai-status-feed {
+    opacity: 0.6;
+}
+
+/* Thinking animation for status dot */
+@keyframes pulse-thinking {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+.status-dot.thinking {
+    animation: pulse-thinking 1s ease-in-out infinite;
+}
+
+.status-dot {
+    width: 0.4375rem;
+    height: 0.4375rem;
+    background: var(--neon-cyan);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--neon-cyan);
+    animation: pulse-dot 2s infinite;
+}
+
+.status-dot.thinking {
+    background: var(--neon-magenta);
+    box-shadow: 0 0 12px var(--neon-magenta);
+}
+
+.ai-status-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--neon-cyan);
+    letter-spacing: 1px;
+}
+
+@keyframes pulse-dot {
+
+    0%,
+    100% {
+        opacity: 0.4;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+/* ═══ CHAT LAYER — Overlays bottom of viewport ═══ */
+
+main.main-view>.chat-layer {
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 5;
+    height: 55%;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-end;
+    background: linear-gradient(to top, rgba(5, 5, 16, 0.95) 0%, rgba(5, 5, 16, 0.6) 50%, transparent 100%);
+    pointer-events: none;
+    border-top: none !important;
+    min-height: unset !important;
+}
+
+main.main-view .chat-layer #chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-md) var(--space-lg);
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    /* Push messages to bottom initially, but allow scrolling up */
+    justify-content: flex-start;
+}
+
+/* INPUT AREA — Single horizontal row (critical fix) */
+main.main-view .chat-layer .input-area {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: rgba(5, 5, 16, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    pointer-events: auto;
+}
+
+/* Textarea — fills remaining space */
+main.main-view .chat-layer .input-area textarea.input-field {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0;
+    background: rgba(0, 10, 20, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-main);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    padding: 0.625rem 0.875rem;
+    border-radius: var(--radius-sm);
+    outline: none;
+    resize: none;
+    min-height: 4.375rem;
+    max-height: 12.5rem;
+    transition: border-color 0.2s;
+}
+
+main.main-view .chat-layer .input-area textarea.input-field:focus {
+    border-color: rgba(0, 240, 255, 0.3);
+}
+
+main.main-view .chat-layer .input-area textarea.input-field::placeholder {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* Buttons in input area */
+.btn-icon {
+    width: 2.5rem !important;
+    height: 2.5rem;
+    flex: 0 0 2.5rem !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.btn-icon:hover {
+    color: var(--neon-cyan);
+    border-color: var(--neon-cyan);
+    background: rgba(0, 240, 255, 0.06);
+}
+
+/* Mic button states */
+.btn-mic.recording {
+    background: rgba(255, 0, 60, 0.2) !important;
+    border-color: var(--neon-magenta) !important;
+    color: var(--neon-magenta) !important;
+    animation: pulse-mic 1s infinite;
+}
+
+.btn-mic.processing {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+@keyframes pulse-mic {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 0, 60, 0.4); }
+    50% { box-shadow: 0 0 12px 4px rgba(255, 0, 60, 0.2); }
+}
+
+.btn-send {
+    height: 2.5rem;
+    flex: 0 0 auto !important;
+    padding: 0 1.25rem;
+    background: rgba(0, 240, 255, 0.12);
+    border: 1px solid var(--neon-cyan);
+    color: var(--neon-cyan);
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.125em;
+    text-transform: uppercase;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-send:hover:not(:disabled) {
+    background: var(--neon-cyan);
+    color: #000;
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+}
+
+.btn-send:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+    
+    
+    /* ═══ CHAT LAYOUT MODES ═══════════════════════════════════════
+   Three configurable modes control how chat and 3D viewport
+   share the center panel. Applied via class on .main-view:
+   - layout-auto (default): chat expands when no VRM model loaded
+   - layout-fullchat: viewport hidden, chat takes 100%
+   - layout-toggle: button switches between chat-only and split
+   ════════════════════════════════════════════════════════════ */
+
+/* --- Auto Mode (default) --- */
+/* With model loaded: standard 55% chat overlay */
+.main-view.layout-auto .chat-layer {
+    height: 55%;
+}
+
+/* No model loaded: chat expands to fill entire panel */
+.main-view.layout-auto.no-model .chat-layer {
+    height: 100%;
+    background: var(--glass-panel);
+}
+
+.main-view.layout-auto.no-model .viewport-layer {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* Fix 5: Friendly prompt shown inside the viewport when no VRM model is loaded in auto mode.
+   Hidden by default; only surfaces via the .no-model selector on .main-view. */
+.no-model-placeholder {
+    display: none;
+}
+
+.main-view.layout-auto.no-model .no-model-placeholder {
+    display: flex;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 0.4rem;
+    z-index: 2;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+/* --- Full Chat Mode --- */
+/* Viewport completely hidden, chat owns the panel */
+.main-view.layout-fullchat .viewport-layer {
+    display: none;
+}
+
+.main-view.layout-fullchat .chat-layer {
+    height: 100%;
+    background: var(--glass-panel);
+}
+
+/* --- Toggle View Mode --- */
+/* Default: chat-only. Button toggles .show-viewport to reveal 3D */
+.main-view.layout-toggle .chat-layer {
+    height: 100%;
+    background: var(--glass-panel);
+}
+
+.main-view.layout-toggle:not(.show-viewport) .viewport-layer {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.main-view.layout-toggle.show-viewport .chat-layer {
+    height: 55%;
+    background: linear-gradient(to top, rgba(5, 5, 16, 0.95) 0%, rgba(5, 5, 16, 0.6) 50%, transparent 100%);
+}
+
+.main-view.layout-toggle.show-viewport .viewport-layer {
+    visibility: visible;
+    pointer-events: auto;
+}
+
+/* --- Toggle View Button --- */
+/* Fix 6: Moved from top-right (conflicted with toast z-index:10000) to bottom-center.
+   The chat-layer starts at 45% from top, so placing the button just above that boundary
+   keeps it visible in both chat-only and split-view states. */
+.btn-toggle-view {
+    position: absolute;
+    bottom: calc(45% + var(--space-sm));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: none;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.3rem 0.6rem;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(0.5rem);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-toggle-view:hover {
+    color: var(--neon-cyan);
+    border-color: var(--neon-cyan);
+    background: rgba(0, 240, 255, 0.08);
+}
+
+/* Only show toggle button in Toggle View mode */
+.main-view.layout-toggle .btn-toggle-view {
+    display: flex;
+}
+
+/* Toggle button is now bottom-center, so viewport toolbar stays at its default top-right position */
+
+/* ═══ VIEWPORT TOOLBAR (top-right of 3D viewport) ═══ */
+/* Positioned below the toggle-view button to avoid overlap */
+.viewport-toolbar {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.main-view:hover .viewport-toolbar {
+    opacity: 1;
+}
+
+.btn-viewport-tool {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--glass-border);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    padding: 0;
+    line-height: 1;
+}
+
+.btn-viewport-tool:hover {
+    color: var(--neon-cyan);
+    border-color: var(--neon-cyan);
+    background: rgba(0, 240, 255, 0.1);
+    transform: scale(1.1);
+}
+
+
+    /* ═══ CHAT BUBBLES ═══ */
+    
+    .message-user,
+    .message-ai {
+        width: 100%;
+        display: flex;
+        margin-bottom: var(--space-xs);
+    }
+
+    .message-user {
+        justify-content: flex-end;
+    }
+
+    .message-ai {
+        justify-content: flex-start;
+    }
+
+    .bubble-content {
+        padding: 0.75rem 1.125rem;
+        font-size: 0.9rem;
+        line-height: 1.6;
+        border-radius: var(--radius-md);
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    
+    .message-user .bubble-content {
+        background: rgba(0, 240, 255, 0.08);
+        border: 1px solid rgba(0, 240, 255, 0.2);
+        color: var(--text-main);
+        border-radius: 0.875rem 0.875rem 0.125rem 0.875rem;
+    }
+    
+    .message-ai .bubble-content {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        color: var(--text-main);
+        border-radius: 0.875rem 0.875rem 0.875rem 0.125rem;
+    }
+    
+    .ai-avatar {
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 50%;
+        margin-right: var(--space-sm);
+        flex-shrink: 0;
+        align-self: flex-end;
+    }
+    
+    .bubble-timestamp,
+    .bubble-info {
+        font-family: var(--font-mono);
+        font-size: 0.6rem;
+        color: var(--text-muted);
+        opacity: 0.7;
+        margin-top: 0.25em;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .bubble-info-stats {
+        color: var(--neon-cyan);
+        opacity: 0.8;
+    }
+
+    .bubble-info-time {
+        color: var(--text-muted);
+    }
+
+    /* Thinking bubble — shows while AI is generating */
+    .message-thinking {
+        width: 100%;
+        display: flex;
+        justify-content: flex-start;
+    }
+
+    .message-thinking .chat-avatar {
+        border: 2px solid var(--neon-magenta);
+        animation: avatar-spin 2s linear infinite;
+    }
+
+    @keyframes avatar-spin {
+        0% { border-color: var(--neon-magenta); box-shadow: 0 0 8px var(--neon-magenta); }
+        50% { border-color: var(--neon-cyan); box-shadow: 0 0 12px var(--neon-cyan); }
+        100% { border-color: var(--neon-magenta); box-shadow: 0 0 8px var(--neon-magenta); }
+    }
+
+    .thinking-dots {
+        display: inline-flex;
+        gap: 0.25rem;
+        padding: 0.75rem 1.125rem;
+    }
+
+    .thinking-dots span {
+        width: 0.5rem;
+        height: 0.5rem;
+        background: var(--neon-cyan);
+        border-radius: 50%;
+        animation: dot-bounce 1.4s ease-in-out infinite;
+    }
+
+    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes dot-bounce {
+        0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+        40% { transform: scale(1); opacity: 1; }
+    }
+    
+    #chat-messages>div:hover .bubble-timestamp,
+    #chat-messages>div:hover .bubble-info {
+        opacity: 0.8;
+    }
+
+    /* Bubble action buttons (edit/regen) — visible on hover */
+    .bubble-action-btn {
+        width: 24px;
+        height: 24px;
+        border: 1px solid var(--glass-border);
+        background: rgba(13, 14, 28, 0.9);
+        color: var(--text-muted);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.7rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+    }
+
+    .bubble-action-btn:hover {
+        color: var(--neon-cyan);
+        border-color: var(--neon-cyan);
+        background: rgba(0, 240, 255, 0.08);
+    }
+
+    .bubble-regen-btn:hover {
+        color: var(--neon-magenta);
+        border-color: var(--neon-magenta);
+        background: rgba(255, 0, 60, 0.08);
+    }
+
+
+    /* ═══ RIGHT PANEL — Memory Bank ═══ */
+    
+    #panel-right {
+        display: flex;
+        flex-direction: column;
+        visibility: visible;
+        min-width: 0;
+    }
+
+    #panel-right>.panel-header {
+        padding: var(--space-md) var(--space-lg);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    #panel-right>.panel-header span {
+        font-family: var(--font-display);
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--neon-magenta);
+        letter-spacing: 0.125em;
+        text-transform: uppercase;
+    }
+    
+    .sidebar-content {
+        flex: 1;
+        padding: var(--space-md);
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    
+    .memory-section {
+        margin-bottom: var(--space-lg);
+    }
+    
+    .memory-header {
+        font-family: var(--font-display);
+        font-size: 0.75rem;
+        color: var(--neon-cyan);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: var(--space-sm);
+        padding-bottom: var(--space-xs);
+        border-bottom: 1px solid var(--glass-border);
+    }
+    
+    .memory-content {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        background: rgba(0, 0, 0, 0.2);
+        padding: var(--space-md);
+        border-radius: var(--radius-sm);
+        min-height: 5rem;
+        border: 1px dashed rgba(255, 255, 255, 0.06);
+    }
+    
+    .memory-content.active {
+        border-color: rgba(0, 240, 255, 0.2);
+        background: rgba(0, 240, 255, 0.03);
+    }
+
+    /* ═══ DASHBOARD WIDGETS ═══ */
+
+    .dashboard-widget {
+        margin-bottom: var(--space-sm);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        border-radius: var(--radius-sm);
+        background: rgba(0, 0, 0, 0.15);
+        transition: border-color 0.2s, box-shadow 0.2s, opacity 0.2s;
+    }
+
+    .dashboard-widget.hidden {
+        display: none;
+    }
+
+    .dashboard-widget.dragging {
+        opacity: 0.4;
+        border-color: var(--neon-cyan);
+        box-shadow: 0 0 8px rgba(0, 240, 255, 0.15);
+    }
+
+    .dashboard-widget.drag-over {
+        border-color: var(--neon-magenta, #ff00ff);
+        box-shadow: 0 0 10px rgba(255, 0, 255, 0.15);
+    }
+
+    .widget-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        font-family: var(--font-display);
+        font-size: 0.7rem;
+        color: var(--neon-cyan);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        user-select: none;
+    }
+
+    .widget-grip {
+        cursor: grab;
+        opacity: 0.25;
+        font-size: 0.6rem;
+        transition: opacity 0.2s;
+        line-height: 1;
+    }
+
+    .widget-grip:hover {
+        opacity: 0.7;
+        color: var(--neon-magenta, #ff00ff);
+    }
+
+    .widget-grip:active {
+        cursor: grabbing;
+    }
+
+    .widget-body {
+        padding: 6px 8px;
+    }
+
+    /* Widget picker dropdown */
+    .widget-picker {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        z-index: 50;
+        min-width: 180px;
+        padding: 8px;
+        background: rgba(10, 10, 25, 0.95);
+        border: 1px solid rgba(0, 240, 255, 0.15);
+        border-radius: var(--radius-sm);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(12px);
+    }
+
+    .widget-picker-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 8px;
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        cursor: pointer;
+        border-radius: 3px;
+        transition: background 0.15s;
+    }
+
+    .widget-picker-item:hover {
+        background: rgba(0, 240, 255, 0.06);
+        color: var(--text-primary);
+    }
+
+    .widget-picker-item input[type="checkbox"] {
+        accent-color: var(--neon-cyan);
+    }
+
+    /* Telemetry Stats (bottom) */
+    .telemetry-panel {
+        background: rgba(0, 0, 0, 0.25);
+        border-radius: var(--radius-sm);
+        padding: var(--space-sm) var(--space-md);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    
+    .stat-row {
+        display: flex;
+        justify-content: space-between;
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        padding: 0.25rem 0;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+
+    .stat-row > span:first-child {
+        flex-shrink: 0;
+    }
+
+    .stat-value {
+        color: var(--neon-green);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+    }
+    
+    .stat-value.crit {
+        color: var(--neon-magenta);
+        text-shadow: 0 0 4px var(--neon-magenta);
+    }
+    
+    
+    /* ═══ SESSION LIST ═══ */
+
+    .session-item {
+        padding: 6px 10px;
+        cursor: pointer;
+        border-radius: 6px;
+        margin-bottom: 2px;
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        background: transparent;
+        border: 1px solid transparent;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.15s;
+    }
+
+    .session-item:hover {
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text-main);
+    }
+
+    .session-item.active {
+        color: var(--neon-cyan) !important;
+        background: rgba(0, 240, 255, 0.1) !important;
+        border-color: rgba(0, 240, 255, 0.25) !important;
+        box-shadow: inset 0 0 8px rgba(0, 240, 255, 0.06);
+    }
+
+    .session-item.pinned {
+        border-left: 2px solid var(--neon-cyan);
+    }
+
+    /* ═══ SCROLLBAR ═══ */
+    
+    ::-webkit-scrollbar {
+        width: 4px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: rgba(0, 240, 255, 0.2);
+        border-radius: 2px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 240, 255, 0.4);
+    }
+    
+    
+    /* ═══ RESPONSIVE ═══ */
+
+    /* Tablet (768–1024px): Narrower sidebar, collapsible panels */
+    @media (max-width: 1024px) {
+        .bento-grid {
+            grid-template-columns: clamp(150px, 22vw, 200px) 1fr 0px;
+            gap: 0.375rem;
+            padding: 0;
+        }
+
+        .bento-grid.right-open {
+            grid-template-columns: clamp(150px, 22vw, 200px) 1fr clamp(150px, 20vw, 220px);
+        }
+
+        .bento-grid.left-collapsed {
+            grid-template-columns: 0px 1fr 0px;
+        }
+
+        .bento-grid.left-collapsed.right-open {
+            grid-template-columns: 0px 1fr clamp(150px, 20vw, 200px);
+        }
+
+        /* Larger touch targets for tablet */
+        .btn-icon {
+            width: 2.75rem !important;
+            height: 2.75rem;
+            flex: 0 0 2.75rem !important;
+        }
+
+        .btn-send {
+            height: 2.75rem;
+            padding: 0 1rem;
+        }
+
+        .settings-box {
+            width: 95vw;
+            max-width: none;
+        }
+    }
+
+    /* Mobile (< 768px): Single column, stacked layout */
+    @media (max-width: 768px) {
+        .bento-grid {
+            display: flex !important;
+            flex-direction: column !important;
+            height: auto;
+            min-height: 100dvh;
+            padding: 0;
+            gap: 0.25rem;
+        }
+
+        /* Left panel becomes a collapsible drawer at top */
+        #panel-left {
+            max-height: 12.5rem;
+            overflow-y: auto;
+        }
+
+        #panel-left .sidebar-header h1 {
+            font-size: 1rem;
+        }
+
+        /* Main viewport fills most of the screen */
+        main.main-view {
+            height: 65dvh;
+            flex: none;
+            min-height: 25rem;
+        }
+
+        /* Chat layer takes more vertical space on mobile */
+        main.main-view>.chat-layer {
+            height: 65%;
+        }
+
+        /* Input area: full width, larger touch targets */
+        main.main-view .chat-layer .input-area {
+            padding: var(--space-sm);
+            gap: 0.25rem;
+        }
+
+        main.main-view .chat-layer .input-area textarea.input-field {
+            font-size: 1rem;
+            padding: 0.75rem;
+            min-height: 2.75rem;
+        }
+
+        .btn-icon {
+            width: 2.75rem !important;
+            height: 2.75rem;
+            flex: 0 0 2.75rem !important;
+            font-size: 1rem;
+        }
+
+        .btn-send {
+            height: 2.75rem;
+            padding: 0 0.75rem;
+            font-size: 0.8rem;
+            letter-spacing: 0.0625em;
+        }
+
+        /* Right panel hidden on mobile */
+        #panel-right {
+            display: none !important;
+        }
+
+        /* Settings modal: full screen on mobile */
+        .settings-box {
+            width: 100vw;
+            height: 100dvh;
+            max-width: none;
+            max-height: none;
+            border-radius: 0;
+        }
+
+        .settings-sidebar {
+            width: 100%;
+            flex-direction: row;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 0.625rem;
+            border-right: none;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .settings-sidebar .settings-header {
+            display: none;
+        }
+
+        .settings-sidebar .tab-btn {
+            white-space: nowrap;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+        }
+
+        .settings-sidebar .settings-footer {
+            display: none;
+        }
+
+        /* Chat bubbles: full width on mobile */
+        .message-user,
+        .message-ai {
+            width: 100%;
+        }
+
+        .ai-status-container {
+            padding: 0.25rem 0.5rem;
+        }
+
+        .ai-status-label {
+            font-size: 0.55rem;
+        }
+    }
+
+    /* Small mobile (< 480px): Ultra compact */
+    @media (max-width: 480px) {
+        #panel-left {
+            max-height: 9.375rem;
+        }
+
+        #panel-left .sidebar-header {
+            padding: var(--space-sm);
+        }
+
+        main.main-view {
+            height: 70dvh;
+        }
+
+        /* Hide toggle buttons on very small screens to save space */
+        #btn-toggle-left,
+        #btn-toggle-right {
+            display: none !important;
+        }
+    }
+    
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+}
+
+/* ─── Dynamic Background Modes (body[data-bg-mode="..."]) ─── */
+
+/* Default: bento-gradient — inherits existing gradient from base styles */
+body[data-bg-mode="bento-gradient"],
+body:not([data-bg-mode]) {
+    /* Intentionally empty — base stylesheet handles the gradient */
+}
+
+/* Void: pure black, no decoration */
+body[data-bg-mode="void"] {
+    background: #000 !important;
+}
+
+/* Digital Rain: dark with a green tint (CSS-only approximation) */
+body[data-bg-mode="digital-rain"] {
+    background: #000d00 !important;
+}
+
+/* City Video: deep navy placeholder — actual video managed via JS */
+body[data-bg-mode="city-video"] {
+    background: #0a0a1a !important;
+}
+
+/* ═══ MODEL MANAGER & PERSONA CREATOR ANIMATIONS ═══ */
+
+@keyframes pulse-border {
+    0%, 100% { border-color: var(--neon-yellow); box-shadow: 0 0 8px rgba(252, 238, 10, 0.1); }
+    50% { border-color: rgba(252, 238, 10, 0.4); box-shadow: 0 0 16px rgba(252, 238, 10, 0.2); }
+}
+
+@keyframes progress-indeterminate {
+    0% { transform: translateX(-100%); }
+    50% { transform: translateX(0%); }
+    100% { transform: translateX(100%); }
+}

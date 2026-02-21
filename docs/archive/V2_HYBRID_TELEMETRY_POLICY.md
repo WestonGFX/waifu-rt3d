@@ -1,0 +1,126 @@
+# V2 Hybrid Telemetry Policy
+
+Date: 2026-02-11
+
+This policy defines telemetry thresholds for the Hybrid track from preflight to cutover approval.
+
+## Source Endpoint
+`GET /api/v2/telemetry/summary`
+
+Metrics used:
+1. `api.error_rate`
+2. `memory.fallback_rate`
+3. `chat.failure_rate`
+4. `api.requests_total`
+5. `memory.graph_requests_total`
+
+## Policy Profiles
+## A. Preflight Smoke Policy (local + CI)
+Purpose: ensure instrumentation works and obvious regressions fail fast.
+
+Defaults enforced by `./tools/v2_hybrid_preflight.sh`:
+1. `api.error_rate <= 0.05`
+2. `memory.fallback_rate <= 1.00`
+3. `chat.failure_rate <= 1.00`
+4. `api.requests_total >= 1`
+5. `memory.graph_requests_total >= 1`
+
+Why memory fallback allows `1.00` in smoke:
+1. Smoke preflight starts backend with `WAIFU_DISABLE_VECTOR_STORE=1`.
+2. Session-only mode is expected in this path.
+
+## B. Cutover Approval Policy (7-day window, vector store enabled)
+Purpose: decide go/no-go for default switch.
+
+Recommended thresholds:
+1. `api.error_rate <= 0.03` (rolling 1h)
+2. `memory.fallback_rate <= 0.35` (rolling 1h, vector store enabled)
+3. `chat.failure_rate <= 0.10` (rolling 1h)
+4. Minimum traffic for valid sample:
+- `api.requests_total >= 200` per evaluation window
+- `memory.graph_requests_total >= 50` per evaluation window
+5. Window quality rule:
+- 7 passing snapshots must span 7 distinct UTC calendar days.
+
+Hard no-go conditions:
+1. Any P0 defect related to data loss.
+2. Telemetry unavailable for more than one evaluation window.
+3. Any threshold breach sustained across two consecutive windows.
+
+Window progress indicators (from report):
+1. `pass_days_in_window`
+2. `remaining_pass_days_needed`
+
+## Commands
+Default smoke policy:
+```bash
+./tools/v2_hybrid_preflight.sh
+```
+
+One-shot gate evidence (recommended local workflow):
+```bash
+./tools/v2_hybrid_collect_gate_evidence.sh
+```
+
+On-demand local telemetry evidence capture:
+```bash
+./tools/v2_hybrid_capture_telemetry.sh
+```
+
+CI telemetry evidence capture (default automation path):
+```bash
+GitHub Actions workflow:
+.github/workflows/v2-hybrid-preflight.yml
+```
+
+Write telemetry output to a custom folder (useful for CI/local dry runs):
+```bash
+WAIFU_TELEMETRY_OUTPUT_DIR=/tmp/v2-telemetry \
+./tools/v2_hybrid_capture_telemetry.sh
+```
+
+Override thresholds if needed:
+```bash
+WAIFU_PREFLIGHT_MAX_API_ERROR_RATE=0.03 \
+WAIFU_PREFLIGHT_MAX_MEMORY_FALLBACK_RATE=0.35 \
+WAIFU_PREFLIGHT_MAX_CHAT_FAILURE_RATE=0.10 \
+WAIFU_PREFLIGHT_MIN_API_REQUESTS=5 \
+WAIFU_PREFLIGHT_MIN_MEMORY_GRAPH_REQUESTS=2 \
+./tools/v2_hybrid_preflight.sh
+```
+
+Override cutover telemetry thresholds/sampling for capture script:
+```bash
+WAIFU_CUTOVER_MAX_API_ERROR_RATE=0.03 \
+WAIFU_CUTOVER_MAX_MEMORY_FALLBACK_RATE=0.35 \
+WAIFU_CUTOVER_MAX_CHAT_FAILURE_RATE=0.10 \
+WAIFU_CUTOVER_MIN_API_REQUESTS=200 \
+WAIFU_CUTOVER_MIN_MEMORY_GRAPH_REQUESTS=50 \
+./tools/v2_hybrid_capture_telemetry.sh
+```
+
+Control distinct-day enforcement (default enabled):
+```bash
+WAIFU_TELEMETRY_REQUIRE_DISTINCT_DAYS=1 \
+./tools/v2_hybrid_capture_telemetry.sh
+```
+
+Optional backend auto-start flags for capture script:
+```bash
+WAIFU_TELEMETRY_AUTOSTART_BACKEND=1 \
+WAIFU_TELEMETRY_BACKEND_CMD="python backend/server.py" \
+WAIFU_TELEMETRY_DISABLE_VECTOR_STORE=0 \
+./tools/v2_hybrid_capture_telemetry.sh
+```
+
+Optional telemetry seeding mode for rehearsal/staging (not for production decision):
+```bash
+WAIFU_TELEMETRY_SEED_TRAFFIC=1 \
+WAIFU_TELEMETRY_SEED_API_REQUESTS=220 \
+WAIFU_TELEMETRY_SEED_MEMORY_REQUESTS=60 \
+./tools/v2_hybrid_capture_telemetry.sh
+```
+
+## Ownership
+1. Observability owner sets dashboard queries and alerting.
+2. Release owner confirms threshold compliance before cutover sign-off.

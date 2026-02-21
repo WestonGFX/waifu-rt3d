@@ -1,0 +1,306 @@
+{
+	"Version": 3,
+	"Parameters": [
+		{
+			"Id": "ParamAngleX",
+			"GroupId": "",
+			"Name": "Angle X"
+		},
+		{
+			"Id": "ParamAngleY",
+			"GroupId": "",
+			"Name": "Angle Y"
+		},
+		{
+			"Id": "ParamAngleZ",
+			"GroupId": "",
+			"Name": "Angle Z"
+		},
+		{
+			"Id": "ParamEyeLOpen",
+			"GroupId": "",
+			"Name": "Left Eye Open/Closed"
+		},
+		{
+			"Id": "ParamEyeLSmile",
+			"GroupId": "",
+			"Name": "Left Eye Smiling"
+		},
+		{
+			"Id": "ParamEyeROpen",
+			"GroupId": "",
+			"Name": "Right Eye Open/Closed"
+		},
+		{
+			"Id": "ParamEyeRSmile",
+			"GroupId": "",
+			"Name": "Right Eye - Smiling Face"
+		},
+		{
+			"Id": "ParamEyeBallX",
+			"GroupId": "",
+			"Name": "Eye X"
+		},
+		{
+			"Id": "ParamEyeBallY",
+			"GroupId": "",
+			"Name": "Eye Y"
+		},
+		{
+			"Id": "ParamBrowLY",
+			"GroupId": "",
+			"Name": "Left Eyebrow - Up and Down"
+		},
+		{
+			"Id": "ParamBrowRY",
+			"GroupId": "",
+			"Name": "Right Eyebrow - Up and down"
+		},
+		{
+			"Id": "ParamBrowLX",
+			"GroupId": "",
+			"Name": "Left Eyebrow - Left and Right"
+		},
+		{
+			"Id": "ParamBrowRX",
+			"GroupId": "",
+			"Name": "Right Eyebrow - Left and Right"
+		},
+		{
+			"Id": "ParamBrowLAngle",
+			"GroupId": "",
+			"Name": "Left eyebrow angle"
+		},
+		{
+			"Id": "ParamBrowRAngle",
+			"GroupId": "",
+			"Name": "Right eyebrow angle"
+		},
+		{
+			"Id": "ParamBrowLForm",
+			"GroupId": "",
+			"Name": "Left eyebrow shape"
+		},
+		{
+			"Id": "ParamBrowRForm",
+			"GroupId": "",
+			"Name": "Right eyebrow changed shape"
+		},
+		{
+			"Id": "ParamMouthForm",
+			"GroupId": "",
+			"Name": "Mouth shape"
+		},
+		{
+			"Id": "ParamMouthOpenY",
+			"GroupId": "",
+			"Name": "Mouth opening and closing"
+		},
+		{
+			"Id": "ParamCheek",
+			"GroupId": "",
+			"Name": "Cheek shape"
+		},
+		{
+			"Id": "ParamBodyAngleX",
+			"GroupId": "",
+			"Name": "Body angle - left and right"
+		},
+		{
+			"Id": "ParamBodyAngleY",
+			"GroupId": "",
+			"Name": "Body angle - up and down"
+		},
+		{
+			"Id": "ParamBodyAngleZ",
+			"GroupId": "",
+			"Name": "Body angle - back and forth"
+		},
+		{
+			"Id": "ParamArmL",
+			"GroupId": "",
+			"Name": "Left wrist"
+		},
+		{
+			"Id": "ParamArmR",
+			"GroupId": "",
+			"Name": "Right wrist"
+		},
+		{
+			"Id": "ParamBreath",
+			"GroupId": "",
+			"Name": "Breathe"
+		},
+		{
+			"Id": "ParamHairFront",
+			"GroupId": "",
+			"Name": "Hair front"
+		},
+		{
+			"Id": "ParamHairSide",
+			"GroupId": "",
+			"Name": "Hair side"
+		},
+		{
+			"Id": "ParamHairBack",
+			"GroupId": "",
+			"Name": "Hair back"
+		},
+		{
+			"Id": "x",
+			"GroupId": "",
+			"Name": "Chest Physics"
+		},
+		{
+			"Id": "tofa",
+			"GroupId": "",
+			"Name": "Hair"
+		},
+		{
+			"Id": "Param_Angle_Rotation_1_ArtMesh0",
+			"GroupId": "ParamGroup",
+			"Name": "[0]1"
+		},
+		{
+			"Id": "Param_Angle_Rotation_2_ArtMesh0",
+			"GroupId": "ParamGroup",
+			"Name": "[1]1"
+		},
+		{
+			"Id": "Param_Angle_Rotation_3_ArtMesh0",
+			"GroupId": "ParamGroup",
+			"Name": "[2]1"
+		},
+		{
+			"Id": "Param_Angle_Rotation_4_ArtMesh0",
+			"GroupId": "ParamGroup",
+			"Name": "[3]1"
+		},
+		{
+			"Id": "Param_Angle_Rotation_5_ArtMesh0",
+			"GroupId": "ParamGroup",
+			"Name": "[4]1"
+		},
+		{
+			"Id": "Param_Angle_Rotation_1_ArtMesh35",
+			"GroupId": "ParamGroup2",
+			"Name": "[0]Right skirt part"
+		},
+		{
+			"Id": "Param_Angle_Rotation_2_ArtMesh35",
+			"GroupId": "ParamGroup2",
+			"Name": "[1]Right skirt part"
+		},
+		{
+			"Id": "Param_Angle_Rotation_3_ArtMesh35",
+			"GroupId": "ParamGroup2",
+			"Name": "[2]Right skirt part"
+		},
+		{
+			"Id": "Param_Angle_Rotation_4_ArtMesh35",
+			"GroupId": "ParamGroup2",
+			"Name": "[3]Right skirt part"
+		},
+		{
+			"Id": "Param_Angle_Rotation_5_ArtMesh35",
+			"GroupId": "ParamGroup2",
+			"Name": "[4]Right skirt part"
+		}
+	],
+	"ParameterGroups": [
+		{
+			"Id": "ParamGroup",
+			"GroupId": "",
+			"Name": "1"
+		},
+		{
+			"Id": "ParamGroup2",
+			"GroupId": "",
+			"Name": "Right	skirt part"
+		}
+	],
+	"Parts": [
+		{
+			"Id": "Part",
+			"Name": "1.png"
+		},
+		{
+			"Id": "Part4",
+			"Name": "Maid.psd(No corresponding layer found)"
+		},
+		{
+			"Id": "Part01Frozen",
+			"Name": "No one available"
+		},
+		{
+			"Id": "Part01HairFront001",
+			"Name": "Front hair"
+		},
+		{
+			"Id": "Part01HairSide001",
+			"Name": "Side hair"
+		},
+		{
+			"Id": "Part01HairBack001",
+			"Name": "Back hair"
+		},
+		{
+			"Id": "Part01Nose001",
+			"Name": "Nose"
+		},
+		{
+			"Id": "Part01Mouth001",
+			"Name": "Mouth"
+		},
+		{
+			"Id": "Part01Brow001",
+			"Name": "Brow"
+		},
+		{
+			"Id": "Part01EyeBall001",
+			"Name": "Eye ball"
+		},
+		{
+			"Id": "Part01Eye001",
+			"Name": "Eye"
+		},
+		{
+			"Id": "Part01Ear001",
+			"Name": "Ear"
+		},
+		{
+			"Id": "Part01Face001",
+			"Name": "Face"
+		},
+		{
+			"Id": "Part01Neck",
+			"Name": "Neck"
+		},
+		{
+			"Id": "Part01Body",
+			"Name": "Body"
+		},
+		{
+			"Id": "ArtMesh0_Skinning",
+			"Name": "1(Skinning)"
+		},
+		{
+			"Id": "Part2",
+			"Name": "1(Rotation)"
+		},
+		{
+			"Id": "ArtMesh35_Skinning",
+			"Name": "Right Skirt Part (Skinning)"
+		},
+		{
+			"Id": "Part3",
+			"Name": "Right Skirt Part (Rotation)"
+		}
+	],
+	"CombinedParameters": [
+		[
+			"ParamAngleX",
+			"ParamAngleY"
+		]
+	]
+}

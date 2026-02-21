@@ -1,0 +1,147 @@
+/* ═══ CHARACTER GRID ═══ */
+
+/* Grid Container — always 2 columns in the sidebar */
+.character-grid-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.375rem;
+    padding: 0.375rem;
+}
+
+/* Individual Card — fixed aspect ratio, never overlaps */
+.char-card {
+    position: relative;
+    width: 100%;
+    padding-bottom: 100%; /* 1:1 aspect ratio via padding hack (more reliable than aspect-ratio) */
+    cursor: pointer;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    background: rgba(10, 10, 20, 0.8);
+    overflow: hidden;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.char-card:hover {
+    box-shadow: 0 0 0.75rem rgba(0, 240, 255, 0.25);
+    border-color: var(--neon-cyan);
+}
+
+.char-card.active {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 1rem var(--neon-cyan);
+}
+
+.char-card.multi-selected {
+    border-color: var(--neon-magenta, #ff00ff);
+    box-shadow: 0 0 0.8rem rgba(255, 0, 255, 0.4);
+}
+
+.char-card.multi-selected::after {
+    content: '✓';
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    background: var(--neon-magenta, #ff00ff);
+    color: #fff;
+    font-size: 0.6rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+}
+
+/* Thumbnail Image — fills entire card */
+.card-thumb {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-size: cover;
+    background-position: center;
+}
+
+/* Overlay Info — always positioned at bottom, shown on hover */
+.card-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.85), transparent);
+    padding: 0.375rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.char-card:hover .card-overlay,
+.char-card.active .card-overlay {
+    opacity: 1;
+}
+
+.card-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(0.55rem, 1vw, 0.8rem);
+    color: #fff;
+    text-shadow: 0 0 0.3rem var(--neon-cyan);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-role {
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    color: var(--neon-cyan);
+    letter-spacing: 0.05em;
+}
+
+/* ═══ CARD HOVER ACTIONS (Edit / Delete) ═══ */
+
+.card-actions {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    display: flex;
+    gap: 0.25rem;
+    z-index: 5;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.char-card:hover .card-actions {
+    opacity: 1;
+}
+
+.card-action-btn {
+    width: 1.5rem;
+    height: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 50%;
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+    line-height: 1;
+}
+
+.card-edit-btn:hover {
+    color: var(--neon-cyan);
+    border-color: var(--neon-cyan);
+    background: rgba(0, 240, 255, 0.15);
+}
+
+.card-delete-btn:hover {
+    color: var(--neon-magenta);
+    border-color: var(--neon-magenta);
+    background: rgba(255, 0, 60, 0.15);
+}

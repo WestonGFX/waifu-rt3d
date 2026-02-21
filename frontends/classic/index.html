@@ -1,0 +1,1740 @@
+the
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WAIFU_LINK // v5.31.0</title>
+  <link rel="stylesheet" href="/assets/css/theme.css?v=cyber" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    /* Toast Notifications */
+    .toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 15px 20px;
+      border-radius: 4px;
+      font-family: var(--font-pixel);
+      font-size: 0.6rem;
+      z-index: 10000;
+      animation: slideIn 0.3s ease-out;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      max-width: 400px;
+      word-wrap: break-word;
+    }
+
+    .toast-error {
+      background: var(--neon-pink);
+      color: #000;
+      border: 2px solid var(--neon-pink);
+    }
+
+    .toast-success {
+      background: var(--neon-green);
+      color: #000;
+      border: 2px solid var(--neon-green);
+    }
+
+    .toast-info {
+      background: var(--neon-blue);
+      color: #000;
+      border: 2px solid var(--neon-blue);
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+      }
+
+      to {
+        opacity: 0;
+      }
+    }
+
+    /* Loading Spinner */
+    .spinner {
+      padding: 20px;
+      text-align: center;
+      color: var(--neon-green);
+      font-family: var(--font-pixel);
+      font-size: 0.5rem;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 0.3;
+      }
+
+      50% {
+        opacity: 1;
+      }
+    }
+
+    /* Session filter buttons */
+    .filter-btn {
+      background: rgba(185, 103, 255, 0.2);
+      border: 1px solid var(--neon-purple);
+      color: var(--neon-purple);
+      padding: 6px;
+      font-family: var(--font-pixel);
+      font-size: 0.5rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .filter-btn:hover {
+      background: rgba(185, 103, 255, 0.4);
+    }
+
+    .filter-btn.active {
+      background: var(--neon-green);
+      color: #000;
+      border-color: var(--neon-green);
+      box-shadow: 0 0 5px var(--neon-green);
+    }
+
+    /* Session action buttons */
+    .session-action-btn {
+      background: var(--neon-yellow);
+      color: #000;
+      border: none;
+      padding: 2px 5px;
+      font-size: 0.4rem;
+      font-family: var(--font-pixel);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .session-action-btn:hover {
+      box-shadow: 0 0 5px currentColor;
+    }
+
+    .session-action-btn.delete {
+      background: var(--neon-pink);
+    }
+
+    /* Modal styles */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.95);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+
+    .modal.open {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--bg-dark);
+      border: 2px solid var(--neon-purple);
+      max-width: 90vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 20px;
+      box-shadow: 0 0 20px rgba(185, 103, 255, 0.5);
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    .form-group label {
+      display: block;
+      color: var(--neon-blue);
+      font-family: var(--font-pixel);
+      font-size: 0.6rem;
+      margin-bottom: 5px;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--neon-purple);
+      color: var(--neon-green);
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- BOOT OVERLAY -->
+  <div id="boot-overlay">
+    <div id="boot-log" class="boot-text"></div>
+  </div>
+
+  <!-- SETUP WIZARD MODAL -->
+  <div id="wizard-overlay"
+    style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.9); z-index:2000; justify-content:center; align-items:center;">
+    <div class="settings-card"
+      style="width:500px; border:2px solid var(--neon-blue); box-shadow: 0 0 30px var(--neon-blue);">
+      <h2
+        style="font-family:var(--font-pixel); font-size:0.8rem; color:var(--neon-blue); border-bottom:1px solid var(--neon-blue); padding-bottom:10px;">
+        INITIAL_DYN_SETUP</h2>
+      <div id="wizard-steps">
+        <!-- Step 1: LLM -->
+        <div class="wizard-step" data-step="1">
+          <p style="font-size:0.7rem; color:var(--neon-green); margin-bottom:20px;">[ STEP_01 ] CONNECTING TO
+            NEURAL_BRAIN...</p>
+          <div class="form-group">
+            <label>LLM_ENDPOINT (LM Studio / Ollama / OpenAI)</label>
+            <input id="wiz_endpoint" value="http://127.0.0.1:1234/v1" />
+          </div>
+          <div class="form-group">
+            <label>API_KEY (Optional for local)</label>
+            <input id="wiz_api_key" value="lm-studio" />
+          </div>
+          <button class="next-step"
+            style="background:var(--neon-blue); border:none; padding:10px; font-family:var(--font-pixel); font-size:0.5rem; width:100%; cursor:pointer;">NEXT_MODULE
+            >></button>
+        </div>
+        <!-- Step 2: Welcome -->
+        <div class="wizard-step" data-step="2" style="display:none;">
+          <p style="font-size:0.7rem; color:var(--neon-green); margin-bottom:20px;">[ STEP_02 ] SYSTEM CALIBRATION
+            COMPLETE.</p>
+          <p style="font-size:0.8rem; line-height:1.5;">Welcome to WAIFU_LINK. Your companion is ready to be
+            initialized.</p>
+          <button id="finish-wizard"
+            style="background:var(--neon-green); border:none; padding:10px; font-family:var(--font-pixel); font-size:0.5rem; width:100%; cursor:pointer; margin-top:20px;">EXECUTE_UPLINK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span>SESSIONS</span>
+        <button id="newSession"
+          style="background:transparent;border:none;color:var(--neon-blue);cursor:pointer;font-family:var(--font-pixel);font-size:0.6rem;">[+]</button>
+      </div>
+      <div id="sessionList" style="flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;">
+        <!-- Session controls -->
+        <div class="session-controls"
+          style="margin-bottom:10px;position:sticky;top:0;background:var(--bg-dark);z-index:10;padding-bottom:5px;">
+          <input type="text" id="sessionSearch" placeholder="SEARCH_SESSIONS..." style="width:100%;padding:8px;background:rgba(0,0,0,0.5);border:1px solid var(--neon-purple);
+                        color:var(--neon-blue);font-family:var(--font-mono);font-size:0.5rem;margin-bottom:8px;" />
+          <div style="display:flex;gap:5px;">
+            <button id="showActive" class="filter-btn active" style="flex:1;">ACTIVE</button>
+            <button id="showArchived" class="filter-btn" style="flex:1;">ARCHIVED</button>
+          </div>
+        </div>
+        <!-- Session list will go here -->
+      </div>
+      <div class="sidebar-header" style="border-top:1px solid var(--neon-purple); border-bottom:none;">
+        <span>TERMINAL</span>
+      </div>
+      <div id="status-display"
+        style="padding:10px;font-size:0.5rem;color:var(--neon-green);font-family:var(--font-mono);line-height:1.4; border-bottom: 1px solid rgba(185,103,255,0.2);">
+        <div class="flex items-center gap-2">
+          <span id="led-link" class="status-dot status-online" style="transform:scale(0.8)"></span>
+          <span>LINK: NOMINAL</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="led-llm" class="status-dot status-checking" style="transform:scale(0.8)"></span>
+          <span id="stat-llm">LLM: OK</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="led-tts" class="status-dot status-online" style="transform:scale(0.8)"></span>
+          <span id="stat-tts">TTS: READY</span>
+        </div>
+      </div>
+      <div id="terminal-feed"
+        style="flex:1; overflow-y:auto; padding:10px; font-size:0.45rem; color:var(--neon-blue); font-family:var(--font-mono); opacity:0.8; height: 150px; background: rgba(0,0,0,0.3);">
+        <!-- Logs flow here -->
+      </div>
+      <div id="version-display"
+        style="position:absolute; bottom:10px; left:10px; font-size:0.4rem; color:var(--neon-blue); font-family:var(--font-mono); opacity:0.7;">
+        v5.31.0
+      </div>
+    </aside>
+
+    <!-- MAIN VIEWPORT -->
+    <main class="main-viewport">
+      <div class="scanlines"></div>
+
+      <header class="tab-nav">
+        <button class="tabbtn active" data-tab="dashboard">DASHBOARD</button>
+        <button class="tabbtn" data-tab="setup">CONF</button>
+        <button class="tabbtn" data-tab="system">DIAG</button>
+      </header>
+
+      <div class="screen-frame">
+        <!-- DASHBOARD TAB (Merged VIEW) -->
+        <section id="dashboard" class="tab active">
+          <div class="dashboard-layout">
+            <!-- 3D Viewport Side -->
+            <div class="avatar-viewport">
+              <iframe id="vrm-iframe" src="about:blank" style="width:100%; height:100%; border:none;"></iframe>
+              <div class="micro-panel status-tr">CAM_LINK: ACTIVE</div>
+              <div class="micro-panel status-bl">VRM_V5.30 // RENDER_OK</div>
+            </div>
+
+            <!-- Chat Side -->
+            <div class="chat-container">
+              <div class="char-tray">
+                <div id="charList"></div>
+              </div>
+
+              <div class="chat-history">
+                <div id="log">
+                  <div class="bubble ai"
+                    style="border-bottom: 1px solid rgba(185, 103, 255, 0.2); margin-bottom: 2rem;">
+                    <pre style="color:var(--neon-green);font-size:0.5rem;line-height:1;margin:0;">
+ _  _  ____  __  ____  __  __ 
+( \/ )(_  _)(  )(  __)(  )(  )
+ \  /  _)(_  )(  ) _)  )(  )( 
+  \/  (____)(__)(__)  (__)(__)
+                    </pre>
+                    <div class="line" style="color:var(--neon-green)">OS v5.35 READY. NEURAL_BRIDGE ACTIVE.</div>
+                  </div>
+                </div>
+
+                <div id="typing"
+                  style="padding:0 2rem; color:var(--neon-yellow); font-family:var(--font-pixel); font-size:0.4rem; display:none; max-width: 800px; margin: 0 auto; width: 100%;">
+                  AI_PROCESSING...</div>
+
+                <div class="input-pane">
+                  <div class="input-box-wrapper">
+                    <textarea id="msg" placeholder="Type a message..." rows="1"></textarea>
+                    <div class="input-actions">
+                      <button id="mic-btn" class="action-btn" title="Toggle Speech Recognition">
+                        <span style="font-family:var(--font-pixel); font-size:0.7rem;">MIC</span>
+                      </button>
+                      <button id="audio-btn" class="action-btn active" title="Toggle Audio Output">
+                        <span style="font-family:var(--font-pixel); font-size:0.7rem;">VOL</span>
+                      </button>
+                      <button id="send" class="send-btn-primary">></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CONFIG TAB (EXPANDED) -->
+        <section id="setup" class="tab" style="padding:30px;overflow-y:auto;">
+          <h2 style="font-family:var(--font-pixel);font-size:0.8rem;color:var(--neon-yellow);margin-bottom:30px;">
+            SYSTEM_VARIABLES_ARRAY</h2>
+
+          <div class="settings-grid">
+            <!-- LLM CONFIG -->
+            <div class="settings-card">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3>[ 01 ] LLM_MODULE</h3>
+                <label style="font-size:0.45rem; color:var(--neon-pink); cursor:pointer;">
+                  [DEV_MODE] <input type="checkbox" id="dev_mode" style="width:auto; vertical-align:middle;" />
+                </label>
+              </div>
+              <div class="form-group">
+                <label>ENDPOINT_URL</label>
+                <input id="endpoint" value="http://127.0.0.1:1234/v1" />
+              </div>
+              <div class="form-group">
+                <label>ACTIVE_MODEL</label>
+                <div style="display:flex; gap:5px;">
+                  <input id="model" placeholder="Model ID..." style="flex:1;" />
+                  <button id="discoverModels"
+                    style="background:var(--neon-blue); border:none; padding:5px; font-family:var(--font-pixel); font-size:0.4rem; cursor:pointer;">SCAN</button>
+                </div>
+              </div>
+
+              <div id="dev-params"
+                style="display:none; margin-top:10px; border-top:1px dashed var(--neon-purple); padding-top:10px;">
+                <div class="form-group">
+                  <label>HISTORY_LIMIT</label>
+                  <input type="number" id="history_limit" value="20" />
+                </div>
+                <div class="form-group">
+                  <label>TEMPERATURE</label>
+                  <input type="range" id="temp" min="0" max="2" step="0.1" value="0.7" />
+                </div>
+              </div>
+            </div>
+
+            <!-- TTS CONFIG -->
+            <div class="settings-card">
+              <h3>[ 02 ] VOICE_SYNTH</h3>
+              <div class="form-group">
+                <label>ENABLED</label>
+                <input type="checkbox" id="tts_enabled" checked />
+              </div>
+              <div class="form-group">
+                <label>PROVIDER</label>
+                <select id="tts_provider">
+                  <option value="local">XTTS_v2 (Local)</option>
+                  <option value="openai">OpenAI (Cloud)</option>
+                  <option value="elevenlabs">ElevenLabs (Cloud)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>VOICE_ID</label>
+                <input id="tts_voice_id" placeholder="Voice ID..." />
+              </div>
+            </div>
+
+            <!-- ASR CONFIG -->
+            <div class="settings-card">
+              <h3>[ 03 ] SPEECH_REC</h3>
+              <div class="form-group">
+                <label>ENABLED</label>
+                <select id="asr_enabled">
+                  <option value="false">OFF (DEFAULT)</option>
+                  <option value="true">ON</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>PROVIDER</label>
+                <select id="asr_provider">
+                  <option value="web_speech">Web Speech API</option>
+                  <option value="whisper">Faster-Whisper (Local)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- UI CONFIG -->
+            <div class="settings-card">
+              <h3>[ 04 ] UI_INTERFACE</h3>
+              <div class="form-group">
+                <label>SCANLINE_OPACITY</label>
+                <input type="range" id="ui_scanlines" min="0" max="1" step="0.1" value="0.4" />
+              </div>
+              <div class="form-group">
+                <label>FLICKER_EFX</label>
+                <select id="ui_flicker">
+                  <option value="true">ENABLED</option>
+                  <option value="false">DISABLED</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- CHARACTER MANAGEMENT -->
+            <div class="settings-card">
+              <h3>[ 05 ] CHARACTER_DATABASE</h3>
+              <button id="openCharModal"
+                style="background:var(--neon-purple);border:none;padding:15px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;width:100%;color:#000;">
+                MANAGE_CHARACTERS
+              </button>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:20px;">
+            <button id="saveCfg"
+              style="background:var(--neon-blue);border:none;padding:20px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;flex:1;margin-top:20px;">COMMIT_CHANGES</button>
+            <button id="resetCfg"
+              style="background:var(--neon-pink);border:none;padding:20px;font-family:var(--font-pixel);font-size:0.6rem;cursor:pointer;width:150px;margin-top:20px;color:#000;">FACTORY_RESET</button>
+          </div>
+        </section>
+
+        <!-- DIAG TAB -->
+        <section id="system" class="tab" style="padding:20px; color: var(--neon-green); font-family: var(--font-mono);">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h2 style="font-family:var(--font-pixel);font-size:0.8rem;color:var(--neon-purple);margin-bottom:10px;">
+                CORE_DIAGNOSTICS</h2>
+              <div id="health"
+                style="background:rgba(0,0,0,0.5); padding:20px; border:1px solid var(--neon-purple); font-size:0.7rem; min-height: 200px;">
+                INITIALIZING_SCAN...
+              </div>
+              <button id="refreshHealth"
+                style="background:var(--neon-green);border:none;padding:15px;font-family:var(--font-pixel);font-size:0.4rem;cursor:pointer;margin-top:20px; width:100%;">FORCE_PROBE</button>
+            </div>
+
+            <div>
+              <h2 style="font-family:var(--font-pixel);font-size:0.8rem;color:var(--neon-yellow);margin-bottom:10px;">
+                EMOTION_ENGINES</h2>
+              <div id="emotion-indicator"
+                style="background:rgba(0,0,0,0.5); padding:20px; border:1px solid var(--neon-yellow); font-size:0.7rem;">
+                AWAITING_INPUT_FOR_ANALYSIS...
+              </div>
+
+              <h2 style="font-family:var(--font-pixel);font-size:0.8rem;color:var(--neon-blue);margin:20px 0 10px;">
+                UPLINK_STATUS</h2>
+              <div
+                style="background:rgba(0,0,0,0.5); padding:15px; border:1px solid var(--neon-blue); font-size:0.6rem;">
+                LATENCY: <span id="diag-latency">--ms</span><br>
+                UPLINK_KEY: SHA-256_HIDDEN<br>
+                AUTH: GRANTED
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    const $ = (q) => document.querySelector(q);
+    const $$ = (q) => document.querySelectorAll(q);
+    let currentSessionId = 1;
+    let currentCharacterId = 1;
+
+    // ========================
+    // ERROR HANDLING UTILITIES
+    // ========================
+
+    /**
+     * Display toast notification to user.
+     *
+     * @param {string} message - Message to display
+     * @param {string} type - 'error', 'success', or 'info'
+     * @param {number} duration - How long to show (ms), default 5000
+     */
+    function showToast(message, type = 'error', duration = 5000) {
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      // Auto-remove after duration
+      setTimeout(() => {
+        toast.style.animation = 'fadeOut 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    }
+
+    /**
+     * Show or hide loading spinner in container.
+     *
+     * @param {string} containerId - ID of container element
+     * @param {boolean} show - True to show, false to hide
+     */
+    function showLoading(containerId, show = true) {
+      const container = document.getElementById(containerId);
+      if (!container) {
+        console.warn(`Container not found: ${containerId}`);
+        return;
+      }
+
+      const spinnerId = `spinner-${containerId}`;
+
+      if (show) {
+        // Remove existing spinner if any
+        const existing = document.getElementById(spinnerId);
+        if (existing) existing.remove();
+
+        const spinner = document.createElement('div');
+        spinner.className = 'spinner';
+        spinner.id = spinnerId;
+        spinner.textContent = 'LOADING...';
+        container.appendChild(spinner);
+      } else {
+        const spinner = document.getElementById(spinnerId);
+        if (spinner) spinner.remove();
+      }
+    }
+
+    /**
+     * Fetch with exponential backoff retry logic.
+     *
+     * @param {string} url - URL to fetch
+     * @param {object} options - Fetch options
+     * @param {number} retries - Number of retry attempts, default 3
+     * @returns {Promise<Response>} Response object
+     * @throws {Error} If all retries fail
+     */
+    async function fetchWithRetry(url, options = {}, retries = 3) {
+      for (let i = 0; i < retries; i++) {
+        try {
+          const response = await fetch(url, options);
+
+          // If response is ok, return immediately
+          if (response.ok) {
+            return response;
+          }
+
+          // If not ok and we have retries left, wait and retry
+          if (i < retries - 1) {
+            const delay = Math.pow(2, i) * 1000; // Exponential backoff: 1s, 2s, 4s
+            console.log(`Request failed (${response.status}), retrying in ${delay}ms...`);
+            await new Promise(r => setTimeout(r, delay));
+            continue;
+          }
+
+          // Last attempt failed, return the failed response
+          return response;
+
+        } catch (err) {
+          // Network error
+          if (i === retries - 1) {
+            // Last retry, throw the error
+            throw err;
+          }
+
+          // Wait before retry
+          const delay = Math.pow(2, i) * 1000;
+          console.log(`Network error, retrying in ${delay}ms...`, err);
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
+    }
+
+    /**
+     * Global error handler for unhandled promise rejections.
+     */
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      showToast('SYSTEM_ERROR: ' + (event.reason?.message || 'Unknown error'));
+      event.preventDefault(); // Prevent default error logging
+    });
+
+    /**
+     * Global error handler for uncaught errors.
+     */
+    window.addEventListener('error', (event) => {
+      console.error('Uncaught error:', event.error);
+      showToast('SYSTEM_ERROR: ' + (event.error?.message || 'Unknown error'));
+    });
+
+    // --- BOOT SEQUENCE ---
+    const bootMessages = [
+      "WAIFU_LINK v5.31.0 BOOTLOADER...",
+      "CPU: NEURAL_ENGINE [DETECTED]",
+      "MEM: 64GB [CHECKING... OK]",
+      "GPU: RT3D_RENDERER [V-LOCKED]",
+      "NET: UPLINK_ENCRYPTED [ESTABLISHED]",
+      "SYSTEM: ALL CORE SERVICES RUNNING",
+      "WELCOME, OPERATOR."
+    ];
+    let bootIdx = 0;
+    function runBoot() {
+      if (bootIdx < bootMessages.length) {
+        const log = $('#boot-log');
+        log.innerHTML += `> ${bootMessages[bootIdx]}<br>`;
+        bootIdx++;
+        setTimeout(runBoot, 100 + Math.random() * 100);
+      } else {
+        setTimeout(() => {
+          $('#boot-overlay').style.opacity = '0';
+          setTimeout(() => {
+            $('#boot-overlay').style.display = 'none';
+            checkOnboarding();
+          }, 500);
+        }, 300);
+      }
+    }
+    runBoot();
+
+    // --- VERSION DISPLAY ---
+    async function displayVersion() {
+      try {
+        const r = await fetchWithRetry('/api/healthcheck');
+        if (!r.ok) {
+          console.warn(`Health check failed: HTTP ${r.status}`);
+          return;
+        }
+        const j = await r.json();
+        if (j.version) {
+          const versionText = `v${j.version}${j.schema_version ? ` | DB v${j.schema_version}` : ''}`;
+          $('#version-display').textContent = versionText;
+        }
+      } catch (e) {
+        console.error('Version fetch failed:', e);
+        // Non-critical, don't show toast
+      }
+    }
+
+    // --- SETUP WIZARD ---
+    async function checkOnboarding() {
+      try {
+        const r = await fetchWithRetry('/api/config');
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+        const cfg = await r.json();
+        if (!cfg.onboarded) {
+          $('#wizard-overlay').style.display = 'flex';
+        }
+      } catch (e) {
+        console.error('Onboarding check failed:', e);
+        showToast('Failed to load configuration', 'error');
+      }
+      displayVersion(); // Fetch version after checking onboarding
+    }
+    $('.next-step').onclick = () => {
+      $('.wizard-step[data-step="1"]').style.display = 'none';
+      $('.wizard-step[data-step="2"]').style.display = 'block';
+    };
+    /**
+     * Complete onboarding wizard and save initial configuration.
+     */
+    $('#finish-wizard').onclick = async () => {
+      try {
+        const body = {
+          onboarded: true,
+          llm: { endpoint: $('#wiz_endpoint').value, api_key: $('#wiz_api_key').value }
+        };
+
+        const r = await fetchWithRetry('/api/config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+
+        $('#wizard-overlay').style.display = 'none';
+        loadCfg();
+        showToast('WAIFU_LINK initialized successfully!', 'success', 3000);
+      } catch (e) {
+        showToast('Failed to complete setup: ' + e.message);
+        console.error('finish-wizard error:', e);
+      }
+    };
+    checkOnboarding();
+
+    // --- TABS ---
+    $$('.tabbtn').forEach(b => {
+      b.onclick = () => {
+        $$('.tab').forEach(t => t.classList.remove('active'));
+        $$('.tabbtn').forEach(btn => btn.classList.remove('active'));
+        const target = $('#' + b.dataset.tab);
+        target.classList.add('active');
+        b.classList.add('active');
+        if (b.dataset.tab === 'system') $('#refreshHealth').click();
+      };
+    });
+
+    // Initialize Dashboard VRM
+    function initDashboard() {
+      if ($('#vrm-iframe').src === 'about:blank') {
+        $('#vrm-iframe').src = `/frontend/viewer/viewer.html?url=/files/avatars/Panicandy.vrm`;
+      }
+    }
+    initDashboard();
+
+    // --- SESSIONS ---
+    let currentFilter = 'active'; // 'active' or 'archived'
+    let searchTimeout;
+
+    /**
+     * Load and display chat sessions based on current filter.
+     */
+    async function loadSessions() {
+      try {
+        showLoading('sessionList', true);
+        const archived = currentFilter === 'archived';
+        const r = await fetchWithRetry(`/api/sessions?archived=${archived}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+
+        const j = await r.json();
+        renderSessions(j.sessions);
+        showLoading('sessionList', false);
+      } catch (e) {
+        showLoading('sessionList', false);
+        showToast('Failed to load sessions: ' + e.message);
+        console.error('loadSessions error:', e);
+      }
+    }
+
+    /**
+     * Render session list with action buttons.
+     * @param {Array} sessions - Array of session objects
+     */
+    function renderSessions(sessions) {
+      const list = $('#sessionList');
+      const controls = list.querySelector('.session-controls');
+      list.innerHTML = '';
+      if (controls) list.appendChild(controls); // Preserve search/filter controls
+
+      sessions.forEach(s => {
+        const d = document.createElement('div');
+        d.className = `session-item`;
+        d.style.cssText = 'padding:8px 12px; border:1px solid rgba(185,103,255,0.3); cursor:pointer; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; font-size:0.6rem; color:var(--neon-blue); background:rgba(26,6,40,0.4);';
+
+        if (s.id === currentSessionId) {
+          d.style.borderColor = "var(--neon-green)";
+          d.style.boxShadow = "inset 0 0 5px var(--neon-green)";
+        }
+
+        // Title (editable on double-click)
+        const titleSpan = document.createElement('span');
+        titleSpan.textContent = `> ${s.title.toUpperCase()}`;
+        titleSpan.style.flex = '1';
+        titleSpan.ondblclick = (e) => {
+          e.stopPropagation();
+          renameSession(s.id, s.title);
+        };
+
+        // Action buttons
+        const actions = document.createElement('div');
+        actions.style.cssText = 'display:flex; gap:5px;';
+
+        const archiveBtn = document.createElement('button');
+        archiveBtn.className = 'session-action-btn';
+        archiveBtn.textContent = s.archived ? 'UNARCH' : 'ARCH';
+        archiveBtn.onclick = (e) => {
+          e.stopPropagation();
+          toggleArchive(s.id, !s.archived);
+        };
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'session-action-btn delete';
+        delBtn.textContent = 'DEL';
+        delBtn.onclick = (e) => {
+          e.stopPropagation();
+          deleteSession(s.id, s.title);
+        };
+
+        actions.appendChild(archiveBtn);
+        actions.appendChild(delBtn);
+        d.appendChild(titleSpan);
+        d.appendChild(actions);
+
+        // Click to select session
+        d.onclick = () => {
+          if (s.id !== currentSessionId) {
+            currentSessionId = s.id;
+            loadSessions();
+            loadMessages(s.id);
+          }
+        };
+
+        list.appendChild(d);
+      });
+    }
+
+    /**
+     * Search sessions using FTS5 full-text search.
+     * @param {string} query - Search query
+     */
+    async function searchSessions(query) {
+      try {
+        showLoading('sessionList', true);
+        const r = await fetchWithRetry(`/api/sessions/search?q=${encodeURIComponent(query)}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+        const j = await r.json();
+        renderSessions(j.sessions);
+        showLoading('sessionList', false);
+      } catch (e) {
+        showLoading('sessionList', false);
+        showToast('Search failed: ' + e.message);
+        console.error('searchSessions error:', e);
+      }
+    }
+
+    /**
+     * Rename a session.
+     * @param {number} sessionId - Session ID
+     * @param {string} currentTitle - Current session title
+     */
+    async function renameSession(sessionId, currentTitle) {
+      const newTitle = prompt('RENAME_SESSION:', currentTitle);
+      if (!newTitle || newTitle === currentTitle) return;
+
+      try {
+        const r = await fetchWithRetry(`/api/sessions/${sessionId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: newTitle })
+        });
+
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+        showToast('Session renamed', 'success', 3000);
+        loadSessions();
+      } catch (e) {
+        showToast('Rename failed: ' + e.message);
+        console.error('renameSession error:', e);
+      }
+    }
+
+    /**
+     * Toggle session archive status.
+     * @param {number} sessionId - Session ID
+     * @param {boolean} archive - Whether to archive (true) or unarchive (false)
+     */
+    async function toggleArchive(sessionId, archive) {
+      try {
+        const r = await fetchWithRetry(`/api/sessions/${sessionId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ archived: archive })
+        });
+
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+        showToast(archive ? 'Session archived' : 'Session restored', 'success', 3000);
+        loadSessions();
+      } catch (e) {
+        showToast('Archive failed: ' + e.message);
+        console.error('toggleArchive error:', e);
+      }
+    }
+
+    /**
+     * Delete a session and all its messages.
+     * @param {number} sessionId - Session ID
+     * @param {string} title - Session title (for confirmation)
+     */
+    async function deleteSession(sessionId, title) {
+      if (!confirm(`DELETE session "${title}"? This cannot be undone.`)) return;
+
+      try {
+        const r = await fetchWithRetry(`/api/sessions/${sessionId}`, { method: 'DELETE' });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+        const j = await r.json();
+        showToast(`Session deleted (${j.deleted_messages} messages)`, 'success', 3000);
+
+        // If deleted current session, clear chat log
+        if (sessionId === currentSessionId) {
+          currentSessionId = 1;
+          $('#log').innerHTML = '';
+        }
+
+        loadSessions();
+      } catch (e) {
+        showToast('Delete failed: ' + e.message);
+        console.error('deleteSession error:', e);
+      }
+    }
+
+    // Search input with debouncing
+    $('#sessionSearch').oninput = (e) => {
+      clearTimeout(searchTimeout);
+      const query = e.target.value.trim();
+
+      if (!query) {
+        // Empty search - reload normal sessions
+        loadSessions();
+        return;
+      }
+
+      searchTimeout = setTimeout(() => searchSessions(query), 300);
+    };
+
+    // Filter toggle handlers
+    $('#showActive').onclick = () => {
+      currentFilter = 'active';
+      $('#showActive').classList.add('active');
+      $('#showArchived').classList.remove('active');
+      $('#sessionSearch').value = ''; // Clear search
+      loadSessions();
+    };
+
+    $('#showArchived').onclick = () => {
+      currentFilter = 'archived';
+      $('#showArchived').classList.add('active');
+      $('#showActive').classList.remove('active');
+      $('#sessionSearch').value = ''; // Clear search
+      loadSessions();
+    };
+
+    loadSessions();
+
+    /**
+     * Load and display messages for a specific session.
+     * @param {number} sid - Session ID to load messages from
+     */
+    async function loadMessages(sid) {
+      try {
+        showLoading('log', true);
+        const r = await fetchWithRetry(`/api/sessions/${sid}/messages`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+
+        const j = await r.json();
+        $('#log').innerHTML = '';
+        j.messages.forEach(m => addBubble(m.text, m.role === 'user'));
+
+        showLoading('log', false);
+      } catch (e) {
+        showLoading('log', false);
+        showToast('Failed to load messages: ' + e.message);
+        console.error('loadMessages error:', e);
+      }
+    }
+
+    /**
+     * Create a new chat session with timestamped title.
+     */
+    $('#newSession').onclick = async () => {
+      try {
+        const title = `LOG_${new Date().toISOString().slice(11, 19)}`;
+        const r = await fetchWithRetry('/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title })
+        });
+
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+
+        const j = await r.json();
+        currentSessionId = j.id;
+        loadSessions();
+        $('#log').innerHTML = '';
+        showToast('New session created', 'success', 3000);
+      } catch (e) {
+        showToast('Failed to create session: ' + e.message);
+        console.error('newSession error:', e);
+      }
+    };
+
+    // --- CHARACTERS ---
+    /**
+     * Load and display character avatars in the character tray.
+     * Highlights the currently active character.
+     */
+    async function loadCharacters() {
+      try {
+        showLoading('charList', true);
+        const r = await fetchWithRetry('/api/characters');
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+
+        const j = await r.json();
+        const c = $('#charList');
+        c.innerHTML = '';
+
+        j.characters.forEach(char => {
+          const d = document.createElement('div');
+          d.className = 'char-item' + (char.id === currentCharacterId ? ' active' : '');
+          d.title = char.name;
+          d.onclick = () => {
+            currentCharacterId = char.id;
+            loadCharacters();
+            addBubble(`[SYSTEM] UPLINK_SWITCH: ${char.name}...`, false);
+          };
+          d.innerHTML = `<img src="${char.avatar_url || ''}" onerror="this.parentElement.style.display='none'"/>`;
+          c.appendChild(d);
+        });
+
+        showLoading('charList', false);
+      } catch (e) {
+        showLoading('charList', false);
+        showToast('Failed to load characters: ' + e.message);
+        console.error('loadCharacters error:', e);
+      }
+    }
+    loadCharacters();
+
+    // --- CONFIG ---
+    /**
+     * Load current configuration from backend and populate UI fields.
+     */
+    async function loadCfg() {
+      try {
+        const r = await fetchWithRetry('/api/config');
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+
+        const j = await r.json();
+
+        if (j.llm) {
+          $('#endpoint').value = j.llm.endpoint || '';
+          $('#model').value = j.llm.model || '';
+          $('#temp').value = j.llm.temperature || 0.7;
+        }
+        if (j.tts) {
+          $('#tts_enabled').checked = !!j.tts.enabled;
+          $('#tts_provider').value = j.tts.provider || 'local';
+          $('#tts_voice_id').value = j.tts.voice_id || '';
+        }
+        if (j.asr) {
+          $('#asr_enabled').value = j.asr.enabled ? "true" : "false";
+          $('#asr_provider').value = j.asr.provider || 'web_speech';
+        }
+        if (j.ui) {
+          $('#ui_scanlines').value = j.ui.scanline_opacity || 0.4;
+          $('#ui_flicker').value = j.ui.flicker_enabled ? "true" : "false";
+          updateUIEffects();
+        }
+
+        updateStatusLights();
+      } catch (e) {
+        showToast('Failed to load configuration: ' + e.message);
+        console.error('loadCfg error:', e);
+      }
+    }
+
+    function updateUIEffects() {
+      const opacity = $('#ui_scanlines').value;
+      const flicker = $('#ui_flicker').value === "true";
+      document.documentElement.style.setProperty('--scanline-opacity', opacity);
+      $('.scanlines').style.opacity = opacity;
+    }
+
+    async function pollLogs() {
+      try {
+        const r = await fetch('/api/logs');
+        if (!r.ok) return;
+        const j = await r.json();
+        const feed = $('#terminal-feed');
+        if (j.logs && j.logs.length > 0) {
+          j.logs.forEach(msg => {
+            const div = document.createElement('div');
+            div.textContent = msg;
+            feed.appendChild(div);
+          });
+          feed.scrollTop = feed.scrollHeight;
+          // Keep only last 50 logs
+          while (feed.children.length > 50) feed.removeChild(feed.firstChild);
+        }
+      } catch (e) {
+        console.warn('Logging offline');
+      }
+    }
+
+    /**
+     * Update status indicator lights with neon classes.
+     */
+    async function updateStatusLights() {
+      try {
+        const r = await fetch('/api/healthcheck');
+        if (!r.ok) throw new Error('OFFLINE');
+        const j = await r.json();
+
+        // LLM status
+        const llmOk = j.ok && j.llm && j.llm.ok;
+        const llmLabel = $('#stat-llm');
+        const llmDot = $('#led-llm');
+
+        llmLabel.textContent = `LLM: ${llmOk ? 'CONNECTED' : 'OFFLINE'}`;
+        llmLabel.style.color = llmOk ? 'var(--neon-green)' : 'var(--neon-pink)';
+        llmDot.className = `status-dot ${llmOk ? 'status-online' : 'status-offline'}`;
+
+        // TTS status
+        const ttsOk = j.ttsConfigured;
+        const ttsLabel = $('#stat-tts');
+        const ttsDot = $('#led-tts');
+        ttsLabel.textContent = `TTS: ${ttsOk ? 'READY' : 'OFFLINE'}`;
+        ttsLabel.style.color = ttsOk ? 'var(--neon-green)' : 'var(--neon-pink)';
+        ttsDot.className = `status-dot ${ttsOk ? 'status-online' : 'status-offline'}`;
+
+        // Latency/Uplink
+        if ($('#diag-latency')) {
+          const start = Date.now();
+          await fetch('/api/config');
+          const latency = Date.now() - start;
+          $('#diag-latency').textContent = `${latency}ms`;
+        }
+      } catch (e) {
+        $('#led-llm').className = 'status-dot status-offline';
+        $('#led-tts').className = 'status-dot status-offline';
+        $('#stat-llm').textContent = 'LLM: DISCONNECTED';
+        $('#stat-llm').style.color = 'var(--neon-pink)';
+      }
+    }
+
+    // Auto-polling intervals
+    setInterval(pollLogs, 2000);
+    setInterval(updateStatusLights, 5000);
+
+    // Dev Mode Toggle
+    $('#dev_mode').onchange = () => {
+      $('#dev-params').style.display = $('#dev_mode').checked ? 'block' : 'none';
+    };
+
+    // Model Discovery
+    $('#discoverModels').onclick = async () => {
+      try {
+        const endpoint = $('#endpoint').value.trim();
+        const base = endpoint.replace(/\/v1$/, '').replace(/\/$/, '') + '/v1';
+        showToast('SCANNING_MODELS...', 'info');
+        const r = await fetch(`${base}/models`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json();
+        if (j.data && j.data.length > 0) {
+          const modelId = j.data[0].id;
+          $('#model').value = modelId;
+          showToast(`FOUND: ${modelId}`, 'success');
+        } else {
+          showToast('NO_MODELS_FOUND');
+        }
+      } catch (e) {
+        showToast('SCAN_FAILED: ' + e.message);
+      }
+    };
+
+    /**
+     * Load current configuration from backend and populate UI fields.
+     */
+    async function loadCfg() {
+      try {
+        const r = await fetchWithRetry('/api/config');
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+
+        const j = await r.json();
+
+        if (j.llm) {
+          $('#endpoint').value = j.llm.endpoint || '';
+          $('#model').value = j.llm.model || '';
+          $('#temp').value = j.llm.temperature || 0.7;
+          $('#history_limit').value = j.llm.history_limit || 20;
+        }
+        // ... (existing tts/asr/ui loads unchanged in previous steps)
+
+        // Reload Dev Mode state from localStorage if you want, or just default off
+        $('#dev_mode').checked = localStorage.getItem('retro_dev_mode') === 'true';
+        $('#dev_mode').onchange();
+
+        updateStatusLights();
+      } catch (e) {
+        showToast('Failed to load configuration: ' + e.message);
+        console.error('loadCfg error:', e);
+      }
+    }
+
+    /**
+     * Save configuration changes to backend.
+     */
+    $('#saveCfg').onclick = async () => {
+      try {
+        localStorage.setItem('retro_dev_mode', $('#dev_mode').checked);
+        const body = {
+          llm: {
+            endpoint: $('#endpoint').value,
+            model: $('#model').value,
+            temperature: parseFloat($('#temp').value),
+            history_limit: parseInt($('#history_limit').value) || 20
+          },
+          tts: { enabled: $('#tts_enabled').checked, provider: $('#tts_provider').value, voice_id: $('#tts_voice_id').value },
+          asr: { enabled: $('#asr_enabled').value === "true", provider: $('#asr_provider').value },
+          ui: { scanline_opacity: parseFloat($('#ui_scanlines').value), flicker_enabled: $('#ui_flicker').value === "true" }
+        };
+
+        const r = await fetchWithRetry('/api/config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+
+        updateUIEffects();
+        showToast('SYSTEM_RECONFIG_SUCCESS', 'success', 3000);
+      } catch (e) {
+        showToast('Failed to save configuration: ' + e.message);
+        console.error('saveCfg error:', e);
+      }
+    };
+
+    /**
+     * Reset configuration to factory defaults and reload page.
+     */
+    $('#resetCfg').onclick = async () => {
+      if (!confirm("CONFIRM FACTORY_RESET? ALL DATA WILL BE WIPED.")) return;
+
+      try {
+        const r = await fetchWithRetry('/api/config/reset', { method: 'POST' });
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+
+        showToast('Configuration reset, reloading...', 'info', 2000);
+        setTimeout(() => location.reload(), 2000);
+      } catch (e) {
+        showToast('Failed to reset configuration: ' + e.message);
+        console.error('resetCfg error:', e);
+      }
+    };
+    loadCfg();
+
+    // --- CHAT LOGIC ---
+    const sendBtn = $('#send');
+    const msgInput = $('#msg');
+    sendBtn.onclick = send;
+    msgInput.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
+
+    let useAudio = true;
+    let useMic = false;
+
+    $('#audio-btn').onclick = () => {
+      useAudio = !useAudio;
+      $('#audio-btn').classList.toggle('active', useAudio);
+    };
+
+    $('#mic-btn').onclick = () => {
+      useMic = !useMic;
+      $('#mic-btn').classList.toggle('active', useMic);
+      if (useMic) startASR(); else stopASR();
+    };
+
+    function startASR() { addBubble("[SYSTEM] ASR_STARTING...", false); }
+    function stopASR() { addBubble("[SYSTEM] ASR_HALTED.", false); }
+
+    // Auto-resize textarea
+    msgInput.addEventListener('input', () => {
+      msgInput.style.height = 'auto';
+      msgInput.style.height = msgInput.scrollHeight + 'px';
+    });
+
+    function addBubble(text, isMe) {
+      const d = document.createElement('div');
+      d.className = `bubble ${isMe ? 'me' : 'ai'}`;
+      d.innerHTML = isMe ? text : `<span class="name">RECV_DATA</span> ${marked.parse(text)}`;
+      $('#log').appendChild(d);
+      $('#log').scrollTop = $('#log').scrollHeight;
+    }
+
+    /**
+     * Send user message to chat API and display AI response.
+     * Handles TTS audio playback and avatar lip-sync animation.
+     */
+    async function send() {
+      const txt = msgInput.value.trim();
+      if (!txt) return;
+
+      msgInput.value = '';
+      msgInput.style.height = 'auto';
+      addBubble(txt, true);
+      $('#typing').style.display = 'block';
+
+      // Avatar Interaction: Nod on send
+      try {
+        $('#vrm-iframe').contentWindow.postMessage({ type: 'nod' }, '*');
+      } catch (e) {
+        console.warn('Avatar interaction failed:', e);
+      }
+
+      try {
+        const res = await fetchWithRetry(`/api/chat?session_id=${currentSessionId}&char_id=${currentCharacterId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: txt, speak: useAudio })
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+
+        const j = await res.json();
+        $('#typing').style.display = 'none';
+
+        if (j.ok) {
+          addBubble(j.reply, false);
+
+          // Send emotion-based expression to viewer
+          if (j.emotion && j.emotion !== 'neutral') {
+            try {
+              $('#vrm-iframe').contentWindow.postMessage({
+                type: 'setExpression',
+                emotion: j.emotion,
+                intensity: j.intensity || 1.0
+              }, '*');
+
+              // Enhanced logging with confidence scores
+              console.log('EXPRESSION_SENT:', j.emotion, 'intensity:', j.intensity);
+              if (j.secondary_emotion) {
+                console.log('  Secondary emotion:', j.secondary_emotion);
+              }
+              if (j.emotion_confidence) {
+                console.log('  Confidence scores:', j.emotion_confidence);
+              }
+
+              // Update emotion indicator in UI
+              updateEmotionIndicator(j);
+            } catch (e) {
+              console.error('Expression message error:', e);
+            }
+          }
+
+          // Send gesture animation to viewer
+          if (j.gesture) {
+            try {
+              $('#vrm-iframe').contentWindow.postMessage({
+                type: 'playGesture',
+                gesture: j.gesture
+              }, '*');
+              console.log('GESTURE_SENT:', j.gesture);
+            } catch (e) {
+              console.error('Gesture message error:', e);
+            }
+          }
+
+          // Handle TTS audio with real-time lip sync
+          if (j.audio && useAudio) {
+            try {
+              // Send audio URL to VRM viewer for audio-driven lip sync
+              $('#vrm-iframe').contentWindow.postMessage({
+                type: 'playAudio',
+                audioUrl: j.audio
+              }, '*');
+
+              console.log('AUDIO_LIPSYNC_TRIGGERED:', j.audio);
+            } catch (e) {
+              console.error('TTS audio error:', e);
+              showToast('TTS audio error: ' + e.message, 'error', 3000);
+            }
+          }
+        } else {
+          const errorMsg = j.error || "UNKNOWN_ERROR";
+          addBubble("CORE_ERR: " + errorMsg, false);
+          showToast('Chat error: ' + errorMsg);
+        }
+      } catch (e) {
+        $('#typing').style.display = 'none';
+        addBubble("UPLINK_ERR: " + e.message, false);
+        showToast('Failed to send message: ' + e.message);
+        console.error('send() error:', e);
+      }
+    }
+
+    // --- EMOTION INDICATOR ---
+    /**
+     * Update emotion indicator with current AI emotion state.
+     * Displays primary emotion, intensity, and confidence scores.
+     *
+     * @param {Object} emotionData - Emotion data from API response
+     * @param {string} emotionData.emotion - Primary emotion
+     * @param {number} emotionData.intensity - Emotion intensity (0-1)
+     * @param {string} emotionData.secondary_emotion - Secondary emotion (optional)
+     * @param {Object} emotionData.emotion_confidence - Confidence scores for top emotions
+     */
+    function updateEmotionIndicator(emotionData) {
+      const indicator = $('#emotion-indicator');
+      if (!indicator) return;
+
+      const { emotion, intensity, secondary_emotion, emotion_confidence } = emotionData;
+
+      // Emotion color mapping
+      const emotionColors = {
+        joy: 'var(--neon-green)',
+        sadness: 'var(--neon-blue)',
+        anger: 'var(--neon-pink)',
+        fear: 'var(--neon-purple)',
+        surprise: 'var(--neon-yellow)',
+        disgust: '#8B4513',
+        neutral: '#888888'
+      };
+
+      const color = emotionColors[emotion] || '#888888';
+
+      // Build confidence bars HTML
+      let confidenceBars = '';
+      if (emotion_confidence) {
+        for (const [emo, conf] of Object.entries(emotion_confidence)) {
+          const barWidth = (conf * 100).toFixed(0);
+          confidenceBars += `
+            <div style="display: flex; align-items: center; margin-top: 4px; font-size: 0.45rem;">
+              <span style="width: 60px; text-transform: uppercase;">${emo}:</span>
+              <div style="flex: 1; background: rgba(255,255,255,0.1); height: 8px; margin: 0 5px; border-radius: 2px; overflow: hidden;">
+                <div style="width: ${barWidth}%; height: 100%; background: ${emotionColors[emo] || '#888'}; transition: width 0.3s;"></div>
+              </div>
+              <span style="width: 35px; text-align: right;">${(conf * 100).toFixed(0)}%</span>
+            </div>
+          `;
+        }
+      }
+
+      indicator.innerHTML = `
+        <div style="padding: 10px; border: 1px solid ${color}; border-radius: 4px; background: rgba(0,0,0,0.5);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-family: var(--font-pixel); font-size: 0.6rem; color: ${color}; text-transform: uppercase;">
+              ${emotion}
+            </span>
+            <span style="font-family: var(--font-mono); font-size: 0.5rem; color: ${color};">
+              ${(intensity * 100).toFixed(0)}%
+            </span>
+          </div>
+          ${secondary_emotion ? `
+            <div style="font-size: 0.45rem; color: #aaa; margin-bottom: 4px;">
+              Secondary: ${secondary_emotion.toUpperCase()}
+            </div>
+          ` : ''}
+          ${confidenceBars}
+        </div>
+      `;
+
+      // Auto-hide after 10 seconds
+      setTimeout(() => {
+        if (indicator) {
+          indicator.style.opacity = '0.3';
+          setTimeout(() => { indicator.style.opacity = '1'; }, 300);
+        }
+      }, 10000);
+    }
+
+    // --- DIAG ---
+    /**
+     * Refresh system health diagnostics and display in SYSTEM tab.
+     */
+    $('#refreshHealth').onclick = async () => {
+      try {
+        showLoading('health', true);
+        const r = await fetchWithRetry('/api/healthcheck');
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+
+        const j = await r.json();
+        $('#health').textContent = JSON.stringify(j, null, 2);
+        showLoading('health', false);
+
+        if (!j.ok) {
+          showToast('System health check failed: ' + (j.issues?.join(', ') || 'Unknown issues'), 'error');
+        } else {
+          showToast('Health check complete', 'success', 2000);
+        }
+      } catch (e) {
+        showLoading('health', false);
+        showToast('Failed to refresh health check: ' + e.message);
+        console.error('refreshHealth error:', e);
+        $('#health').textContent = `ERROR: ${e.message}`;
+      }
+    }
+
+    // --- CHARACTER MANAGEMENT ---
+    /**
+     * Open character management modal and load character list.
+     */
+    function openCharacterManager() {
+      $('#charModal').classList.add('open');
+      loadCharactersManage();
+    }
+
+    /**
+     * Close character management modal.
+     */
+    $('#closeCharModal').onclick = () => {
+      $('#charModal').classList.remove('open');
+    };
+
+    /**
+     * Open modal button handler.
+     */
+    $('#openCharModal').onclick = openCharacterManager;
+
+    /**
+     * Load characters into management modal list.
+     */
+    async function loadCharactersManage() {
+      try {
+        const r = await fetchWithRetry('/api/characters');
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+        const j = await r.json();
+        const list = $('#charListManage');
+        list.innerHTML = '';
+
+        j.characters.forEach(char => {
+          const item = document.createElement('div');
+          item.style.cssText = 'padding:10px; margin-bottom:5px; border:1px solid var(--neon-purple); display:flex; justify-content:space-between; background:rgba(26,6,40,0.3);';
+
+          const info = document.createElement('div');
+          info.innerHTML = `<strong style="color:var(--neon-green); font-size:0.6rem;">${char.name}</strong><br><span style="font-size:0.5rem; color:var(--neon-blue);">${char.system_prompt.substring(0, 50)}...</span>`;
+
+          const actions = document.createElement('div');
+          actions.style.cssText = 'display:flex; gap:5px; align-items:center;';
+
+          const editBtn = document.createElement('button');
+          editBtn.textContent = 'EDIT';
+          editBtn.style.cssText = 'background:var(--neon-blue); color:#000; border:none; padding:5px 10px; cursor:pointer; font-family:var(--font-pixel); font-size:0.5rem;';
+          editBtn.onclick = () => editCharacter(char);
+
+          const delBtn = document.createElement('button');
+          delBtn.textContent = 'DEL';
+          delBtn.style.cssText = 'background:var(--neon-pink); color:#000; border:none; padding:5px 10px; cursor:pointer; font-family:var(--font-pixel); font-size:0.5rem;';
+          delBtn.disabled = (char.id === 1);
+          if (char.id === 1) delBtn.style.opacity = '0.3';
+          delBtn.onclick = () => deleteChar(char.id, char.name);
+
+          actions.appendChild(editBtn);
+          actions.appendChild(delBtn);
+          item.appendChild(info);
+          item.appendChild(actions);
+          list.appendChild(item);
+        });
+      } catch (e) {
+        showToast('Failed to load characters: ' + e.message);
+        console.error('loadCharactersManage error:', e);
+      }
+    }
+
+    /**
+     * Populate form with character data for editing.
+     * @param {Object} char - Character object
+     */
+    function editCharacter(char) {
+      $('#editCharId').value = char.id;
+      $('#charName').value = char.name;
+      $('#charPrompt').value = char.system_prompt;
+      $('#charAvatar').value = char.avatar_url || '';
+      $('#charVoice').value = char.voice_id || '';
+      $('#charTTS').value = char.tts_provider || '';
+      $('#charTraits').value = (char.personality_traits || []).join(', ');
+    }
+
+    /**
+     * Clear character form for new character creation.
+     */
+    $('#newChar').onclick = () => {
+      $('#editCharId').value = '';
+      $('#charName').value = '';
+      $('#charPrompt').value = '';
+      $('#charAvatar').value = '';
+      $('#charVoice').value = '';
+      $('#charTTS').value = '';
+      $('#charTraits').value = '';
+    };
+
+    /**
+     * Save character (create or update).
+     */
+    $('#saveChar').onclick = async () => {
+      const charId = $('#editCharId').value;
+      const isNew = !charId;
+
+      const data = {
+        name: $('#charName').value.trim(),
+        system_prompt: $('#charPrompt').value.trim(),
+        avatar_url: $('#charAvatar').value.trim(),
+        voice_id: $('#charVoice').value.trim(),
+        tts_provider: $('#charTTS').value,
+        personality_traits: $('#charTraits').value.split(',').map(s => s.trim()).filter(s => s)
+      };
+
+      if (!data.name || !data.system_prompt) {
+        showToast('Name and system prompt required');
+        return;
+      }
+
+      try {
+        const url = isNew ? '/api/characters' : `/api/characters/${charId}`;
+        const method = isNew ? 'POST' : 'PUT';
+
+        const r = await fetchWithRetry(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+        showToast(isNew ? 'Character created' : 'Character updated', 'success', 3000);
+        loadCharactersManage();
+        $('#newChar').click();
+        loadCharacters(); // Refresh character tray
+      } catch (e) {
+        showToast('Save failed: ' + e.message);
+        console.error('saveChar error:', e);
+      }
+    };
+
+    /**
+     * Delete a character.
+     * @param {number} charId - Character ID
+     * @param {string} name - Character name (for confirmation)
+     */
+    async function deleteChar(charId, name) {
+      if (charId === 1) {
+        showToast('Cannot delete default character');
+        return;
+      }
+
+      if (!confirm(`DELETE character "${name}"?`)) return;
+
+      try {
+        const r = await fetchWithRetry(`/api/characters/${charId}`, { method: 'DELETE' });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+        showToast('Character deleted', 'success', 3000);
+        loadCharactersManage();
+        loadCharacters(); // Refresh character tray
+
+        // Reset to default if deleted current character
+        if (charId === currentCharacterId) {
+          currentCharacterId = 1;
+        }
+      } catch (e) {
+        showToast('Delete failed: ' + e.message);
+        console.error('deleteChar error:', e);
+      }
+    }
+  </script>
+
+  <!-- Character Management Modal -->
+  <div id="charModal" class="modal">
+    <div class="modal-content" style="width:600px;">
+      <div style="display:flex; justify-content:space-between; margin-bottom:20px; align-items:center;">
+        <h2 style="font-family:var(--font-pixel); font-size:0.8rem; color:var(--neon-blue); margin:0;">
+          CHARACTER_DATABASE
+        </h2>
+        <button id="closeCharModal"
+          style="background:transparent; border:none; color:var(--neon-pink); cursor:pointer; font-size:1.5rem; padding:0; line-height:1;">&times;</button>
+      </div>
+
+      <!-- Character List -->
+      <div id="charListManage"
+        style="max-height:200px; overflow-y:auto; margin-bottom:20px; border:1px solid var(--neon-purple); padding:10px; background:rgba(0,0,0,0.3);">
+      </div>
+
+      <!-- Character Form -->
+      <div id="charForm">
+        <input type="hidden" id="editCharId" value="" />
+
+        <div class="form-group">
+          <label>NAME</label>
+          <input type="text" id="charName" placeholder="Character Name" />
+        </div>
+
+        <div class="form-group">
+          <label>SYSTEM_PROMPT</label>
+          <textarea id="charPrompt" rows="4" placeholder="You are..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>AVATAR_URL</label>
+          <input type="text" id="charAvatar" placeholder="/files/avatars/character.vrm" />
+        </div>
+
+        <div class="form-group">
+          <label>VOICE_ID</label>
+          <input type="text" id="charVoice" placeholder="Voice identifier" />
+        </div>
+
+        <div class="form-group">
+          <label>TTS_PROVIDER</label>
+          <select id="charTTS">
+            <option value="">Default</option>
+            <option value="fish_audio">Fish Audio</option>
+            <option value="elevenlabs">ElevenLabs</option>
+            <option value="piper_local">Piper Local</option>
+            <option value="xtts_server">XTTS Server</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>PERSONALITY_TRAITS (comma-separated)</label>
+          <input type="text" id="charTraits" placeholder="friendly, energetic" />
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button id="saveChar"
+            style="flex:1; background:var(--neon-green); color:#000; border:none; padding:15px; font-family:var(--font-pixel); font-size:0.6rem; cursor:pointer;">SAVE</button>
+          <button id="newChar"
+            style="flex:1; background:var(--neon-blue); color:#000; border:none; padding:15px; font-family:var(--font-pixel); font-size:0.6rem; cursor:pointer;">NEW</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+
+</html>

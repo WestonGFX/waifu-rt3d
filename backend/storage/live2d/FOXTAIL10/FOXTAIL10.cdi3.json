@@ -1,0 +1,380 @@
+{
+	"Version": 3,
+	"Parameters": [
+		{
+			"Id": "ParamEyeLOpen",
+			"GroupId": "ParamGroup",
+			"Name": "Left Eye Blink"
+		},
+		{
+			"Id": "ParamEyeLSmile",
+			"GroupId": "ParamGroup",
+			"Name": "Left Eye Smile"
+		},
+		{
+			"Id": "ParamEyeROpen",
+			"GroupId": "ParamGroup",
+			"Name": "Right Eye Blink"
+		},
+		{
+			"Id": "ParamEyeRSmile",
+			"GroupId": "ParamGroup",
+			"Name": "Right Eye Smile"
+		},
+		{
+			"Id": "Param",
+			"GroupId": "ParamGroup",
+			"Name": "Eye Ball X"
+		},
+		{
+			"Id": "Param2",
+			"GroupId": "ParamGroup",
+			"Name": "Eye Ball Y"
+		},
+		{
+			"Id": "Param4",
+			"GroupId": "ParamGroup",
+			"Name": "Right Eye Physics"
+		},
+		{
+			"Id": "Param8",
+			"GroupId": "ParamGroup",
+			"Name": "Left Eye Physics"
+		},
+		{
+			"Id": "Param7",
+			"GroupId": "ParamGroup",
+			"Name": "Left Eye Highlight"
+		},
+		{
+			"Id": "Param9",
+			"GroupId": "ParamGroup",
+			"Name": "Left Eye Ball Highlight"
+		},
+		{
+			"Id": "Param5",
+			"GroupId": "ParamGroup",
+			"Name": "Right Eye Highlight"
+		},
+		{
+			"Id": "Param6",
+			"GroupId": "ParamGroup",
+			"Name": "Right Eye Ball Highlight"
+		},
+		{
+			"Id": "ParamBrowLX",
+			"GroupId": "ParamGroup",
+			"Name": "Left Brow X"
+		},
+		{
+			"Id": "ParamBrowLY",
+			"GroupId": "ParamGroup",
+			"Name": "Left Brow Y"
+		},
+		{
+			"Id": "ParamBrowLAngle",
+			"GroupId": "ParamGroup",
+			"Name": "Left Brow Angle"
+		},
+		{
+			"Id": "ParamBrowLForm",
+			"GroupId": "ParamGroup",
+			"Name": "Left Brow Form"
+		},
+		{
+			"Id": "ParamBrowRX",
+			"GroupId": "ParamGroup",
+			"Name": "Right Brow X"
+		},
+		{
+			"Id": "ParamBrowRY",
+			"GroupId": "ParamGroup",
+			"Name": "Right Brow Y"
+		},
+		{
+			"Id": "ParamBrowRAngle",
+			"GroupId": "ParamGroup",
+			"Name": "Right Brow Angle"
+		},
+		{
+			"Id": "Param3",
+			"GroupId": "ParamGroup",
+			"Name": "Right Brow Form"
+		},
+		{
+			"Id": "ParamMouthForm",
+			"GroupId": "ParamGroup",
+			"Name": "Mouth Form"
+		},
+		{
+			"Id": "ParamMouthOpenY",
+			"GroupId": "ParamGroup",
+			"Name": "Mouth Open"
+		},
+		{
+			"Id": "Param26",
+			"GroupId": "ParamGroup",
+			"Name": "EYE shrink"
+		},
+		{
+			"Id": "Param10",
+			"GroupId": "ParamGroup3",
+			"Name": "Hair Front Physics X1"
+		},
+		{
+			"Id": "Param11",
+			"GroupId": "ParamGroup3",
+			"Name": "Hair Front Physics Y1"
+		},
+		{
+			"Id": "Param12",
+			"GroupId": "ParamGroup3",
+			"Name": "Hair Front Physics X2"
+		},
+		{
+			"Id": "Param13",
+			"GroupId": "ParamGroup3",
+			"Name": "Hair Front Physics Y2"
+		},
+		{
+			"Id": "ParamAngleX",
+			"GroupId": "ParamGroup4",
+			"Name": "Face X"
+		},
+		{
+			"Id": "ParamAngleY",
+			"GroupId": "ParamGroup4",
+			"Name": "Face Y"
+		},
+		{
+			"Id": "ParamAngleZ",
+			"GroupId": "ParamGroup4",
+			"Name": "Face Z"
+		},
+		{
+			"Id": "Param_Angle_Rotation",
+			"GroupId": "ParamGroup2",
+			"Name": "[0]Tail Angle"
+		},
+		{
+			"Id": "Param_Angle_Rotation2",
+			"GroupId": "ParamGroup2",
+			"Name": "[1]Tail Angle"
+		},
+		{
+			"Id": "Param_Angle_Rotation3",
+			"GroupId": "ParamGroup2",
+			"Name": "[2]Tail Angle"
+		},
+		{
+			"Id": "Param_Angle_Rotation4",
+			"GroupId": "ParamGroup2",
+			"Name": "[3]Tail Angle"
+		},
+		{
+			"Id": "Param_Angle_Rotation5",
+			"GroupId": "ParamGroup2",
+			"Name": "[4]Tail Angle"
+		},
+		{
+			"Id": "Param_Angle_Rotation6",
+			"GroupId": "ParamGroup2",
+			"Name": "[5]Tail Angle"
+		},
+		{
+			"Id": "Param14",
+			"GroupId": "ParamGroup5",
+			"Name": "Breast X1"
+		},
+		{
+			"Id": "Param15",
+			"GroupId": "ParamGroup5",
+			"Name": "Breast X2"
+		},
+		{
+			"Id": "Param16",
+			"GroupId": "ParamGroup5",
+			"Name": "Breast Y1"
+		},
+		{
+			"Id": "Param17",
+			"GroupId": "ParamGroup5",
+			"Name": "Breast Y2"
+		},
+		{
+			"Id": "Param18",
+			"GroupId": "",
+			"Name": "Right Arm"
+		},
+		{
+			"Id": "Param19",
+			"GroupId": "",
+			"Name": "Left Arm"
+		},
+		{
+			"Id": "Param20",
+			"GroupId": "",
+			"Name": "Breath"
+		},
+		{
+			"Id": "Param21",
+			"GroupId": "",
+			"Name": "Body X"
+		},
+		{
+			"Id": "Param22",
+			"GroupId": "",
+			"Name": "Body Y"
+		},
+		{
+			"Id": "Param23",
+			"GroupId": "",
+			"Name": "Body Z"
+		},
+		{
+			"Id": "Param24",
+			"GroupId": "",
+			"Name": "Red"
+		},
+		{
+			"Id": "Param25",
+			"GroupId": "",
+			"Name": "Blue"
+		}
+	],
+	"ParameterGroups": [
+		{
+			"Id": "ParamGroup",
+			"GroupId": "",
+			"Name": "표정"
+		},
+		{
+			"Id": "ParamGroup3",
+			"GroupId": "",
+			"Name": "머리카락흔들림"
+		},
+		{
+			"Id": "ParamGroup4",
+			"GroupId": "",
+			"Name": "얼굴각도"
+		},
+		{
+			"Id": "ParamGroup2",
+			"GroupId": "",
+			"Name": "꼬리 움직임"
+		},
+		{
+			"Id": "ParamGroup5",
+			"GroupId": "",
+			"Name": "가슴움직임"
+		}
+	],
+	"Parts": [
+		{
+			"Id": "Head",
+			"Name": "Head"
+		},
+		{
+			"Id": "Body",
+			"Name": "Body"
+		},
+		{
+			"Id": "HairSide",
+			"Name": "HairSide"
+		},
+		{
+			"Id": "Ribbon",
+			"Name": "Ribbon"
+		},
+		{
+			"Id": "HairFront",
+			"Name": "HairFront"
+		},
+		{
+			"Id": "Part",
+			"Name": "ear ring"
+		},
+		{
+			"Id": "Part3",
+			"Name": "eye R"
+		},
+		{
+			"Id": "Part2",
+			"Name": "eye L"
+		},
+		{
+			"Id": "Mouth",
+			"Name": "Mouth"
+		},
+		{
+			"Id": "Face",
+			"Name": "Face"
+		},
+		{
+			"Id": "Ear",
+			"Name": "Ear"
+		},
+		{
+			"Id": "HairTail",
+			"Name": "HairTail"
+		},
+		{
+			"Id": "Part6",
+			"Name": "Leg L"
+		},
+		{
+			"Id": "Part7",
+			"Name": "Leg R"
+		},
+		{
+			"Id": "Tail_Skinning",
+			"Name": "Tail(스키닝)"
+		}
+	],
+	"CombinedParameters": [
+		[
+			"Param",
+			"Param2"
+		],
+		[
+			"Param7",
+			"Param9"
+		],
+		[
+			"Param5",
+			"Param6"
+		],
+		[
+			"ParamBrowLX",
+			"ParamBrowLY"
+		],
+		[
+			"ParamBrowLAngle",
+			"ParamBrowLForm"
+		],
+		[
+			"ParamBrowRX",
+			"ParamBrowRY"
+		],
+		[
+			"ParamBrowRAngle",
+			"Param3"
+		],
+		[
+			"ParamMouthForm",
+			"ParamMouthOpenY"
+		],
+		[
+			"ParamAngleX",
+			"ParamAngleY"
+		],
+		[
+			"Param14",
+			"Param15"
+		],
+		[
+			"Param21",
+			"Param22"
+		]
+	]
+}

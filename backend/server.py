@@ -144,6 +144,45 @@ AVATARS  = STORAGE / "avatars"
 AUDIO    = STORAGE / "audio"
 DB_PATH  = STORAGE / "app.db"
 
+# --- Environment-overridable defaults ---
+# These allow Docker/production deployments to configure endpoints without
+# editing app.json. The env var takes priority over the config file value.
+DEFAULT_LLM_ENDPOINT = os.environ.get("WAIFU_LLM_ENDPOINT", "http://localhost:1234/v1")
+DEFAULT_COMFYUI_ENDPOINT = os.environ.get("WAIFU_COMFYUI_ENDPOINT", "http://localhost:8188")
+
+
+def _get_llm_endpoint(cfg: dict) -> str:
+    """Get the LLM endpoint from env var, config, or hardcoded default.
+
+    Priority: WAIFU_LLM_ENDPOINT env var > app.json llm.endpoint > localhost:1234
+
+    Args:
+        cfg: Loaded app config dict.
+
+    Returns:
+        LLM endpoint URL string.
+    """
+    if os.environ.get("WAIFU_LLM_ENDPOINT"):
+        return DEFAULT_LLM_ENDPOINT
+    return cfg.get("llm", {}).get("endpoint", DEFAULT_LLM_ENDPOINT)
+
+
+def _get_comfyui_endpoint(cfg: dict, section: str = "image_gen") -> str:
+    """Get the ComfyUI endpoint from env var, config, or hardcoded default.
+
+    Priority: WAIFU_COMFYUI_ENDPOINT env var > app.json section.endpoint > localhost:8188
+
+    Args:
+        cfg: Loaded app config dict.
+        section: Config section to check ("image_gen" or "video_gen").
+
+    Returns:
+        ComfyUI endpoint URL string.
+    """
+    if os.environ.get("WAIFU_COMFYUI_ENDPOINT"):
+        return DEFAULT_COMFYUI_ENDPOINT
+    return cfg.get(section, {}).get("endpoint", DEFAULT_COMFYUI_ENDPOINT)
+
 def save_config(cfg):
     CONFIG.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 
@@ -1680,7 +1719,7 @@ async def chat_multi(req: Request):
             llm_messages = [{"role": "system", "content": system_prompt + memory_context + filter_inj}] + hist
 
             # Call LLM
-            endpoint = cfg.get("llm", {}).get("endpoint", "http://localhost:1234/v1")
+            endpoint = _get_llm_endpoint(cfg)
             model = cfg.get("llm", {}).get("model", "")
             api_key = cfg.get("llm", {}).get("api_key", "lm-studio")
 
@@ -4553,7 +4592,7 @@ def _try_auto_start_lmstudio(cfg: dict) -> None:
         if well_known.exists():
             lms_path = str(well_known)
 
-    endpoint = cfg.get("llm", {}).get("endpoint", "http://localhost:1234/v1")
+    endpoint = _get_llm_endpoint(cfg)
     base_url = endpoint.replace("/v1", "").rstrip("/")
 
     # Check if already reachable
@@ -4886,7 +4925,7 @@ async def lm_studio_models():
         {"ok": true, "models": [...], "active_model": {"id": "gemma-3-12b", "max_context_length": 131072}}
     """
     cfg = load_config()
-    endpoint = cfg.get("llm", {}).get("endpoint", "http://localhost:1234/v1")
+    endpoint = _get_llm_endpoint(cfg)
     # Derive LM Studio base URL from the OpenAI-compat endpoint
     base_url = endpoint.replace("/v1", "").rstrip("/")
 

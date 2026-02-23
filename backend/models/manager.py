@@ -16,6 +16,7 @@ Typical flow:
 """
 
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -45,7 +46,9 @@ class ModelManager:
         self.token: Optional[str] = config.get("system", {}).get("huggingface_token")
 
         # Derive LM Studio base URL from OpenAI-compat endpoint (strip /v1)
-        endpoint = config.get("llm", {}).get("endpoint", "http://localhost:1234/v1")
+        endpoint = config.get("llm", {}).get(
+            "endpoint", os.environ.get("WAIFU_LLM_ENDPOINT", "http://localhost:1234/v1")
+        )
         self.base_url: str = endpoint.replace("/v1", "").rstrip("/")
 
         # ``lms`` CLI path (auto-detect or from config)

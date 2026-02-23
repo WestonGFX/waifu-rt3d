@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from .adapters.base import ImageGenAdapter
@@ -27,6 +28,7 @@ logger = logging.getLogger("waifu.image_gen.registry")
 _ROOT = Path(__file__).resolve().parents[2]
 _IMAGES_DIR = _ROOT / "backend" / "storage" / "images"
 _CONFIG_DIR = _ROOT / "backend" / "config"
+_DEFAULT_COMFYUI_ENDPOINT = os.environ.get("WAIFU_COMFYUI_ENDPOINT", "http://localhost:8188")
 
 
 class _DisabledAdapter(ImageGenAdapter):
@@ -77,7 +79,7 @@ def get_image_gen(cfg: dict) -> ImageGenAdapter:
     """
     image_cfg = cfg.get("image_gen", {})
     provider = image_cfg.get("provider", "disabled").lower()
-    endpoint = image_cfg.get("endpoint", "http://localhost:8188")
+    endpoint = image_cfg.get("endpoint", _DEFAULT_COMFYUI_ENDPOINT)
     model = image_cfg.get("model", "")
 
     if provider == "comfyui":
@@ -125,7 +127,7 @@ def get_video_gen(cfg: dict) -> ImageGenAdapter:
     """
     video_cfg = cfg.get("video_gen", {})
     provider = video_cfg.get("provider", "disabled").lower()
-    endpoint = video_cfg.get("endpoint", "http://localhost:8188")
+    endpoint = video_cfg.get("endpoint", _DEFAULT_COMFYUI_ENDPOINT)
     model = video_cfg.get("model", "wan2.2-ti2v-5b")
 
     if provider == "comfyui":

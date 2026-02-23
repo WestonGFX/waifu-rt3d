@@ -285,6 +285,21 @@ export class PersonaCreator {
                                    style="width:100%; padding:8px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px; font-size:0.85rem;">
                             <div style="font-size:0.65rem; color:var(--text-muted); margin-top:3px;">Override the global active model for this character only.</div>
                         </div>
+                        <div class="persona-field">
+                            <label style="color:var(--text-muted); font-size:0.8rem; font-weight:600; display:block; margin-bottom:4px;">
+                                Character Temperature Override
+                                <span id="persona-llm-temp-val" style="color:var(--neon-cyan); margin-left:8px; font-weight:400;">
+                                    ${tpl.llm_temperature != null ? tpl.llm_temperature : 'Global'}
+                                </span>
+                            </label>
+                            <input id="persona-llm-temperature" type="range" min="0" max="2" step="0.05"
+                                   value="${tpl.llm_temperature != null ? tpl.llm_temperature : 0}"
+                                   style="width:100%; accent-color:var(--neon-cyan);">
+                            <div style="display:flex; justify-content:space-between; font-size:0.6rem; color:var(--text-muted); margin-top:2px;">
+                                <span>0 = Global</span><span>0.7 = Balanced</span><span>1.5 = Creative</span><span>2.0 = Wild</span>
+                            </div>
+                            <div style="font-size:0.65rem; color:var(--text-muted); margin-top:3px;">Per-character creativity. Drag to 0 to use the global temperature setting.</div>
+                        </div>
                     </div>
                 </details>
 
@@ -298,6 +313,27 @@ export class PersonaCreator {
                         <div style="padding:20px; text-align:center; color:var(--text-muted); font-size:0.75rem; grid-column:1/-1;">Loading avatars...</div>
                     </div>
                 </div>
+
+                ${isEdit ? `
+                <div id="persona-expressions-section" class="persona-field" style="margin-top:6px;">
+                    <label style="color:var(--text-main); font-weight:600; display:block; margin-bottom:4px;">
+                        Expression Portraits
+                        <span id="expr-pack-status" style="margin-left:8px; font-size:0.72rem; color:var(--text-muted); font-weight:400;">(checking AI art...)</span>
+                    </label>
+                    <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;">
+                        AI-generated portraits shown as reaction overlays during chat when emotions fire.
+                    </div>
+                    <div id="expr-portraits-preview" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;"></div>
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <button id="btn-generate-expressions" style="padding:6px 14px; border-radius:6px;
+                                border:1px solid rgba(157,80,255,0.5); background:rgba(157,80,255,0.1);
+                                color:rgba(157,80,255,0.9); font-size:0.78rem; cursor:pointer;">
+                            ✨ Generate All Expressions
+                        </button>
+                        <span id="expr-gen-status" style="font-size:0.75rem; color:var(--text-muted);"></span>
+                    </div>
+                </div>
+                ` : ''}
 
                 ${isEdit ? this._renderKnowledgeBaseSection() : ''}
 
@@ -322,8 +358,23 @@ export class PersonaCreator {
 
         document.getElementById('btn-persona-save').onclick = () => this._save();
 
+        // Live display for temperature slider (#3)
+        const tempSlider = document.getElementById('persona-llm-temperature');
+        const tempVal = document.getElementById('persona-llm-temp-val');
+        if (tempSlider && tempVal) {
+            tempSlider.oninput = () => {
+                const v = parseFloat(tempSlider.value);
+                tempVal.textContent = v === 0 ? 'Global' : v.toFixed(2);
+            };
+        }
+
         // Load avatars
         this._loadAvatarGrid(tpl.avatar_2d_url || tpl.avatar_url);
+
+        // Phase 8A: expression pack section (edit mode only)
+        if (isEdit && tpl.id) {
+            this._initExpressionPackSection(tpl);
+        }
     }
 
     /**
@@ -395,9 +446,22 @@ export class PersonaCreator {
                 return;
             }
 
+            // Pre-select this.selectedAvatar if already set (keeps state through re-loads)
+            const effectiveSelected = this.selectedAvatar || selectedUrl || '';
+
             avatars.forEach(img => {
                 const item = document.createElement('div');
-                const isSelected = selectedUrl && (selectedUrl === img.url || selectedUrl.includes(img.file));
+                // Robust URL match: normalize trailing slashes and try multiple heuristics.
+                // Covers cases like '/files/images/foo.png' vs 'files/images/foo.png',
+                // or when only the filename component is stored in the DB.
+                const normSelected = effectiveSelected.replace(/^\//, '');
+                const normUrl = (img.url || '').replace(/^\//, '');
+                const isSelected = effectiveSelected && (
+                    normSelected === normUrl ||
+                    normSelected.endsWith('/' + img.file) ||
+                    normUrl.endsWith('/' + img.file.replace(/^.*[\\/]/, '')) ||
+                    img.file === effectiveSelected.split('/').pop()
+                );
                 item.style.cssText = `
                     aspect-ratio: 1; border-radius: 6px; overflow: hidden; cursor: pointer;
                     border: 2px solid ${isSelected ? 'var(--neon-cyan)' : 'transparent'};
@@ -834,6 +898,10 @@ export class PersonaCreator {
 
         const traits = traitsStr ? traitsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
 
+        // Per-character temperature: 0 means "use global" → send null to backend (#3)
+        const llmTempRaw = parseFloat(document.getElementById('persona-llm-temperature')?.value || '0');
+        const llmTemperature = llmTempRaw > 0 ? llmTempRaw : null;
+
         const payload = {
             name,
             system_prompt: prompt,
@@ -845,6 +913,7 @@ export class PersonaCreator {
             vocab_categories: JSON.stringify(this._getSelectedVocabCategories()),
             llm_endpoint: llmEndpoint,
             llm_model: llmModel,
+            llm_temperature: llmTemperature,
         };
 
         const saveBtn = document.getElementById('btn-persona-save');
@@ -924,5 +993,128 @@ export class PersonaCreator {
         };
 
         input.click();
+    }
+
+    // ── Phase 8A: Expression Pack ─────────────────────────────────────────────
+
+    /**
+     * Initialize the expression pack section in edit mode.
+     * Checks whether AI art is available, renders existing portraits,
+     * and wires the "Generate All Expressions" button.
+     *
+     * @private
+     * @param {Object} char - Character object with id, name, expr_portraits fields.
+     */
+    async _initExpressionPackSection(char) {
+        const statusEl = document.getElementById('expr-pack-status');
+        const genBtn = document.getElementById('btn-generate-expressions');
+        const previewEl = document.getElementById('expr-portraits-preview');
+        if (!genBtn) return;
+
+        // Check AI art availability
+        try {
+            const res = await fetch('/api/image-gen/status');
+            const data = await res.json();
+            if (!data.available) {
+                if (statusEl) statusEl.textContent = `(${data.provider === 'disabled' ? 'disabled — enable in Settings → AI ART' : data.provider + ' offline'})`;
+                genBtn.disabled = true;
+                genBtn.style.opacity = '0.4';
+            } else {
+                if (statusEl) statusEl.textContent = `(${data.provider}: ${data.model || 'ready'})`;
+            }
+        } catch {
+            if (statusEl) statusEl.textContent = '(AI art unavailable)';
+            genBtn.disabled = true;
+            genBtn.style.opacity = '0.4';
+        }
+
+        // Render existing expression portraits as thumbnails
+        if (previewEl) {
+            let portraits = char.expr_portraits || {};
+            if (typeof portraits === 'string') {
+                try { portraits = JSON.parse(portraits); } catch { portraits = {}; }
+            }
+            Object.entries(portraits).forEach(([emotion, url]) => {
+                const thumb = document.createElement('div');
+                thumb.title = emotion;
+                thumb.style.cssText = `
+                    width:48px; height:60px; border-radius:6px; overflow:hidden;
+                    border:1px solid var(--glass-border); position:relative; flex-shrink:0;
+                `;
+                thumb.innerHTML = `
+                    <img src="${url}" style="width:100%; height:100%; object-fit:cover; object-position:top;">
+                    <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.7);
+                                font-size:0.55rem; text-align:center; padding:2px; color:#ccc;">
+                        ${emotion}
+                    </div>
+                `;
+                previewEl.appendChild(thumb);
+            });
+        }
+
+        // Wire Generate button
+        genBtn.onclick = () => this._generateExpressions(char);
+    }
+
+    /**
+     * Trigger batch AI expression portrait generation for a character.
+     * Calls POST /api/image-gen/expressions/{char_id} and shows progress.
+     *
+     * @private
+     * @param {Object} char - Character object with id and name.
+     */
+    async _generateExpressions(char) {
+        const btn = document.getElementById('btn-generate-expressions');
+        const statusEl = document.getElementById('expr-gen-status');
+        const previewEl = document.getElementById('expr-portraits-preview');
+        if (!btn) return;
+
+        btn.disabled = true;
+        btn.textContent = '⚡ Generating... (takes ~30s)';
+        if (statusEl) statusEl.textContent = 'Starting generation...';
+
+        try {
+            const res = await fetch(`/api/image-gen/expressions/${char.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+            });
+            const data = await res.json();
+
+            if (data.ok && data.portraits) {
+                const count = Object.keys(data.portraits).length;
+                btn.textContent = `✅ Generated ${count} portraits!`;
+                if (statusEl) statusEl.textContent = data.errors?.length ? `(${data.errors.length} failed)` : '';
+
+                // Update thumbnail preview
+                if (previewEl) {
+                    previewEl.innerHTML = '';
+                    Object.entries(data.portraits).forEach(([emotion, url]) => {
+                        const thumb = document.createElement('div');
+                        thumb.title = emotion;
+                        thumb.style.cssText = `width:48px; height:60px; border-radius:6px; overflow:hidden; border:1px solid var(--neon-purple,#9d50ff); flex-shrink:0; position:relative;`;
+                        thumb.innerHTML = `
+                            <img src="${url}" style="width:100%; height:100%; object-fit:cover; object-position:top;">
+                            <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.7); font-size:0.55rem; text-align:center; padding:2px; color:#ccc;">${emotion}</div>
+                        `;
+                        previewEl.appendChild(thumb);
+                    });
+                }
+
+                toast.success(`Generated ${count} expression portraits for ${char.name}!`);
+                // Refresh character data so expr_portraits is current in state
+                await state.loadCharacters();
+            } else {
+                btn.textContent = '❌ Generation failed';
+                btn.disabled = false;
+                if (statusEl) statusEl.textContent = data.errors?.[0] || data.error || 'Unknown error';
+                toast.error('Expression generation failed');
+            }
+        } catch (err) {
+            btn.textContent = '❌ Error';
+            btn.disabled = false;
+            if (statusEl) statusEl.textContent = err.message;
+            toast.error(`Expression generation error: ${err.message}`, 5000);
+        }
     }
 }

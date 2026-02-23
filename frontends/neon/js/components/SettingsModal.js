@@ -86,6 +86,15 @@ const SETTINGS_SCHEMA = {
                 default: false,
                 desc: "Enable chain-of-thought reasoning for Qwen3 models.",
                 tooltip: "🧠 When ON: Qwen3 uses deep reasoning (slower, smarter). When OFF: fast direct responses. Only applies when a Qwen3 model is loaded. Recommended models by VRAM: Qwen3-4B (~3GB), Qwen3-8B (~7GB), Qwen3-14B (~10GB), Qwen3-30B-A3B (~19GB MoE)."
+            },
+            {
+                id: "message_input_mode",
+                name: "Message During AI Response",
+                type: "select",
+                options: ["queue", "steer", "discard"],
+                default: "queue",
+                desc: "What to do when you send a message while the AI is still responding.",
+                tooltip: "⚡ Queue: your message is buffered and auto-fired when the current response finishes (default). Steer: aborts the current generation and immediately redirects — like Claude.ai's steering feature. Discard: message is dropped silently."
             }
         ]
     },
@@ -112,6 +121,28 @@ const SETTINGS_SCHEMA = {
                 default: "base.en",
                 desc: "Accuracy vs. speed tradeoff. Only applies when using Faster-Whisper.",
                 tooltip: "💡 tiny.en: fastest, least accurate. base.en: good balance for English. large-v3: best accuracy, multilingual, needs ~4GB RAM."
+            },
+            {
+                id: "vad_threshold", name: "VAD Sensitivity Threshold", type: "slider",
+                min: 0.001, max: 0.05, step: 0.001, default: 0.015,
+                desc: "Lower = more sensitive (picks up whispers). Higher = less sensitive (ignores keyboard noise).",
+                tooltip: "💡 Default 0.015. Try 0.02–0.03 if keyboard clicks trigger hands-free mode. Lower to 0.005 to detect whispers."
+            },
+            {
+                id: "asr_min_confidence", name: "ASR Confidence Threshold", type: "slider",
+                min: 0, max: 0.9, step: 0.05, default: 0,
+                desc: "Minimum confidence to accept a transcription (#20). 0 = accept all.",
+                tooltip: "💡 Transcriptions below this confidence are discarded. 0 = accept everything. 0.5 = reject uncertain transcriptions. Only used by Faster-Whisper."
+            },
+            {
+                id: "_tts_preview", name: "Voice Preview", type: "button", action: "tts_preview",
+                desc: "Hear the current voice settings with a test phrase.",
+                tooltip: "▶ Synthesizes a test phrase using the current TTS provider and voice ID."
+            },
+            {
+                id: "_tts_cache", name: "Audio Cache", type: "custom",
+                desc: "Synthesized audio files cached on disk. Clear to free up space.",
+                tooltip: "🔊 TTS responses are cached by content hash to avoid re-synthesizing identical phrases. Safe to clear at any time — files will be regenerated on demand."
             }
         ]
     },
@@ -133,6 +164,7 @@ const SETTINGS_SCHEMA = {
             { id: "lighting_preset", name: "Scene Lighting", type: "select", options: ["studio", "warm_sunset", "cool_moonlight", "dramatic", "neon"], default: "studio", desc: "Lighting mood for the 3D viewport.", tooltip: "💡 Changes the lighting on your 3D avatar. Studio is neutral, others are atmospheric." },
             { id: "fps_target", name: "FPS Cap (3D Viewport)", type: "select", options: ["30", "60", "120", "Unlimited"], default: "Unlimited", desc: "Limit 3D render frame rate.", tooltip: "💡 Capping FPS reduces GPU load. Useful if the app is running in the background or on battery." },
             { id: "show_fps_overlay", name: "Show FPS Overlay (in Viewport)", type: "toggle", default: false, desc: "Display live FPS counter inside the 3D model window.", tooltip: "💡 Shows a small FPS readout in the corner of the 3D viewport for quick performance checks." },
+            { id: "shadow_quality", name: "Shadow Quality", type: "select", options: ["off", "soft", "sharp"], default: "off", desc: "3D character shadow rendering quality.", tooltip: "💡 Off = no shadows (fastest). Soft = realistic blur (recommended). Sharp = hard-edged shadows." },
             { id: "_open_theme_editor", name: "Theme Editor", type: "button", action: "theme_editor", desc: "Fine-tune CSS variables, create and export custom themes.", tooltip: "🎨 Opens a live editor for every CSS variable. Save custom themes and share them." }
         ]
     },
@@ -141,11 +173,15 @@ const SETTINGS_SCHEMA = {
         icon: "👤",
         fields: [
             { id: "active_character_id", name: "Active Character", type: "select", options: ["Loading..."], default: "1", desc: "Select the current persona.", tooltip: "💡 Switch between your created characters. Each has their own personality, avatar, and chat history." },
-            { id: "avatar_url", name: "2D Avatar / Icon", type: "gallery", filter: "avatar", desc: "Select a profile picture for chat/UI.", tooltip: "💡 This image appears in chat bubbles and the character roster. Click to select, use + to upload." },
+            { id: "avatar_url", name: "2D Avatar / Icon", type: "gallery", filter: "avatar", generateType: "portrait", desc: "Select a profile picture for chat/UI.", tooltip: "💡 This image appears in chat bubbles and the character roster. Click to select, use + to upload, or ✨ Generate with AI." },
             { id: "model_vrm", name: "VRM Model", type: "select", options: ["Loading..."], default: "", desc: "3D Model file.", tooltip: "💡 VRM files are 3D anime models. Place .vrm files in backend/storage/avatars/ to see them here." },
             { id: "live2d_model", name: "Live2D Model", type: "select", options: ["Loading..."], default: "", desc: "2D Model folder.", tooltip: "💡 Live2D models are 2D animated portraits. Switch Avatar Engine to '2D (Live2D)' in Appearance tab to use." },
-            { id: "bg_image", name: "Background Image", type: "gallery", filter: "background", desc: "Select a background for this character.", tooltip: "💡 Per-character background shown behind the 3D/2D avatar. Click to select, use + to upload." },
-            { id: "background_mode", name: "Background Mode", type: "select", options: ["transparent", "image", "color", "video", "gradient"], default: "transparent", desc: "How the 3D viewport background is rendered.", tooltip: "💡 Transparent blends with the UI. Image/Video shows media behind the avatar. Color is a solid fill." }
+            { id: "bg_image", name: "Background Image", type: "gallery", filter: "background", generateType: "background", desc: "Select a background for this character.", tooltip: "💡 Per-character background shown behind the 3D/2D avatar. Click to select, use + to upload, or ✨ Generate with AI." },
+            { id: "background_mode", name: "Background Mode", type: "select", options: ["transparent", "image", "color", "video", "gradient"], default: "transparent", desc: "How the 3D viewport background is rendered.", tooltip: "💡 Transparent blends with the UI. Image/Video shows media behind the avatar. Color is a solid fill." },
+            // Character scale/position sliders (#86): adjust VRM in viewport, saved per character
+            { id: "vrm_scale", name: "VRM Scale", type: "slider", min: 0.5, max: 2.0, step: 0.05, default: 1.0, desc: "Scale of the 3D model in the viewport.", tooltip: "💡 Adjust if the model appears too big or too small. 1.0 = original size." },
+            { id: "vrm_offset_x", name: "VRM Horizontal Position", type: "slider", min: -1.0, max: 1.0, step: 0.05, default: 0.0, desc: "Shift the model left/right.", tooltip: "💡 Moves the avatar horizontally in the viewport. 0 = centered." },
+            { id: "vrm_offset_y", name: "VRM Vertical Position", type: "slider", min: -0.5, max: 0.5, step: 0.05, default: 0.0, desc: "Shift the model up/down.", tooltip: "💡 Moves the avatar vertically. 0 = default position. Positive = up." }
         ]
     },
     templates: {
@@ -164,14 +200,148 @@ const SETTINGS_SCHEMA = {
             { id: "_vocab_manager_btn", name: "Vocabulary Manager", type: "custom", desc: "Browse, search, and manage all vocabulary entries.", tooltip: "📖 Opens the full vocab browser with 2500+ base entries. Add your own custom terms too." }
         ]
     },
+    safety: {
+        label: "SAFETY",
+        icon: "🛡️",
+        fields: [
+            {
+                id: "content_filter_level",
+                name: "Content Filter",
+                type: "select",
+                options: [
+                    "🔴 -1 — Off (NSFW Allowed)",
+                    "⚪ 0 — Minimal (Model Defaults)",
+                    "🟡 1 — Light (Default)",
+                    "🟠 2 — Moderate",
+                    "🟢 3 — Strict (Family Safe)"
+                ],
+                default: "🟡 1 — Light (Default)",
+                desc: "Controls what content the AI is allowed to generate.",
+                tooltip: "🛡️ -1: Adult content enabled (NSFW). 0: No instruction added (model decides). 1: Light — no explicit content (default). 2: Moderate — all-ages friendly. 3: Strict — fully PG, refuses mature requests. The filter works by adding instructions to the system prompt.",
+                serialize: (val) => {
+                    // Extract the integer from the option string like "🟡 1 — Light (Default)"
+                    const m = val.match(/-?\d+/);
+                    return m ? parseInt(m[0], 10) : 1;
+                },
+                deserialize: (val) => {
+                    const map = {
+                        "-1": "🔴 -1 — Off (NSFW Allowed)",
+                        "0": "⚪ 0 — Minimal (Model Defaults)",
+                        "1": "🟡 1 — Light (Default)",
+                        "2": "🟠 2 — Moderate",
+                        "3": "🟢 3 — Strict (Family Safe)"
+                    };
+                    return map[String(val)] ?? "🟡 1 — Light (Default)";
+                }
+            },
+            {
+                id: "audio_cleanup_days",
+                name: "Audio Cache Retention",
+                type: "slider",
+                min: 0,
+                max: 30,
+                step: 1,
+                default: 7,
+                desc: "Days to keep cached TTS audio files (0 = keep forever).",
+                tooltip: "🗑️ Audio files older than this many days are automatically deleted. Set to 0 to disable cleanup."
+            }
+        ]
+    },
+    aiart: {
+        label: "AI ART",
+        icon: "🎨",
+        fields: [
+            {
+                id: "image_gen.provider",
+                name: "Image Generator",
+                type: "select",
+                options: ["disabled", "comfyui", "easydiffusion"],
+                default: "disabled",
+                desc: "Backend for AI image generation (backgrounds, portraits, icons).",
+                tooltip: "🎨 comfyui: run ComfyUI locally on port 8188. easydiffusion: run Easy Diffusion (stable channel port 9000, or your LAN IP). disabled: hide all Generate buttons."
+            },
+            {
+                id: "image_gen.endpoint",
+                name: "Image Gen URL",
+                type: "text",
+                default: "http://localhost:8188",
+                desc: "URL of your ComfyUI or Easy Diffusion server.",
+                tooltip: "💡 ComfyUI default: http://localhost:8188. Easy Diffusion on LAN: e.g. http://10.0.0.202:9000 (enable Allow Network Access in Easy Diffusion beta settings)."
+            },
+            {
+                id: "image_gen.model",
+                name: "Default Checkpoint",
+                type: "text",
+                default: "z-image-turbo",
+                desc: "ComfyUI checkpoint filename (without .safetensors). Ignored by Easy Diffusion.",
+                tooltip: "💡 Z-Image-Turbo: 9 steps, ~1s on RTX 5080. FLUX.1-dev: 20 steps, higher quality. SDXL: 25–35 steps. Must match a checkpoint loaded in ComfyUI."
+            },
+            {
+                id: "image_gen.steps",
+                name: "Inference Steps",
+                type: "slider",
+                min: 4,
+                max: 50,
+                step: 1,
+                default: 9,
+                desc: "Denoising steps per image. More = higher quality, slower.",
+                tooltip: "💡 Z-Image-Turbo: 9. FLUX.1-dev: 20. SDXL: 25–35. Chasing quality vs speed."
+            },
+            {
+                id: "image_gen.width",
+                name: "Default Width (px)",
+                type: "slider",
+                min: 256,
+                max: 1024,
+                step: 64,
+                default: 512,
+                desc: "Default image width in pixels.",
+                tooltip: "💡 512px is fast and fine for backgrounds. 768–1024px for high-quality portraits."
+            },
+            {
+                id: "image_gen.height",
+                name: "Default Height (px)",
+                type: "slider",
+                min: 256,
+                max: 1024,
+                step: 64,
+                default: 512,
+                desc: "Default image height in pixels.",
+                tooltip: "💡 512px squares for icons. 512×768 for portrait orientation backgrounds."
+            },
+            {
+                id: "video_gen.provider",
+                name: "Video Generator",
+                type: "select",
+                options: ["disabled", "comfyui", "wan2gp"],
+                default: "disabled",
+                desc: "Backend for AI video background generation (async, takes minutes).",
+                tooltip: "⚠️ Video generation takes 5–15 minutes per clip even on RTX 5080. Requires ComfyUI + WanVideoWrapper node pack + Wan 2.2 TI2V-5B model. Use for pre-generating looping backgrounds offline."
+            },
+            {
+                id: "video_gen.endpoint",
+                name: "Video Gen URL",
+                type: "text",
+                default: "http://localhost:8188",
+                desc: "URL of your ComfyUI server for video generation.",
+                tooltip: "💡 Can be the same ComfyUI instance as image gen, or a separate one."
+            }
+        ]
+    },
     system: {
         label: "SYSTEM & DEV",
         icon: "⚙️",
         fields: [
+            { id: "chat_font_size", name: "Chat Font Size", type: "select", options: ["small", "medium", "large"], default: "medium", desc: "Size of chat message text.", tooltip: "💡 Small = 0.8rem, Medium = 0.9rem (default), Large = 1.05rem. Applied live without reload." },
+            { id: "show_timestamps", name: "Show Message Timestamps", type: "toggle", default: true, desc: "Show time on each chat bubble.", tooltip: "💡 Hides the time stamp on each message for a cleaner look." },
+            { id: "typewriter_enabled", name: "Typewriter Effect", type: "toggle", default: false, desc: "Animate AI responses word by word.", tooltip: "💡 AI responses appear word-by-word for a visual novel feel. Markdown renders after animation finishes." },
+            { id: "typewriter_speed", name: "Typewriter Speed (words/sec)", type: "slider", min: 5, max: 40, step: 1, default: 15, desc: "How fast words appear in typewriter mode.", tooltip: "💡 15 = natural reading pace. Increase for faster reveal, decrease for dramatic effect." },
             { id: "auto_start_lmstudio", name: "Auto-Start LM Studio (Headless)", type: "toggle", default: true, desc: "Start LM Studio daemon automatically on server boot.", tooltip: "💡 Runs 'lms daemon up' + 'lms server start' if LM Studio is not reachable." },
+            { id: "lms_autoload_model", name: "LM Studio Auto-Load Model", type: "text", default: "", desc: "Model key to auto-load on headless start (e.g. gemma-3-12b-instruct). Leave blank to skip.", tooltip: "💡 After starting headless LM Studio, runs 'lms load <model>'. Uses llm.model from config if blank." },
             { id: "dev_mode", name: "Developer Mode", type: "toggle", default: false, desc: "Show Debug Log Overlay.", tooltip: "🔧 Shows a floating debug panel with API calls, errors, and timing. Press Ctrl+Shift+D to toggle." },
             { id: "log_limit", name: "Log Buffer Size", type: "slider", min: 100, max: 1000, step: 100, default: 200, desc: "Lines to keep in memory.", tooltip: "💡 How many log lines to keep in the developer console. Higher = more history but more memory." },
             { id: "save_logs_auto", name: "Auto-Save Logs", type: "toggle", default: false, desc: "Save logs on exit.", tooltip: "💡 Automatically saves the debug log to a file when you close the app." },
+            { id: "_webhooks_ui", name: "Outbound Webhooks", type: "custom", desc: "POST chat replies to external URLs (#62).", tooltip: "📤 Register URLs that receive a JSON payload after each AI response: {character, reply, emotion, session_id, timestamp}." },
             { id: "reset_all", name: "Factory Reset", type: "button", action: "reset", desc: "Wipe all settings.", tooltip: "⚠️ Resets ALL settings to defaults. Characters and chat history are NOT affected." },
             { id: "_open_error_log", name: "Error Log", type: "button", action: "open_error_log", desc: "View JS errors and backend log output.", tooltip: "🐛 Opens the developer console on the Errors tab. Shows JS exceptions and backend error lines." }
         ]
@@ -187,6 +357,9 @@ export class SettingsModal {
         this.images = []; // Cache for gallery images
         this.galleryPage = 0; // Current page for gallery pagination
         this.galleryPageSize = 20; // Images per page
+        /** @type {boolean} Whether the image gen backend is currently reachable */
+        this._imageGenAvailable = false;
+        this._pollImageGenStatus();
 
         /** @type {string[]} Config snapshots for undo/redo (JSON strings) */
         this.undoStack = [];
@@ -355,6 +528,167 @@ export class SettingsModal {
     }
 
     /**
+     * Poll /api/image-gen/status every 15s to know whether AI art generation
+     * is available. Used to show/hide the "✨ Gen" tile in gallery fields.
+     * @private
+     */
+    async _pollImageGenStatus() {
+        const check = async () => {
+            try {
+                const res = await fetch('/api/image-gen/status', { cache: 'no-store' });
+                if (res.ok) {
+                    const data = await res.json();
+                    this._imageGenAvailable = data.available === true;
+                    this._imageGenInfo = data; // { provider, model, endpoint }
+                }
+            } catch {
+                this._imageGenAvailable = false;
+            }
+        };
+        await check();
+        setInterval(check, 15_000);
+    }
+
+    /**
+     * Open an inline AI generation panel below the gallery field.
+     * Shows a prompt textarea, style presets, resolution picker, and Generate button.
+     *
+     * @param {HTMLElement} container - The gallery wrapper element to append the panel into.
+     * @param {string} generateType  - "background" or "portrait"
+     * @param {string} fieldId       - The tempConfig key to update on success (e.g. "bg_image").
+     */
+    _openImageGenPanel(container, generateType, fieldId) {
+        // Remove any existing panel
+        container.querySelectorAll('.ai-gen-panel').forEach(el => el.remove());
+
+        const endpoint = generateType === 'background'
+            ? '/api/image-gen/background'
+            : '/api/image-gen/portrait';
+
+        const stylePresets = {
+            background: [
+                { label: 'Bedroom', value: 'anime bedroom, cozy room, soft lighting' },
+                { label: 'Outdoor', value: 'anime outdoor scenery, nature, cherry blossoms' },
+                { label: 'Fantasy', value: 'anime fantasy castle, magical floating islands' },
+                { label: 'Cyberpunk', value: 'cyberpunk cityscape, neon lights, rain' },
+                { label: 'Lofi', value: 'lofi aesthetic, cozy cafe, warm lighting, pastel' },
+                { label: 'Retro', value: 'retro anime aesthetic, 90s style, vaporwave' },
+            ],
+            portrait: [
+                { label: 'Smiling', value: 'anime portrait, smiling warmly, upper body' },
+                { label: 'Serious', value: 'anime portrait, serious expression, upper body' },
+                { label: 'Cute', value: 'anime chibi portrait, cute style, pastel colors' },
+                { label: 'Dynamic', value: 'anime portrait, dynamic pose, expressive' },
+            ],
+        };
+
+        const presets = stylePresets[generateType] || stylePresets.background;
+
+        const panel = document.createElement('div');
+        panel.className = 'ai-gen-panel';
+        panel.style.cssText = `
+            margin-top: 10px; padding: 12px; border: 1px solid rgba(157,80,255,0.4);
+            border-radius: 8px; background: rgba(157,80,255,0.06);
+            animation: fadeIn 0.2s ease;
+        `;
+
+        panel.innerHTML = `
+            <div style="font-size:0.78rem; color:var(--neon-purple,#9d50ff); margin-bottom:8px; font-weight:600;">
+                ✨ AI Generate ${generateType === 'background' ? 'Background' : 'Portrait'}
+            </div>
+            <textarea id="ai-gen-prompt" placeholder="Describe the image..." rows="2"
+                style="width:100%; padding:6px 8px; border-radius:6px; border:1px solid var(--glass-border);
+                       background:rgba(0,0,0,0.3); color:var(--text-primary); font-size:0.8rem;
+                       resize:none; margin-bottom:8px; box-sizing:border-box;"></textarea>
+            <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px;" id="ai-gen-presets"></div>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <select id="ai-gen-res" style="padding:4px 6px; border-radius:4px; border:1px solid var(--glass-border);
+                         background:rgba(0,0,0,0.3); color:var(--text-primary); font-size:0.75rem;">
+                    <option value="512x512">512 × 512</option>
+                    <option value="512x768">512 × 768 (portrait)</option>
+                    <option value="768x512">768 × 512 (landscape)</option>
+                    <option value="768x768">768 × 768</option>
+                    <option value="1024x512">1024 × 512 (wide)</option>
+                </select>
+                <button id="ai-gen-btn" style="padding:5px 14px; border-radius:5px; border:1px solid rgba(157,80,255,0.5);
+                         background:rgba(157,80,255,0.15); color:var(--neon-purple,#9d50ff); font-size:0.8rem;
+                         cursor:pointer; flex-shrink:0;">Generate</button>
+                <span id="ai-gen-status" style="font-size:0.75rem; color:var(--text-muted); flex:1;"></span>
+                <button id="ai-gen-close" style="padding:3px 8px; border-radius:4px; border:1px solid var(--glass-border);
+                         background:transparent; color:var(--text-muted); font-size:0.75rem; cursor:pointer;">✕</button>
+            </div>
+        `;
+
+        container.appendChild(panel);
+
+        // Populate preset pills
+        const presetsEl = panel.querySelector('#ai-gen-presets');
+        presets.forEach(p => {
+            const pill = document.createElement('button');
+            pill.textContent = p.label;
+            pill.style.cssText = `padding:3px 8px; border-radius:12px; border:1px solid var(--glass-border);
+                background:rgba(255,255,255,0.05); color:var(--text-muted); font-size:0.72rem; cursor:pointer;`;
+            pill.onclick = () => {
+                panel.querySelector('#ai-gen-prompt').value = p.value;
+                presetsEl.querySelectorAll('button').forEach(b => b.style.borderColor = 'var(--glass-border)');
+                pill.style.borderColor = 'var(--neon-purple,#9d50ff)';
+            };
+            presetsEl.appendChild(pill);
+        });
+
+        // Close button
+        panel.querySelector('#ai-gen-close').onclick = () => panel.remove();
+
+        // Generate button
+        panel.querySelector('#ai-gen-btn').onclick = async () => {
+            const prompt = panel.querySelector('#ai-gen-prompt').value.trim();
+            if (!prompt) {
+                panel.querySelector('#ai-gen-status').textContent = '⚠️ Enter a prompt first';
+                return;
+            }
+
+            const [w, h] = panel.querySelector('#ai-gen-res').value.split('x').map(Number);
+            const btn = panel.querySelector('#ai-gen-btn');
+            const statusEl = panel.querySelector('#ai-gen-status');
+
+            btn.disabled = true;
+            btn.textContent = '⚡ Generating...';
+            statusEl.textContent = 'Sending to image generator...';
+
+            try {
+                // Resolve current character_id from tempConfig
+                const charIdStr = this.tempConfig.active_character_id || '';
+                const charId = parseInt(charIdStr) || null;
+
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt, width: w, height: h, character_id: charId }),
+                });
+                const data = await res.json();
+
+                if (data.ok) {
+                    statusEl.textContent = '✅ Generated!';
+                    // Add to images cache and select it
+                    const newImg = { url: data.url, file: data.filename, name: data.filename, type: generateType === 'background' ? 'background' : 'avatar', source: 'uploaded' };
+                    this.images.push(newImg);
+                    this.tempConfig[fieldId] = data.url;
+                    panel.remove();
+                    this.switchTab(this.currentTab); // Re-render gallery with new image selected
+                } else {
+                    statusEl.textContent = `❌ ${data.error || 'Generation failed'}`;
+                    btn.disabled = false;
+                    btn.textContent = 'Retry';
+                }
+            } catch (err) {
+                statusEl.textContent = `❌ ${err.message}`;
+                btn.disabled = false;
+                btn.textContent = 'Retry';
+            }
+        };
+    }
+
+    /**
      * Fetch VRM model files from the backend and populate the schema dropdown.
      * Updates SETTINGS_SCHEMA.character in place so renderField sees real options.
      */
@@ -488,6 +822,10 @@ export class SettingsModal {
         if (this.tempConfig.system?.auto_start_lmstudio !== undefined) {
             this.tempConfig.auto_start_lmstudio = this.tempConfig.system.auto_start_lmstudio;
         }
+        // lms_autoload_model lives in system.lms_autoload_model
+        if (this.tempConfig.system?.lms_autoload_model !== undefined) {
+            this.tempConfig.lms_autoload_model = this.tempConfig.system.lms_autoload_model;
+        }
         // vocab.enabled / vocab.limit → flat vocab_enabled / vocab_limit
         if (this.tempConfig.vocab) {
             if (this.tempConfig.vocab.enabled !== undefined) {
@@ -502,6 +840,13 @@ export class SettingsModal {
         this.tempConfig.asr_provider = this.tempConfig.asr?.provider ?? "browser";
         this.tempConfig.asr_model = this.tempConfig.asr?.model ?? "base.en";
 
+        // content_filter_level: integer in config (-1..3) → display string for select UI
+        {
+            const lvl = this.tempConfig.content_filter_level ?? 1;
+            const filterField = Object.values(SETTINGS_SCHEMA).flatMap(s => s.fields).find(f => f.id === 'content_filter_level');
+            this.tempConfig.content_filter_level = filterField?.deserialize(lvl) ?? "🟡 1 — Light (Default)";
+        }
+
         // Dot-notation fields: stored nested in config but referenced by literal dotted keys in tempConfig.
         // llm.qwen3_thinking_mode → tempConfig["llm.qwen3_thinking_mode"]
         this.tempConfig["llm.qwen3_thinking_mode"] = this.tempConfig.llm?.qwen3_thinking_mode ?? false;
@@ -509,6 +854,16 @@ export class SettingsModal {
         this.tempConfig["tts.exaggeration"] = this.tempConfig.tts?.exaggeration ?? 0.8;
         // tts.fast_chunking → tempConfig["tts.fast_chunking"]
         this.tempConfig["tts.fast_chunking"] = this.tempConfig.tts?.fast_chunking ?? true;
+        // image_gen.* → flat dot-notation keys for AI ART tab
+        this.tempConfig["image_gen.provider"] = this.tempConfig.image_gen?.provider ?? "disabled";
+        this.tempConfig["image_gen.endpoint"] = this.tempConfig.image_gen?.endpoint ?? "http://localhost:8188";
+        this.tempConfig["image_gen.model"]    = this.tempConfig.image_gen?.model ?? "z-image-turbo";
+        this.tempConfig["image_gen.steps"]    = this.tempConfig.image_gen?.steps ?? 9;
+        this.tempConfig["image_gen.width"]    = this.tempConfig.image_gen?.width ?? 512;
+        this.tempConfig["image_gen.height"]   = this.tempConfig.image_gen?.height ?? 512;
+        // video_gen.* → flat dot-notation keys for AI ART tab
+        this.tempConfig["video_gen.provider"] = this.tempConfig.video_gen?.provider ?? "disabled";
+        this.tempConfig["video_gen.endpoint"] = this.tempConfig.video_gen?.endpoint ?? "http://localhost:8188";
 
         // Fetch external data in parallel when opening
         Promise.all([
@@ -722,6 +1077,15 @@ export class SettingsModal {
                         delete row.dataset.error;
                     }
                 }
+
+                // Live-apply VRM transform sliders (#86) — immediate viewer feedback
+                if (['vrm_scale', 'vrm_offset_x', 'vrm_offset_y'].includes(def.id) && window.app?.viewer) {
+                    window.app.viewer.setVrmTransform({
+                        scale:   Number(this.tempConfig['vrm_scale']    ?? 1.0),
+                        offsetX: Number(this.tempConfig['vrm_offset_x'] ?? 0.0),
+                        offsetY: Number(this.tempConfig['vrm_offset_y'] ?? 0.0),
+                    });
+                }
             };
 
             wrap.appendChild(input); wrap.appendChild(disp);
@@ -824,6 +1188,10 @@ export class SettingsModal {
                 if (def.id === 'lighting_preset' && window.app?.viewer) {
                     window.app.viewer.setLightingPreset(e.target.value);
                 }
+                // Live-apply shadow quality changes (#26)
+                if (def.id === 'shadow_quality' && window.app?.viewer) {
+                    window.app.viewer.setShadowQuality(e.target.value);
+                }
             };
             selectWrap.appendChild(input);
 
@@ -831,8 +1199,8 @@ export class SettingsModal {
             if (def.id === 'live2d_model') {
                 const uploadBtn = document.createElement('button');
                 uploadBtn.className = 'btn btn-sm';
-                uploadBtn.style.cssText = 'margin-top:4px; width:100%; font-size:0.65rem;';
-                uploadBtn.textContent = '+ Upload Live2D (.zip)';
+                uploadBtn.style.cssText = 'margin-top:4px; padding:4px 10px; font-size:0.68rem; color:var(--neon-cyan); border:1px solid var(--neon-cyan); background:rgba(0,240,255,0.06); cursor:pointer; border-radius:4px; white-space:nowrap; width:100%;';
+                uploadBtn.textContent = '+ UPLOAD LIVE2D (.zip)';
                 /**
                  * Opens a hidden file input, POSTs the zip to /api/upload/live2d,
                  * then refreshes the model list and selects the newly uploaded model.
@@ -912,7 +1280,41 @@ export class SettingsModal {
         } else if (def.type === 'button') {
             const btn = document.createElement('button');
 
-            if (def.action === 'theme_editor') {
+            if (def.action === 'tts_preview') {
+                // Voice preview button (#12): synthesize a test phrase using current settings
+                btn.className = 'btn-config';
+                btn.style.cssText = 'padding:6px 14px; color:var(--neon-green,#39ff14); border-color:rgba(57,255,20,0.25); display:flex; align-items:center; gap:6px;';
+                btn.innerHTML = '&#x25B6; Preview Voice';
+                btn.onclick = async () => {
+                    btn.innerHTML = '&#x23F3; Synthesizing...';
+                    btn.disabled = true;
+                    try {
+                        const testPhrase = "Hello! I'm your AI companion. How can I help you today?";
+                        const res = await fetch('/api/tts', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                text: testPhrase,
+                                voice_id: this.tempConfig['voice_id'] || this.tempConfig['tts.voice_id'] || '',
+                                provider: this.tempConfig['tts_provider'] || this.tempConfig['tts.provider'] || '',
+                                rate: this.tempConfig['speech_rate'] || 1.0,
+                            }),
+                        });
+                        const data = await res.json();
+                        if (data.ok && data.url) {
+                            new Audio(data.url).play();
+                            btn.innerHTML = '&#x2714; Playing...';
+                            setTimeout(() => { btn.innerHTML = '&#x25B6; Preview Voice'; btn.disabled = false; }, 4000);
+                        } else {
+                            btn.innerHTML = '&#x274C; TTS Failed';
+                            setTimeout(() => { btn.innerHTML = '&#x25B6; Preview Voice'; btn.disabled = false; }, 2000);
+                        }
+                    } catch (err) {
+                        btn.innerHTML = `&#x274C; ${err.message}`;
+                        setTimeout(() => { btn.innerHTML = '&#x25B6; Preview Voice'; btn.disabled = false; }, 3000);
+                    }
+                };
+            } else if (def.action === 'theme_editor') {
                 btn.className = 'btn-config';
                 btn.style.cssText = 'padding:6px 14px; color:var(--neon-cyan); border-color:rgba(0,240,255,0.2);';
                 btn.innerText = "OPEN THEME EDITOR";
@@ -1010,6 +1412,32 @@ export class SettingsModal {
                     fileInput.click();
                 };
                 grid.appendChild(uploadTile);
+
+                // ── AI Generate "✨" tile (shown when image gen backend is available) ──
+                if (def.generateType && this._imageGenAvailable) {
+                    const genTile = document.createElement('div');
+                    genTile.className = 'gallery-item';
+                    genTile.title = `Generate with AI (${this._imageGenInfo?.provider || 'AI'})`;
+                    genTile.style.cssText = 'display:flex; align-items:center; justify-content:center; flex-direction:column; border:2px dashed rgba(157,80,255,0.6); background:rgba(157,80,255,0.06); cursor:pointer; gap:2px;';
+                    genTile.innerHTML = `
+                        <span style="font-size:1.3rem;">✨</span>
+                        <span style="font-size:0.6rem; color:rgba(157,80,255,0.9);">Generate</span>
+                    `;
+                    genTile.onmouseenter = () => {
+                        genTile.style.borderColor = 'rgba(157,80,255,1)';
+                        genTile.style.background = 'rgba(157,80,255,0.12)';
+                    };
+                    genTile.onmouseleave = () => {
+                        genTile.style.borderColor = 'rgba(157,80,255,0.6)';
+                        genTile.style.background = 'rgba(157,80,255,0.06)';
+                    };
+                    genTile.onclick = () => {
+                        // Show the inline generation panel below the gallery wrapper
+                        const wrapper = genTile.closest('.setting-row') || grid.parentElement;
+                        this._openImageGenPanel(wrapper, def.generateType, def.id);
+                    };
+                    grid.appendChild(genTile);
+                }
 
                 pageImages.forEach(img => {
                     const item = document.createElement('div');
@@ -1116,6 +1544,127 @@ export class SettingsModal {
             }
 
             row.appendChild(wrapper);
+        } else if (def.type === 'custom' && def.id === '_tts_cache') {
+            // TTS cache management widget (#76): shows cache stats and a clear button.
+            // Stats are fetched immediately so they're current when the Voice tab opens.
+            const cacheWrap = document.createElement('div');
+            cacheWrap.style.cssText = 'display:flex; align-items:center; gap:12px; flex-wrap:wrap;';
+
+            const statsSpan = document.createElement('span');
+            statsSpan.id = 'tts-cache-stats';
+            statsSpan.style.cssText = 'font-size:0.78rem; color:var(--text-muted); font-family:var(--font-mono); flex:1;';
+            statsSpan.textContent = 'Loading…';
+            cacheWrap.appendChild(statsSpan);
+
+            const clearBtn = document.createElement('button');
+            clearBtn.className = 'btn-config';
+            clearBtn.style.cssText = 'padding:5px 12px; font-size:0.78rem; color:var(--neon-magenta,#ff00ff); border-color:rgba(255,0,255,0.25); white-space:nowrap;';
+            clearBtn.innerHTML = '&#x1F5D1; Clear Cache';
+            cacheWrap.appendChild(clearBtn);
+            row.appendChild(cacheWrap);
+
+            /**
+             * Fetches cache stats from the backend and updates the stats span.
+             *
+             * @returns {Promise<void>}
+             */
+            const refreshCacheStats = async () => {
+                try {
+                    const res = await fetch('/api/tts/cache');
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const data = await res.json();
+                    if (data.file_count === 0) {
+                        statsSpan.textContent = 'No cached audio files';
+                        clearBtn.disabled = true;
+                        clearBtn.style.opacity = '0.4';
+                    } else {
+                        const oldest = data.oldest_ts
+                            ? new Date(data.oldest_ts * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                            : '—';
+                        statsSpan.textContent = `${data.file_count} files · ${data.size_mb.toFixed(1)} MB · oldest: ${oldest}`;
+                        clearBtn.disabled = false;
+                        clearBtn.style.opacity = '1';
+                    }
+                } catch (err) {
+                    statsSpan.textContent = `Error: ${err.message}`;
+                }
+            };
+
+            clearBtn.onclick = async () => {
+                if (!confirm('Clear all cached TTS audio files? They will be regenerated on demand.')) return;
+                clearBtn.innerHTML = '&#x23F3; Clearing…';
+                clearBtn.disabled = true;
+                try {
+                    const res = await fetch('/api/tts/cache', { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.ok) {
+                        statsSpan.textContent = `Cleared ${data.deleted} file${data.deleted !== 1 ? 's' : ''}`;
+                        clearBtn.disabled = true;
+                        clearBtn.style.opacity = '0.4';
+                        setTimeout(() => {
+                            clearBtn.innerHTML = '&#x1F5D1; Clear Cache';
+                            refreshCacheStats();
+                        }, 2000);
+                    } else {
+                        throw new Error('Delete failed');
+                    }
+                } catch (err) {
+                    statsSpan.textContent = `Error: ${err.message}`;
+                    clearBtn.innerHTML = '&#x1F5D1; Clear Cache';
+                    clearBtn.disabled = false;
+                }
+            };
+
+            // Fetch stats immediately when the Voice tab renders
+            refreshCacheStats();
+        } else if (def.type === 'custom' && def.id === '_webhooks_ui') {
+            // Outbound webhooks manager (#62): textarea of URLs + save button.
+            // Each line is one webhook URL. Backend fires all of them after each AI response.
+            const wrapDiv = document.createElement('div');
+            wrapDiv.style.cssText = 'display:flex; flex-direction:column; gap:8px; width:100%;';
+
+            const ta = document.createElement('textarea');
+            ta.id = 'webhooks-textarea';
+            ta.placeholder = 'https://example.com/webhook\nhttps://hooks.zapier.com/...';
+            ta.rows = 3;
+            ta.style.cssText = 'width:100%; box-sizing:border-box; resize:vertical; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); color:var(--text-primary); font-family:var(--font-mono); font-size:0.75rem; padding:6px 8px; border-radius:4px;';
+
+            const saveBtn = document.createElement('button');
+            saveBtn.className = 'btn-config';
+            saveBtn.style.cssText = 'padding:5px 14px; font-size:0.78rem; align-self:flex-start;';
+            saveBtn.textContent = '💾 Save Webhooks';
+
+            wrapDiv.appendChild(ta);
+            wrapDiv.appendChild(saveBtn);
+            row.appendChild(wrapDiv);
+
+            // Load existing webhooks from backend when System tab renders
+            fetch('/api/config/webhooks').then(r => r.json()).then(d => {
+                ta.value = (d.webhooks || []).join('\n');
+            }).catch(() => {});
+
+            saveBtn.onclick = async () => {
+                const urls = ta.value.split('\n').map(u => u.trim()).filter(u => u.startsWith('http'));
+                saveBtn.textContent = '⌛ Saving...';
+                saveBtn.disabled = true;
+                try {
+                    const res = await fetch('/api/config/webhooks', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ webhooks: urls }),
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        saveBtn.textContent = '✔ Saved';
+                        setTimeout(() => { saveBtn.textContent = '💾 Save Webhooks'; saveBtn.disabled = false; }, 2000);
+                    } else {
+                        throw new Error('Save failed');
+                    }
+                } catch (err) {
+                    saveBtn.textContent = `✘ ${err.message}`;
+                    setTimeout(() => { saveBtn.textContent = '💾 Save Webhooks'; saveBtn.disabled = false; }, 3000);
+                }
+            };
         } else if (def.type === 'custom' && def.id === '_vocab_manager_btn') {
             // Render a button that opens the full VocabManager modal
             const btn = document.createElement('button');
@@ -1474,6 +2023,12 @@ export class SettingsModal {
                 this.tempConfig.system.auto_start_lmstudio = this.tempConfig.auto_start_lmstudio;
                 delete this.tempConfig.auto_start_lmstudio;
             }
+            // lms_autoload_model → system.lms_autoload_model
+            if (this.tempConfig.lms_autoload_model !== undefined) {
+                if (!this.tempConfig.system) this.tempConfig.system = {};
+                this.tempConfig.system.lms_autoload_model = this.tempConfig.lms_autoload_model;
+                delete this.tempConfig.lms_autoload_model;
+            }
 
             // vocab_enabled / vocab_limit → vocab.enabled / vocab.limit
             if (this.tempConfig.vocab_enabled !== undefined || this.tempConfig.vocab_limit !== undefined) {
@@ -1486,6 +2041,12 @@ export class SettingsModal {
                     this.tempConfig.vocab.limit = this.tempConfig.vocab_limit;
                     delete this.tempConfig.vocab_limit;
                 }
+            }
+
+            // content_filter_level: display string → integer for storage
+            if (typeof this.tempConfig.content_filter_level === 'string') {
+                const filterField = Object.values(SETTINGS_SCHEMA).flatMap(s => s.fields).find(f => f.id === 'content_filter_level');
+                this.tempConfig.content_filter_level = filterField?.serialize(this.tempConfig.content_filter_level) ?? 1;
             }
 
             // Dot-notation fields: write flat staging keys back to nested config paths.
@@ -1506,6 +2067,37 @@ export class SettingsModal {
                 if (!this.tempConfig.tts) this.tempConfig.tts = {};
                 this.tempConfig.tts.fast_chunking = this.tempConfig["tts.fast_chunking"];
                 delete this.tempConfig["tts.fast_chunking"];
+            }
+
+            // image_gen.* → nested config.image_gen object
+            {
+                const imageGenKeys = ["provider", "endpoint", "model", "steps", "width", "height"];
+                const hasImageGenKey = imageGenKeys.some(k => this.tempConfig[`image_gen.${k}`] !== undefined);
+                if (hasImageGenKey) {
+                    if (!this.tempConfig.image_gen) this.tempConfig.image_gen = {};
+                    imageGenKeys.forEach(k => {
+                        const flat = `image_gen.${k}`;
+                        if (this.tempConfig[flat] !== undefined) {
+                            this.tempConfig.image_gen[k] = this.tempConfig[flat];
+                            delete this.tempConfig[flat];
+                        }
+                    });
+                }
+            }
+            // video_gen.* → nested config.video_gen object
+            {
+                const videoGenKeys = ["provider", "endpoint"];
+                const hasVideoGenKey = videoGenKeys.some(k => this.tempConfig[`video_gen.${k}`] !== undefined);
+                if (hasVideoGenKey) {
+                    if (!this.tempConfig.video_gen) this.tempConfig.video_gen = {};
+                    videoGenKeys.forEach(k => {
+                        const flat = `video_gen.${k}`;
+                        if (this.tempConfig[flat] !== undefined) {
+                            this.tempConfig.video_gen[k] = this.tempConfig[flat];
+                            delete this.tempConfig[flat];
+                        }
+                    });
+                }
             }
 
             // asr_provider / asr_model → asr.provider / asr.model
@@ -1536,6 +2128,26 @@ export class SettingsModal {
                         { type: 'setFpsTarget', payload: { fps: this.tempConfig.fps_target } }, '*'
                     );
                 }
+                // Apply shadow quality on save (#26)
+                if (this.tempConfig.shadow_quality !== undefined) {
+                    viewerIframe.contentWindow.postMessage(
+                        { type: 'setShadowQuality', payload: { quality: this.tempConfig.shadow_quality } }, '*'
+                    );
+                }
+            }
+
+            // Apply chat font size live (#30) — maps setting string to CSS variable
+            if (this.tempConfig.chat_font_size) {
+                const sizeMap = { small: '0.8rem', medium: '0.9rem', large: '1.05rem' };
+                const fontSize = sizeMap[this.tempConfig.chat_font_size] || '0.9rem';
+                document.documentElement.style.setProperty('--chat-font-size', fontSize);
+            }
+
+            // Apply timestamps visibility (#93) — toggle .bubble-info-time opacity via body class
+            if (this.tempConfig.show_timestamps === false) {
+                document.body.classList.add('hide-timestamps');
+            } else {
+                document.body.classList.remove('hide-timestamps');
             }
 
             await state.saveConfig(this.tempConfig);

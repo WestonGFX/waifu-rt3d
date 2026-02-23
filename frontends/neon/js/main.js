@@ -17,6 +17,7 @@ import { VocabManager } from './components/VocabManager.js';
 import { HotkeyEditor } from './components/HotkeyEditor.js';
 import { keyboard } from './utils/KeyboardShortcuts.js';
 import { toast } from './utils/Toast.js';
+import { API } from './core/API.js';
 
 console.log("%c[Boot] Initiating CyberDeck V3.0...", "color:#00f0ff; font-weight:bold;");
 
@@ -65,6 +66,18 @@ function _applyVisualConfig(cfg) {
     }
     if (cfg.glow_intensity !== undefined) {
         r.style.setProperty('--glow-intensity', cfg.glow_intensity / 100);
+    }
+    // #30 — Chat font size: S/M/L setting → CSS variable
+    if (cfg.chat_font_size) {
+        const sizeMap = { small: '0.8rem', medium: '0.9rem', large: '1.05rem' };
+        const fontSize = sizeMap[cfg.chat_font_size] || '0.9rem';
+        r.style.setProperty('--chat-font-size', fontSize);
+    }
+    // #93 — Timestamps toggle
+    if (cfg.show_timestamps === false) {
+        document.body.classList.add('hide-timestamps');
+    } else {
+        document.body.classList.remove('hide-timestamps');
     }
 }
 
@@ -213,6 +226,17 @@ async function initApp() {
         setupKeyboardShortcuts(settings, charGrid, chat);
         logger.success("System", "Keyboard Shortcuts Registered");
 
+        // 6a. Backend watchdog + connection quality indicator (#51, #52).
+        // Polls /api/health every 30 seconds. On failure → shows red banner.
+        // Every 10 seconds, measures round-trip latency and colours the dot
+        // green (<150ms), yellow (150–500ms), or red (>500ms / offline).
+        startBackendWatchdog();
+        startArtStatusWatchdog(); // Phase 8A — AI art availability indicator
+
+        // Font size (S/M/L) and compress history are settings-panel features.
+        // Font size is controlled via Appearance → Base Font Size slider.
+        // Compress history is triggered via Ctrl+H keyboard shortcut only.
+
         // 6. Listen for model load events from viewer iframe
         window.addEventListener('message', (e) => {
             const mv = document.querySelector('.main-view');
@@ -350,6 +374,27 @@ function setupKeyboardShortcuts(settings, charGrid, chat) {
         description: 'Expression Editor'
     });
 
+    // Ctrl+H - Compress chat history (summarize + truncate current session)
+    keyboard.register('Ctrl+h', async () => {
+        const sessionId = state.state.currentSessionId;
+        if (!sessionId) { toast.warning('No active session to compress', 2000); return; }
+        try {
+            const res = await API.post(`sessions/${sessionId}/summarize`);
+            if (res.ok) {
+                toast.success('History compressed — context window freed', 3000);
+                const sessionData = await API.get(`sessions/${sessionId}/messages`);
+                bus.emit('session:selected', sessionData);
+            } else {
+                toast.warning(res.error || 'Nothing to compress', 3000);
+            }
+        } catch (err) {
+            toast.error(`Compress failed: ${err.message}`, 3000);
+        }
+    }, {
+        allowInInput: false,
+        description: 'Compress chat history'
+    });
+
     // Ctrl+T - Open Theme Editor
     keyboard.register('Ctrl+t', () => {
         if (window.app?.themeEditor) {
@@ -408,6 +453,108 @@ function setupKeyboardShortcuts(settings, charGrid, chat) {
         allowInInput: false,
         description: 'Reset camera'
     });
+}
+
+/**
+ * Start the backend health watchdog and connection quality indicator.
+ *
+ * Behaviour:
+ * - Every 10 seconds: fetch /api/health and measure round-trip latency.
+ *   The `#conn-quality-dot` changes colour: green (<150ms), yellow (150–500ms), red (fail/offline).
+ * - Every 30 seconds (3rd tick): update the `#backend-offline-banner`.
+ *   Banner shown on failure, hidden on recovery.
+ *
+ * Dot colours mirror standard monitoring conventions:
+ *   🟢 green  — healthy, low latency
+ *   🟡 yellow — healthy but slow (LLM or heavy load)
+ *   🔴 red    — unreachable or error
+ */
+function startBackendWatchdog() {
+    const dot = document.getElementById('conn-quality-dot');
+    const banner = document.getElementById('backend-offline-banner');
+    if (!dot) return;
+
+    let tickCount = 0;
+
+    const setDot = (color, glow, title) => {
+        dot.style.background = color;
+        dot.style.boxShadow = `0 0 6px ${glow}`;
+        dot.title = title;
+    };
+
+    const tick = async () => {
+        tickCount++;
+        const t0 = performance.now();
+        try {
+            // ANY HTTP response means the server is alive (even 404 on older builds).
+            // Only a network-level throw means truly unreachable.
+            const res = await fetch('/api/health', { cache: 'no-store' });
+            const latency = Math.round(performance.now() - t0);
+
+            // Backend is reachable — grade by latency and health status
+            if (banner) banner.style.display = 'none';
+            if (res.ok) {
+                if (latency < 150) {
+                    setDot('#39ff14', '#39ff14', `Backend OK — ${latency}ms`);
+                } else if (latency < 500) {
+                    setDot('#ffd700', '#ffd700', `Backend slow — ${latency}ms`);
+                } else {
+                    setDot('#ff9900', '#ff9900', `Backend very slow — ${latency}ms`);
+                }
+            } else {
+                // Server responded but health check returned non-2xx (old build or error)
+                setDot('#ffd700', '#ffd700', `Backend alive (status ${res.status}) — ${latency}ms`);
+            }
+        } catch {
+            // Network error — server is genuinely unreachable
+            setDot('#ff003c', '#ff003c', 'Backend unreachable');
+            if (banner) banner.style.display = 'block';
+        }
+    };
+
+    // First check immediately, then every 10 seconds
+    tick();
+    setInterval(tick, 10_000);
+}
+
+/**
+ * Poll /api/image-gen/status every 15 seconds and update the AI art
+ * status indicator (🎨 icon in the viewport toolbar).
+ *
+ * When ComfyUI or Easy Diffusion is reachable the icon glows purple;
+ * when offline it stays grey. Tooltip shows the provider + model.
+ */
+function startArtStatusWatchdog() {
+    const icon = document.getElementById('art-status-icon');
+    if (!icon) return;
+
+    const tick = async () => {
+        try {
+            const res = await fetch('/api/image-gen/status', { cache: 'no-store' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+
+            if (data.available) {
+                icon.style.opacity = '1';
+                icon.style.filter = 'drop-shadow(0 0 4px rgba(157,80,255,0.9))';
+                icon.title = `AI Art: ${data.provider} available — ${data.model || 'no model set'}`;
+                icon.style.color = 'rgba(157,80,255,0.9)';
+            } else {
+                icon.style.opacity = '0.35';
+                icon.style.filter = 'none';
+                const providerName = data.provider === 'disabled' ? 'disabled in settings' : `${data.provider} offline`;
+                icon.title = `AI Art: ${providerName} — enable in Settings → AI ART`;
+                icon.style.color = 'var(--text-muted)';
+            }
+        } catch {
+            icon.style.opacity = '0.2';
+            icon.style.filter = 'none';
+            icon.title = 'AI Art: backend unreachable';
+        }
+    };
+
+    tick();
+    setInterval(tick, 15_000);
 }
 
 // Check if DOM is ready

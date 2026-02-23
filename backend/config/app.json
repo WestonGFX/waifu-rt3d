@@ -9,7 +9,7 @@
   "interrupt_mode": true,
   "visual_mode": "3D (VRM)",
   "theme": "Blurple",
-  "bg_mode": "Digital Rain",
+  "bg_mode": "Bento Gradient",
   "glow_intensity": 50,
   "ui_border_radius": 12,
   "ui_blur": 10,
@@ -26,13 +26,16 @@
     "endpoint": "http://localhost:1234/v1",
     "model": "google/gemma-3-12b",
     "api_key": "lm-studio",
-    "history_limit": 0
+    "history_limit": 0,
+    "qwen3_thinking_mode": false
   },
   "tts": {
     "enabled": true,
     "provider": "local",
     "voice_id": "fox_v1",
-    "auto_speak": true
+    "auto_speak": true,
+    "exaggeration": 0.8,
+    "fast_chunking": true
   },
   "system": {
     "auto_start_lmstudio": false,
@@ -40,9 +43,17 @@
   },
   "active_character_id": "1: Fox (Rin)",
   "avatar_url": "/images/rin_pixel_portrait.png",
-  "model_vrm": "/files/avatars/Nyx.vrm",
-  "live2d_model": "/live2d/Alexia/Alexia.model3.json",
+  "model_vrm": "/files/avatars/Panicandy.vrm",
+  "live2d_model": "/live2d/himekawasino/himekawasino.model3.json",
   "bg_image": "/assets/characters/glitch/glitch_bedroom_bg.png",
   "background_mode": "image",
-  "chat_layout": "Toggle View"
+  "chat_layout": "Toggle View",
+  "fps_target": "120",
+  "show_fps_overlay": true,
+  "asr": {
+    "provider": "browser",
+    "enabled": false,
+    "model": "base.en"
+  },
+  "content_filter_level": 1
 }

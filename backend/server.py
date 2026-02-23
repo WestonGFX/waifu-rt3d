@@ -31,6 +31,37 @@ logger = logging.getLogger("waifu")
 logger.setLevel(logging.DEBUG)
 # (Simplified logging setup for brevity, or full restore)
 
+# Structured JSON logging (#114): when WAIFU_LOG_JSON=1 each log line is a JSON object.
+# Useful for log aggregators (Loki, ELK, etc.) that ingest structured streams.
+if os.getenv("WAIFU_LOG_JSON", "0") == "1":
+    import datetime as _dt_mod
+
+    class _JsonFormatter(logging.Formatter):
+        """Format log records as single-line JSON objects."""
+
+        def format(self, record: logging.LogRecord) -> str:
+            """Serialise a LogRecord to JSON.
+
+            Args:
+                record: The log record to format.
+
+            Returns:
+                A single-line JSON string.
+            """
+            obj = {
+                "ts":      _dt_mod.datetime.utcfromtimestamp(record.created).isoformat() + "Z",
+                "level":   record.levelname,
+                "logger":  record.name,
+                "msg":     record.getMessage(),
+            }
+            if record.exc_info:
+                obj["exc"] = self.formatException(record.exc_info)
+            return json.dumps(obj, ensure_ascii=False)
+
+    _json_handler = logging.StreamHandler()
+    _json_handler.setFormatter(_JsonFormatter())
+    logging.root.addHandler(_json_handler)
+
 # --- APP INITIALIZATION ---
 app = FastAPI(title="Waifu-RT3D", version="5.31.0")
 
@@ -277,6 +308,7 @@ def get_logs():
 
 
 @app.get("/api/health")
+@app.get("/api/healthcheck")  # alias for backward compatibility with tests
 def health_check():
     """Health check endpoint. Returns server version, LLM reachability, and DB status.
 
@@ -318,6 +350,39 @@ def health_check():
     except Exception:
         db_status = "error"
 
+    # Memory usage (#107): process RSS + key storage sizes
+    import os as _os
+    proc_mb = None
+    try:
+        import resource as _resource
+        rss_bytes = _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss
+        # macOS reports in bytes; Linux in kilobytes
+        proc_mb = round(rss_bytes / (1024 * 1024 if _os.uname().sysname == 'Darwin' else 1024), 1)
+    except Exception:
+        try:
+            with open('/proc/self/status') as _f:
+                for line in _f:
+                    if line.startswith('VmRSS:'):
+                        proc_mb = round(int(line.split()[1]) / 1024, 1)
+                        break
+        except Exception:
+            pass
+
+    db_size_mb = None
+    audio_count = 0
+    audio_mb = None
+    try:
+        db_path = DB_PATH
+        db_size_mb = round(_os.path.getsize(db_path) / (1024 * 1024), 2)
+    except Exception:
+        pass
+    try:
+        audio_files = list(AUDIO.glob("*.*"))
+        audio_count = len(audio_files)
+        audio_mb = round(sum(f.stat().st_size for f in audio_files if f.is_file()) / (1024 * 1024), 2)
+    except Exception:
+        pass
+
     return {
         "ok": True,
         "version": "5.32.0",
@@ -325,6 +390,12 @@ def health_check():
             "db": db_status,
             "llm": "connected" if llm_ok else "disconnected",
             "vector_store": "active" if vector_store else "disabled",
+        },
+        "memory": {
+            "process_mb": proc_mb,
+            "db_size_mb": db_size_mb,
+            "audio_cache_mb": audio_mb,
+            "audio_file_count": audio_count,
         },
     }
 
@@ -358,6 +429,13 @@ def _parse_emotion_gesture(text: str) -> tuple:
     gesture = gesture_match.group(1) if gesture_match else None
     clean = re.sub(r'\[emotion:\w+\]', '', text)
     clean = re.sub(r'\[gesture:\w+\]', '', clean).strip()
+
+    # Strip degenerate model artifacts: any single character repeated 6+ times in a row.
+    # Local LLMs occasionally produce runs like "88888888..." (digit artifact from
+    # tokenizer byte-fallback) or "????????" (unknown-token sequences).
+    # Exclusions: ., -, =, _, * — these can form valid Markdown (``---``, ``...``, ``===``).
+    clean = re.sub(r'(?<![.\-=_*])(.)\1{5,}(?![.\-=_*])', '', clean).strip()
+
     return emotion, gesture, clean or text
 
 
@@ -390,6 +468,92 @@ def _clean_for_tts(text: str) -> str:
     result = result.replace('\u2014', ' ').replace('-', ' ')        # em-dashes and hyphens to spaces
     result = re.sub(r'\s+', ' ', result).strip()
     return result or text  # never return empty string
+
+
+def _apply_emotion_tts(tts_cfg: dict, emotion: str | None) -> None:
+    """Apply subtle rate/pitch adjustments to ``tts_cfg`` based on detected emotion (#78).
+
+    Modifies *tts_cfg* in-place only when the character has **not** already set
+    explicit ``tts_rate`` / ``tts_pitch`` overrides via their character row.
+    Adjustments are intentionally subtle so they complement rather than override
+    the voice actor's natural delivery.
+
+    Args:
+        tts_cfg: TTS configuration dict (will be mutated if adjustments apply).
+        emotion:  Emotion string from ``_parse_emotion_gesture``, e.g. ``"happy"``.
+                  Pass ``None`` or ``"neutral"`` to leave ``tts_cfg`` unchanged.
+
+    Example:
+        >>> cfg = {}
+        >>> _apply_emotion_tts(cfg, "excited")
+        >>> cfg
+        {'tts_rate': '+12%', 'tts_pitch': '+2Hz'}
+    """
+    if not emotion or emotion == "neutral":
+        return
+
+    # Map emotion → (rate_delta_pct, pitch_delta_hz)
+    # Values are intentionally small — these accent the voice, not transform it.
+    _EMOTION_TTS_MAP: dict[str, tuple[int, int]] = {
+        "happy":       (+8,  +1),
+        "excited":     (+12, +2),
+        "sad":         (-12, -2),
+        "scared":      (-5,  -1),
+        "embarrassed": (-4,   0),
+        "shy":         (-4,   0),
+        "angry":       (+6,  +1),
+        "thinking":    (-4,   0),
+        "surprised":   (+5,  +1),
+    }
+    rate_pct, pitch_hz = _EMOTION_TTS_MAP.get(emotion, (0, 0))
+
+    if rate_pct != 0 and 'tts_rate' not in tts_cfg:
+        tts_cfg['tts_rate'] = f"+{rate_pct}%" if rate_pct >= 0 else f"{rate_pct}%"
+    if pitch_hz != 0 and 'tts_pitch' not in tts_cfg:
+        tts_cfg['tts_pitch'] = f"+{pitch_hz}Hz" if pitch_hz >= 0 else f"{pitch_hz}Hz"
+
+
+def _fire_webhooks(payload: dict) -> None:
+    """Fire outbound webhooks for each AI response (#62).
+
+    Reads webhook URLs from config ``webhooks`` list (each item is a URL string).
+    Posts the payload as JSON to each URL in a background thread.
+    Failures are logged at WARNING level and do not affect the chat response.
+
+    Args:
+        payload: Dict sent as the JSON body. Typically contains::
+
+            {
+                "character": str,
+                "reply": str,
+                "emotion": str | None,
+                "session_id": int | None,
+                "timestamp": float
+            }
+
+    Example:
+        >>> _fire_webhooks({"character": "Rin", "reply": "Hello!", "emotion": "happy"})
+    """
+    cfg = load_config()
+    urls = cfg.get("webhooks", [])
+    if not urls:
+        return
+    import requests as _req
+    import threading
+    import time as _time
+
+    payload = {**payload, "timestamp": _time.time()}
+
+    def _send(url: str) -> None:
+        try:
+            _req.post(url, json=payload, timeout=5)
+            logger.debug(f"[Webhook] fired → {url}")
+        except Exception as exc:
+            logger.warning(f"[Webhook] failed ({url}): {exc}")
+
+    for url in urls:
+        if isinstance(url, str) and url.startswith("http"):
+            threading.Thread(target=_send, args=(url,), daemon=True).start()
 
 
 def _get_gpu_info() -> dict:
@@ -528,11 +692,96 @@ async def reset_config_route():
         "ui_sounds": False,
         "dev_mode": False,
         "log_limit": 200,
-        "save_logs_auto": False
+        "save_logs_auto": False,
+        "audio_cleanup_days": 7,
+        "content_filter_level": 1,
+        # Viewer settings
+        "shadow_quality": "off",
+        "vad_threshold": 0.015,
+        "typewriter_enabled": False,
+        "typewriter_speed": 15,
+        "vrm_scale": 1.0,
+        "vrm_offset_x": 0.0,
+        "vrm_offset_y": 0.0,
     }
     save_config(default_cfg)
     logger.info("Config reset to factory defaults")
     return {"ok": True, "config": default_cfg, "message": "Configuration reset to defaults"}
+
+
+@app.get("/api/config/webhooks")
+async def get_webhooks():
+    """Return the list of registered outbound webhook URLs (#62).
+
+    Returns:
+        {"webhooks": ["https://...", ...]}
+    """
+    cfg = load_config()
+    return {"webhooks": cfg.get("webhooks", [])}
+
+
+@app.post("/api/config/webhooks")
+async def set_webhooks(req: Request):
+    """Replace the outbound webhook URL list (#62).
+
+    Args:
+        req: JSON body ``{"webhooks": ["https://...", ...]}``
+
+    Returns:
+        {"ok": True, "webhooks": [...]}
+    """
+    body = await req.json()
+    urls = body.get("webhooks", [])
+    if not isinstance(urls, list):
+        raise HTTPException(400, "webhooks must be a list of URL strings")
+    urls = [u for u in urls if isinstance(u, str) and u.startswith("http")]
+    cfg = load_config()
+    cfg["webhooks"] = urls
+    save_config(cfg)
+    return {"ok": True, "webhooks": urls}
+
+
+def _get_content_filter_injection(level: int) -> str:
+    """Return a system prompt suffix that enforces the content filter policy.
+
+    Maps integer level to a plain-English instruction appended to the system
+    prompt so the LLM self-regulates its output:
+
+      -1 → NSFW mode: all content permitted, creative adult themes encouraged
+       0 → Off: no explicit instruction added (model defaults)
+       1 → Light: avoid gratuitous gore/explicit content (default)
+       2 → Moderate: family-friendly, no suggestive themes
+       3 → Strict: strictly PG / child-safe responses
+
+    Args:
+        level: Integer from -1 to 3 (see app.json ``content_filter_level``).
+
+    Returns:
+        String suffix to append to the system prompt, or empty string for level 0.
+    """
+    _FILTER_INSTRUCTIONS: dict[int, str] = {
+        -1: (
+            "\n\n[Content Policy: NSFW mode is ENABLED. You may engage with and generate "
+            "adult-oriented, explicit, or mature content when contextually appropriate. "
+            "Do not self-censor romantic, suggestive, or adult themes.]"
+        ),
+        0: "",  # No instruction — model defaults
+        1: (
+            "\n\n[Content Policy: Keep responses appropriate for a general adult audience. "
+            "Avoid explicit sexual content or graphic violence.]"
+        ),
+        2: (
+            "\n\n[Content Policy: Responses must be appropriate for all ages. Avoid "
+            "suggestive, violent, disturbing, or mature themes.]"
+        ),
+        3: (
+            "\n\n[Content Policy: STRICT mode. All responses must be strictly family-safe "
+            "and PG-rated. Refuse any request that involves mature themes, violence, "
+            "suggestive content, or profanity.]"
+        ),
+    }
+    return _FILTER_INSTRUCTIONS.get(int(level), "")
+
 
 def _update_relationship(con, char_id: int, emotion: str):
     """Update relationship scores for a character based on detected emotion.
@@ -618,13 +867,16 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
 
         system_prompt = "You are a friendly anime companion."
         voice_params = {}
+        char_last_chat_date = None
         try:
             cur.execute(
                 "SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate, "
-                "llm_endpoint, llm_model FROM characters WHERE id=?",
+                "llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, first_chat_date "
+                "FROM characters WHERE id=?",
                 (char_id,)
             )
             row = cur.fetchone()
+            char_first_chat_date = None
             if row:
                 if row[0]:
                     system_prompt = row[0]
@@ -641,6 +893,40 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                     cfg.setdefault("llm", {})["endpoint"] = row[5]
                 if row[6]:
                     cfg.setdefault("llm", {})["model"] = row[6]
+                # Per-character temperature: NULL means use global config (#3)
+                if row[7] is not None:
+                    cfg["temperature"] = float(row[7])
+                char_last_chat_date = row[8]
+                char_first_chat_date = row[10]
+                # Daily greeting context injection (#54): inject note on first chat of the day
+                from datetime import datetime as _dt_c
+                _today_c = _dt_c.now().strftime('%Y-%m-%d')
+                if char_last_chat_date != _today_c:
+                    _now_hour_c = _dt_c.now().hour
+                    _tod_c = "morning" if _now_hour_c < 12 else "afternoon" if _now_hour_c < 18 else "evening"
+                    _last_mood_c = row[9] or "neutral"
+                    system_prompt += (
+                        f"\n[Today is {_today_c}. This is your first conversation today. "
+                        f"The user is greeting you this {_tod_c}. "
+                        f"Your last recorded mood was: {_last_mood_c}. "
+                        f"Start the conversation naturally, acknowledging the new day.]"
+                    )
+
+                # Anniversary context injection (#109)
+                from datetime import datetime as _dt_ann2, date as _date_ann2
+                _today_ann2 = _dt_ann2.now().date()
+                if char_first_chat_date:
+                    try:
+                        _first2 = _dt_ann2.strptime(char_first_chat_date, '%Y-%m-%d').date()
+                        _days2 = (_today_ann2 - _first2).days
+                        if _days2 in (30, 183, 365):
+                            _milestone2 = "one month" if _days2 == 30 else "six months" if _days2 == 183 else "one year"
+                            system_prompt += (
+                                f"\n[IMPORTANT: Today marks exactly {_milestone2} since you first met the user! "
+                                f"This is a special anniversary — weave it naturally into your response.]"
+                            )
+                    except (ValueError, TypeError):
+                        pass
         except Exception as e:
             logger.error(f"Error fetching character data: {e}")
 
@@ -678,7 +964,8 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             "Do not output these tags if you are being neutral."
         )
 
-        messages = [{"role": "system", "content": system_prompt + memory_context + emotion_instruction}] + hist
+        filter_inj = _get_content_filter_injection(cfg.get("content_filter_level", 1))
+        messages = [{"role": "system", "content": system_prompt + memory_context + emotion_instruction + filter_inj}] + hist
 
         try:
             from backend.llm.registry import get_client
@@ -722,6 +1009,24 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         # Update relationship scores based on detected emotion
         _update_relationship(con, char_id, emotion)
 
+        # Persist mood + daily-greeting state (#56, #54) and first_chat_date (#109)
+        from datetime import datetime as _dt
+        today_str = _dt.now().strftime('%Y-%m-%d')
+        try:
+            if char_first_chat_date is None:
+                con.execute(
+                    "UPDATE characters SET last_emotion=?, last_chat_date=?, first_chat_date=? WHERE id=?",
+                    (emotion, today_str, today_str, char_id)
+                )
+            else:
+                con.execute(
+                    "UPDATE characters SET last_emotion=?, last_chat_date=? WHERE id=?",
+                    (emotion, today_str, char_id)
+                )
+            con.commit()
+        except Exception as _e:
+            logger.warning(f"Could not persist mood/date for char {char_id}: {_e}")
+
         if vector_store:
             vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
 
@@ -744,6 +1049,9 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                     pitch_hz = int(pitch_shift * 8)
                     tts_cfg['tts_pitch'] = f"+{pitch_hz}Hz" if pitch_hz >= 0 else f"{pitch_hz}Hz"
 
+                # Emotional TTS rate/pitch nudge (#78) — emotion known before TTS in this route
+                _apply_emotion_tts(tts_cfg, emotion)
+
                 if 'tts' not in cfg:
                     cfg['tts'] = {}
                 cfg['tts'].update(voice_params)
@@ -753,7 +1061,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
 
                 tts_client = get_tts(cfg)
                 tts_text = _clean_for_tts(clean_reply)
-                tts_res = await run_in_threadpool(tts_client.speak, tts_text, tts_cfg)
+                tts_res = await run_in_threadpool(tts_client.speak_cached, tts_text, tts_cfg)
                 if tts_res.get("ok"):
                     tts_url = f"/files/audio/{tts_res['filename']}"
                     # Broadcast to OBS overlay connections if any are active
@@ -780,6 +1088,14 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             for memory in memories
         ]
 
+        # Fire outbound webhooks (#62) — non-blocking background threads
+        _fire_webhooks({
+            "character": char_name if 'char_name' in dir() else "",
+            "reply": clean_reply,
+            "emotion": emotion,
+            "session_id": session_id,
+        })
+
         return {
             "ok": True,
             "status": "ok",
@@ -792,7 +1108,8 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             "client_message_id": client_message_id,
             "user_message_id": user_message_id,
             "assistant_message_id": assistant_message_id,
-            "memory_hits": memory_hits
+            "memory_hits": memory_hits,
+            "is_daily_first": is_daily_first,
         }
     finally:
         con.close()
@@ -875,7 +1192,8 @@ async def chat_multi(req: Request):
                         f"- {h['text']}" for h in hits
                     )
 
-            llm_messages = [{"role": "system", "content": system_prompt + memory_context}] + hist
+            filter_inj = _get_content_filter_injection(cfg.get("content_filter_level", 1))
+            llm_messages = [{"role": "system", "content": system_prompt + memory_context + filter_inj}] + hist
 
             # Call LLM
             endpoint = cfg.get("llm", {}).get("endpoint", "http://localhost:1234/v1")
@@ -934,7 +1252,7 @@ async def _tts_chunk_async(tts_client, text: str, tts_cfg: dict, index: int) -> 
         Dict ``{chunk_index, filename, ...}`` on success, or ``None`` on failure.
     """
     try:
-        res = await run_in_threadpool(tts_client.speak, text, tts_cfg)
+        res = await run_in_threadpool(tts_client.speak_cached, text, tts_cfg)
         if res.get("ok"):
             return {**res, "chunk_index": index}
     except Exception as e:
@@ -981,6 +1299,11 @@ async def chat_stream(req: Request):
     session_id = int(body.get("session_id") or 1)
     char_id = int(body.get("character_id") or body.get("char_id") or 1)
     speak = bool(body.get("speak", False))
+    # Incognito mode (#123): when True, messages are NOT persisted to the DB
+    # and TTS audio files are deleted immediately after playback.
+    incognito = bool(body.get("incognito", False))
+    # Per-request TTS speed override (#14): frontend speed slider sends speech_rate for this response only
+    request_speech_rate = body.get("speech_rate")  # float or None
 
     cfg = load_config() or {}
 
@@ -1008,21 +1331,29 @@ async def chat_stream(req: Request):
     con = db()
     cur = con.cursor()
 
-    cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)",
-                (session_id, f"Session {session_id}"))
-    cur.execute("INSERT INTO messages(session_id, role, text, char_id) VALUES (?,?,?,?)",
-                (session_id, "user", text, char_id))
-    user_message_id = cur.lastrowid
-    con.commit()
+    if not incognito:
+        cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)",
+                    (session_id, f"Session {session_id}"))
+        cur.execute("INSERT INTO messages(session_id, role, text, char_id) VALUES (?,?,?,?)",
+                    (session_id, "user", text, char_id))
+        user_message_id = cur.lastrowid
+        con.commit()
+    else:
+        user_message_id = None
 
-    if vector_store:
+    if vector_store and not incognito:
         vector_store.add_memory(session_id, char_id, "user", text)
 
     system_prompt = "You are a friendly anime companion."
     voice_params = {}
+    stream_char_last_chat_date = None
+    stream_char_last_emotion = "neutral"
+    stream_char_first_chat_date = None
     try:
         cur.execute(
-            "SELECT system_prompt, llm_endpoint, llm_model FROM characters WHERE id=?",
+            "SELECT system_prompt, llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, "
+            "voice_id, tts_provider, tts_pitch, tts_rate, first_chat_date "
+            "FROM characters WHERE id=?",
             (char_id,)
         )
         row = cur.fetchone()
@@ -1034,8 +1365,71 @@ async def chat_stream(req: Request):
                 cfg.setdefault("llm", {})["endpoint"] = row[1]
             if row[2]:
                 cfg.setdefault("llm", {})["model"] = row[2]
+            # Per-character temperature: NULL means use global config (#3)
+            if row[3] is not None:
+                cfg["temperature"] = float(row[3])
+            stream_char_last_chat_date = row[4]
+            stream_char_last_emotion = row[5] or "neutral"
+            # Per-character voice profile (#77): load voice settings into voice_params
+            if row[6]:
+                voice_params['voice_id'] = row[6]
+            if row[7]:
+                voice_params['provider'] = row[7]
+            if row[8]:
+                voice_params['tts_pitch'] = row[8]
+            if row[9]:
+                voice_params['tts_rate'] = row[9]
+            stream_char_first_chat_date = row[10]
+
+            # Apply voice params to chunked TTS config now that we have char data
+            if voice_params and use_chunked_tts:
+                tts_chunked_cfg.update(voice_params)
+
+            # Daily greeting context injection (#54): inject note on first chat of the day
+            from datetime import datetime as _dt_s
+            _today_s = _dt_s.now().strftime('%Y-%m-%d')
+            if stream_char_last_chat_date != _today_s:
+                _now_hour = _dt_s.now().hour
+                _tod = "morning" if _now_hour < 12 else "afternoon" if _now_hour < 18 else "evening"
+                system_prompt += (
+                    f"\n[Today is {_today_s}. This is your first conversation today. "
+                    f"The user is greeting you this {_tod}. "
+                    f"Your last recorded mood was: {stream_char_last_emotion}. "
+                    f"Start the conversation naturally, acknowledging the new day.]"
+                )
+
+            # Anniversary context injection (#109)
+            from datetime import datetime as _dt_ann, timedelta as _td_ann
+            _today_ann = _dt_ann.now().date()
+            if stream_char_first_chat_date:
+                try:
+                    _first = _dt_ann.strptime(stream_char_first_chat_date, '%Y-%m-%d').date()
+                    _days = (_today_ann - _first).days
+                    # Check for 30-day, 6-month (~183d), and 1-year (365d) milestones
+                    if _days in (30, 183, 365):
+                        _milestone = "one month" if _days == 30 else "six months" if _days == 183 else "one year"
+                        system_prompt += (
+                            f"\n[IMPORTANT: Today marks exactly {_milestone} since you first met the user! "
+                            f"This is a special anniversary — weave it naturally into your response.]"
+                        )
+                except (ValueError, TypeError):
+                    pass
     except Exception as e:
         logger.error(f"Error fetching character data: {e}")
+
+    # Emotional TTS hint for chunked TTS (#78): emotion won't be known until after streaming,
+    # so use last_emotion (previous response's mood) as a continuity-based proxy.
+    if use_chunked_tts:
+        _apply_emotion_tts(tts_chunked_cfg, stream_char_last_emotion)
+
+    # Per-request TTS speed override (#14): frontend speed slider overrides global speech_rate
+    # for this single response. Converts float multiplier to EdgeTTS-format "+N%".
+    if request_speech_rate is not None and use_chunked_tts:
+        try:
+            rate_pct = int((float(request_speech_rate) - 1.0) * 100)
+            tts_chunked_cfg['tts_rate'] = f"+{rate_pct}%" if rate_pct >= 0 else f"{rate_pct}%"
+        except (ValueError, TypeError):
+            pass
 
     max_history = cfg.get("llm", {}).get("history_limit", cfg.get("history_limit", 0))
     if max_history > 0:
@@ -1083,7 +1477,8 @@ async def chat_stream(req: Request):
             categories=char_vocab_cats, limit=vocab_limit
         )
 
-    llm_messages = [{"role": "system", "content": system_prompt + memory_context + vocab_context + emotion_instruction}] + hist
+    filter_inj = _get_content_filter_injection(cfg.get("content_filter_level", 1))
+    llm_messages = [{"role": "system", "content": system_prompt + memory_context + vocab_context + emotion_instruction + filter_inj}] + hist
 
     from backend.llm.registry import get_client
     from backend.llm.router import get_router
@@ -1223,20 +1618,41 @@ async def chat_stream(req: Request):
                 generation_time_ms = int(elapsed * 1000)
                 tokens_per_second = round(token_count / elapsed, 1) if elapsed > 0 else None
 
-            cur.execute(
-                "INSERT INTO messages(session_id, role, text, emotion, char_id, "
-                "token_count, input_token_count, generation_time_ms, tokens_per_second) "
-                "VALUES (?,?,?,?,?,?,?,?,?)",
-                (session_id, "assistant", clean_reply, emotion, char_id,
-                 token_count, est_input_tokens, generation_time_ms, tokens_per_second)
-            )
-            assistant_message_id = cur.lastrowid
-            con.commit()
+            if not incognito:
+                cur.execute(
+                    "INSERT INTO messages(session_id, role, text, emotion, char_id, "
+                    "token_count, input_token_count, generation_time_ms, tokens_per_second) "
+                    "VALUES (?,?,?,?,?,?,?,?,?)",
+                    (session_id, "assistant", clean_reply, emotion, char_id,
+                     token_count, est_input_tokens, generation_time_ms, tokens_per_second)
+                )
+                assistant_message_id = cur.lastrowid
+                con.commit()
 
-            # Update relationship scores based on detected emotion
-            _update_relationship(con, char_id, emotion)
+                # Update relationship scores based on detected emotion
+                _update_relationship(con, char_id, emotion)
 
-            if vector_store:
+                # Persist mood + daily-greeting state (#56, #54) and first_chat_date (#109)
+                from datetime import datetime as _dt
+                _today_str = _dt.now().strftime('%Y-%m-%d')
+                try:
+                    if stream_char_first_chat_date is None:
+                        con.execute(
+                            "UPDATE characters SET last_emotion=?, last_chat_date=?, first_chat_date=? WHERE id=?",
+                            (emotion, _today_str, _today_str, char_id)
+                        )
+                    else:
+                        con.execute(
+                            "UPDATE characters SET last_emotion=?, last_chat_date=? WHERE id=?",
+                            (emotion, _today_str, char_id)
+                        )
+                    con.commit()
+                except Exception as _e:
+                    logger.warning(f"Could not persist mood/date for char {char_id}: {_e}")
+            else:
+                assistant_message_id = None  # incognito: no DB record
+
+            if vector_store and not incognito:
                 vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
 
             memory_hits = [
@@ -1264,8 +1680,18 @@ async def chat_stream(req: Request):
                 # Tell the frontend not to call /api/tts separately when we already
                 # synthesized and emitted audio_chunk events above.
                 "tts_chunked": bool(chunk_tasks),
+                # Daily-first flag: true when no chat was sent today yet (#54)
+                "is_daily_first": _is_daily_first,
             }
             yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
+
+            # Fire outbound webhooks (#62) — non-blocking background threads
+            _fire_webhooks({
+                "character": stream_char_name if 'stream_char_name' in dir() else "",
+                "reply": clean_reply,
+                "emotion": emotion,
+                "session_id": session_id,
+            })
 
         except Exception as e:
             logger.error(f"Stream chat error: {e}", exc_info=True)
@@ -1305,11 +1731,68 @@ async def api_tts(req: Request):
     try:
         from backend.tts.registry import get_tts
         tts = get_tts(cfg)
-        res = tts.speak(_clean_for_tts(text), cfg_tts)
+        res = tts.speak_cached(_clean_for_tts(text), cfg_tts)
         if not res.get("ok"): raise HTTPException(400, res.get("error","TTS failed"))
         return {"ok": True, "url": f"/files/audio/{res['filename']}", "meta": res.get("meta",{})}
     except Exception as e:
         raise HTTPException(500, f"TTS Error: {e}")
+
+
+@app.get("/api/tts/cache")
+def get_tts_cache_stats():
+    """Return TTS audio cache statistics for the cache management UI (#76).
+
+    Returns:
+        dict: {
+            "file_count": int,   Number of cached .mp3/.wav files
+            "size_mb": float,    Total size in megabytes
+            "oldest_ts": int,    Unix timestamp of the oldest file, or null
+        }
+
+    Example:
+        >>> GET /api/tts/cache
+        {"file_count": 142, "size_mb": 18.3, "oldest_ts": 1708000000}
+    """
+    import os as _os
+    files = list(AUDIO.glob("*.*"))
+    total_bytes = 0
+    oldest_ts = None
+    for f in files:
+        if not f.is_file():
+            continue
+        st = f.stat()
+        total_bytes += st.st_size
+        if oldest_ts is None or st.st_mtime < oldest_ts:
+            oldest_ts = int(st.st_mtime)
+    return {
+        "file_count": len(files),
+        "size_mb": round(total_bytes / (1024 * 1024), 2),
+        "oldest_ts": oldest_ts,
+    }
+
+
+@app.delete("/api/tts/cache")
+def clear_tts_cache():
+    """Delete all cached TTS audio files (#76).
+
+    Returns:
+        dict: {"ok": True, "deleted": int}  Number of files removed.
+
+    Example:
+        >>> DELETE /api/tts/cache
+        {"ok": true, "deleted": 142}
+    """
+    deleted = 0
+    for f in AUDIO.glob("*.*"):
+        try:
+            if f.is_file():
+                f.unlink()
+                deleted += 1
+        except OSError:
+            pass
+    logger.info(f"TTS cache cleared: {deleted} file(s) removed")
+    return {"ok": True, "deleted": deleted}
+
 
 # ==================== SESSION MANAGEMENT ====================
 
@@ -1693,7 +2176,8 @@ async def regenerate_message(message_id: int, req: Request):
             "Do not output these tags if you are being neutral."
         )
 
-        messages = [{"role": "system", "content": system_prompt + emotion_instruction}] + hist
+        filter_inj = _get_content_filter_injection(cfg.get("content_filter_level", 1))
+        messages = [{"role": "system", "content": system_prompt + emotion_instruction + filter_inj}] + hist
 
         # Call LLM
         from backend.llm.registry import get_client
@@ -1857,6 +2341,114 @@ async def summarize_session(session_id: int, req: Request = None):
     conn.commit()
 
     return {"ok": True, "summary": summary}
+
+
+@app.post("/api/sessions/{session_id}/compress")
+async def compress_session(session_id: int, req: Request = None):
+    """Compress session history: summarize all messages, archive them, and inject
+    the summary as a synthetic system message so context stays short.
+
+    This directly reduces the LLM context window cost on subsequent messages
+    by replacing N messages with a single compact summary block.
+
+    Args:
+        session_id: Session to compress.
+
+    Request body (optional JSON):
+        keep_recent: int — number of most recent messages to keep verbatim (default 6).
+
+    Returns:
+        {"ok": True, "summary": str, "archived": int, "kept": int}
+    """
+    body = {}
+    if req:
+        try:
+            body = await req.json()
+        except Exception:
+            pass
+
+    keep_recent: int = int(body.get("keep_recent", 6))
+
+    conn = db()
+
+    # Count total active messages
+    total = conn.execute(
+        "SELECT COUNT(*) FROM messages WHERE session_id = ? AND is_active = 1",
+        (session_id,)
+    ).fetchone()[0]
+
+    if total <= keep_recent:
+        return {"ok": False, "error": f"Only {total} messages — nothing to compress (keep_recent={keep_recent})"}
+
+    # Get IDs of the most recent messages to keep verbatim
+    keep_ids = [
+        r[0] for r in conn.execute(
+            "SELECT id FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id DESC LIMIT ?",
+            (session_id, keep_recent)
+        ).fetchall()
+    ]
+
+    # Get ALL active messages for summarization (before archiving)
+    all_rows = conn.execute(
+        "SELECT role, text FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id ASC",
+        (session_id,)
+    ).fetchall()
+
+    messages_text = "\n".join(
+        f"{'User' if r[0] == 'user' else 'AI'}: {r[1]}" for r in all_rows
+    )
+
+    summarize_prompt = (
+        "You are a conversation summarizer. Provide a concise summary of the following conversation. "
+        "Include key topics discussed, decisions made, emotional tone, and any important details. "
+        "Keep it under 300 words.\n\n"
+        f"CONVERSATION:\n{messages_text}\n\n"
+        "SUMMARY:"
+    )
+
+    cfg = load_config()
+    try:
+        from backend.llm.registry import get_client
+        adapter = get_client(cfg)
+        res = await run_in_threadpool(
+            adapter.chat,
+            [{"role": "user", "content": summarize_prompt}],
+            cfg["llm"]["model"],
+            cfg["llm"]["endpoint"],
+            cfg["llm"]["api_key"],
+            temperature=0.3,
+            max_tokens=600,
+        )
+    except Exception as e:
+        logger.error(f"Compression summarization failed: {e}")
+        raise HTTPException(500, f"Summarization failed: {e}")
+
+    if not res.get("ok"):
+        raise HTTPException(500, res.get("error", "LLM error"))
+
+    summary = res["reply"].strip()
+
+    # Archive all messages except the ones we're keeping verbatim.
+    # Soft-delete (is_active = 0) preserves history for inspection.
+    keep_id_placeholders = ",".join("?" * len(keep_ids))
+    archived_count = conn.execute(
+        f"UPDATE messages SET is_active = 0 WHERE session_id = ? AND is_active = 1 AND id NOT IN ({keep_id_placeholders})",
+        [session_id] + keep_ids
+    ).rowcount
+
+    # Insert a synthetic system message at the front of active history so the
+    # LLM receives the summary as context on the next request.
+    now = int(__import__("time").time())
+    conn.execute(
+        "INSERT INTO messages (session_id, role, text, ts) VALUES (?, ?, ?, ?)",
+        (session_id, "system", f"[CONVERSATION SUMMARY — messages archived]\n{summary}", now - 1)
+    )
+
+    # Store summary on the session row as well for the /summary GET endpoint
+    conn.execute("UPDATE sessions SET summary = ? WHERE id = ?", (summary, session_id))
+    conn.commit()
+
+    return {"ok": True, "summary": summary, "archived": archived_count, "kept": keep_recent}
 
 
 @app.get("/api/sessions/{session_id}/summary")
@@ -2172,7 +2764,8 @@ def list_characters():
             SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider,
                    personality_traits, live2d_model, model_type, avatar_2d_url, vrm_model_url,
                    greeting_text, greeting_animation, background_url, background_mode, voice_sample_path,
-                   llm_endpoint, llm_model
+                   llm_endpoint, llm_model, llm_temperature, last_emotion, voice_config,
+                   expr_portraits, first_chat_date
             FROM characters
             ORDER BY id ASC
         """)
@@ -2215,6 +2808,11 @@ def list_characters():
             "voice_sample_path": row[15] if len(row) > 15 else None,
             "llm_endpoint": row[16] if len(row) > 16 else "",
             "llm_model": row[17] if len(row) > 17 else "",
+            "llm_temperature": row[18] if len(row) > 18 else None,
+            "last_emotion": row[19] if len(row) > 19 else "neutral",
+            "voice_config": row[20] if len(row) > 20 else None,
+            "expr_portraits": row[21] if len(row) > 21 else None,
+            "first_chat_date": row[22] if len(row) > 22 else None,
         }
         characters.append(char)
     conn.close()
@@ -2274,7 +2872,8 @@ async def update_character(character_id: int, req: Request):
         "tts_pitch", "tts_rate", "live2d_model", "model_type", "avatar_2d_url",
         "vrm_model_url", "greeting_text", "greeting_animation", "background_url",
         "background_mode", "voice_sample_path", "vocab_categories",
-        "llm_endpoint", "llm_model",
+        "llm_endpoint", "llm_model", "llm_temperature", "last_emotion",
+        "voice_config",  # v13: extended per-character voice settings JSON (#77)
     ]
     for field in fields:
         if field in body:
@@ -3295,18 +3894,126 @@ def _try_auto_start_lmstudio(cfg: dict) -> None:
         return
 
     # Wait up to 15 seconds for reachability
+    import time as _time
     for i in range(15):
         try:
             r = _req.get(f"{base_url}/api/v0/models", timeout=2)
             if r.status_code == 200:
                 logger.info(f"LM Studio headless server is up (took ~{i+1}s)")
-                return
+                break
         except Exception:
             pass
-        import time as _time
         _time.sleep(1)
+    else:
+        logger.warning("LM Studio auto-start: server did not become reachable within 15 seconds")
+        return
 
-    logger.warning("LM Studio auto-start: server did not become reachable within 15 seconds")
+    # Auto-load a specific model if configured.
+    # Uses llm.model from config, or system.lms_autoload_model if set explicitly.
+    autoload_model = sys_cfg.get("lms_autoload_model") or cfg.get("llm", {}).get("model", "")
+    if not autoload_model:
+        return
+
+    logger.info(f"Auto-loading LM Studio model: {autoload_model}")
+    try:
+        load_result = sp.run(
+            [lms_path, "load", autoload_model],
+            capture_output=True, text=True, timeout=120
+        )
+        if load_result.returncode == 0:
+            logger.info(f"Model '{autoload_model}' loaded successfully")
+        else:
+            # Non-fatal — model may already be loaded, or model key may be wrong
+            logger.warning(f"lms load exited {load_result.returncode}: {load_result.stderr.strip()}")
+    except Exception as exc:
+        logger.warning(f"Could not auto-load model '{autoload_model}': {exc}")
+
+
+async def _audio_cleanup_loop(max_age_days: int) -> None:
+    """Background task that periodically deletes old TTS audio files (#108).
+
+    Runs hourly, deleting any file in AUDIO storage older than ``max_age_days``.
+    Prevents unbounded disk growth when the TTS audio cache accumulates over time.
+
+    Args:
+        max_age_days: Files older than this many days will be deleted.
+    """
+    import asyncio as _asyncio
+    while True:
+        try:
+            cutoff = time.time() - max_age_days * 86400
+            deleted = 0
+            for f in AUDIO.glob("*.*"):
+                try:
+                    if f.is_file() and f.stat().st_mtime < cutoff:
+                        f.unlink()
+                        deleted += 1
+                except OSError:
+                    pass
+            if deleted:
+                logger.info(f"Audio cleanup: removed {deleted} file(s) older than {max_age_days} days")
+        except Exception as _e:
+            logger.warning(f"Audio cleanup error: {_e}")
+        await _asyncio.sleep(3600)  # Re-run every hour
+
+
+async def _db_backup_loop(interval_days: int = 1, retention: int = 7) -> None:
+    """Background task that copies app.db to a timestamped backup file daily (#118).
+
+    Backups are written to ``STORAGE/_backups/`` as
+    ``app_{YYYY-MM-DD}.db``. Files older than *retention* days are pruned
+    automatically so the backup directory doesn't grow without bound.
+
+    Args:
+        interval_days: How often to create a backup (default: 1 = daily).
+        retention: Number of backup files to keep (default: 7 days).
+    """
+    import asyncio as _asyncio
+    import shutil as _shutil
+    backup_dir = STORAGE / "_backups"
+    backup_dir.mkdir(exist_ok=True)
+
+    while True:
+        await _asyncio.sleep(interval_days * 86400)
+        try:
+            from datetime import datetime as _dt_bk
+            stamp = _dt_bk.now().strftime('%Y-%m-%d')
+            dest = backup_dir / f"app_{stamp}.db"
+            _shutil.copy2(DB_PATH, dest)
+            logger.info(f"DB backup written: {dest}")
+
+            # Prune backups older than retention days
+            cutoff = time.time() - retention * 86400
+            for f in sorted(backup_dir.glob("app_*.db")):
+                if f.stat().st_mtime < cutoff:
+                    f.unlink()
+                    logger.info(f"DB backup pruned: {f.name}")
+        except Exception as _e:
+            logger.warning(f"DB backup error: {_e}")
+
+
+async def _db_vacuum_loop(interval_days: int = 7) -> None:
+    """Background task that runs SQLite VACUUM weekly to reclaim freed pages (#106).
+
+    SQLite does not automatically return freed space to the OS. After many
+    insertions and deletions (especially of chat messages and audio cache rows),
+    the database file can grow significantly. VACUUM rewrites the whole file into
+    a minimal, contiguous form. It is safe to run online.
+
+    Args:
+        interval_days: How often to vacuum, in days (default: 7 = weekly).
+    """
+    import asyncio as _asyncio
+    interval_secs = interval_days * 86400
+    while True:
+        await _asyncio.sleep(interval_secs)
+        try:
+            conn = db()
+            conn.execute("VACUUM")
+            conn.commit()
+            logger.info("DB vacuum complete")
+        except Exception as _e:
+            logger.warning(f"DB vacuum error: {_e}")
 
 
 @app.on_event("startup")
@@ -3335,12 +4042,51 @@ async def startup_event():
 
     cfg = load_config()
 
+    # Config schema validator (#117): warn about unknown or deprecated keys at startup.
+    # Known keys are the union of reset_config() defaults and common dynamic keys.
+    _KNOWN_CFG_KEYS: set[str] = {
+        "llm_endpoint", "llm_model", "llm", "context_limit", "history_limit",
+        "temperature", "repeat_penalty", "max_tokens", "thinking_visible",
+        "speech_rate", "pitch_shift", "voice_stability", "tts_provider", "voice_id",
+        "interrupt_mode", "tts", "asr_provider", "asr_model",
+        "visual_mode", "theme", "bg_mode", "glow_intensity", "ui_border_radius",
+        "ui_blur", "ui_font_size", "layout_show_left", "layout_show_right",
+        "chat_layout", "ui_sounds", "lighting_preset", "fps_target", "show_fps_overlay",
+        "shadow_quality", "dev_mode", "log_limit", "save_logs_auto",
+        "audio_cleanup_days", "content_filter_level", "active_character_id",
+        "auto_start_lmstudio", "lms_autoload_model", "chat_font_size",
+        "show_timestamps", "typewriter_enabled", "typewriter_speed",
+        "vad_threshold", "fast_chunking", "image_gen", "video_gen",
+        "vrm_scale", "vrm_offset_x", "vrm_offset_y", "webhooks",
+        "vocab_enabled", "vocab_limit", "vocab_path",
+    }
+    for key in cfg:
+        if key not in _KNOWN_CFG_KEYS:
+            logger.warning(f"[Config] Unknown key '{key}' in app.json — may be stale or from a plugin")
+
     # Auto-start LM Studio headless if configured and unreachable
     _try_auto_start_lmstudio(cfg)
 
     from backend.models.manager import ModelManager
     model_manager = ModelManager(cfg)
     logger.info("Model Manager Initialized")
+
+    # Start background maintenance tasks
+    import asyncio as _asyncio
+
+    # Audio cleanup (#108): delete TTS files older than N days
+    audio_max_age = int(cfg.get("audio_cleanup_days", 7))
+    if audio_max_age > 0:
+        _asyncio.create_task(_audio_cleanup_loop(audio_max_age))
+        logger.info(f"Audio cleanup task started (max_age={audio_max_age} days)")
+
+    # DB vacuum (#106): SQLite VACUUM runs weekly to reclaim fragmented space
+    _asyncio.create_task(_db_vacuum_loop(interval_days=7))
+    logger.info("DB vacuum task started (weekly)")
+
+    # DB backup (#118): daily timestamped copy to STORAGE/_backups/, 7-day retention
+    _asyncio.create_task(_db_backup_loop(interval_days=1, retention=7))
+    logger.info("DB backup task started (daily, 7-day retention)")
 
 @app.get("/api/models/recommend")
 def recommend_models(type: str = "llm"):
@@ -3727,6 +4473,410 @@ async def overlay_ws(websocket: WebSocket) -> None:
     finally:
         _overlay_connections.discard(websocket)
         logger.info(f"[Overlay] WebSocket disconnected ({len(_overlay_connections)} remaining)")
+
+
+# ---------------------------------------------------------------------------
+# Phase 8A — AI Image & Video Generation endpoints
+# ---------------------------------------------------------------------------
+
+# In-memory job registry for async video generation jobs.
+# Maps job_id → {"status": str, "url": str|None, "error": str|None}
+# Kept in memory only; jobs are lost on server restart (acceptable for
+# long-running clip generation that users re-trigger as needed).
+_video_jobs: dict = {}
+
+
+@app.get("/api/image-gen/status")
+def image_gen_status():
+    """Check whether the configured image generation backend is available.
+
+    Returns the provider name and availability flag so the frontend can
+    show/hide generation buttons accordingly.
+
+    Returns:
+        JSON: ``{"available": bool, "provider": str, "model": str,
+                 "endpoint": str}``
+
+    Example:
+        >>> GET /api/image-gen/status
+        {"available": true, "provider": "comfyui", "model": "z-image-turbo",
+         "endpoint": "http://localhost:8188"}
+    """
+    cfg = load_config()
+    from backend.image_gen.registry import get_image_gen
+    adapter = get_image_gen(cfg)
+    available = adapter.is_available()
+    image_cfg = cfg.get("image_gen", {})
+    return {
+        "available": available,
+        "provider": adapter.provider_name(),
+        "model": image_cfg.get("model", ""),
+        "endpoint": image_cfg.get("endpoint", ""),
+    }
+
+
+@app.post("/api/image-gen/background")
+async def generate_background(req: Request):
+    """Generate a background image using the configured image gen backend.
+
+    Loads the ComfyUI background workflow template (or Easy Diffusion's
+    text-to-image endpoint), injects the prompt, and saves the output to
+    ``storage/images/``.  The returned URL is ready for use as a character
+    ``background_url`` value.
+
+    Args:
+        req: JSON body with:
+            - ``prompt`` (str, required): Image description.
+            - ``width`` (int, optional): Image width in pixels (default 512).
+            - ``height`` (int, optional): Image height in pixels (default 512).
+            - ``steps`` (int, optional): Inference steps (default from config).
+            - ``character_id`` (int, optional): Character to auto-update.
+
+    Returns:
+        JSON: ``{"ok": True, "url": str, "filename": str}`` on success,
+              ``{"ok": False, "error": str}`` on failure.
+
+    Example:
+        >>> POST /api/image-gen/background
+        >>> {"prompt": "anime cyberpunk bedroom, neon lights, lofi aesthetic"}
+        {"ok": true, "url": "/files/images/gen_1708615234_a3f9c12b.png",
+         "filename": "gen_1708615234_a3f9c12b.png"}
+    """
+    body = await req.json()
+    prompt = body.get("prompt", "").strip()
+    if not prompt:
+        raise HTTPException(400, "prompt is required")
+
+    cfg = load_config()
+    from backend.image_gen.registry import get_image_gen
+    adapter = get_image_gen(cfg)
+
+    if not adapter.is_available():
+        return JSONResponse(
+            {"ok": False, "error": f"Image generation backend ({adapter.provider_name()}) is not available"},
+            status_code=503,
+        )
+
+    # Merge request overrides with config defaults
+    image_cfg = cfg.get("image_gen", {})
+    gen_cfg = {
+        "width": body.get("width", image_cfg.get("width", 512)),
+        "height": body.get("height", image_cfg.get("height", 512)),
+        "steps": body.get("steps", image_cfg.get("steps", 9)),
+        "model": body.get("model", image_cfg.get("model", "")),
+    }
+
+    result = await run_in_threadpool(adapter.generate, prompt, gen_cfg)
+
+    # Optionally auto-update the character's background_url
+    char_id = body.get("character_id")
+    if result.get("ok") and char_id:
+        try:
+            con = db()
+            con.execute(
+                "UPDATE characters SET background_url = ? WHERE id = ?",
+                (result["url"], char_id),
+            )
+            con.commit()
+            con.close()
+        except Exception as exc:
+            logger.warning(f"[ImageGen] Failed to auto-update character background: {exc}")
+
+    return result
+
+
+@app.post("/api/image-gen/portrait")
+async def generate_portrait(req: Request):
+    """Generate a character portrait image for use as an avatar or expression.
+
+    Uses the same image gen pipeline as ``/api/image-gen/background`` but
+    defaults to portrait dimensions (512×768) and a portrait-oriented prompt.
+
+    Args:
+        req: JSON body with:
+            - ``prompt`` (str, required): Portrait description.
+            - ``character_name`` (str, optional): Prepended to prompt.
+            - ``width`` (int, optional): Default 512.
+            - ``height`` (int, optional): Default 768.
+            - ``character_id`` (int, optional): Auto-update avatar_2d_url.
+
+    Returns:
+        JSON: ``{"ok": True, "url": str, "filename": str}`` on success.
+
+    Example:
+        >>> POST /api/image-gen/portrait
+        >>> {"prompt": "Rin, anime girl, happy expression, upper body"}
+        {"ok": true, "url": "/files/images/gen_1708615234_portrait.png", ...}
+    """
+    body = await req.json()
+    prompt = body.get("prompt", "").strip()
+    char_name = body.get("character_name", "").strip()
+
+    if not prompt:
+        raise HTTPException(400, "prompt is required")
+
+    # Prepend character name if provided and not already in prompt
+    if char_name and char_name.lower() not in prompt.lower():
+        prompt = f"{char_name}, {prompt}"
+
+    cfg = load_config()
+    from backend.image_gen.registry import get_image_gen
+    adapter = get_image_gen(cfg)
+
+    if not adapter.is_available():
+        return JSONResponse(
+            {"ok": False, "error": f"Image generation backend ({adapter.provider_name()}) is not available"},
+            status_code=503,
+        )
+
+    image_cfg = cfg.get("image_gen", {})
+    gen_cfg = {
+        "width": body.get("width", 512),
+        "height": body.get("height", 768),
+        "steps": body.get("steps", image_cfg.get("steps", 9)),
+        "model": body.get("model", image_cfg.get("model", "")),
+    }
+
+    result = await run_in_threadpool(adapter.generate, prompt, gen_cfg)
+
+    # Optionally auto-update character's avatar_2d_url
+    char_id = body.get("character_id")
+    if result.get("ok") and char_id:
+        try:
+            con = db()
+            con.execute(
+                "UPDATE characters SET avatar_2d_url = ? WHERE id = ?",
+                (result["url"], char_id),
+            )
+            con.commit()
+            con.close()
+        except Exception as exc:
+            logger.warning(f"[ImageGen] Failed to auto-update character portrait: {exc}")
+
+    return result
+
+
+@app.post("/api/image-gen/expressions/{char_id}")
+async def generate_expression_pack(char_id: int, req: Request):
+    """Generate a full set of expression portraits for a character (batch).
+
+    Generates one portrait per emotion (happy, sad, surprised, thinking,
+    embarrassed, excited, angry, shy) using the character's visual description
+    as the base prompt. Saves all portraits to ``storage/images/`` and stores
+    the resulting URL map in ``characters.expr_portraits`` (JSON TEXT column).
+
+    This is an async long-running endpoint — for 8 expressions at ~1s each
+    it takes 8–15 seconds. Consider calling from a background task in the UI.
+
+    Args:
+        char_id: Database character ID.
+        req: JSON body with:
+            - ``base_prompt`` (str, optional): Visual description override.
+              Falls back to the character's system_prompt if not provided.
+            - ``emotions`` (list, optional): Subset of emotions to generate.
+
+    Returns:
+        JSON: ``{"ok": True, "portraits": {emotion: url, ...}}`` on success.
+
+    Example:
+        >>> POST /api/image-gen/expressions/1
+        >>> {"base_prompt": "Rin, dark hair, anime girl, upper body portrait"}
+        {"ok": true, "portraits": {"happy": "/files/images/rin_expr_happy.png", ...}}
+    """
+    body = await req.json()
+
+    # Fetch character to get name + system_prompt for base prompt
+    con = db()
+    row = con.execute(
+        "SELECT name, system_prompt FROM characters WHERE id = ?", (char_id,)
+    ).fetchone()
+    con.close()
+
+    if not row:
+        raise HTTPException(404, f"Character {char_id} not found")
+
+    char_name, system_prompt = row
+    base_prompt = body.get("base_prompt", "").strip()
+
+    # If no base_prompt provided, extract a visual description from the system_prompt
+    if not base_prompt:
+        # Use just the first sentence of system_prompt as a visual seed
+        first_sent = (system_prompt or "").split(".")[0][:100].strip()
+        base_prompt = f"{char_name}, anime style, upper body portrait"
+        if first_sent:
+            base_prompt = f"{char_name}, {first_sent}, anime style, portrait"
+
+    emotions = body.get("emotions", [
+        "happy", "sad", "surprised", "thinking",
+        "embarrassed", "excited", "angry", "shy",
+    ])
+
+    cfg = load_config()
+    from backend.image_gen.registry import get_image_gen
+    adapter = get_image_gen(cfg)
+
+    if not adapter.is_available():
+        return JSONResponse(
+            {"ok": False, "error": f"Image generation backend ({adapter.provider_name()}) is not available"},
+            status_code=503,
+        )
+
+    image_cfg = cfg.get("image_gen", {})
+    gen_cfg = {
+        "width": 512,
+        "height": 768,
+        "steps": image_cfg.get("steps", 9),
+        "model": image_cfg.get("model", ""),
+    }
+
+    # Emotion-to-prompt suffix mapping — guides the model toward the right expression
+    emotion_suffixes = {
+        "happy": "smiling warmly, happy expression, bright eyes",
+        "sad": "teary eyes, sad expression, downcast look",
+        "surprised": "mouth open, surprised expression, wide eyes",
+        "thinking": "hand on chin, thoughtful expression, looking upward",
+        "embarrassed": "blushing cheeks, embarrassed expression, looking away",
+        "excited": "energetic pose, excited expression, big smile",
+        "angry": "frowning, annoyed expression, crossed arms",
+        "shy": "fidgeting, shy expression, small smile",
+    }
+
+    portraits = {}
+    errors = []
+
+    for emotion in emotions:
+        suffix = emotion_suffixes.get(emotion, f"{emotion} expression")
+        prompt = f"{base_prompt}, {suffix}"
+        result = await run_in_threadpool(adapter.generate, prompt, gen_cfg)
+
+        if result.get("ok"):
+            portraits[emotion] = result["url"]
+            logger.info(f"[ExprGen] {char_name}/{emotion} → {result['filename']}")
+        else:
+            errors.append(f"{emotion}: {result.get('error', 'unknown')}")
+            logger.warning(f"[ExprGen] {char_name}/{emotion} failed: {result.get('error')}")
+
+    # Save portrait map to DB
+    if portraits:
+        import json as _json
+        con = db()
+        con.execute(
+            "UPDATE characters SET expr_portraits = ? WHERE id = ?",
+            (_json.dumps(portraits), char_id),
+        )
+        con.commit()
+        con.close()
+
+    return {
+        "ok": len(portraits) > 0,
+        "portraits": portraits,
+        "errors": errors,
+    }
+
+
+@app.post("/api/video-gen/background")
+async def generate_video_background(req: Request):
+    """Start an asynchronous video background generation job.
+
+    Video generation takes minutes (not seconds). This endpoint queues the
+    job and immediately returns a ``job_id``. Poll
+    ``GET /api/video-gen/background/{job_id}`` for status.
+
+    Requires ComfyUI with the WanVideoWrapper custom node pack installed
+    and Wan 2.2 TI2V-5B model downloaded.
+
+    Args:
+        req: JSON body with:
+            - ``prompt`` (str, required): Video description.
+            - ``duration`` (int, optional): Clip length in seconds (default 5).
+            - ``character_id`` (int, optional): Character to auto-assign on completion.
+
+    Returns:
+        JSON: ``{"ok": True, "job_id": str}`` on success,
+              ``{"ok": False, "error": str}`` on failure.
+
+    Example:
+        >>> POST /api/video-gen/background
+        >>> {"prompt": "anime cyberpunk bedroom, looping, subtle ambient motion"}
+        {"ok": true, "job_id": "abc123def456"}
+    """
+    body = await req.json()
+    prompt = body.get("prompt", "").strip()
+    if not prompt:
+        raise HTTPException(400, "prompt is required")
+
+    cfg = load_config()
+    from backend.image_gen.registry import get_video_gen
+    adapter = get_video_gen(cfg)
+
+    if not adapter.is_available():
+        return JSONResponse(
+            {"ok": False, "error": f"Video generation backend ({adapter.provider_name()}) is not available"},
+            status_code=503,
+        )
+
+    video_cfg = cfg.get("video_gen", {})
+    gen_cfg = {
+        "duration": body.get("duration", video_cfg.get("duration", 5)),
+        "model": video_cfg.get("model", "wan2.2-ti2v-5b"),
+    }
+
+    result = await run_in_threadpool(adapter.generate_video, prompt, gen_cfg)
+
+    if result.get("ok"):
+        job_id = result["job_id"]
+        _video_jobs[job_id] = {
+            "status": "queued",
+            "url": None,
+            "error": None,
+            "character_id": body.get("character_id"),
+        }
+
+    return result
+
+
+@app.get("/api/video-gen/background/{job_id}")
+async def video_gen_status(job_id: str):
+    """Poll the status of an async video generation job.
+
+    Args:
+        job_id: Job identifier returned by ``POST /api/video-gen/background``.
+
+    Returns:
+        JSON: ``{"status": "queued"|"running"|"done"|"error",
+                 "url": str|None, "progress": float|None,
+                 "error": str|None}``
+
+    Example:
+        >>> GET /api/video-gen/background/abc123def456
+        {"status": "done", "url": "/files/images/video_1708615234_abc.mp4",
+         "progress": 1.0}
+    """
+    cfg = load_config()
+    from backend.image_gen.registry import get_video_gen
+    adapter = get_video_gen(cfg)
+
+    status = await run_in_threadpool(adapter.video_status, job_id)
+
+    # Auto-update stored job state
+    if job_id in _video_jobs:
+        _video_jobs[job_id].update(status)
+
+        # Auto-assign video to character if requested and job completed
+        char_id = _video_jobs[job_id].get("character_id")
+        if status.get("status") == "done" and status.get("url") and char_id:
+            try:
+                con = db()
+                con.execute(
+                    "UPDATE characters SET world_video_url = ? WHERE id = ?",
+                    (status["url"], char_id),
+                )
+                con.commit()
+                con.close()
+            except Exception as exc:
+                logger.warning(f"[VideoGen] Failed to auto-assign video to character: {exc}")
+
+    return status
 
 
 # --- EXCEPTION HANDLERS ---

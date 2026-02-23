@@ -18,12 +18,14 @@
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/component_grid.css">
     <link rel="stylesheet" href="css/settings_modal.css">
-    <link rel="stylesheet" href="css/cyber_glass.css">
+    <link rel="stylesheet" href="css/cyber_glass.css?v=2">
 
     <!-- CORE LIBS -->
     <script src="lib/live2dcubismcore.min.js"></script>
     <script src="lib/pixi.min.js"></script>
     <script src="lib/live2d.min.js"></script>
+    <!-- marked.js — Markdown → HTML renderer for AI message bubbles (#32) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 </head>
 <body>
 
@@ -90,10 +92,28 @@
   </button>
 
   <!-- Viewport Toolbar (top-right corner) -->
+  <!-- Backend connection quality indicator (#51 watchdog, #52 quality dot) -->
+  <div id="backend-offline-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:9999;
+    background:#ff003c; color:#fff; text-align:center; padding:6px; font-size:0.75rem; font-weight:700;
+    letter-spacing:0.05em;">
+    ⚡ BACKEND OFFLINE — reconnecting…
+  </div>
+
   <div class="viewport-toolbar">
+    <!-- Connection quality dot: green=ok, yellow=slow, red=offline (#52) -->
+    <span id="conn-quality-dot" title="Backend connection" style="width:8px; height:8px; border-radius:50%;
+      display:inline-block; background:#39ff14; box-shadow:0 0 6px #39ff14; margin-right:4px; flex-shrink:0;"></span>
+    <!-- AI Art status icon: glows purple when ComfyUI/EasyDiffusion is available (Phase 8A) -->
+    <span id="art-status-icon" title="AI Art: checking..." onclick="window.openSettings?.('aiart')"
+      style="font-size:0.85rem; opacity:0.2; cursor:pointer; margin-right:2px; flex-shrink:0;
+             transition:opacity 0.3s, filter 0.3s; color:var(--text-muted);" aria-label="AI Art status">🎨</span>
     <button id="btn-screenshot" class="btn-viewport-tool" title="Screenshot (Ctrl+Shift+S)">&#x1F4F7;</button>
     <button id="btn-expression-editor" class="btn-viewport-tool" title="Expression Editor (Ctrl+E)" onclick="window.app?.expressionEditor?.open()">&#x1F3AD;</button>
     <button id="btn-reset-camera" class="btn-viewport-tool" title="Reset Camera (Ctrl+0)" onclick="window.app?.viewer?.resetCamera()">&#x1F3AF;</button>
+    <!-- Camera preset buttons (#27): Bust / Full Body / Face close-up -->
+    <button class="btn-viewport-tool" title="Full Body view" onclick="window.app?.viewer?.setCameraPreset('fullbody')" style="font-size:0.65rem; padding:0 5px; letter-spacing:0.03em;">FULL</button>
+    <button class="btn-viewport-tool" title="Bust view" onclick="window.app?.viewer?.setCameraPreset('bust')" style="font-size:0.65rem; padding:0 5px; letter-spacing:0.03em;">BUST</button>
+    <button class="btn-viewport-tool" title="Face close-up" onclick="window.app?.viewer?.setCameraPreset('face')" style="font-size:0.65rem; padding:0 5px; letter-spacing:0.03em;">FACE</button>
     <button id="btn-pet-mode" class="btn-viewport-tool" title="Open Desktop Pet">&#x1F43E;</button>
   </div>
 

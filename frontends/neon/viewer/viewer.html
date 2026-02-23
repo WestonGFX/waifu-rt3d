@@ -221,9 +221,22 @@
                 this.spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this.spherical.radius));
             }
 
-            /** Call each frame to apply accumulated deltas. */
+            /** Call each frame to apply accumulated deltas and advance any active tween. */
             update() {
                 if (!this.enabled) return;
+
+                // Drive smooth camera tween (set by tweenTo). Uses smoothstep easing.
+                if (this._tween) {
+                    const t = Math.min((performance.now() - this._tween.startTime) / this._tween.duration, 1);
+                    // Smoothstep easing: t² × (3 − 2t)
+                    const s = t * t * (3 - 2 * t);
+                    this.camera.position.lerpVectors(this._tween.fromPos, this._tween.toPos, s);
+                    this.target.lerpVectors(this._tween.fromTarget, this._tween.toTarget, s);
+                    this._updateSpherical();
+                    if (t >= 1) this._tween = null; // tween complete
+                    this.camera.lookAt(this.target);
+                    return; // skip manual-delta handling while tweening
+                }
 
                 // Apply pan
                 this.target.add(this.panOffset);
@@ -241,11 +254,31 @@
                 this.camera.lookAt(this.target);
             }
 
-            /** Reset camera to a specific position + target. */
+            /** Reset camera to a specific position + target (instant, no tween). */
             reset(position, target) {
+                this._tween = null; // cancel any active tween
                 this.target.copy(target || new THREE.Vector3(0, 1.2, 0));
                 this.camera.position.copy(position || new THREE.Vector3(0, 1.4, 1.2));
                 this._updateSpherical();
+            }
+
+            /**
+             * Smoothly animate the camera to a new position and target.
+             *
+             * @param {THREE.Vector3} toPos - Destination camera position
+             * @param {THREE.Vector3} toTarget - Destination orbit target (look-at point)
+             * @param {number} [durationMs=500] - Animation duration in milliseconds
+             */
+            tweenTo(toPos, toTarget, durationMs = 500) {
+                this._tween = {
+                    fromPos:    this.camera.position.clone(),
+                    fromTarget: this.target.clone(),
+                    toPos:      toPos.clone(),
+                    toTarget:   toTarget.clone(),
+                    duration:   durationMs,
+                    elapsed:    0,
+                    startTime:  performance.now(),
+                };
             }
 
             /** Get serializable camera state for presets. */
@@ -717,7 +750,7 @@
                 this.currentIntensity = 0;
                 this.targetIntensity = 0;
                 this.transitionProgress = 1.0;
-                this.transitionDuration = 0.5;
+                this.transitionDuration = 0.3; // 0.3s default (#24) — snappy but smooth
             }
 
             setExpression(emotion, intensity = 1.0, duration = 0.5) {
@@ -797,7 +830,8 @@
                 const durations = {
                     nod: 0.6, tilt: 0.5, wave: 1.0, shrug: 0.8,
                     bow: 1.2, clap: 0.8, think: 1.5, point: 0.7,
-                    celebrate: 1.2, shy: 1.0, dance: 2.0
+                    celebrate: 1.2, shy: 1.0, dance: 2.0,
+                    foot_tap: 1.8, crossed_arms: 2.0, shake: 0.8
                 };
                 this.gestureDuration = durations[gesture] || 0.6;
             }
@@ -938,6 +972,49 @@
                         if (rArm) rArm.rotation.z = -0.3 - danceBeat * 0.4;
                         break;
                     }
+
+                    case 'foot_tap': {
+                        // Rapid foot-tap: right leg lifts and drops 3 times.
+                        // Each cycle is 0.6s → 3 taps in 1.8s total.
+                        const tapFreq = 3;  // taps per gesture duration
+                        const tapBeat = Math.sin(t * Math.PI * 2 * tapFreq);
+                        const rLeg = getBone('rightUpperLeg');
+                        const rLower = getBone('rightLowerLeg');
+                        const rFoot = getBone('rightFoot');
+                        if (rLeg)   rLeg.rotation.x   = tapBeat * 0.12;   // slight hip kick
+                        if (rLower) rLower.rotation.x  = -tapBeat * 0.1;  // knee flex
+                        if (rFoot)  rFoot.rotation.x   = tapBeat * 0.15;  // foot strike
+                        break;
+                    }
+
+                    case 'crossed_arms': {
+                        // Bring both upper arms forward and across the chest.
+                        // Hold position for the full duration (sustained pose).
+                        const holdT = Math.min(1.0, eased * 2.0);  // fast ramp-in, hold, ramp-out at end
+                        const releaseT = t > 0.8 ? (1.0 - t) / 0.2 : 1.0;
+                        const blend = holdT * releaseT;
+                        const lUpper = getBone('leftUpperArm');
+                        const rUpper = getBone('rightUpperArm');
+                        const lLower = getBone('leftLowerArm');
+                        const rLower2 = getBone('rightLowerArm');
+                        // Pull arms inward across chest
+                        if (lUpper) { lUpper.rotation.x = blend * 1.1; lUpper.rotation.z = blend * -0.5; }
+                        if (rUpper) { rUpper.rotation.x = blend * 1.1; rUpper.rotation.z = blend * 0.5; }
+                        // Forearms fold to complete the cross
+                        if (lLower)  lLower.rotation.x  = blend * 1.2;
+                        if (rLower2) rLower2.rotation.x = blend * 1.2;
+                        break;
+                    }
+
+                    case 'shake': {
+                        // Head shake left-right (disagreement / "no" gesture)
+                        const shakeBeat = Math.sin(t * Math.PI * 3);
+                        const neck = getBone('neck');
+                        const head = getBone('head');
+                        if (neck) neck.rotation.y = shakeBeat * 0.25;
+                        if (head) head.rotation.y = shakeBeat * 0.15;
+                        break;
+                    }
                 }
             }
 
@@ -945,7 +1022,8 @@
                 if (!this.vrm) return;
                 const bones = ['neck', 'head', 'spine', 'hips',
                                'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm',
-                               'leftHand', 'rightHand'];
+                               'leftHand', 'rightHand',
+                               'rightUpperLeg', 'rightLowerLeg', 'rightFoot'];
                 const getBone = (name) => this.vrm.humanoid.getNormalizedBoneNode ?
                                           this.vrm.humanoid.getNormalizedBoneNode(name) :
                                           this.vrm.humanoid.getBoneNode(name);
@@ -1046,6 +1124,13 @@
         // Main Init
         // ══════════════════════════════════════════════════════════
 
+        /**
+         * Frame data stored after a VRM model loads so camera presets can
+         * compute positions relative to the actual model size.
+         * @type {{targetY: number, camZ: number, modelHeight: number, headY: number}|null}
+         */
+        let _vrmFrameData = null;
+
         async function init() {
             const canvas = document.getElementById('c');
             const bgVideo = document.getElementById('bg-video');
@@ -1083,6 +1168,20 @@
             fillLight.position.set(-1, 1, -2);
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
             scene.add(keyLight, fillLight, ambientLight);
+
+            // Disco / party lighting (#25): three RGB point lights, hidden by default.
+            // Hue cycles at different speeds when disco mode is active.
+            const discoLights = [
+                new THREE.PointLight(0xff0000, 0, 4),
+                new THREE.PointLight(0x00ff00, 0, 4),
+                new THREE.PointLight(0x0000ff, 0, 4),
+            ];
+            discoLights[0].position.set( 1.5, 2.0,  1.0);
+            discoLights[1].position.set(-1.5, 1.5,  0.5);
+            discoLights[2].position.set( 0.0, 2.5, -1.0);
+            discoLights.forEach(l => scene.add(l));
+            let _discoActive = false;
+            let _discoTime   = 0;
 
             /**
              * Apply a lighting configuration to the scene.
@@ -1249,6 +1348,15 @@
 
                     if (proceduralAnimator) proceduralAnimator.update(delta);
                 }
+
+                // Disco mode (#25): cycle hue of three RGB point lights at different speeds
+                if (_discoActive) {
+                    _discoTime += delta;
+                    discoLights[0].color.setHSL((_discoTime * 0.5)        % 1, 1, 0.5);
+                    discoLights[1].color.setHSL((_discoTime * 0.5 + 0.33) % 1, 1, 0.5);
+                    discoLights[2].color.setHSL((_discoTime * 0.5 + 0.67) % 1, 1, 0.5);
+                }
+
                 renderer.render(scene, camera);
 
                 // FPS counter: count frames, update display once per second.
@@ -1466,6 +1574,12 @@
                             new THREE.Vector3(0, targetY, 0)
                         );
 
+                        // Store frame data for camera presets (#27)
+                        const headY = headBone
+                            ? (() => { const hp = new THREE.Vector3(); headBone.getWorldPosition(hp); return hp.y; })()
+                            : targetY + modelHeight * 0.35;
+                        _vrmFrameData = { targetY, camZ, modelHeight, headY };
+
                         console.log('[Viewer] VRM loaded successfully');
                         window.parent.postMessage({ type: 'modelLoaded' }, '*');
                     },
@@ -1528,10 +1642,51 @@
                 }
                 if (type === 'resetCamera') {
                     controls.reset();
+                    _vrmFrameData && controls.tweenTo(
+                        new THREE.Vector3(0, _vrmFrameData.targetY + 0.05, _vrmFrameData.camZ),
+                        new THREE.Vector3(0, _vrmFrameData.targetY, 0),
+                        500
+                    );
+                    return;
+                }
+                if (type === 'setCameraPreset') {
+                    // Camera preset buttons (#27): bust / fullbody / face
+                    // Positions are derived from the loaded model's actual frame data.
+                    if (!_vrmFrameData) return;
+                    const { targetY, camZ, modelHeight, headY } = _vrmFrameData;
+                    const presets = {
+                        fullbody: {
+                            pos:    new THREE.Vector3(0, targetY + 0.05, camZ),
+                            target: new THREE.Vector3(0, targetY, 0),
+                        },
+                        bust: {
+                            pos:    new THREE.Vector3(0, targetY + modelHeight * 0.15, camZ * 0.55),
+                            target: new THREE.Vector3(0, targetY + modelHeight * 0.15, 0),
+                        },
+                        face: {
+                            pos:    new THREE.Vector3(0, headY, camZ * 0.28),
+                            target: new THREE.Vector3(0, headY, 0),
+                        },
+                    };
+                    const p = presets[payload?.preset];
+                    if (p) controls.tweenTo(p.pos, p.target, 500);
                     return;
                 }
                 if (type === 'setCameraEnabled') {
                     controls.enabled = !!e.data.enabled;
+                    return;
+                }
+                if (type === 'setVrmTransform') {
+                    // Character scale/position editor (#86): adjust VRM scale and position.
+                    // Offsets are from the model's natural ground position (y=0).
+                    if (currentVrm?.scene) {
+                        const s = payload?.scale   ?? 1.0;
+                        const x = payload?.offsetX ?? 0.0;
+                        const y = payload?.offsetY ?? 0.0;
+                        currentVrm.scene.scale.setScalar(s);
+                        currentVrm.scene.position.x = x;
+                        currentVrm.scene.position.y = y;
+                    }
                     return;
                 }
 
@@ -1556,7 +1711,7 @@
                 }
                 else if (type === 'setExpression') {
                     if (expressionController) {
-                        expressionController.setExpression(e.data.emotion, e.data.intensity || 1.0, e.data.duration || 0.5);
+                        expressionController.setExpression(e.data.emotion, e.data.intensity || 1.0, e.data.duration || 0.3);
                     }
                     if (proceduralAnimator && e.data.emotion) {
                         proceduralAnimator.setEmotion(e.data.emotion, e.data.intensity || 0.7);
@@ -1569,7 +1724,7 @@
                     const emo = payload?.emotion || e.data.emotion;
                     const inten = e.data.intensity || 0.7;
                     if (expressionController && emo) {
-                        expressionController.setExpression(emo, inten, e.data.duration || 0.5);
+                        expressionController.setExpression(emo, inten, e.data.duration || 0.3);
                     }
                     if (proceduralAnimator && emo) {
                         proceduralAnimator.setEmotion(emo, inten);
@@ -1617,6 +1772,35 @@
                         _fpsTargetMs = 1000 / Number(target);
                     }
                     _fpsLastRenderTime = 0;  // reset so next frame renders immediately
+                }
+                else if (type === 'setDiscoMode') {
+                    // Party/disco lighting (#25): cycle RGB point lights hue on beat.
+                    _discoActive = !!payload?.enabled;
+                    const intensity = _discoActive ? 1.2 : 0;
+                    discoLights.forEach(l => { l.intensity = intensity; });
+                    if (!_discoActive) {
+                        // Restore neutral ambient on disco off
+                        ambientLight.intensity = 0.8;
+                        ambientLight.color.set(0xffffff);
+                    } else {
+                        ambientLight.intensity = 0.3; // dim base to let colours pop
+                    }
+                }
+                else if (type === 'setShadowQuality') {
+                    // Shadow quality toggle (#26): Off / Soft / Sharp
+                    const q = payload?.quality || 'off';
+                    if (q === 'off') {
+                        renderer.shadowMap.enabled = false;
+                        keyLight.castShadow = false;
+                    } else {
+                        renderer.shadowMap.enabled = true;
+                        keyLight.castShadow = true;
+                        renderer.shadowMap.type = q === 'sharp'
+                            ? THREE.BasicShadowMap
+                            : THREE.PCFSoftShadowMap;
+                        keyLight.shadow.mapSize.width  = 1024;
+                        keyLight.shadow.mapSize.height = 1024;
+                    }
                 }
             });
 

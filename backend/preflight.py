@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → v5 → v6 → v7)
+- Database schema migrations (v3 → v4 → … → v12)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -14,6 +14,8 @@ Migration Strategy:
     - v7 → v8: Token data persistence (generation stats on messages)
     - v8 → v9: Per-character LLM routing + world columns (Phase 5)
     - v9 → v10: GPT-SoVITS voice_sample_prompt column (Phase 6H)
+    - v10 → v11: Per-character LLM temperature + mood persistence (Phase 7B)
+    - v11 → v12: Expression portraits JSON column (Phase 8A)
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -51,7 +53,24 @@ DEFAULT_CFG = {
           "voice_id":"8ef4a238714b45718ce04243307c57a7","format":"mp3","sample_rate":24000,
           "fallback_chain":["piper_local","xtts_server","elevenlabs"]},
   "asr": {"enabled":False,"provider":"browser","endpoint":"","api_key":"","model":"whisper-1","language":"en"},
-  "memory": {"max_history": 12}
+  "vad_threshold": 0.015,
+  "typewriter_enabled": False,
+  "typewriter_speed": 15,
+  "memory": {"max_history": 12},
+  "image_gen": {
+    "provider": "disabled",
+    "endpoint": "http://localhost:8188",
+    "model": "z-image-turbo",
+    "width": 512,
+    "height": 512,
+    "steps": 9
+  },
+  "video_gen": {
+    "provider": "disabled",
+    "endpoint": "http://localhost:8188",
+    "model": "wan2.2-ti2v-5b",
+    "duration": 5
+  }
 }
 
 
@@ -540,6 +559,62 @@ def migrate_to_v9(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v11(con: sqlite3.Connection) -> bool:
+    """Upgrade database from v10 to v11 (Phase 7B: per-character temperature, mood persistence).
+
+    Changes in v11:
+        - Characters: llm_temperature (REAL) — per-character LLM temperature override.
+          NULL means "use global config temperature". Allows fine-tuning creativity
+          per character without affecting global settings.
+        - Characters: last_emotion (TEXT) — persists the character's last detected
+          emotion across sessions, enabling mood continuity on next open.
+        - Characters: last_chat_date (TEXT) — stores the date of the last chat
+          (YYYY-MM-DD) for daily greeting detection.
+
+    Args:
+        con: Active SQLite database connection.
+
+    Returns:
+        bool: True if migration was applied, False if already at v11.
+
+    Raises:
+        sqlite3.Error: If database operations fail.
+
+    Example:
+        >>> con = sqlite3.connect('app.db')
+        >>> if migrate_to_v11(con):
+        ...     print("Migrated to v11")
+    """
+    cur = con.cursor()
+
+    cur.execute("PRAGMA table_info(characters)")
+    columns = [row[1] for row in cur.fetchall()]
+
+    # Use llm_temperature as sentinel for v11
+    if 'llm_temperature' in columns:
+        # Ensure all v11 columns exist (idempotent)
+        for col, typedef in [('last_emotion', 'TEXT'), ('last_chat_date', 'TEXT')]:
+            if col not in columns:
+                cur.execute(f"ALTER TABLE characters ADD COLUMN {col} {typedef}")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (11)")
+        con.commit()
+        return False
+
+    logger.info("Applying schema v11 migration (Phase 7B: temperature + mood persistence)...")
+    try:
+        cur.execute("ALTER TABLE characters ADD COLUMN llm_temperature REAL")
+        cur.execute("ALTER TABLE characters ADD COLUMN last_emotion TEXT DEFAULT 'neutral'")
+        cur.execute("ALTER TABLE characters ADD COLUMN last_chat_date TEXT")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (11)")
+        con.commit()
+        logger.info("✅ Schema v11 migration complete (llm_temperature, last_emotion, last_chat_date)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v11 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def migrate_to_v10(con: sqlite3.Connection) -> bool:
     """Upgrade database from v9 to v10 (Phase 6H: GPT-SoVITS voice_sample_prompt).
 
@@ -585,19 +660,109 @@ def migrate_to_v10(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v12(con: sqlite3.Connection) -> bool:
+    """Upgrade database from v11 to v12 (Phase 8A: expression portraits).
+
+    Changes in v12:
+        - Characters: expr_portraits (TEXT) — JSON map of emotion names to
+          image URLs, e.g. ``{"happy": "/files/images/rin_expr_happy.png"}``.
+          Populated by the AI art expression pack generator; used by
+          ChatInterface to display 2D portrait reactions during chat.
+
+    Args:
+        con: Active SQLite database connection.
+
+    Returns:
+        bool: True if migration was applied, False if already at v12.
+
+    Raises:
+        sqlite3.Error: If database operations fail.
+
+    Example:
+        >>> con = sqlite3.connect('app.db')
+        >>> if migrate_to_v12(con):
+        ...     print("Migrated to v12")
+    """
+    cur = con.cursor()
+
+    cur.execute("PRAGMA table_info(characters)")
+    columns = [row[1] for row in cur.fetchall()]
+
+    if 'expr_portraits' in columns:
+        logger.info("Schema v12 logic: expr_portraits column exists. Ensuring version is 12.")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (12)")
+        con.commit()
+        return False
+
+    logger.info("Applying schema v12 migration (Phase 8A: expression portraits)...")
+    try:
+        cur.execute("ALTER TABLE characters ADD COLUMN expr_portraits TEXT")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (12)")
+        con.commit()
+        logger.info("✅ Schema v12 migration complete (expr_portraits column added)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v12 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v13(con: sqlite3.Connection) -> bool:
+    """Apply schema v13 migration (Phase 7D: anniversary tracking + voice config).
+
+    Adds:
+        - ``first_chat_date`` (TEXT) — ISO date of the very first conversation
+          with this character. Used for anniversary milestone detection (#109).
+        - ``voice_config`` (TEXT) — JSON blob for additional voice settings
+          (e.g. ElevenLabs stability, SSML style, pitch preset) beyond the
+          existing tts_pitch / tts_rate columns (#77).
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration succeeded, False if columns already existed (idempotent).
+
+    Raises:
+        sqlite3.Error: If migration fails.
+    """
+    cur = con.cursor()
+    cur.execute("PRAGMA table_info(characters)")
+    columns = {row[1] for row in cur.fetchall()}
+
+    # Idempotent: first_chat_date is the sentinel for v13
+    if 'first_chat_date' in columns:
+        for col, typedef in [('voice_config', 'TEXT')]:
+            if col not in columns:
+                logger.info(f"  - Adding {col} to characters (v13 catch-up)")
+                cur.execute(f"ALTER TABLE characters ADD COLUMN {col} {typedef}")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (13)")
+        con.commit()
+        return False
+
+    logger.info("Applying schema v13 migration (Phase 7D: anniversary tracking + voice config)...")
+    try:
+        cur.execute("ALTER TABLE characters ADD COLUMN first_chat_date TEXT")
+        cur.execute("ALTER TABLE characters ADD COLUMN voice_config TEXT")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (13)")
+        con.commit()
+        logger.info("✅ Schema v13 migration complete (first_chat_date, voice_config)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v13 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
     Migration Paths:
-        - v0 (empty) → v4 → v5 → v6 → v7 → v8 → v9 → v10
-        - v3 → v4 → … → v10
-        - v4 → v5 → … → v10
-        - v5 → v6 → … → v10
-        - v6 → v7 → … → v10
-        - v7 → v8 → … → v10
-        - v8 → v9 → v10
-        - v9 → v10
-        - v10 → no-op (already current)
+        - v0 (empty) → v4 → … → v13
+        - v3 → v4 → … → v13
+        - v11 → v12 → v13
+        - v12 → v13
+        - v13 → no-op (already current)
 
     The function is idempotent - safe to run multiple times.
     Will log all migration steps and verify final state.
@@ -683,16 +848,40 @@ def ensure_db():
             if migrate_to_v10(con):
                 version = 10
 
+        # Upgrade from v10 to v11 (Phase 7B: per-character temperature + mood persistence)
+        if version < 11:
+            logger.info("Upgrading database schema from v10 to v11...")
+            logger.info("  - Adding llm_temperature to characters (per-character creativity override)")
+            logger.info("  - Adding last_emotion to characters (mood persistence between sessions)")
+            logger.info("  - Adding last_chat_date to characters (daily greeting detection)")
+            if migrate_to_v11(con):
+                version = 11
+
+        # Upgrade from v11 to v12 (Phase 8A: expression portraits)
+        if version < 12:
+            logger.info("Upgrading database schema from v11 to v12...")
+            logger.info("  - Adding expr_portraits to characters (AI-generated expression portrait URLs)")
+            if migrate_to_v12(con):
+                version = 12
+
+        # Upgrade from v12 to v13 (Phase 7D: anniversary tracking + voice config)
+        if version < 13:
+            logger.info("Upgrading database schema from v12 to v13...")
+            logger.info("  - Adding first_chat_date to characters (anniversary milestone tracking)")
+            logger.info("  - Adding voice_config to characters (extended per-character voice settings)")
+            if migrate_to_v13(con):
+                version = 13
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 10:
-            raise RuntimeError(f"Database initialization failed: Expected v10, got v{final_version}")
+        if final_version < 13:
+            raise RuntimeError(f"Database initialization failed: Expected v13, got v{final_version}")
 
-        if final_version > 10:
-            logger.warning(f"Database is newer than application (v{final_version} > v10). Some features might be unused.")
+        if final_version > 13:
+            logger.warning(f"Database is newer than application (v{final_version} > v13). Some features might be unused.")
 
-        logger.info(f"✅ Database ready (schema v{final_version} active)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v13 supports first_chat_date, voice_config)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

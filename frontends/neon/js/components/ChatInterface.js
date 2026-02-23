@@ -16,6 +16,27 @@ export class ChatInterface {
         this.isThinking = false;
         this.currentRequestAbortController = null;
         this.timeoutWarningTimer = null;
+        /** @type {string[]} Messages queued while AI was responding (queue mode, FIFO). */
+        this._queuedMessages = [];
+        /** @type {string|null} Steering message that triggered an in-flight abort (steer mode). */
+        this._steeringMessage = null;
+
+        // TTS queue tracking (#79): class-level so _updateTTSPill() can see them
+        /** @type {Array<{url:string,index:number}>} Chunks pending playback */
+        this._ttsQueue = [];
+        /** @type {number} Total chunks enqueued for the current response */
+        this._ttsQueueTotal = 0;
+
+        // Silence padding (#80): brief VAD gate after TTS ends to prevent mic
+        // from picking up speaker echo. Set to true by drainAudioQueue, cleared after 300ms.
+        this._ttsSilencePad = false;
+
+        // In-chat TTS speed override (#14): set by the speed slider for next response only.
+        // null = use global config speech_rate.
+        this._ttsRateOverride = null;
+
+        // Incognito mode (#123): when true, messages skip DB persistence.
+        this._incognito = false;
 
         // Listen for session changes to load history
         bus.on('session:selected', (data) => {
@@ -47,6 +68,23 @@ export class ChatInterface {
         this._multiChatIds = null;
         bus.on('multi-chat:start', (charIds) => {
             this._multiChatIds = charIds;
+        });
+
+        // Phase 8A: Reaction portrait overlay — shows the character's AI-generated
+        // expression portrait as a brief floating image when an emotion fires.
+        this._reactionPortraitEl = this._createReactionPortraitEl();
+        bus.on('chat:emotion', ({ emotion }) => {
+            // #112: Mood-reactive background — set data-emotion on <body> for CSS glow shifts
+            if (emotion) document.body.dataset.emotion = emotion;
+
+            const char = state.state.characters?.find(c => c.id == state.state.currentCharacterId);
+            if (!char) return;
+            const portraits = char.expr_portraits;
+            if (!portraits) return;
+            // expr_portraits may be stored as a JSON string or already parsed
+            const map = typeof portraits === 'string' ? (() => { try { return JSON.parse(portraits); } catch { return {}; } })() : (portraits || {});
+            const url = map[emotion] || map['neutral'];
+            if (url) this._showReactionPortrait(url, emotion);
         });
 
         // New chat button
@@ -138,16 +176,43 @@ export class ChatInterface {
             return;
         }
 
+        // Live transcription preview (#81): When asr_provider is 'browser', use the
+        // Web Speech API's interimResults to show ghost text in the input as the user speaks.
+        // The interim text is visually dimmed and replaced by the final PTT transcript on stop.
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        /** @type {SpeechRecognition|null} */
+        this._speechPreview = SR ? new SR() : null;
+        if (this._speechPreview) {
+            this._speechPreview.continuous = true;
+            this._speechPreview.interimResults = true;
+            this._speechPreview.onresult = (e) => {
+                if (!this.input) return;
+                let interim = '';
+                for (let i = e.resultIndex; i < e.results.length; i++) {
+                    if (!e.results[i].isFinal) interim += e.results[i][0].transcript;
+                }
+                if (interim) {
+                    this.input.dataset.interim = '1';
+                    this.input.value = interim;
+                    this.input.style.opacity = '0.55';
+                    this.input.dispatchEvent(new Event('input'));
+                }
+            };
+            this._speechPreview.onerror = () => { /* silent — PTT handles errors */ };
+        }
+
         this.ptt = new PushToTalk({
             mode: 'toggle',
             maxDuration: 30000,
+            minConfidence: state.state.config?.asr_min_confidence ?? 0, // #20
             onTranscript: (text) => {
-                // Insert transcribed text into chat input
+                // Clear any interim preview, then insert the final transcribed text
                 if (this.input) {
-                    const current = this.input.value;
+                    this.input.dataset.interim = '';
+                    this.input.style.opacity = '';
+                    const current = this.input.dataset.interim ? '' : this.input.value.replace(/\s+$/, '');
                     const separator = current && !current.endsWith(' ') ? ' ' : '';
-                    this.input.value = current + separator + text;
-                    // Trigger auto-expand
+                    this.input.value = (current ? current + separator : '') + text;
                     this.input.dispatchEvent(new Event('input'));
                     this.input.focus();
                 }
@@ -157,16 +222,48 @@ export class ChatInterface {
                 if (pttState === 'recording') {
                     micBtn.classList.add('recording');
                     micBtn.title = 'Recording... Click to stop';
-                } else if (pttState === 'processing') {
-                    micBtn.classList.add('processing');
-                    micBtn.title = 'Transcribing...';
+                    // Start live preview if browser ASR is selected
+                    if (this._speechPreview && state.state.config?.asr_provider !== 'faster_whisper') {
+                        try { this._speechPreview.start(); } catch (_) { /* already started */ }
+                    }
                 } else {
-                    micBtn.title = 'Voice Input (Push-to-Talk)';
+                    // Stop live preview on any non-recording state
+                    if (this._speechPreview) {
+                        try { this._speechPreview.stop(); } catch (_) {}
+                    }
+                    if (this.input) {
+                        this.input.style.opacity = '';
+                        this.input.dataset.interim = '';
+                    }
+                    if (pttState === 'processing') {
+                        micBtn.classList.add('processing');
+                        micBtn.title = 'Transcribing...';
+                    } else {
+                        micBtn.title = 'Voice Input (Push-to-Talk)';
+                    }
                 }
             }
         });
 
         this.ptt.attachToButton(micBtn);
+
+        // Push-to-talk Space hotkey (#18): hold Space to record, release to stop.
+        // Guards: only fires when the chat input is NOT focused (to avoid blocking typing)
+        // and when VAD is not already active (they would conflict).
+        let _spaceHeld = false;
+        document.addEventListener('keydown', (e) => {
+            if (e.code !== 'Space' || e.repeat) return;
+            if (document.activeElement === this.input) return; // typing in input
+            if (this.vadActive) return; // VAD already handling mic
+            if (_spaceHeld) return;
+            _spaceHeld = true;
+            if (this.ptt?.state === 'idle') this.ptt.startRecording();
+        });
+        document.addEventListener('keyup', (e) => {
+            if (e.code !== 'Space') return;
+            _spaceHeld = false;
+            if (this.ptt?.state === 'recording') this.ptt.stopRecording();
+        });
     }
 
     /**
@@ -226,10 +323,12 @@ export class ChatInterface {
 
         try {
             this.vad = new VAD({
-                threshold: 0.015,
+                threshold: state.state.config?.vad_threshold ?? 0.015,
                 silenceTimeout: 1500,
                 activationDelay: 200,
                 onSpeechStart: () => {
+                    // Silence padding (#80): ignore speech events during the post-TTS cooldown
+                    if (this._ttsSilencePad) return;
                     btn.classList.add('recording');
                     const indicator = document.getElementById('vad-volume-indicator');
                     if (indicator) indicator.style.background = 'var(--neon-magenta)';
@@ -241,6 +340,7 @@ export class ChatInterface {
                     }
                 },
                 onSpeechEnd: async (blob) => {
+                    if (this._ttsSilencePad) return; // still in cooldown, discard this segment
                     btn.classList.remove('recording');
                     const indicator = document.getElementById('vad-volume-indicator');
                     if (indicator) indicator.style.background = 'var(--neon-green)';
@@ -534,13 +634,84 @@ export class ChatInterface {
      * Tokens appear in real-time in the chat bubble, and the status bar
      * shows actual token count and generation speed (tok/s).
      */
+    /**
+     * Show a "⏳ queued" badge near the send button so the user knows their
+     * message is buffered and will fire automatically.
+     *
+     * @param {string} text - The queued message text (shown truncated).
+     */
+    /**
+     * Update the queued-message badge to reflect the current queue state.
+     * Shows the first message text and a count if there are multiple.
+     */
+    _showQueuedBadge() {
+        this._hideQueuedBadge();
+        const count = this._queuedMessages.length;
+        if (count === 0) return;
+
+        const badge = document.createElement('div');
+        badge.id = 'queued-msg-badge';
+
+        const first = this._queuedMessages[0];
+        const truncated = first.length > 35 ? first.slice(0, 32) + '…' : first;
+        const countLabel = count > 1 ? ` (+${count - 1} more)` : '';
+        badge.textContent = `⏳ Queued: ${truncated}${countLabel}`;
+        badge.title = this._queuedMessages.join('\n');
+
+        badge.style.cssText = [
+            'position:absolute', 'bottom:calc(100% + 4px)', 'right:0',
+            'background:rgba(0,240,255,0.12)', 'border:1px solid rgba(0,240,255,0.4)',
+            'color:var(--neon-cyan)', 'font-size:0.6rem', 'padding:2px 8px',
+            'border-radius:4px', 'white-space:nowrap', 'max-width:260px',
+            'overflow:hidden', 'text-overflow:ellipsis', 'z-index:50',
+            'pointer-events:none'
+        ].join(';');
+
+        if (this.sendBtn?.parentElement) {
+            this.sendBtn.parentElement.style.position = 'relative';
+            this.sendBtn.parentElement.appendChild(badge);
+        }
+    }
+
+    /** Remove the queued message badge. */
+    _hideQueuedBadge() {
+        document.getElementById('queued-msg-badge')?.remove();
+    }
+
     async sendMessage() {
         const text = this.input.value.trim();
-        if (!text || this.isThinking) return;
+        if (!text) return;
 
-        // Disable controls
+        // ── Mid-thinking intercept ─────────────────────────────────────────────
+        // When the AI is already generating, behaviour depends on the
+        // `message_input_mode` config setting:
+        //   "queue"   – buffer the message; auto-send it once the current
+        //               response finishes (default)
+        //   "steer"   – abort the current generation and immediately redirect
+        //               the conversation with the new message
+        //   "discard" – silently drop the message (classic behaviour)
+        if (this.isThinking) {
+            const mode = state.state.config?.message_input_mode ?? 'queue';
+            this.input.value = '';
+            this.input.style.height = '';
+
+            if (mode === 'steer') {
+                // Mark as a steering abort so the catch block stays silent
+                this._steeringMessage = text;
+                if (this.currentRequestAbortController) {
+                    this.currentRequestAbortController.abort();
+                }
+            } else if (mode === 'queue') {
+                this._queuedMessages.push(text);
+                this._showQueuedBadge();
+            }
+            // 'discard' → fall through and do nothing
+            return;
+        }
+
+        // Disable the send button (prevents double-submit) but keep input editable
+        // so the user can type their next message while the AI is responding.
         if (this.sendBtn) this.sendBtn.disabled = true;
-        this.input.disabled = true;
         this.input.value = '';
         this.input.style.height = '';
 
@@ -562,18 +733,13 @@ export class ChatInterface {
         // Abort controller for cancellation
         this.currentRequestAbortController = new AbortController();
 
-        // Timeout warning at 120s
+        // Timeout warning at 30s — show a non-blocking in-chat banner instead of a
+        // browser confirm() dialog (which blocks browser events and breaks automation).
+        this._timeoutBanner = null;
         this.timeoutWarningTimer = setTimeout(() => {
             if (!this.isThinking) return;
-            const shouldCancel = confirm(
-                "The AI is taking longer than usual (2+ minutes).\n\n" +
-                "Continue waiting or cancel?"
-            );
-            if (!shouldCancel && this.currentRequestAbortController) {
-                this.currentRequestAbortController.abort();
-                toast.warning("Request cancelled by user", 3000);
-            }
-        }, 120000);
+            this._showTimeoutBanner(text);
+        }, 30000);
 
         const startTime = performance.now();
 
@@ -586,7 +752,19 @@ export class ChatInterface {
                 // Opt-in to sentence-chunked TTS when TTS is globally enabled.
                 // The server will emit audio_chunk SSE events as sentences complete.
                 speak: !!(state.config?.tts?.enabled),
+                // In-chat TTS speed override (#14): transient per-response rate, reset after send
+                ...(this._ttsRateOverride !== null && { speech_rate: this._ttsRateOverride }),
+                // Incognito mode (#123): skip DB persistence for this exchange
+                ...(this._incognito && { incognito: true }),
             };
+            // Reset transient speed override after building payload (it's per-response)
+            if (this._ttsRateOverride !== null) {
+                this._ttsRateOverride = null;
+                const slider = document.getElementById('tts-speed-slider');
+                const label = document.getElementById('tts-speed-label');
+                if (slider) slider.value = '1.0';
+                if (label) { label.textContent = '1.0×'; label.style.color = 'var(--text-muted)'; }
+            }
 
             const response = await fetch('/api/chat/stream', {
                 method: 'POST',
@@ -623,6 +801,10 @@ export class ChatInterface {
             const audioQueue = [];
             let audioQueuePlaying = false;
 
+            // Reset class-level TTS queue trackers for this response (#79)
+            this._ttsQueue = audioQueue;
+            this._ttsQueueTotal = 0;
+
             /**
              * Pop the next audio chunk from the sorted queue and play it.
              *
@@ -634,10 +816,25 @@ export class ChatInterface {
             const drainAudioQueue = () => {
                 if (!audioQueue.length) {
                     audioQueuePlaying = false;
+                    this._updateTTSPill(); // Hide pill when queue is empty
+                    // Silence padding (#80): gate VAD for 300ms so the mic doesn't pick
+                    // up speaker echo immediately after the character finishes speaking.
+                    if (this.vadActive) {
+                        this._ttsSilencePad = true;
+                        setTimeout(() => { this._ttsSilencePad = false; }, 300);
+                    }
                     return;
                 }
                 audioQueuePlaying = true;
                 const { url } = audioQueue.shift();
+                this._updateTTSPill(); // Update pill position after pop
+
+                // Preload the *next* chunk while the current one plays (#47).
+                // fetch() with no-op consumption warms the browser's audio cache so
+                // the next Audio() constructor finds it already in memory.
+                if (audioQueue.length > 0) {
+                    fetch(audioQueue[0].url, { cache: 'force-cache' }).catch(() => {});
+                }
 
                 const audio = new Audio(url);
                 audio.onended = drainAudioQueue;
@@ -677,6 +874,9 @@ export class ChatInterface {
                 audioQueue.push({ url, index });
                 // Sort ascending by index so lowest-indexed chunk is always at front
                 audioQueue.sort((a, b) => a.index - b.index);
+                // Track total for pill display (#79)
+                this._ttsQueueTotal++;
+                this._updateTTSPill();
                 // Only call drainAudioQueue() if nothing is playing — the drain
                 // chain will handle everything else via its onended callback.
                 if (!audioQueuePlaying) drainAudioQueue();
@@ -789,6 +989,7 @@ export class ChatInterface {
 
             // Stream complete — finalize
             clearTimeout(this.timeoutWarningTimer);
+            this._dismissTimeoutBanner();
 
             // Track total time in dashboard
             const responseTimeMs = Math.round(performance.now() - startTime);
@@ -809,6 +1010,32 @@ export class ChatInterface {
                 streamContentEl.innerText = metadata.reply;
             }
 
+            // Sync local counters with server metadata (#73 token counter fix).
+            //
+            // Two scenarios where the frontend counters end up at 0:
+            //  a) LLM adapter doesn't emit individual SSE `token` events — so
+            //     this.tokenCount never increments during streaming.
+            //  b) The `generating` SSE event wasn't emitted before the first token,
+            //     so this.streamStartTime is null, making speed = '0'.
+            //
+            // Fix: always trust the server's authoritative token_count when it's > 0,
+            // and backfill streamStartTime from multiple fallback sources.
+            if (metadata?.token_count > 0) {
+                // Prefer server count — it's the source of truth regardless of
+                // whether the frontend counted the same value via token events.
+                this.tokenCount = metadata.token_count;
+            }
+            if (!this.streamStartTime) {
+                if (metadata?.generation_time_ms > 0) {
+                    // Server reported how long generation took — backfill the start time.
+                    this.streamStartTime = performance.now() - metadata.generation_time_ms;
+                } else if (this.prefillStartTime) {
+                    // Last resort: treat the whole request time as generation time.
+                    // Speed will be slightly underestimated but avoids showing 0.
+                    this.streamStartTime = this.prefillStartTime;
+                }
+            }
+
             // Add info line with real token stats (left) and time (right)
             const genTime = this.streamStartTime
                 ? ((performance.now() - this.streamStartTime) / 1000).toFixed(1)
@@ -817,12 +1044,12 @@ export class ChatInterface {
                 ? (performance.now() - this.streamStartTime) / 1000 : 0;
             const speed = elapsed > 0.2
                 ? (this.tokenCount / elapsed).toFixed(1) : '0';
-            const tokenCount = metadata?.token_count || this.tokenCount;
+            const tokenCount = this.tokenCount;
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             const infoLine = document.createElement('div');
             infoLine.className = 'bubble-info';
-            infoLine.innerHTML = `<span class="bubble-info-stats">${tokenCount} tok · ${speed} tok/s · ${genTime}s</span><span class="bubble-info-time">${time}</span>`;
+            infoLine.innerHTML = `<span class="bubble-info-stats">${tokenCount} tok · ${speed} tok/s · ${genTime}s</span><span class="bubble-info-sep" style="opacity:0.4; margin:0 4px;">·</span><span class="bubble-info-time">${time}</span>`;
             streamContentEl.appendChild(infoLine);
 
             this.setThinking(false, null);
@@ -841,28 +1068,95 @@ export class ChatInterface {
                 // Forward reply text to pet popup window (if open) so it can show
                 // the response in its overlay bubble via ViewerBridge.sendPetReply()
                 if (metadata.reply) bus.emit('pet:reply', { text: metadata.reply });
+
+                // ── Emotion + gesture → viewer ──────────────────────────────
+                // Emit the primary emotion (sets VRM expression) and the explicit
+                // [gesture:X] tag that was extracted server-side from the reply.
+                // This was previously missing from the stream path (only fired
+                // in the history-reload path), causing gestures to be silently dropped.
+                if (metadata.emotion || metadata.gesture) {
+                    bus.emit('chat:emotion', {
+                        emotion: metadata.emotion,
+                        gesture: metadata.gesture
+                    });
+                }
+
+                // ── Parse *action text* → additional gestures ────────────────
+                // Scan the reply for *asterisk-wrapped action phrases* and fire
+                // matching VRM gestures. The text stays visible in the bubble
+                // (it's part of the character's personality expression).
+                if (metadata.reply) {
+                    const actionGestures = this._extractActionGestures(metadata.reply);
+                    // Skip index 0 if already covered by metadata.gesture above
+                    const startIdx = (metadata.gesture && actionGestures[0] === metadata.gesture) ? 1 : 0;
+                    for (let i = startIdx; i < actionGestures.length; i++) {
+                        // Small stagger so gestures don't all fire simultaneously
+                        setTimeout(() => bus.emit('viewer:gesture', { gesture: actionGestures[i] }), i * 600);
+                    }
+                }
                 if (metadata.session_id && metadata.session_id !== state.state.currentSessionId) {
                     state.state.currentSessionId = metadata.session_id;
                     state.loadSessions();
+                }
+
+                // Daily greeting: if the server signals this is the first chat today,
+                // emit an event so the dashboard or character can show a greeting (#54).
+                // The ViewerBridge sets the initial expression from last_emotion on load;
+                // here we just fire the bus event for any listeners to react.
+                if (metadata.is_daily_first) {
+                    bus.emit('chat:daily_first', {
+                        char_id: state.state.currentCharId,
+                        emotion: metadata.emotion,
+                    });
                 }
             }
 
         } catch (err) {
             clearTimeout(this.timeoutWarningTimer);
+            this._dismissTimeoutBanner();
             this.setThinking(false, null);
             console.error('[Chat] Stream error:', err);
 
             if (err.name === 'AbortError') {
-                this.addBubble("Request cancelled", false, null);
+                // Steer abort: the partial response is intentionally discarded;
+                // the steering message will be fired from the finally block.
+                // Regular cancel: show a brief notice.
+                if (!this._steeringMessage) {
+                    this.addBubble("↩ Response cancelled", false, null);
+                }
             } else {
                 this.addBubble(`Error: ${err.message}`, false, null);
                 toast.error(`Chat error: ${err.message}`, 5000);
             }
         } finally {
-            this.input.disabled = false;
-            this.input.focus();
             if (this.sendBtn) this.sendBtn.disabled = false;
             this.currentRequestAbortController = null;
+            this._hideQueuedBadge();
+
+            // Fire steering message (overwrites queue — steer aborted the whole
+            // generation, so the queue is now stale and should be cleared) or
+            // dequeue the next message FIFO from the queue.
+            const steering = this._steeringMessage;
+            this._steeringMessage = null;
+
+            const pending = steering ?? this._queuedMessages.shift() ?? null;
+            if (!steering) {
+                // Queue was consumed one item at a time; keep the rest
+            } else {
+                // Steer replaced the generation — discard any buffered queue
+                this._queuedMessages = [];
+            }
+
+            if (pending) {
+                // Small settle delay so the DOM finishes updating before the
+                // next generation starts
+                setTimeout(() => {
+                    this.input.value = pending;
+                    this.sendMessage();
+                }, 80);
+            } else {
+                setTimeout(() => this.input.focus(), 0);
+            }
         }
     }
 
@@ -902,9 +1196,8 @@ export class ChatInterface {
             this.addBubble(`Error: ${err.message}`, false, null);
         }
 
-        this.input.disabled = false;
-        this.input.focus();
         if (this.sendBtn) this.sendBtn.disabled = false;
+        setTimeout(() => this.input.focus(), 0);
     }
 
     /**
@@ -1043,6 +1336,15 @@ export class ChatInterface {
         contentEl.className = 'bubble-content';
 
         row.innerHTML = avatarHtml;
+
+        // Bind avatar tooltip for streaming bubble (#94)
+        const avatarDiv = row.querySelector('.chat-avatar');
+        if (avatarDiv) {
+            avatarDiv.style.cursor = 'pointer';
+            avatarDiv.onmouseenter = (e) => this._showAvatarTooltip(e, state.state.currentCharacterId);
+            avatarDiv.onmouseleave = () => this._hideAvatarTooltip();
+        }
+
         row.appendChild(contentEl);
         this.container.appendChild(row);
         this.container.scrollTop = this.container.scrollHeight;
@@ -1057,6 +1359,11 @@ export class ChatInterface {
      * @param {Object} data - {sessionId, messages: [{id, role, text, ts}]}
      */
     loadHistory(data) {
+        // Save scroll position for the session we're leaving (#92)
+        if (state.state.currentSessionId && state.state.currentSessionId !== data.id) {
+            sessionStorage.setItem(`scroll-${state.state.currentSessionId}`, this.container.scrollTop);
+        }
+
         const { messages } = data;
         this.container.innerHTML = ''; // Clear current chat
 
@@ -1102,9 +1409,15 @@ export class ChatInterface {
             this.addBubble(msg.text, isUser, isUser ? null : avatarUrl, meta);
         });
 
-        // Scroll to bottom after loading
+        // Restore scroll position if the user had scrolled up in this session (#92),
+        // otherwise snap to bottom for new sessions
+        const savedScroll = sessionStorage.getItem(`scroll-${data.id}`);
         requestAnimationFrame(() => {
-            this.container.scrollTop = this.container.scrollHeight;
+            if (savedScroll !== null) {
+                this.container.scrollTop = parseInt(savedScroll, 10);
+            } else {
+                this.container.scrollTop = this.container.scrollHeight;
+            }
         });
     }
 
@@ -1200,6 +1513,7 @@ export class ChatInterface {
             { label: isPinned ? 'Unpin' : 'Pin to Top', icon: isPinned ? '✕' : '📌', action: () => this._togglePinSession(sessionId, !isPinned) },
             { label: 'Duplicate', icon: '⧉', action: () => this._duplicateSession(sessionId) },
             { label: 'Export', icon: '↓', action: () => this._exportSession(sessionId, session.title) },
+            { label: 'Compress History', icon: '⚡', action: () => this._compressHistory(sessionId) },
             { divider: true },
             { label: 'Archive', icon: '📦', action: () => this._archiveSession(sessionId) },
             { label: 'Delete', icon: '🗑', action: () => this._deleteSession(sessionId), danger: true },
@@ -1497,7 +1811,19 @@ export class ChatInterface {
 
         const textEl = document.createElement('span');
         textEl.className = 'bubble-text';
-        textEl.innerText = text;
+        if (!isUser && window.marked) {
+            // Render Markdown in AI bubbles: bold, italic, code, code blocks (#32).
+            // marked.parse returns an HTML string; we set innerHTML directly since the
+            // content comes from our own LLM (not user input), so XSS is not a concern.
+            if (!isUser && state.state.config?.typewriter_enabled && !meta.streaming) {
+                // Typewriter effect (#91): animate word-by-word, full markdown render on completion
+                this._typewriterEffect(textEl, text);
+            } else {
+                textEl.innerHTML = window.marked.parse(text, { breaks: true, gfm: true });
+            }
+        } else {
+            textEl.innerText = text;
+        }
         bubbleContent.appendChild(textEl);
 
         // Action buttons (edit for user, regen for AI) — shown on hover
@@ -1509,7 +1835,11 @@ export class ChatInterface {
             if (isUser) {
                 actions.innerHTML = `<button class="bubble-action-btn bubble-edit-btn" title="Edit message" data-msg-id="${meta.messageId}">&#x270E;</button>`;
             } else {
-                actions.innerHTML = `<button class="bubble-action-btn bubble-regen-btn" title="Regenerate response" data-msg-id="${meta.messageId}">&#x21BB;</button>`;
+                // AI bubble: regen + TTS replay (#13)
+                actions.innerHTML = `
+                    <button class="bubble-action-btn bubble-tts-replay-btn" title="Replay audio (TTS)" data-msg-id="${meta.messageId}">&#x1F508;</button>
+                    <button class="bubble-action-btn bubble-regen-btn" title="Regenerate response" data-msg-id="${meta.messageId}">&#x21BB;</button>
+                `;
             }
 
             bubbleContent.appendChild(actions);
@@ -1523,22 +1853,36 @@ export class ChatInterface {
 
         const timeDate = meta.timestamp ? new Date(meta.timestamp * 1000) : new Date();
         const time = timeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        // Separator ensures stats and time are always visually distinct,
+        // even when the bubble content is narrow (justify-content: space-between
+        // requires the parent to be wider than total child content to have effect).
+        const SEP = '<span class="bubble-info-sep" style="opacity:0.4; margin:0 4px;">·</span>';
         if (isUser) {
             const charCount = text.length;
-            infoLine.innerHTML = `<span class="bubble-info-stats">${charCount} chars</span><span class="bubble-info-time">${time}</span>`;
+            infoLine.innerHTML = `<span class="bubble-info-stats">${charCount} chars</span>${SEP}<span class="bubble-info-time">${time}</span>`;
         } else if (meta.tokenCount) {
             const speed = meta.tokPerSec ? `${meta.tokPerSec} tok/s` : '';
             const duration = meta.totalTime ? `${meta.totalTime}s` : '';
             const stats = [`${meta.tokenCount} tok`, speed, duration].filter(Boolean).join(' · ');
-            infoLine.innerHTML = `<span class="bubble-info-stats">${stats}</span><span class="bubble-info-time">${time}</span>`;
+            infoLine.innerHTML = `<span class="bubble-info-stats">${stats}</span>${SEP}<span class="bubble-info-time">${time}</span>`;
         } else {
-            infoLine.innerHTML = `<span class="bubble-info-stats"></span><span class="bubble-info-time">${time}</span>`;
+            infoLine.innerHTML = `<span class="bubble-info-time">${time}</span>`;
         }
 
         bubbleContent.appendChild(infoLine);
 
         row.innerHTML = isUser ? '' : avatarHtml;
         row.appendChild(bubbleContent);
+
+        // Bind avatar tooltip for AI bubbles (#94)
+        if (!isUser) {
+            const avatarDiv = row.querySelector('.chat-avatar');
+            if (avatarDiv) {
+                avatarDiv.style.cursor = 'pointer';
+                avatarDiv.onmouseenter = (e) => this._showAvatarTooltip(e, state.state.currentCharacterId);
+                avatarDiv.onmouseleave = () => this._hideAvatarTooltip();
+            }
+        }
 
         this.container.appendChild(row);
         this.container.scrollTop = this.container.scrollHeight;
@@ -1566,6 +1910,50 @@ export class ChatInterface {
             regenBtn.onclick = async (e) => {
                 e.stopPropagation();
                 await this._regenerateMessage(row, parseInt(regenBtn.dataset.msgId));
+            };
+        }
+
+        // TTS replay: re-synthesize the AI message text on demand (#13)
+        const ttsReplayBtn = row.querySelector('.bubble-tts-replay-btn');
+        if (ttsReplayBtn) {
+            ttsReplayBtn.onclick = async (e) => {
+                e.stopPropagation();
+                const textEl = row.querySelector('.bubble-text');
+                if (!textEl) return;
+
+                // Use innerText to get the plain text, stripping any Markdown HTML
+                const text = textEl.innerText?.trim();
+                if (!text) return;
+
+                ttsReplayBtn.disabled = true;
+                ttsReplayBtn.textContent = '⌛';
+                try {
+                    const res = await fetch('/api/tts', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text }),
+                    });
+                    if (!res.ok) throw new Error(`TTS failed: ${res.status}`);
+                    const data = await res.json();
+                    // TTS endpoint returns { ok, url } — not audio_url
+                    const audioUrl = data.url || data.audio_url;
+                    if (data.ok && audioUrl) {
+                        const audio = new Audio(audioUrl);
+                        audio.play().catch(() => {});
+                        // Sync lips with VRM viewer
+                        const viewerIframe = document.querySelector('.viewport-layer iframe');
+                        if (viewerIframe?.contentWindow) {
+                            viewerIframe.contentWindow.postMessage(
+                                { type: 'audioUrl', audioUrl }, '*'
+                            );
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[ChatInterface] TTS replay failed:', err);
+                } finally {
+                    ttsReplayBtn.disabled = false;
+                    ttsReplayBtn.textContent = '🔊';
+                }
             };
         }
     }
@@ -1721,6 +2109,72 @@ export class ChatInterface {
         recapBtn.onclick = () => this._showRecap();
 
         statusContainer.appendChild(recapBtn);
+
+        // TTS speed override control (#14): compact slider above the send button area.
+        // Only visible when TTS is enabled. Affects only the NEXT response, not saved config.
+        const inputArea = document.querySelector('.input-area');
+        if (inputArea) {
+            const speedRow = document.createElement('div');
+            speedRow.id = 'tts-speed-row';
+            speedRow.style.cssText = [
+                'display:none; align-items:center; gap:6px; padding:2px 8px 0',
+                'font-family:var(--font-mono); font-size:0.6rem; color:var(--text-muted)',
+            ].join(';');
+            speedRow.innerHTML = `
+                <span style="white-space:nowrap; opacity:0.7;">🔊 Speed</span>
+                <input type="range" id="tts-speed-slider" min="0.5" max="2.0" step="0.05" value="1.0"
+                    style="flex:1; height:3px; accent-color:var(--neon-cyan); cursor:pointer;"
+                    title="TTS speed for next response (0.5×–2.0×)">
+                <span id="tts-speed-label" style="min-width:28px; text-align:right; opacity:0.9;">1.0×</span>
+                <button id="tts-speed-reset" title="Reset to 1×"
+                    style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.65rem; padding:0 2px; opacity:0.6;">↺</button>
+            `;
+            inputArea.insertBefore(speedRow, inputArea.firstChild);
+
+            const slider = speedRow.querySelector('#tts-speed-slider');
+            const label = speedRow.querySelector('#tts-speed-label');
+            const resetBtn = speedRow.querySelector('#tts-speed-reset');
+
+            slider.oninput = () => {
+                const v = parseFloat(slider.value);
+                label.textContent = `${v.toFixed(2)}×`;
+                this._ttsRateOverride = v === 1.0 ? null : v;
+                label.style.color = v !== 1.0 ? 'var(--neon-cyan)' : 'var(--text-muted)';
+            };
+            resetBtn.onclick = () => {
+                slider.value = '1.0';
+                label.textContent = '1.0×';
+                label.style.color = 'var(--text-muted)';
+                this._ttsRateOverride = null;
+            };
+
+            // Show speed row only when TTS is enabled
+            const updateSpeedVisibility = () => {
+                speedRow.style.display = state.state.config?.tts?.enabled ? 'flex' : 'none';
+            };
+            bus.on('config:updated', updateSpeedVisibility);
+            updateSpeedVisibility();
+        }
+
+        // Incognito mode toggle (#123): ghost button in the status bar
+        const incognitoBtn = document.createElement('button');
+        incognitoBtn.id = 'btn-incognito';
+        incognitoBtn.className = 'btn-icon';
+        incognitoBtn.title = 'Incognito mode: messages won\'t be saved';
+        incognitoBtn.style.cssText = 'width:28px; height:28px; font-size:0.75rem; opacity:0.4; transition:all 0.2s; margin-left:4px;';
+        incognitoBtn.textContent = '👻';
+        incognitoBtn.onclick = () => {
+            this._incognito = !this._incognito;
+            incognitoBtn.style.opacity = this._incognito ? '1' : '0.4';
+            incognitoBtn.style.filter = this._incognito ? 'drop-shadow(0 0 6px rgba(157,80,255,0.7))' : '';
+            incognitoBtn.title = this._incognito
+                ? 'Incognito ON — messages are NOT saved (click to disable)'
+                : 'Incognito mode: messages won\'t be saved';
+            if (this._incognito) {
+                import('../utils/Toast.js').then(({ toast }) => toast.warning('Incognito mode ON — this conversation won\'t be saved', 3000));
+            }
+        };
+        statusContainer.appendChild(incognitoBtn);
     }
 
     /**
@@ -1812,6 +2266,101 @@ export class ChatInterface {
     }
 
     /**
+     * Show a non-blocking in-chat timeout banner when the AI takes longer than 30s.
+     * The banner sits at the bottom of the chat container and auto-dismisses when
+     * the response completes. Avoids blocking browser confirm() dialogs (#50).
+     *
+     * @param {string} lastText - The user's last message, used for the Retry button.
+     * @private
+     */
+    _showTimeoutBanner(lastText) {
+        if (this._timeoutBanner) return; // Already showing
+
+        const banner = document.createElement('div');
+        banner.id = 'timeout-warning-banner';
+        banner.style.cssText = `
+            position: sticky; bottom: 0; left: 0; right: 0;
+            background: rgba(255, 60, 0, 0.12);
+            border: 1px solid rgba(255, 80, 0, 0.35);
+            border-radius: 8px; padding: 8px 12px; margin: 8px 0;
+            display: flex; align-items: center; gap: 10px;
+            font-family: var(--font-mono); font-size: 0.72rem;
+            color: #ff8040; z-index: 10;
+            animation: fadeIn 0.3s ease;
+        `;
+
+        banner.innerHTML = `
+            <span style="flex:1;">⏳ Still waiting for AI response… (${Math.floor(30)}s+)</span>
+            <button id="timeout-cancel-btn" style="
+                padding: 3px 10px; background: rgba(255,60,0,0.2);
+                border: 1px solid rgba(255,80,0,0.4); border-radius: 4px;
+                color: #ff8040; font-size: 0.7rem; cursor: pointer; font-family: inherit;
+            ">Cancel</button>
+        `;
+
+        this.container.appendChild(banner);
+        this.container.scrollTop = this.container.scrollHeight;
+        this._timeoutBanner = banner;
+
+        banner.querySelector('#timeout-cancel-btn').onclick = () => {
+            if (this.currentRequestAbortController) {
+                this.currentRequestAbortController.abort();
+            }
+            this._dismissTimeoutBanner();
+        };
+    }
+
+    /**
+     * Dismiss the timeout warning banner if it is currently shown.
+     * @private
+     */
+    _dismissTimeoutBanner() {
+        if (this._timeoutBanner) {
+            this._timeoutBanner.remove();
+            this._timeoutBanner = null;
+        }
+    }
+
+    /**
+     * Compress session history: summarize all messages, archive them in the DB,
+     * and inject a summary system message so future LLM calls have a shorter context.
+     *
+     * This actively reduces the LLM context window cost — unlike _showRecap which
+     * only displays the summary without touching stored messages.
+     *
+     * @param {number} sessionId - Session to compress
+     * @private
+     */
+    async _compressHistory(sessionId) {
+        if (!sessionId) {
+            toast.warning('No session selected', 2000);
+            return;
+        }
+
+        // Confirm before archiving (destructive-ish operation)
+        if (!confirm('Compress history?\n\nThis will summarize and archive old messages, keeping the last 6 as context. The summary will be injected as a system message.\n\nYou can still see archived messages by reading the stored summary.')) {
+            return;
+        }
+
+        toast.info('Compressing history…', 4000);
+
+        try {
+            const res = await API.post(`sessions/${sessionId}/compress`, { keep_recent: 6 });
+            if (res.ok) {
+                toast.success(`Compressed — ${res.archived} messages archived, summary injected`, 4000);
+                // Reload the chat so the injected summary message is visible
+                if (sessionId === state.state.currentSessionId) {
+                    await this.loadHistory({ id: sessionId });
+                }
+            } else {
+                toast.warning(res.error || 'Nothing to compress', 3000);
+            }
+        } catch (err) {
+            toast.error(`Compress failed: ${err.message}`, 3000);
+        }
+    }
+
+    /**
      * Display a recap/summary as a special system bubble in the chat.
      * @private
      * @param {string} summary - The summary text
@@ -1838,6 +2387,316 @@ export class ChatInterface {
         const div = document.createElement('div');
         div.textContent = str || '';
         return div.innerHTML;
+    }
+
+    /**
+     * Scan AI reply text for *asterisk-wrapped action phrases* and return a
+     * list of matching VRM gesture names to trigger on the 3D avatar.
+     *
+     * The LLM frequently narrates physical actions inline, e.g.:
+     *   "*crosses arms*", "*foot tapping*", "*tilts head*"
+     * We extract these and map them to the gesture controller's named animations
+     * so the character actually performs the described action.
+     *
+     * Only up to 3 gestures are returned per reply to prevent animation spam.
+     *
+     * @param {string} text - Full AI reply text including *action phrases*.
+     * @returns {string[]} List of gesture name strings (may be empty).
+     */
+    _extractActionGestures(text) {
+        if (!text) return [];
+
+        // Map of regex pattern (matched against lowercased action phrase) → gesture name.
+        // Ordered from most-specific to least-specific.
+        const ACTION_MAP = [
+            [/foot.?tap|tap.?foot|stamp.?foot|foot.?stamp/, 'foot_tap'],
+            [/cross.?arm|arm.?cross|fold.?arm|arm.?fold/, 'crossed_arms'],
+            [/shake.?head|head.?shake/, 'shake'],
+            [/tilt.?head|head.?tilt/, 'tilt'],
+            [/nod/, 'nod'],
+            [/wave|waving/, 'wave'],
+            [/shrug/, 'shrug'],
+            [/bow|bowing/, 'bow'],
+            [/clap|clapping/, 'clap'],
+            [/think|thinking|ponder/, 'think'],
+            [/point|pointing/, 'point'],
+            [/celebrat|cheer|jump|yell/, 'celebrate'],
+            [/shy|blush|embarrass/, 'shy'],
+            [/danc|spinning/, 'dance'],
+            [/sigh/, 'shrug'],    // subtle body gesture for sighs
+            [/fidget|fidgeting/, 'shrug'],
+        ];
+
+        const seen = new Set();
+        const results = [];
+
+        // Extract all *...*-wrapped phrases from the text
+        const matches = [...text.matchAll(/\*([^*]{2,50})\*/g)];
+        for (const match of matches) {
+            const phrase = match[1].toLowerCase();
+            for (const [pattern, gesture] of ACTION_MAP) {
+                if (pattern.test(phrase) && !seen.has(gesture)) {
+                    seen.add(gesture);
+                    results.push(gesture);
+                    break;
+                }
+            }
+            if (results.length >= 3) break; // cap at 3 gestures per reply
+        }
+
+        return results;
+    }
+
+    // ── Phase 8A: Reaction Portrait Overlay ─────────────────────────────────
+
+    /**
+     * Create and inject the floating reaction portrait element into the DOM.
+     * The element is absolutely positioned over the chat overlay area and is
+     * invisible by default; ``_showReactionPortrait()`` fades it in and out.
+     *
+     * @private
+     * @returns {HTMLElement} The portrait overlay element.
+     */
+    _createReactionPortraitEl() {
+        const el = document.createElement('div');
+        el.id = 'reaction-portrait-overlay';
+        el.style.cssText = `
+            position: fixed;
+            bottom: 140px;
+            right: 20px;
+            width: 160px;
+            height: 200px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(157,80,255,0.5);
+            box-shadow: 0 0 20px rgba(157,80,255,0.3);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 500;
+            transition: opacity 0.3s ease;
+            background: rgba(0,0,0,0.4);
+        `;
+        el.innerHTML = `
+            <img id="reaction-portrait-img" src="" alt=""
+                style="width:100%; height:100%; object-fit:cover; object-position:top;">
+            <div id="reaction-portrait-emotion"
+                style="position:absolute; bottom:0; left:0; right:0; padding:4px 8px;
+                       background:rgba(0,0,0,0.6); font-size:0.7rem; text-align:center;
+                       color:rgba(157,80,255,0.9); letter-spacing:0.05em; text-transform:uppercase;">
+            </div>
+        `;
+        document.body.appendChild(el);
+
+        // Inject portrait animation keyframes if not already present
+        if (!document.getElementById('reaction-portrait-anim')) {
+            const style = document.createElement('style');
+            style.id = 'reaction-portrait-anim';
+            style.textContent = `
+                @keyframes portraitFadeIn {
+                    0%  { opacity: 0; transform: translateY(8px) scale(0.96); }
+                    100%{ opacity: 1; transform: translateY(0)   scale(1); }
+                }
+                #reaction-portrait-overlay.visible {
+                    animation: portraitFadeIn 0.25s ease forwards;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        return el;
+    }
+
+    /**
+     * Display an expression portrait as a floating overlay for 2.5 seconds,
+     * then fade it out. Replaces any currently visible portrait immediately.
+     *
+     * @param {string} url     - URL of the expression portrait image.
+     * @param {string} emotion - Emotion label shown below the portrait.
+     *
+     * @example
+     * this._showReactionPortrait('/files/images/rin_expr_happy.png', 'happy');
+     */
+    _showReactionPortrait(url, emotion) {
+        if (!this._reactionPortraitEl) return;
+
+        const img = this._reactionPortraitEl.querySelector('#reaction-portrait-img');
+        const label = this._reactionPortraitEl.querySelector('#reaction-portrait-emotion');
+
+        if (!img) return;
+
+        // Clear any pending hide timer
+        if (this._portraitHideTimer) {
+            clearTimeout(this._portraitHideTimer);
+            this._portraitHideTimer = null;
+        }
+
+        img.src = url;
+        if (label) label.textContent = emotion || '';
+
+        this._reactionPortraitEl.style.opacity = '1';
+        this._reactionPortraitEl.classList.add('visible');
+
+        // Auto-hide after 2.5 seconds
+        this._portraitHideTimer = setTimeout(() => {
+            if (this._reactionPortraitEl) {
+                this._reactionPortraitEl.style.opacity = '0';
+                this._reactionPortraitEl.classList.remove('visible');
+            }
+        }, 2500);
+    }
+
+    // ── Phase 7C: TTS Queue Pill (#79) ───────────────────────────────────────
+
+    /**
+     * Update the floating TTS queue progress pill.
+     * Shows "🔊 Speaking N/Total" while audio chunks are queued, hides otherwise.
+     * The pill is appended to document.body (fixed position) so it floats above the chat.
+     *
+     * @private
+     */
+    _updateTTSPill() {
+        const remaining = this._ttsQueue?.length ?? 0;
+        const total = this._ttsQueueTotal ?? 0;
+
+        let pill = document.getElementById('tts-queue-pill');
+
+        if (total === 0 || remaining === 0) {
+            if (pill) pill.style.display = 'none';
+            return;
+        }
+
+        const current = total - remaining + 1;
+
+        if (!pill) {
+            pill = document.createElement('div');
+            pill.id = 'tts-queue-pill';
+            pill.style.cssText = [
+                'position:fixed',
+                'bottom:80px',
+                'left:50%',
+                'transform:translateX(-50%)',
+                'background:rgba(0,240,255,0.08)',
+                'border:1px solid rgba(0,240,255,0.25)',
+                'border-radius:20px',
+                'padding:4px 14px',
+                'font-family:var(--font-mono,monospace)',
+                'font-size:0.65rem',
+                'color:var(--neon-cyan,#00f0ff)',
+                'z-index:200',
+                'pointer-events:none',
+                'transition:opacity 0.3s',
+                'letter-spacing:0.05em',
+            ].join(';');
+            document.body.appendChild(pill);
+        }
+
+        pill.style.display = 'block';
+        pill.textContent = `🔊 Speaking ${current}/${total}`;
+    }
+
+    // ── Phase 7C: Avatar Info Tooltip (#94) ──────────────────────────────────
+
+    /**
+     * Show a tooltip near the cursor with character info.
+     * Displays name, traits, current mood, and bond tier.
+     *
+     * @private
+     * @param {MouseEvent} e      - The mouseenter event on the avatar div.
+     * @param {number}     charId - Current character ID from state.
+     */
+    _showAvatarTooltip(e, charId) {
+        this._hideAvatarTooltip();
+
+        const char = state.state.characters?.find(c => c.id == charId);
+        if (!char) return;
+
+        const traits = Array.isArray(char.personality_traits)
+            ? char.personality_traits.join(', ')
+            : (char.personality_traits || '—');
+        const mood = char.last_emotion || 'neutral';
+        const moodEmoji = { happy: '😊', sad: '😢', angry: '😠', surprised: '😲', shy: '😳', excited: '⚡', embarrassed: '😅', thinking: '🤔', neutral: '😐' };
+        const bondScore = char.relationship_score || 0;
+        const bondTier = bondScore >= 80 ? 'Devoted' : bondScore >= 50 ? 'Close' : bondScore >= 20 ? 'Friendly' : 'Acquainted';
+
+        const tip = document.createElement('div');
+        tip.id = 'avatar-tooltip';
+        tip.style.cssText = [
+            'position:fixed',
+            `left:${Math.min(e.clientX + 12, window.innerWidth - 220)}px`,
+            `top:${Math.max(e.clientY - 10, 8)}px`,
+            'background:rgba(8,10,20,0.95)',
+            'border:1px solid rgba(0,240,255,0.3)',
+            'border-radius:8px',
+            'padding:8px 12px',
+            'font-size:0.72rem',
+            'color:var(--text-main,#e0e6ed)',
+            'z-index:9000',
+            'pointer-events:none',
+            'max-width:200px',
+            'box-shadow:0 4px 20px rgba(0,0,0,0.6)',
+            'line-height:1.5',
+        ].join(';');
+        tip.innerHTML = `
+            <div style="font-weight:700; color:var(--neon-cyan,#00f0ff); margin-bottom:4px;">${char.name}</div>
+            <div style="color:var(--text-muted,#8899aa); font-size:0.65rem; margin-bottom:3px;">${traits || '—'}</div>
+            <div>${moodEmoji[mood] || '😐'} ${mood.charAt(0).toUpperCase() + mood.slice(1)}</div>
+            <div style="color:rgba(157,80,255,0.9); font-size:0.68rem; margin-top:2px;">⚡ ${bondTier} (${bondScore} pts)</div>
+        `;
+        document.body.appendChild(tip);
+
+        // Auto-hide after 3 seconds
+        this._avatarTooltipTimer = setTimeout(() => this._hideAvatarTooltip(), 3000);
+    }
+
+    /**
+     * Remove the avatar info tooltip from the DOM.
+     * @private
+     */
+    _hideAvatarTooltip() {
+        if (this._avatarTooltipTimer) {
+            clearTimeout(this._avatarTooltipTimer);
+            this._avatarTooltipTimer = null;
+        }
+        const tip = document.getElementById('avatar-tooltip');
+        if (tip) tip.remove();
+    }
+
+    /**
+     * Animate AI message text with a word-by-word typewriter effect (#91).
+     *
+     * Words are revealed progressively via ``setInterval``. After each tick the
+     * partial source text is re-rendered through ``marked.parse()`` so markdown
+     * syntax remains valid throughout. A final pass re-renders the full text
+     * once the animation completes.
+     *
+     * Only fires when ``state.state.config.typewriter_enabled`` is truthy.
+     * Does nothing for streaming bubbles (they animate naturally via SSE).
+     *
+     * @param {HTMLElement} el     - The ``.bubble-text`` element to animate into
+     * @param {string}      text   - Raw (markdown) source text to reveal
+     * @param {Function}    [onDone] - Called after animation finishes
+     */
+    _typewriterEffect(el, text, onDone) {
+        if (!text) return;
+        const words = text.split(' ');
+        let i = 0;
+        const wps = Math.max(1, Math.min(state.state.config?.typewriter_speed ?? 15, 60));
+        const intervalMs = Math.round(1000 / wps);
+        el.innerHTML = '';
+
+        const tick = setInterval(() => {
+            i++;
+            const partial = words.slice(0, i).join(' ');
+            // Re-render markdown on each tick — marked handles partial syntax gracefully
+            el.innerHTML = typeof marked !== 'undefined' ? marked.parse(partial) : partial;
+
+            if (i >= words.length) {
+                clearInterval(tick);
+                // Final full render ensures clean closing tags after animation
+                el.innerHTML = typeof marked !== 'undefined' ? marked.parse(text) : text;
+                if (onDone) onDone();
+            }
+        }, intervalMs);
     }
 }
 

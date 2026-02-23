@@ -1,39 +1,56 @@
 from .adapters.openai_compat import OpenAICompatAdapter
 from .adapters.ollama import OllamaAdapter
 from .adapters.lmstudio_rest import LMStudioRESTAdapter
+from .adapters.gemini import GeminiAdapter
+from .adapters.claude_api import ClaudeAPIAdapter
+
 
 def get_client(cfg):
-    """
-    Factory to return the appropriate LLM adapter based on config.
-    Supports new 'services' structure with fallback to legacy.
+    """Return the appropriate LLM adapter based on the active configuration.
+
+    Resolves from the new ``services.llm`` config structure first, then falls
+    back to the legacy flat ``llm.provider`` key.
+
+    Supported provider types:
+        ``openai``, ``ollama``, ``lmstudio-rest``, ``gemini``
+
+    Args:
+        cfg: Full application config dict (from ``load_config()``).
+
+    Returns:
+        An ``LLMAdapter`` subclass instance.
     """
     services = cfg.get("services", {})
     llm_cfg = services.get("llm", {})
-    
+
     # New Config Structure
     if "active_provider" in llm_cfg:
         active = llm_cfg["active_provider"]
         provider_cfg = llm_cfg.get("providers", {}).get(active, {})
         ptype = provider_cfg.get("type", "openai")
-        
+
         if ptype == "openai":
             return OpenAICompatAdapter()
-        elif ptype == "ollama":
+        if ptype == "ollama":
             return OllamaAdapter()
-        elif ptype == "lmstudio-rest":
+        if ptype == "lmstudio-rest":
             return LMStudioRESTAdapter()
-        else:
-            # Fallback to generic openai compat for unknown types as safe bet
-            return OpenAICompatAdapter()
-            
-    # Legacy / Fallback [Update default logic if needed, but usually config drives this]
-    # If legacy config uses "local" and endpoint is generic, default to OpenAICompat.
-    # But if user specifically asked for defaults, they are likely in app.json.
-    # Legacy / Fallback
+        if ptype == "gemini":
+            return GeminiAdapter()
+        if ptype in ("claude", "anthropic"):
+            return ClaudeAPIAdapter()
+        # Fallback to generic openai compat for unknown types
+        return OpenAICompatAdapter()
+
+    # Legacy flat-config fallback
     simple_provider = cfg.get("llm", {}).get("provider", "local")
     if simple_provider == "lmstudio-rest":
         return LMStudioRESTAdapter()
-    elif simple_provider == "ollama":
+    if simple_provider == "ollama":
         return OllamaAdapter()
-        
+    if simple_provider == "gemini":
+        return GeminiAdapter()
+    if simple_provider in ("claude", "anthropic"):
+        return ClaudeAPIAdapter()
+
     return OpenAICompatAdapter()

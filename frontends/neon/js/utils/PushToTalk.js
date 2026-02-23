@@ -26,12 +26,14 @@ export class PushToTalk {
      * @param {function(PTTState): void} [options.onStateChange] - Called on state transitions
      * @param {string} [options.mode='toggle'] - 'toggle' (click on/off) or 'hold' (hold to record)
      * @param {number} [options.maxDuration=30000] - Max recording duration in ms
+     * @param {number} [options.minConfidence=0] - Min ASR confidence (0–1) to accept transcript (#20)
      */
     constructor(options = {}) {
         this.onTranscript = options.onTranscript || (() => {});
         this.onStateChange = options.onStateChange || (() => {});
         this.mode = options.mode || 'toggle';
         this.maxDuration = options.maxDuration || 30000;
+        this.minConfidence = options.minConfidence ?? 0;
 
         /** @type {PTTState} */
         this.state = 'idle';
@@ -188,10 +190,19 @@ export class PushToTalk {
 
             const result = await response.json();
             const text = (result.text || '').trim();
+            const confidence = result.confidence ?? null;
 
             if (text) {
-                this.onTranscript(text);
-                toast.success(`Transcribed: "${text.substring(0, 50)}..."`, 2000);
+                // ASR confidence display (#20): show % and reject below threshold
+                const confPct = confidence !== null ? Math.round(confidence * 100) : null;
+                const confLabel = confPct !== null ? ` (${confPct}%)` : '';
+
+                if (confidence !== null && this.minConfidence > 0 && confidence < this.minConfidence) {
+                    toast.warning(`Low confidence${confLabel} — ignored. Speak more clearly.`, 3000);
+                } else {
+                    this.onTranscript(text);
+                    toast.success(`🎤 "${text.substring(0, 40)}${text.length > 40 ? '…' : ''}"${confLabel}`, 2000);
+                }
             } else {
                 toast.warning('No speech detected', 2000);
             }

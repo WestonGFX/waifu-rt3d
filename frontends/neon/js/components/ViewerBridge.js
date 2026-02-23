@@ -165,6 +165,22 @@ export class ViewerBridge {
             }
         });
 
+        // Restore last known mood on character load (#56 mood persistence).
+        // Delays slightly to give the VRM model time to fully load before
+        // the expression controller receives the command.
+        if (char.last_emotion && char.last_emotion !== 'neutral') {
+            setTimeout(() => this.setExpression(char.last_emotion, 0.8), 1200);
+        }
+
+        // Apply saved VRM transform (#86) after model loads
+        const cfg = window.app?.state?.state?.config;
+        const scale   = Number(cfg?.vrm_scale    ?? 1.0);
+        const offsetX = Number(cfg?.vrm_offset_x ?? 0.0);
+        const offsetY = Number(cfg?.vrm_offset_y ?? 0.0);
+        if (scale !== 1.0 || offsetX !== 0.0 || offsetY !== 0.0) {
+            setTimeout(() => this.setVrmTransform({ scale, offsetX, offsetY }), 1500);
+        }
+
         // Apply per-character background if set
         if (char.background_url) {
             this.setBackground(char.background_mode || 'image', char.background_url);
@@ -288,9 +304,18 @@ export class ViewerBridge {
         this._post({ type: 'setCameraPosition', payload: preset });
     }
 
-    /** Reset camera to default framing position. */
+    /** Reset camera to default full-body framing position (with smooth tween). */
     resetCamera() {
         this._post({ type: 'resetCamera' });
+    }
+
+    /**
+     * Smoothly tween the camera to a named preset view (#27).
+     *
+     * @param {'fullbody'|'bust'|'face'} preset - Named camera preset
+     */
+    setCameraPreset(preset) {
+        this._post({ type: 'setCameraPreset', payload: { preset } });
     }
 
     /**
@@ -317,6 +342,32 @@ export class ViewerBridge {
      */
     setLighting(config) {
         this._post({ type: 'setLighting', payload: config });
+    }
+
+    /**
+     * Set VRM model scale and position offset (#86).
+     * Changes take effect immediately in the 3D viewport.
+     *
+     * @param {{scale: number, offsetX: number, offsetY: number}} transform
+     */
+    setVrmTransform(transform) {
+        this._post({ type: 'setVrmTransform', payload: transform });
+    }
+
+    /**
+     * Enable or disable party/disco RGB cycling lights (#25).
+     * @param {boolean} enabled
+     */
+    setDiscoMode(enabled) {
+        this._post({ type: 'setDiscoMode', payload: { enabled } });
+    }
+
+    /**
+     * Set shadow quality (#26).
+     * @param {'off'|'soft'|'sharp'} quality
+     */
+    setShadowQuality(quality) {
+        this._post({ type: 'setShadowQuality', payload: { quality } });
     }
 
     // ── Background ───────────────────────────────────────────

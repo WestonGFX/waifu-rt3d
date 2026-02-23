@@ -723,22 +723,23 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
    The chat-layer starts at 45% from top, so placing the button just above that boundary
    keeps it visible in both chat-only and split-view states. */
 .btn-toggle-view {
+    /* Anchored to the top-right of the main view — safely above chat messages
+     * and clearly associated with the viewport toggle action (#85 UX fix) */
     position: absolute;
-    bottom: calc(45% + var(--space-sm));
-    left: 50%;
-    transform: translateX(-50%);
+    top: var(--space-xs);
+    right: var(--space-xs);
     z-index: 20;
     display: none;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.3rem 0.6rem;
-    background: rgba(0, 0, 0, 0.6);
+    padding: 0.25rem 0.5rem;
+    background: rgba(0, 0, 0, 0.65);
     backdrop-filter: blur(0.5rem);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: var(--radius-sm);
     color: var(--text-muted);
     font-family: var(--font-mono);
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     letter-spacing: 0.05em;
     cursor: pointer;
     transition: all 0.2s;
@@ -869,6 +870,17 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
 
     .bubble-info-time {
         color: var(--text-muted);
+    }
+
+    /* #93 — Timestamps toggle: hide time + separator when body has hide-timestamps class */
+    body.hide-timestamps .bubble-info-time,
+    body.hide-timestamps .bubble-info-sep {
+        display: none;
+    }
+
+    /* #30 — Chat font size: controlled by --chat-font-size CSS variable (default 0.9rem) */
+    .bubble-text {
+        font-size: var(--chat-font-size, 0.9rem);
     }
 
     /* Thinking bubble — shows while AI is generating */
@@ -1411,4 +1423,53 @@ body[data-bg-mode="city-video"] {
     0% { transform: translateX(-100%); }
     50% { transform: translateX(0%); }
     100% { transform: translateX(100%); }
+}
+
+/* ═══ MOOD-REACTIVE BACKGROUND (#112) ═══
+   Subtle ambient glow shifts on <body data-emotion="X"> changes.
+   Transition keeps the shift imperceptible during rapid emotion toggles.
+   Only the ::after pseudo-element is animated so it never interferes
+   with panel/layout sizing. ═══ */
+body {
+    transition: background-color 2s ease, box-shadow 2s ease;
+}
+body::after {
+    content: '';
+    position: fixed; inset: 0; pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 2s ease, background 2s ease;
+}
+
+/* happy / excited → warm yellow-green wash */
+body[data-emotion="happy"]::after,
+body[data-emotion="excited"]::after {
+    background: radial-gradient(ellipse at 50% 120%, rgba(252,238,10,0.04) 0%, transparent 70%);
+    opacity: 1;
+}
+
+/* sad / scared → cold blue-indigo tint */
+body[data-emotion="sad"]::after,
+body[data-emotion="scared"]::after {
+    background: radial-gradient(ellipse at 50% 0%, rgba(60,80,220,0.05) 0%, transparent 70%);
+    opacity: 1;
+}
+
+/* embarrassed / shy → rose blush */
+body[data-emotion="embarrassed"]::after,
+body[data-emotion="shy"]::after {
+    background: radial-gradient(ellipse at 80% 100%, rgba(255,80,120,0.05) 0%, transparent 60%);
+    opacity: 1;
+}
+
+/* angry → deep red edge */
+body[data-emotion="angry"]::after {
+    background: radial-gradient(ellipse at 100% 50%, rgba(255,30,30,0.06) 0%, transparent 60%);
+    opacity: 1;
+}
+
+/* thinking → muted cyan (default neon, slightly brighter) */
+body[data-emotion="thinking"]::after {
+    background: radial-gradient(ellipse at 20% 50%, rgba(0,240,255,0.04) 0%, transparent 60%);
+    opacity: 1;
 }

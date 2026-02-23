@@ -2041,217 +2041,362 @@ async def chat_stream(req: Request):
     if "qwen3" in routed_model.lower():
         stream_extra_body = {"chat_template_kwargs": {"enable_thinking": bool(qwen3_thinking)}}
 
-    # Use an asyncio.Queue to bridge the sync generator thread → async generator
-    token_q: asyncio.Queue = asyncio.Queue()
-    loop = asyncio.get_event_loop()
-
-    def _stream_thread():
-        """Run the synchronous LLM streaming generator in a dedicated thread."""
-        try:
-            first_token = True
-            for token in adapter.chat_stream(
-                llm_messages,
-                routed_model,
-                cfg["llm"]["endpoint"],
-                cfg["llm"]["api_key"],
-                temperature=cfg.get("temperature", 0.7),
-                max_tokens=_cap_max_tokens,  # Phase 9: per-character output limit (-1 = unlimited)
-                repeat_penalty=cfg.get("repeat_penalty"),
-                frequency_penalty=cfg.get("frequency_penalty"),
-                extra_body=stream_extra_body,
-            ):
-                if first_token:
-                    # Signal that prefill is complete and generation has begun
-                    loop.call_soon_threadsafe(token_q.put_nowait, ("generating", None))
-                    first_token = False
-                loop.call_soon_threadsafe(token_q.put_nowait, ("token", token))
-            loop.call_soon_threadsafe(token_q.put_nowait, ("end", None))
-        except Exception as e:
-            loop.call_soon_threadsafe(token_q.put_nowait, ("error", str(e)))
-
     # Count input tokens (rough estimate: ~4 chars per token for English text)
     input_char_count = sum(len(m.get("content", "")) for m in llm_messages)
     est_input_tokens = input_char_count // 4
 
-    async def event_generator():
-        """Async generator yielding SSE events as tokens arrive from the LLM.
+    # ── Phase 10: Agentic tool-use path ──────────────────────────────
+    _use_agent = bool(cap.get("supports_tools"))
+    if _use_agent:
+        from backend.agent.tools import get_default_registry
+        from backend.agent.runner import AgentRunner
+        from backend.agent.registry import ToolContext
 
-        When ``use_chunked_tts`` is True, sentence-boundary detection accumulates
-        tokens into ``sentence_buffer``.  Each complete sentence fires a background
-        ``asyncio.Task`` for TTS synthesis so audio generation overlaps with the
-        remaining LLM token stream.  After the stream ends, all pending TTS tasks
-        are collected and their results emitted as ``audio_chunk`` SSE events before
-        the ``done`` event — allowing the frontend to begin playback as each chunk
-        arrives while the LLM is still generating the rest of the reply.
-        """
-        full_reply = ""
-        token_count = 0
-        stream_start_time = None  # Set when first token arrives
+        _agent_registry = get_default_registry()
+        _agent_context = ToolContext(
+            cfg=cfg, char_id=char_id, session_id=session_id,
+            db_conn=con, vector_store=vector_store,
+        )
+        _agent_runner = AgentRunner(_agent_registry, max_rounds=3)
+        _agent_tools = _agent_registry.all_tools()
+    # ── End Phase 10 setup ───────────────────────────────────────────
 
-        # Sentence-chunked TTS state
-        sentence_buffer = ""
-        chunk_index = 0
-        chunk_tasks: list[asyncio.Task] = []
+    if _use_agent:
+        async def event_generator():
+            """Agentic SSE generator -- routes through AgentRunner for tool-use.
 
-        # Emit processing event so frontend shows "PROCESSING INPUT..."
-        yield f"event: processing\ndata: {json.dumps({'input_tokens': est_input_tokens})}\n\n"
+            When the character's capability profile has ``supports_tools: true``,
+            the LLM response is driven by :class:`AgentRunner` which can invoke
+            tools mid-stream.  Tool call / result events are forwarded as SSE
+            events so the frontend can render tool cards in real time.
 
-        # Start the sync streaming thread
-        thread = threading.Thread(target=_stream_thread, daemon=True)
-        thread.start()
+            The done-event payload mirrors the non-agentic path so the frontend
+            needs no special handling beyond the extra ``tool_call`` / ``tool_result``
+            events.
+            """
+            full_reply = ""
+            token_count = 0
+            stream_start_time = time.time()
 
-        try:
-            while True:
-                msg_type, payload = await token_q.get()
+            yield f"event: processing\ndata: {json.dumps({'input_tokens': est_input_tokens})}\n\n"
+            yield f"event: generating\ndata: {json.dumps({'status': 'first_token'})}\n\n"
 
-                if msg_type == "generating":
-                    stream_start_time = time.time()
-                    yield f"event: generating\ndata: {json.dumps({'status': 'first_token'})}\n\n"
+            try:
+                async for event in _agent_runner.run_stream(
+                    llm_messages, adapter, cfg, _agent_tools,
+                    context=_agent_context,
+                    temperature=cfg.get("temperature", 0.7),
+                    max_tokens=_cap_max_tokens,
+                    repeat_penalty=cfg.get("repeat_penalty"),
+                    frequency_penalty=cfg.get("frequency_penalty"),
+                    extra_body=stream_extra_body,
+                ):
+                    evt_type = event["event"]
+                    evt_data = event["data"]
 
-                elif msg_type == "token":
-                    full_reply += payload
-                    token_count += 1
-                    sentence_buffer += payload
-                    yield f"event: token\ndata: {json.dumps({'t': payload})}\n\n"
+                    if evt_type == "token":
+                        t = evt_data.get("text", "")
+                        full_reply += t
+                        token_count += len(t) // 4 or 1  # rough token estimate for chunks
+                        yield f"event: token\ndata: {json.dumps({'t': t})}\n\n"
 
-                    # Sentence-chunked TTS: flush buffer on sentence boundary.
-                    # Minimum 30 chars avoids firing TTS on very short fragments.
-                    if (use_chunked_tts and tts_chunked_client
-                            and _SENTENCE_ENDS.search(sentence_buffer)
-                            and len(sentence_buffer) > 30):
-                        chunk_text = _clean_for_tts(sentence_buffer.strip())
-                        sentence_buffer = ""
-                        task = asyncio.create_task(
-                            _tts_chunk_async(tts_chunked_client, chunk_text, tts_chunked_cfg, chunk_index)
-                        )
-                        chunk_tasks.append(task)
-                        chunk_index += 1
+                    elif evt_type in ("tool_call", "tool_result"):
+                        yield f"event: {evt_type}\ndata: {json.dumps(evt_data)}\n\n"
 
-                elif msg_type == "end":
-                    break
-
-                elif msg_type == "error":
-                    _telemetry_inc("chat.failures_total")
-                    yield f"event: error\ndata: {json.dumps({'error': payload})}\n\n"
-                    return
-
-            # Flush any remaining sentence buffer after stream ends
-            if use_chunked_tts and tts_chunked_client and sentence_buffer.strip():
-                chunk_text = _clean_for_tts(sentence_buffer.strip())
-                task = asyncio.create_task(
-                    _tts_chunk_async(tts_chunked_client, chunk_text, tts_chunked_cfg, chunk_index)
-                )
-                chunk_tasks.append(task)
-
-            # Collect TTS results (some tasks may already be done by now) and yield chunks
-            if chunk_tasks:
-                chunk_results = await asyncio.gather(*chunk_tasks, return_exceptions=True)
-                for r in chunk_results:
-                    if isinstance(r, dict) and r.get("ok"):
-                        # Build the audio URL outside the f-string — Python does not
-                        # allow backslash escapes inside f-string expression braces.
-                        audio_url = f"/files/audio/{r['filename']}"
-                        yield (
-                            f"event: audio_chunk\n"
-                            f"data: {json.dumps({'url': audio_url, 'index': r['chunk_index']})}\n\n"
-                        )
-
-            # Stream complete — parse emotion/gesture, save to DB, emit done event
-            emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
-
-            # Calculate generation timing for token stats
-            generation_time_ms = None
-            tokens_per_second = None
-            if stream_start_time and token_count > 0:
+                # Stream complete — parse emotion/gesture, save to DB, emit done event
                 elapsed = time.time() - stream_start_time
                 generation_time_ms = int(elapsed * 1000)
                 tokens_per_second = round(token_count / elapsed, 1) if elapsed > 0 else None
 
-            if not incognito:
-                cur.execute(
-                    "INSERT INTO messages(session_id, role, text, emotion, char_id, "
-                    "token_count, input_token_count, generation_time_ms, tokens_per_second) "
-                    "VALUES (?,?,?,?,?,?,?,?,?)",
-                    (session_id, "assistant", clean_reply, emotion, char_id,
-                     token_count, est_input_tokens, generation_time_ms, tokens_per_second)
-                )
-                assistant_message_id = cur.lastrowid
-                con.commit()
+                emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
 
-                # Update relationship scores based on detected emotion
-                _update_relationship(con, char_id, emotion)
-
-                # Persist mood + daily-greeting state (#56, #54) and first_chat_date (#109)
-                from datetime import datetime as _dt
-                _today_str = _dt.now().strftime('%Y-%m-%d')
-                try:
-                    if stream_char_first_chat_date is None:
-                        con.execute(
-                            "UPDATE characters SET last_emotion=?, last_chat_date=?, first_chat_date=? WHERE id=?",
-                            (emotion, _today_str, _today_str, char_id)
-                        )
-                    else:
-                        con.execute(
-                            "UPDATE characters SET last_emotion=?, last_chat_date=? WHERE id=?",
-                            (emotion, _today_str, char_id)
-                        )
+                if not incognito:
+                    cur.execute(
+                        "INSERT INTO messages(session_id, role, text, emotion, char_id, "
+                        "token_count, input_token_count, generation_time_ms, tokens_per_second) "
+                        "VALUES (?,?,?,?,?,?,?,?,?)",
+                        (session_id, "assistant", clean_reply, emotion, char_id,
+                         token_count, est_input_tokens, generation_time_ms, tokens_per_second)
+                    )
+                    assistant_message_id = cur.lastrowid
                     con.commit()
-                except Exception as _e:
-                    logger.warning(f"Could not persist mood/date for char {char_id}: {_e}")
-            else:
-                assistant_message_id = None  # incognito: no DB record
 
-            if vector_store and not incognito:
-                vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
+                    _update_relationship(con, char_id, emotion)
 
-            memory_hits = [
-                {
-                    "text": m.get("text", ""),
-                    "role": m.get("role", ""),
-                    "score": max(0.0, 1.0 - float(m.get("dist", 0.0))),
+                    from datetime import datetime as _dt
+                    _today_str = _dt.now().strftime('%Y-%m-%d')
+                    try:
+                        if stream_char_first_chat_date is None:
+                            con.execute(
+                                "UPDATE characters SET last_emotion=?, last_chat_date=?, first_chat_date=? WHERE id=?",
+                                (emotion, _today_str, _today_str, char_id)
+                            )
+                        else:
+                            con.execute(
+                                "UPDATE characters SET last_emotion=?, last_chat_date=? WHERE id=?",
+                                (emotion, _today_str, char_id)
+                            )
+                        con.commit()
+                    except Exception as _e:
+                        logger.warning(f"Could not persist mood/date for char {char_id}: {_e}")
+                else:
+                    assistant_message_id = None
+
+                if vector_store and not incognito:
+                    vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
+
+                memory_hits = [
+                    {
+                        "text": m.get("text", ""),
+                        "role": m.get("role", ""),
+                        "score": max(0.0, 1.0 - float(m.get("dist", 0.0))),
+                    }
+                    for m in memories
+                ]
+
+                done_data = {
+                    "ok": True,
+                    "reply": clean_reply,
+                    "session_id": session_id,
+                    "emotion": emotion,
+                    "gesture": gesture,
+                    "user_message_id": user_message_id,
+                    "assistant_message_id": assistant_message_id,
+                    "memory_hits": memory_hits,
+                    "token_count": token_count,
+                    "input_tokens": est_input_tokens,
+                    "generation_time_ms": generation_time_ms,
+                    "tokens_per_second": tokens_per_second,
+                    "tts_chunked": False,
+                    "is_daily_first": _is_daily_first,
+                    "context_budget": _context_budget_summary(sections, hist, cfg),
+                    "capability_warning": _capability_warning,
                 }
-                for m in memories
-            ]
+                yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
-            done_data = {
-                "ok": True,
-                "reply": clean_reply,
-                "session_id": session_id,
-                "emotion": emotion,
-                "gesture": gesture,
-                "user_message_id": user_message_id,
-                "assistant_message_id": assistant_message_id,
-                "memory_hits": memory_hits,
-                "token_count": token_count,
-                "input_tokens": est_input_tokens,
-                "generation_time_ms": generation_time_ms,
-                "tokens_per_second": tokens_per_second,
-                # Tell the frontend not to call /api/tts separately when we already
-                # synthesized and emitted audio_chunk events above.
-                "tts_chunked": bool(chunk_tasks),
-                # Daily-first flag: true when no chat was sent today yet (#54)
-                "is_daily_first": _is_daily_first,
-                # Token budget for the context window dashboard widget
-                "context_budget": _context_budget_summary(sections, hist, cfg),
-                # Phase 9: capability mismatch warning (if character needs a bigger model)
-                "capability_warning": _capability_warning,
-            }
-            yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
+                _fire_webhooks({
+                    "character": stream_char_name if 'stream_char_name' in dir() else "",
+                    "reply": clean_reply,
+                    "emotion": emotion,
+                    "session_id": session_id,
+                })
 
-            # Fire outbound webhooks (#62) — non-blocking background threads
-            _fire_webhooks({
-                "character": stream_char_name if 'stream_char_name' in dir() else "",
-                "reply": clean_reply,
-                "emotion": emotion,
-                "session_id": session_id,
-            })
+            except Exception as e:
+                logger.error(f"Agentic stream error: {e}", exc_info=True)
+                _telemetry_inc("chat.failures_total")
+                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+            finally:
+                con.close()
 
-        except Exception as e:
-            logger.error(f"Stream chat error: {e}", exc_info=True)
-            _telemetry_inc("chat.failures_total")
-            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
-        finally:
-            con.close()
+    else:
+        # ── Existing non-agentic streaming path (unchanged) ──────────
+        # Use an asyncio.Queue to bridge the sync generator thread → async generator
+        token_q: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
+
+        def _stream_thread():
+            """Run the synchronous LLM streaming generator in a dedicated thread."""
+            try:
+                first_token = True
+                for token in adapter.chat_stream(
+                    llm_messages,
+                    routed_model,
+                    cfg["llm"]["endpoint"],
+                    cfg["llm"]["api_key"],
+                    temperature=cfg.get("temperature", 0.7),
+                    max_tokens=_cap_max_tokens,  # Phase 9: per-character output limit (-1 = unlimited)
+                    repeat_penalty=cfg.get("repeat_penalty"),
+                    frequency_penalty=cfg.get("frequency_penalty"),
+                    extra_body=stream_extra_body,
+                ):
+                    if first_token:
+                        # Signal that prefill is complete and generation has begun
+                        loop.call_soon_threadsafe(token_q.put_nowait, ("generating", None))
+                        first_token = False
+                    loop.call_soon_threadsafe(token_q.put_nowait, ("token", token))
+                loop.call_soon_threadsafe(token_q.put_nowait, ("end", None))
+            except Exception as e:
+                loop.call_soon_threadsafe(token_q.put_nowait, ("error", str(e)))
+
+        async def event_generator():
+            """Async generator yielding SSE events as tokens arrive from the LLM.
+
+            When ``use_chunked_tts`` is True, sentence-boundary detection accumulates
+            tokens into ``sentence_buffer``.  Each complete sentence fires a background
+            ``asyncio.Task`` for TTS synthesis so audio generation overlaps with the
+            remaining LLM token stream.  After the stream ends, all pending TTS tasks
+            are collected and their results emitted as ``audio_chunk`` SSE events before
+            the ``done`` event -- allowing the frontend to begin playback as each chunk
+            arrives while the LLM is still generating the rest of the reply.
+            """
+            full_reply = ""
+            token_count = 0
+            stream_start_time = None  # Set when first token arrives
+
+            # Sentence-chunked TTS state
+            sentence_buffer = ""
+            chunk_index = 0
+            chunk_tasks: list[asyncio.Task] = []
+
+            # Emit processing event so frontend shows "PROCESSING INPUT..."
+            yield f"event: processing\ndata: {json.dumps({'input_tokens': est_input_tokens})}\n\n"
+
+            # Start the sync streaming thread
+            thread = threading.Thread(target=_stream_thread, daemon=True)
+            thread.start()
+
+            try:
+                while True:
+                    msg_type, payload = await token_q.get()
+
+                    if msg_type == "generating":
+                        stream_start_time = time.time()
+                        yield f"event: generating\ndata: {json.dumps({'status': 'first_token'})}\n\n"
+
+                    elif msg_type == "token":
+                        full_reply += payload
+                        token_count += 1
+                        sentence_buffer += payload
+                        yield f"event: token\ndata: {json.dumps({'t': payload})}\n\n"
+
+                        # Sentence-chunked TTS: flush buffer on sentence boundary.
+                        # Minimum 30 chars avoids firing TTS on very short fragments.
+                        if (use_chunked_tts and tts_chunked_client
+                                and _SENTENCE_ENDS.search(sentence_buffer)
+                                and len(sentence_buffer) > 30):
+                            chunk_text = _clean_for_tts(sentence_buffer.strip())
+                            sentence_buffer = ""
+                            task = asyncio.create_task(
+                                _tts_chunk_async(tts_chunked_client, chunk_text, tts_chunked_cfg, chunk_index)
+                            )
+                            chunk_tasks.append(task)
+                            chunk_index += 1
+
+                    elif msg_type == "end":
+                        break
+
+                    elif msg_type == "error":
+                        _telemetry_inc("chat.failures_total")
+                        yield f"event: error\ndata: {json.dumps({'error': payload})}\n\n"
+                        return
+
+                # Flush any remaining sentence buffer after stream ends
+                if use_chunked_tts and tts_chunked_client and sentence_buffer.strip():
+                    chunk_text = _clean_for_tts(sentence_buffer.strip())
+                    task = asyncio.create_task(
+                        _tts_chunk_async(tts_chunked_client, chunk_text, tts_chunked_cfg, chunk_index)
+                    )
+                    chunk_tasks.append(task)
+
+                # Collect TTS results (some tasks may already be done by now) and yield chunks
+                if chunk_tasks:
+                    chunk_results = await asyncio.gather(*chunk_tasks, return_exceptions=True)
+                    for r in chunk_results:
+                        if isinstance(r, dict) and r.get("ok"):
+                            # Build the audio URL outside the f-string -- Python does not
+                            # allow backslash escapes inside f-string expression braces.
+                            audio_url = f"/files/audio/{r['filename']}"
+                            yield (
+                                f"event: audio_chunk\n"
+                                f"data: {json.dumps({'url': audio_url, 'index': r['chunk_index']})}\n\n"
+                            )
+
+                # Stream complete — parse emotion/gesture, save to DB, emit done event
+                emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
+
+                # Calculate generation timing for token stats
+                generation_time_ms = None
+                tokens_per_second = None
+                if stream_start_time and token_count > 0:
+                    elapsed = time.time() - stream_start_time
+                    generation_time_ms = int(elapsed * 1000)
+                    tokens_per_second = round(token_count / elapsed, 1) if elapsed > 0 else None
+
+                if not incognito:
+                    cur.execute(
+                        "INSERT INTO messages(session_id, role, text, emotion, char_id, "
+                        "token_count, input_token_count, generation_time_ms, tokens_per_second) "
+                        "VALUES (?,?,?,?,?,?,?,?,?)",
+                        (session_id, "assistant", clean_reply, emotion, char_id,
+                         token_count, est_input_tokens, generation_time_ms, tokens_per_second)
+                    )
+                    assistant_message_id = cur.lastrowid
+                    con.commit()
+
+                    # Update relationship scores based on detected emotion
+                    _update_relationship(con, char_id, emotion)
+
+                    # Persist mood + daily-greeting state (#56, #54) and first_chat_date (#109)
+                    from datetime import datetime as _dt
+                    _today_str = _dt.now().strftime('%Y-%m-%d')
+                    try:
+                        if stream_char_first_chat_date is None:
+                            con.execute(
+                                "UPDATE characters SET last_emotion=?, last_chat_date=?, first_chat_date=? WHERE id=?",
+                                (emotion, _today_str, _today_str, char_id)
+                            )
+                        else:
+                            con.execute(
+                                "UPDATE characters SET last_emotion=?, last_chat_date=? WHERE id=?",
+                                (emotion, _today_str, char_id)
+                            )
+                        con.commit()
+                    except Exception as _e:
+                        logger.warning(f"Could not persist mood/date for char {char_id}: {_e}")
+                else:
+                    assistant_message_id = None  # incognito: no DB record
+
+                if vector_store and not incognito:
+                    vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
+
+                memory_hits = [
+                    {
+                        "text": m.get("text", ""),
+                        "role": m.get("role", ""),
+                        "score": max(0.0, 1.0 - float(m.get("dist", 0.0))),
+                    }
+                    for m in memories
+                ]
+
+                done_data = {
+                    "ok": True,
+                    "reply": clean_reply,
+                    "session_id": session_id,
+                    "emotion": emotion,
+                    "gesture": gesture,
+                    "user_message_id": user_message_id,
+                    "assistant_message_id": assistant_message_id,
+                    "memory_hits": memory_hits,
+                    "token_count": token_count,
+                    "input_tokens": est_input_tokens,
+                    "generation_time_ms": generation_time_ms,
+                    "tokens_per_second": tokens_per_second,
+                    # Tell the frontend not to call /api/tts separately when we already
+                    # synthesized and emitted audio_chunk events above.
+                    "tts_chunked": bool(chunk_tasks),
+                    # Daily-first flag: true when no chat was sent today yet (#54)
+                    "is_daily_first": _is_daily_first,
+                    # Token budget for the context window dashboard widget
+                    "context_budget": _context_budget_summary(sections, hist, cfg),
+                    # Phase 9: capability mismatch warning (if character needs a bigger model)
+                    "capability_warning": _capability_warning,
+                }
+                yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
+
+                # Fire outbound webhooks (#62) — non-blocking background threads
+                _fire_webhooks({
+                    "character": stream_char_name if 'stream_char_name' in dir() else "",
+                    "reply": clean_reply,
+                    "emotion": emotion,
+                    "session_id": session_id,
+                })
+
+            except Exception as e:
+                logger.error(f"Stream chat error: {e}", exc_info=True)
+                _telemetry_inc("chat.failures_total")
+                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+            finally:
+                con.close()
 
     return StreamingResponse(
         event_generator(),

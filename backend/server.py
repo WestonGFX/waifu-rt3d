@@ -284,6 +284,15 @@ def v2_spa(full_path: str):
 if FRONTEND_DASHBOARD_DIST.exists():
     app.mount("/dashboard", StaticFiles(directory=str(FRONTEND_DASHBOARD_DIST), html=True), name="dashboard")
 
+# Favicon — served from the active frontend's root directory
+@app.get("/favicon.svg")
+def favicon():
+    """Serve the SVG favicon from the Neon frontend root."""
+    path = FRONTEND / "favicon.svg"
+    if path.exists():
+        return FileResponse(path, media_type="image/svg+xml")
+    return JSONResponse({"error": "not found"}, status_code=404)
+
 # Mount Static Files
 app.mount("/assets", StaticFiles(directory=str(FRONTEND / "assets")), name="assets")
 app.mount("/files", StaticFiles(directory=str(STORAGE)), name="files")
@@ -877,6 +886,193 @@ def _update_relationship(con, char_id: int, emotion: str):
         logger.warning(f"Relationship update failed for char {char_id}: {e}")
 
 
+def _build_prompt_sections(
+    cfg: dict,
+    system_prompt: str,
+    char_id: int,
+    session_id: int,
+    cur,
+    user_text: str = "",
+    *,
+    diary: str = None,
+    diary_date: str = None,
+    last_chat_date: str = None,
+    last_emotion: str = "neutral",
+    first_chat_date: str = None,
+    include_vocab: bool = False,
+) -> list[dict]:
+    """Build all system prompt injection sections with per-section token estimates.
+
+    Centralises prompt assembly previously duplicated across ``/api/chat``,
+    ``/api/chat/stream``, and ``/api/chat/multi``.  Each section is returned
+    as a dict so callers can both concatenate the content for the LLM request
+    AND report per-section token costs to the Token Budget widget.
+
+    Token estimation uses ``len(content) // 4`` (~4 chars per English token),
+    the same heuristic used elsewhere in the codebase.
+
+    Args:
+        cfg: App config dict (from ``load_config()``).
+        system_prompt: Base system prompt text from the character record.
+        char_id: Character ID (for vocab category filtering).
+        session_id: Current chat session ID.
+        cur: SQLite cursor (already open).
+        user_text: The user's message text (used for RAG memory query).
+        diary: Character's diary entry text, or None.
+        diary_date: Date string for the diary entry, or None.
+        last_chat_date: Character's ``last_chat_date`` (YYYY-MM-DD), or None.
+        last_emotion: Character's last detected emotion (default ``"neutral"``).
+        first_chat_date: Character's ``first_chat_date`` for anniversary check.
+        include_vocab: Whether to include vocabulary context injection.
+
+    Returns:
+        List of dicts, each with keys:
+            - ``name`` (str): Human-readable section label (e.g. ``"System Prompt"``).
+            - ``content`` (str): The text to inject into the system prompt.
+            - ``tokens`` (int): Estimated token count (``len(content) // 4``).
+            - ``chars`` (int): Character count of the content.
+
+    Example:
+        >>> sections = _build_prompt_sections(cfg, "You are Fox.", 1, 1, cur)
+        >>> system_content = "".join(s["content"] for s in sections)
+        >>> total_tokens = sum(s["tokens"] for s in sections)
+    """
+    from datetime import datetime as _dt_bps
+
+    def _section(name: str, content: str) -> dict:
+        """Create a section dict with automatic token/char estimation."""
+        return {"name": name, "content": content, "tokens": len(content) // 4, "chars": len(content)}
+
+    sections = []
+
+    # 1. Base system prompt
+    if system_prompt:
+        sections.append(_section("System Prompt", system_prompt))
+
+    # 2. Diary entry (#57)
+    if diary:
+        label = f"[YOUR DIARY — {diary_date}]" if diary_date else "[YOUR DIARY]"
+        sections.append(_section("Diary Entry", f"\n\n{label}\n{diary}"))
+
+    # 3. Daily greeting (#54)
+    _today = _dt_bps.now().strftime('%Y-%m-%d')
+    is_daily_first = (last_chat_date != _today) if last_chat_date is not None else False
+    if is_daily_first:
+        _hour = _dt_bps.now().hour
+        _tod = "morning" if _hour < 12 else "afternoon" if _hour < 18 else "evening"
+        greeting_text = (
+            f"\n[Today is {_today}. This is your first conversation today. "
+            f"The user is greeting you this {_tod}. "
+            f"Your last recorded mood was: {last_emotion}. "
+            f"Start the conversation naturally, acknowledging the new day.]"
+        )
+        sections.append(_section("Daily Greeting", greeting_text))
+
+    # 4. Anniversary milestones (#109)
+    if first_chat_date:
+        try:
+            _first = _dt_bps.strptime(first_chat_date, '%Y-%m-%d').date()
+            _days = (_dt_bps.now().date() - _first).days
+            if _days in (30, 183, 365):
+                _milestone = "one month" if _days == 30 else "six months" if _days == 183 else "one year"
+                ann_text = (
+                    f"\n[IMPORTANT: Today marks exactly {_milestone} since you first met the user! "
+                    f"This is a special anniversary — weave it naturally into your response.]"
+                )
+                sections.append(_section("Anniversary", ann_text))
+        except (ValueError, TypeError):
+            pass
+
+    # 5. RAG memory context
+    if vector_store and user_text:
+        memories = vector_store.query_memory(user_text, char_id=char_id)
+        if memories:
+            mem_text = "\n[MEMORY_CONTEXT]\nRelevant past conversations:\n"
+            for memory in memories:
+                mem_text += f"- {memory['role'].upper()}: {memory['text']}\n"
+            sections.append(_section("RAG Memory", mem_text))
+    else:
+        memories = []
+
+    # 6. Vocabulary context
+    if include_vocab:
+        vocab_cfg = cfg.get("vocab", {})
+        if vocab_cfg.get("enabled", True) and vocab_manager._loaded:
+            char_vocab_cats = None
+            try:
+                row_vc = cur.execute(
+                    "SELECT vocab_categories FROM characters WHERE id=?", (char_id,)
+                ).fetchone()
+                if row_vc and row_vc[0]:
+                    char_vocab_cats = json.loads(row_vc[0]) if isinstance(row_vc[0], str) else row_vc[0]
+            except Exception:
+                pass
+            vocab_limit = vocab_cfg.get("limit", 40)
+            vocab_text = vocab_manager.get_vocab_context(
+                categories=char_vocab_cats, limit=vocab_limit
+            )
+            if vocab_text:
+                sections.append(_section(f"Vocabulary", vocab_text))
+
+    # 7. Emotion / gesture instructions
+    emotion_instruction = (
+        "\n\nVISUAL SYSTEM INSTRUCTIONS:\n"
+        "You have a 3D avatar. Express your artificial emotions using tags at the start of your response.\n"
+        "Format: [emotion:happy] or [emotion:sad] or [emotion:surprised] or [emotion:angry] or [emotion:neutral]\n"
+        "You can also use gestures: [gesture:nod] or [gesture:wave] or [gesture:shake] or [gesture:shrug]\n"
+        "Example: [emotion:happy] [gesture:wave] Hello! It's great to see you!\n"
+        "Do not output these tags if you are being neutral."
+    )
+    sections.append(_section("Emotion Instructions", emotion_instruction))
+
+    # 8. Content filter
+    filter_text = _get_content_filter_injection(cfg.get("content_filter_level", 1))
+    if filter_text:
+        sections.append(_section("Content Filter", filter_text))
+
+    return sections
+
+
+def _context_budget_summary(
+    sections: list[dict],
+    hist: list[dict],
+    cfg: dict,
+) -> dict:
+    """Build a compact context budget summary for chat response payloads.
+
+    Estimates total token usage across prompt sections and chat history,
+    then computes usage percentage against the configured context limit.
+
+    Args:
+        sections: List of section dicts from ``_build_prompt_sections()``.
+        hist: The chat history message list sent to the LLM.
+        cfg: App config dict (for ``context_limit``).
+
+    Returns:
+        Dict with keys: ``sections``, ``total_tokens``, ``context_limit``,
+        ``usage_pct``, ``history_messages``, ``remaining_tokens``.
+    """
+    hist_chars = sum(len(m.get("content", "")) for m in hist)
+    hist_tokens = hist_chars // 4
+    hist_section = {"name": f"Chat History ({len(hist)} msgs)", "tokens": hist_tokens, "chars": hist_chars}
+
+    all_sections = [{"name": s["name"], "tokens": s["tokens"], "chars": s["chars"]} for s in sections]
+    all_sections.append(hist_section)
+
+    total_tokens = sum(s["tokens"] for s in all_sections)
+    context_limit = cfg.get("context_limit", 131072)
+    usage_pct = round(total_tokens / context_limit * 100, 1) if context_limit > 0 else 0
+
+    return {
+        "sections": all_sections,
+        "total_tokens": total_tokens,
+        "context_limit": context_limit,
+        "usage_pct": usage_pct,
+        "history_messages": len(hist),
+        "remaining_tokens": max(0, context_limit - total_tokens),
+    }
+
+
 @app.post("/api/chat")
 async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
     _telemetry_inc("chat.requests_total")
@@ -913,6 +1109,10 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         voice_params = {}
         char_last_chat_date = None
         is_daily_first = False
+        char_first_chat_date = None
+        char_diary = None
+        char_diary_date = None
+        char_last_emotion = "neutral"
         try:
             cur.execute(
                 "SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate, "
@@ -922,7 +1122,6 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 (char_id,)
             )
             row = cur.fetchone()
-            char_first_chat_date = None
             if row:
                 if row[0]:
                     system_prompt = row[0]
@@ -943,47 +1142,32 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 if row[7] is not None:
                     cfg["temperature"] = float(row[7])
                 char_last_chat_date = row[8]
+                char_last_emotion = row[9] or "neutral"
                 char_first_chat_date = row[10]
-
-                # Diary context injection (#57): prepend latest diary entry if present
                 char_diary = row[11]
                 char_diary_date = row[12]
-                if char_diary:
-                    _diary_label = f"[YOUR DIARY — {char_diary_date}]" if char_diary_date else "[YOUR DIARY]"
-                    system_prompt += f"\n\n{_diary_label}\n{char_diary}"
-
-                # Daily greeting context injection (#54): inject note on first chat of the day
-                from datetime import datetime as _dt_c
-                _today_c = _dt_c.now().strftime('%Y-%m-%d')
-                is_daily_first = (char_last_chat_date != _today_c)
-                if is_daily_first:
-                    _now_hour_c = _dt_c.now().hour
-                    _tod_c = "morning" if _now_hour_c < 12 else "afternoon" if _now_hour_c < 18 else "evening"
-                    _last_mood_c = row[9] or "neutral"
-                    system_prompt += (
-                        f"\n[Today is {_today_c}. This is your first conversation today. "
-                        f"The user is greeting you this {_tod_c}. "
-                        f"Your last recorded mood was: {_last_mood_c}. "
-                        f"Start the conversation naturally, acknowledging the new day.]"
-                    )
-
-                # Anniversary context injection (#109)
-                from datetime import datetime as _dt_ann2, date as _date_ann2
-                _today_ann2 = _dt_ann2.now().date()
-                if char_first_chat_date:
-                    try:
-                        _first2 = _dt_ann2.strptime(char_first_chat_date, '%Y-%m-%d').date()
-                        _days2 = (_today_ann2 - _first2).days
-                        if _days2 in (30, 183, 365):
-                            _milestone2 = "one month" if _days2 == 30 else "six months" if _days2 == 183 else "one year"
-                            system_prompt += (
-                                f"\n[IMPORTANT: Today marks exactly {_milestone2} since you first met the user! "
-                                f"This is a special anniversary — weave it naturally into your response.]"
-                            )
-                    except (ValueError, TypeError):
-                        pass
         except Exception as e:
             logger.error(f"Error fetching character data: {e}")
+
+        # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, emotion, filter)
+        sections = _build_prompt_sections(
+            cfg, system_prompt, char_id, session_id, cur,
+            user_text=text,
+            diary=char_diary,
+            diary_date=char_diary_date,
+            last_chat_date=char_last_chat_date,
+            last_emotion=char_last_emotion,
+            first_chat_date=char_first_chat_date,
+            include_vocab=False,  # Non-streaming route historically excludes vocab
+        )
+        system_content = "".join(s["content"] for s in sections)
+        # Check is_daily_first from sections (Daily Greeting section present = first of day)
+        is_daily_first = any(s["name"] == "Daily Greeting" for s in sections)
+
+        # Extract RAG memory hits for the response payload
+        memories = []
+        if vector_store:
+            memories = vector_store.query_memory(text, char_id=char_id)
 
         # History limit: 0 = unlimited (fetch all messages for session)
         # Check both nested (llm.history_limit) and top-level (history_limit) for compat
@@ -1010,26 +1194,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             ).fetchone()[0]
             _maybe_auto_compress(session_id, total_active, max_history)
 
-        memories = []
-        memory_context = ""
-        if vector_store:
-            memories = vector_store.query_memory(text, char_id=char_id)
-            if memories:
-                memory_context = "\n[MEMORY_CONTEXT]\nRelevant past conversations:\n"
-                for memory in memories:
-                    memory_context += f"- {memory['role'].upper()}: {memory['text']}\n"
-
-        emotion_instruction = (
-            "\n\nVISUAL SYSTEM INSTRUCTIONS:\n"
-            "You have a 3D avatar. Express your artificial emotions using tags at the start of your response.\n"
-            "Format: [emotion:happy] or [emotion:sad] or [emotion:surprised] or [emotion:angry] or [emotion:neutral]\n"
-            "You can also use gestures: [gesture:nod] or [gesture:wave] or [gesture:shake] or [gesture:shrug]\n"
-            "Example: [emotion:happy] [gesture:wave] Hello! It's great to see you!\n"
-            "Do not output these tags if you are being neutral."
-        )
-
-        filter_inj = _get_content_filter_injection(cfg.get("content_filter_level", 1))
-        messages = [{"role": "system", "content": system_prompt + memory_context + emotion_instruction + filter_inj}] + hist
+        messages = [{"role": "system", "content": system_content}] + hist
 
         try:
             from backend.llm.registry import get_client
@@ -1176,6 +1341,112 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             "assistant_message_id": assistant_message_id,
             "memory_hits": memory_hits,
             "is_daily_first": is_daily_first,
+            "context_budget": _context_budget_summary(sections, hist, cfg),
+        }
+    finally:
+        con.close()
+
+
+@app.get("/api/context-budget/{session_id}")
+async def get_context_budget(session_id: int, char_id: int = None):
+    """Get a full token budget breakdown for a session's context window.
+
+    Returns per-section token estimates for every system prompt injection layer
+    (base prompt, diary, daily greeting, anniversary, RAG memory, vocabulary,
+    emotion instructions, content filter) plus chat history. Used by the
+    Token Budget widget in the right panel to visualize context consumption.
+
+    Args:
+        session_id: The session ID to compute budget for.
+        char_id: Optional character ID override. If not provided, uses the
+            most recent character from the session's messages.
+
+    Returns:
+        JSON with ``ok``, ``sections`` (per-layer breakdown), ``total_tokens``,
+        ``context_limit``, ``remaining_tokens``, ``usage_pct``, ``history_limit``.
+
+    Example:
+        >>> GET /api/context-budget/1?char_id=1
+        {"ok": true, "sections": [...], "total_tokens": 4433, ...}
+    """
+    cfg = load_config() or {}
+    con = db()
+    cur = con.cursor()
+
+    try:
+        # Resolve char_id if not provided
+        if not char_id:
+            row = cur.execute(
+                "SELECT char_id FROM messages WHERE session_id=? AND char_id IS NOT NULL "
+                "ORDER BY id DESC LIMIT 1", (session_id,)
+            ).fetchone()
+            char_id = row[0] if row else 1
+
+        # Fetch character data for prompt sections
+        system_prompt = "You are a friendly anime companion."
+        diary = None
+        diary_date = None
+        last_chat_date = None
+        last_emotion = "neutral"
+        first_chat_date = None
+        try:
+            cur.execute(
+                "SELECT system_prompt, last_chat_date, last_emotion, first_chat_date, diary, diary_date "
+                "FROM characters WHERE id=?", (char_id,)
+            )
+            row = cur.fetchone()
+            if row:
+                system_prompt = row[0] or system_prompt
+                last_chat_date = row[1]
+                last_emotion = row[2] or "neutral"
+                first_chat_date = row[3]
+                diary = row[4]
+                diary_date = row[5]
+        except Exception:
+            pass
+
+        # Build prompt sections (no user_text for RAG since this is a snapshot)
+        sections = _build_prompt_sections(
+            cfg, system_prompt, char_id, session_id, cur,
+            diary=diary,
+            diary_date=diary_date,
+            last_chat_date=last_chat_date,
+            last_emotion=last_emotion,
+            first_chat_date=first_chat_date,
+            include_vocab=True,
+        )
+
+        # Estimate chat history tokens
+        max_history = cfg.get("llm", {}).get("history_limit", cfg.get("history_limit", 0))
+        if max_history > 0:
+            rows = cur.execute(
+                "SELECT role, text FROM messages WHERE session_id=? AND is_active=1 "
+                "ORDER BY id DESC LIMIT ?", (session_id, max_history)
+            ).fetchall()
+        else:
+            rows = cur.execute(
+                "SELECT role, text FROM messages WHERE session_id=? AND is_active=1 "
+                "ORDER BY id DESC", (session_id,)
+            ).fetchall()
+        hist_chars = sum(len(t or "") for _, t in rows)
+        hist_tokens = hist_chars // 4
+
+        # Build response
+        all_sections = [{"name": s["name"], "tokens": s["tokens"], "chars": s["chars"]} for s in sections]
+        all_sections.append({"name": f"Chat History ({len(rows)} msgs)", "tokens": hist_tokens, "chars": hist_chars})
+
+        total_tokens = sum(s["tokens"] for s in all_sections)
+        context_limit = cfg.get("context_limit", 131072)
+        usage_pct = round(total_tokens / context_limit * 100, 1) if context_limit > 0 else 0
+
+        return {
+            "ok": True,
+            "context_limit": context_limit,
+            "history_limit": max_history,
+            "sections": all_sections,
+            "total_tokens": total_tokens,
+            "remaining_tokens": max(0, context_limit - total_tokens),
+            "usage_pct": usage_pct,
         }
     finally:
         con.close()
@@ -1416,6 +1687,8 @@ async def chat_stream(req: Request):
     stream_char_last_emotion = "neutral"
     stream_char_first_chat_date = None
     _is_daily_first = False
+    _stream_diary = None
+    _stream_diary_date = None
     try:
         cur.execute(
             "SELECT system_prompt, llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, "
@@ -1447,50 +1720,33 @@ async def chat_stream(req: Request):
             if row[9]:
                 voice_params['tts_rate'] = row[9]
             stream_char_first_chat_date = row[10]
-
-            # Diary context injection (#57): prepend latest diary entry if present
             _stream_diary = row[11]
             _stream_diary_date = row[12]
-            if _stream_diary:
-                _dlabel = f"[YOUR DIARY — {_stream_diary_date}]" if _stream_diary_date else "[YOUR DIARY]"
-                system_prompt += f"\n\n{_dlabel}\n{_stream_diary}"
 
             # Apply voice params to chunked TTS config now that we have char data
             if voice_params and use_chunked_tts:
                 tts_chunked_cfg.update(voice_params)
-
-            # Daily greeting context injection (#54): inject note on first chat of the day
-            from datetime import datetime as _dt_s
-            _today_s = _dt_s.now().strftime('%Y-%m-%d')
-            _is_daily_first = (stream_char_last_chat_date != _today_s)
-            if _is_daily_first:
-                _now_hour = _dt_s.now().hour
-                _tod = "morning" if _now_hour < 12 else "afternoon" if _now_hour < 18 else "evening"
-                system_prompt += (
-                    f"\n[Today is {_today_s}. This is your first conversation today. "
-                    f"The user is greeting you this {_tod}. "
-                    f"Your last recorded mood was: {stream_char_last_emotion}. "
-                    f"Start the conversation naturally, acknowledging the new day.]"
-                )
-
-            # Anniversary context injection (#109)
-            from datetime import datetime as _dt_ann, timedelta as _td_ann
-            _today_ann = _dt_ann.now().date()
-            if stream_char_first_chat_date:
-                try:
-                    _first = _dt_ann.strptime(stream_char_first_chat_date, '%Y-%m-%d').date()
-                    _days = (_today_ann - _first).days
-                    # Check for 30-day, 6-month (~183d), and 1-year (365d) milestones
-                    if _days in (30, 183, 365):
-                        _milestone = "one month" if _days == 30 else "six months" if _days == 183 else "one year"
-                        system_prompt += (
-                            f"\n[IMPORTANT: Today marks exactly {_milestone} since you first met the user! "
-                            f"This is a special anniversary — weave it naturally into your response.]"
-                        )
-                except (ValueError, TypeError):
-                    pass
     except Exception as e:
         logger.error(f"Error fetching character data: {e}")
+
+    # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, vocab, emotion, filter)
+    sections = _build_prompt_sections(
+        cfg, system_prompt, char_id, session_id, cur,
+        user_text=text,
+        diary=_stream_diary,
+        diary_date=_stream_diary_date,
+        last_chat_date=stream_char_last_chat_date,
+        last_emotion=stream_char_last_emotion,
+        first_chat_date=stream_char_first_chat_date,
+        include_vocab=True,
+    )
+    system_content = "".join(s["content"] for s in sections)
+    _is_daily_first = any(s["name"] == "Daily Greeting" for s in sections)
+
+    # Extract RAG memory hits for the response payload
+    memories = []
+    if vector_store:
+        memories = vector_store.query_memory(text, char_id=char_id)
 
     # Emotional TTS hint for chunked TTS (#78): emotion won't be known until after streaming,
     # so use last_emotion (previous response's mood) as a continuity-based proxy.
@@ -1523,45 +1779,7 @@ async def chat_stream(req: Request):
         ).fetchone()[0]
         _maybe_auto_compress(session_id, total_active, max_history)
 
-    memories = []
-    memory_context = ""
-    if vector_store:
-        memories = vector_store.query_memory(text, char_id=char_id)
-        if memories:
-            memory_context = "\n[MEMORY_CONTEXT]\nRelevant past conversations:\n"
-            for memory in memories:
-                memory_context += f"- {memory['role'].upper()}: {memory['text']}\n"
-
-    emotion_instruction = (
-        "\n\nVISUAL SYSTEM INSTRUCTIONS:\n"
-        "You have a 3D avatar. Express your artificial emotions using tags at the start of your response.\n"
-        "Format: [emotion:happy] or [emotion:sad] or [emotion:surprised] or [emotion:angry] or [emotion:neutral]\n"
-        "You can also use gestures: [gesture:nod] or [gesture:wave] or [gesture:shake] or [gesture:shrug]\n"
-        "Example: [emotion:happy] [gesture:wave] Hello! It's great to see you!\n"
-        "Do not output these tags if you are being neutral."
-    )
-
-    # Inject vocabulary context if enabled
-    vocab_context = ""
-    vocab_cfg = cfg.get("vocab", {})
-    if vocab_cfg.get("enabled", True) and vocab_manager._loaded:
-        # Per-character category filter (if character has vocab_categories set)
-        char_vocab_cats = None
-        try:
-            row_vc = cur.execute(
-                "SELECT vocab_categories FROM characters WHERE id=?", (char_id,)
-            ).fetchone()
-            if row_vc and row_vc[0]:
-                char_vocab_cats = json.loads(row_vc[0]) if isinstance(row_vc[0], str) else row_vc[0]
-        except Exception:
-            pass  # Column may not exist yet
-        vocab_limit = vocab_cfg.get("limit", 40)
-        vocab_context = vocab_manager.get_vocab_context(
-            categories=char_vocab_cats, limit=vocab_limit
-        )
-
-    filter_inj = _get_content_filter_injection(cfg.get("content_filter_level", 1))
-    llm_messages = [{"role": "system", "content": system_prompt + memory_context + vocab_context + emotion_instruction + filter_inj}] + hist
+    llm_messages = [{"role": "system", "content": system_content}] + hist
 
     from backend.llm.registry import get_client
     from backend.llm.router import get_router
@@ -1767,6 +1985,8 @@ async def chat_stream(req: Request):
                 "tts_chunked": bool(chunk_tasks),
                 # Daily-first flag: true when no chat was sent today yet (#54)
                 "is_daily_first": _is_daily_first,
+                # Token budget for the context window dashboard widget
+                "context_budget": _context_budget_summary(sections, hist, cfg),
             }
             yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
@@ -2251,18 +2471,13 @@ async def regenerate_message(message_id: int, req: Request):
         except Exception:
             pass
 
-        # Build emotion instruction (same as chat endpoint)
-        emotion_instruction = (
-            "\n\nVISUAL SYSTEM INSTRUCTIONS:\n"
-            "You have a 3D avatar. Express your artificial emotions using tags at the start of your response.\n"
-            "Format: [emotion:happy] or [emotion:sad] or [emotion:surprised] or [emotion:angry] or [emotion:neutral]\n"
-            "You can also use gestures: [gesture:nod] or [gesture:wave] or [gesture:shake] or [gesture:shrug]\n"
-            "Example: [emotion:happy] [gesture:wave] Hello! It's great to see you!\n"
-            "Do not output these tags if you are being neutral."
+        # Build prompt sections via shared helper (regenerate uses minimal injections)
+        sections = _build_prompt_sections(
+            cfg, system_prompt, char_id, session_id, cur,
+            include_vocab=False,
         )
-
-        filter_inj = _get_content_filter_injection(cfg.get("content_filter_level", 1))
-        messages = [{"role": "system", "content": system_prompt + emotion_instruction + filter_inj}] + hist
+        system_content = "".join(s["content"] for s in sections)
+        messages = [{"role": "system", "content": system_content}] + hist
 
         # Call LLM
         from backend.llm.registry import get_client

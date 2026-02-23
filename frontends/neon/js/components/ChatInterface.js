@@ -31,12 +31,15 @@ export class ChatInterface {
         // from picking up speaker echo. Set to true by drainAudioQueue, cleared after 300ms.
         this._ttsSilencePad = false;
 
-        // In-chat TTS speed override (#14): set by the speed slider for next response only.
-        // null = use global config speech_rate.
-        this._ttsRateOverride = null;
-
         // Incognito mode (#123): when true, messages skip DB persistence.
         this._incognito = false;
+
+        // Chat search (#31): tracks open/active state; _searchBar is the DOM element.
+        this._searchActive = false;
+        /** @type {HTMLElement|null} */
+        this._searchBar = null;
+        this._searchMatches = [];
+        this._searchMatchIndex = 0;
 
         // Listen for session changes to load history
         bus.on('session:selected', (data) => {
@@ -438,6 +441,9 @@ export class ChatInterface {
                 }
             };
         }
+
+        // Chat message search (#31)
+        this._initChatSearch();
     }
 
     /**
@@ -459,6 +465,7 @@ export class ChatInterface {
             this.streamStartTime = null;
             this.prefillStartTime = performance.now();
             this.inputTokens = 0;
+            this._lastMetadata = null;
         }
 
         const dot = document.querySelector('.status-dot');
@@ -482,14 +489,28 @@ export class ChatInterface {
                 dot.style.boxShadow = '0 0 15px #00ffff';
                 dot.classList.remove('thinking');
 
-                // Show final stats — persists until next message (no revert to idle)
-                this._lastGenTime = this.streamStartTime
+                // Show final stats — persists until next message (no revert to idle).
+                // Prefer server-authoritative metadata values when the frontend
+                // counters are 0 (e.g. adapter didn't emit individual token events).
+                const meta = this._lastMetadata;
+                let tokCount = this.tokenCount;
+                let genTimeSec = this.streamStartTime
                     ? (performance.now() - this.streamStartTime) / 1000
                     : 0;
+
+                // Fallback to server metadata when frontend counters are empty
+                if (tokCount === 0 && meta?.token_count > 0) {
+                    tokCount = meta.token_count;
+                }
+                if (genTimeSec === 0 && meta?.generation_time_ms > 0) {
+                    genTimeSec = meta.generation_time_ms / 1000;
+                }
+
+                this._lastGenTime = genTimeSec;
                 this._lastTotalTime = (performance.now() - this.prefillStartTime) / 1000;
-                this._lastSpeed = this._lastGenTime > 0
-                    ? (this.tokenCount / this._lastGenTime).toFixed(1) : '0';
-                label.innerText = `DONE: ${this.tokenCount} tok | ${this._lastSpeed} tok/s | ${this._lastTotalTime.toFixed(1)}s`;
+                this._lastSpeed = genTimeSec > 0
+                    ? (tokCount / genTimeSec).toFixed(1) : '0';
+                label.innerText = `DONE: ${tokCount} tok | ${this._lastSpeed} tok/s | ${this._lastTotalTime.toFixed(1)}s`;
                 label.style.color = '#00ff88';
             }
         }
@@ -752,19 +773,9 @@ export class ChatInterface {
                 // Opt-in to sentence-chunked TTS when TTS is globally enabled.
                 // The server will emit audio_chunk SSE events as sentences complete.
                 speak: !!(state.config?.tts?.enabled),
-                // In-chat TTS speed override (#14): transient per-response rate, reset after send
-                ...(this._ttsRateOverride !== null && { speech_rate: this._ttsRateOverride }),
                 // Incognito mode (#123): skip DB persistence for this exchange
                 ...(this._incognito && { incognito: true }),
             };
-            // Reset transient speed override after building payload (it's per-response)
-            if (this._ttsRateOverride !== null) {
-                this._ttsRateOverride = null;
-                const slider = document.getElementById('tts-speed-slider');
-                const label = document.getElementById('tts-speed-label');
-                if (slider) slider.value = '1.0';
-                if (label) { label.textContent = '1.0×'; label.style.color = 'var(--text-muted)'; }
-            }
 
             const response = await fetch('/api/chat/stream', {
                 method: 'POST',
@@ -1036,20 +1047,31 @@ export class ChatInterface {
                 }
             }
 
-            // Add info line with real token stats (left) and time (right)
+            // Store metadata for setThinking() status bar fallback
+            this._lastMetadata = metadata;
+
+            // Use the best available token stats: prefer frontend counters (real-time),
+            // fall back to server metadata when frontend counters are 0
+            const finalTokenCount = this.tokenCount > 0
+                ? this.tokenCount
+                : (metadata?.token_count || 0);
             const genTime = this.streamStartTime
                 ? ((performance.now() - this.streamStartTime) / 1000).toFixed(1)
-                : '0';
+                : metadata?.generation_time_ms > 0
+                    ? (metadata.generation_time_ms / 1000).toFixed(1)
+                    : '0';
             const elapsed = this.streamStartTime
-                ? (performance.now() - this.streamStartTime) / 1000 : 0;
+                ? (performance.now() - this.streamStartTime) / 1000
+                : metadata?.generation_time_ms > 0
+                    ? metadata.generation_time_ms / 1000
+                    : 0;
             const speed = elapsed > 0.2
-                ? (this.tokenCount / elapsed).toFixed(1) : '0';
-            const tokenCount = this.tokenCount;
+                ? (finalTokenCount / elapsed).toFixed(1) : '0';
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             const infoLine = document.createElement('div');
             infoLine.className = 'bubble-info';
-            infoLine.innerHTML = `<span class="bubble-info-stats">${tokenCount} tok · ${speed} tok/s · ${genTime}s</span><span class="bubble-info-sep" style="opacity:0.4; margin:0 4px;">·</span><span class="bubble-info-time">${time}</span>`;
+            infoLine.innerHTML = `<span class="bubble-info-stats">${finalTokenCount} tok · ${speed} tok/s · ${genTime}s</span><span class="bubble-info-sep" style="opacity:0.4; margin:0 4px;">·</span><span class="bubble-info-time">${time}</span>`;
             streamContentEl.appendChild(infoLine);
 
             this.setThinking(false, null);
@@ -1363,6 +1385,9 @@ export class ChatInterface {
         if (state.state.currentSessionId && state.state.currentSessionId !== data.id) {
             sessionStorage.setItem(`scroll-${state.state.currentSessionId}`, this.container.scrollTop);
         }
+
+        // Close search bar when switching sessions (#31) — highlights are now gone
+        if (this._searchActive) this._closeSearch();
 
         const { messages } = data;
         this.container.innerHTML = ''; // Clear current chat
@@ -2110,52 +2135,6 @@ export class ChatInterface {
 
         statusContainer.appendChild(recapBtn);
 
-        // TTS speed override control (#14): compact slider above the send button area.
-        // Only visible when TTS is enabled. Affects only the NEXT response, not saved config.
-        const inputArea = document.querySelector('.input-area');
-        if (inputArea) {
-            const speedRow = document.createElement('div');
-            speedRow.id = 'tts-speed-row';
-            speedRow.style.cssText = [
-                'display:none; align-items:center; gap:6px; padding:2px 8px 0',
-                'font-family:var(--font-mono); font-size:0.6rem; color:var(--text-muted)',
-            ].join(';');
-            speedRow.innerHTML = `
-                <span style="white-space:nowrap; opacity:0.7;">🔊 Speed</span>
-                <input type="range" id="tts-speed-slider" min="0.5" max="2.0" step="0.05" value="1.0"
-                    style="flex:1; height:3px; accent-color:var(--neon-cyan); cursor:pointer;"
-                    title="TTS speed for next response (0.5×–2.0×)">
-                <span id="tts-speed-label" style="min-width:28px; text-align:right; opacity:0.9;">1.0×</span>
-                <button id="tts-speed-reset" title="Reset to 1×"
-                    style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.65rem; padding:0 2px; opacity:0.6;">↺</button>
-            `;
-            inputArea.insertBefore(speedRow, inputArea.firstChild);
-
-            const slider = speedRow.querySelector('#tts-speed-slider');
-            const label = speedRow.querySelector('#tts-speed-label');
-            const resetBtn = speedRow.querySelector('#tts-speed-reset');
-
-            slider.oninput = () => {
-                const v = parseFloat(slider.value);
-                label.textContent = `${v.toFixed(2)}×`;
-                this._ttsRateOverride = v === 1.0 ? null : v;
-                label.style.color = v !== 1.0 ? 'var(--neon-cyan)' : 'var(--text-muted)';
-            };
-            resetBtn.onclick = () => {
-                slider.value = '1.0';
-                label.textContent = '1.0×';
-                label.style.color = 'var(--text-muted)';
-                this._ttsRateOverride = null;
-            };
-
-            // Show speed row only when TTS is enabled
-            const updateSpeedVisibility = () => {
-                speedRow.style.display = state.state.config?.tts?.enabled ? 'flex' : 'none';
-            };
-            bus.on('config:updated', updateSpeedVisibility);
-            updateSpeedVisibility();
-        }
-
         // Incognito mode toggle (#123): ghost button in the status bar
         const incognitoBtn = document.createElement('button');
         incognitoBtn.id = 'btn-incognito';
@@ -2697,6 +2676,251 @@ export class ChatInterface {
                 if (onDone) onDone();
             }
         }, intervalMs);
+    }
+
+    // ── Chat Search (#31) ────────────────────────────────────────────────────
+
+    /**
+     * Set up Ctrl+F keyboard listener to open the in-chat search bar.
+     * Escape closes the bar; Enter / Shift+Enter navigate between matches.
+     * @private
+     */
+    _initChatSearch() {
+        document.addEventListener('keydown', (e) => {
+            // Only intercept Ctrl+F (or Cmd+F on Mac) when not in an input
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                // Don't intercept if user is typing in an <input> or <textarea>
+                const tag = document.activeElement?.tagName?.toLowerCase();
+                if (tag === 'input' || tag === 'textarea') return;
+
+                e.preventDefault();
+                if (this._searchActive) {
+                    this._focusSearch();
+                } else {
+                    this._openSearch();
+                }
+            }
+
+            if (e.key === 'Escape' && this._searchActive) {
+                this._closeSearch();
+            }
+        });
+    }
+
+    /**
+     * Create and display the chat search bar above the message list.
+     * @private
+     */
+    _openSearch() {
+        if (this._searchBar) {
+            this._searchBar.style.display = 'flex';
+            this._focusSearch();
+            this._searchActive = true;
+            return;
+        }
+
+        const bar = document.createElement('div');
+        bar.id = 'chat-search-bar';
+        bar.style.cssText = `
+            display:flex; align-items:center; gap:8px; padding:6px 12px;
+            background:rgba(0,10,20,0.92); border-bottom:1px solid rgba(0,240,255,0.25);
+            position:sticky; top:0; z-index:50; backdrop-filter:blur(8px);
+        `;
+        bar.innerHTML = `
+            <span style="color:var(--neon-cyan); font-size:0.75rem; font-family:var(--font-mono); white-space:nowrap;">🔍 SEARCH</span>
+            <input id="chat-search-input" type="text" placeholder="Search messages..."
+                   style="flex:1; padding:4px 8px; background:rgba(0,20,40,0.8);
+                          border:1px solid rgba(0,240,255,0.3); color:var(--text-main);
+                          border-radius:6px; font-size:0.82rem; outline:none;"/>
+            <span id="chat-search-count" style="color:var(--text-muted); font-size:0.72rem; font-family:var(--font-mono); white-space:nowrap; min-width:48px;"></span>
+            <button id="chat-search-prev" title="Previous (Shift+Enter)"
+                    style="padding:2px 7px; border-radius:4px; border:1px solid rgba(0,240,255,0.3);
+                           background:transparent; color:var(--neon-cyan); cursor:pointer; font-size:0.8rem;">▲</button>
+            <button id="chat-search-next" title="Next (Enter)"
+                    style="padding:2px 7px; border-radius:4px; border:1px solid rgba(0,240,255,0.3);
+                           background:transparent; color:var(--neon-cyan); cursor:pointer; font-size:0.8rem;">▼</button>
+            <button id="chat-search-close" title="Close (Esc)"
+                    style="padding:2px 7px; border-radius:4px; border:none;
+                           background:transparent; color:var(--text-muted); cursor:pointer; font-size:0.9rem;">✕</button>
+        `;
+
+        // Insert at top of message container (sticky positioning handles the rest)
+        this.container.insertBefore(bar, this.container.firstChild);
+        this._searchBar = bar;
+        this._searchActive = true;
+
+        const input = bar.querySelector('#chat-search-input');
+        let debounce = null;
+        input.addEventListener('input', () => {
+            clearTimeout(debounce);
+            debounce = setTimeout(() => this._runSearch(input.value), 120);
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.shiftKey) this._navigateMatch(-1);
+                else this._navigateMatch(1);
+            } else if (e.key === 'Escape') {
+                this._closeSearch();
+            }
+        });
+
+        bar.querySelector('#chat-search-prev').onclick = () => this._navigateMatch(-1);
+        bar.querySelector('#chat-search-next').onclick = () => this._navigateMatch(1);
+        bar.querySelector('#chat-search-close').onclick = () => this._closeSearch();
+
+        this._focusSearch();
+    }
+
+    /** @private */
+    _focusSearch() {
+        const input = document.getElementById('chat-search-input');
+        if (input) { input.focus(); input.select(); }
+    }
+
+    /**
+     * Close and hide the search bar, removing all highlights.
+     * @private
+     */
+    _closeSearch() {
+        this._clearHighlights();
+        if (this._searchBar) this._searchBar.style.display = 'none';
+        this._searchActive = false;
+        this._searchMatches = [];
+        this._searchMatchIndex = 0;
+        const count = document.getElementById('chat-search-count');
+        if (count) count.textContent = '';
+    }
+
+    /**
+     * Highlight all text nodes matching the query within chat bubbles.
+     * Builds a match list for navigation.
+     *
+     * @private
+     * @param {string} query - Search string (case-insensitive)
+     */
+    _runSearch(query) {
+        this._clearHighlights();
+        this._searchMatches = [];
+        this._searchMatchIndex = 0;
+        const count = document.getElementById('chat-search-count');
+
+        if (!query || query.length < 2) {
+            if (count) count.textContent = '';
+            return;
+        }
+
+        const qLower = query.toLowerCase();
+
+        // Walk text nodes inside .bubble-text elements only (not timestamps, metadata)
+        this.container.querySelectorAll('.bubble-text').forEach(bubble => {
+            this._highlightInElement(bubble, qLower, query);
+        });
+
+        // Collect all mark elements as match targets
+        this._searchMatches = Array.from(this.container.querySelectorAll('mark.chat-search-mark'));
+
+        if (count) {
+            count.textContent = this._searchMatches.length
+                ? `1/${this._searchMatches.length}`
+                : 'No match';
+        }
+
+        // Scroll to first match
+        if (this._searchMatches.length) {
+            this._activateMatch(0);
+        }
+    }
+
+    /**
+     * Recursively walk text nodes in `el` and wrap matches in `<mark>`.
+     * Operates on live text nodes to avoid breaking markdown HTML.
+     *
+     * @private
+     * @param {Element} el - Container element
+     * @param {string} qLower - Lowercased query for matching
+     * @param {string} query - Original query for display
+     */
+    _highlightInElement(el, qLower, query) {
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        const nodesToProcess = [];
+
+        // Collect all text nodes first (modifying DOM mid-walk is unsafe)
+        let node;
+        while ((node = walker.nextNode())) {
+            if (node.textContent.toLowerCase().includes(qLower)) {
+                nodesToProcess.push(node);
+            }
+        }
+
+        for (const textNode of nodesToProcess) {
+            const text = textNode.textContent;
+            const lower = text.toLowerCase();
+            const parts = [];
+            let lastIdx = 0;
+            let idx;
+
+            while ((idx = lower.indexOf(qLower, lastIdx)) !== -1) {
+                if (idx > lastIdx) parts.push(document.createTextNode(text.slice(lastIdx, idx)));
+                const mark = document.createElement('mark');
+                mark.className = 'chat-search-mark';
+                mark.textContent = text.slice(idx, idx + query.length);
+                mark.style.cssText = 'background:rgba(0,240,255,0.35); color:inherit; border-radius:2px; padding:0 1px;';
+                parts.push(mark);
+                lastIdx = idx + query.length;
+            }
+
+            if (lastIdx < text.length) parts.push(document.createTextNode(text.slice(lastIdx)));
+
+            if (parts.length > 1) {
+                const frag = document.createDocumentFragment();
+                parts.forEach(p => frag.appendChild(p));
+                textNode.parentNode.replaceChild(frag, textNode);
+            }
+        }
+    }
+
+    /**
+     * Remove all `<mark>` elements inserted by search, restoring original text nodes.
+     * @private
+     */
+    _clearHighlights() {
+        this.container.querySelectorAll('mark.chat-search-mark').forEach(mark => {
+            const text = document.createTextNode(mark.textContent);
+            mark.parentNode.replaceChild(text, mark);
+        });
+        // Normalize merges adjacent text nodes created by our splitting
+        this.container.normalize();
+    }
+
+    /**
+     * Navigate to the next or previous match and scroll it into view.
+     *
+     * @private
+     * @param {number} delta - +1 for next, -1 for previous
+     */
+    _navigateMatch(delta) {
+        if (!this._searchMatches.length) return;
+        const prev = this._searchMatches[this._searchMatchIndex];
+        if (prev) prev.style.background = 'rgba(0,240,255,0.35)';
+
+        this._searchMatchIndex = (this._searchMatchIndex + delta + this._searchMatches.length) % this._searchMatches.length;
+        this._activateMatch(this._searchMatchIndex);
+
+        const count = document.getElementById('chat-search-count');
+        if (count) count.textContent = `${this._searchMatchIndex + 1}/${this._searchMatches.length}`;
+    }
+
+    /**
+     * Highlight the active match and scroll it into view.
+     * @private
+     * @param {number} idx - Match index
+     */
+    _activateMatch(idx) {
+        const mark = this._searchMatches[idx];
+        if (!mark) return;
+        mark.style.background = 'rgba(255,200,0,0.55)'; // Gold for active match
+        mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 

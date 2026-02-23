@@ -217,7 +217,7 @@ export class PersonaCreator {
                               placeholder="Describe the character's personality, speech patterns, and behavior..."
                               style="width:100%; padding:10px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px; resize:vertical;">${this._escapeHtml(prompt)}</textarea>
                     <div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">
-                        <span id="prompt-char-count">${prompt.length}</span>/5000 chars
+                        <span id="prompt-char-count">${prompt.length}</span>/5000 chars · <span id="prompt-token-count" style="color:var(--text-muted);">~${Math.ceil(prompt.length / 4)} tokens</span>
                     </div>
                 </div>
 
@@ -378,8 +378,20 @@ export class PersonaCreator {
         // Bind events
         const promptEl = document.getElementById('persona-prompt');
         const charCount = document.getElementById('prompt-char-count');
+        const tokenCount = document.getElementById('prompt-token-count');
         promptEl.oninput = () => {
-            charCount.textContent = promptEl.value.length;
+            const chars = promptEl.value.length;
+            const tokens = Math.ceil(chars / 4);
+            charCount.textContent = chars;
+            if (tokenCount) {
+                tokenCount.textContent = `~${tokens.toLocaleString()} tokens`;
+                if (tokens > 2000) {
+                    tokenCount.style.color = '#ffaa00';
+                    tokenCount.textContent += ' (long)';
+                } else {
+                    tokenCount.style.color = 'var(--text-muted)';
+                }
+            }
         };
 
         const backBtn = document.getElementById('btn-persona-back');

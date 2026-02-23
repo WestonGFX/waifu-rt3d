@@ -35,13 +35,21 @@ export class Dashboard {
         this.initTelemetry();
         this._initWidgetSystem();
         this._initVocabWidget();
+        this._initTokenBudgetWidget();
 
         // Refresh data widgets on character/session/chat events
-        bus.on('character:selected', () => this.refreshRelationship());
-        bus.on('session:selected', () => this.refreshEmotionTimeline());
-        bus.on('chat:completed', () => {
+        bus.on('character:selected', () => {
+            this.refreshRelationship();
+            this.refreshTokenBudget();
+        });
+        bus.on('session:selected', () => {
+            this.refreshEmotionTimeline();
+            this.refreshTokenBudget();
+        });
+        bus.on('chat:completed', (meta) => {
             this.refreshRelationship();
             this.refreshEmotionTimeline();
+            this.updateTokenBudget(meta?.context_budget);
         });
     }
 
@@ -649,6 +657,11 @@ export class Dashboard {
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 6);
 
+            // Estimate injected token count: limit entries × ~60 chars each ÷ 4 chars/token
+            const vocabLimit = stats.limit || 40;
+            const injectedCount = Math.min(stats.total || 0, vocabLimit);
+            const estTokens = Math.round(injectedCount * 15);  // ~60 chars/entry ÷ 4
+
             widget.innerHTML = `
                 <div style="display:flex; justify-content:space-between; font-size:0.65rem; margin-bottom:6px;">
                     <span style="color:var(--text-muted);">Total Terms</span>
@@ -658,6 +671,11 @@ export class Dashboard {
                     <span style="color:var(--text-muted);">Custom</span>
                     <span style="color:var(--neon-cyan);">${stats.user || 0}</span>
                 </div>
+                ${injectedCount > 0 ? `
+                    <div style="font-size:0.6rem; color:var(--neon-green,#39ff14); margin-bottom:4px; opacity:0.8;">
+                        Injecting ${injectedCount} entries · ~${estTokens} tok
+                    </div>
+                ` : ''}
                 ${topCategories.length ? `
                     <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;">
                         ${topCategories.map(([cat, count]) => `
@@ -668,6 +686,172 @@ export class Dashboard {
             `;
         } catch (e) {
             widget.innerHTML = '<div style="color:var(--text-muted); font-size:0.7rem;">--</div>';
+        }
+    }
+
+    // ─── TOKEN BUDGET WIDGET ──────────────────────────────
+
+    /**
+     * Initialize the Token Budget widget.
+     * Subscribes to events that trigger budget refreshes.
+     * @private
+     */
+    _initTokenBudgetWidget() {
+        /** @type {boolean} Whether the breakdown list is expanded */
+        this._tokenBudgetExpanded = false;
+        /** @type {Object|null} Last full budget data for re-rendering */
+        this._lastBudgetData = null;
+    }
+
+    /**
+     * Fetch the full token budget breakdown from the backend.
+     * Called on session/character switch for a complete snapshot.
+     *
+     * Uses raw fetch (not API.get) to avoid toast spam — this is a
+     * non-critical widget update that should degrade silently.
+     */
+    async refreshTokenBudget() {
+        const sid = state.state.currentSessionId;
+        const cid = state.state.currentCharacterId;
+        if (!sid) return;
+
+        try {
+            const res = await fetch(`/api/context-budget/${sid}?char_id=${cid || ''}`);
+            if (!res.ok) return;  // Silently ignore errors (e.g. endpoint not available)
+            const data = await res.json();
+            if (data?.ok) {
+                this._lastBudgetData = data;
+                this._renderTokenBudget(data);
+            }
+        } catch (e) {
+            console.debug('[Dashboard] Token budget fetch failed:', e.message);
+        }
+    }
+
+    /**
+     * Quick-update the token budget from inline chat response data.
+     * Avoids an extra API call — piggybacks on the SSE done event.
+     *
+     * @param {Object|null} summary - context_budget from chat response
+     */
+    updateTokenBudget(summary) {
+        if (!summary) {
+            console.debug('[Dashboard] chat:completed had no context_budget — backend may need restart');
+            return;
+        }
+        this._lastBudgetData = summary;
+        this._renderTokenBudget(summary);
+    }
+
+    /**
+     * Render the token budget widget with SVG stacked bar and breakdown list.
+     *
+     * @param {Object} data - Budget data with sections, total_tokens, context_limit, usage_pct
+     * @private
+     */
+    _renderTokenBudget(data) {
+        const widget = document.getElementById('token-budget-widget');
+        if (!widget) return;
+
+        const { sections = [], total_tokens = 0, context_limit = 131072, usage_pct = 0 } = data;
+
+        // Color palette for each section type (cyberpunk)
+        const SECTION_COLORS = {
+            'System Prompt': '#00ff41',
+            'Diary Entry': '#ff00ff',
+            'Daily Greeting': '#ffaa00',
+            'Anniversary': '#ffaa00',
+            'RAG Memory': '#00ffcc',
+            'Vocabulary': '#ff6b6b',
+            'Emotion Instructions': '#00d4ff',
+            'Content Filter': '#888888',
+        };
+        // Chat History and anything else defaults to purple
+        const getColor = (name) => {
+            for (const [key, color] of Object.entries(SECTION_COLORS)) {
+                if (name.startsWith(key)) return color;
+            }
+            return name.includes('History') ? '#7c4dff' : '#aaa';
+        };
+
+        // Format token count for display (e.g. 4433 → "4.4k", 131072 → "131k")
+        const fmtTok = (n) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+
+        // Urgency class
+        const urgencyColor = usage_pct >= 90 ? '#ff003c'
+            : usage_pct >= 70 ? '#ffaa00'
+            : 'var(--text-muted)';
+        const urgencyLabel = usage_pct >= 90 ? ' · ⚠ CONTEXT NEARLY FULL'
+            : usage_pct >= 70 ? ' · ⚠ Getting full'
+            : '';
+
+        // Build SVG stacked bar
+        const barWidth = 220;
+        const barHeight = 14;
+        let svgRects = '';
+        let x = 0;
+        const nonZeroSections = sections.filter(s => s.tokens > 0);
+        for (const s of nonZeroSections) {
+            const w = Math.max(1, (s.tokens / context_limit) * barWidth);
+            const color = getColor(s.name);
+            svgRects += `<rect x="${x}" y="0" width="${w}" height="${barHeight}" fill="${color}" opacity="0.85"><title>${s.name}: ${s.tokens.toLocaleString()} tokens</title></rect>`;
+            x += w;
+        }
+        // Remaining space
+        if (x < barWidth) {
+            svgRects += `<rect x="${x}" y="0" width="${barWidth - x}" height="${barHeight}" fill="#1a1a2e" opacity="0.3"></rect>`;
+        }
+
+        const svgBar = `<svg width="100%" height="${barHeight}" viewBox="0 0 ${barWidth} ${barHeight}" preserveAspectRatio="none" style="border-radius:3px; overflow:hidden; display:block;">${svgRects}</svg>`;
+
+        // Build breakdown list
+        const breakdownId = 'token-budget-breakdown';
+        const breakdownItems = nonZeroSections.map(s => {
+            const color = getColor(s.name);
+            return `<div style="display:flex; justify-content:space-between; align-items:center; font-size:0.6rem; padding:1px 0;">
+                <span style="display:flex; align-items:center; gap:4px;">
+                    <span style="width:6px; height:6px; border-radius:1px; background:${color}; display:inline-block; flex-shrink:0;"></span>
+                    <span style="color:var(--text-secondary);">${s.name}</span>
+                </span>
+                <span style="color:var(--text-muted); font-family:var(--font-mono); font-size:0.55rem;">${s.tokens.toLocaleString()}</span>
+            </div>`;
+        }).join('');
+
+        widget.innerHTML = `
+            <div style="margin-bottom:4px;">
+                ${svgBar}
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.6rem; margin-bottom:4px;">
+                <span style="color:${urgencyColor}; font-family:var(--font-mono);">${fmtTok(total_tokens)} / ${fmtTok(context_limit)} · ${usage_pct}%${urgencyLabel}</span>
+            </div>
+            <div>
+                <button id="btn-token-budget-toggle" style="background:none; border:none; color:var(--text-muted); font-size:0.6rem; cursor:pointer; padding:0; font-family:var(--font-mono);">
+                    ${this._tokenBudgetExpanded ? '▾ Hide breakdown' : '▸ Show breakdown'}
+                </button>
+                <div id="${breakdownId}" style="display:${this._tokenBudgetExpanded ? 'block' : 'none'}; margin-top:4px;">
+                    ${breakdownItems}
+                </div>
+            </div>
+        `;
+
+        // Bind toggle
+        const toggleBtn = document.getElementById('btn-token-budget-toggle');
+        const breakdownEl = document.getElementById(breakdownId);
+        if (toggleBtn && breakdownEl) {
+            toggleBtn.addEventListener('click', () => {
+                this._tokenBudgetExpanded = !this._tokenBudgetExpanded;
+                breakdownEl.style.display = this._tokenBudgetExpanded ? 'block' : 'none';
+                toggleBtn.textContent = this._tokenBudgetExpanded ? '▾ Hide breakdown' : '▸ Show breakdown';
+            });
+        }
+
+        // Pulse animation for high usage
+        if (usage_pct >= 90) {
+            widget.closest('.dashboard-widget')?.style.setProperty('border-color', 'rgba(255, 0, 60, 0.4)');
+        } else if (usage_pct >= 70) {
+            widget.closest('.dashboard-widget')?.style.setProperty('border-color', 'rgba(255, 170, 0, 0.3)');
+        } else {
+            widget.closest('.dashboard-widget')?.style.removeProperty('border-color');
         }
     }
 }

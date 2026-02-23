@@ -719,15 +719,11 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
 }
 
 /* --- Toggle View Button --- */
-/* Fix 6: Moved from top-right (conflicted with toast z-index:10000) to bottom-center.
-   The chat-layer starts at 45% from top, so placing the button just above that boundary
-   keeps it visible in both chat-only and split-view states. */
+/* Positioned below AI status container (top-left) to avoid overlapping both status and toolbar */
 .btn-toggle-view {
-    /* Anchored to the top-right of the main view — safely above chat messages
-     * and clearly associated with the viewport toggle action (#85 UX fix) */
     position: absolute;
-    top: var(--space-xs);
-    right: var(--space-xs);
+    top: 52px;
+    left: var(--space-md);
     z-index: 20;
     display: none;
     align-items: center;
@@ -757,10 +753,9 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
     display: flex;
 }
 
-/* Toggle button is now bottom-center, so viewport toolbar stays at its default top-right position */
+/* Toggle button is top-left, viewport toolbar is top-right — no overlap */
 
 /* ═══ VIEWPORT TOOLBAR (top-right of 3D viewport) ═══ */
-/* Positioned below the toggle-view button to avoid overlap */
 .viewport-toolbar {
     position: absolute;
     top: 8px;

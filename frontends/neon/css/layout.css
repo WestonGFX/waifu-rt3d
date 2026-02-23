@@ -1,0 +1,41 @@
+/* The Main Grid Shell */
+.app-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr; /* Fixed Sidebar, Fluid Content */
+    grid-template-rows: 1fr;
+    height: 100vh;
+    width: 100vw;
+    transition: grid-template-columns 0.3s ease;
+}
+
+.app-layout.sidebar-collapsed {
+    grid-template-columns: 60px 1fr;
+}
+
+/* Sidebar Area */
+.sidebar {
+    background: var(--glass-base);
+    backdrop-filter: blur(var(--blur-amt));
+    border-right: 1px solid var(--glass-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 10;
+}
+
+/* Main Content Area */
+.main-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* 3D Viewport Layer (Underneath Chat) */
+.viewport-layer {
+    flex: 1; /* Takes remaining space */
+    background: black;
+    position: relative;
+}
+
+/* Chat Layer — Positioned by cyber_glass.css */

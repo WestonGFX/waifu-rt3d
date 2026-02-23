@@ -1,0 +1,67 @@
+# V2 Hybrid Gate Status
+
+Updated: 2026-02-11
+
+This is the live status board for Hybrid cutover gates.
+
+## Gate Status
+1. Frontend lint: PASS
+- command: `npm run lint` in `frontends/v2`
+2. Frontend unit tests: PASS
+- command: `npm test` in `frontends/v2`
+3. Frontend build: PASS
+- command: `npm run build` in `frontends/v2`
+4. Mocked E2E core flow: PASS
+- command: `npm run e2e` in `frontends/v2`
+5. Backend API contracts: PASS
+- command: `pytest -q backend/tests`
+6. Live backend E2E smoke: PASS
+- command: `npm run e2e:live` in `frontends/v2`
+- latest result: pass when backend was running on `http://127.0.0.1:8080`
+7. Telemetry instrumentation: PASS
+- endpoint: `GET /api/v2/telemetry/summary`
+- captures: API error rate + memory fallback frequency
+8. Telemetry policy document: PASS
+- policy: `docs/V2_HYBRID_TELEMETRY_POLICY.md`
+9. Telemetry threshold enforcement in preflight: PASS
+- command: `./tools/v2_hybrid_preflight.sh`
+- supports threshold overrides via `WAIFU_PREFLIGHT_*` env vars
+10. Telemetry evidence capture script: PASS
+- command: `./tools/v2_hybrid_capture_telemetry.sh`
+- outputs: local default in `docs/telemetry/*`, configurable via `WAIFU_TELEMETRY_OUTPUT_DIR`
+- cutover guard: enforces 7 passing snapshots across 7 distinct UTC days by default
+- rehearsal option: `WAIFU_TELEMETRY_SEED_TRAFFIC=1` to validate threshold mechanics with synthetic load
+- progress counters in report: `pass_days_in_window` and `remaining_pass_days_needed`
+11. CI telemetry artifact collection: PASS
+- workflow: `.github/workflows/v2-hybrid-preflight.yml`
+- result: each workflow run uploads telemetry CSV + report artifacts
+12. One-shot local evidence workflow: PASS
+- command: `./tools/v2_hybrid_collect_gate_evidence.sh`
+- behavior: runs preflight then telemetry capture without background scheduling
+13. Default-route cutover guard: PASS
+- env: `WAIFU_DEFAULT_FRONTEND=v2` switches `/` to v2
+- rollback: `/legacy` always serves Neon and `/` falls back to Neon if v2 dist is missing
+14. Cutover rehearsal command: PASS
+- command: `./tools/v2_hybrid_cutover_rehearsal.sh`
+- validates root route cutover + legacy rollback + live e2e via `/`
+15. Cutover decision command: PASS
+- command: `./tools/v2_hybrid_cutover_decision.sh`
+- output: `docs/V2_HYBRID_READINESS_REPORT.md` with GO/NO-GO and blocking gates
+
+## What is blocking Hybrid cutover now
+1. Run the 7-day P0/P1 + telemetry threshold window and record evidence:
+- policy: `docs/V2_HYBRID_TELEMETRY_POLICY.md`
+2. Keep running explicit decision check and reach GO:
+- `./tools/v2_hybrid_cutover_decision.sh`
+
+## Next Actions
+1. CI preflight workflow added:
+- `.github/workflows/v2-hybrid-preflight.yml`
+2. Wire dashboard/reporting query around `/api/v2/telemetry/summary`.
+3. Create cutover issue from `docs/V2_HYBRID_CUTOVER_TICKET_TEMPLATE.md`.
+4. Rehearse route switch and rollback with:
+- `./tools/v2_hybrid_cutover_rehearsal.sh`
+5. Run 7-day window with:
+- CI artifacts + manual `./tools/v2_hybrid_capture_telemetry.sh` checkpoints and track P0/P1 status.
+6. Run explicit go/no-go check with:
+- `./tools/v2_hybrid_cutover_decision.sh`

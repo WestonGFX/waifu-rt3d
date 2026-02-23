@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [master, integrate/master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  python-tests:
+    name: Python unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          # lighter-weight test-only installs (no GPU packages)
+          pip install fastapi uvicorn httpx pytest pytest-asyncio
+
+      - name: Run unit tests
+        run: pytest tests/ -v --tb=short
+
+  lint-frontend:
+    name: Frontend lint (ESLint)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontends/neon/package-lock.json
+
+      - name: Install ESLint
+        working-directory: frontends/neon
+        # Only run if package.json exists; gracefully skip if not set up yet
+        run: |
+          if [ -f package.json ]; then
+            npm ci
+          else
+            npm init -y
+            npm install --save-dev eslint
+          fi
+
+      - name: Run ESLint
+        working-directory: frontends/neon
+        run: |
+          if [ -f .eslintrc* ] || [ -f eslint.config* ]; then
+            npx eslint js/ --ext .js --max-warnings 0
+          else
+            echo "No ESLint config found — skipping lint"
+          fi

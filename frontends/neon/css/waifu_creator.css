@@ -1,0 +1,577 @@
+/* ═══════════════════════════════════════════════════
+   waifu_creator.css — Full-Page Character Creator
+   Split layout: scrollable settings (left 60%) + live VRM preview (right 40%)
+   Uses existing CSS vars from cyber_glass.css for theme compatibility.
+   ═══════════════════════════════════════════════════ */
+
+/* ── Full-page container ── */
+.waifu-creator {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 1000;
+    background: var(--bg-deep, #0b0c15);
+}
+
+/* ── Left panel: Settings ── */
+.wc-settings {
+    width: 60%;
+    display: flex;
+    flex-direction: column;
+    background: var(--glass-panel, rgba(13, 14, 28, 0.82));
+    border-right: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+    overflow: hidden;
+}
+
+/* Header row */
+.wc-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.wc-header h2 {
+    font-family: var(--font-display, 'Rajdhani', sans-serif);
+    font-size: 1.3rem;
+    letter-spacing: 2px;
+    color: var(--neon-cyan, #00f0ff);
+    margin: 0;
+    text-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+}
+
+/* ── Tab bar ── */
+.wc-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--glass-border);
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 0;
+}
+
+.wc-tabs::-webkit-scrollbar { display: none; }
+
+.wc-tab {
+    padding: 10px 16px;
+    font-family: var(--font-display, 'Rajdhani', sans-serif);
+    font-size: 0.75rem;
+    letter-spacing: 1.5px;
+    color: var(--text-muted, #94a3b8);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    position: relative;
+}
+
+.wc-tab:hover {
+    color: var(--text-main, #e0e6ed);
+}
+
+.wc-tab.active {
+    color: var(--neon-cyan, #00f0ff);
+    border-bottom-color: var(--neon-cyan, #00f0ff);
+    text-shadow: 0 0 6px rgba(0, 240, 255, 0.4);
+}
+
+.wc-tab.completed::after {
+    content: '✓';
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 0.55rem;
+    color: var(--success, #55ff55);
+}
+
+/* ── Scrollable content area ── */
+.wc-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,240,255,0.2) transparent;
+}
+
+.wc-content::-webkit-scrollbar { width: 6px; }
+.wc-content::-webkit-scrollbar-track { background: transparent; }
+.wc-content::-webkit-scrollbar-thumb {
+    background: rgba(0, 240, 255, 0.2);
+    border-radius: 3px;
+}
+
+/* ── Footer (prev/next/save buttons) ── */
+.wc-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 24px;
+    border-top: 1px solid var(--glass-border);
+    flex-shrink: 0;
+}
+
+/* ── Right panel: VRM Preview ── */
+.wc-preview {
+    width: 40%;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-void, #050510);
+    position: relative;
+}
+
+.wc-preview-viewport {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+.wc-preview-viewport iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: transparent;
+}
+
+.wc-preview-info {
+    padding: 12px 16px;
+    border-top: 1px solid var(--glass-border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+}
+
+.wc-preview-label {
+    font-family: var(--font-display, 'Rajdhani', sans-serif);
+    font-size: 0.7rem;
+    letter-spacing: 1px;
+    color: var(--text-muted, #94a3b8);
+}
+
+.wc-preview-label .wc-model-name {
+    color: var(--neon-cyan, #00f0ff);
+}
+
+.wc-preview-label .wc-model-meta {
+    color: var(--text-muted);
+    font-size: 0.6rem;
+    margin-left: 8px;
+}
+
+/* ── Form elements ── */
+.wc-field {
+    margin-bottom: 18px;
+}
+
+.wc-label {
+    display: block;
+    font-family: var(--font-display, 'Rajdhani', sans-serif);
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+    color: var(--text-muted, #94a3b8);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+}
+
+.wc-hint {
+    font-size: 0.65rem;
+    color: var(--text-muted, #94a3b8);
+    opacity: 0.7;
+    margin-top: 4px;
+}
+
+.wc-input,
+.wc-select,
+.wc-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--text-main, #e0e6ed);
+    font-family: var(--font-body, 'Inter', sans-serif);
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.wc-input:focus,
+.wc-select:focus,
+.wc-textarea:focus {
+    border-color: var(--neon-cyan, #00f0ff);
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.15);
+}
+
+.wc-textarea {
+    resize: vertical;
+    min-height: 100px;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.wc-select {
+    appearance: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 30px;
+}
+
+.wc-select option {
+    background: #1a1b2e;
+    color: var(--text-main);
+}
+
+/* ── VRM & Avatar grid cards ── */
+.wc-vrm-grid,
+.wc-avatar-grid,
+.wc-bg-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.wc-vrm-card,
+.wc-avatar-card,
+.wc-bg-card {
+    aspect-ratio: 1;
+    border: 2px solid var(--glass-border, rgba(255,255,255,0.1));
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+    overflow: hidden;
+    position: relative;
+}
+
+.wc-vrm-card:hover,
+.wc-avatar-card:hover,
+.wc-bg-card:hover {
+    border-color: rgba(0, 240, 255, 0.4);
+    background: rgba(0, 240, 255, 0.05);
+}
+
+.wc-vrm-card.selected,
+.wc-avatar-card.selected,
+.wc-bg-card.selected {
+    border-color: var(--neon-cyan, #00f0ff);
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+}
+
+.wc-vrm-card .wc-card-icon {
+    font-size: 2rem;
+    margin-bottom: 4px;
+    opacity: 0.7;
+}
+
+.wc-vrm-card .wc-card-name,
+.wc-avatar-card .wc-card-name,
+.wc-bg-card .wc-card-name {
+    font-family: var(--font-display, 'Rajdhani', sans-serif);
+    font-size: 0.65rem;
+    letter-spacing: 0.5px;
+    color: var(--text-main, #e0e6ed);
+    text-align: center;
+    padding: 0 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+}
+
+.wc-vrm-card .wc-card-size {
+    font-size: 0.55rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.wc-avatar-card img,
+.wc-bg-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0; left: 0;
+}
+
+.wc-avatar-card .wc-card-name,
+.wc-bg-card .wc-card-name {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 4px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    z-index: 1;
+}
+
+/* Upload "+" card */
+.wc-upload-card {
+    border-style: dashed;
+    opacity: 0.6;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.wc-upload-card:hover {
+    opacity: 1;
+    border-color: var(--neon-cyan);
+    color: var(--neon-cyan);
+}
+
+.wc-upload-card .wc-upload-icon {
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+}
+
+/* ── Template archetype grid ── */
+.wc-template-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.wc-template-card {
+    padding: 12px;
+    border: 2px solid var(--glass-border);
+    border-radius: 8px;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.wc-template-card:hover {
+    border-color: rgba(0, 240, 255, 0.4);
+    background: rgba(0, 240, 255, 0.05);
+}
+
+.wc-template-card.selected {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+}
+
+.wc-template-card .wc-tpl-icon {
+    font-size: 1.8rem;
+    margin-bottom: 4px;
+}
+
+.wc-template-card .wc-tpl-name {
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+    color: var(--text-main);
+}
+
+.wc-template-card .wc-tpl-desc {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* ── Traits pill display ── */
+.wc-traits-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.wc-trait-pill {
+    padding: 3px 10px;
+    border: 1px solid var(--neon-cyan, #00f0ff);
+    border-radius: 12px;
+    font-size: 0.65rem;
+    color: var(--neon-cyan, #00f0ff);
+    background: rgba(0, 240, 255, 0.08);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.wc-trait-pill .wc-trait-remove {
+    cursor: pointer;
+    opacity: 0.6;
+    font-size: 0.7rem;
+}
+
+.wc-trait-pill .wc-trait-remove:hover {
+    opacity: 1;
+    color: var(--danger, #ff5555);
+}
+
+/* ── Token counter ── */
+.wc-token-counter {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-align: right;
+    margin-top: 4px;
+}
+
+.wc-token-counter.warn {
+    color: var(--accent-yellow, #f9f871);
+}
+
+.wc-token-counter.danger {
+    color: var(--danger, #ff5555);
+}
+
+/* ── Collapsible section ── */
+.wc-collapsible-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 8px 0;
+    color: var(--text-muted);
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+    user-select: none;
+}
+
+.wc-collapsible-header:hover {
+    color: var(--text-main);
+}
+
+.wc-collapsible-header .wc-caret {
+    transition: transform 0.2s;
+    font-size: 0.6rem;
+}
+
+.wc-collapsible-header.open .wc-caret {
+    transform: rotate(90deg);
+}
+
+.wc-collapsible-body {
+    display: none;
+    padding-left: 8px;
+}
+
+.wc-collapsible-body.open {
+    display: block;
+}
+
+/* ── Review summary ── */
+.wc-review-section {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+}
+
+.wc-review-section h4 {
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+    color: var(--neon-cyan);
+    margin: 0 0 8px 0;
+}
+
+.wc-review-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 0.75rem;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.wc-review-row .wc-review-key {
+    color: var(--text-muted);
+}
+
+.wc-review-row .wc-review-val {
+    color: var(--text-main);
+    text-align: right;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── Voice preview button ── */
+.wc-voice-preview-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: rgba(0, 240, 255, 0.1);
+    border: 1px solid var(--neon-cyan);
+    border-radius: 6px;
+    color: var(--neon-cyan);
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: 0.7rem;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+}
+
+.wc-voice-preview-btn:hover {
+    background: rgba(0, 240, 255, 0.2);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+}
+
+.wc-voice-preview-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ── Buttons ── */
+.wc-btn-back {
+    background: none;
+    border: 1px solid var(--glass-border);
+    color: var(--text-muted);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.wc-btn-back:hover {
+    border-color: var(--text-main);
+    color: var(--text-main);
+}
+
+/* ── Section divider ── */
+.wc-divider {
+    border: none;
+    border-top: 1px solid var(--glass-border);
+    margin: 16px 0;
+}
+
+/* ── Responsive: stack on narrow screens ── */
+@media (max-width: 900px) {
+    .waifu-creator {
+        flex-direction: column;
+    }
+
+    .wc-settings {
+        width: 100%;
+        height: 60vh;
+    }
+
+    .wc-preview {
+        width: 100%;
+        height: 40vh;
+    }
+}

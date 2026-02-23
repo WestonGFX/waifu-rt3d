@@ -1,0 +1,94 @@
+{
+  "_comment": "Wan 2.2 TI2V-5B text-to-video workflow for ComfyUI. Requires the WanVideoWrapper custom node pack (https://github.com/kijai/ComfyUI-WanVideoWrapper). At 480p 81 frames (approx 5s at 16fps), expect ~5-9 min on RTX 5080.",
+  "1": {
+    "inputs": {
+      "model": "Wan2.2_TI2V_5B_bf16.safetensors",
+      "base_precision": "bf16",
+      "quantization": "disabled"
+    },
+    "class_type": "WanVideoModelLoader",
+    "_meta": { "title": "Load Wan Video Model" }
+  },
+  "2": {
+    "inputs": {
+      "model_name": "umt5-xxl-enc-bf16.safetensors",
+      "precision": "bf16"
+    },
+    "class_type": "WanVideoTextEncoderLoader",
+    "_meta": { "title": "Load Wan Text Encoder" }
+  },
+  "3": {
+    "inputs": {
+      "model_name": "Wan2.2_VAE.safetensors",
+      "precision": "bf16"
+    },
+    "class_type": "WanVideoVAELoader",
+    "_meta": { "title": "Load Wan VAE" }
+  },
+  "4": {
+    "inputs": {
+      "positive_prompt": "anime bedroom, cyberpunk aesthetic, looping background",
+      "negative_prompt": "blurry, artifacts, watermark, text",
+      "text_encoder": ["2", 0],
+      "force_offload": true
+    },
+    "class_type": "WanVideoTextEncode",
+    "_meta": { "title": "Wan Text Encode" }
+  },
+  "5": {
+    "inputs": {
+      "width": 832,
+      "height": 480,
+      "num_frames": 81,
+      "batch_size": 1
+    },
+    "class_type": "WanVideoEmptyEmbeds",
+    "_meta": { "title": "Wan Video Empty Embeds" }
+  },
+  "6": {
+    "inputs": {
+      "seed": 0,
+      "steps": 30,
+      "cfg": 5.0,
+      "shift": 5.0,
+      "sampler_name": "unipc",
+      "scheduler": "simple",
+      "denoise_strength": 1.0,
+      "model": ["1", 0],
+      "positive": ["4", 0],
+      "negative": ["4", 1],
+      "image_embeds": ["5", 0],
+      "vae": ["3", 0]
+    },
+    "class_type": "WanVideoSampler",
+    "_meta": { "title": "Wan Video Sampler" }
+  },
+  "7": {
+    "inputs": {
+      "enable_vae_tiling": true,
+      "tile_sample_min_height": 272,
+      "tile_sample_min_width": 272,
+      "tile_overlap_factor_height": 0.2,
+      "tile_overlap_factor_width": 0.2,
+      "auto_tile_size": true,
+      "samples": ["6", 0],
+      "vae": ["3", 0]
+    },
+    "class_type": "WanVideoVAEDecode",
+    "_meta": { "title": "Wan Video VAE Decode" }
+  },
+  "8": {
+    "inputs": {
+      "frame_rate": 16,
+      "loop_count": 0,
+      "filename_prefix": "waifu_video",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "images": ["7", 0]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": { "title": "Video Combine (VHS)" }
+  }
+}

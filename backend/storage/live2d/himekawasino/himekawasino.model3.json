@@ -1,0 +1,18 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "himekawasino.moc3",
+		"Textures": [
+			"himekawasino.2048/texture_00.png"
+		],
+		"Physics": "himekawasino.physics3.json",
+		"DisplayInfo": "himekawasino.cdi3.json"
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": []
+		}
+	]
+}

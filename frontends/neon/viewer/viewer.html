@@ -1,0 +1,1860 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Viewer</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            background: transparent;
+            overflow: hidden;
+        }
+
+        #loading {
+            display: none;
+        }
+
+        /* Video background layer (behind canvas) */
+        #bg-video {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: -1;
+            display: none;
+        }
+
+        /* ── Pet Mode Overlay ──────────────────────────────────────── */
+        body.pet-mode { background: transparent; }
+
+        #pet-overlay {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            padding: 8px; z-index: 100;
+            display: flex; flex-direction: column; gap: 6px;
+            pointer-events: none;
+        }
+        #pet-overlay > * { pointer-events: auto; }
+
+        .pet-bubble {
+            background: rgba(0,0,0,0.75); color: #e0e0ff;
+            padding: 6px 12px; border-radius: 12px;
+            font: 13px/1.45 system-ui; max-width: 88%;
+            word-break: break-word;
+            opacity: 1; transition: opacity 0.4s ease;
+        }
+        .pet-bubble.user {
+            align-self: flex-end;
+            background: rgba(120,80,255,0.78);
+        }
+        .pet-bubble.hidden { opacity: 0; pointer-events: none; }
+
+        #pet-input-row { display: flex; gap: 6px; }
+
+        #pet-input {
+            flex: 1; background: rgba(0,0,0,0.65); color: #fff;
+            border: 1px solid rgba(120,80,255,0.5); border-radius: 10px;
+            padding: 7px 12px; font: 13px system-ui; outline: none;
+        }
+        #pet-input:focus { border-color: rgba(120,80,255,0.9); }
+
+        #pet-send {
+            background: rgba(120,80,255,0.85); color: #fff;
+            border: none; border-radius: 10px; padding: 7px 14px;
+            cursor: pointer; font: 15px system-ui; line-height: 1;
+        }
+        #pet-send:hover { background: rgba(140,100,255,0.95); }
+    </style>
+</head>
+
+<body>
+    <div id="loading">UPLINKING_VISUAL_FEED...</div>
+    <video id="bg-video" loop muted playsinline></video>
+    <canvas id="c"></canvas>
+    <!-- FPS overlay — hidden by default, shown via showFps postMessage or settings toggle -->
+    <div id="fps-overlay" style="
+        position:fixed; bottom:8px; right:8px; z-index:9999;
+        font-family:monospace; font-size:11px; color:#39ff14;
+        background:rgba(0,0,0,0.55); padding:2px 8px; border-radius:3px;
+        display:none; pointer-events:none; letter-spacing:0.5px;
+    "></div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "/frontend/lib/three.module.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from '/frontend/lib/GLTFLoader.js';
+        import { VRMLoaderPlugin, VRMUtils } from '/frontend/lib/three-vrm.module.min.js';
+
+        let currentVrm = null;
+        let clock = new THREE.Clock();
+        let lipSync = null;
+        let blinkController = null;
+        let headMovement = null;
+        let expressionController = null;
+        let gestureController = null;
+        let proceduralAnimator = null;
+        let mouseTracker = null;
+        // Tracks the last emotion that triggered an auto-gesture, preventing
+        // repeat gestures when the same emotion fires on consecutive messages.
+        let lastAutoGestureEmotion = null;
+        // FPS counter state — updated once per second in the render loop
+        let _fpsFrameCount = 0;
+        let _fpsLastTime = 0;
+        let _fpsDisplay = 0;
+        // FPS cap state — 0 means unlimited (default). Set via setFpsTarget postMessage.
+        // When set, the animate() loop skips rendering until the target interval elapses.
+        let _fpsTargetMs = 0;
+        let _fpsLastRenderTime = 0;
+
+        // ══════════════════════════════════════════════════════════
+        // Inline OrbitControls (minimal implementation)
+        // Provides: left-drag orbit, scroll zoom, right-drag pan
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Minimal orbit camera controller for Three.js.
+         * Supports left-click orbit, right-click pan, scroll zoom.
+         * No external dependency — written inline to avoid missing lib issues.
+         */
+        class SimpleOrbitControls {
+            constructor(camera, domElement) {
+                this.camera = camera;
+                this.domElement = domElement;
+                this.enabled = true;
+
+                // Orbit state
+                this.target = new THREE.Vector3(0, 1.2, 0);
+                this.spherical = new THREE.Spherical();
+                this.sphericalDelta = new THREE.Spherical();
+                this.panOffset = new THREE.Vector3();
+
+                // Limits
+                this.minDistance = 0.3;
+                this.maxDistance = 5;
+                this.minPolarAngle = 0.1;
+                this.maxPolarAngle = Math.PI - 0.1;
+                this.rotateSpeed = 1.0;
+                this.panSpeed = 1.0;
+                this.zoomSpeed = 1.0;
+
+                // Internal state
+                this._rotateStart = new THREE.Vector2();
+                this._panStart = new THREE.Vector2();
+                this._isRotating = false;
+                this._isPanning = false;
+
+                this._bindEvents();
+                this._updateSpherical();
+            }
+
+            /** Sync internal spherical from current camera position. */
+            _updateSpherical() {
+                const offset = new THREE.Vector3().copy(this.camera.position).sub(this.target);
+                this.spherical.setFromVector3(offset);
+            }
+
+            _bindEvents() {
+                const el = this.domElement;
+                el.addEventListener('pointerdown', (e) => this._onPointerDown(e));
+                el.addEventListener('pointermove', (e) => this._onPointerMove(e));
+                el.addEventListener('pointerup', () => this._onPointerUp());
+                el.addEventListener('pointerleave', () => this._onPointerUp());
+                el.addEventListener('wheel', (e) => this._onWheel(e), { passive: false });
+                el.addEventListener('contextmenu', (e) => e.preventDefault());
+            }
+
+            _onPointerDown(e) {
+                if (!this.enabled) return;
+                if (e.button === 0) {
+                    this._isRotating = true;
+                    this._rotateStart.set(e.clientX, e.clientY);
+                } else if (e.button === 2) {
+                    this._isPanning = true;
+                    this._panStart.set(e.clientX, e.clientY);
+                }
+            }
+
+            _onPointerMove(e) {
+                if (!this.enabled) return;
+                if (this._isRotating) {
+                    const dx = (e.clientX - this._rotateStart.x) / this.domElement.clientHeight * Math.PI * this.rotateSpeed;
+                    const dy = (e.clientY - this._rotateStart.y) / this.domElement.clientHeight * Math.PI * this.rotateSpeed;
+                    this.sphericalDelta.theta -= dx;
+                    this.sphericalDelta.phi -= dy;
+                    this._rotateStart.set(e.clientX, e.clientY);
+                }
+                if (this._isPanning) {
+                    const dx = (e.clientX - this._panStart.x) * this.panSpeed * 0.002;
+                    const dy = (e.clientY - this._panStart.y) * this.panSpeed * 0.002;
+                    // Pan relative to camera orientation
+                    const right = new THREE.Vector3();
+                    const up = new THREE.Vector3();
+                    right.setFromMatrixColumn(this.camera.matrix, 0);
+                    up.setFromMatrixColumn(this.camera.matrix, 1);
+                    this.panOffset.addScaledVector(right, -dx);
+                    this.panOffset.addScaledVector(up, dy);
+                    this._panStart.set(e.clientX, e.clientY);
+                }
+            }
+
+            _onPointerUp() {
+                this._isRotating = false;
+                this._isPanning = false;
+            }
+
+            _onWheel(e) {
+                if (!this.enabled) return;
+                e.preventDefault();
+                if (e.deltaY > 0) {
+                    this.spherical.radius *= (1 + 0.05 * this.zoomSpeed);
+                } else {
+                    this.spherical.radius *= (1 - 0.05 * this.zoomSpeed);
+                }
+                this.spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this.spherical.radius));
+            }
+
+            /** Call each frame to apply accumulated deltas and advance any active tween. */
+            update() {
+                if (!this.enabled) return;
+
+                // Drive smooth camera tween (set by tweenTo). Uses smoothstep easing.
+                if (this._tween) {
+                    const t = Math.min((performance.now() - this._tween.startTime) / this._tween.duration, 1);
+                    // Smoothstep easing: t² × (3 − 2t)
+                    const s = t * t * (3 - 2 * t);
+                    this.camera.position.lerpVectors(this._tween.fromPos, this._tween.toPos, s);
+                    this.target.lerpVectors(this._tween.fromTarget, this._tween.toTarget, s);
+                    this._updateSpherical();
+                    if (t >= 1) this._tween = null; // tween complete
+                    this.camera.lookAt(this.target);
+                    return; // skip manual-delta handling while tweening
+                }
+
+                // Apply pan
+                this.target.add(this.panOffset);
+                this.panOffset.set(0, 0, 0);
+
+                // Apply rotation
+                this.spherical.theta += this.sphericalDelta.theta;
+                this.spherical.phi += this.sphericalDelta.phi;
+                this.spherical.phi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, this.spherical.phi));
+                this.sphericalDelta.set(0, 0, 0);
+
+                // Compute new camera position
+                const offset = new THREE.Vector3().setFromSpherical(this.spherical);
+                this.camera.position.copy(this.target).add(offset);
+                this.camera.lookAt(this.target);
+            }
+
+            /** Reset camera to a specific position + target (instant, no tween). */
+            reset(position, target) {
+                this._tween = null; // cancel any active tween
+                this.target.copy(target || new THREE.Vector3(0, 1.2, 0));
+                this.camera.position.copy(position || new THREE.Vector3(0, 1.4, 1.2));
+                this._updateSpherical();
+            }
+
+            /**
+             * Smoothly animate the camera to a new position and target.
+             *
+             * @param {THREE.Vector3} toPos - Destination camera position
+             * @param {THREE.Vector3} toTarget - Destination orbit target (look-at point)
+             * @param {number} [durationMs=500] - Animation duration in milliseconds
+             */
+            tweenTo(toPos, toTarget, durationMs = 500) {
+                this._tween = {
+                    fromPos:    this.camera.position.clone(),
+                    fromTarget: this.target.clone(),
+                    toPos:      toPos.clone(),
+                    toTarget:   toTarget.clone(),
+                    duration:   durationMs,
+                    elapsed:    0,
+                    startTime:  performance.now(),
+                };
+            }
+
+            /** Get serializable camera state for presets. */
+            getState() {
+                return {
+                    position: this.camera.position.toArray(),
+                    target: this.target.toArray(),
+                    radius: this.spherical.radius
+                };
+            }
+
+            /** Restore camera state from preset. */
+            setState(preset) {
+                if (preset.position) this.camera.position.fromArray(preset.position);
+                if (preset.target) this.target.fromArray(preset.target);
+                this._updateSpherical();
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Procedural Animation — emotion-driven idle modifiers
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Emotion-driven idle animation modifiers.
+         * Blends with existing blink/breathing controllers to make the
+         * character feel more alive based on current emotion.
+         */
+        class ProceduralAnimator {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.currentEmotion = 'neutral';
+                /** @type {number} Amplitude scaling factor (0–1) for all procedural motion */
+                this.intensity = 0.7;
+                this.breathScale = 1.0;
+                this.bounceOffset = 0;
+                this.swayAmount = 0;
+                this.time = 0;
+            }
+
+            /**
+             * Set the current emotion and intensity to adjust idle behavior.
+             * @param {string} emotion - Emotion name (happy, sad, angry, excited, neutral)
+             * @param {number} [intensity=0.7] - Motion amplitude scale (0–1)
+             */
+            setEmotion(emotion, intensity = 0.7) {
+                this.currentEmotion = emotion || 'neutral';
+                this.intensity = Math.min(Math.max(intensity, 0), 1);
+            }
+
+            /**
+             * Per-frame update — applies subtle procedural motion to bones.
+             * @param {number} deltaTime - Seconds since last frame
+             */
+            update(deltaTime) {
+                this.time += deltaTime;
+                const getBone = (name) => this.vrm.humanoid.getNormalizedBoneNode ?
+                    this.vrm.humanoid.getNormalizedBoneNode(name) :
+                    this.vrm.humanoid.getBoneNode(name);
+
+                const spine = getBone('spine');
+                const hips = getBone('hips');
+                const intensity = this.intensity;
+
+                // Hip sway — slow weight shift, always active (0.3Hz ± noise)
+                if (hips) {
+                    const swayNoise = 1 + Math.sin(this.time * 0.09) * 0.2;
+                    hips.rotation.y = Math.sin(this.time * 0.3) * 0.02 * swayNoise * intensity;
+                }
+
+                switch (this.currentEmotion) {
+                    case 'happy':
+                    case 'excited':
+                        // Subtle bounce + wider sway
+                        if (hips) hips.position.y = Math.sin(this.time * 3) * 0.008 * intensity;
+                        if (spine) spine.rotation.z = Math.sin(this.time * 1.5) * 0.02 * intensity;
+                        break;
+                    case 'sad':
+                        // Droopy posture, slow breathing
+                        if (spine) {
+                            spine.rotation.x = 0.03 * intensity;
+                            spine.rotation.z = Math.sin(this.time * 0.5) * 0.005 * intensity;
+                        }
+                        break;
+                    case 'angry':
+                        // Tense, minimal movement, subtle tremor
+                        if (spine) spine.rotation.z = Math.sin(this.time * 8) * 0.003 * intensity;
+                        break;
+                    case 'thinking':
+                        // Slow tilt
+                        if (spine) spine.rotation.z = Math.sin(this.time * 0.8) * 0.015 * intensity;
+                        break;
+                    default:
+                        // Neutral — very subtle sway
+                        if (spine) spine.rotation.z = Math.sin(this.time * 0.7) * 0.005 * intensity;
+                        break;
+                }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Audio Lip Sync
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Real-time audio-driven lip sync using Web Audio API.
+         * Analyzes audio frequency data to drive the 'aa' blend shape.
+         */
+        /**
+         * Real-time audio-driven lip sync using Web Audio API FFT analysis.
+         *
+         * Splits the frequency spectrum into three speech-formant bands and maps
+         * each to a distinct VRM viseme for more natural mouth movement than
+         * the previous single-band volume-to-'aa' approach.
+         *
+         * Band → viseme mapping (at 44.1kHz, fftSize=512 → ~86Hz/bin):
+         *   Low  (bins 0–5,   0–430 Hz)  → 'aa'  F1 dominant, open vowels
+         *   Mid  (bins 6–23,  516–1978Hz) → 'ou'  F2/F3 range, rounded vowels
+         *   High (bins 24–63, 2064–5418Hz)→ 'ee'  fricatives / sibilants
+         *
+         * Each viseme has independent EMA smoothing to prevent jitter while
+         * allowing high-frequency content (fricatives) to be more responsive.
+         */
+        class AudioLipSync {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.analyser = this.audioContext.createAnalyser();
+                // 512-point FFT → 256 bins at ~86Hz/bin (was 256 → 128 bins at ~172Hz/bin)
+                this.analyser.fftSize = 512;
+                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+                this.isPlaying = false;
+                this.currentSource = null;
+                // Per-viseme EMA state (separate smoothing for each shape)
+                this.smoothAa = 0;  // low band  → open mouth
+                this.smoothOu = 0;  // mid band  → rounded lips
+                this.smoothEe = 0;  // high band → spread / fricative
+            }
+
+            /**
+             * Play audio and drive multi-viseme lip sync from FFT analysis.
+             * @param {string} audioUrl - URL of the audio file to play
+             */
+            async playAudioWithLipSync(audioUrl) {
+                try {
+                    this.stop();
+                    const response = await fetch(audioUrl);
+                    const arrayBuffer = await response.arrayBuffer();
+                    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+
+                    const source = this.audioContext.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(this.analyser);
+                    this.analyser.connect(this.audioContext.destination);
+
+                    this.currentSource = source;
+                    this.isPlaying = true;
+                    isTalking = true;  // Phase 6D: switch to talk motion params
+                    source.start(0);
+
+                    source.onended = () => {
+                        this.isPlaying = false;
+                        this.currentSource = null;
+                        isTalking = false;  // Phase 6D: revert to idle motion params
+                        this._zeroAllVisemes();
+                    };
+
+                    this.updateLipSync();
+                } catch (error) {
+                    console.error('LIPSYNC_ERROR:', error);
+                    this.isPlaying = false;
+                    this._zeroAllVisemes();
+                }
+            }
+
+            /**
+             * Per-frame lip sync update — computes band energies and drives visemes.
+             * Called via requestAnimationFrame while audio is playing.
+             */
+            updateLipSync() {
+                if (!this.isPlaying) return;
+                this.analyser.getByteFrequencyData(this.dataArray);
+
+                // Low band: bins 0–5 (~0–430 Hz), captures F1 for open vowels
+                let lowSum = 0;
+                for (let i = 0; i <= 5; i++) lowSum += this.dataArray[i];
+
+                // Mid band: bins 6–23 (~516–1978 Hz), captures F2/F3 for rounded vowels
+                let midSum = 0;
+                for (let i = 6; i <= 23; i++) midSum += this.dataArray[i];
+
+                // High band: bins 24–63 (~2064–5418 Hz), captures fricatives/sibilants
+                let highSum = 0;
+                for (let i = 24; i <= 63; i++) highSum += this.dataArray[i];
+
+                // Normalize: bin values are 0–255, /128 gives 0–2 range, clamp to 0–1.
+                // The /128 threshold biases toward active speech rather than ambient noise.
+                const aaRaw = Math.min(lowSum  / 6  / 128, 1.0);
+                const ouRaw = Math.min(midSum  / 18 / 128, 1.0);
+                const eeRaw = Math.min(highSum / 40 / 128, 1.0);
+
+                // Per-viseme EMA — alphas tuned to physiological movement speed:
+                //   'aa' (jaw): moderately responsive, alpha=0.4
+                //   'ou' (lip rounding): slowest — sustained posture, alpha=0.35
+                //   'ee' (lip spread): most responsive — tracks fast fricatives, alpha=0.5
+                this.smoothAa = aaRaw * 0.4  + this.smoothAa * 0.6;
+                this.smoothOu = ouRaw * 0.35 + this.smoothOu * 0.65;
+                this.smoothEe = eeRaw * 0.5  + this.smoothEe * 0.5;
+
+                this._applyVisemes(this.smoothAa, this.smoothOu, this.smoothEe);
+                requestAnimationFrame(() => this.updateLipSync());
+            }
+
+            /**
+             * Apply computed viseme values to the VRM expression manager.
+             * Each viseme uses an individual try/catch so a VRM missing one
+             * blend shape doesn't prevent the others from being applied.
+             *
+             * @param {number} aa - 0–1, open mouth ('aa')
+             * @param {number} ou - 0–1, rounded lips ('ou')
+             * @param {number} ee - 0–1, spread lips / fricative ('ee')
+             */
+            _applyVisemes(aa, ou, ee) {
+                if (!this.vrm) return;
+                const em = this.vrm.expressionManager || this.vrm.blendShapeProxy;
+                if (!em) return;
+                try { em.setValue('aa', aa); } catch (e) {}
+                try { em.setValue('ou', ou); } catch (e) {}
+                try { em.setValue('ee', ee); } catch (e) {}
+            }
+
+            /**
+             * Zero all viseme blend shapes and reset EMA state.
+             * Resets smoothing state so the next utterance starts from 0,
+             * not from the decayed value of the previous one.
+             */
+            _zeroAllVisemes() {
+                this.smoothAa = 0;
+                this.smoothOu = 0;
+                this.smoothEe = 0;
+                this._applyVisemes(0, 0, 0);
+            }
+
+            /**
+             * Stop audio playback and clear all viseme state.
+             */
+            stop() {
+                if (this.currentSource) {
+                    try { this.currentSource.stop(); } catch (e) {}
+                    this.currentSource = null;
+                }
+                this.isPlaying = false;
+                this._zeroAllVisemes();
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Idle vs. Talking Motion Parameters (Phase 6D)
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Global talking state — set true when TTS audio begins, false when it ends.
+         * Read by IdleHeadMovement to pick the appropriate motion parameter set.
+         */
+        let isTalking = false;
+
+        /**
+         * Motion parameters for idle (silent) state.
+         * Calm, slow, minimal range — the character is at rest.
+         * @type {{nodRange: number, turnRange: number, tiltRange: number, moveInterval: [number,number], lerpSpeed: number}}
+         */
+        const MOTION_IDLE = {
+            nodRange:      0.08,   // X-axis (pitch)
+            turnRange:     0.12,   // Y-axis (yaw)
+            tiltRange:     0.05,   // Z-axis (roll)
+            minInterval:   4,      // seconds between head target updates (min)
+            maxInterval:   9,      // seconds between head target updates (max)
+            lerpSpeed:     0.4,    // per-frame lerp alpha (lower = smoother/slower)
+        };
+
+        /**
+         * Motion parameters for talking state.
+         * More frequent, wider range — the character is engaged and expressive.
+         * @type {{nodRange: number, turnRange: number, tiltRange: number, moveInterval: [number,number], lerpSpeed: number}}
+         */
+        const MOTION_TALK = {
+            nodRange:      0.15,
+            turnRange:     0.18,
+            tiltRange:     0.10,
+            minInterval:   1,
+            maxInterval:   3,
+            lerpSpeed:     0.6,
+        };
+
+        // ══════════════════════════════════════════════════════════
+        // Blink Controller
+        // ══════════════════════════════════════════════════════════
+
+        class BlinkController {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.nextBlinkTime = this.getNextBlinkDelay();
+                this.isBlinking = false;
+                this.blinkProgress = 0;
+            }
+
+            update(deltaTime) {
+                if (this.isBlinking) {
+                    this.blinkProgress += deltaTime * 10;
+                    if (this.blinkProgress < 0.5) this.setBlinkValue(this.blinkProgress * 2);
+                    else this.setBlinkValue(1.0 - ((this.blinkProgress - 0.5) * 2));
+
+                    if (this.blinkProgress >= 1.0) {
+                        this.isBlinking = false;
+                        this.blinkProgress = 0;
+                        this.setBlinkValue(0);
+                        this.nextBlinkTime = this.getNextBlinkDelay();
+                    }
+                } else {
+                    this.nextBlinkTime -= deltaTime;
+                    if (this.nextBlinkTime <= 0) this.isBlinking = true;
+                }
+            }
+
+            setBlinkValue(value) {
+                if (!this.vrm) return;
+                if (this.vrm.expressionManager) this.vrm.expressionManager.setValue('blink', value);
+                else if (this.vrm.blendShapeProxy) this.vrm.blendShapeProxy.setValue('blink', value);
+            }
+
+            getNextBlinkDelay() { return 2 + Math.random() * 4; }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Idle Head Movement
+        // ══════════════════════════════════════════════════════════
+
+        class IdleHeadMovement {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.headTarget = { x: 0, y: 0, z: 0 };
+                this.headCurrent = { x: 0, y: 0, z: 0 };
+                this.nextMoveTime = 5;
+            }
+
+            update(deltaTime) {
+                // Pick motion params based on global isTalking flag (Phase 6D).
+                // During speech: more frequent, wider-range head movement signals engagement.
+                const mp = isTalking ? MOTION_TALK : MOTION_IDLE;
+
+                this.nextMoveTime -= deltaTime;
+                if (this.nextMoveTime <= 0) {
+                    this.headTarget = {
+                        x: (Math.random() - 0.5) * mp.nodRange  * 2,
+                        y: (Math.random() - 0.5) * mp.turnRange * 2,
+                        z: (Math.random() - 0.5) * mp.tiltRange * 2,
+                    };
+                    this.nextMoveTime = mp.minInterval + Math.random() * (mp.maxInterval - mp.minInterval);
+                }
+                const lerpSpeed = deltaTime * mp.lerpSpeed;
+                this.headCurrent.x += (this.headTarget.x - this.headCurrent.x) * lerpSpeed;
+                this.headCurrent.y += (this.headTarget.y - this.headCurrent.y) * lerpSpeed;
+                this.headCurrent.z += (this.headTarget.z - this.headCurrent.z) * lerpSpeed;
+
+                const head = this.vrm.humanoid.getNormalizedBoneNode ?
+                             this.vrm.humanoid.getNormalizedBoneNode('head') :
+                             this.vrm.humanoid.getBoneNode('head');
+
+                if (head) {
+                    head.rotation.x = this.headCurrent.x;
+                    head.rotation.y = this.headCurrent.y;
+                    head.rotation.z = this.headCurrent.z;
+                }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Mouse Tracking Controller (Eyes + Subtle Head Follow)
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Tracks mouse cursor position to drive eye bone rotations
+         * and add subtle additive head rotation for a "looking at you" effect.
+         * Runs AFTER IdleHeadMovement so head follow is additive (+=).
+         */
+        class MouseTrackingController {
+            constructor(vrm, canvas) {
+                this.vrm = vrm;
+                this.canvas = canvas;
+                /** @type {{x: number, y: number}} Normalized cursor -1..1 */
+                this.cursor = { x: 0, y: 0 };
+                /** @type {{x: number, y: number}} Smoothed eye target */
+                this.eyeCurrent = { x: 0, y: 0 };
+                /** @type {{x: number, y: number}} Smoothed head offset */
+                this.headOffset = { x: 0, y: 0 };
+                this.active = true;
+
+                this._onMouseMove = (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    this.cursor.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                    this.cursor.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                    this.active = true;
+                };
+                this._onMouseLeave = () => {
+                    this.active = false;
+                    this.cursor.x = 0;
+                    this.cursor.y = 0;
+                };
+
+                canvas.addEventListener('mousemove', this._onMouseMove);
+                canvas.addEventListener('mouseleave', this._onMouseLeave);
+            }
+
+            /**
+             * Per-frame update — lerp eyes and head toward cursor.
+             * @param {number} deltaTime - Seconds since last frame
+             */
+            update(deltaTime) {
+                const getBone = (name) => this.vrm.humanoid.getNormalizedBoneNode ?
+                    this.vrm.humanoid.getNormalizedBoneNode(name) :
+                    this.vrm.humanoid.getBoneNode(name);
+
+                const targetX = this.active ? this.cursor.x : 0;
+                const targetY = this.active ? this.cursor.y : 0;
+
+                // Eye tracking — fast lerp (responsive feel)
+                const eyeSpeed = deltaTime * 3;
+                this.eyeCurrent.x += (targetX - this.eyeCurrent.x) * eyeSpeed;
+                this.eyeCurrent.y += (targetY - this.eyeCurrent.y) * eyeSpeed;
+
+                const leftEye = getBone('leftEye');
+                const rightEye = getBone('rightEye');
+                if (leftEye) {
+                    leftEye.rotation.y = this.eyeCurrent.x * 0.3;
+                    leftEye.rotation.x = -this.eyeCurrent.y * 0.15;
+                }
+                if (rightEye) {
+                    rightEye.rotation.y = this.eyeCurrent.x * 0.3;
+                    rightEye.rotation.x = -this.eyeCurrent.y * 0.15;
+                }
+
+                // Subtle head follow — slow lerp, ADDITIVE (+=) to blend with idle
+                const headSpeed = deltaTime * 1;
+                this.headOffset.x += (targetX * 0.12 - this.headOffset.x) * headSpeed;
+                this.headOffset.y += (targetY * 0.08 - this.headOffset.y) * headSpeed;
+
+                const head = getBone('head');
+                if (head) {
+                    head.rotation.y += this.headOffset.x;
+                    head.rotation.x += -this.headOffset.y;
+                }
+            }
+
+            dispose() {
+                this.canvas.removeEventListener('mousemove', this._onMouseMove);
+                this.canvas.removeEventListener('mouseleave', this._onMouseLeave);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Expression Controller
+        // ══════════════════════════════════════════════════════════
+
+        class ExpressionController {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.currentExpression = "neutral";
+                this.targetExpression = "neutral";
+                this.currentIntensity = 0;
+                this.targetIntensity = 0;
+                this.transitionProgress = 1.0;
+                this.transitionDuration = 0.3; // 0.3s default (#24) — snappy but smooth
+            }
+
+            setExpression(emotion, intensity = 1.0, duration = 0.5) {
+                if (emotion === this.targetExpression) return;
+                this.targetExpression = emotion;
+                this.targetIntensity = Math.min(Math.max(intensity, 0), 1);
+                this.transitionDuration = duration;
+                this.transitionProgress = 0;
+            }
+
+            update(deltaTime) {
+                if (this.transitionProgress < 1.0) {
+                    this.transitionProgress += deltaTime / this.transitionDuration;
+                    const t = Math.min(this.transitionProgress, 1.0);
+                    const eased = t * t * (3 - 2 * t);
+                    const blendedIntensity = this.currentIntensity + (this.targetIntensity - this.currentIntensity) * eased;
+                    this.applyExpression(this.targetExpression, blendedIntensity);
+                    if (this.transitionProgress >= 1.0) {
+                        this.currentExpression = this.targetExpression;
+                        this.currentIntensity = this.targetIntensity;
+                    }
+                }
+            }
+
+            applyExpression(emotion, intensity) {
+                if (!this.vrm) return;
+                const em = this.vrm.expressionManager || this.vrm.blendShapeProxy;
+                if (!em) return;
+
+                ['happy', 'sad', 'surprised', 'angry', 'relaxed'].forEach(expr => {
+                    try { em.setValue(expr, 0); } catch(e) {}
+                });
+
+                try {
+                    if (emotion === "happy") em.setValue('happy', intensity);
+                    else if (emotion === "sad") em.setValue('sad', intensity);
+                    else if (emotion === "surprised") em.setValue('surprised', intensity);
+                    else if (emotion === "angry") em.setValue('angry', intensity);
+                    else if (emotion === "confused") {
+                        em.setValue('surprised', intensity * 0.4);
+                        const head = this.vrm.humanoid.getNormalizedBoneNode ?
+                                     this.vrm.humanoid.getNormalizedBoneNode('head') :
+                                     this.vrm.humanoid.getBoneNode('head');
+                        if (head) head.rotation.z = 0.15 * intensity;
+                    }
+                    else if (emotion === "thinking") em.setValue('relaxed', intensity * 0.6);
+                } catch (e) { console.warn('Expression not available:', emotion); }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Gesture Controller (expanded with new gestures)
+        // ══════════════════════════════════════════════════════════
+
+        class GestureController {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.currentGesture = null;
+                this.gestureProgress = 0;
+                this.gestureDuration = 0;
+                this.gestureQueue = [];
+            }
+
+            /**
+             * Play a gesture animation on the VRM model.
+             * Supports: nod, tilt, wave, shrug, bow, clap, think, point, celebrate, shy, dance
+             * @param {string} gesture - Gesture name
+             */
+            playGesture(gesture) {
+                if (this.currentGesture) {
+                    this.gestureQueue.push(gesture);
+                    return;
+                }
+                this.currentGesture = gesture;
+                this.gestureProgress = 0;
+                // Duration varies per gesture
+                const durations = {
+                    nod: 0.6, tilt: 0.5, wave: 1.0, shrug: 0.8,
+                    bow: 1.2, clap: 0.8, think: 1.5, point: 0.7,
+                    celebrate: 1.2, shy: 1.0, dance: 2.0,
+                    foot_tap: 1.8, crossed_arms: 2.0, shake: 0.8
+                };
+                this.gestureDuration = durations[gesture] || 0.6;
+            }
+
+            /**
+             * Play a sequence of gestures with timing.
+             * @param {Array<{gesture: string, delay?: number}>} sequence
+             */
+            playSequence(sequence) {
+                if (!Array.isArray(sequence) || sequence.length === 0) return;
+                this.playGesture(sequence[0].gesture);
+                for (let i = 1; i < sequence.length; i++) {
+                    this.gestureQueue.push(sequence[i].gesture);
+                }
+            }
+
+            update(deltaTime) {
+                if (!this.currentGesture) return;
+                this.gestureProgress += deltaTime;
+
+                if (this.gestureProgress >= this.gestureDuration) {
+                    this.resetGesture();
+                    this.currentGesture = null;
+                    // Check queue
+                    if (this.gestureQueue.length > 0) {
+                        this.playGesture(this.gestureQueue.shift());
+                    }
+                    return;
+                }
+
+                const t = this.gestureProgress / this.gestureDuration;
+                const eased = Math.sin(t * Math.PI);
+
+                const getBone = (name) => this.vrm.humanoid.getNormalizedBoneNode ?
+                                          this.vrm.humanoid.getNormalizedBoneNode(name) :
+                                          this.vrm.humanoid.getBoneNode(name);
+
+                switch (this.currentGesture) {
+                    case 'nod': {
+                        const neck = getBone('neck');
+                        if (neck) neck.rotation.x = eased * 0.3;
+                        break;
+                    }
+                    case 'tilt': {
+                        const head = getBone('head');
+                        if (head) head.rotation.z = eased * 0.35;
+                        break;
+                    }
+                    case 'wave': {
+                        const rightArm = getBone('rightUpperArm');
+                        const rightHand = getBone('rightHand');
+                        if (rightArm) {
+                            rightArm.rotation.z = -eased * 1.2;
+                            rightArm.rotation.x = eased * 0.3;
+                        }
+                        if (rightHand) rightHand.rotation.z = Math.sin(t * Math.PI * 4) * 0.4;
+                        break;
+                    }
+                    case 'shrug': {
+                        const lArm = getBone('leftUpperArm');
+                        const rArm = getBone('rightUpperArm');
+                        if (lArm) lArm.rotation.z = eased * 0.3;
+                        if (rArm) rArm.rotation.z = -eased * 0.3;
+                        const headBone = getBone('head');
+                        if (headBone) headBone.rotation.z = Math.sin(t * Math.PI) * 0.1;
+                        break;
+                    }
+                    case 'bow': {
+                        const spine = getBone('spine');
+                        const neck = getBone('neck');
+                        if (spine) spine.rotation.x = eased * 0.4;
+                        if (neck) neck.rotation.x = eased * 0.2;
+                        break;
+                    }
+                    case 'clap': {
+                        const lArm = getBone('leftUpperArm');
+                        const rArm = getBone('rightUpperArm');
+                        const lForearm = getBone('leftLowerArm');
+                        const rForearm = getBone('rightLowerArm');
+                        const clapCycle = Math.sin(t * Math.PI * 6); // 3 claps
+                        if (lArm) lArm.rotation.z = 0.5 + clapCycle * 0.15;
+                        if (rArm) rArm.rotation.z = -0.5 - clapCycle * 0.15;
+                        if (lForearm) lForearm.rotation.y = -0.8 + clapCycle * 0.2;
+                        if (rForearm) rForearm.rotation.y = 0.8 - clapCycle * 0.2;
+                        break;
+                    }
+                    case 'think': {
+                        const rArm = getBone('rightUpperArm');
+                        const rForearm = getBone('rightLowerArm');
+                        const head = getBone('head');
+                        if (rArm) rArm.rotation.z = -eased * 0.3;
+                        if (rForearm) rForearm.rotation.y = eased * 1.2;
+                        if (head) {
+                            head.rotation.z = eased * 0.12;
+                            head.rotation.x = eased * 0.08;
+                        }
+                        break;
+                    }
+                    case 'point': {
+                        const rArm = getBone('rightUpperArm');
+                        const rForearm = getBone('rightLowerArm');
+                        if (rArm) {
+                            rArm.rotation.z = -eased * 0.8;
+                            rArm.rotation.x = eased * 0.3;
+                        }
+                        if (rForearm) rForearm.rotation.y = eased * 0.4;
+                        break;
+                    }
+                    case 'celebrate': {
+                        const lArm = getBone('leftUpperArm');
+                        const rArm = getBone('rightUpperArm');
+                        const lHand = getBone('leftHand');
+                        const rHand = getBone('rightHand');
+                        if (lArm) lArm.rotation.z = eased * 1.5;
+                        if (rArm) rArm.rotation.z = -eased * 1.5;
+                        if (lHand) lHand.rotation.z = Math.sin(t * Math.PI * 6) * 0.4;
+                        if (rHand) rHand.rotation.z = Math.sin(t * Math.PI * 6 + 1) * 0.4;
+                        break;
+                    }
+                    case 'shy': {
+                        const lArm = getBone('leftUpperArm');
+                        const rArm = getBone('rightUpperArm');
+                        const head = getBone('head');
+                        const spine = getBone('spine');
+                        if (lArm) lArm.rotation.z = eased * 0.3;
+                        if (rArm) rArm.rotation.z = -eased * 0.3;
+                        if (head) head.rotation.x = eased * 0.2;
+                        if (spine) spine.rotation.z = eased * 0.05;
+                        break;
+                    }
+                    case 'dance': {
+                        const hips = getBone('hips');
+                        const lArm = getBone('leftUpperArm');
+                        const rArm = getBone('rightUpperArm');
+                        const danceBeat = Math.sin(t * Math.PI * 4);
+                        if (hips) hips.position.y = danceBeat * 0.02;
+                        if (lArm) lArm.rotation.z = 0.3 + danceBeat * 0.4;
+                        if (rArm) rArm.rotation.z = -0.3 - danceBeat * 0.4;
+                        break;
+                    }
+
+                    case 'foot_tap': {
+                        // Rapid foot-tap: right leg lifts and drops 3 times.
+                        // Each cycle is 0.6s → 3 taps in 1.8s total.
+                        const tapFreq = 3;  // taps per gesture duration
+                        const tapBeat = Math.sin(t * Math.PI * 2 * tapFreq);
+                        const rLeg = getBone('rightUpperLeg');
+                        const rLower = getBone('rightLowerLeg');
+                        const rFoot = getBone('rightFoot');
+                        if (rLeg)   rLeg.rotation.x   = tapBeat * 0.12;   // slight hip kick
+                        if (rLower) rLower.rotation.x  = -tapBeat * 0.1;  // knee flex
+                        if (rFoot)  rFoot.rotation.x   = tapBeat * 0.15;  // foot strike
+                        break;
+                    }
+
+                    case 'crossed_arms': {
+                        // Bring both upper arms forward and across the chest.
+                        // Hold position for the full duration (sustained pose).
+                        const holdT = Math.min(1.0, eased * 2.0);  // fast ramp-in, hold, ramp-out at end
+                        const releaseT = t > 0.8 ? (1.0 - t) / 0.2 : 1.0;
+                        const blend = holdT * releaseT;
+                        const lUpper = getBone('leftUpperArm');
+                        const rUpper = getBone('rightUpperArm');
+                        const lLower = getBone('leftLowerArm');
+                        const rLower2 = getBone('rightLowerArm');
+                        // Pull arms inward across chest
+                        if (lUpper) { lUpper.rotation.x = blend * 1.1; lUpper.rotation.z = blend * -0.5; }
+                        if (rUpper) { rUpper.rotation.x = blend * 1.1; rUpper.rotation.z = blend * 0.5; }
+                        // Forearms fold to complete the cross
+                        if (lLower)  lLower.rotation.x  = blend * 1.2;
+                        if (rLower2) rLower2.rotation.x = blend * 1.2;
+                        break;
+                    }
+
+                    case 'shake': {
+                        // Head shake left-right (disagreement / "no" gesture)
+                        const shakeBeat = Math.sin(t * Math.PI * 3);
+                        const neck = getBone('neck');
+                        const head = getBone('head');
+                        if (neck) neck.rotation.y = shakeBeat * 0.25;
+                        if (head) head.rotation.y = shakeBeat * 0.15;
+                        break;
+                    }
+                }
+            }
+
+            resetGesture() {
+                if (!this.vrm) return;
+                const bones = ['neck', 'head', 'spine', 'hips',
+                               'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm',
+                               'leftHand', 'rightHand',
+                               'rightUpperLeg', 'rightLowerLeg', 'rightFoot'];
+                const getBone = (name) => this.vrm.humanoid.getNormalizedBoneNode ?
+                                          this.vrm.humanoid.getNormalizedBoneNode(name) :
+                                          this.vrm.humanoid.getBoneNode(name);
+
+                bones.forEach(boneName => {
+                    const bone = getBone(boneName);
+                    if (bone) {
+                        bone.rotation.x = 0;
+                        bone.rotation.y = 0;
+                        bone.rotation.z = 0;
+                        if (bone.position) {
+                            bone.position.x = 0;
+                            bone.position.y = 0;
+                            bone.position.z = 0;
+                        }
+                    }
+                });
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Lighting Presets
+        // ══════════════════════════════════════════════════════════
+
+        const LIGHT_PRESETS = {
+            studio: {
+                key: { color: 0xffffff, intensity: 1.5, position: [1, 2, 3] },
+                fill: { color: 0xffffff, intensity: 0.5, position: [-1, 1, -2] },
+                ambient: { color: 0xffffff, intensity: 0.8 }
+            },
+            warm_sunset: {
+                key: { color: 0xffaa44, intensity: 1.8, position: [2, 1, 1] },
+                fill: { color: 0xff6633, intensity: 0.4, position: [-2, 0.5, -1] },
+                ambient: { color: 0xffddbb, intensity: 0.6 }
+            },
+            cool_moonlight: {
+                key: { color: 0x6688ff, intensity: 1.2, position: [-1, 3, 2] },
+                fill: { color: 0x4466cc, intensity: 0.3, position: [1, 0.5, -1] },
+                ambient: { color: 0x334488, intensity: 0.5 }
+            },
+            dramatic: {
+                key: { color: 0xff0044, intensity: 2.0, position: [3, 2, 0] },
+                fill: { color: 0x0044ff, intensity: 0.6, position: [-3, 1, 0] },
+                ambient: { color: 0x111122, intensity: 0.3 }
+            },
+            neon: {
+                key: { color: 0x00ffcc, intensity: 1.6, position: [1, 2, 2] },
+                fill: { color: 0xff00ff, intensity: 0.8, position: [-1, 1, -1] },
+                ambient: { color: 0x220033, intensity: 0.4 }
+            }
+        };
+
+        // ══════════════════════════════════════════════════════════
+        // Emotion → Auto-Gesture
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Maps emotion names to candidate gesture(s) triggered automatically
+         * when the character's emotion changes. Arrays are randomly sampled
+         * so the character doesn't always use the same motion for the same feeling.
+         * Emotions absent from the map (e.g. 'angry', 'neutral') trigger nothing —
+         * stillness is intentional for those states.
+         */
+        const EMOTION_GESTURE_MAP = {
+            happy:     ['wave', 'clap'],
+            excited:   ['celebrate'],
+            sad:       ['shy'],
+            surprised: ['tilt'],
+            thinking:  ['think'],
+            confused:  ['think'],
+        };
+
+        /**
+         * Conditionally play a contextual gesture when the character's emotion changes.
+         *
+         * Guards (all must pass):
+         *   1. Emotion changed from last auto-gesture trigger — prevents re-firing
+         *   2. No gesture currently playing — avoids interrupting in-progress animation
+         *   3. 40% random chance — keeps gestures spontaneous, not mechanical every message
+         *   4. Emotion has an entry in EMOTION_GESTURE_MAP
+         *
+         * @param {string|null} emotion - Incoming emotion name from setEmotion/setExpression
+         */
+        function _triggerAutoGesture(emotion) {
+            if (!emotion || !gestureController) return;
+            if (emotion === lastAutoGestureEmotion) return;        // dedup
+            if (gestureController.currentGesture !== null) return; // don't interrupt
+            if (Math.random() > 0.4) return;                       // 40% chance
+            const candidates = EMOTION_GESTURE_MAP[emotion];
+            if (!candidates || candidates.length === 0) return;
+            lastAutoGestureEmotion = emotion;
+            const gesture = candidates[Math.floor(Math.random() * candidates.length)];
+            gestureController.playGesture(gesture);
+            console.log(`[Viewer] Auto-gesture: ${emotion} → ${gesture}`);
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Main Init
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Frame data stored after a VRM model loads so camera presets can
+         * compute positions relative to the actual model size.
+         * @type {{targetY: number, camZ: number, modelHeight: number, headY: number}|null}
+         */
+        let _vrmFrameData = null;
+
+        async function init() {
+            const canvas = document.getElementById('c');
+            const bgVideo = document.getElementById('bg-video');
+
+            const renderer = new THREE.WebGLRenderer({
+                canvas,
+                antialias: true,
+                alpha: true,
+                preserveDrawingBuffer: true   // Required for screenshot toDataURL()
+            });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            // Three.js r150+: outputEncoding → outputColorSpace
+            if ('outputColorSpace' in renderer) {
+                renderer.outputColorSpace = THREE.SRGBColorSpace;
+            } else {
+                renderer.outputEncoding = THREE.sRGBEncoding;
+            }
+
+            const scene = new THREE.Scene();
+            // Default dark background so VRM is visible against the UI
+            // (transparent renders as invisible on the dark cyberpunk layout)
+            scene.background = new THREE.Color(0x0a0b14);
+
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 1.25, 1.5);
+
+            // Orbit controls
+            const controls = new SimpleOrbitControls(camera, canvas);
+
+            // Lighting (stored as refs for dynamic updates)
+            const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            keyLight.position.set(1, 2, 3);
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            fillLight.position.set(-1, 1, -2);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(keyLight, fillLight, ambientLight);
+
+            // Disco / party lighting (#25): three RGB point lights, hidden by default.
+            // Hue cycles at different speeds when disco mode is active.
+            const discoLights = [
+                new THREE.PointLight(0xff0000, 0, 4),
+                new THREE.PointLight(0x00ff00, 0, 4),
+                new THREE.PointLight(0x0000ff, 0, 4),
+            ];
+            discoLights[0].position.set( 1.5, 2.0,  1.0);
+            discoLights[1].position.set(-1.5, 1.5,  0.5);
+            discoLights[2].position.set( 0.0, 2.5, -1.0);
+            discoLights.forEach(l => scene.add(l));
+            let _discoActive = false;
+            let _discoTime   = 0;
+
+            /**
+             * Apply a lighting configuration to the scene.
+             * @param {Object} config - Lighting config with key/fill/ambient properties
+             */
+            function setLighting(config) {
+                if (config.key) {
+                    if (config.key.color !== undefined) keyLight.color.set(config.key.color);
+                    if (config.key.intensity !== undefined) keyLight.intensity = config.key.intensity;
+                    if (config.key.position) keyLight.position.fromArray(config.key.position);
+                }
+                if (config.fill) {
+                    if (config.fill.color !== undefined) fillLight.color.set(config.fill.color);
+                    if (config.fill.intensity !== undefined) fillLight.intensity = config.fill.intensity;
+                    if (config.fill.position) fillLight.position.fromArray(config.fill.position);
+                }
+                if (config.ambient) {
+                    if (config.ambient.color !== undefined) ambientLight.color.set(config.ambient.color);
+                    if (config.ambient.intensity !== undefined) ambientLight.intensity = config.ambient.intensity;
+                }
+                console.log('[Viewer] Lighting updated');
+            }
+
+            /**
+             * Set the scene background.
+             * @param {string} mode - 'color', 'image', 'video', 'gradient', or 'transparent'
+             * @param {string|number} value - Color hex, image URL, video URL, or gradient CSS
+             */
+            function setBackground(mode, value) {
+                console.log("[Viewer] BG_MODE:", mode, value);
+                // Hide video by default
+                bgVideo.style.display = 'none';
+                bgVideo.pause();
+
+                if (mode === 'color') {
+                    scene.background = new THREE.Color(value);
+                    renderer.setClearAlpha(1);
+                } else if (mode === 'image') {
+                    new THREE.TextureLoader().load(value, (tex) => {
+                        scene.background = tex;
+                        renderer.setClearAlpha(1);
+                    });
+                } else if (mode === 'video') {
+                    // Use HTML video element behind canvas
+                    scene.background = null;
+                    renderer.setClearAlpha(0);
+                    bgVideo.src = value;
+                    bgVideo.style.display = 'block';
+                    bgVideo.play().catch(e => console.warn('[Viewer] Video autoplay blocked:', e));
+                } else if (mode === 'gradient') {
+                    // Apply CSS gradient to body, keep scene transparent
+                    scene.background = null;
+                    renderer.setClearAlpha(0);
+                    document.body.style.background = value;
+                } else {
+                    // "transparent" mode — use dark fallback to match UI theme
+                    scene.background = new THREE.Color(0x0a0b14);
+                    renderer.setClearAlpha(1);
+                    document.body.style.background = '#0a0b14';
+                }
+            }
+
+            /**
+             * Capture the current viewport as a PNG data URL.
+             * @returns {string} Base64 PNG data URL
+             */
+            function captureScreenshot() {
+                renderer.render(scene, camera);
+                return renderer.domElement.toDataURL('image/png');
+            }
+
+            /**
+             * Get all available blend shape / expression names from the loaded VRM.
+             * @returns {string[]} Array of expression names
+             */
+            function getAvailableBlendShapes() {
+                if (!currentVrm) return [];
+                const em = currentVrm.expressionManager || currentVrm.blendShapeProxy;
+                if (!em) return [];
+
+                // VRM 1.0: expressionManager has _expressionMap
+                if (em._expressionMap) return Array.from(em._expressionMap.keys());
+                // VRM 0.x: blendShapeProxy has _blendShapeGroups
+                if (em._blendShapeGroups) return em._blendShapeGroups.map(g => g.name);
+                return [];
+            }
+
+            /**
+             * Set a single blend shape to a specific value (0-1).
+             * @param {string} name - Blend shape name
+             * @param {number} value - Value between 0 and 1
+             */
+            function setBlendShape(name, value) {
+                if (!currentVrm) return;
+                const em = currentVrm.expressionManager || currentVrm.blendShapeProxy;
+                if (!em) return;
+                try {
+                    em.setValue(name, Math.max(0, Math.min(1, value)));
+                } catch (e) {
+                    console.warn('[Viewer] Blend shape not found:', name);
+                }
+            }
+
+            // ── Animation Loop ──────────────────────────────────
+
+            function animate() {
+                requestAnimationFrame(animate);
+                // FPS cap: skip rendering if the target frame interval hasn't elapsed.
+                // rAF still fires at ~60Hz; we just do nothing on the skipped frames.
+                if (_fpsTargetMs > 0) {
+                    const _now = performance.now();
+                    if (_now - _fpsLastRenderTime < _fpsTargetMs) return;
+                    _fpsLastRenderTime = _now;
+                }
+                // Cap delta to 100ms to prevent animation pops when tab regains focus.
+                // Browsers throttle rAF to ~1fps while hidden; on resume getDelta() returns
+                // the full elapsed time, causing lerp snap and sin() position jumps.
+                const delta = Math.min(clock.getDelta(), 0.1);
+
+                controls.update();
+
+                if (currentVrm) {
+                    currentVrm.update(delta);
+
+                    // Breathing — varied rate with occasional deep breaths
+                    const getBone = (name) => currentVrm.humanoid.getNormalizedBoneNode ?
+                                              currentVrm.humanoid.getNormalizedBoneNode(name) :
+                        currentVrm.humanoid.getBoneNode(name);
+                    const t = clock.elapsedTime;
+                    // Base rate ~2Hz with ±0.3Hz variation via slow modulator
+                    const rateModulator = 2 + Math.sin(t * 0.13) * 0.3;
+                    // Noise layer at 0.7Hz for organic feel
+                    const noiseLayer = Math.sin(t * 0.7) * 0.0008;
+                    // Deep breath: amplitude triples when slow cycle > 0.95 (~every 20s)
+                    const deepCycle = Math.sin(t * 0.16);
+                    const breathAmp = deepCycle > 0.95 ? 0.009 : 0.003;
+                    const breathStrength = Math.sin(t * rateModulator) * breathAmp + noiseLayer;
+                    const chest = getBone('chest') || getBone('spine');
+                    if (chest) {
+                        // Use = (not +=) — breathStrength oscillates around 0,
+                        // so += would cause unbounded drift at 60fps over time.
+                        chest.rotation.x = breathStrength;
+                        chest.rotation.z = breathStrength * 0.5;
+                    }
+
+                    if (blinkController) blinkController.update(delta);
+                    if (headMovement) headMovement.update(delta);
+                    if (mouseTracker) mouseTracker.update(delta);
+                    if (expressionController) expressionController.update(delta);
+                    if (gestureController) gestureController.update(delta);
+
+                    // Maintain A-pose arm baseline every frame when no gesture is playing.
+                    // resetGesture() zeros all arm bones on gesture completion; this
+                    // immediately restores the ~40° lowered-arm position in the same frame.
+                    // NOTE: Positive Z rotation lifts the arm UP (right-hand rule: +X→+Y).
+                    // Negative Z rotation swings the arm DOWN toward the hip. -0.7 ≈ 40° below
+                    // horizontal, giving a natural A-pose idle stance.
+                    if (gestureController && !gestureController.currentGesture) {
+                        const lArm = getBone('leftUpperArm');
+                        const rArm = getBone('rightUpperArm');
+                        if (lArm) lArm.rotation.z = -0.7;  // ~40° below horizontal — A-pose left arm
+                        if (rArm) rArm.rotation.z = 0.7;   // Mirror for right arm
+                    }
+
+                    if (proceduralAnimator) proceduralAnimator.update(delta);
+                }
+
+                // Disco mode (#25): cycle hue of three RGB point lights at different speeds
+                if (_discoActive) {
+                    _discoTime += delta;
+                    discoLights[0].color.setHSL((_discoTime * 0.5)        % 1, 1, 0.5);
+                    discoLights[1].color.setHSL((_discoTime * 0.5 + 0.33) % 1, 1, 0.5);
+                    discoLights[2].color.setHSL((_discoTime * 0.5 + 0.67) % 1, 1, 0.5);
+                }
+
+                renderer.render(scene, camera);
+
+                // FPS counter: count frames, update display once per second.
+                // Posts to parent window for the right panel, and updates the
+                // in-viewport overlay if visible (toggled by showFps postMessage).
+                _fpsFrameCount++;
+                const _fpsNow = performance.now();
+                if (_fpsNow - _fpsLastTime >= 1000) {
+                    _fpsDisplay = Math.round(_fpsFrameCount * 1000 / (_fpsNow - _fpsLastTime));
+                    _fpsFrameCount = 0;
+                    _fpsLastTime = _fpsNow;
+                    window.parent?.postMessage({ type: 'fpsUpdate', fps: _fpsDisplay }, '*');
+                    const fpsEl = document.getElementById('fps-overlay');
+                    if (fpsEl && fpsEl.style.display !== 'none') {
+                        fpsEl.textContent = `${_fpsDisplay} FPS`;
+                        fpsEl.style.color = _fpsDisplay >= 55 ? '#39ff14'
+                                          : _fpsDisplay >= 30 ? '#ffcc00' : '#ff4444';
+                    }
+                }
+            }
+            animate();
+
+            // Load VRM from URL parameter if provided (direct link mode)
+            const urlParam = new URLSearchParams(location.search).get('url');
+            if (urlParam) {
+                loadVRM(urlParam, scene, camera);
+            }
+
+            // ── Pet Mode ─────────────────────────────────────────────────
+            // Detect ?pet=1 URL param. When true the viewer runs as a floating
+            // popup window with a minimal chat overlay at the bottom.
+            // User input is relayed to the main window via window.opener.postMessage()
+            // and AI replies are received back as {type:'petReply', text} messages.
+            const PET_MODE = new URLSearchParams(location.search).get('pet') === '1';
+
+            if (PET_MODE) {
+                document.body.classList.add('pet-mode');
+
+                // Build chat overlay DOM
+                const petOverlay = document.createElement('div');
+                petOverlay.id = 'pet-overlay';
+                petOverlay.innerHTML = `
+                    <div id="pet-bubble" class="pet-bubble hidden"></div>
+                    <div id="pet-input-row">
+                        <input id="pet-input" type="text" placeholder="Say something\u2026" autocomplete="off">
+                        <button id="pet-send">\u2192</button>
+                    </div>`;
+                document.body.appendChild(petOverlay);
+
+                /**
+                 * Show a transient chat bubble in the pet overlay.
+                 * Auto-hides after 8 seconds.
+                 *
+                 * @param {string} text - Message text to display
+                 * @param {'user'|'assistant'} role - Bubble style variant
+                 */
+                function showPetBubble(text, role) {
+                    const bubble = document.getElementById('pet-bubble');
+                    if (!bubble) return;
+                    bubble.textContent = text;
+                    bubble.className = `pet-bubble ${role}`;
+                    bubble.classList.remove('hidden');
+                    clearTimeout(bubble._hideTimer);
+                    bubble._hideTimer = setTimeout(() => bubble.classList.add('hidden'), 8000);
+                }
+
+                /**
+                 * Read the pet input, relay the text to the main window via
+                 * window.opener.postMessage, and show a user bubble immediately
+                 * for instant visual feedback before the AI responds.
+                 */
+                function sendPetMessage() {
+                    const petInput = document.getElementById('pet-input');
+                    const text = petInput?.value?.trim();
+                    if (!text) return;
+                    petInput.value = '';
+                    showPetBubble('You: ' + text, 'user');
+                    window.opener?.postMessage({ type: 'petMessage', text }, '*');
+                }
+
+                document.getElementById('pet-send')?.addEventListener('click', sendPetMessage);
+                document.getElementById('pet-input')?.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') sendPetMessage();
+                });
+
+                // Handle AI replies and audio commands forwarded from the main window
+                window.addEventListener('message', (evt) => {
+                    if (evt.data?.type === 'petReply') {
+                        showPetBubble(evt.data.text, 'assistant');
+                    }
+                });
+            }
+
+            /**
+             * Apply a natural standing pose to a VRM model.
+             * VRM models load in T-pose (arms out). This relaxes the skeleton
+             * into a comfortable A-pose / idle standing position with arms at sides,
+             * slight hand curl, and natural spine posture.
+             *
+             * @param {Object} vrm - Loaded VRM instance
+             */
+            function applyNaturalPose(vrm) {
+                // MUST use normalized bones — three-vrm's vrm.update() propagates
+                // normalized bone transforms to raw bones each frame. Direct raw bone
+                // edits would be overwritten; normalized bone edits persist correctly.
+                const bone = (name) => {
+                    if (vrm.humanoid.getNormalizedBoneNode) {
+                        return vrm.humanoid.getNormalizedBoneNode(name);
+                    }
+                    return vrm.humanoid.getBoneNode(name);
+                };
+
+                // --- Arms: bring down from T-pose to relaxed A-pose ---
+                // In VRM 1.x normalized space: positive Z rotation RAISES the arm
+                // (right-hand rule: arm's local +X toward hand, +Y up → +Z rotates arm tip UP).
+                // Negative Z swings the arm DOWN toward the hip.
+                // Value -0.7 rad ≈ 40° below horizontal — natural standing A-pose.
+                const leftUpperArm = bone('leftUpperArm');
+                const rightUpperArm = bone('rightUpperArm');
+                if (leftUpperArm) leftUpperArm.rotation.z = -0.7;
+                if (rightUpperArm) rightUpperArm.rotation.z = 0.7;
+
+                // --- Spine: very slight natural S-curve ---
+                const spine = bone('spine');
+                if (spine) spine.rotation.x = -0.02;
+
+                const chest = bone('chest');
+                if (chest) chest.rotation.x = 0.02;
+
+                // Head: tiny downward tilt (looking at user, not sky)
+                const head = bone('head');
+                if (head) head.rotation.x = 0.03;
+
+                console.log('[Viewer] Natural pose applied (normalized bones) v=FIX-20260219');
+            }
+
+            /**
+             * Load a VRM model from URL into the scene.
+             * Notifies parent window on success or failure via postMessage.
+             *
+             * @param {string} modelUrl - Path to the .vrm file
+             * @param {THREE.Scene} scene - Three.js scene
+             * @param {THREE.PerspectiveCamera} camera - Camera to frame the model
+             */
+            function loadVRM(modelUrl, scene, camera) {
+                const loader = new GLTFLoader();
+                loader.register((parser) => new VRMLoaderPlugin(parser));
+
+                console.log('[Viewer] Loading VRM:', modelUrl);
+                loader.load(
+                    modelUrl,
+                    (gltf) => {
+                        // Remove previous model
+                        if (currentVrm && currentVrm.scene) {
+                            scene.remove(currentVrm.scene);
+                            VRMUtils.deepDispose(currentVrm.scene);
+                        }
+
+                        const vrm = gltf.userData.vrm;
+                        if (!vrm) {
+                            console.error('[Viewer] No VRM data in GLTF');
+                            window.parent.postMessage({ type: 'modelFailed', reason: 'no VRM data' }, '*');
+                            return;
+                        }
+
+                        // VRMUtils.rotateVRM0 is only for VRM 0.x assets (sets scene.rotation.y = π).
+                        // VRM 1.x models already face -Z (glTF convention), which is toward our
+                        // camera at +Z — so rotateVRM0 would flip them backwards. Skip it for 1.x.
+                        const vrmMetaVersion = vrm.meta?.metaVersion ?? '0';
+                        if (vrmMetaVersion === '0') {
+                            VRMUtils.rotateVRM0(vrm);
+                        }
+                        // combineMorphs merges duplicate morph targets across meshes in VRM 0.x.
+                        // Without this, setValue('blink') may only affect the head mesh, leaving
+                        // body/accessory meshes with a half-blink — a common VRM 0 artifact.
+                        VRMUtils.combineMorphs(vrm);
+
+                        scene.add(vrm.scene);
+                        currentVrm = vrm;
+
+                        // Expose VRM to parent for diagnostics
+                        window._vrm = vrm;
+
+                        // Apply natural idle pose (relax arms from T-pose)
+                        applyNaturalPose(vrm);
+
+                        // Initialize controllers
+                        lipSync = new AudioLipSync(vrm);
+                        blinkController = new BlinkController(vrm);
+                        headMovement = new IdleHeadMovement(vrm);
+                        expressionController = new ExpressionController(vrm);
+                        gestureController = new GestureController(vrm);
+                        proceduralAnimator = new ProceduralAnimator(vrm);
+                        mouseTracker = new MouseTrackingController(vrm, document.getElementById('c'));
+
+                        // Auto-frame camera based on model's actual height
+                        const headBone = vrm.humanoid.getRawBoneNode('head');
+                        const footBone = vrm.humanoid.getRawBoneNode('leftFoot') || vrm.humanoid.getRawBoneNode('rightFoot');
+                        let modelTop = 1.5, modelBottom = 0;
+                        if (headBone) {
+                            const hp = new THREE.Vector3();
+                            headBone.getWorldPosition(hp);
+                            modelTop = hp.y + 0.15; // Above head for hair
+                        }
+                        if (footBone) {
+                            const fp = new THREE.Vector3();
+                            footBone.getWorldPosition(fp);
+                            modelBottom = fp.y;
+                        }
+                        const modelHeight = modelTop - modelBottom;
+                        const targetY = modelBottom + modelHeight * 0.55; // Chest/neck area
+                        const camZ = Math.max(modelHeight * 1.0, 0.8);   // Distance scales with height
+                        controls.reset(
+                            new THREE.Vector3(0, targetY + 0.05, camZ),
+                            new THREE.Vector3(0, targetY, 0)
+                        );
+
+                        // Store frame data for camera presets (#27)
+                        const headY = headBone
+                            ? (() => { const hp = new THREE.Vector3(); headBone.getWorldPosition(hp); return hp.y; })()
+                            : targetY + modelHeight * 0.35;
+                        _vrmFrameData = { targetY, camZ, modelHeight, headY };
+
+                        console.log('[Viewer] VRM loaded successfully');
+                        window.parent.postMessage({ type: 'modelLoaded' }, '*');
+                    },
+                    (progress) => {
+                        // Optional: report loading progress
+                    },
+                    (error) => {
+                        console.error('[Viewer] VRM load error:', error);
+                        window.parent.postMessage({ type: 'modelFailed', reason: String(error) }, '*');
+                    }
+                );
+            }
+
+            // ── PostMessage API ─────────────────────────────────
+
+            window.addEventListener('message', (e) => {
+                const { type, payload } = e.data || {};
+                const audioUrl = e.data?.audioUrl;
+
+                // Commands that work without a VRM loaded
+                if (type === 'loadCharacter') {
+                    const p = payload || {};
+                    if (p.modelUrl) loadVRM(p.modelUrl, scene, camera);
+                    return;
+                }
+                if (type === 'updateBackground') {
+                    setBackground(e.data.mode, e.data.value);
+                    return;
+                }
+                if (type === 'setLighting') {
+                    if (e.data.preset && LIGHT_PRESETS[e.data.preset]) {
+                        setLighting(LIGHT_PRESETS[e.data.preset]);
+                    } else if (payload) {
+                        setLighting(payload);
+                    }
+                    return;
+                }
+                if (type === 'getLightingPresets') {
+                    window.parent.postMessage({
+                        type: 'lightingPresets',
+                        presets: Object.keys(LIGHT_PRESETS)
+                    }, '*');
+                    return;
+                }
+                if (type === 'captureScreenshot') {
+                    const dataUrl = captureScreenshot();
+                    window.parent.postMessage({ type: 'screenshotReady', dataUrl }, '*');
+                    return;
+                }
+                if (type === 'setCameraPosition') {
+                    if (payload) controls.setState(payload);
+                    return;
+                }
+                if (type === 'getCameraPosition') {
+                    window.parent.postMessage({
+                        type: 'cameraPosition',
+                        state: controls.getState()
+                    }, '*');
+                    return;
+                }
+                if (type === 'resetCamera') {
+                    controls.reset();
+                    _vrmFrameData && controls.tweenTo(
+                        new THREE.Vector3(0, _vrmFrameData.targetY + 0.05, _vrmFrameData.camZ),
+                        new THREE.Vector3(0, _vrmFrameData.targetY, 0),
+                        500
+                    );
+                    return;
+                }
+                if (type === 'setCameraPreset') {
+                    // Camera preset buttons (#27): bust / fullbody / face
+                    // Positions are derived from the loaded model's actual frame data.
+                    if (!_vrmFrameData) return;
+                    const { targetY, camZ, modelHeight, headY } = _vrmFrameData;
+                    const presets = {
+                        fullbody: {
+                            pos:    new THREE.Vector3(0, targetY + 0.05, camZ),
+                            target: new THREE.Vector3(0, targetY, 0),
+                        },
+                        bust: {
+                            pos:    new THREE.Vector3(0, targetY + modelHeight * 0.15, camZ * 0.55),
+                            target: new THREE.Vector3(0, targetY + modelHeight * 0.15, 0),
+                        },
+                        face: {
+                            pos:    new THREE.Vector3(0, headY, camZ * 0.28),
+                            target: new THREE.Vector3(0, headY, 0),
+                        },
+                    };
+                    const p = presets[payload?.preset];
+                    if (p) controls.tweenTo(p.pos, p.target, 500);
+                    return;
+                }
+                if (type === 'setCameraEnabled') {
+                    controls.enabled = !!e.data.enabled;
+                    return;
+                }
+                if (type === 'setVrmTransform') {
+                    // Character scale/position editor (#86): adjust VRM scale and position.
+                    // Offsets are from the model's natural ground position (y=0).
+                    if (currentVrm?.scene) {
+                        const s = payload?.scale   ?? 1.0;
+                        const x = payload?.offsetX ?? 0.0;
+                        const y = payload?.offsetY ?? 0.0;
+                        currentVrm.scene.scale.setScalar(s);
+                        currentVrm.scene.position.x = x;
+                        currentVrm.scene.position.y = y;
+                    }
+                    return;
+                }
+
+                // Commands that require a loaded VRM
+                if (!currentVrm) return;
+
+                if (type === 'nod') {
+                    const getBone = (name) => currentVrm.humanoid.getNormalizedBoneNode ?
+                        currentVrm.humanoid.getNormalizedBoneNode(name) :
+                        currentVrm.humanoid.getBoneNode(name);
+                    const neck = getBone('neck');
+                    if (neck) {
+                        neck.rotation.x = 0.2;
+                        setTimeout(() => neck.rotation.x = 0, 300);
+                    }
+                }
+                else if (type === 'playAudio') {
+                    if (lipSync && audioUrl) lipSync.playAudioWithLipSync(audioUrl);
+                }
+                else if (type === 'stopAudio') {
+                    if (lipSync) lipSync.stop();
+                }
+                else if (type === 'setExpression') {
+                    if (expressionController) {
+                        expressionController.setExpression(e.data.emotion, e.data.intensity || 1.0, e.data.duration || 0.3);
+                    }
+                    if (proceduralAnimator && e.data.emotion) {
+                        proceduralAnimator.setEmotion(e.data.emotion, e.data.intensity || 0.7);
+                    }
+                    // Auto-gesture: trigger contextual gesture on emotion change (40% chance)
+                    _triggerAutoGesture(e.data.emotion);
+                }
+                else if (type === 'setEmotion') {
+                    // Alias for setExpression — sent by ViewerBridge
+                    const emo = payload?.emotion || e.data.emotion;
+                    const inten = e.data.intensity || 0.7;
+                    if (expressionController && emo) {
+                        expressionController.setExpression(emo, inten, e.data.duration || 0.3);
+                    }
+                    if (proceduralAnimator && emo) {
+                        proceduralAnimator.setEmotion(emo, inten);
+                    }
+                    // Auto-gesture: trigger contextual gesture on emotion change (40% chance)
+                    _triggerAutoGesture(emo);
+                }
+                else if (type === 'playGesture') {
+                    const gesture = payload?.gesture || e.data.gesture;
+                    if (gestureController && gesture) gestureController.playGesture(gesture);
+                }
+                else if (type === 'playGestureSequence') {
+                    if (gestureController && payload) gestureController.playSequence(payload);
+                }
+                else if (type === 'getAvailableBlendShapes') {
+                    const shapes = getAvailableBlendShapes();
+                    window.parent.postMessage({ type: 'blendShapeList', shapes }, '*');
+                }
+                else if (type === 'setBlendShape') {
+                    if (payload) setBlendShape(payload.name, payload.value);
+                }
+                else if (type === 'setBlendShapes') {
+                    // Batch set multiple blend shapes at once
+                    if (payload && typeof payload === 'object') {
+                        Object.entries(payload).forEach(([name, value]) => {
+                            setBlendShape(name, value);
+                        });
+                    }
+                }
+                else if (type === 'showFpsOverlay') {
+                    // Toggle the in-viewport FPS counter overlay.
+                    // Does NOT require VRM to be loaded — FPS counter runs regardless.
+                    const fpsEl = document.getElementById('fps-overlay');
+                    if (fpsEl) {
+                        fpsEl.style.display = payload?.visible ? 'block' : 'none';
+                    }
+                }
+                else if (type === 'setFpsTarget') {
+                    // Set the render loop FPS cap. 0 = unlimited.
+                    // Converts "30"/"60"/"120"/"Unlimited" labels to millisecond intervals.
+                    const target = payload?.fps;
+                    if (!target || target === 'Unlimited' || target === 0) {
+                        _fpsTargetMs = 0;  // unlimited
+                    } else {
+                        _fpsTargetMs = 1000 / Number(target);
+                    }
+                    _fpsLastRenderTime = 0;  // reset so next frame renders immediately
+                }
+                else if (type === 'setDiscoMode') {
+                    // Party/disco lighting (#25): cycle RGB point lights hue on beat.
+                    _discoActive = !!payload?.enabled;
+                    const intensity = _discoActive ? 1.2 : 0;
+                    discoLights.forEach(l => { l.intensity = intensity; });
+                    if (!_discoActive) {
+                        // Restore neutral ambient on disco off
+                        ambientLight.intensity = 0.8;
+                        ambientLight.color.set(0xffffff);
+                    } else {
+                        ambientLight.intensity = 0.3; // dim base to let colours pop
+                    }
+                }
+                else if (type === 'setShadowQuality') {
+                    // Shadow quality toggle (#26): Off / Soft / Sharp
+                    const q = payload?.quality || 'off';
+                    if (q === 'off') {
+                        renderer.shadowMap.enabled = false;
+                        keyLight.castShadow = false;
+                    } else {
+                        renderer.shadowMap.enabled = true;
+                        keyLight.castShadow = true;
+                        renderer.shadowMap.type = q === 'sharp'
+                            ? THREE.BasicShadowMap
+                            : THREE.PCFSoftShadowMap;
+                        keyLight.shadow.mapSize.width  = 1024;
+                        keyLight.shadow.mapSize.height = 1024;
+                    }
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+            });
+        }
+        init();
+    </script>
+
+    <!-- Fix 8: Camera controls HUD — shown in bottom-left, fades in on canvas hover.
+         pointer-events:none keeps it from blocking orbit/zoom/pan interactions. -->
+    <style>
+        #camera-hud {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            z-index: 10;
+            font-family: monospace;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.25);
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            transition: color 0.3s;
+        }
+        #camera-hud:hover {
+            color: rgba(255, 255, 255, 0.55);
+        }
+        .hud-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .hud-row kbd {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 3px;
+            padding: 0 4px;
+            font-family: monospace;
+            font-size: 9px;
+            min-width: 48px;
+            text-align: center;
+        }
+    </style>
+    <div id="camera-hud">
+        <div class="hud-row"><kbd>L-Drag</kbd> Orbit</div>
+        <div class="hud-row"><kbd>Scroll</kbd> Zoom</div>
+        <div class="hud-row"><kbd>R-Drag</kbd> Pan</div>
+        <div class="hud-row"><kbd>Ctrl+0</kbd> Reset</div>
+    </div>
+</body>
+
+</html>

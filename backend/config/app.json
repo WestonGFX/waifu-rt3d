@@ -26,7 +26,7 @@
     "endpoint": "http://localhost:1234/v1",
     "model": "google/gemma-3-12b",
     "api_key": "lm-studio",
-    "history_limit": 0,
+    "history_limit": 30,
     "qwen3_thinking_mode": false
   },
   "tts": {

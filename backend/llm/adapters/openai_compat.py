@@ -31,6 +31,15 @@ class OpenAICompatAdapter(LLMAdapter):
             "temperature": kw.get("temperature", 0.7),
             "stream": False
         }
+        # Repetition / frequency penalties — critical for preventing degenerate
+        # loops on local models (Gemma, LLaMA, etc.).  LM Studio and llama.cpp
+        # recognise "repetition_penalty" (multiplicative) while the OpenAI spec
+        # uses "frequency_penalty" (additive).  We send both when configured so
+        # the server can use whichever it supports.
+        if kw.get("repeat_penalty") is not None:
+            payload["repetition_penalty"] = kw["repeat_penalty"]
+        if kw.get("frequency_penalty") is not None:
+            payload["frequency_penalty"] = kw["frequency_penalty"]
         # Merge any extra_body kwargs (e.g. Qwen3 thinking mode: {"chat_template_kwargs": {"enable_thinking": False}})
         if kw.get("extra_body"):
             payload.update(kw["extra_body"])
@@ -88,6 +97,10 @@ class OpenAICompatAdapter(LLMAdapter):
             "temperature": kw.get("temperature", 0.7),
             "stream": True
         }
+        if kw.get("repeat_penalty") is not None:
+            payload["repetition_penalty"] = kw["repeat_penalty"]
+        if kw.get("frequency_penalty") is not None:
+            payload["frequency_penalty"] = kw["frequency_penalty"]
         # Merge any extra_body kwargs (e.g. Qwen3 thinking mode)
         if kw.get("extra_body"):
             payload.update(kw["extra_body"])

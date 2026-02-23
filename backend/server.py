@@ -436,7 +436,51 @@ def _parse_emotion_gesture(text: str) -> tuple:
     # Exclusions: ., -, =, _, * — these can form valid Markdown (``---``, ``...``, ``===``).
     clean = re.sub(r'(?<![.\-=_*])(.)\1{5,}(?![.\-=_*])', '', clean).strip()
 
+    # Strip multi-character repetition loops: 2-6 char substrings repeated 4+ times.
+    # Catches patterns like "lollollollol...", "hahahaha...", "ollolloll..." that
+    # single-char detection misses.  Collapses to a single occurrence of the pattern.
+    clean = re.sub(r'(.{2,6}?)\1{3,}', r'\1', clean).strip()
+
     return emotion, gesture, clean or text
+
+
+def _maybe_auto_compress(session_id: int, total_active: int, max_history: int) -> None:
+    """Fire background auto-compression when history approaches the limit.
+
+    When the number of active messages in a session exceeds 90% of the
+    configured ``max_history``, this schedules a non-blocking compression
+    task so the *next* request benefits from a shorter context.  The current
+    request is unaffected — the user gets a normal response while compression
+    happens in the background.
+
+    Args:
+        session_id: Session to potentially compress.
+        total_active: Current count of active (non-archived) messages.
+        max_history: Configured history limit (0 = unlimited → skip).
+    """
+    if max_history <= 0:
+        return
+    threshold = int(max_history * 0.9)
+    if total_active < threshold:
+        return
+
+    import asyncio
+
+    async def _do_compress():
+        try:
+            logger.info(
+                f"Auto-compressing session {session_id}: "
+                f"{total_active} msgs >= {threshold} threshold (limit={max_history})"
+            )
+            await compress_session(session_id)
+        except Exception as e:
+            logger.warning(f"Auto-compression failed for session {session_id}: {e}")
+
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(_do_compress())
+    except RuntimeError:
+        pass  # No event loop — skip (shouldn't happen in FastAPI)
 
 
 def _clean_for_tts(text: str) -> str:
@@ -868,6 +912,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         system_prompt = "You are a friendly anime companion."
         voice_params = {}
         char_last_chat_date = None
+        is_daily_first = False
         try:
             cur.execute(
                 "SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate, "
@@ -910,7 +955,8 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 # Daily greeting context injection (#54): inject note on first chat of the day
                 from datetime import datetime as _dt_c
                 _today_c = _dt_c.now().strftime('%Y-%m-%d')
-                if char_last_chat_date != _today_c:
+                is_daily_first = (char_last_chat_date != _today_c)
+                if is_daily_first:
                     _now_hour_c = _dt_c.now().hour
                     _tod_c = "morning" if _now_hour_c < 12 else "afternoon" if _now_hour_c < 18 else "evening"
                     _last_mood_c = row[9] or "neutral"
@@ -955,6 +1001,15 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             )
         hist = [{"role": r, "content": t} for (r, t) in cur.fetchall()][::-1]
 
+        # Auto-compress: when active message count nears history_limit, fire
+        # background compression so the next request benefits from shorter context.
+        if max_history > 0:
+            total_active = cur.execute(
+                "SELECT COUNT(*) FROM messages WHERE session_id=? AND is_active=1",
+                (session_id,)
+            ).fetchone()[0]
+            _maybe_auto_compress(session_id, total_active, max_history)
+
         memories = []
         memory_context = ""
         if vector_store:
@@ -993,6 +1048,8 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 cfg["llm"]["api_key"],
                 temperature=cfg.get("temperature", 0.7),
                 max_tokens=-1,  # -1 = unlimited output (LM Studio default)
+                repeat_penalty=cfg.get("repeat_penalty"),
+                frequency_penalty=cfg.get("frequency_penalty"),
                 extra_body=extra_body,
             )
         except Exception as e:
@@ -1358,6 +1415,7 @@ async def chat_stream(req: Request):
     stream_char_last_chat_date = None
     stream_char_last_emotion = "neutral"
     stream_char_first_chat_date = None
+    _is_daily_first = False
     try:
         cur.execute(
             "SELECT system_prompt, llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, "
@@ -1404,7 +1462,8 @@ async def chat_stream(req: Request):
             # Daily greeting context injection (#54): inject note on first chat of the day
             from datetime import datetime as _dt_s
             _today_s = _dt_s.now().strftime('%Y-%m-%d')
-            if stream_char_last_chat_date != _today_s:
+            _is_daily_first = (stream_char_last_chat_date != _today_s)
+            if _is_daily_first:
                 _now_hour = _dt_s.now().hour
                 _tod = "morning" if _now_hour < 12 else "afternoon" if _now_hour < 18 else "evening"
                 system_prompt += (
@@ -1455,6 +1514,14 @@ async def chat_stream(req: Request):
         cur.execute("SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC",
                     (session_id,))
     hist = [{"role": r, "content": t} for (r, t) in cur.fetchall()][::-1]
+
+    # Auto-compress when history nears the limit (background, non-blocking)
+    if max_history > 0:
+        total_active = cur.execute(
+            "SELECT COUNT(*) FROM messages WHERE session_id=? AND is_active=1",
+            (session_id,)
+        ).fetchone()[0]
+        _maybe_auto_compress(session_id, total_active, max_history)
 
     memories = []
     memory_context = ""
@@ -1525,6 +1592,8 @@ async def chat_stream(req: Request):
                 cfg["llm"]["api_key"],
                 temperature=cfg.get("temperature", 0.7),
                 max_tokens=-1,
+                repeat_penalty=cfg.get("repeat_penalty"),
+                frequency_penalty=cfg.get("frequency_penalty"),
                 extra_body=stream_extra_body,
             ):
                 if first_token:
@@ -2202,6 +2271,8 @@ async def regenerate_message(message_id: int, req: Request):
             adapter.chat, messages, cfg["llm"]["model"],
             cfg["llm"]["endpoint"], cfg["llm"]["api_key"],
             temperature=cfg.get("temperature", 0.7), max_tokens=-1,
+            repeat_penalty=cfg.get("repeat_penalty"),
+            frequency_penalty=cfg.get("frequency_penalty"),
         )
 
         if not res.get("ok"):

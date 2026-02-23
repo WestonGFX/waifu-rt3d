@@ -2,6 +2,14 @@ class LLMAdapter:
     def chat(self, messages, model, endpoint, api_key, **kw):
         raise NotImplementedError
 
+    def supports_tools(self) -> bool:
+        """Whether this adapter supports native function/tool calling.
+
+        Returns:
+            False by default. Override in subclasses that support tools.
+        """
+        return False
+
     def chat_stream(self, messages, model, endpoint, api_key, **kw):
         """
         Streaming variant of chat(). Yields token delta strings as they arrive.

@@ -7,6 +7,10 @@ from .base import LLMAdapter
 logger = logging.getLogger("waifu.llm.openai")
 
 class OpenAICompatAdapter(LLMAdapter):
+    def supports_tools(self) -> bool:
+        """OpenAI-compatible APIs generally support function calling."""
+        return True
+
     def chat(self, messages, model, endpoint, api_key, **kw):
         """
         Non-streaming chat completion via OpenAI-compatible API.

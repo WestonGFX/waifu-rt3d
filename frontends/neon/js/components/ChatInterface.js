@@ -997,6 +997,23 @@ export class ChatInterface {
                             // Sentence-chunked TTS: queue this audio clip for sequential playback
                             enqueueAudioChunk(parsed.url, parsed.index);
 
+                        } else if (eventType === 'tool_call') {
+                            // Agentic tool invocation — render an inline card
+                            // inside the current assistant bubble while the tool runs.
+                            if (!streamContentEl) {
+                                this._removeThinkingBubble();
+                                const bubble = this._addStreamingBubble(avatarUrl);
+                                streamRow = bubble.row;
+                                streamContentEl = bubble.contentEl;
+                            }
+                            this._renderToolCard(parsed.id, parsed.name, parsed.args, 'running', streamContentEl);
+                            this.container.scrollTop = this.container.scrollHeight;
+
+                        } else if (eventType === 'tool_result') {
+                            // Tool finished — update the card with result data
+                            this._updateToolCard(parsed.id, parsed);
+                            this.container.scrollTop = this.container.scrollHeight;
+
                         } else if (eventType === 'done') {
                             metadata = parsed;
 
@@ -1365,6 +1382,220 @@ export class ChatInterface {
      * @param {string|null} avatarUrl - Avatar image URL
      * @returns {{row: HTMLElement, contentEl: HTMLElement}}
      */
+
+    // ── Agentic Tool Card Rendering ─────────────────────────────────────
+
+    /** @type {Record<string, string>} Map tool names to display icons */
+    static TOOL_ICONS = {
+        generate_image: '\u{1F3A8}',
+        web_search:     '\u{1F50D}',
+        search_memory:  '\u{1F4AD}',
+        set_scene:      '\u2728',
+    };
+
+    /** @type {Record<string, string>} Human-readable "running" labels */
+    static TOOL_RUNNING_LABELS = {
+        generate_image: 'Generating image\u2026',
+        web_search:     'Searching the web\u2026',
+        search_memory:  'Searching memories\u2026',
+        set_scene:      'Updating scene\u2026',
+    };
+
+    /** @type {Record<string, string>} Human-readable "done" labels */
+    static TOOL_DONE_LABELS = {
+        generate_image: 'Image generated',
+        web_search:     'Search complete',
+        search_memory:  'Memory search complete',
+        set_scene:      'Scene updated',
+    };
+
+    /**
+     * Render an inline tool card inside the current assistant message bubble.
+     *
+     * Creates a `.tool-card` element showing the tool name, icon, and a
+     * spinner while the tool is running. A collapsible `<details>` holds
+     * the raw arguments for power-user inspection.
+     *
+     * @param {string} toolId   - Unique tool call ID (e.g. "tc_001")
+     * @param {string} toolName - Tool function name (e.g. "generate_image")
+     * @param {Object} args     - Arguments passed to the tool
+     * @param {string} status   - Current status ("running" | "success" | "error")
+     * @param {HTMLElement} contentEl - The `.bubble-content` element to append into
+     */
+    _renderToolCard(toolId, toolName, args, status, contentEl) {
+        const icon = ChatInterface.TOOL_ICONS[toolName] || '\u{1F527}';
+        const label = ChatInterface.TOOL_RUNNING_LABELS[toolName] || `Running ${toolName}\u2026`;
+
+        const card = document.createElement('div');
+        card.className = `tool-card ${status}`;
+        card.dataset.toolId = toolId;
+        card.dataset.toolName = toolName;
+
+        card.innerHTML = `
+            <div class="tool-card-header">
+                <span class="tool-icon">${icon}</span>
+                <span class="tool-name">${label}</span>
+                <span class="tool-spinner">\u25E0</span>
+            </div>
+            <div class="tool-card-body"></div>
+            <details class="tool-card-details">
+                <summary>Details</summary>
+                <pre>${this._escapeHtml(JSON.stringify(args, null, 2))}</pre>
+            </details>
+        `;
+
+        contentEl.appendChild(card);
+    }
+
+    /**
+     * Update an existing tool card after the tool finishes execution.
+     *
+     * Finds the card by `data-tool-id`, removes the spinner, sets a
+     * success/error indicator, and populates the body based on the
+     * result's `display` type (image, list, scene_command, or text).
+     *
+     * For `scene_command` results, also dispatches commands to the
+     * ViewerBridge (expression, animation, background changes).
+     *
+     * @param {string} toolId     - Unique tool call ID to find the card
+     * @param {Object} resultData - Result payload from the backend
+     * @param {boolean} resultData.ok      - Whether the tool succeeded
+     * @param {string}  resultData.display  - Display mode: "image"|"list"|"scene_command"|"text"
+     * @param {Object}  resultData.data     - Display-specific payload
+     * @param {number}  [resultData.elapsed] - Execution time in seconds
+     */
+    _updateToolCard(toolId, resultData) {
+        const card = this.container.querySelector(`.tool-card[data-tool-id="${toolId}"]`);
+        if (!card) {
+            console.warn('[Chat] Tool card not found for id:', toolId);
+            return;
+        }
+
+        // Determine tool name from existing label text
+        const nameEl = card.querySelector('.tool-name');
+        const toolName = card.dataset.toolName || this._inferToolName(nameEl?.textContent);
+
+        // Update status class
+        card.classList.remove('running');
+        card.classList.add(resultData.ok ? 'success' : 'error');
+
+        // Replace spinner with status indicator
+        const spinner = card.querySelector('.tool-spinner');
+        if (spinner) {
+            spinner.classList.remove('tool-spinner');
+            spinner.classList.add('tool-status-icon');
+            spinner.textContent = resultData.ok ? '\u2713' : '\u2717';
+            spinner.style.animation = 'none';
+        }
+
+        // Update header label
+        if (nameEl) {
+            if (resultData.ok) {
+                nameEl.textContent = ChatInterface.TOOL_DONE_LABELS[toolName] || 'Done';
+            } else {
+                nameEl.textContent = resultData.data?.error || 'Tool failed';
+            }
+        }
+
+        // Populate body based on display type
+        const body = card.querySelector('.tool-card-body');
+        if (body && resultData.display) {
+            body.innerHTML = this._renderToolBody(resultData);
+        }
+
+        // Execute scene commands via ViewerBridge
+        if (resultData.display === 'scene_command' && resultData.ok) {
+            const cmds = resultData.data?.commands;
+            if (cmds && window.app?.viewerBridge) {
+                if (cmds.expression) window.app.viewerBridge.setExpression(cmds.expression);
+                if (cmds.animation) window.app.viewerBridge.playAnimation(cmds.animation);
+                if (cmds.background) window.app.viewerBridge.setBackground(cmds.background);
+            }
+        }
+
+        // Add timing info to details section
+        if (resultData.elapsed != null) {
+            const details = card.querySelector('.tool-card-details pre');
+            if (details) {
+                const existing = details.textContent;
+                details.textContent = existing + `\n\n--- Completed in ${resultData.elapsed.toFixed(2)}s ---`;
+            }
+        }
+    }
+
+    /**
+     * Render the tool card body HTML based on the result display type.
+     *
+     * @private
+     * @param {Object} resultData - The tool result payload
+     * @returns {string} HTML string for the tool card body
+     */
+    _renderToolBody(resultData) {
+        const { display, data } = resultData;
+
+        switch (display) {
+            case 'image':
+                return `<img src="${this._escapeHtml(data.url)}" class="tool-card-image"
+                            alt="Generated image" loading="lazy"
+                            onerror="this.alt='Image failed to load'; this.style.display='none'">`;
+
+            case 'list': {
+                if (!data?.items?.length) return '<em>No results</em>';
+                const items = data.items.map(item => {
+                    const title = this._escapeHtml(item.title || item.text || String(item));
+                    const snippet = item.snippet ? `<br><small>${this._escapeHtml(item.snippet)}</small>` : '';
+                    return `<li>${title}${snippet}</li>`;
+                }).join('');
+                return `<ul class="tool-card-list">${items}</ul>`;
+            }
+
+            case 'scene_command': {
+                const cmds = data?.commands || {};
+                const parts = [];
+                if (cmds.expression) parts.push(`expression \u2192 ${cmds.expression}`);
+                if (cmds.animation) parts.push(`animation \u2192 ${cmds.animation}`);
+                if (cmds.background) parts.push(`background \u2192 ${cmds.background}`);
+                return `<em>\u2728 ${this._escapeHtml(parts.join(', ') || 'scene updated')}</em>`;
+            }
+
+            case 'text':
+            default:
+                return `<span>${this._escapeHtml(data?.text || data?.error || 'Done')}</span>`;
+        }
+    }
+
+    /**
+     * Infer tool name from its running label text for lookup in TOOL_DONE_LABELS.
+     *
+     * @private
+     * @param {string} labelText - Current label text (e.g. "Generating image...")
+     * @returns {string} Inferred tool name key or empty string
+     */
+    _inferToolName(labelText) {
+        if (!labelText) return '';
+        for (const [name, runLabel] of Object.entries(ChatInterface.TOOL_RUNNING_LABELS)) {
+            if (labelText === runLabel) return name;
+        }
+        // Fallback: try matching done labels too
+        for (const [name, doneLabel] of Object.entries(ChatInterface.TOOL_DONE_LABELS)) {
+            if (labelText === doneLabel) return name;
+        }
+        return '';
+    }
+
+    /**
+     * Escape HTML special characters to prevent XSS in tool card content.
+     *
+     * @private
+     * @param {string} str - Raw string to escape
+     * @returns {string} HTML-safe string
+     */
+    _escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
     _addStreamingBubble(avatarUrl) {
         const row = document.createElement('div');
         row.className = 'message-ai';

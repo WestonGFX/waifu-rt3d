@@ -1468,3 +1468,148 @@ body[data-emotion="thinking"]::after {
     background: radial-gradient(ellipse at 20% 50%, rgba(0,240,255,0.04) 0%, transparent 60%);
     opacity: 1;
 }
+
+/* ═══ AGENTIC TOOL CARDS (Phase 10) ═══
+   Inline cards rendered inside assistant chat bubbles when the LLM
+   invokes a tool (generate_image, web_search, search_memory, set_scene).
+   Styled to match the cyberpunk glass aesthetic. ═══ */
+
+.tool-card {
+    margin: 8px 0;
+    border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+    border-radius: var(--radius-sm, 8px);
+    background: var(--glass-panel, rgba(0,0,0,0.3));
+    padding: 8px 12px;
+    font-size: 0.85em;
+    font-family: var(--font-body, 'Inter', system-ui, sans-serif);
+    backdrop-filter: blur(8px);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.tool-card.running {
+    border-color: rgba(0, 240, 255, 0.2);
+    box-shadow: 0 0 8px rgba(0, 240, 255, calc(0.06 * var(--glow-intensity, 1)));
+}
+
+.tool-card.success {
+    border-color: rgba(0, 240, 255, 0.25);
+}
+
+.tool-card.error {
+    border-color: rgba(255, 68, 68, 0.3);
+}
+
+.tool-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-family: var(--font-display, 'Rajdhani', sans-serif);
+    letter-spacing: 0.02em;
+}
+
+.tool-icon {
+    font-size: 1.1em;
+    flex-shrink: 0;
+}
+
+.tool-name {
+    flex: 1;
+    color: var(--text-main, #e0e6ed);
+}
+
+.tool-spinner {
+    display: inline-block;
+    animation: tool-spin 1s linear infinite;
+    color: var(--neon-cyan, #00f0ff);
+    font-size: 0.9em;
+}
+
+.tool-status-icon {
+    font-weight: 700;
+    font-size: 0.95em;
+}
+
+@keyframes tool-spin {
+    to { transform: rotate(360deg); }
+}
+
+.tool-card.success .tool-card-header {
+    color: var(--neon-cyan, #0ff);
+}
+
+.tool-card.error .tool-card-header {
+    color: #f44;
+}
+
+.tool-card-body {
+    margin-top: 6px;
+    color: var(--text-main, #e0e6ed);
+}
+
+.tool-card-body em {
+    opacity: 0.85;
+    font-style: italic;
+}
+
+.tool-card-image {
+    max-width: 200px;
+    border-radius: var(--radius-sm, 4px);
+    margin-top: 4px;
+    border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
+}
+
+.tool-card-list {
+    margin: 4px 0 0 0;
+    padding-left: 1.2em;
+    list-style: none;
+}
+
+.tool-card-list li {
+    padding: 3px 0;
+    border-bottom: 1px solid var(--glass-border, rgba(255,255,255,0.05));
+}
+
+.tool-card-list li::before {
+    content: '\25B8';
+    color: var(--neon-cyan, #00f0ff);
+    margin-right: 6px;
+    font-size: 0.8em;
+}
+
+.tool-card-list li:last-child {
+    border-bottom: none;
+}
+
+.tool-card-list small {
+    color: var(--text-muted, #94a3b8);
+}
+
+.tool-card-details {
+    margin-top: 4px;
+    font-size: 0.8em;
+    opacity: 0.7;
+}
+
+.tool-card-details summary {
+    cursor: pointer;
+    color: var(--text-muted, #94a3b8);
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    user-select: none;
+}
+
+.tool-card-details summary:hover {
+    color: var(--neon-cyan, #00f0ff);
+}
+
+.tool-card-details pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.85em;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    color: var(--text-muted, #94a3b8);
+    margin: 4px 0 0 0;
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}

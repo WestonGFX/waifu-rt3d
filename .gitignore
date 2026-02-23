@@ -88,3 +88,4 @@ docs/telemetry/V2_HYBRID_7DAY_REPORT.md
 # ── Archived cleanup staging area + full backup root (large zips, not source) ──
 _BACKUP_ROOT/
 .git.zip
+.worktrees/

@@ -132,6 +132,116 @@
         --shadow-glow: 0 0 20px rgba(88, 101, 242, calc(0.15 * var(--glow-intensity)));
     }
 
+    /* iOS Messages (Light) — Native iOS aesthetic */
+    [data-theme="ios-light"] {
+        --bg-void: #F2F2F7;
+        --bg-deep: #FFFFFF;
+        --text-main: #000000;
+        --text-muted: #6C6C70;
+        --neon-cyan: #007AFF;
+        --neon-magenta: #FF3B30;
+        --neon-green: #34C759;
+        --neon-yellow: #FF9500;
+        --glass-panel: rgba(255, 255, 255, 0.98);
+        --glass-border: rgba(0, 0, 0, 0.12);
+        --glass-blur: 0px;
+        --shadow-glow: none;
+        --space-xs: 4px;
+        --border-radius: 12px;
+        --font-mono: Menlo, Monaco, "Courier New", monospace;
+    }
+
+    /* Kill animated background and gradients for iOS light theme */
+    body[data-theme="ios-light"] {
+        background-image: none !important;
+        background-color: #F2F2F7 !important;
+    }
+
+    /* iOS Messages bubble overrides (light) */
+    body[data-theme="ios-light"] .message-user .bubble-content {
+        background: #007AFF !important;
+        color: #FFFFFF !important;
+        border-radius: 18px 18px 4px 18px !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+
+    body[data-theme="ios-light"] .message-ai .bubble-content {
+        background: #E9E9EB !important;
+        color: #000000 !important;
+        border-radius: 18px 18px 18px 4px !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+
+    /* Thin light scrollbar for iOS light */
+    body[data-theme="ios-light"] ::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    body[data-theme="ios-light"] ::-webkit-scrollbar-track {
+        background: #F2F2F7;
+    }
+
+    body[data-theme="ios-light"] ::-webkit-scrollbar-thumb {
+        background: #C7C7CC;
+        border-radius: 2px;
+    }
+
+    /* iOS Messages Dark — True black OLED */
+    [data-theme="ios-dark"] {
+        --bg-void: #000000;
+        --bg-deep: #1C1C1E;
+        --text-main: #FFFFFF;
+        --text-muted: #8E8E93;
+        --neon-cyan: #007AFF;
+        --neon-magenta: #FF453A;
+        --neon-green: #30D158;
+        --neon-yellow: #FF9F0A;
+        --glass-panel: rgba(28, 28, 30, 0.98);
+        --glass-border: rgba(255, 255, 255, 0.1);
+        --glass-blur: 0px;
+        --shadow-glow: none;
+        --font-mono: Menlo, Monaco, "Courier New", monospace;
+    }
+
+    /* Kill animated background for iOS dark theme */
+    body[data-theme="ios-dark"] {
+        background-image: none !important;
+        background-color: #000000 !important;
+    }
+
+    /* iOS Messages bubble overrides (dark) */
+    body[data-theme="ios-dark"] .message-user .bubble-content {
+        background: #007AFF !important;
+        color: #FFFFFF !important;
+        border-radius: 18px 18px 4px 18px !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+
+    body[data-theme="ios-dark"] .message-ai .bubble-content {
+        background: #3A3A3C !important;
+        color: #FFFFFF !important;
+        border-radius: 18px 18px 18px 4px !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+
+    /* Thin dark scrollbar for iOS dark */
+    body[data-theme="ios-dark"] ::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    body[data-theme="ios-dark"] ::-webkit-scrollbar-track {
+        background: #1C1C1E;
+    }
+
+    body[data-theme="ios-dark"] ::-webkit-scrollbar-thumb {
+        background: #3A3A3C;
+        border-radius: 2px;
+    }
+
 
 /* ═══ BENTO GRID — 3 Column Layout ═══ */
 /* Sidebar widths use clamp() for responsive sizing:

@@ -78,6 +78,14 @@ const SETTINGS_SCHEMA = {
                 default: true,
                 desc: "Show the AI's Chain-of-Thought.",
                 tooltip: "🔍 Shows reasoning process in <think> tags. Useful for debugging."
+            },
+            {
+                id: "llm.qwen3_thinking_mode",
+                name: "Qwen3 Thinking Mode",
+                type: "toggle",
+                default: false,
+                desc: "Enable chain-of-thought reasoning for Qwen3 models.",
+                tooltip: "🧠 When ON: Qwen3 uses deep reasoning (slower, smarter). When OFF: fast direct responses. Only applies when a Qwen3 model is loaded. Recommended models by VRAM: Qwen3-4B (~3GB), Qwen3-8B (~7GB), Qwen3-14B (~10GB), Qwen3-30B-A3B (~19GB MoE)."
             }
         ]
     },
@@ -88,7 +96,23 @@ const SETTINGS_SCHEMA = {
             { id: "speech_rate", name: "Speech Rate", type: "slider", min: 0.5, max: 2.0, step: 0.1, default: 1.0, desc: "Speed of TTS output.", tooltip: "💡 1.0 is normal speed. Lower for dramatic delivery, higher for quick responses." },
             { id: "pitch_shift", name: "Pitch Shift", type: "slider", min: -10, max: 10, step: 1, default: 0, desc: "Semitone shift for voice.", tooltip: "💡 Adjust the pitch of the AI's voice. Negative = deeper, positive = higher." },
             { id: "voice_stability", name: "Voice Stability", type: "slider", min: 0, max: 1.0, step: 0.1, default: 0.5, desc: "Consistent vs Expressive.", tooltip: "💡 Low = more expressive and varied. High = more consistent but robotic." },
-            { id: "interrupt_mode", name: "Interrupt Mode", type: "toggle", default: true, desc: "Stop AI talking when you speak.", tooltip: "💡 When enabled, speaking into the mic will stop the AI's current TTS playback." }
+            { id: "tts.exaggeration", name: "Chatterbox Exaggeration", type: "slider", min: 0.3, max: 2.0, step: 0.1, default: 0.8, desc: "Emotional intensity for Chatterbox TTS.", tooltip: "🎭 0.3–0.5 = Calm. 0.7–0.9 = Natural (recommended). 1.2–1.5 = Dramatic. 1.8+ = Over-the-top. Only applies when using the Chatterbox TTS provider." },
+            { id: "interrupt_mode", name: "Interrupt Mode", type: "toggle", default: true, desc: "Stop AI talking when you speak.", tooltip: "💡 When enabled, speaking into the mic will stop the AI's current TTS playback." },
+            { id: "tts.fast_chunking", name: "Fast TTS (Sentence Streaming)", type: "toggle", default: true, desc: "Start speaking after the first sentence instead of waiting for the full reply.", tooltip: "🔊 When ON: each sentence is synthesized as it arrives (~1-2s latency vs ~10s). Recommended for all local TTS providers (Kokoro, Chatterbox, Edge-TTS). Turn OFF for ElevenLabs." },
+            {
+                id: "asr_provider", name: "Microphone (ASR) Provider", type: "select",
+                options: ["browser", "faster_whisper"],
+                default: "browser",
+                desc: "Speech recognition engine for voice input.",
+                tooltip: "🎤 Browser: uses native Web Speech API (cloud, requires internet). Faster-Whisper: local offline transcription (install: pip install faster-whisper). Faster-Whisper is more accurate and works completely offline."
+            },
+            {
+                id: "asr_model", name: "Faster-Whisper Model Size", type: "select",
+                options: ["tiny.en", "base.en", "small", "medium", "large-v3"],
+                default: "base.en",
+                desc: "Accuracy vs. speed tradeoff. Only applies when using Faster-Whisper.",
+                tooltip: "💡 tiny.en: fastest, least accurate. base.en: good balance for English. large-v3: best accuracy, multilingual, needs ~4GB RAM."
+            }
         ]
     },
     visuals: {
@@ -96,7 +120,7 @@ const SETTINGS_SCHEMA = {
         icon: "🎨",
         fields: [
             { id: "visual_mode", name: "Avatar Engine", type: "select", options: ["3D (VRM)", "2D (Live2D)"], default: "3D (VRM)", desc: "Choose rendering engine.", tooltip: "💡 VRM = 3D models with full body/face animation. Live2D = 2D animated portraits." },
-            { id: "theme", name: "Visual Theme", type: "select", options: ["Synthwave UI (Dark)", "Zen (Light)", "Anime Pop", "Bubblegum", "Dracula", "Nord", "Hacker", "Blurple"], default: "Synthwave UI (Dark)", desc: "Global color scheme.", tooltip: "💡 Changes the entire UI color palette. Use Theme Editor below for fine-grained control." },
+            { id: "theme", name: "Visual Theme", type: "select", options: ["Synthwave UI (Dark)", "Zen (Light)", "Anime Pop", "Bubblegum", "Dracula", "Nord", "Hacker", "Blurple", "iOS Messages", "iOS Dark"], default: "Synthwave UI (Dark)", desc: "Global color scheme.", tooltip: "💡 Changes the entire UI color palette. Use Theme Editor below for fine-grained control." },
             { id: "bg_mode", name: "Dynamic Background", type: "select", options: ["Void", "Bento Gradient", "Digital Rain", "City Video"], default: "Bento Gradient", desc: "Background animation style.", tooltip: "💡 Decorative background behind the main UI panels." },
             { id: "glow_intensity", name: "Neon Glow Intensity", type: "slider", min: 0, max: 100, default: 50, desc: "Brightness of UI elements.", tooltip: "💡 Controls the strength of neon glow effects. Set to 0 for a more subtle look." },
             { id: "ui_border_radius", name: "Border Radius", type: "slider", min: 0, max: 20, step: 2, default: 12, desc: "Roundness of panels (px).", tooltip: "💡 0 = sharp corners, 20 = very rounded. Affects all panels and buttons." },
@@ -473,6 +497,18 @@ export class SettingsModal {
                 this.tempConfig.vocab_limit = this.tempConfig.vocab.limit;
             }
         }
+
+        // Flat ASR fields: asr_provider / asr_model map to cfg.asr.provider / cfg.asr.model
+        this.tempConfig.asr_provider = this.tempConfig.asr?.provider ?? "browser";
+        this.tempConfig.asr_model = this.tempConfig.asr?.model ?? "base.en";
+
+        // Dot-notation fields: stored nested in config but referenced by literal dotted keys in tempConfig.
+        // llm.qwen3_thinking_mode → tempConfig["llm.qwen3_thinking_mode"]
+        this.tempConfig["llm.qwen3_thinking_mode"] = this.tempConfig.llm?.qwen3_thinking_mode ?? false;
+        // tts.exaggeration → tempConfig["tts.exaggeration"]
+        this.tempConfig["tts.exaggeration"] = this.tempConfig.tts?.exaggeration ?? 0.8;
+        // tts.fast_chunking → tempConfig["tts.fast_chunking"]
+        this.tempConfig["tts.fast_chunking"] = this.tempConfig.tts?.fast_chunking ?? true;
 
         // Fetch external data in parallel when opening
         Promise.all([
@@ -1341,7 +1377,9 @@ export class SettingsModal {
                 "Dracula": "dracula",
                 "Nord": "nord",
                 "Hacker": "hacker",
-                "Blurple": "blurple"
+                "Blurple": "blurple",
+                "iOS Messages": "ios-light",
+                "iOS Dark": "ios-dark"
             };
             const themeName = themeMap[this.tempConfig.theme] || "dark";
             document.body.dataset.theme = themeName;
@@ -1447,6 +1485,40 @@ export class SettingsModal {
                 if (this.tempConfig.vocab_limit !== undefined) {
                     this.tempConfig.vocab.limit = this.tempConfig.vocab_limit;
                     delete this.tempConfig.vocab_limit;
+                }
+            }
+
+            // Dot-notation fields: write flat staging keys back to nested config paths.
+            // tempConfig["llm.qwen3_thinking_mode"] → config.llm.qwen3_thinking_mode
+            if (this.tempConfig["llm.qwen3_thinking_mode"] !== undefined) {
+                if (!this.tempConfig.llm) this.tempConfig.llm = {};
+                this.tempConfig.llm.qwen3_thinking_mode = this.tempConfig["llm.qwen3_thinking_mode"];
+                delete this.tempConfig["llm.qwen3_thinking_mode"];
+            }
+            // tempConfig["tts.exaggeration"] → config.tts.exaggeration
+            if (this.tempConfig["tts.exaggeration"] !== undefined) {
+                if (!this.tempConfig.tts) this.tempConfig.tts = {};
+                this.tempConfig.tts.exaggeration = this.tempConfig["tts.exaggeration"];
+                delete this.tempConfig["tts.exaggeration"];
+            }
+            // tempConfig["tts.fast_chunking"] → config.tts.fast_chunking
+            if (this.tempConfig["tts.fast_chunking"] !== undefined) {
+                if (!this.tempConfig.tts) this.tempConfig.tts = {};
+                this.tempConfig.tts.fast_chunking = this.tempConfig["tts.fast_chunking"];
+                delete this.tempConfig["tts.fast_chunking"];
+            }
+
+            // asr_provider / asr_model → asr.provider / asr.model
+            if (this.tempConfig.asr_provider !== undefined || this.tempConfig.asr_model !== undefined) {
+                if (!this.tempConfig.asr) this.tempConfig.asr = {};
+                if (this.tempConfig.asr_provider !== undefined) {
+                    this.tempConfig.asr.provider = this.tempConfig.asr_provider;
+                    this.tempConfig.asr.enabled = this.tempConfig.asr_provider !== "browser";
+                    delete this.tempConfig.asr_provider;
+                }
+                if (this.tempConfig.asr_model !== undefined) {
+                    this.tempConfig.asr.model = this.tempConfig.asr_model;
+                    delete this.tempConfig.asr_model;
                 }
             }
 

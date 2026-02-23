@@ -18,7 +18,7 @@ import psutil
 from typing import Optional
 
 # ... (Previous imports) ...
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -361,6 +361,37 @@ def _parse_emotion_gesture(text: str) -> tuple:
     return emotion, gesture, clean or text
 
 
+def _clean_for_tts(text: str) -> str:
+    """Strip LLM prose artifacts before sending text to a voice engine.
+
+    Removes content that TTS engines would read aloud literally but that is
+    intended as visual/stage direction only: emotion tags, parenthetical stage
+    directions, asterisk action text, and Markdown formatting remnants.
+
+    Args:
+        text: LLM reply after emotion/gesture tag extraction (i.e. the value
+              already returned by ``_parse_emotion_gesture``).
+
+    Returns:
+        Cleaned text suitable for speech synthesis.  Falls back to the original
+        *text* if cleaning leaves an empty string.
+
+    Example:
+        >>> _clean_for_tts("(laughs softly) *blushes* That's so kind of you!")
+        "That's so kind of you!"
+    """
+    result = text
+    result = re.sub(r'\[[^\]]*\]', '', result)           # [emotion:happy], [gesture:wave]
+    result = re.sub(r'\([^)]*\)', '', result)             # (laughs softly)
+    result = re.sub(r'\*[^*]*\*', '', result)             # *blushes* or **bold**
+    result = re.sub(r'[_~`]', '', result)                 # markdown remnants
+    result = result.replace('\u2018', "'").replace('\u2019', "'")   # smart single quotes
+    result = result.replace('\u201c', '"').replace('\u201d', '"')   # smart double quotes
+    result = result.replace('\u2014', ' ').replace('-', ' ')        # em-dashes and hyphens to spaces
+    result = re.sub(r'\s+', ' ', result).strip()
+    return result or text  # never return empty string
+
+
 def _get_gpu_info() -> dict:
     """Best-effort GPU/VRAM info for the system stats endpoint.
 
@@ -589,7 +620,8 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         voice_params = {}
         try:
             cur.execute(
-                "SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate FROM characters WHERE id=?",
+                "SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate, "
+                "llm_endpoint, llm_model FROM characters WHERE id=?",
                 (char_id,)
             )
             row = cur.fetchone()
@@ -604,6 +636,11 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                     voice_params['tts_pitch'] = row[3]
                 if row[4]:
                     voice_params['tts_rate'] = row[4]
+                # Per-character LLM override (e.g. TinyAya on Ollama for Japanese characters)
+                if row[5]:
+                    cfg.setdefault("llm", {})["endpoint"] = row[5]
+                if row[6]:
+                    cfg.setdefault("llm", {})["model"] = row[6]
         except Exception as e:
             logger.error(f"Error fetching character data: {e}")
 
@@ -646,14 +683,21 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         try:
             from backend.llm.registry import get_client
             adapter = get_client(cfg)
+            # Build Qwen3 thinking-mode override when enabled and model is Qwen3
+            llm_model_name = cfg["llm"].get("model", "")
+            qwen3_thinking = cfg.get("llm", {}).get("qwen3_thinking_mode", False)
+            extra_body = None
+            if "qwen3" in llm_model_name.lower():
+                extra_body = {"chat_template_kwargs": {"enable_thinking": bool(qwen3_thinking)}}
             res = await run_in_threadpool(
                 adapter.chat,
                 messages,
-                cfg["llm"]["model"],
+                llm_model_name,
                 cfg["llm"]["endpoint"],
                 cfg["llm"]["api_key"],
                 temperature=cfg.get("temperature", 0.7),
                 max_tokens=-1,  # -1 = unlimited output (LM Studio default)
+                extra_body=extra_body,
             )
         except Exception as e:
             _telemetry_inc("chat.failures_total")
@@ -708,9 +752,19 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                     cfg['services'].get('tts', {}).pop('active_provider', None)
 
                 tts_client = get_tts(cfg)
-                tts_res = await run_in_threadpool(tts_client.speak, clean_reply, tts_cfg)
+                tts_text = _clean_for_tts(clean_reply)
+                tts_res = await run_in_threadpool(tts_client.speak, tts_text, tts_cfg)
                 if tts_res.get("ok"):
                     tts_url = f"/files/audio/{tts_res['filename']}"
+                    # Broadcast to OBS overlay connections if any are active
+                    if _overlay_connections:
+                        await _broadcast_overlay({
+                            "type": "speak",
+                            "audio_url": tts_url,
+                            "text": clean_reply,
+                            "expression": emotion,
+                            "animation": None,
+                        })
             except Exception as e:
                 logger.error(f"TTS Generation failed: {e}")
                 tts_url = None
@@ -864,6 +918,36 @@ async def chat_multi(req: Request):
         con.close()
 
 
+async def _tts_chunk_async(tts_client, text: str, tts_cfg: dict, index: int) -> dict | None:
+    """Synthesize a single TTS chunk in a thread pool and return the result.
+
+    Designed to run concurrently via ``asyncio.create_task`` during LLM streaming
+    so TTS synthesis happens in parallel with token generation.
+
+    Args:
+        tts_client: Instantiated TTS adapter from ``get_tts``.
+        text: Pre-cleaned sentence text for synthesis.
+        tts_cfg: TTS config dict (provider, voice, etc.).
+        index: Chunk sequence index for in-order playback on the frontend.
+
+    Returns:
+        Dict ``{chunk_index, filename, ...}`` on success, or ``None`` on failure.
+    """
+    try:
+        res = await run_in_threadpool(tts_client.speak, text, tts_cfg)
+        if res.get("ok"):
+            return {**res, "chunk_index": index}
+    except Exception as e:
+        logger.warning(f"TTS chunk {index} failed: {e}")
+    return None
+
+
+# Pattern for detecting sentence boundaries in the token stream.
+# Matches whitespace after .!? — the sentence that just ended gets flushed
+# to TTS when the buffer is long enough (>30 chars) to avoid micro-chunks.
+_SENTENCE_ENDS = re.compile(r'(?<=[.!?])\s+')
+
+
 @app.post("/api/chat/stream")
 async def chat_stream(req: Request):
     """
@@ -896,8 +980,28 @@ async def chat_stream(req: Request):
 
     session_id = int(body.get("session_id") or 1)
     char_id = int(body.get("character_id") or body.get("char_id") or 1)
+    speak = bool(body.get("speak", False))
 
     cfg = load_config() or {}
+
+    # Sentence-chunked TTS setup: enabled when frontend opts in with speak=True,
+    # TTS is globally enabled, and the fast_chunking flag is not explicitly disabled.
+    tts_chunked_client = None
+    tts_chunked_cfg: dict = {}
+    use_chunked_tts = (
+        speak
+        and cfg.get("tts", {}).get("enabled", False)
+        and cfg.get("tts", {}).get("fast_chunking", True)
+    )
+    if use_chunked_tts:
+        try:
+            from backend.tts.registry import get_tts
+            tts_chunked_client = get_tts(cfg)
+            tts_chunked_cfg = cfg.get("tts", {}).copy()
+        except Exception as e:
+            logger.warning(f"Chunked TTS init failed, falling back to post-stream TTS: {e}")
+            tts_chunked_client = None
+            use_chunked_tts = False
 
     # Pre-compute all DB reads and prompt construction BEFORE the generator
     # so the streaming part only handles the LLM stream + DB writes.
@@ -917,10 +1021,19 @@ async def chat_stream(req: Request):
     system_prompt = "You are a friendly anime companion."
     voice_params = {}
     try:
-        cur.execute("SELECT system_prompt FROM characters WHERE id=?", (char_id,))
+        cur.execute(
+            "SELECT system_prompt, llm_endpoint, llm_model FROM characters WHERE id=?",
+            (char_id,)
+        )
         row = cur.fetchone()
-        if row and row[0]:
-            system_prompt = row[0]
+        if row:
+            if row[0]:
+                system_prompt = row[0]
+            # Per-character LLM override (e.g. TinyAya on Ollama for multilingual characters)
+            if row[1]:
+                cfg.setdefault("llm", {})["endpoint"] = row[1]
+            if row[2]:
+                cfg.setdefault("llm", {})["model"] = row[2]
     except Exception as e:
         logger.error(f"Error fetching character data: {e}")
 
@@ -980,6 +1093,12 @@ async def chat_stream(req: Request):
     router = get_router(cfg)
     routed_model = router.route(text) if router else cfg["llm"]["model"]
 
+    # Build Qwen3 thinking-mode override when enabled and model is Qwen3
+    qwen3_thinking = cfg.get("llm", {}).get("qwen3_thinking_mode", False)
+    stream_extra_body = None
+    if "qwen3" in routed_model.lower():
+        stream_extra_body = {"chat_template_kwargs": {"enable_thinking": bool(qwen3_thinking)}}
+
     # Use an asyncio.Queue to bridge the sync generator thread → async generator
     token_q: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_event_loop()
@@ -995,6 +1114,7 @@ async def chat_stream(req: Request):
                 cfg["llm"]["api_key"],
                 temperature=cfg.get("temperature", 0.7),
                 max_tokens=-1,
+                extra_body=stream_extra_body,
             ):
                 if first_token:
                     # Signal that prefill is complete and generation has begun
@@ -1010,10 +1130,24 @@ async def chat_stream(req: Request):
     est_input_tokens = input_char_count // 4
 
     async def event_generator():
-        """Async generator yielding SSE events as tokens arrive from the LLM."""
+        """Async generator yielding SSE events as tokens arrive from the LLM.
+
+        When ``use_chunked_tts`` is True, sentence-boundary detection accumulates
+        tokens into ``sentence_buffer``.  Each complete sentence fires a background
+        ``asyncio.Task`` for TTS synthesis so audio generation overlaps with the
+        remaining LLM token stream.  After the stream ends, all pending TTS tasks
+        are collected and their results emitted as ``audio_chunk`` SSE events before
+        the ``done`` event — allowing the frontend to begin playback as each chunk
+        arrives while the LLM is still generating the rest of the reply.
+        """
         full_reply = ""
         token_count = 0
         stream_start_time = None  # Set when first token arrives
+
+        # Sentence-chunked TTS state
+        sentence_buffer = ""
+        chunk_index = 0
+        chunk_tasks: list[asyncio.Task] = []
 
         # Emit processing event so frontend shows "PROCESSING INPUT..."
         yield f"event: processing\ndata: {json.dumps({'input_tokens': est_input_tokens})}\n\n"
@@ -1033,7 +1167,21 @@ async def chat_stream(req: Request):
                 elif msg_type == "token":
                     full_reply += payload
                     token_count += 1
+                    sentence_buffer += payload
                     yield f"event: token\ndata: {json.dumps({'t': payload})}\n\n"
+
+                    # Sentence-chunked TTS: flush buffer on sentence boundary.
+                    # Minimum 30 chars avoids firing TTS on very short fragments.
+                    if (use_chunked_tts and tts_chunked_client
+                            and _SENTENCE_ENDS.search(sentence_buffer)
+                            and len(sentence_buffer) > 30):
+                        chunk_text = _clean_for_tts(sentence_buffer.strip())
+                        sentence_buffer = ""
+                        task = asyncio.create_task(
+                            _tts_chunk_async(tts_chunked_client, chunk_text, tts_chunked_cfg, chunk_index)
+                        )
+                        chunk_tasks.append(task)
+                        chunk_index += 1
 
                 elif msg_type == "end":
                     break
@@ -1042,6 +1190,27 @@ async def chat_stream(req: Request):
                     _telemetry_inc("chat.failures_total")
                     yield f"event: error\ndata: {json.dumps({'error': payload})}\n\n"
                     return
+
+            # Flush any remaining sentence buffer after stream ends
+            if use_chunked_tts and tts_chunked_client and sentence_buffer.strip():
+                chunk_text = _clean_for_tts(sentence_buffer.strip())
+                task = asyncio.create_task(
+                    _tts_chunk_async(tts_chunked_client, chunk_text, tts_chunked_cfg, chunk_index)
+                )
+                chunk_tasks.append(task)
+
+            # Collect TTS results (some tasks may already be done by now) and yield chunks
+            if chunk_tasks:
+                chunk_results = await asyncio.gather(*chunk_tasks, return_exceptions=True)
+                for r in chunk_results:
+                    if isinstance(r, dict) and r.get("ok"):
+                        # Build the audio URL outside the f-string — Python does not
+                        # allow backslash escapes inside f-string expression braces.
+                        audio_url = f"/files/audio/{r['filename']}"
+                        yield (
+                            f"event: audio_chunk\n"
+                            f"data: {json.dumps({'url': audio_url, 'index': r['chunk_index']})}\n\n"
+                        )
 
             # Stream complete — parse emotion/gesture, save to DB, emit done event
             emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
@@ -1092,6 +1261,9 @@ async def chat_stream(req: Request):
                 "input_tokens": est_input_tokens,
                 "generation_time_ms": generation_time_ms,
                 "tokens_per_second": tokens_per_second,
+                # Tell the frontend not to call /api/tts separately when we already
+                # synthesized and emitted audio_chunk events above.
+                "tts_chunked": bool(chunk_tasks),
             }
             yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
@@ -1133,7 +1305,7 @@ async def api_tts(req: Request):
     try:
         from backend.tts.registry import get_tts
         tts = get_tts(cfg)
-        res = tts.speak(text, cfg_tts)
+        res = tts.speak(_clean_for_tts(text), cfg_tts)
         if not res.get("ok"): raise HTTPException(400, res.get("error","TTS failed"))
         return {"ok": True, "url": f"/files/audio/{res['filename']}", "meta": res.get("meta",{})}
     except Exception as e:
@@ -1999,7 +2171,8 @@ def list_characters():
         cur.execute("""
             SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider,
                    personality_traits, live2d_model, model_type, avatar_2d_url, vrm_model_url,
-                   greeting_text, greeting_animation, background_url, background_mode, voice_sample_path
+                   greeting_text, greeting_animation, background_url, background_mode, voice_sample_path,
+                   llm_endpoint, llm_model
             FROM characters
             ORDER BY id ASC
         """)
@@ -2040,6 +2213,8 @@ def list_characters():
             "background_url": row[13] if len(row) > 13 else None,
             "background_mode": row[14] if len(row) > 14 else "transparent",
             "voice_sample_path": row[15] if len(row) > 15 else None,
+            "llm_endpoint": row[16] if len(row) > 16 else "",
+            "llm_model": row[17] if len(row) > 17 else "",
         }
         characters.append(char)
     conn.close()
@@ -2098,7 +2273,8 @@ async def update_character(character_id: int, req: Request):
         "name", "system_prompt", "avatar_url", "voice_id", "tts_provider",
         "tts_pitch", "tts_rate", "live2d_model", "model_type", "avatar_2d_url",
         "vrm_model_url", "greeting_text", "greeting_animation", "background_url",
-        "background_mode", "voice_sample_path", "vocab_categories"
+        "background_mode", "voice_sample_path", "vocab_categories",
+        "llm_endpoint", "llm_model",
     ]
     for field in fields:
         if field in body:
@@ -3486,6 +3662,71 @@ async def import_vocab(req: Request):
         "imported": count,
         "total_user": len(vocab_manager.user_entries)
     }
+
+
+# ==================== OBS STREAMING OVERLAY ====================
+
+# Set of active WebSocket connections from overlay browser sources.
+# Broadcast messages are sent to all connected overlays whenever the AI responds.
+_overlay_connections: set[WebSocket] = set()
+
+
+async def _broadcast_overlay(msg: dict) -> None:
+    """Broadcast a JSON message to all connected OBS overlay WebSockets.
+
+    Dead connections are silently removed from ``_overlay_connections`` so the
+    set stays clean without manual management.
+
+    Args:
+        msg: JSON-serialisable dict.  Overlay clients expect keys:
+             ``type``, ``audio_url``, ``text``, ``expression``, ``animation``.
+    """
+    disconnected: list[WebSocket] = []
+    for ws in list(_overlay_connections):
+        try:
+            await ws.send_json(msg)
+        except Exception:
+            disconnected.append(ws)
+    for ws in disconnected:
+        _overlay_connections.discard(ws)
+
+
+@app.websocket("/ws/overlay")
+async def overlay_ws(websocket: WebSocket) -> None:
+    """WebSocket endpoint for the OBS streaming overlay.
+
+    The overlay HTML page (``/viewer/overlay.html``) connects here on load.
+    The backend pushes ``speak`` and ``animate`` events whenever the AI produces
+    a response so the overlay character reacts in real-time without the user
+    having to interact with the main UI.
+
+    Protocol:
+        Server → client JSON events::
+            {"type": "speak", "audio_url": "/files/audio/xxx.mp3",
+             "text": "Hello!", "expression": "happy", "animation": null}
+            {"type": "animate", "name": "wave"}
+            {"type": "ping"}
+
+        Client → server: Any text frame is treated as a keep-alive; the
+        connection stays open until the client disconnects.
+
+    Example OBS Browser Source URL:
+        http://localhost:8080/viewer/overlay.html
+    """
+    await websocket.accept()
+    _overlay_connections.add(websocket)
+    logger.info(f"[Overlay] WebSocket connected ({len(_overlay_connections)} active)")
+    try:
+        while True:
+            # Keep connection alive; client sends keep-alive pings periodically
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.debug(f"[Overlay] WebSocket error: {e}")
+    finally:
+        _overlay_connections.discard(websocket)
+        logger.info(f"[Overlay] WebSocket disconnected ({len(_overlay_connections)} remaining)")
 
 
 # --- EXCEPTION HANDLERS ---

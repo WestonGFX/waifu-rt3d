@@ -12,6 +12,8 @@ Migration Strategy:
     - v5 → v6: Separates 2D/3D avatar fields
     - v6 → v7: Phase 3 data foundation (branching, greetings, templates, docs, relationships)
     - v7 → v8: Token data persistence (generation stats on messages)
+    - v8 → v9: Per-character LLM routing + world columns (Phase 5)
+    - v9 → v10: GPT-SoVITS voice_sample_prompt column (Phase 6H)
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -477,17 +479,125 @@ def migrate_to_v8(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v9(con: sqlite3.Connection) -> bool:
+    """Upgrade database from v8 to v9 (Phase 5: per-character LLM + world support).
+
+    Changes in v9:
+        - Characters: llm_endpoint, llm_model (per-character LLM routing for TinyAya etc.)
+        - Characters: world_video_url, world_description (Phase 5D living world backgrounds)
+        - Updates schema_version to 9
+
+    Args:
+        con: Active SQLite database connection
+
+    Returns:
+        bool: True if migration was applied, False if already at v9
+
+    Raises:
+        sqlite3.Error: If database operations fail
+
+    Example:
+        >>> con = sqlite3.connect('app.db')
+        >>> if migrate_to_v9(con):
+        ...     print("Migrated to v9")
+        ... else:
+        ...     print("Already at v9")
+    """
+    cur = con.cursor()
+
+    # Use llm_endpoint as the idempotent sentinel column
+    cur.execute("PRAGMA table_info(characters)")
+    columns = [row[1] for row in cur.fetchall()]
+
+    if 'llm_endpoint' in columns:
+        logger.info("Schema v9 logic: llm_endpoint column exists. Ensuring version is 9.")
+        # Ensure all v9 columns are present (safe to re-run)
+        for col, typedef in [
+            ('llm_model', 'TEXT'),
+            ('world_video_url', 'TEXT'),
+            ('world_description', 'TEXT'),
+        ]:
+            if col not in columns:
+                logger.info(f"  - Adding {col} to characters (v9 catch-up)")
+                cur.execute(f"ALTER TABLE characters ADD COLUMN {col} {typedef}")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (9)")
+        con.commit()
+        return False
+
+    logger.info("Applying schema v9 migration (Phase 5: per-character LLM + world)...")
+    try:
+        cur.execute("ALTER TABLE characters ADD COLUMN llm_endpoint TEXT")
+        cur.execute("ALTER TABLE characters ADD COLUMN llm_model TEXT")
+        cur.execute("ALTER TABLE characters ADD COLUMN world_video_url TEXT")
+        cur.execute("ALTER TABLE characters ADD COLUMN world_description TEXT")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (9)")
+        con.commit()
+        logger.info("✅ Schema v9 migration complete (per-character LLM routing + world columns)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v9 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v10(con: sqlite3.Connection) -> bool:
+    """Upgrade database from v9 to v10 (Phase 6H: GPT-SoVITS voice_sample_prompt).
+
+    Changes in v10:
+        - Characters: voice_sample_prompt (TEXT) — transcript of the reference
+          audio clip used by GPT-SoVITS for voice conditioning.
+
+    Args:
+        con: Active SQLite database connection
+
+    Returns:
+        bool: True if migration was applied, False if already at v10
+
+    Raises:
+        sqlite3.Error: If database operations fail
+
+    Example:
+        >>> con = sqlite3.connect('app.db')
+        >>> if migrate_to_v10(con):
+        ...     print("Migrated to v10")
+    """
+    cur = con.cursor()
+
+    cur.execute("PRAGMA table_info(characters)")
+    columns = [row[1] for row in cur.fetchall()]
+
+    if 'voice_sample_prompt' in columns:
+        logger.info("Schema v10 logic: voice_sample_prompt column exists. Ensuring version is 10.")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (10)")
+        con.commit()
+        return False
+
+    logger.info("Applying schema v10 migration (Phase 6H: GPT-SoVITS voice_sample_prompt)...")
+    try:
+        cur.execute("ALTER TABLE characters ADD COLUMN voice_sample_prompt TEXT")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (10)")
+        con.commit()
+        logger.info("✅ Schema v10 migration complete (voice_sample_prompt added)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v10 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
     Migration Paths:
-        - v0 (empty) → v4 → v5 → v6 → v7 → v8
-        - v3 → v4 → v5 → v6 → v7 → v8
-        - v4 → v5 → v6 → v7 → v8
-        - v5 → v6 → v7 → v8
-        - v6 → v7 → v8
-        - v7 → v8
-        - v8 → no-op (already current)
+        - v0 (empty) → v4 → v5 → v6 → v7 → v8 → v9 → v10
+        - v3 → v4 → … → v10
+        - v4 → v5 → … → v10
+        - v5 → v6 → … → v10
+        - v6 → v7 → … → v10
+        - v7 → v8 → … → v10
+        - v8 → v9 → v10
+        - v9 → v10
+        - v10 → no-op (already current)
 
     The function is idempotent - safe to run multiple times.
     Will log all migration steps and verify final state.
@@ -558,14 +668,29 @@ def ensure_db():
             if migrate_to_v8(con):
                 version = 8
 
+        # Upgrade from v8 to v9 (Phase 5: per-character LLM routing + world columns)
+        if version < 9:
+            logger.info("Upgrading database schema from v8 to v9...")
+            logger.info("  - Adding llm_endpoint, llm_model to characters (TinyAya/Ollama routing)")
+            logger.info("  - Adding world_video_url, world_description to characters")
+            if migrate_to_v9(con):
+                version = 9
+
+        # Upgrade from v9 to v10 (Phase 6H: GPT-SoVITS voice_sample_prompt)
+        if version < 10:
+            logger.info("Upgrading database schema from v9 to v10...")
+            logger.info("  - Adding voice_sample_prompt to characters (GPT-SoVITS conditioning text)")
+            if migrate_to_v10(con):
+                version = 10
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 8:
-            raise RuntimeError(f"Database initialization failed: Expected v8, got v{final_version}")
+        if final_version < 10:
+            raise RuntimeError(f"Database initialization failed: Expected v10, got v{final_version}")
 
-        if final_version > 8:
-            logger.warning(f"Database is newer than application (v{final_version} > v8). Some features might be unused.")
+        if final_version > 10:
+            logger.warning(f"Database is newer than application (v{final_version} > v10). Some features might be unused.")
 
         logger.info(f"✅ Database ready (schema v{final_version} active)")
 

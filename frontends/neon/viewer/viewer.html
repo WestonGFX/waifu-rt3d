@@ -26,6 +26,46 @@
             z-index: -1;
             display: none;
         }
+
+        /* ── Pet Mode Overlay ──────────────────────────────────────── */
+        body.pet-mode { background: transparent; }
+
+        #pet-overlay {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            padding: 8px; z-index: 100;
+            display: flex; flex-direction: column; gap: 6px;
+            pointer-events: none;
+        }
+        #pet-overlay > * { pointer-events: auto; }
+
+        .pet-bubble {
+            background: rgba(0,0,0,0.75); color: #e0e0ff;
+            padding: 6px 12px; border-radius: 12px;
+            font: 13px/1.45 system-ui; max-width: 88%;
+            word-break: break-word;
+            opacity: 1; transition: opacity 0.4s ease;
+        }
+        .pet-bubble.user {
+            align-self: flex-end;
+            background: rgba(120,80,255,0.78);
+        }
+        .pet-bubble.hidden { opacity: 0; pointer-events: none; }
+
+        #pet-input-row { display: flex; gap: 6px; }
+
+        #pet-input {
+            flex: 1; background: rgba(0,0,0,0.65); color: #fff;
+            border: 1px solid rgba(120,80,255,0.5); border-radius: 10px;
+            padding: 7px 12px; font: 13px system-ui; outline: none;
+        }
+        #pet-input:focus { border-color: rgba(120,80,255,0.9); }
+
+        #pet-send {
+            background: rgba(120,80,255,0.85); color: #fff;
+            border: none; border-radius: 10px; padding: 7px 14px;
+            cursor: pointer; font: 15px system-ui; line-height: 1;
+        }
+        #pet-send:hover { background: rgba(140,100,255,0.95); }
     </style>
 </head>
 
@@ -363,11 +403,13 @@
 
                     this.currentSource = source;
                     this.isPlaying = true;
+                    isTalking = true;  // Phase 6D: switch to talk motion params
                     source.start(0);
 
                     source.onended = () => {
                         this.isPlaying = false;
                         this.currentSource = null;
+                        isTalking = false;  // Phase 6D: revert to idle motion params
                         this._zeroAllVisemes();
                     };
 
@@ -461,6 +503,44 @@
         }
 
         // ══════════════════════════════════════════════════════════
+        // Idle vs. Talking Motion Parameters (Phase 6D)
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Global talking state — set true when TTS audio begins, false when it ends.
+         * Read by IdleHeadMovement to pick the appropriate motion parameter set.
+         */
+        let isTalking = false;
+
+        /**
+         * Motion parameters for idle (silent) state.
+         * Calm, slow, minimal range — the character is at rest.
+         * @type {{nodRange: number, turnRange: number, tiltRange: number, moveInterval: [number,number], lerpSpeed: number}}
+         */
+        const MOTION_IDLE = {
+            nodRange:      0.08,   // X-axis (pitch)
+            turnRange:     0.12,   // Y-axis (yaw)
+            tiltRange:     0.05,   // Z-axis (roll)
+            minInterval:   4,      // seconds between head target updates (min)
+            maxInterval:   9,      // seconds between head target updates (max)
+            lerpSpeed:     0.4,    // per-frame lerp alpha (lower = smoother/slower)
+        };
+
+        /**
+         * Motion parameters for talking state.
+         * More frequent, wider range — the character is engaged and expressive.
+         * @type {{nodRange: number, turnRange: number, tiltRange: number, moveInterval: [number,number], lerpSpeed: number}}
+         */
+        const MOTION_TALK = {
+            nodRange:      0.15,
+            turnRange:     0.18,
+            tiltRange:     0.10,
+            minInterval:   1,
+            maxInterval:   3,
+            lerpSpeed:     0.6,
+        };
+
+        // ══════════════════════════════════════════════════════════
         // Blink Controller
         // ══════════════════════════════════════════════════════════
 
@@ -512,16 +592,20 @@
             }
 
             update(deltaTime) {
+                // Pick motion params based on global isTalking flag (Phase 6D).
+                // During speech: more frequent, wider-range head movement signals engagement.
+                const mp = isTalking ? MOTION_TALK : MOTION_IDLE;
+
                 this.nextMoveTime -= deltaTime;
                 if (this.nextMoveTime <= 0) {
                     this.headTarget = {
-                        x: (Math.random() - 0.5) * 0.15,
-                        y: (Math.random() - 0.5) * 0.25,
-                        z: (Math.random() - 0.5) * 0.08
+                        x: (Math.random() - 0.5) * mp.nodRange  * 2,
+                        y: (Math.random() - 0.5) * mp.turnRange * 2,
+                        z: (Math.random() - 0.5) * mp.tiltRange * 2,
                     };
-                    this.nextMoveTime = 3 + Math.random() * 7;
+                    this.nextMoveTime = mp.minInterval + Math.random() * (mp.maxInterval - mp.minInterval);
                 }
-                const lerpSpeed = deltaTime * 0.5;
+                const lerpSpeed = deltaTime * mp.lerpSpeed;
                 this.headCurrent.x += (this.headTarget.x - this.headCurrent.x) * lerpSpeed;
                 this.headCurrent.y += (this.headTarget.y - this.headCurrent.y) * lerpSpeed;
                 this.headCurrent.z += (this.headTarget.z - this.headCurrent.z) * lerpSpeed;
@@ -1193,6 +1277,71 @@
                 loadVRM(urlParam, scene, camera);
             }
 
+            // ── Pet Mode ─────────────────────────────────────────────────
+            // Detect ?pet=1 URL param. When true the viewer runs as a floating
+            // popup window with a minimal chat overlay at the bottom.
+            // User input is relayed to the main window via window.opener.postMessage()
+            // and AI replies are received back as {type:'petReply', text} messages.
+            const PET_MODE = new URLSearchParams(location.search).get('pet') === '1';
+
+            if (PET_MODE) {
+                document.body.classList.add('pet-mode');
+
+                // Build chat overlay DOM
+                const petOverlay = document.createElement('div');
+                petOverlay.id = 'pet-overlay';
+                petOverlay.innerHTML = `
+                    <div id="pet-bubble" class="pet-bubble hidden"></div>
+                    <div id="pet-input-row">
+                        <input id="pet-input" type="text" placeholder="Say something\u2026" autocomplete="off">
+                        <button id="pet-send">\u2192</button>
+                    </div>`;
+                document.body.appendChild(petOverlay);
+
+                /**
+                 * Show a transient chat bubble in the pet overlay.
+                 * Auto-hides after 8 seconds.
+                 *
+                 * @param {string} text - Message text to display
+                 * @param {'user'|'assistant'} role - Bubble style variant
+                 */
+                function showPetBubble(text, role) {
+                    const bubble = document.getElementById('pet-bubble');
+                    if (!bubble) return;
+                    bubble.textContent = text;
+                    bubble.className = `pet-bubble ${role}`;
+                    bubble.classList.remove('hidden');
+                    clearTimeout(bubble._hideTimer);
+                    bubble._hideTimer = setTimeout(() => bubble.classList.add('hidden'), 8000);
+                }
+
+                /**
+                 * Read the pet input, relay the text to the main window via
+                 * window.opener.postMessage, and show a user bubble immediately
+                 * for instant visual feedback before the AI responds.
+                 */
+                function sendPetMessage() {
+                    const petInput = document.getElementById('pet-input');
+                    const text = petInput?.value?.trim();
+                    if (!text) return;
+                    petInput.value = '';
+                    showPetBubble('You: ' + text, 'user');
+                    window.opener?.postMessage({ type: 'petMessage', text }, '*');
+                }
+
+                document.getElementById('pet-send')?.addEventListener('click', sendPetMessage);
+                document.getElementById('pet-input')?.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') sendPetMessage();
+                });
+
+                // Handle AI replies and audio commands forwarded from the main window
+                window.addEventListener('message', (evt) => {
+                    if (evt.data?.type === 'petReply') {
+                        showPetBubble(evt.data.text, 'assistant');
+                    }
+                });
+            }
+
             /**
              * Apply a natural standing pose to a VRM model.
              * VRM models load in T-pose (arms out). This relaxes the skeleton
@@ -1272,6 +1421,11 @@
                         if (vrmMetaVersion === '0') {
                             VRMUtils.rotateVRM0(vrm);
                         }
+                        // combineMorphs merges duplicate morph targets across meshes in VRM 0.x.
+                        // Without this, setValue('blink') may only affect the head mesh, leaving
+                        // body/accessory meshes with a half-blink — a common VRM 0 artifact.
+                        VRMUtils.combineMorphs(vrm);
+
                         scene.add(vrm.scene);
                         currentVrm = vrm;
 

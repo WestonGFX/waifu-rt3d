@@ -2,11 +2,13 @@ from typing import Dict, Optional
 from .adapters.base import ASRAdapter
 from .adapters.whisper_api import WhisperAPIAdapter
 from .adapters.whisper_local import WhisperLocalAdapter
+from .adapters.faster_whisper import FasterWhisperAdapter
 
 # Registry of available ASR adapters
 ASR_ADAPTERS = {
     "whisper_api": WhisperAPIAdapter,
     "whisper_local": WhisperLocalAdapter,
+    "faster_whisper": FasterWhisperAdapter,
 }
 
 def get_asr_adapter(cfg: Dict) -> Optional[ASRAdapter]:
@@ -41,6 +43,7 @@ def get_asr_adapter(cfg: Dict) -> Optional[ASRAdapter]:
     adapter_key = None
     if ptype == "openai" or ptype == "whisper_api": adapter_key = "whisper_api"
     elif ptype == "whisper_local": adapter_key = "whisper_local"
+    elif ptype == "faster_whisper": adapter_key = "faster_whisper"
     
     if not adapter_key: 
         return None # Browser ASR is client side only

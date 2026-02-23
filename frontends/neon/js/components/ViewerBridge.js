@@ -16,6 +16,8 @@ export class ViewerBridge {
         this.iframe = document.getElementById('vrm-iframe');
         this._pendingCallbacks = {};
         this._mode = 'vrm'; // 'vrm' or 'live2d'
+        /** @type {Window|null} Reference to the pet mode popup window, if open */
+        this._petWindow = null;
 
         if (this.iframe) {
             this.iframe.src = "viewer/viewer.html";
@@ -35,7 +37,17 @@ export class ViewerBridge {
             if (data.gesture) this.playGesture(data.gesture);
         });
 
-        // Listen for responses from viewer iframe
+        // Pet mode: forward AI reply text to the pet popup window
+        bus.on('pet:reply', ({ text }) => this.sendPetReply(text));
+
+        // Pet mode: mirror TTS audio to the pet window so its VRM can lip-sync
+        bus.on('chat:audioPlay', ({ url }) => {
+            if (this._petWindow && !this._petWindow.closed) {
+                this._petWindow.postMessage({ type: 'playAudio', audioUrl: url }, '*');
+            }
+        });
+
+        // Listen for responses from viewer iframe AND pet popup
         window.addEventListener('message', (e) => this._handleViewerMessage(e));
     }
 
@@ -90,6 +102,16 @@ export class ViewerBridge {
     _handleViewerMessage(e) {
         const { type } = e.data || {};
         if (!type) return;
+
+        // Pet mode: messages from the popup window are relayed through the EventBus
+        // so ChatInterface can handle them like normal user input.
+        // Source check prevents spoofing from other origins.
+        if (this._petWindow && e.source === this._petWindow) {
+            if (type === 'petMessage') {
+                bus.emit('pet:userMessage', { text: e.data.text });
+            }
+            return;
+        }
 
         // Route to pending callback if one exists
         if (this._pendingCallbacks[type]) {
@@ -325,5 +347,63 @@ export class ViewerBridge {
                 }
             }, 5000);
         });
+    }
+
+    // ── Pet Mode ─────────────────────────────────────────────────
+
+    /**
+     * Open the VRM viewer as a floating desktop pet popup window.
+     *
+     * The popup loads viewer.html?pet=1 (and ?url=<vrm> if a model is active).
+     * Once open, user messages typed in the popup are forwarded here via
+     * window.opener.postMessage → _handleViewerMessage → bus.emit('pet:userMessage').
+     * AI replies are sent back by sendPetReply() after ChatInterface finishes streaming.
+     *
+     * @returns {Window|null} Reference to the opened popup, or null if blocked.
+     *
+     * @example
+     * const win = viewer.openPetMode();
+     * if (!win) toast.warning('Enable popups for this site');
+     */
+    openPetMode() {
+        // If already open, focus it instead of opening a second window
+        if (this._petWindow && !this._petWindow.closed) {
+            this._petWindow.focus();
+            return this._petWindow;
+        }
+
+        const vrmUrl = state.state.characters?.find(
+            c => c.id === state.state.currentCharacterId
+        )?.vrm_model_url;
+
+        let petUrl = 'viewer/viewer.html?pet=1';
+        if (vrmUrl) petUrl += `&url=${encodeURIComponent(vrmUrl)}`;
+
+        this._petWindow = window.open(
+            petUrl,
+            'waifu-pet',
+            'width=320,height=540,resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no'
+        );
+
+        if (!this._petWindow) {
+            console.warn('[ViewerBridge] Pet window blocked — enable popups for this site');
+            return null;
+        }
+
+        console.log('[ViewerBridge] Pet window opened');
+        return this._petWindow;
+    }
+
+    /**
+     * Send an AI reply text to the pet popup window.
+     * Called after ChatInterface finishes streaming a response.
+     *
+     * @param {string} text - The AI reply text (may contain emotion/gesture tags
+     *   that were already stripped by the backend before reaching metadata.reply)
+     */
+    sendPetReply(text) {
+        if (this._petWindow && !this._petWindow.closed) {
+            this._petWindow.postMessage({ type: 'petReply', text }, '*');
+        }
     }
 }

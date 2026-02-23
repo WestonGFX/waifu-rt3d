@@ -169,6 +169,17 @@ async function initApp() {
             };
         }
 
+        // Wire up Pet Mode button — opens VRM viewer as a floating desktop popup.
+        // The popup relays user messages back here via postMessage; ViewerBridge
+        // routes them through ChatInterface so the full LLM pipeline runs normally.
+        const petBtn = document.getElementById('btn-pet-mode');
+        if (petBtn) {
+            petBtn.onclick = () => {
+                const win = viewer.openPetMode();
+                if (!win) toast.warning('Pet window blocked — allow popups for this site', 4000);
+            };
+        }
+
         // Fix 5: Eagerly init Live2D PIXI canvas so it's ready before any mode switch.
         // Lazy init inside loadModel() can cause a race when the user switches modes quickly.
         live2d.init().catch(e => console.warn('[Live2D] Eager init failed:', e));

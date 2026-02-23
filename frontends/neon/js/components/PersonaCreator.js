@@ -260,6 +260,34 @@ export class PersonaCreator {
                     </select>
                 </div>
 
+                <details style="margin-top:4px;">
+                    <summary style="color:var(--text-muted); font-size:0.8rem; cursor:pointer; user-select:none; padding:4px 0;">
+                        ▸ Advanced: Per-Character LLM Override
+                    </summary>
+                    <div style="display:flex; flex-direction:column; gap:12px; margin-top:12px; padding:12px; border:1px solid rgba(255,255,255,0.06); border-radius:8px; background:rgba(0,0,0,0.15);">
+                        <div class="persona-field">
+                            <label style="color:var(--text-muted); font-size:0.8rem; font-weight:600; display:block; margin-bottom:4px;">
+                                Custom LLM Endpoint
+                            </label>
+                            <input id="persona-llm-endpoint" type="text" class="input-field"
+                                   value="${this._escapeHtml(tpl.llm_endpoint || '')}"
+                                   placeholder="e.g. http://localhost:11434/v1 (leave blank for global)"
+                                   style="width:100%; padding:8px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px; font-size:0.85rem;">
+                            <div style="font-size:0.65rem; color:var(--text-muted); margin-top:3px;">Override the global LLM endpoint for this character only.</div>
+                        </div>
+                        <div class="persona-field">
+                            <label style="color:var(--text-muted); font-size:0.8rem; font-weight:600; display:block; margin-bottom:4px;">
+                                Custom LLM Model
+                            </label>
+                            <input id="persona-llm-model" type="text" class="input-field"
+                                   value="${this._escapeHtml(tpl.llm_model || '')}"
+                                   placeholder="e.g. lmstudio-community/Meta-Llama-3-8B-Instruct-GGUF (leave blank for global)"
+                                   style="width:100%; padding:8px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px; font-size:0.85rem;">
+                            <div style="font-size:0.65rem; color:var(--text-muted); margin-top:3px;">Override the global active model for this character only.</div>
+                        </div>
+                    </div>
+                </details>
+
                 ${isEdit ? this._renderVoiceCloneSection(tpl) : ''}
 
                 ${isEdit ? this._renderVocabCategoriesSection(tpl) : ''}
@@ -788,6 +816,8 @@ export class PersonaCreator {
         const voiceId = document.getElementById('persona-voice').value.trim();
         const greeting = document.getElementById('persona-greeting')?.value.trim() || '';
         const greetingAnim = document.getElementById('persona-greeting-anim')?.value || '';
+        const llmEndpoint = document.getElementById('persona-llm-endpoint')?.value.trim() || '';
+        const llmModel = document.getElementById('persona-llm-model')?.value.trim() || '';
 
         if (!name) {
             toast.error('Name is required', 3000);
@@ -813,6 +843,8 @@ export class PersonaCreator {
             greeting_text: greeting,
             greeting_animation: greetingAnim,
             vocab_categories: JSON.stringify(this._getSelectedVocabCategories()),
+            llm_endpoint: llmEndpoint,
+            llm_model: llmModel,
         };
 
         const saveBtn = document.getElementById('btn-persona-save');

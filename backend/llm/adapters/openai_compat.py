@@ -31,6 +31,9 @@ class OpenAICompatAdapter(LLMAdapter):
             "temperature": kw.get("temperature", 0.7),
             "stream": False
         }
+        # Merge any extra_body kwargs (e.g. Qwen3 thinking mode: {"chat_template_kwargs": {"enable_thinking": False}})
+        if kw.get("extra_body"):
+            payload.update(kw["extra_body"])
 
         try:
             timeout = kw.get("timeout", (10, 300))
@@ -85,6 +88,9 @@ class OpenAICompatAdapter(LLMAdapter):
             "temperature": kw.get("temperature", 0.7),
             "stream": True
         }
+        # Merge any extra_body kwargs (e.g. Qwen3 thinking mode)
+        if kw.get("extra_body"):
+            payload.update(kw["extra_body"])
 
         try:
             timeout = kw.get("timeout", (10, 300))

@@ -70,6 +70,8 @@ export class ThemeEditor {
                             <option value="dracula">Dracula</option>
                             <option value="nord">Nord</option>
                             <option value="pop">Pop</option>
+                            <option value="ios-light">iOS Messages (Light)</option>
+                            <option value="ios-dark">iOS Messages (Dark)</option>
                         </select>
                         <button class="btn-config" id="theme-apply-builtin" style="padding:4px 10px; font-size:0.7rem;">APPLY</button>
                     </div>

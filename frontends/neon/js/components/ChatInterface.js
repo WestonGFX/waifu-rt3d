@@ -32,6 +32,16 @@ export class ChatInterface {
             this._updateStatusTopLine(char);
         });
 
+        // Pet mode: route messages from the pet popup through the normal send pipeline.
+        // ViewerBridge emits 'pet:userMessage' when it receives a postMessage from the
+        // popup window; we inject the text into the input and trigger sendMessage()
+        // so the full streaming pipeline (emotion, TTS, history) runs unchanged.
+        bus.on('pet:userMessage', ({ text }) => {
+            if (this.isThinking) return; // drop silently if AI is already busy
+            this.input.value = text;
+            this.sendMessage();
+        });
+
         // Multi-character chat mode
         /** @type {number[]|null} Active multi-chat character IDs */
         this._multiChatIds = null;
@@ -573,6 +583,9 @@ export class ChatInterface {
                 text,
                 character_id: state.state.currentCharacterId,
                 session_id: state.state.currentSessionId,
+                // Opt-in to sentence-chunked TTS when TTS is globally enabled.
+                // The server will emit audio_chunk SSE events as sentences complete.
+                speak: !!(state.config?.tts?.enabled),
             };
 
             const response = await fetch('/api/chat/stream', {
@@ -592,7 +605,103 @@ export class ChatInterface {
             let fullText = '';
             let metadata = null;
 
-            // Read the SSE stream
+            // ── Sentence-chunked TTS audio queue (Phase 6G) ────────────────────
+            //
+            // WHY a queue instead of playing audio immediately?
+            //   The server fires TTS synthesis for each sentence concurrently
+            //   while the LLM streams tokens.  Because network latency varies,
+            //   sentence 2 might arrive *before* sentence 1 has finished playing.
+            //   Without a queue, audio clips overlap or play out of order.
+            //
+            // HOW it works:
+            //   1. Each audio_chunk SSE event carries a URL + an integer `index`.
+            //   2. enqueueAudioChunk() inserts the chunk into a sorted array.
+            //   3. drainAudioQueue() pops and plays the next clip; on `ended` or
+            //      `error` it calls itself again (chain-plays the whole queue).
+            //   4. The viewer iframe is notified via postMessage so the VRM
+            //      character's mouth moves in sync with the audio.
+            const audioQueue = [];
+            let audioQueuePlaying = false;
+
+            /**
+             * Pop the next audio chunk from the sorted queue and play it.
+             *
+             * Calls itself recursively via `onended` so each clip starts
+             * immediately after the previous one finishes — no gap, no overlap.
+             * On `onerror` it skips the broken clip and plays the next one
+             * so a single bad audio file doesn't freeze the whole queue.
+             */
+            const drainAudioQueue = () => {
+                if (!audioQueue.length) {
+                    audioQueuePlaying = false;
+                    return;
+                }
+                audioQueuePlaying = true;
+                const { url } = audioQueue.shift();
+
+                const audio = new Audio(url);
+                audio.onended = drainAudioQueue;
+                // On error: log it and skip to the next chunk rather than stalling
+                audio.onerror = (err) => {
+                    console.warn('[ChatInterface] Audio chunk error, skipping:', url, err);
+                    drainAudioQueue();
+                };
+
+                // Tell the VRM viewer to activate lip sync for this audio file.
+                // The viewer.html listens for postMessage({type:'audioUrl', audioUrl})
+                // and attaches its WebAudio analyser to the same URL.
+                const viewerIframe = document.querySelector('.viewport-layer iframe');
+                if (viewerIframe?.contentWindow) {
+                    viewerIframe.contentWindow.postMessage({ type: 'audioUrl', audioUrl: url }, '*');
+                }
+
+                // .play() returns a Promise — catch it to avoid unhandled-rejection
+                // warnings in Chrome when the user navigates away mid-playback.
+                audio.play().catch((err) => {
+                    console.warn('[ChatInterface] Audio play() rejected:', err.message);
+                    drainAudioQueue();
+                });
+            };
+
+            /**
+             * Add a TTS chunk to the queue and start draining if idle.
+             *
+             * The sort by `index` guarantees that even if chunk 2 arrives before
+             * chunk 1 (due to variable TTS synthesis latency), playback is always
+             * in the correct sentence order.
+             *
+             * @param {string} url   - Audio file URL from the server
+             * @param {number} index - Sequence number (0-based) for ordered playback
+             */
+            const enqueueAudioChunk = (url, index) => {
+                audioQueue.push({ url, index });
+                // Sort ascending by index so lowest-indexed chunk is always at front
+                audioQueue.sort((a, b) => a.index - b.index);
+                // Only call drainAudioQueue() if nothing is playing — the drain
+                // chain will handle everything else via its onended callback.
+                if (!audioQueuePlaying) drainAudioQueue();
+            };
+
+            // ── SSE stream reader ───────────────────────────────────────────────
+            //
+            // Server-Sent Events (SSE) is a simple text protocol over HTTP where
+            // the server pushes multiple messages on one long-lived connection.
+            //
+            // Each event looks like:
+            //   event: token\n
+            //   data: {"t": "Hello"}\n
+            //   \n                         ← blank line signals end of event
+            //
+            // We use a manual ReadableStream reader rather than EventSource because:
+            //  - EventSource doesn't support POST requests
+            //  - We need to abort the stream (AbortController) when the user stops
+            //
+            // Parsing strategy:
+            //  1. Read raw Uint8Array chunks from the HTTP body
+            //  2. Decode to text and append to a rolling `buffer` string
+            //  3. Split on '\n\n' to get complete event blocks
+            //  4. The LAST split fragment is always incomplete (stream mid-event),
+            //     so we save it back to `buffer` (via .pop()) for the next iteration
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
@@ -601,17 +710,22 @@ export class ChatInterface {
                 const { done, value } = await reader.read();
                 if (done) break;
 
+                // `stream: true` tells TextDecoder not to flush multi-byte chars
+                // that may be split across two network packets
                 buffer += decoder.decode(value, { stream: true });
 
-                // Process complete SSE events (delimited by double newlines)
+                // SSE events are separated by blank lines (\n\n).
+                // Split gets us complete events PLUS one possibly-incomplete tail.
                 const events = buffer.split('\n\n');
-                buffer = events.pop(); // Keep incomplete chunk in buffer
+                buffer = events.pop(); // Save incomplete tail back into buffer
 
                 for (const eventBlock of events) {
                     if (!eventBlock.trim()) continue;
 
+                    // Each event block has one or more "field: value" lines.
+                    // We care about "event:" (the event type) and "data:" (the payload).
                     const lines = eventBlock.split('\n');
-                    let eventType = 'message';
+                    let eventType = 'message';  // Default SSE event type
                     let eventData = '';
 
                     for (const line of lines) {
@@ -651,6 +765,10 @@ export class ChatInterface {
 
                             // Auto-scroll as text streams in
                             this.container.scrollTop = this.container.scrollHeight;
+
+                        } else if (eventType === 'audio_chunk') {
+                            // Sentence-chunked TTS: queue this audio clip for sequential playback
+                            enqueueAudioChunk(parsed.url, parsed.index);
 
                         } else if (eventType === 'done') {
                             metadata = parsed;
@@ -709,8 +827,9 @@ export class ChatInterface {
 
             this.setThinking(false, null);
 
-            // Play TTS audio if enabled and attach visualizer
-            if (metadata?.reply && state.config?.tts?.enabled) {
+            // Play TTS audio if enabled and the server did NOT already emit audio_chunk
+            // events (chunked TTS). When chunked, audioQueue handles playback above.
+            if (metadata?.reply && state.config?.tts?.enabled && !metadata?.tts_chunked) {
                 this._playTTSWithVisualizer(metadata.reply, streamRow);
             }
 
@@ -719,6 +838,9 @@ export class ChatInterface {
                 this.updateMemoryBank(metadata);
                 // Notify dashboard to refresh relationship + emotion widgets
                 bus.emit('chat:completed', metadata);
+                // Forward reply text to pet popup window (if open) so it can show
+                // the response in its overlay bubble via ViewerBridge.sendPetReply()
+                if (metadata.reply) bus.emit('pet:reply', { text: metadata.reply });
                 if (metadata.session_id && metadata.session_id !== state.state.currentSessionId) {
                     state.state.currentSessionId = metadata.session_id;
                     state.loadSessions();

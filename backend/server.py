@@ -6,7 +6,8 @@ from threading import Lock
 import os
 import sys
 
-# HACK: Allow running as script without -m
+# Ensure project root is on sys.path for `python backend/server.py` invocations.
+# Prefer `python -m backend` which handles this automatically via __main__.py.
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)

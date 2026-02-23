@@ -40,11 +40,11 @@ class TestDefaultRegistry:
     """Tests for the singleton default tool registry."""
 
     def test_registry_has_all_tools(self) -> None:
-        """Registry should contain exactly 4 tools after initialisation."""
+        """Registry should contain all 12 tools (4 core + 8 Phase 10b)."""
         from backend.agent.tools import get_default_registry
 
         registry = get_default_registry()
-        assert len(registry.all_tools()) == 4
+        assert len(registry.all_tools()) == 12
 
     def test_registry_schemas_are_valid(self) -> None:
         """Every schema must have the expected OpenAI function-calling shape."""
@@ -52,7 +52,7 @@ class TestDefaultRegistry:
 
         registry = get_default_registry()
         schemas = registry.get_schemas()
-        assert len(schemas) == 4
+        assert len(schemas) == 12
 
         for schema in schemas:
             assert schema["type"] == "function"

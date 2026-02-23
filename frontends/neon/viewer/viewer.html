@@ -102,6 +102,7 @@
         let gestureController = null;
         let proceduralAnimator = null;
         let mouseTracker = null;
+        let animationDirector = null;
         // Tracks the last emotion that triggered an auto-gesture, preventing
         // repeat gestures when the same emotion fires on consecutive messages.
         let lastAutoGestureEmotion = null;
@@ -298,6 +299,907 @@
             }
         }
 
+
+        // ══════════════════════════════════════════════════════════
+        // Layered Animation System — Phase 6F
+        // 6 layers processed per frame in order:
+        //   L0 BasePose, L1 IdleBehavior, L2 EmotionModifier,
+        //   L3 TalkBehavior, L4 GestureOverride, L5 LookAt
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Default animation personality profile.
+         * All values 0–1. Used when character has no custom profile.
+         */
+        const DEFAULT_PERSONALITY = {
+            energy: 0.5, confidence: 0.5, nervousness: 0.3,
+            expressiveness: 0.5, playfulness: 0.5,
+        };
+
+        /**
+         * Base class for all animation layers.
+         * Each layer writes to specific bones using set (=) or additive (+=) mode.
+         * @abstract
+         */
+        class AnimationLayer {
+            /**
+             * @param {Object} vrm - The loaded VRM model instance
+             * @param {string} name - Layer name for debugging
+             */
+            constructor(vrm, name) {
+                this.vrm = vrm;
+                this.name = name;
+                this.personality = { ...DEFAULT_PERSONALITY };
+                this.enabled = true;
+                this.weight = 1.0;
+                this.time = 0;
+            }
+
+            /**
+             * Resolve a VRM humanoid bone by name.
+             * @param {string} boneName - Humanoid bone name (e.g. 'spine', 'hips')
+             * @returns {Object|null} The bone node or null
+             */
+            getBone(boneName) {
+                return this.vrm.humanoid.getNormalizedBoneNode?.(boneName)
+                    || this.vrm.humanoid.getBoneNode?.(boneName)
+                    || null;
+            }
+
+            /**
+             * Update personality parameters from profile object.
+             * @param {Object} profile - {energy, confidence, nervousness, expressiveness, playfulness}
+             */
+            setPersonality(profile) {
+                this.personality = { ...DEFAULT_PERSONALITY, ...profile };
+            }
+
+            /**
+             * Per-frame update. Subclasses override this.
+             * @param {number} dt - Delta time in seconds
+             */
+            update(dt) { this.time += dt; }
+        }
+
+        /**
+         * Orchestrates all 6 animation layers per frame.
+         * Manages suppression rules:
+         *   - L3 (Talk) suppresses L1 (Idle) when active
+         *   - L4 (Gesture) suppresses L1 and L3 on affected bones during playback
+         *   - L5 (LookAt) is always additive
+         */
+        class AnimationDirector {
+            /**
+             * @param {Object} vrm - The loaded VRM model
+             */
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.layers = [];
+                this.personality = { ...DEFAULT_PERSONALITY };
+            }
+
+            /**
+             * Register a layer. Layers are processed in array order (index = priority).
+             * @param {AnimationLayer} layer
+             */
+            addLayer(layer) {
+                layer.setPersonality(this.personality);
+                this.layers.push(layer);
+            }
+
+            /**
+             * Retrieve a layer by name.
+             * @param {string} name - Layer name
+             * @returns {AnimationLayer|undefined}
+             */
+            getLayer(name) {
+                return this.layers.find(l => l.name === name);
+            }
+
+            /**
+             * Apply a personality profile to all layers.
+             * @param {Object|null} profile - Personality JSON or null for defaults
+             */
+            setPersonality(profile) {
+                this.personality = { ...DEFAULT_PERSONALITY, ...(profile || {}) };
+                for (const layer of this.layers) {
+                    layer.setPersonality(this.personality);
+                }
+            }
+
+            /**
+             * Per-frame update — runs all layers in order with suppression logic.
+             * @param {number} dt - Delta time in seconds
+             */
+            update(dt) {
+                const gesture = this.getLayer('gesture');
+                const talk = this.getLayer('talk');
+                const idle = this.getLayer('idle');
+
+                // Suppression: Talk active → suppress Idle
+                if (idle) {
+                    idle.enabled = !(talk && talk.active);
+                }
+
+                // Suppression: Gesture playing → suppress Idle and Talk
+                if (gesture && gesture.isPlaying) {
+                    if (idle) idle.enabled = false;
+                    if (talk) talk.enabled = false;
+                }
+
+                for (const layer of this.layers) {
+                    if (layer.enabled) layer.update(dt);
+                }
+
+                // Re-enable for next frame evaluation
+                if (idle) idle.enabled = true;
+                if (talk) talk.enabled = true;
+            }
+        }
+
+        /**
+         * L0: Base pose — breathing rhythm and weight distribution.
+         * Write mode: SET (=) on chest/spine.
+         * Personality influence:
+         *   energy → breath speed/depth
+         *   confidence → chest-out posture, wider stance
+         *   nervousness → faster breathing
+         */
+        class BasePoseLayer extends AnimationLayer {
+            constructor(vrm) {
+                super(vrm, 'basePose');
+            }
+
+            update(dt) {
+                super.update(dt);
+                const t = this.time;
+                const p = this.personality;
+
+                // Breath rate: base 2Hz, faster with energy/nervousness
+                const rateScale = 1 + (p.energy - 0.5) * 0.6 + p.nervousness * 0.4;
+                const rateModulator = 2 * rateScale + Math.sin(t * 0.13) * 0.3;
+                const noiseLayer = Math.sin(t * 0.7) * 0.0008;
+
+                // Deep breath cycle (~every 20s), bigger with energy
+                const deepCycle = Math.sin(t * 0.16);
+                const deepAmp = 0.003 + p.energy * 0.006;
+                const shallowAmp = 0.002 + p.energy * 0.002;
+                const breathAmp = deepCycle > 0.95 ? deepAmp : shallowAmp;
+                const breathStrength = Math.sin(t * rateModulator) * breathAmp + noiseLayer;
+
+                const chest = this.getBone('chest') || this.getBone('spine');
+                if (chest) {
+                    chest.rotation.x = breathStrength;
+                    chest.rotation.z = breathStrength * 0.5;
+                }
+
+                // Confidence: subtle chest-out posture (spine extension)
+                const spine = this.getBone('spine');
+                if (spine && p.confidence > 0.5) {
+                    spine.rotation.x -= (p.confidence - 0.5) * 0.03;
+                }
+            }
+        }
+
+        /**
+         * L1: Idle behavior — personality-driven fidget library.
+         * Write mode: SET (=) on affected bones.
+         * Suppressed when Talk (L3) or Gesture (L4) is active.
+         *
+         * A random timer (3–8s, scaled by energy) selects from eligible fidgets
+         * based on personality thresholds. Each fidget is a micro-animation
+         * lasting 1–3 seconds that modifies specific bones.
+         */
+        class IdleBehaviorLayer extends AnimationLayer {
+            constructor(vrm) {
+                super(vrm, 'idle');
+                this._fidgetTimer = 3 + Math.random() * 5;
+                this._activeFidget = null;
+                this._fidgetTime = 0;
+                this._fidgetDuration = 0;
+            }
+
+            /** @type {Array<{name:string, duration:number, requires?:(p:Object)=>boolean, apply:(t:number,p:Object,getBone:(s:string)=>any)=>void}>} */
+            static get FIDGETS() {
+                return [
+                    {
+                        name: 'weight_shift', duration: 2,
+                        apply(t, p, B) {
+                            const hips = B('hips');
+                            if (hips) hips.rotation.y = Math.sin(t * Math.PI) * 0.04;
+                        }
+                    },
+                    {
+                        name: 'shoulder_roll', duration: 1.5,
+                        apply(t, p, B) {
+                            const ls = B('leftShoulder'), rs = B('rightShoulder');
+                            const v = Math.sin(t * Math.PI * 2) * 0.05;
+                            if (ls) ls.rotation.z = v;
+                            if (rs) rs.rotation.z = -v * 0.7;
+                        }
+                    },
+                    {
+                        name: 'head_tilt', duration: 1,
+                        apply(t, p, B) {
+                            const head = B('head');
+                            if (head) head.rotation.z = Math.sin(t * Math.PI) * 0.08;
+                        }
+                    },
+                    {
+                        name: 'look_around', duration: 2,
+                        apply(t, p, B) {
+                            const head = B('head');
+                            if (head) {
+                                head.rotation.y = Math.sin(t * Math.PI) * 0.15;
+                                head.rotation.x = Math.sin(t * Math.PI * 0.7) * 0.05;
+                            }
+                        }
+                    },
+                    {
+                        name: 'deep_breath', duration: 3,
+                        apply(t, p, B) {
+                            const chest = B('chest') || B('spine');
+                            if (chest) {
+                                const inhale = Math.sin(t * Math.PI * 0.667) * 0.015;
+                                chest.rotation.x = inhale;
+                            }
+                        }
+                    },
+                    {
+                        name: 'arm_adjust', duration: 1.5,
+                        apply(t, p, B) {
+                            const arm = B('leftUpperArm');
+                            if (arm) arm.rotation.z = -0.7 + Math.sin(t * Math.PI) * 0.1;
+                        }
+                    },
+                    {
+                        name: 'subtle_sway', duration: 3,
+                        apply(t, p, B) {
+                            const hips = B('hips'), spine = B('spine');
+                            const s = Math.sin(t * Math.PI * 0.667) * 0.02;
+                            if (hips) hips.rotation.z = s;
+                            if (spine) spine.rotation.z = s * -0.5;
+                        }
+                    },
+                    {
+                        name: 'ankle_cross', duration: 3,
+                        apply(t, p, B) {
+                            const lLeg = B('leftUpperLeg');
+                            if (lLeg) lLeg.rotation.z = Math.sin(t * Math.PI * 0.5) * 0.04;
+                        }
+                    },
+                    {
+                        name: 'hand_to_chest', duration: 1.5,
+                        apply(t, p, B) {
+                            const arm = B('rightUpperArm');
+                            if (arm) {
+                                const blend = Math.sin(t * Math.PI);
+                                arm.rotation.z = 0.7 * (1 - blend * 0.5);
+                                arm.rotation.x = blend * 0.3;
+                            }
+                        }
+                    },
+                    {
+                        name: 'hand_clasp', duration: 2,
+                        requires: (p) => p.confidence > 0.4,
+                        apply(t, p, B) {
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
+                            const blend = Math.sin(t * Math.PI * 0.5);
+                            if (la) { la.rotation.z = -0.7 + blend * 0.3; la.rotation.x = blend * 0.2; }
+                            if (ra) { ra.rotation.z = 0.7 - blend * 0.3; ra.rotation.x = blend * 0.2; }
+                        }
+                    },
+                    {
+                        name: 'hip_cock', duration: 2,
+                        requires: (p) => p.confidence > 0.6,
+                        apply(t, p, B) {
+                            const hips = B('hips'), spine = B('spine');
+                            const blend = Math.sin(t * Math.PI * 0.5);
+                            if (hips) { hips.rotation.z = blend * 0.06; hips.rotation.y = blend * 0.03; }
+                            if (spine) spine.rotation.z = blend * -0.03;
+                        }
+                    },
+                    {
+                        name: 'hand_on_hip', duration: 3,
+                        requires: (p) => p.confidence > 0.5,
+                        apply(t, p, B) {
+                            const arm = B('rightUpperArm');
+                            if (arm) {
+                                const blend = Math.sin(t * Math.PI / 3);
+                                arm.rotation.z = 0.7 - blend * 0.5;
+                                arm.rotation.y = blend * 0.3;
+                            }
+                        }
+                    },
+                    {
+                        name: 'touch_face', duration: 1.5,
+                        requires: (p) => p.nervousness > 0.3,
+                        apply(t, p, B) {
+                            const arm = B('leftUpperArm');
+                            if (arm) {
+                                const blend = Math.sin(t * Math.PI);
+                                arm.rotation.z = -0.7 + blend * 0.6;
+                                arm.rotation.x = blend * 0.4;
+                            }
+                        }
+                    },
+                    {
+                        name: 'touch_hair', duration: 2,
+                        requires: (p) => p.nervousness > 0.3,
+                        apply(t, p, B) {
+                            const arm = B('rightUpperArm');
+                            if (arm) {
+                                const blend = Math.sin(t * Math.PI * 0.5);
+                                arm.rotation.z = 0.7 - blend * 0.8;
+                                arm.rotation.x = -blend * 0.3;
+                            }
+                        }
+                    },
+                    {
+                        name: 'fidget_hands', duration: 1.5,
+                        requires: (p) => p.nervousness > 0.4,
+                        apply(t, p, B) {
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
+                            const v = Math.sin(t * Math.PI * 4) * 0.03;
+                            if (la) la.rotation.x = v;
+                            if (ra) ra.rotation.x = -v;
+                        }
+                    },
+                    {
+                        name: 'hand_behind_back', duration: 2.5,
+                        requires: (p) => p.nervousness > 0.3 || p.playfulness > 0.4,
+                        apply(t, p, B) {
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
+                            const blend = Math.sin(t * Math.PI * 0.4);
+                            if (la) { la.rotation.z = -0.7 - blend * 0.3; la.rotation.y = -blend * 0.4; }
+                            if (ra) { ra.rotation.z = 0.7 + blend * 0.3; ra.rotation.y = blend * 0.4; }
+                        }
+                    },
+                    {
+                        name: 'hair_twirl', duration: 2,
+                        requires: (p) => p.playfulness > 0.5,
+                        apply(t, p, B) {
+                            const arm = B('rightUpperArm');
+                            if (arm) {
+                                const blend = Math.sin(t * Math.PI * 0.5);
+                                arm.rotation.z = 0.7 - blend * 0.8;
+                                arm.rotation.y = Math.sin(t * Math.PI * 2) * 0.1;
+                            }
+                        }
+                    },
+                    {
+                        name: 'peace_sign', duration: 1,
+                        requires: (p) => p.playfulness > 0.6,
+                        apply(t, p, B) {
+                            const arm = B('rightUpperArm');
+                            if (arm) {
+                                const blend = Math.sin(t * Math.PI);
+                                arm.rotation.z = 0.7 - blend * 0.9;
+                                arm.rotation.x = -blend * 0.2;
+                            }
+                        }
+                    },
+                    {
+                        name: 'curtsy_bob', duration: 2,
+                        requires: (p) => p.playfulness > 0.5,
+                        apply(t, p, B) {
+                            const hips = B('hips'), spine = B('spine');
+                            const dip = Math.sin(t * Math.PI * 0.5);
+                            if (hips) hips.position.y = -dip * 0.02;
+                            if (spine) spine.rotation.x = dip * 0.04;
+                        }
+                    },
+                    {
+                        name: 'bounce', duration: 1,
+                        requires: (p) => p.energy > 0.6,
+                        apply(t, p, B) {
+                            const hips = B('hips');
+                            if (hips) hips.position.y = Math.abs(Math.sin(t * Math.PI * 2)) * 0.015;
+                        }
+                    },
+                    {
+                        name: 'stretch', duration: 3,
+                        requires: (p) => p.energy > 0.5,
+                        apply(t, p, B) {
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
+                            const spine = B('spine');
+                            const blend = Math.sin(t * Math.PI / 3);
+                            if (la) la.rotation.z = -0.7 - blend * 0.5;
+                            if (ra) ra.rotation.z = 0.7 + blend * 0.5;
+                            if (spine) spine.rotation.x = -blend * 0.04;
+                        }
+                    },
+                    {
+                        name: 'foot_tap', duration: 2,
+                        requires: (p) => p.energy > 0.4,
+                        apply(t, p, B) {
+                            const leg = B('rightUpperLeg');
+                            if (leg) leg.rotation.x = Math.abs(Math.sin(t * Math.PI * 3)) * 0.03;
+                        }
+                    },
+                ];
+            }
+
+            update(dt) {
+                super.update(dt);
+                const p = this.personality;
+
+                if (this._activeFidget) {
+                    this._fidgetTime += dt;
+                    const progress = this._fidgetTime / this._fidgetDuration;
+                    if (progress >= 1) {
+                        this._activeFidget = null;
+                        this._fidgetTime = 0;
+                        const baseWait = 3 + Math.random() * 5;
+                        this._fidgetTimer = baseWait * (1.3 - p.energy * 0.6);
+                    } else {
+                        let envelope = 1;
+                        if (progress < 0.15) envelope = progress / 0.15;
+                        else if (progress > 0.85) envelope = (1 - progress) / 0.15;
+
+                        this._activeFidget.apply(
+                            this._fidgetTime * envelope,
+                            p,
+                            (name) => this.getBone(name)
+                        );
+                    }
+                    return;
+                }
+
+                this._fidgetTimer -= dt;
+                if (this._fidgetTimer <= 0) {
+                    const eligible = IdleBehaviorLayer.FIDGETS.filter(
+                        f => !f.requires || f.requires(p)
+                    );
+                    if (eligible.length > 0) {
+                        const pick = eligible[Math.floor(Math.random() * eligible.length)];
+                        this._activeFidget = pick;
+                        this._fidgetTime = 0;
+                        this._fidgetDuration = pick.duration * (0.8 + p.expressiveness * 0.4);
+                    }
+                    const baseWait = 3 + Math.random() * 5;
+                    this._fidgetTimer = baseWait * (1.3 - p.energy * 0.6);
+                }
+            }
+        }
+
+        /**
+         * L2: Emotion modifier — posture bias from current emotion.
+         * Write mode: ADDITIVE (+=) on spine, hips, shoulders.
+         * Replaces the old ProceduralAnimator class.
+         */
+        class EmotionLayer extends AnimationLayer {
+            constructor(vrm) {
+                super(vrm, 'emotion');
+                this.currentEmotion = 'neutral';
+                this.intensity = 0.7;
+            }
+
+            setEmotion(emotion, intensity = 0.7) {
+                this.currentEmotion = emotion || 'neutral';
+                this.intensity = Math.max(0, Math.min(1, intensity));
+            }
+
+            update(dt) {
+                super.update(dt);
+                const t = this.time;
+                const p = this.personality;
+                const hips = this.getBone('hips');
+                const spine = this.getBone('spine');
+                const expressScale = 0.5 + p.expressiveness * 1.0;
+                const intensity = this.intensity * expressScale;
+
+                if (hips) {
+                    const swayNoise = 1 + Math.sin(t * 0.09) * 0.2;
+                    hips.rotation.y += Math.sin(t * 0.3) * 0.02 * swayNoise * intensity;
+                }
+
+                const emo = this.currentEmotion;
+                const effectiveEmo = (p.playfulness > 0.6 && emo === 'angry') ? 'pouty' : emo;
+
+                switch (effectiveEmo) {
+                    case 'happy':
+                    case 'excited': {
+                        const scale = emo === 'excited' ? 1.3 : 1.0;
+                        const happyBoost = 1 + p.playfulness * 0.5;
+                        if (hips) hips.position.y += Math.sin(t * 3) * 0.008 * intensity * scale * happyBoost;
+                        if (spine) spine.rotation.z += Math.sin(t * 1.5) * 0.02 * intensity * happyBoost;
+                        break;
+                    }
+                    case 'sad': {
+                        const nervBoost = 1 + p.nervousness * 0.5;
+                        if (spine) {
+                            spine.rotation.x += 0.03 * intensity * nervBoost;
+                            spine.rotation.z += Math.sin(t * 0.5) * 0.005 * intensity;
+                        }
+                        break;
+                    }
+                    case 'angry': {
+                        const nervBoost = 1 + p.nervousness * 0.4;
+                        if (spine) spine.rotation.z += Math.sin(t * 8) * 0.003 * intensity * nervBoost;
+                        break;
+                    }
+                    case 'pouty': {
+                        if (spine) spine.rotation.z += Math.sin(t * 1.2) * 0.015 * intensity;
+                        if (hips) hips.rotation.y += Math.sin(t * 0.8) * 0.015 * intensity;
+                        break;
+                    }
+                    case 'embarrassed':
+                    case 'shy': {
+                        if (spine) spine.rotation.x += 0.04 * intensity;
+                        const ls = this.getBone('leftShoulder'), rs = this.getBone('rightShoulder');
+                        if (ls) ls.rotation.z += 0.03 * intensity;
+                        if (rs) rs.rotation.z -= 0.03 * intensity;
+                        break;
+                    }
+                }
+            }
+        }
+
+        /**
+         * L3: Talk behavior — conversational body language when isTalking is true.
+         * Write mode: SET (=) on hands, head, spine.
+         * Suppresses L1 (Idle) when active.
+         */
+        class TalkLayer extends AnimationLayer {
+            constructor(vrm) {
+                super(vrm, 'talk');
+                this.active = false;
+                this._nodTimer = 0;
+                this._nodCooldown = 1.5 + Math.random() * 2;
+                this._shiftTimer = 0;
+            }
+
+            setTalking(talking) {
+                this.active = !!talking;
+                if (!talking) {
+                    this._nodTimer = 0;
+                    this._shiftTimer = 0;
+                }
+            }
+
+            update(dt) {
+                if (!this.active) return;
+                super.update(dt);
+                const t = this.time;
+                const p = this.personality;
+                const expressScale = 0.5 + p.expressiveness;
+                const spread = 0.5 + p.confidence * 0.5 - p.nervousness * 0.3;
+
+                const lArm = this.getBone('leftUpperArm');
+                const rArm = this.getBone('rightUpperArm');
+                const handAmp = 0.08 * spread * expressScale;
+                if (lArm) {
+                    lArm.rotation.z = -0.7 + Math.sin(t * 1.8) * handAmp;
+                    lArm.rotation.x = Math.sin(t * 1.3) * handAmp * 0.5;
+                }
+                if (rArm) {
+                    rArm.rotation.z = 0.7 - Math.sin(t * 2.1 + 1) * handAmp;
+                    rArm.rotation.x = Math.sin(t * 1.5 + 0.5) * handAmp * 0.5;
+                }
+
+                this._nodTimer += dt;
+                const head = this.getBone('head');
+                if (this._nodTimer >= this._nodCooldown && head) {
+                    const nodProgress = (this._nodTimer - this._nodCooldown) / 0.3;
+                    if (nodProgress < 1) {
+                        head.rotation.x = Math.sin(nodProgress * Math.PI) * 0.08;
+                    } else {
+                        this._nodTimer = 0;
+                        const playBoost = 1 + p.playfulness * 0.5;
+                        this._nodCooldown = (1.2 + Math.random() * 1.5) / playBoost;
+                    }
+                }
+
+                if (head && p.playfulness > 0.4) {
+                    head.rotation.z = Math.sin(t * 0.7) * 0.04 * p.playfulness;
+                }
+
+                const spine = this.getBone('spine');
+                if (spine) {
+                    spine.rotation.x = -0.015 * expressScale;
+                }
+
+                this._shiftTimer += dt;
+                if (this._shiftTimer > 4) {
+                    const hips = this.getBone('hips');
+                    const shiftProgress = (this._shiftTimer - 4) / 2;
+                    if (shiftProgress < 1 && hips) {
+                        hips.rotation.y = Math.sin(shiftProgress * Math.PI) * 0.03;
+                    } else {
+                        this._shiftTimer = 0;
+                    }
+                }
+            }
+        }
+
+        /**
+         * L4: Gesture override — triggered animations (wave, dance, etc.).
+         * Write mode: SET (=) on affected bones during playback.
+         * Suppresses L1 and L3 on affected bones when playing.
+         * Uses smooth 3-phase blend: 15% ease-in, 70% hold, 15% ease-out.
+         */
+        class GestureLayer extends AnimationLayer {
+            constructor(vrm) {
+                super(vrm, 'gesture');
+                this.isPlaying = false;
+                this.currentGesture = null;
+                this._gestureTime = 0;
+                this._gestureDuration = 0;
+                this._gestureSequence = [];
+                this._sequenceIndex = 0;
+            }
+
+            _envelope(progress) {
+                if (progress < 0.15) return progress / 0.15;
+                if (progress > 0.85) return (1 - progress) / 0.15;
+                return 1;
+            }
+
+            playGesture(gestureName) {
+                const gestureDef = GestureLayer.GESTURES[gestureName];
+                if (!gestureDef) return;
+                this.currentGesture = gestureName;
+                this.isPlaying = true;
+                this._gestureTime = 0;
+                this._gestureDuration = gestureDef.duration;
+            }
+
+            playSequence(sequence) {
+                if (!Array.isArray(sequence) || sequence.length === 0) return;
+                this._gestureSequence = sequence;
+                this._sequenceIndex = 0;
+                this.playGesture(sequence[0].gesture || sequence[0]);
+            }
+
+            update(dt) {
+                if (!this.isPlaying || !this.currentGesture) return;
+                super.update(dt);
+
+                this._gestureTime += dt;
+                const progress = this._gestureTime / this._gestureDuration;
+
+                if (progress >= 1) {
+                    this.isPlaying = false;
+                    this.currentGesture = null;
+                    this._gestureTime = 0;
+
+                    if (this._gestureSequence.length > 0) {
+                        this._sequenceIndex++;
+                        if (this._sequenceIndex < this._gestureSequence.length) {
+                            const next = this._gestureSequence[this._sequenceIndex];
+                            const delay = next.delay || 0.3;
+                            setTimeout(() => {
+                                this.playGesture(next.gesture || next);
+                            }, delay * 1000);
+                        } else {
+                            this._gestureSequence = [];
+                            this._sequenceIndex = 0;
+                        }
+                    }
+                    return;
+                }
+
+                const envelope = this._envelope(progress);
+                const expressScale = 0.5 + this.personality.expressiveness;
+                const amp = envelope * expressScale;
+                const t = this._gestureTime;
+                const gestureDef = GestureLayer.GESTURES[this.currentGesture];
+                if (gestureDef) {
+                    gestureDef.apply(t, amp, (name) => this.getBone(name));
+                }
+            }
+
+            static get GESTURES() {
+                return {
+                    nod: {
+                        duration: 0.8,
+                        apply(t, amp, B) {
+                            const head = B('head');
+                            if (head) head.rotation.x = Math.sin(t * Math.PI * 2.5) * 0.15 * amp;
+                        }
+                    },
+                    tilt: {
+                        duration: 1.0,
+                        apply(t, amp, B) {
+                            const head = B('head');
+                            if (head) head.rotation.z = Math.sin(t * Math.PI) * 0.2 * amp;
+                        }
+                    },
+                    wave: {
+                        duration: 1.5,
+                        apply(t, amp, B) {
+                            const arm = B('rightUpperArm');
+                            if (arm) {
+                                arm.rotation.z = (0.7 - 1.2 * amp);
+                                arm.rotation.x = Math.sin(t * Math.PI * 3) * 0.3 * amp;
+                            }
+                        }
+                    },
+                    shrug: {
+                        duration: 1.2,
+                        apply(t, amp, B) {
+                            const ls = B('leftShoulder'), rs = B('rightShoulder');
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
+                            const v = Math.sin(t * Math.PI / 1.2) * amp;
+                            if (ls) ls.rotation.y = -0.15 * v;
+                            if (rs) rs.rotation.y = 0.15 * v;
+                            if (la) la.rotation.z = -0.7 + 0.2 * v;
+                            if (ra) ra.rotation.z = 0.7 - 0.2 * v;
+                        }
+                    },
+                    bow: {
+                        duration: 2.0,
+                        apply(t, amp, B) {
+                            const spine = B('spine'), head = B('head');
+                            const v = Math.sin(t * Math.PI / 2) * amp;
+                            if (spine) spine.rotation.x = 0.3 * v;
+                            if (head) head.rotation.x = 0.15 * v;
+                        }
+                    },
+                    clap: {
+                        duration: 1.5,
+                        apply(t, amp, B) {
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
+                            const cycle = Math.sin(t * Math.PI * 4) * amp;
+                            if (la) { la.rotation.z = -0.7 + 0.5 * amp; la.rotation.x = 0.3 * amp + cycle * 0.1; }
+                            if (ra) { ra.rotation.z = 0.7 - 0.5 * amp; ra.rotation.x = 0.3 * amp - cycle * 0.1; }
+                        }
+                    },
+                    think: {
+                        duration: 2.0,
+                        apply(t, amp, B) {
+                            const ra = B('rightUpperArm'), head = B('head');
+                            if (ra) { ra.rotation.z = 0.7 - 0.6 * amp; ra.rotation.x = 0.3 * amp; }
+                            if (head) head.rotation.z = Math.sin(t * 0.5) * 0.1 * amp;
+                        }
+                    },
+                    point: {
+                        duration: 1.2,
+                        apply(t, amp, B) {
+                            const ra = B('rightUpperArm');
+                            if (ra) {
+                                ra.rotation.z = 0.7 - 0.9 * amp;
+                                ra.rotation.x = -0.2 * amp;
+                            }
+                        }
+                    },
+                    celebrate: {
+                        duration: 2.0,
+                        apply(t, amp, B) {
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
+                            const hips = B('hips');
+                            if (la) la.rotation.z = -0.7 - 0.8 * amp;
+                            if (ra) ra.rotation.z = 0.7 + 0.8 * amp;
+                            if (hips) hips.position.y = Math.sin(t * Math.PI * 3) * 0.01 * amp;
+                        }
+                    },
+                    shy: {
+                        duration: 1.5,
+                        apply(t, amp, B) {
+                            const head = B('head'), spine = B('spine');
+                            if (head) { head.rotation.x = 0.15 * amp; head.rotation.z = 0.1 * amp; }
+                            if (spine) spine.rotation.x = 0.05 * amp;
+                        }
+                    },
+                    dance: {
+                        duration: 3.0,
+                        apply(t, amp, B) {
+                            const hips = B('hips'), la = B('leftUpperArm'), ra = B('rightUpperArm');
+                            if (hips) {
+                                hips.rotation.y = Math.sin(t * Math.PI * 2) * 0.1 * amp;
+                                hips.position.y = Math.abs(Math.sin(t * Math.PI * 3)) * 0.015 * amp;
+                            }
+                            if (la) la.rotation.z = -0.7 + Math.sin(t * Math.PI * 2.5) * 0.4 * amp;
+                            if (ra) ra.rotation.z = 0.7 - Math.sin(t * Math.PI * 2.5 + 1) * 0.4 * amp;
+                        }
+                    },
+                    foot_tap: {
+                        duration: 2.0,
+                        apply(t, amp, B) {
+                            const leg = B('rightUpperLeg');
+                            if (leg) leg.rotation.x = Math.abs(Math.sin(t * Math.PI * 3)) * 0.06 * amp;
+                        }
+                    },
+                    crossed_arms: {
+                        duration: 2.5,
+                        apply(t, amp, B) {
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
+                            if (la) { la.rotation.z = -0.7 + 0.4 * amp; la.rotation.x = 0.5 * amp; }
+                            if (ra) { ra.rotation.z = 0.7 - 0.4 * amp; ra.rotation.x = 0.5 * amp; }
+                        }
+                    },
+                    shake: {
+                        duration: 0.8,
+                        apply(t, amp, B) {
+                            const head = B('head');
+                            if (head) head.rotation.y = Math.sin(t * Math.PI * 5) * 0.12 * amp;
+                        }
+                    },
+                };
+            }
+        }
+
+        /**
+         * L5: LookAt — always additive (+=) on eyes + head.
+         * Absorbs MouseTrackingController + IdleHeadMovement into one layer.
+         * When mouse is active: track cursor. When idle: gentle gaze wander.
+         * This layer ALWAYS runs (never suppressed).
+         */
+        class LookAtLayer extends AnimationLayer {
+            constructor(vrm, canvas) {
+                super(vrm, 'lookAt');
+                this._mouseX = 0;
+                this._mouseY = 0;
+                this._mouseActive = false;
+                this._mouseTimeout = null;
+
+                if (canvas) {
+                    canvas.addEventListener('mousemove', (e) => {
+                        const rect = canvas.getBoundingClientRect();
+                        this._mouseX = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+                        this._mouseY = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+                        this._mouseActive = true;
+                        clearTimeout(this._mouseTimeout);
+                        this._mouseTimeout = setTimeout(() => { this._mouseActive = false; }, 3000);
+                    });
+                    canvas.addEventListener('mouseleave', () => { this._mouseActive = false; });
+                }
+
+                this._gazeTarget = { x: 0, y: 0 };
+                this._gazeCurrent = { x: 0, y: 0 };
+                this._gazeTimer = 2 + Math.random() * 3;
+                this._headTarget = { x: 0, y: 0, z: 0 };
+                this._headCurrent = { x: 0, y: 0, z: 0 };
+                this._headTimer = 1 + Math.random() * 3;
+            }
+
+            update(dt) {
+                super.update(dt);
+                const head = this.getBone('head');
+                const neck = this.getBone('neck');
+
+                if (this._mouseActive) {
+                    if (head) {
+                        head.rotation.y += this._mouseX * 0.15;
+                        head.rotation.x += this._mouseY * -0.08;
+                    }
+                } else {
+                    this._gazeTimer -= dt;
+                    if (this._gazeTimer <= 0) {
+                        this._gazeTarget.x = (Math.random() - 0.5) * 0.2;
+                        this._gazeTarget.y = (Math.random() - 0.5) * 0.1;
+                        this._gazeTimer = 2 + Math.random() * 4;
+                    }
+                    this._gazeCurrent.x += (this._gazeTarget.x - this._gazeCurrent.x) * dt * 2;
+                    this._gazeCurrent.y += (this._gazeTarget.y - this._gazeCurrent.y) * dt * 2;
+                    if (head) {
+                        head.rotation.y += this._gazeCurrent.x;
+                        head.rotation.x += this._gazeCurrent.y;
+                    }
+                }
+
+                this._headTimer -= dt;
+                if (this._headTimer <= 0) {
+                    const isTalkingNow = typeof isTalking !== 'undefined' && isTalking;
+                    const range = isTalkingNow ? 0.06 : 0.04;
+                    this._headTarget.x = (Math.random() - 0.5) * range;
+                    this._headTarget.y = (Math.random() - 0.5) * range;
+                    this._headTarget.z = (Math.random() - 0.5) * range * 0.5;
+                    const speed = isTalkingNow ? 0.8 : 2;
+                    this._headTimer = speed + Math.random() * speed;
+                }
+                const lerpSpeed = dt * 1.5;
+                this._headCurrent.x += (this._headTarget.x - this._headCurrent.x) * lerpSpeed;
+                this._headCurrent.y += (this._headTarget.y - this._headCurrent.y) * lerpSpeed;
+                this._headCurrent.z += (this._headTarget.z - this._headCurrent.z) * lerpSpeed;
+                if (neck) {
+                    neck.rotation.x += this._headCurrent.x;
+                    neck.rotation.y += this._headCurrent.y;
+                    neck.rotation.z += this._headCurrent.z;
+                }
+            }
+        }
         // ══════════════════════════════════════════════════════════
         // Procedural Animation — emotion-driven idle modifiers
         // ══════════════════════════════════════════════════════════

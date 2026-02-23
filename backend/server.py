@@ -16,6 +16,7 @@ import json
 import re
 import sqlite3
 import psutil
+from contextlib import asynccontextmanager
 from typing import Optional
 
 # ... (Previous imports) ...
@@ -108,7 +109,91 @@ mimetypes.add_type("model/gltf-binary", ".vrm")
 
 
 # --- APP INITIALIZATION ---
-app = FastAPI(title="Waifu-RT3D", version="5.31.0")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: run startup tasks, yield, then clean up.
+
+    Replaces the deprecated ``@app.on_event("startup")`` pattern with
+    the modern FastAPI lifespan context manager.  Code before ``yield``
+    runs at startup; code after ``yield`` runs at shutdown.
+    """
+    global model_manager, vector_store
+
+    try:
+        from backend import preflight
+        preflight.run()
+    except Exception as e:
+        logger.error(f"Preflight failed: {e}")
+
+    disable_vector_store = os.getenv("WAIFU_DISABLE_VECTOR_STORE", "").strip().lower() in {"1", "true", "yes"}
+    if disable_vector_store:
+        vector_store = None
+        logger.info("Vector Store initialization skipped by WAIFU_DISABLE_VECTOR_STORE")
+    else:
+        try:
+            from backend.memory.vector_store import VectorStore
+            vector_store = VectorStore(storage_path=str(STORAGE / "memory"))
+            logger.info("Vector Store Initialized")
+        except Exception as e:
+            vector_store = None
+            logger.warning(f"Vector Store unavailable, session-only memory mode active: {e}")
+
+    cfg = load_config()
+
+    # Config schema validator (#117): warn about unknown or deprecated keys at startup.
+    _KNOWN_CFG_KEYS: set[str] = {
+        "llm_endpoint", "llm_model", "llm", "context_limit", "history_limit",
+        "temperature", "repeat_penalty", "max_tokens", "thinking_visible",
+        "speech_rate", "pitch_shift", "voice_stability", "tts_provider", "voice_id",
+        "interrupt_mode", "tts", "asr_provider", "asr_model",
+        "visual_mode", "theme", "bg_mode", "glow_intensity", "ui_border_radius",
+        "ui_blur", "ui_font_size", "layout_show_left", "layout_show_right",
+        "chat_layout", "ui_sounds", "lighting_preset", "fps_target", "show_fps_overlay",
+        "shadow_quality", "dev_mode", "log_limit", "save_logs_auto",
+        "audio_cleanup_days", "content_filter_level", "active_character_id",
+        "auto_start_lmstudio", "lms_autoload_model", "chat_font_size",
+        "show_timestamps", "typewriter_enabled", "typewriter_speed",
+        "vad_threshold", "fast_chunking", "image_gen", "video_gen",
+        "vrm_scale", "vrm_offset_x", "vrm_offset_y", "webhooks",
+        "vocab_enabled", "vocab_limit", "vocab_path",
+    }
+    for key in cfg:
+        if key not in _KNOWN_CFG_KEYS:
+            logger.warning(f"[Config] Unknown key '{key}' in app.json — may be stale or from a plugin")
+
+    # Auto-start LM Studio headless if configured and unreachable
+    _try_auto_start_lmstudio(cfg)
+
+    from backend.models.manager import ModelManager
+    model_manager = ModelManager(cfg)
+    logger.info("Model Manager Initialized")
+
+    # Start background maintenance tasks
+    import asyncio as _asyncio
+
+    # Audio cleanup (#108): delete TTS files older than N days
+    audio_max_age = int(cfg.get("audio_cleanup_days", 7))
+    if audio_max_age > 0:
+        _asyncio.create_task(_audio_cleanup_loop(audio_max_age))
+        logger.info(f"Audio cleanup task started (max_age={audio_max_age} days)")
+
+    # DB vacuum (#106): SQLite VACUUM runs weekly to reclaim fragmented space
+    _asyncio.create_task(_db_vacuum_loop(interval_days=7))
+    logger.info("DB vacuum task started (weekly)")
+
+    # DB backup (#118): daily timestamped copy to STORAGE/_backups/, 7-day retention
+    _asyncio.create_task(_db_backup_loop(interval_days=1, retention=7))
+    logger.info("DB backup task started (daily, 7-day retention)")
+
+    yield
+
+    # Shutdown: nothing to clean up currently
+    logger.info("Application shutdown complete")
+
+
+app = FastAPI(title="Waifu-RT3D", version="5.31.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -4889,77 +4974,8 @@ async def _db_vacuum_loop(interval_days: int = 7) -> None:
             logger.warning(f"DB vacuum error: {_e}")
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Application startup: run preflight, init vector store, auto-start LM Studio, init ModelManager."""
-    global model_manager, vector_store
 
-    try:
-        from backend import preflight
-        preflight.run()
-    except Exception as e:
-        logger.error(f"Preflight failed: {e}")
-
-    disable_vector_store = os.getenv("WAIFU_DISABLE_VECTOR_STORE", "").strip().lower() in {"1", "true", "yes"}
-    if disable_vector_store:
-        vector_store = None
-        logger.info("Vector Store initialization skipped by WAIFU_DISABLE_VECTOR_STORE")
-    else:
-        try:
-            from backend.memory.vector_store import VectorStore
-            vector_store = VectorStore(storage_path=str(STORAGE / "memory"))
-            logger.info("Vector Store Initialized")
-        except Exception as e:
-            vector_store = None
-            logger.warning(f"Vector Store unavailable, session-only memory mode active: {e}")
-
-    cfg = load_config()
-
-    # Config schema validator (#117): warn about unknown or deprecated keys at startup.
-    # Known keys are the union of reset_config() defaults and common dynamic keys.
-    _KNOWN_CFG_KEYS: set[str] = {
-        "llm_endpoint", "llm_model", "llm", "context_limit", "history_limit",
-        "temperature", "repeat_penalty", "max_tokens", "thinking_visible",
-        "speech_rate", "pitch_shift", "voice_stability", "tts_provider", "voice_id",
-        "interrupt_mode", "tts", "asr_provider", "asr_model",
-        "visual_mode", "theme", "bg_mode", "glow_intensity", "ui_border_radius",
-        "ui_blur", "ui_font_size", "layout_show_left", "layout_show_right",
-        "chat_layout", "ui_sounds", "lighting_preset", "fps_target", "show_fps_overlay",
-        "shadow_quality", "dev_mode", "log_limit", "save_logs_auto",
-        "audio_cleanup_days", "content_filter_level", "active_character_id",
-        "auto_start_lmstudio", "lms_autoload_model", "chat_font_size",
-        "show_timestamps", "typewriter_enabled", "typewriter_speed",
-        "vad_threshold", "fast_chunking", "image_gen", "video_gen",
-        "vrm_scale", "vrm_offset_x", "vrm_offset_y", "webhooks",
-        "vocab_enabled", "vocab_limit", "vocab_path",
-    }
-    for key in cfg:
-        if key not in _KNOWN_CFG_KEYS:
-            logger.warning(f"[Config] Unknown key '{key}' in app.json — may be stale or from a plugin")
-
-    # Auto-start LM Studio headless if configured and unreachable
-    _try_auto_start_lmstudio(cfg)
-
-    from backend.models.manager import ModelManager
-    model_manager = ModelManager(cfg)
-    logger.info("Model Manager Initialized")
-
-    # Start background maintenance tasks
-    import asyncio as _asyncio
-
-    # Audio cleanup (#108): delete TTS files older than N days
-    audio_max_age = int(cfg.get("audio_cleanup_days", 7))
-    if audio_max_age > 0:
-        _asyncio.create_task(_audio_cleanup_loop(audio_max_age))
-        logger.info(f"Audio cleanup task started (max_age={audio_max_age} days)")
-
-    # DB vacuum (#106): SQLite VACUUM runs weekly to reclaim fragmented space
-    _asyncio.create_task(_db_vacuum_loop(interval_days=7))
-    logger.info("DB vacuum task started (weekly)")
-
-    # DB backup (#118): daily timestamped copy to STORAGE/_backups/, 7-day retention
-    _asyncio.create_task(_db_backup_loop(interval_days=1, retention=7))
-    logger.info("DB backup task started (daily, 7-day retention)")
+# NOTE: startup logic is now in the lifespan() context manager above.
 
 @app.get("/api/models/recommend")
 def recommend_models(type: str = "llm"):

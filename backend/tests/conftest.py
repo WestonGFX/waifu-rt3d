@@ -1,6 +1,7 @@
 import sqlite3
 import sys
 import types
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
@@ -187,20 +188,24 @@ def server_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     return server
 
 
+@asynccontextmanager
+async def _noop_lifespan(app):
+    """No-op lifespan that skips real startup/shutdown for tests."""
+    yield
+
+
 @pytest.fixture()
 def client(server_module):
-    startup_handlers = list(server_module.app.router.on_startup)
-    shutdown_handlers = list(server_module.app.router.on_shutdown)
-
-    server_module.app.router.on_startup = []
-    server_module.app.router.on_shutdown = []
+    # Bypass the real lifespan so tests use the monkeypatched server state
+    # (e.g. vector_store=None, stub LLM) instead of running full startup.
+    original_lifespan = server_module.app.router.lifespan_context
+    server_module.app.router.lifespan_context = _noop_lifespan
 
     try:
         with TestClient(server_module.app) as test_client:
             yield test_client
     finally:
-        server_module.app.router.on_startup = startup_handlers
-        server_module.app.router.on_shutdown = shutdown_handlers
+        server_module.app.router.lifespan_context = original_lifespan
 
 
 @pytest.fixture()

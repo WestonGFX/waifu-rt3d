@@ -3566,7 +3566,7 @@ def list_characters():
                    greeting_text, greeting_animation, background_url, background_mode, voice_sample_path,
                    llm_endpoint, llm_model, llm_temperature, last_emotion, voice_config,
                    expr_portraits, first_chat_date, diary, diary_date, capability_profile,
-                   tts_pitch, tts_rate, vocab_categories
+                   tts_pitch, tts_rate, vocab_categories, animation_profile
             FROM characters
             ORDER BY id ASC
         """)
@@ -3620,6 +3620,7 @@ def list_characters():
             "tts_pitch": row[26] if len(row) > 26 else None,
             "tts_rate": row[27] if len(row) > 27 else None,
             "vocab_categories": row[28] if len(row) > 28 else None,
+            "animation_profile": json.loads(row[29]) if len(row) > 29 and row[29] else None,
         }
         characters.append(char)
     conn.close()
@@ -3669,6 +3670,7 @@ async def create_character(req: Request):
         "voice_config": json.dumps(body.get("voice_config", {})) if body.get("voice_config") else "",
         "vocab_categories": json.dumps(body.get("vocab_categories", [])) if body.get("vocab_categories") else "",
         "capability_profile": json.dumps(body.get("capability_profile", {})) if body.get("capability_profile") else None,
+        "animation_profile": json.dumps(body.get("animation_profile", {})) if body.get("animation_profile") else None,
         "live2d_model": "",
         "model_type": "3d",
     }
@@ -3713,8 +3715,9 @@ async def update_character(character_id: int, req: Request):
         "llm_endpoint", "llm_model", "llm_temperature", "last_emotion",
         "voice_config",  # v13: extended per-character voice settings JSON (#77)
         "capability_profile",  # v15: Phase 9 per-character LLM capability metadata
+        "animation_profile",  # v16: Phase 6F per-character animation personality traits
     ]
-    _json_fields = {"capability_profile", "voice_config", "vocab_categories"}
+    _json_fields = {"capability_profile", "voice_config", "vocab_categories", "animation_profile"}
     for field in fields:
         if field in body:
             updates.append(f"{field}=?")
@@ -3836,10 +3839,10 @@ async def import_character(req: Request):
             'model_type', 'avatar_2d_url', 'vrm_model_url', 'greeting_text',
             'greeting_animation', 'background_url', 'background_mode', 'voice_sample_path',
             'vocab_categories', 'llm_endpoint', 'llm_model', 'llm_temperature',
-            'voice_config', 'capability_profile',
+            'voice_config', 'capability_profile', 'animation_profile',
         ]
         # JSON-encode dict/list fields before INSERT
-        for jf in ('voice_config', 'capability_profile', 'vocab_categories'):
+        for jf in ('voice_config', 'capability_profile', 'vocab_categories', 'animation_profile'):
             if jf in body and isinstance(body[jf], (dict, list)):
                 body[jf] = json.dumps(body[jf])
         fields = []

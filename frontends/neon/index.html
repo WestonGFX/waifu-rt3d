@@ -110,14 +110,14 @@
     <span id="art-status-icon" title="AI Art: checking..." onclick="window.openSettings?.('aiart')"
       style="font-size:0.85rem; opacity:0.2; cursor:pointer; margin-right:2px; flex-shrink:0;
              transition:opacity 0.3s, filter 0.3s; color:var(--text-muted);" aria-label="AI Art status">🎨</span>
-    <button id="btn-screenshot" class="btn-viewport-tool" title="Screenshot (Ctrl+Shift+S)">&#x1F4F7;</button>
-    <button id="btn-expression-editor" class="btn-viewport-tool" title="Expression Editor (Ctrl+E)" onclick="window.app?.expressionEditor?.open()">&#x1F3AD;</button>
-    <button id="btn-reset-camera" class="btn-viewport-tool" title="Reset Camera (Ctrl+0)" onclick="window.app?.viewer?.resetCamera()">&#x1F3AF;</button>
+    <button id="btn-screenshot" class="btn-viewport-tool" title="Screenshot (Ctrl+Shift+S)" aria-label="Screenshot">&#x1F4F7;</button>
+    <button id="btn-expression-editor" class="btn-viewport-tool" title="Expression Editor (Ctrl+E)" aria-label="Expression Editor" onclick="window.app?.expressionEditor?.open()">&#x1F3AD;</button>
+    <button id="btn-reset-camera" class="btn-viewport-tool" title="Reset Camera (Ctrl+0)" aria-label="Reset Camera" onclick="window.app?.viewer?.resetCamera()">&#x1F3AF;</button>
     <!-- Camera preset buttons (#27): Bust / Full Body / Face close-up -->
-    <button class="btn-viewport-tool" title="Full Body view" onclick="window.app?.viewer?.setCameraPreset('fullbody')" style="font-size:0.65rem; padding:0 5px; letter-spacing:0.03em;">FULL</button>
-    <button class="btn-viewport-tool" title="Bust view" onclick="window.app?.viewer?.setCameraPreset('bust')" style="font-size:0.65rem; padding:0 5px; letter-spacing:0.03em;">BUST</button>
-    <button class="btn-viewport-tool" title="Face close-up" onclick="window.app?.viewer?.setCameraPreset('face')" style="font-size:0.65rem; padding:0 5px; letter-spacing:0.03em;">FACE</button>
-    <button id="btn-pet-mode" class="btn-viewport-tool" title="Open Desktop Pet">&#x1F43E;</button>
+    <button class="btn-viewport-tool" title="Full Body view" aria-label="Full Body view" onclick="window.app?.viewer?.setCameraPreset('fullbody')" style="font-size:0.65rem; padding:0 5px; letter-spacing:0.03em;">FULL</button>
+    <button class="btn-viewport-tool" title="Bust view" aria-label="Bust view" onclick="window.app?.viewer?.setCameraPreset('bust')" style="font-size:0.65rem; padding:0 5px; letter-spacing:0.03em;">BUST</button>
+    <button class="btn-viewport-tool" title="Face close-up" aria-label="Face close-up" onclick="window.app?.viewer?.setCameraPreset('face')" style="font-size:0.65rem; padding:0 5px; letter-spacing:0.03em;">FACE</button>
+    <button id="btn-pet-mode" class="btn-viewport-tool" title="Open Desktop Pet" aria-label="Desktop Pet">&#x1F43E;</button>
   </div>
 
   <!-- AI Status Indicator (live — updates via ChatInterface) -->

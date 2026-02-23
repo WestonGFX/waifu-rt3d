@@ -198,6 +198,12 @@ async function initApp() {
 
         // Fix 5: Eagerly init Live2D PIXI canvas so it's ready before any mode switch.
         // Lazy init inside loadModel() can cause a race when the user switches modes quickly.
+        // Suppress Cubism 2 detection errors that fire repeatedly from the library (~76/session).
+        const _origErr = console.error;
+        console.error = (...args) => {
+            if (typeof args[0] === 'string' && args[0].includes?.('Cubism')) return;
+            _origErr.apply(console, args);
+        };
         live2d.init().catch(e => console.warn('[Live2D] Eager init failed:', e));
 
         // 3. Hydrate State

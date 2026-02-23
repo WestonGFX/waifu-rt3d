@@ -101,10 +101,22 @@ def _create_schema(db_path: Path) -> None:
                 last_emotion TEXT DEFAULT 'neutral',
                 voice_config TEXT,
                 expr_portraits TEXT,
+                last_chat_date TEXT,
                 first_chat_date TEXT,
                 diary TEXT,
                 diary_date TEXT,
                 capability_profile TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS character_relationships (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id INTEGER UNIQUE NOT NULL,
+                affinity REAL DEFAULT 0.5,
+                mood REAL DEFAULT 0.5,
+                trust REAL DEFAULT 0.5,
+                interactions INTEGER DEFAULT 0,
+                last_updated INTEGER DEFAULT (strftime('%s','now')),
+                FOREIGN KEY(char_id) REFERENCES characters(id)
             );
             """
         )

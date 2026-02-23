@@ -1529,6 +1529,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             "memory_hits": memory_hits,
             "is_daily_first": is_daily_first,
             "context_budget": _context_budget_summary(sections, hist, cfg),
+            "capability_warning": _cap_warning_ns,
         }
     finally:
         con.close()

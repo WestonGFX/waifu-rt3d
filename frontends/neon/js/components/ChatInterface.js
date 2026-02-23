@@ -456,7 +456,7 @@ export class ChatInterface {
      * @param {boolean} thinking - Whether the AI is currently generating
      * @param {string|null} avatarUrl - Avatar URL for the thinking bubble
      */
-    setThinking(thinking, avatarUrl) {
+    setThinking(thinking, avatarUrl, stats = null) {
         this.isThinking = thinking;
         if (thinking) {
             // Reset counters only when entering thinking state — not on exit,
@@ -489,19 +489,27 @@ export class ChatInterface {
                 dot.style.boxShadow = '0 0 15px #00ffff';
                 dot.classList.remove('thinking');
 
-                // Show final stats — persists until next message (no revert to idle).
-                // Cascading fallbacks for token count and timing:
-                //  1. Frontend counter (real-time, from individual token events)
-                //  2. Server metadata token_count (from done event)
-                //  3. Estimate from reply length (chars / 4)
+                // When pre-computed stats are passed, use them directly.
+                // This avoids re-computing from potentially stale instance
+                // counters and eliminates drift between the bubble info line
+                // and the status bar.
+                if (stats) {
+                    this._lastSpeed = stats.speed || '--';
+                    this._lastTotalTime = stats.totalTime || 0;
+                    label.innerText = `DONE: ${stats.tokens} tok | ${this._lastSpeed} tok/s | ${this._lastTotalTime.toFixed(1)}s`;
+                    label.style.color = '#00ff88';
+                    return;
+                }
+
+                // Fallback: compute from instance counters + server metadata
                 const meta = this._lastMetadata;
                 let tokCount = this.tokenCount;
                 let genTimeSec = this.streamStartTime
                     ? (performance.now() - this.streamStartTime) / 1000
                     : 0;
 
-                // Fallback to server metadata when frontend counters are empty
-                if (tokCount === 0 && meta?.token_count > 0) {
+                // Always prefer server metadata when available
+                if (meta?.token_count > 0) {
                     tokCount = meta.token_count;
                 }
                 // Last resort: estimate from reply text length
@@ -515,7 +523,6 @@ export class ChatInterface {
                 this._lastGenTime = genTimeSec;
                 this._lastTotalTime = this.prefillStartTime
                     ? (performance.now() - this.prefillStartTime) / 1000 : 0;
-                // Use generation time for speed calc; fall back to total time
                 const speedTimeSec = genTimeSec > 0 ? genTimeSec : this._lastTotalTime;
                 this._lastSpeed = speedTimeSec > 0.2
                     ? (tokCount / speedTimeSec).toFixed(1) : '--';
@@ -1088,7 +1095,15 @@ export class ChatInterface {
             infoLine.innerHTML = `<span class="bubble-info-stats">${finalTokenCount} tok · ${speed} tok/s · ${genTime}s</span><span class="bubble-info-sep" style="opacity:0.4; margin:0 4px;">·</span><span class="bubble-info-time">${time}</span>`;
             streamContentEl.appendChild(infoLine);
 
-            this.setThinking(false, null);
+            // Pass pre-computed stats to setThinking so the status bar
+            // matches the bubble info exactly — no re-computation drift
+            const totalTimeSec = this.prefillStartTime
+                ? (performance.now() - this.prefillStartTime) / 1000 : 0;
+            this.setThinking(false, null, {
+                tokens: finalTokenCount,
+                speed: speed,
+                totalTime: totalTimeSec,
+            });
 
             // Play TTS audio if enabled and the server did NOT already emit audio_chunk
             // events (chunked TTS). When chunked, audioQueue handles playback above.

@@ -7,6 +7,7 @@ import { CharacterGrid } from './components/CharacterGrid.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { ChatInterface } from './components/ChatInterface.js';
 import { PersonaCreator } from './components/PersonaCreator.js';
+import { WaifuCreator } from './components/WaifuCreator.js';
 import { ModelManager } from './components/ModelManager.js';
 import { MemoryManager } from './components/MemoryManager.js';
 import { ViewerBridge } from './components/ViewerBridge.js';
@@ -137,6 +138,7 @@ async function initApp() {
         const devConsole = new DevConsole();
         const vocabManager = new VocabManager();
         const hotkeyEditor = new HotkeyEditor();
+        const waifuCreator = new WaifuCreator();
 
         // 3. Expose Global API for HTML Event Handlers
         window.app = {
@@ -145,6 +147,7 @@ async function initApp() {
             settings,
             chat,
             personaCreator,
+            waifuCreator,
             modelManager,
             memoryManager,
             viewer,
@@ -250,6 +253,31 @@ async function initApp() {
             }
         });
 
+        // 7. Hash-based routing for full-page views (Create-a-Waifu)
+        function handleRoute() {
+            const hash = window.location.hash;
+            const bentoGrid = document.querySelector('.bento-grid');
+            if (!bentoGrid) return;
+
+            if (hash.startsWith('#create-waifu')) {
+                bentoGrid.style.display = 'none';
+                waifuCreator.open(null);
+            } else if (hash.startsWith('#edit-waifu/')) {
+                const charId = parseInt(hash.split('/')[1]);
+                if (charId) {
+                    bentoGrid.style.display = 'none';
+                    waifuCreator.open(charId);
+                }
+            } else {
+                bentoGrid.style.display = '';
+                waifuCreator.close();
+            }
+        }
+
+        window.addEventListener('hashchange', handleRoute);
+        // Handle deep-link on page load (e.g. user refreshes on #create-waifu)
+        handleRoute();
+
     } catch (e) {
         logger.error("Boot", "Critical Failure: " + e.message);
         document.body.innerHTML += `<div style="color:red; padding:20px;">CRITICAL SYSTEM FAILURE: ${e.message}</div>`;
@@ -280,14 +308,12 @@ function setupKeyboardShortcuts(settings, charGrid, chat) {
         description: 'Open settings'
     });
 
-    // Ctrl+N - Open Persona Creator (new persona)
+    // Ctrl+N - Open Create-a-Waifu (full-page character creator)
     keyboard.register('Ctrl+n', () => {
-        if (window.openPersonaCreator) {
-            window.openPersonaCreator();
-        }
+        window.location.hash = '#create-waifu';
     }, {
         allowInInput: false,
-        description: 'New persona'
+        description: 'New character'
     });
 
     // Escape - Close modals/overlays (checks all modals in z-order)
@@ -300,6 +326,7 @@ function setupKeyboardShortcuts(settings, charGrid, chat) {
             { id: 'hotkey-editor-modal', close: () => window.app?.hotkeyEditor?.close() },
             { id: 'vocab-manager-modal', close: () => window.app?.vocabManager?.close() },
             { id: 'memory-manager-modal', close: () => window.app?.memoryManager?.close() },
+            { id: 'waifu-creator', close: () => { window.location.hash = ''; } },
             { id: 'persona-creator-modal', close: () => window.app?.personaCreator?.close() },
             { id: 'model-manager-modal', close: () => window.app?.modelManager?.close() },
             { id: 'settings-modal', close: () => settings.close() }

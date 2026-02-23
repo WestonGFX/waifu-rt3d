@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WAIFU.EXE // NEURAL LINK</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="apple-touch-icon" href="logo.png">
 
     <!-- FONTS -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,6 +21,7 @@
     <link rel="stylesheet" href="css/component_grid.css">
     <link rel="stylesheet" href="css/settings_modal.css">
     <link rel="stylesheet" href="css/cyber_glass.css?v=2">
+    <link rel="stylesheet" href="css/waifu_creator.css">
 
     <!-- CORE LIBS -->
     <script src="lib/live2dcubismcore.min.js"></script>
@@ -246,6 +248,33 @@
   </div>
 </aside>
 
+    </div>
+
+    <!-- ═══ CREATE-A-WAIFU (Full-Page Character Creator) ═══ -->
+    <div id="waifu-creator" class="waifu-creator" style="display:none;">
+      <!-- Left: Settings Panel -->
+      <div class="wc-settings">
+        <div class="wc-header">
+          <button id="wc-back" class="wc-btn-back">&larr;</button>
+          <h2 id="wc-title">CREATE A WAIFU</h2>
+        </div>
+        <div class="wc-tabs" id="wc-tab-bar"></div>
+        <div class="wc-content" id="wc-content"></div>
+        <div class="wc-footer">
+          <button id="wc-prev" class="btn-config" style="display:none;">PREV</button>
+          <button id="wc-next" class="btn-config">NEXT</button>
+          <button id="wc-save" class="btn-config" style="display:none;">CREATE ENTITY</button>
+        </div>
+      </div>
+      <!-- Right: Live VRM Preview -->
+      <div class="wc-preview">
+        <div class="wc-preview-viewport">
+          <iframe id="wc-vrm-iframe" src="viewer/viewer.html"></iframe>
+        </div>
+        <div class="wc-preview-info" id="wc-preview-info">
+          <span class="wc-preview-label">SELECT A MODEL TO PREVIEW</span>
+        </div>
+      </div>
     </div>
 
     <!-- ENTRY POINT -->

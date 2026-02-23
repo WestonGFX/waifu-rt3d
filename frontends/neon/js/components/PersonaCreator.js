@@ -71,8 +71,10 @@ export class PersonaCreator {
         this.injectHTML();
         this.modal = document.getElementById('persona-creator-modal');
 
-        // Expose globally for CharacterGrid's "NEW ENTITY" button
-        window.openPersonaCreator = (charId) => this.open(charId);
+        // Redirect to WaifuCreator (full-page creator). Preserved for backward compatibility.
+        window.openPersonaCreator = (charId) => {
+            window.location.hash = charId ? `#edit-waifu/${charId}` : '#create-waifu';
+        };
     }
 
     /**

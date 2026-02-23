@@ -62,6 +62,50 @@ if os.getenv("WAIFU_LOG_JSON", "0") == "1":
     _json_handler.setFormatter(_JsonFormatter())
     logging.root.addHandler(_json_handler)
 
+
+# --- QUIET POLLING FILTER ---
+# Suppress uvicorn access-log spam for high-frequency polling endpoints
+# (health check every 10s, stats every 10s, art-status every 15s).
+# Without this, idle console fills with ~15 lines/minute of noise that
+# buries real errors and makes debugging painful.
+class _QuietPollingFilter(logging.Filter):
+    """Filter out uvicorn access log entries for known polling paths."""
+
+    _NOISY_PATHS = frozenset({
+        "/api/health",
+        "/api/healthcheck",
+        "/api/stats",
+        "/api/image-gen/status",
+        "/favicon.svg",
+        "/favicon.ico",
+    })
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Return False to suppress polling noise, True to keep the log entry.
+
+        Args:
+            record: The uvicorn access log record. The message typically
+                     contains the HTTP method + path (e.g. 'GET /api/health').
+
+        Returns:
+            True if the record should be logged, False to suppress it.
+        """
+        msg = record.getMessage()
+        return not any(path in msg for path in self._NOISY_PATHS)
+
+
+logging.getLogger("uvicorn.access").addFilter(_QuietPollingFilter())
+
+
+# --- MIME TYPE REGISTRATION ---
+# VRM files are glTF binary containers (.glb under the hood).  Python's
+# mimetypes module doesn't know .vrm, so Starlette's StaticFiles serves
+# them as "text/plain; charset=utf-8" — which corrupts the binary data
+# in the browser and prevents Three.js GLTFLoader from parsing them.
+import mimetypes
+mimetypes.add_type("model/gltf-binary", ".vrm")
+
+
 # --- APP INITIALIZATION ---
 app = FastAPI(title="Waifu-RT3D", version="5.31.0")
 
@@ -284,13 +328,39 @@ def v2_spa(full_path: str):
 if FRONTEND_DASHBOARD_DIST.exists():
     app.mount("/dashboard", StaticFiles(directory=str(FRONTEND_DASHBOARD_DIST), html=True), name="dashboard")
 
-# Favicon — served from the active frontend's root directory
+# Favicon — served from the active frontend's root directory.
+# Two routes: /favicon.svg (the actual file) and /favicon.ico (redirect).
+# Chrome hard-requests /favicon.ico on every page load regardless of what
+# the <link rel="icon"> tag says, so we redirect it to avoid 404 spam.
 @app.get("/favicon.svg")
-def favicon():
+def favicon_svg():
     """Serve the SVG favicon from the Neon frontend root."""
     path = FRONTEND / "favicon.svg"
     if path.exists():
         return FileResponse(path, media_type="image/svg+xml")
+    return JSONResponse({"error": "not found"}, status_code=404)
+
+
+@app.get("/favicon.ico")
+def favicon_ico():
+    """Serve .ico if it exists, otherwise redirect to SVG.
+
+    Chrome always requests /favicon.ico regardless of the HTML <link>
+    tag. Serving a real .ico or redirecting avoids 404 noise.
+    """
+    ico_path = FRONTEND / "favicon.ico"
+    if ico_path.exists():
+        return FileResponse(ico_path, media_type="image/x-icon")
+    from starlette.responses import RedirectResponse
+    return RedirectResponse("/favicon.svg", status_code=301)
+
+
+@app.get("/logo.png")
+def logo_png():
+    """Serve the project logo/icon as PNG (used for social sharing, about page)."""
+    path = FRONTEND / "logo.png"
+    if path.exists():
+        return FileResponse(path, media_type="image/png")
     return JSONResponse({"error": "not found"}, status_code=404)
 
 # Mount Static Files
@@ -3124,26 +3194,60 @@ def list_characters():
 
 @app.post("/api/characters")
 async def create_character(req: Request):
-    """Create a new character."""
+    """Create a new character with all supported fields.
+
+    Accepts the same field set as PUT /api/characters/{id} so the full-page
+    Create-a-Waifu wizard can persist every setting on first save.
+
+    Args:
+        req: JSON body with ``name`` (required), ``system_prompt`` (required),
+            and any optional character fields (vrm_model_url, tts_provider, etc.)
+
+    Returns:
+        dict: The newly created character record with all persisted fields.
+
+    Raises:
+        HTTPException 400: If name or system_prompt is missing.
+        HTTPException 500: On database write failure.
+    """
     body = await req.json()
     name = body.get("name", "")
     system_prompt = body.get("system_prompt", "")
     if not name or not system_prompt:
         raise HTTPException(400, "name and system_prompt required")
-    avatar_url = body.get("avatar_url", "")
-    voice_id = body.get("voice_id", "")
-    tts_provider = body.get("tts_provider", "")
-    tts_pitch = body.get("tts_pitch", "")
-    tts_rate = body.get("tts_rate", "")
-    personality_traits = json.dumps(body.get("personality_traits", []))
-    
+
+    # All optional fields — mirrors the PUT endpoint's field list
+    fields = {
+        "avatar_url": body.get("avatar_url", ""),
+        "avatar_2d_url": body.get("avatar_2d_url", ""),
+        "vrm_model_url": body.get("vrm_model_url", ""),
+        "voice_id": body.get("voice_id", ""),
+        "tts_provider": body.get("tts_provider", ""),
+        "tts_pitch": body.get("tts_pitch", ""),
+        "tts_rate": body.get("tts_rate", ""),
+        "personality_traits": json.dumps(body.get("personality_traits", [])),
+        "greeting_text": body.get("greeting_text", ""),
+        "greeting_animation": body.get("greeting_animation", ""),
+        "background_url": body.get("background_url", ""),
+        "background_mode": body.get("background_mode", ""),
+        "llm_endpoint": body.get("llm_endpoint", ""),
+        "llm_model": body.get("llm_model", ""),
+        "llm_temperature": body.get("llm_temperature"),
+        "voice_config": json.dumps(body.get("voice_config", {})) if body.get("voice_config") else "",
+        "vocab_categories": json.dumps(body.get("vocab_categories", [])) if body.get("vocab_categories") else "",
+        "live2d_model": "",
+        "model_type": "3d",
+    }
+
+    cols = ["name", "system_prompt"] + list(fields.keys())
+    vals = [name, system_prompt] + list(fields.values())
+    placeholders = ", ".join(["?"] * len(cols))
+    col_names = ", ".join(cols)
+
     conn = db()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            INSERT INTO characters (name, system_prompt, avatar_url, voice_id, tts_provider, tts_pitch, tts_rate, personality_traits, live2d_model, model_type) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (name, system_prompt, avatar_url, voice_id, tts_provider, tts_pitch, tts_rate, personality_traits, "", "3d"))
+        cur.execute(f"INSERT INTO characters ({col_names}) VALUES ({placeholders})", vals)
         char_id = cur.lastrowid
         conn.commit()
     except Exception as e:
@@ -3154,12 +3258,8 @@ async def create_character(req: Request):
         "id": char_id,
         "name": name,
         "system_prompt": system_prompt,
-        "avatar_url": avatar_url,
-        "voice_id": voice_id,
-        "tts_provider": tts_provider,
-        "tts_pitch": tts_pitch,
-        "tts_rate": tts_rate,
-        "personality_traits": json.loads(personality_traits)
+        **{k: v for k, v in fields.items() if k != "personality_traits"},
+        "personality_traits": body.get("personality_traits", []),
     }
 
 @app.put("/api/characters/{character_id}")

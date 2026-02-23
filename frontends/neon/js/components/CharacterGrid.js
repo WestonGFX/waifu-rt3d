@@ -68,11 +68,7 @@ export class CharacterGrid {
             </div>
         `;
         createCard.onclick = () => {
-            if (window.openPersonaCreator) {
-                window.openPersonaCreator();
-            } else {
-                window.openSettings('character');
-            }
+            window.location.hash = '#create-waifu';
         };
         createCard.onmouseenter = () => createCard.style.opacity = '1';
         createCard.onmouseleave = () => createCard.style.opacity = '0.8';
@@ -169,9 +165,7 @@ export class CharacterGrid {
             if (editBtn) {
                 editBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    if (window.openPersonaCreator) {
-                        window.openPersonaCreator(char.id);
-                    }
+                    window.location.hash = `#edit-waifu/${char.id}`;
                 });
             }
 

@@ -2010,16 +2010,18 @@
          * @param {string|null} emotion - Incoming emotion name from setEmotion/setExpression
          */
         function _triggerAutoGesture(emotion) {
-            if (!emotion || !gestureController) return;
-            if (emotion === lastAutoGestureEmotion) return;        // dedup
-            if (gestureController.currentGesture !== null) return; // don't interrupt
-            if (Math.random() > 0.4) return;                       // 40% chance
+            const gl = animationDirector?.getLayer('gesture');
+            if (!emotion || !gl) return;
+            if (emotion === lastAutoGestureEmotion) return;  // dedup
+            if (gl.isPlaying) return;                         // don't interrupt
+            if (Math.random() > 0.4) return;                  // 40% chance
             const candidates = EMOTION_GESTURE_MAP[emotion];
             if (!candidates || candidates.length === 0) return;
             lastAutoGestureEmotion = emotion;
             const gesture = candidates[Math.floor(Math.random() * candidates.length)];
-            gestureController.playGesture(gesture);
+            gl.playGesture(gesture);
             console.log(`[Viewer] Auto-gesture: ${emotion} → ${gesture}`);
+        }
         }
 
         // ══════════════════════════════════════════════════════════
@@ -2208,47 +2210,29 @@
                 if (currentVrm) {
                     currentVrm.update(delta);
 
-                    // Breathing — varied rate with occasional deep breaths
-                    const getBone = (name) => currentVrm.humanoid.getNormalizedBoneNode ?
-                                              currentVrm.humanoid.getNormalizedBoneNode(name) :
-                        currentVrm.humanoid.getBoneNode(name);
-                    const t = clock.elapsedTime;
-                    // Base rate ~2Hz with ±0.3Hz variation via slow modulator
-                    const rateModulator = 2 + Math.sin(t * 0.13) * 0.3;
-                    // Noise layer at 0.7Hz for organic feel
-                    const noiseLayer = Math.sin(t * 0.7) * 0.0008;
-                    // Deep breath: amplitude triples when slow cycle > 0.95 (~every 20s)
-                    const deepCycle = Math.sin(t * 0.16);
-                    const breathAmp = deepCycle > 0.95 ? 0.009 : 0.003;
-                    const breathStrength = Math.sin(t * rateModulator) * breathAmp + noiseLayer;
-                    const chest = getBone('chest') || getBone('spine');
-                    if (chest) {
-                        // Use = (not +=) — breathStrength oscillates around 0,
-                        // so += would cause unbounded drift at 60fps over time.
-                        chest.rotation.x = breathStrength;
-                        chest.rotation.z = breathStrength * 0.5;
+                    // Layered animation system (Phase 6F)
+                    if (animationDirector) {
+                        // Sync talk state from global isTalking flag
+                        const talkLayer = animationDirector.getLayer('talk');
+                        if (talkLayer) talkLayer.setTalking(isTalking);
+
+                        animationDirector.update(delta);
+
+                        // A-pose arm restoration when no gesture or talk is playing
+                        const gestureLayer = animationDirector.getLayer('gesture');
+                        const talkActive = talkLayer && talkLayer.active;
+                        if (!gestureLayer?.isPlaying && !talkActive) {
+                            const getBone = (name) => currentVrm.humanoid.getNormalizedBoneNode?.(name)
+                                || currentVrm.humanoid.getBoneNode?.(name);
+                            const lArm = getBone('leftUpperArm');
+                            const rArm = getBone('rightUpperArm');
+                            if (lArm) lArm.rotation.z = -0.7;
+                            if (rArm) rArm.rotation.z = 0.7;
+                        }
                     }
 
                     if (blinkController) blinkController.update(delta);
-                    if (headMovement) headMovement.update(delta);
-                    if (mouseTracker) mouseTracker.update(delta);
                     if (expressionController) expressionController.update(delta);
-                    if (gestureController) gestureController.update(delta);
-
-                    // Maintain A-pose arm baseline every frame when no gesture is playing.
-                    // resetGesture() zeros all arm bones on gesture completion; this
-                    // immediately restores the ~40° lowered-arm position in the same frame.
-                    // NOTE: Positive Z rotation lifts the arm UP (right-hand rule: +X→+Y).
-                    // Negative Z rotation swings the arm DOWN toward the hip. -0.7 ≈ 40° below
-                    // horizontal, giving a natural A-pose idle stance.
-                    if (gestureController && !gestureController.currentGesture) {
-                        const lArm = getBone('leftUpperArm');
-                        const rArm = getBone('rightUpperArm');
-                        if (lArm) lArm.rotation.z = -0.7;  // ~40° below horizontal — A-pose left arm
-                        if (rArm) rArm.rotation.z = 0.7;   // Mirror for right arm
-                    }
-
-                    if (proceduralAnimator) proceduralAnimator.update(delta);
                 }
 
                 // Disco mode (#25): cycle hue of three RGB point lights at different speeds
@@ -2448,11 +2432,23 @@
                         // Initialize controllers
                         lipSync = new AudioLipSync(vrm);
                         blinkController = new BlinkController(vrm);
-                        headMovement = new IdleHeadMovement(vrm);
                         expressionController = new ExpressionController(vrm);
-                        gestureController = new GestureController(vrm);
-                        proceduralAnimator = new ProceduralAnimator(vrm);
-                        mouseTracker = new MouseTrackingController(vrm, document.getElementById('c'));
+
+                        // Legacy controllers disabled — replaced by AnimationDirector layers
+                        headMovement = null;
+                        gestureController = null;
+                        proceduralAnimator = null;
+                        mouseTracker = null;
+
+                        // Initialize layered animation system (Phase 6F)
+                        const canvas = document.getElementById('c');
+                        animationDirector = new AnimationDirector(vrm);
+                        animationDirector.addLayer(new BasePoseLayer(vrm));
+                        animationDirector.addLayer(new IdleBehaviorLayer(vrm));
+                        animationDirector.addLayer(new EmotionLayer(vrm));
+                        animationDirector.addLayer(new TalkLayer(vrm));
+                        animationDirector.addLayer(new GestureLayer(vrm));
+                        animationDirector.addLayer(new LookAtLayer(vrm, canvas));
 
                         // Auto-frame camera based on model's actual height
                         const headBone = vrm.humanoid.getRawBoneNode('head');
@@ -2615,31 +2611,42 @@
                     if (expressionController) {
                         expressionController.setExpression(e.data.emotion, e.data.intensity || 1.0, e.data.duration || 0.3);
                     }
-                    if (proceduralAnimator && e.data.emotion) {
-                        proceduralAnimator.setEmotion(e.data.emotion, e.data.intensity || 0.7);
+                    if (animationDirector) {
+                        const emotionLayer = animationDirector.getLayer('emotion');
+                        if (emotionLayer) emotionLayer.setEmotion(e.data.emotion, e.data.intensity || 0.7);
                     }
-                    // Auto-gesture: trigger contextual gesture on emotion change (40% chance)
                     _triggerAutoGesture(e.data.emotion);
                 }
                 else if (type === 'setEmotion') {
-                    // Alias for setExpression — sent by ViewerBridge
                     const emo = payload?.emotion || e.data.emotion;
                     const inten = e.data.intensity || 0.7;
                     if (expressionController && emo) {
                         expressionController.setExpression(emo, inten, e.data.duration || 0.3);
                     }
-                    if (proceduralAnimator && emo) {
-                        proceduralAnimator.setEmotion(emo, inten);
+                    if (animationDirector && emo) {
+                        const emotionLayer = animationDirector.getLayer('emotion');
+                        if (emotionLayer) emotionLayer.setEmotion(emo, inten);
                     }
-                    // Auto-gesture: trigger contextual gesture on emotion change (40% chance)
                     _triggerAutoGesture(emo);
                 }
                 else if (type === 'playGesture') {
                     const gesture = payload?.gesture || e.data.gesture;
-                    if (gestureController && gesture) gestureController.playGesture(gesture);
+                    if (animationDirector && gesture) {
+                        const gl = animationDirector.getLayer('gesture');
+                        if (gl) gl.playGesture(gesture);
+                    }
+                }
                 }
                 else if (type === 'playGestureSequence') {
-                    if (gestureController && payload) gestureController.playSequence(payload);
+                    if (animationDirector && payload) {
+                        const gl = animationDirector.getLayer('gesture');
+                        if (gl) gl.playSequence(payload);
+                    }
+                }
+                else if (type === 'setPersonality') {
+                    if (animationDirector && payload) {
+                        animationDirector.setPersonality(payload);
+                    }
                 }
                 else if (type === 'getAvailableBlendShapes') {
                     const shapes = getAvailableBlendShapes();

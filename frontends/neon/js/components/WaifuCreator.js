@@ -103,9 +103,12 @@ export class WaifuCreator {
         this.formData = this._defaultFormData();
 
         if (charId) {
-            // Edit mode — load existing character data
+            // Edit mode — fetch fresh character data from API
             this.titleEl.textContent = 'EDIT WAIFU';
             this.saveBtn.textContent = 'SAVE CHANGES';
+            try {
+                await state.loadCharacters();
+            } catch { /* use cache if refresh fails */ }
             const char = state.state.characters?.find(c => c.id == charId);
             if (char) {
                 this._populateFromCharacter(char);
@@ -1256,15 +1259,14 @@ export class WaifuCreator {
 
             if (!res.ok) throw new Error(`TTS failed: ${res.status}`);
 
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            this._previewAudio = new Audio(url);
+            const data = await res.json();
+            if (!data.ok || !data.url) throw new Error('TTS returned no audio URL');
+
+            this._previewAudio = new Audio(data.url);
             this._previewAudio.onended = () => {
-                URL.revokeObjectURL(url);
                 if (btn) btn.disabled = false;
             };
             this._previewAudio.onerror = () => {
-                URL.revokeObjectURL(url);
                 if (btn) btn.disabled = false;
                 toast.error('Voice preview playback failed', 3000);
             };
@@ -1306,6 +1308,8 @@ export class WaifuCreator {
      * @private
      */
     async _save() {
+        if (this._saving) return;
+
         // Collect current tab's data first
         this._collectFormData();
 
@@ -1314,6 +1318,10 @@ export class WaifuCreator {
             toast.error(errors.join('. '), 5000);
             return;
         }
+
+        this._saving = true;
+        const saveBtn = document.getElementById('wc-save');
+        if (saveBtn) saveBtn.disabled = true;
 
         const payload = { ...this.formData };
 
@@ -1338,6 +1346,9 @@ export class WaifuCreator {
             window.location.hash = '';
         } catch (err) {
             toast.error(`Save failed: ${err.message}`, 5000);
+        } finally {
+            this._saving = false;
+            if (saveBtn) saveBtn.disabled = false;
         }
     }
 

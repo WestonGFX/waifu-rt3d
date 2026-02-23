@@ -145,9 +145,9 @@ async def lifespan(app: FastAPI):
     # Config schema validator (#117): warn about unknown or deprecated keys at startup.
     _KNOWN_CFG_KEYS: set[str] = {
         "llm_endpoint", "llm_model", "llm", "context_limit", "history_limit",
-        "temperature", "repeat_penalty", "max_tokens", "thinking_visible",
+        "temperature", "repeat_penalty", "frequency_penalty", "max_tokens", "thinking_visible",
         "speech_rate", "pitch_shift", "voice_stability", "tts_provider", "voice_id",
-        "interrupt_mode", "tts", "asr_provider", "asr_model",
+        "interrupt_mode", "tts", "asr_provider", "asr_model", "asr",
         "visual_mode", "theme", "bg_mode", "glow_intensity", "ui_border_radius",
         "ui_blur", "ui_font_size", "layout_show_left", "layout_show_right",
         "chat_layout", "ui_sounds", "lighting_preset", "fps_target", "show_fps_overlay",
@@ -157,7 +157,9 @@ async def lifespan(app: FastAPI):
         "show_timestamps", "typewriter_enabled", "typewriter_speed",
         "vad_threshold", "fast_chunking", "image_gen", "video_gen",
         "vrm_scale", "vrm_offset_x", "vrm_offset_y", "webhooks",
-        "vocab_enabled", "vocab_limit", "vocab_path",
+        "vocab_enabled", "vocab_limit", "vocab_path", "vocab",
+        "onboarded", "avatar_url", "model_vrm", "live2d_model",
+        "bg_image", "background_mode", "memory", "services", "system",
     }
     for key in cfg:
         if key not in _KNOWN_CFG_KEYS:
@@ -1328,6 +1330,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
     cfg = load_config() or {}
     con = db()
     cur = con.cursor()
+    char_name = ""
 
     try:
         cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)", (session_id, f"Session {session_id}"))
@@ -1593,7 +1596,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
 
         # Fire outbound webhooks (#62) — non-blocking background threads
         _fire_webhooks({
-            "character": char_name if 'char_name' in dir() else "",
+            "character": char_name if char_name else "",
             "reply": clean_reply,
             "emotion": emotion,
             "session_id": session_id,
@@ -1963,16 +1966,18 @@ async def chat_stream(req: Request):
     _stream_diary = None
     _stream_diary_date = None
     _raw_cap = None  # Phase 9: raw capability_profile JSON string
+    stream_char_name = ""
     try:
         cur.execute(
             "SELECT system_prompt, llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, "
             "voice_id, tts_provider, tts_pitch, tts_rate, first_chat_date, diary, diary_date, "
-            "capability_profile "
+            "capability_profile, name "
             "FROM characters WHERE id=?",
             (char_id,)
         )
         row = cur.fetchone()
         if row:
+            stream_char_name = row[14] or ""
             if row[0]:
                 system_prompt = row[0]
             # Per-character LLM override (e.g. TinyAya on Ollama for multilingual characters)
@@ -2239,6 +2244,20 @@ async def chat_stream(req: Request):
                     for m in memories
                 ]
 
+                # Generate TTS for the agentic reply (post-stream, single chunk)
+                tts_url = None
+                if use_chunked_tts and tts_chunked_client and clean_reply.strip():
+                    try:
+                        _apply_emotion_tts(tts_chunked_cfg, emotion)
+                        tts_text = _clean_for_tts(clean_reply)
+                        tts_res = await run_in_threadpool(
+                            tts_chunked_client.speak_cached, tts_text, tts_chunked_cfg
+                        )
+                        if tts_res.get("ok"):
+                            tts_url = f"/files/audio/{tts_res['filename']}"
+                    except Exception as e:
+                        logger.warning(f"Agentic TTS failed: {e}")
+
                 done_data = {
                     "ok": True,
                     "reply": clean_reply,
@@ -2253,6 +2272,7 @@ async def chat_stream(req: Request):
                     "generation_time_ms": generation_time_ms,
                     "tokens_per_second": tokens_per_second,
                     "tts_chunked": False,
+                    "audio": tts_url,
                     "is_daily_first": _is_daily_first,
                     "context_budget": _context_budget_summary(sections, hist, cfg),
                     "capability_warning": _capability_warning,
@@ -2260,7 +2280,7 @@ async def chat_stream(req: Request):
                 yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
                 _fire_webhooks({
-                    "character": stream_char_name if 'stream_char_name' in dir() else "",
+                    "character": stream_char_name if stream_char_name else "",
                     "reply": clean_reply,
                     "emotion": emotion,
                     "session_id": session_id,
@@ -2470,7 +2490,7 @@ async def chat_stream(req: Request):
 
                 # Fire outbound webhooks (#62) — non-blocking background threads
                 _fire_webhooks({
-                    "character": stream_char_name if 'stream_char_name' in dir() else "",
+                    "character": stream_char_name if stream_char_name else "",
                     "reply": clean_reply,
                     "emotion": emotion,
                     "session_id": session_id,
@@ -3545,7 +3565,8 @@ def list_characters():
                    personality_traits, live2d_model, model_type, avatar_2d_url, vrm_model_url,
                    greeting_text, greeting_animation, background_url, background_mode, voice_sample_path,
                    llm_endpoint, llm_model, llm_temperature, last_emotion, voice_config,
-                   expr_portraits, first_chat_date, diary, diary_date, capability_profile
+                   expr_portraits, first_chat_date, diary, diary_date, capability_profile,
+                   tts_pitch, tts_rate, vocab_categories
             FROM characters
             ORDER BY id ASC
         """)
@@ -3596,6 +3617,9 @@ def list_characters():
             "diary": row[23] if len(row) > 23 else None,
             "diary_date": row[24] if len(row) > 24 else None,
             "capability_profile": row[25] if len(row) > 25 else None,
+            "tts_pitch": row[26] if len(row) > 26 else None,
+            "tts_rate": row[27] if len(row) > 27 else None,
+            "vocab_categories": row[28] if len(row) > 28 else None,
         }
         characters.append(char)
     conn.close()
@@ -3690,12 +3714,13 @@ async def update_character(character_id: int, req: Request):
         "voice_config",  # v13: extended per-character voice settings JSON (#77)
         "capability_profile",  # v15: Phase 9 per-character LLM capability metadata
     ]
+    _json_fields = {"capability_profile", "voice_config", "vocab_categories"}
     for field in fields:
         if field in body:
             updates.append(f"{field}=?")
-            # JSON-encode dict/list values before storing
             val = body[field]
-            if field == "capability_profile" and isinstance(val, dict):
+            # JSON-encode dict/list values before storing
+            if field in _json_fields and isinstance(val, (dict, list)):
                 val = json.dumps(val)
             params.append(val)
 
@@ -3809,8 +3834,14 @@ async def import_character(req: Request):
             'name', 'system_prompt', 'avatar_url', 'voice_id', 'tts_provider',
             'tts_pitch', 'tts_rate', 'personality_traits', 'live2d_model',
             'model_type', 'avatar_2d_url', 'vrm_model_url', 'greeting_text',
-            'greeting_animation', 'background_url', 'background_mode', 'voice_sample_path'
+            'greeting_animation', 'background_url', 'background_mode', 'voice_sample_path',
+            'vocab_categories', 'llm_endpoint', 'llm_model', 'llm_temperature',
+            'voice_config', 'capability_profile',
         ]
+        # JSON-encode dict/list fields before INSERT
+        for jf in ('voice_config', 'capability_profile', 'vocab_categories'):
+            if jf in body and isinstance(body[jf], (dict, list)):
+                body[jf] = json.dumps(body[jf])
         fields = []
         values = []
         for f in allowed_fields:

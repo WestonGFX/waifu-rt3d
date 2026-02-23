@@ -1387,26 +1387,54 @@ export class ChatInterface {
 
     /** @type {Record<string, string>} Map tool names to display icons */
     static TOOL_ICONS = {
-        generate_image: '\u{1F3A8}',
-        web_search:     '\u{1F50D}',
-        search_memory:  '\u{1F4AD}',
-        set_scene:      '\u2728',
+        // Phase 10: Core tools
+        generate_image:    '\u{1F3A8}',
+        web_search:        '\u{1F50D}',
+        memory_search:     '\u{1F4AD}',
+        scene_control:     '\u2728',
+        // Phase 10b: DB-backed tools
+        write_diary:       '\u{1F4D3}',
+        check_relationship:'\u{1F495}',
+        modify_self:       '\u{1F527}',
+        trigger_webhook:   '\u{1F4E1}',
+        // Phase 10b: Adapter-backed tools
+        generate_voice:    '\u{1F3A4}',
+        analyze_mood:      '\u{1F3AD}',
+        read_knowledge:    '\u{1F4DA}',
+        // Phase 10b: Cross-character
+        message_character: '\u{1F4AC}',
     };
 
     /** @type {Record<string, string>} Human-readable "running" labels */
     static TOOL_RUNNING_LABELS = {
-        generate_image: 'Generating image\u2026',
-        web_search:     'Searching the web\u2026',
-        search_memory:  'Searching memories\u2026',
-        set_scene:      'Updating scene\u2026',
+        generate_image:    'Generating image\u2026',
+        web_search:        'Searching the web\u2026',
+        memory_search:     'Searching memories\u2026',
+        scene_control:     'Updating scene\u2026',
+        write_diary:       'Writing diary\u2026',
+        check_relationship:'Checking relationship\u2026',
+        modify_self:       'Updating self\u2026',
+        trigger_webhook:   'Sending webhook\u2026',
+        generate_voice:    'Generating voice\u2026',
+        analyze_mood:      'Analyzing mood\u2026',
+        read_knowledge:    'Reading knowledge\u2026',
+        message_character: 'Messaging character\u2026',
     };
 
     /** @type {Record<string, string>} Human-readable "done" labels */
     static TOOL_DONE_LABELS = {
-        generate_image: 'Image generated',
-        web_search:     'Search complete',
-        search_memory:  'Memory search complete',
-        set_scene:      'Scene updated',
+        generate_image:    'Image generated',
+        web_search:        'Search complete',
+        memory_search:     'Memory recalled',
+        scene_control:     'Scene updated',
+        write_diary:       'Diary written',
+        check_relationship:'Relationship checked',
+        modify_self:       'Self updated',
+        trigger_webhook:   'Webhook sent',
+        generate_voice:    'Voice generated',
+        analyze_mood:      'Mood analyzed',
+        read_knowledge:    'Knowledge retrieved',
+        message_character: 'Message sent',
     };
 
     /**
@@ -1493,7 +1521,7 @@ export class ChatInterface {
             if (resultData.ok) {
                 nameEl.textContent = ChatInterface.TOOL_DONE_LABELS[toolName] || 'Done';
             } else {
-                nameEl.textContent = resultData.data?.error || 'Tool failed';
+                nameEl.textContent = resultData.error || resultData.data?.error || 'Tool failed';
             }
         }
 
@@ -1510,6 +1538,7 @@ export class ChatInterface {
                 if (cmds.expression) window.app.viewerBridge.setExpression(cmds.expression);
                 if (cmds.animation) window.app.viewerBridge.playAnimation(cmds.animation);
                 if (cmds.background) window.app.viewerBridge.setBackground(cmds.background);
+                if (cmds.lighting) window.app.viewerBridge.setLightingPreset(cmds.lighting);
             }
         }
 
@@ -1592,7 +1621,7 @@ export class ChatInterface {
      */
     _escapeHtml(str) {
         const div = document.createElement('div');
-        div.textContent = str;
+        div.textContent = str || '';
         return div.innerHTML;
     }
 
@@ -2614,18 +2643,6 @@ export class ChatInterface {
         `;
         this.container.appendChild(row);
         this.container.scrollTop = this.container.scrollHeight;
-    }
-
-    /**
-     * Escape HTML special characters for safe rendering.
-     * @param {string} str - Raw string
-     * @returns {string} Escaped string
-     * @private
-     */
-    _escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str || '';
-        return div.innerHTML;
     }
 
     /**

@@ -106,7 +106,8 @@ def _create_schema(db_path: Path) -> None:
                 first_chat_date TEXT,
                 diary TEXT,
                 diary_date TEXT,
-                capability_profile TEXT
+                capability_profile TEXT,
+                animation_profile TEXT
             );
 
             CREATE TABLE IF NOT EXISTS character_relationships (

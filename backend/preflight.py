@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v14)
+- Database schema migrations (v3 → v4 → … → v16)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -18,6 +18,8 @@ Migration Strategy:
     - v11 → v12: Expression portraits JSON column (Phase 8A)
     - v12 → v13: Anniversary tracking + per-character voice config (Phase 7D)
     - v13 → v14: Character diary column (Phase 7C #57)
+    - v14 → v15: Capability-aware character profiles (Phase 9)
+    - v15 → v16: Animation personality profiles (Phase 6F)
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -848,15 +850,59 @@ def migrate_to_v15(con: sqlite3.Connection) -> bool:
         raise
 
 
+
+def migrate_to_v16(con: sqlite3.Connection) -> bool:
+    """Apply schema v16 migration (Phase 6F: Layered Animation Personality).
+
+    Adds:
+        - ``animation_profile`` (TEXT) — JSON blob storing per-character animation
+          personality parameters: energy, confidence, nervousness, expressiveness,
+          playfulness (each 0–1). NULL = use defaults (backward-compatible).
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if column already existed.
+
+    Raises:
+        sqlite3.Error: If migration fails.
+
+    Example:
+        >>> if migrate_to_v16(con):
+        ...     print("Migrated to v16")
+    """
+    columns = {row[1] for row in con.execute("PRAGMA table_info(characters)")}
+    if 'animation_profile' in columns:
+        logger.info("Schema v16 logic: animation_profile column exists. Ensuring version is 16.")
+        cur = con.cursor()
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (16)")
+        con.commit()
+        return False
+
+    try:
+        logger.info("Applying schema v16 migration (Phase 6F: animation personality profiles)...")
+        cur = con.cursor()
+        cur.execute("ALTER TABLE characters ADD COLUMN animation_profile TEXT")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (16)")
+        con.commit()
+        logger.info("✅ Schema v16 migration complete (animation_profile column added)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v16 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
     Migration Paths:
-        - v0 (empty) → v4 → … → v14
-        - v3 → v4 → … → v14
-        - v11 → v12 → v13 → v14
-        - v13 → v14
-        - v14 → no-op (already current)
+        - v0 (empty) → v4 → … → v16
+        - v3 → v4 → … → v16
+        - v11 → v12 → v13 → v16
+        - v13 → v16
+        - v16 → no-op (already current)
 
     The function is idempotent - safe to run multiple times.
     Will log all migration steps and verify final state.
@@ -981,16 +1027,23 @@ def ensure_db():
             if migrate_to_v15(con):
                 version = 15
 
+
+        # Upgrade from v15 to v16 (Phase 6F: animation personality profiles)
+        if version < 16:
+            logger.info("Upgrading database schema from v15 to v16...")
+            logger.info("  - Adding animation_profile to characters (layered animation personality)")
+            if migrate_to_v16(con):
+                version = 16
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 15:
-            raise RuntimeError(f"Database initialization failed: Expected v15, got v{final_version}")
+        if final_version < 16:
+            raise RuntimeError(f"Database initialization failed: Expected v16, got v{final_version}")
 
-        if final_version > 15:
-            logger.warning(f"Database is newer than application (v{final_version} > v15). Some features might be unused.")
+        if final_version > 16:
+            logger.warning(f"Database is newer than application (v{final_version} > v16). Some features might be unused.")
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v15 supports capability profiles)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v16 supports animation profiles)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

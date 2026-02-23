@@ -490,8 +490,10 @@ export class ChatInterface {
                 dot.classList.remove('thinking');
 
                 // Show final stats — persists until next message (no revert to idle).
-                // Prefer server-authoritative metadata values when the frontend
-                // counters are 0 (e.g. adapter didn't emit individual token events).
+                // Cascading fallbacks for token count and timing:
+                //  1. Frontend counter (real-time, from individual token events)
+                //  2. Server metadata token_count (from done event)
+                //  3. Estimate from reply length (chars / 4)
                 const meta = this._lastMetadata;
                 let tokCount = this.tokenCount;
                 let genTimeSec = this.streamStartTime
@@ -502,14 +504,21 @@ export class ChatInterface {
                 if (tokCount === 0 && meta?.token_count > 0) {
                     tokCount = meta.token_count;
                 }
+                // Last resort: estimate from reply text length
+                if (tokCount === 0 && meta?.reply) {
+                    tokCount = Math.ceil(meta.reply.length / 4);
+                }
                 if (genTimeSec === 0 && meta?.generation_time_ms > 0) {
                     genTimeSec = meta.generation_time_ms / 1000;
                 }
 
                 this._lastGenTime = genTimeSec;
-                this._lastTotalTime = (performance.now() - this.prefillStartTime) / 1000;
-                this._lastSpeed = genTimeSec > 0
-                    ? (tokCount / genTimeSec).toFixed(1) : '0';
+                this._lastTotalTime = this.prefillStartTime
+                    ? (performance.now() - this.prefillStartTime) / 1000 : 0;
+                // Use generation time for speed calc; fall back to total time
+                const speedTimeSec = genTimeSec > 0 ? genTimeSec : this._lastTotalTime;
+                this._lastSpeed = speedTimeSec > 0.2
+                    ? (tokCount / speedTimeSec).toFixed(1) : '--';
                 label.innerText = `DONE: ${tokCount} tok | ${this._lastSpeed} tok/s | ${this._lastTotalTime.toFixed(1)}s`;
                 label.style.color = '#00ff88';
             }

@@ -94,7 +94,17 @@ def _create_schema(db_path: Path) -> None:
                 background_url TEXT,
                 background_mode TEXT DEFAULT 'transparent',
                 voice_sample_path TEXT,
-                vocab_categories TEXT
+                vocab_categories TEXT,
+                llm_endpoint TEXT,
+                llm_model TEXT,
+                llm_temperature REAL,
+                last_emotion TEXT DEFAULT 'neutral',
+                voice_config TEXT,
+                expr_portraits TEXT,
+                first_chat_date TEXT,
+                diary TEXT,
+                diary_date TEXT,
+                capability_profile TEXT
             );
             """
         )

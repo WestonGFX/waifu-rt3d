@@ -337,6 +337,15 @@ export class ViewerBridge {
     }
 
     /**
+     * Apply an animation personality profile to the VRM model.
+     * Controls how the character breathes, fidgets, and gestures.
+     * @param {Object} profile - {energy, confidence, nervousness, expressiveness, playfulness} (each 0-1)
+     */
+    setPersonality(profile) {
+        this._post({ type: 'setPersonality', payload: profile });
+    }
+
+    /**
      * Apply custom lighting configuration.
      * @param {Object} config - {key: {color, intensity, position}, fill: {...}, ambient: {...}}
      */

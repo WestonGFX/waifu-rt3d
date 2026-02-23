@@ -284,6 +284,7 @@ export class WaifuCreator {
             llm_temperature: 0,
             vocab_categories: [],
             capability_profile: {},
+            animation_profile: null,
         };
     }
 
@@ -330,6 +331,12 @@ export class WaifuCreator {
             this.formData.capability_profile = typeof char.capability_profile === 'string'
                 ? JSON.parse(char.capability_profile) : (char.capability_profile || {});
         } catch { this.formData.capability_profile = {}; }
+
+        // Phase 6F: Animation personality profile
+        try {
+            this.formData.animation_profile = typeof char.animation_profile === 'string'
+                ? JSON.parse(char.animation_profile) : (char.animation_profile || null);
+        } catch { this.formData.animation_profile = null; }
     }
 
     /**
@@ -422,6 +429,26 @@ export class WaifuCreator {
                 </div>
                 <div class="wc-traits-list" id="wc-traits-list">${traitsHtml}</div>
             </div>
+
+            <hr class="wc-divider">
+
+            <div class="wc-field">
+                <label class="wc-label">ANIMATION PERSONALITY</label>
+                <div class="wc-hint">Controls how the character moves and fidgets in 3D</div>
+                ${['energy', 'confidence', 'nervousness', 'expressiveness', 'playfulness'].map(param => {
+                    const val = this.formData.animation_profile?.[param] ?? (param === 'nervousness' ? 0.3 : 0.5);
+                    return `
+                    <div style="display:flex;align-items:center;gap:8px;margin:6px 0;">
+                        <span style="width:130px;font-size:12px;text-transform:uppercase;opacity:0.7;">${param}</span>
+                        <input type="range" min="0" max="100" value="${Math.round(val * 100)}"
+                               data-personality="${param}" class="wc-personality-slider"
+                               style="flex:1;accent-color:var(--neon-cyan);" />
+                        <span class="wc-personality-value" style="width:35px;text-align:right;font-size:12px;font-family:var(--font-mono);">
+                            ${Math.round(val * 100)}%
+                        </span>
+                    </div>`;
+                }).join('')}
+            </div>
         `;
     }
 
@@ -479,6 +506,39 @@ export class WaifuCreator {
                 this._refreshTraitPills();
             }
         });
+
+        // Phase 6F: Animation personality sliders
+        c.querySelectorAll('.wc-personality-slider').forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                const param = e.target.dataset.personality;
+                const value = parseInt(e.target.value) / 100;
+                if (!this.formData.animation_profile) {
+                    this.formData.animation_profile = {
+                        energy: 0.5, confidence: 0.5, nervousness: 0.3,
+                        expressiveness: 0.5, playfulness: 0.5,
+                    };
+                }
+                this.formData.animation_profile[param] = value;
+                e.target.nextElementSibling.textContent = `${Math.round(value * 100)}%`;
+                // Live preview in VRM iframe
+                this._updatePersonalityPreview();
+            });
+        });
+    }
+
+
+    /**
+     * Send current personality profile to the VRM preview iframe for live feedback.
+     * @private
+     */
+    _updatePersonalityPreview() {
+        const iframe = document.getElementById('wc-vrm-iframe');
+        if (iframe?.contentWindow && this.formData.animation_profile) {
+            iframe.contentWindow.postMessage({
+                type: 'setPersonality',
+                payload: this.formData.animation_profile,
+            }, '*');
+        }
     }
 
     /**

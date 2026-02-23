@@ -1209,6 +1209,8 @@
          * Blends with existing blink/breathing controllers to make the
          * character feel more alive based on current emotion.
          */
+        // @deprecated — Replaced by EmotionLayer (L2) in AnimationDirector (Phase 6F).
+        // Kept temporarily for reference. Safe to remove in future cleanup.
         class ProceduralAnimator {
             constructor(vrm) {
                 this.vrm = vrm;
@@ -1518,6 +1520,8 @@
         // Idle Head Movement
         // ══════════════════════════════════════════════════════════
 
+        // @deprecated — Replaced by LookAtLayer (L5) in AnimationDirector (Phase 6F).
+        // Kept temporarily for reference. Safe to remove in future cleanup.
         class IdleHeadMovement {
             constructor(vrm) {
                 this.vrm = vrm;
@@ -1566,6 +1570,8 @@
          * and add subtle additive head rotation for a "looking at you" effect.
          * Runs AFTER IdleHeadMovement so head follow is additive (+=).
          */
+        // @deprecated — Replaced by LookAtLayer (L5) in AnimationDirector (Phase 6F).
+        // Kept temporarily for reference. Safe to remove in future cleanup.
         class MouseTrackingController {
             constructor(vrm, canvas) {
                 this.vrm = vrm;
@@ -1707,6 +1713,8 @@
         // Gesture Controller (expanded with new gestures)
         // ══════════════════════════════════════════════════════════
 
+        // @deprecated — Replaced by GestureLayer (L4) in AnimationDirector (Phase 6F).
+        // Kept temporarily for reference. Safe to remove in future cleanup.
         class GestureController {
             constructor(vrm) {
                 this.vrm = vrm;

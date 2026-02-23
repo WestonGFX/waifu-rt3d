@@ -305,12 +305,27 @@ export class PersonaCreator {
                     </div>
                 </details>
 
+                <details style="margin-top:4px;">
+                    <summary style="color:var(--text-muted); font-size:0.8rem; cursor:pointer; user-select:none; padding:4px 0;">
+                        ▸ Capabilities: Model Requirements &amp; Behavior
+                    </summary>
+                    ${this._renderCapabilitySection(tpl)}
+                </details>
+
                 ${isEdit ? this._renderVoiceCloneSection(tpl) : ''}
 
                 ${isEdit ? this._renderVocabCategoriesSection(tpl) : ''}
 
                 <div id="persona-avatar-section" class="persona-field">
-                    <label style="color:var(--text-main); font-weight:600; display:block; margin-bottom:4px;">Avatar</label>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <label style="color:var(--text-main); font-weight:600;">Avatar</label>
+                        <button id="btn-generate-icon" style="padding:4px 12px; border-radius:6px;
+                                border:1px solid rgba(157,80,255,0.5); background:rgba(157,80,255,0.1);
+                                color:rgba(157,80,255,0.9); font-size:0.72rem; cursor:pointer;"
+                                title="AI-generate a character portrait">
+                            ✨ Generate Icon
+                        </button>
+                    </div>
                     <div id="persona-avatar-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(60px, 1fr)); gap:8px; max-height:200px; overflow-y:auto; padding:8px; border:1px solid var(--glass-border); border-radius:8px; background:rgba(0,0,0,0.2);">
                         <div style="padding:20px; text-align:center; color:var(--text-muted); font-size:0.75rem; grid-column:1/-1;">Loading avatars...</div>
                     </div>
@@ -413,6 +428,12 @@ export class PersonaCreator {
 
         // Load avatars
         this._loadAvatarGrid(tpl.avatar_2d_url || tpl.avatar_url);
+
+        // Phase 8A-6c: Generate Icon button
+        const genIconBtn = document.getElementById('btn-generate-icon');
+        if (genIconBtn) {
+            genIconBtn.onclick = () => this._generateIcon(tpl);
+        }
 
         // Phase 8A: expression pack section (edit mode only)
         if (isEdit && tpl.id) {
@@ -631,8 +652,202 @@ export class PersonaCreator {
     }
 
     /**
-     * Render the Voice Clone section for edit mode.
-     * Shows upload/playback/delete for character voice samples used by XTTS.
+     * Generate an AI portrait icon for the character using the image gen pipeline.
+     *
+     * Calls POST /api/image-gen/portrait with a prompt derived from the
+     * character's name and traits. Auto-updates avatar_2d_url if in edit mode.
+     *
+     * @private
+     * @param {Object} tpl - Character template data (may include id for edit mode)
+     */
+    async _generateIcon(tpl) {
+        const btn = document.getElementById('btn-generate-icon');
+        if (!btn) return;
+
+        const name = document.getElementById('persona-name')?.value?.trim() || tpl.name || 'character';
+        const traits = document.getElementById('persona-traits')?.value?.trim() || '';
+
+        // Build a descriptive prompt from character info
+        const traitStr = traits ? `, ${traits}` : '';
+        const prompt = `${name}, anime character portrait, upper body, detailed face${traitStr}, high quality, studio lighting`;
+
+        btn.disabled = true;
+        btn.textContent = '⌛ Generating...';
+
+        try {
+            const body = {
+                prompt,
+                character_name: name,
+                character_id: tpl.id || null,
+            };
+            const res = await fetch('/api/image-gen/portrait', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const result = await res.json();
+
+            if (result.ok && result.url) {
+                toast.success('Portrait generated!', 2000);
+                this.selectedAvatar = result.url;
+                await this._loadAvatarGrid(result.url);
+            } else {
+                toast.error(result.error || 'Generation failed', 4000);
+            }
+        } catch (err) {
+            toast.error(`Generate icon failed: ${err.message}`, 5000);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '✨ Generate Icon';
+        }
+    }
+
+    /**
+     * Renders the Phase 9 Capability Profile editor section.
+     *
+     * Provides controls for model tier, context budget, penalty overrides,
+     * max output tokens, feature flags, prompt style, and notes.
+     *
+     * @private
+     * @param {Object} tpl - Character template data
+     * @returns {string} HTML string for the capability section
+     */
+    _renderCapabilitySection(tpl) {
+        let cap = {};
+        if (tpl.capability_profile) {
+            try {
+                cap = typeof tpl.capability_profile === 'string'
+                    ? JSON.parse(tpl.capability_profile) : tpl.capability_profile;
+            } catch { /* ignore */ }
+        }
+        const tier = cap.model_tier || 'medium';
+        const ctxBudget = cap.context_budget || 8192;
+        const repPenalty = cap.repeat_penalty ?? '';
+        const freqPenalty = cap.frequency_penalty ?? '';
+        const maxTok = cap.max_tokens ?? -1;
+        const tools = cap.supports_tools ?? false;
+        const thinking = cap.supports_thinking ?? false;
+        const vision = cap.supports_vision ?? false;
+        const pStyle = cap.prompt_style || 'default';
+        const notes = cap.notes || '';
+        return `
+            <div style="display:flex; flex-direction:column; gap:12px; margin-top:12px; padding:12px; border:1px solid rgba(255,255,255,0.06); border-radius:8px; background:rgba(0,0,0,0.15);">
+                <div class="persona-field">
+                    <label style="color:var(--text-muted); font-size:0.8rem; font-weight:600; display:block; margin-bottom:4px;">
+                        Model Tier Requirement
+                    </label>
+                    <select id="cap-model-tier" style="width:100%; padding:8px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px; font-size:0.85rem;">
+                        <option value="tiny" ${tier === 'tiny' ? 'selected' : ''}>Tiny (1-3B)</option>
+                        <option value="small" ${tier === 'small' ? 'selected' : ''}>Small (3-7B)</option>
+                        <option value="medium" ${tier === 'medium' ? 'selected' : ''}>Medium (7-14B)</option>
+                        <option value="large" ${tier === 'large' ? 'selected' : ''}>Large (14-32B)</option>
+                        <option value="xl" ${tier === 'xl' ? 'selected' : ''}>XL (32B+)</option>
+                    </select>
+                    <div style="font-size:0.65rem; color:var(--text-muted); margin-top:3px;">Minimum model size this character needs. Shows a warning if a smaller model is loaded.</div>
+                </div>
+                <div class="persona-field">
+                    <label style="color:var(--text-muted); font-size:0.8rem; font-weight:600; display:block; margin-bottom:4px;">
+                        Context Budget (tokens)
+                        <span id="cap-ctx-val" style="color:var(--neon-cyan); margin-left:8px; font-weight:400;">${ctxBudget}</span>
+                    </label>
+                    <input id="cap-context-budget" type="range" min="1024" max="131072" step="1024"
+                           value="${ctxBudget}"
+                           oninput="document.getElementById('cap-ctx-val').textContent=this.value"
+                           style="width:100%; accent-color:var(--neon-cyan);">
+                    <div style="display:flex; justify-content:space-between; font-size:0.6rem; color:var(--text-muted);">
+                        <span>1K</span><span>8K</span><span>32K</span><span>128K</span>
+                    </div>
+                    <div style="font-size:0.65rem; color:var(--text-muted); margin-top:3px;">Max tokens per request. Lower = faster responses, fewer history messages.</div>
+                </div>
+                <div style="display:flex; gap:12px;">
+                    <div class="persona-field" style="flex:1;">
+                        <label style="color:var(--text-muted); font-size:0.8rem; font-weight:600; display:block; margin-bottom:4px;">Repeat Penalty</label>
+                        <input id="cap-repeat-penalty" type="number" min="0" max="2" step="0.05"
+                               value="${repPenalty}" placeholder="Global"
+                               style="width:100%; padding:8px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px; font-size:0.85rem;">
+                    </div>
+                    <div class="persona-field" style="flex:1;">
+                        <label style="color:var(--text-muted); font-size:0.8rem; font-weight:600; display:block; margin-bottom:4px;">Freq Penalty</label>
+                        <input id="cap-freq-penalty" type="number" min="0" max="2" step="0.05"
+                               value="${freqPenalty}" placeholder="Global"
+                               style="width:100%; padding:8px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px; font-size:0.85rem;">
+                    </div>
+                    <div class="persona-field" style="flex:1;">
+                        <label style="color:var(--text-muted); font-size:0.8rem; font-weight:600; display:block; margin-bottom:4px;">Max Tokens</label>
+                        <input id="cap-max-tokens" type="number" min="-1" max="32768" step="100"
+                               value="${maxTok}" placeholder="-1 (∞)"
+                               style="width:100%; padding:8px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px; font-size:0.85rem;">
+                    </div>
+                </div>
+                <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                    <label style="color:var(--text-muted); font-size:0.8rem; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                        <input id="cap-supports-tools" type="checkbox" ${tools ? 'checked' : ''}>
+                        Supports Tool Use
+                    </label>
+                    <label style="color:var(--text-muted); font-size:0.8rem; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                        <input id="cap-supports-thinking" type="checkbox" ${thinking ? 'checked' : ''}>
+                        Supports Thinking (CoT)
+                    </label>
+                    <label style="color:var(--text-muted); font-size:0.8rem; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                        <input id="cap-supports-vision" type="checkbox" ${vision ? 'checked' : ''}>
+                        Supports Vision
+                    </label>
+                </div>
+                <div class="persona-field">
+                    <label style="color:var(--text-muted); font-size:0.8rem; font-weight:600; display:block; margin-bottom:4px;">Prompt Style</label>
+                    <select id="cap-prompt-style" style="width:100%; padding:8px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px; font-size:0.85rem;">
+                        <option value="default" ${pStyle === 'default' ? 'selected' : ''}>Default</option>
+                        <option value="minimal" ${pStyle === 'minimal' ? 'selected' : ''}>Minimal (tiny models)</option>
+                        <option value="chatml" ${pStyle === 'chatml' ? 'selected' : ''}>ChatML</option>
+                        <option value="alpaca" ${pStyle === 'alpaca' ? 'selected' : ''}>Alpaca</option>
+                    </select>
+                    <div style="font-size:0.65rem; color:var(--text-muted); margin-top:3px;">How to format the system prompt. "Minimal" strips bracket syntax for tiny models.</div>
+                </div>
+                <div class="persona-field">
+                    <label style="color:var(--text-muted); font-size:0.8rem; font-weight:600; display:block; margin-bottom:4px;">Notes</label>
+                    <input id="cap-notes" type="text" class="input-field"
+                           value="${this._escapeHtml(notes)}"
+                           placeholder="e.g. Tuned for Gemma-3-12b Q4 on RTX 5080"
+                           style="width:100%; padding:8px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px; font-size:0.85rem;">
+                </div>
+            </div>`;
+    }
+
+    /**
+     * Collects the capability profile form values into a JSON object.
+     *
+     * Reads all #cap-* input elements and returns a structured capability
+     * profile dict ready for the API.
+     *
+     * @private
+     * @returns {Object|null} Capability profile dict, or null if all defaults
+     */
+    _collectCapabilityProfile() {
+        const tier = document.getElementById('cap-model-tier')?.value || 'medium';
+        const ctxBudget = parseInt(document.getElementById('cap-context-budget')?.value || '8192');
+        const repPenalty = parseFloat(document.getElementById('cap-repeat-penalty')?.value);
+        const freqPenalty = parseFloat(document.getElementById('cap-freq-penalty')?.value);
+        const maxTok = parseInt(document.getElementById('cap-max-tokens')?.value ?? '-1');
+        const tools = document.getElementById('cap-supports-tools')?.checked || false;
+        const thinking = document.getElementById('cap-supports-thinking')?.checked || false;
+        const vision = document.getElementById('cap-supports-vision')?.checked || false;
+        const pStyle = document.getElementById('cap-prompt-style')?.value || 'default';
+        const notes = document.getElementById('cap-notes')?.value?.trim() || '';
+
+        const profile = { model_tier: tier, context_budget: ctxBudget };
+        if (!isNaN(repPenalty)) profile.repeat_penalty = repPenalty;
+        if (!isNaN(freqPenalty)) profile.frequency_penalty = freqPenalty;
+        profile.max_tokens = isNaN(maxTok) ? -1 : maxTok;
+        profile.supports_tools = tools;
+        profile.supports_thinking = thinking;
+        profile.supports_vision = vision;
+        if (pStyle !== 'default') profile.prompt_style = pStyle;
+        if (notes) profile.notes = notes;
+
+        return profile;
+    }
+
+    /**
      * @private
      * @param {Object} char - Character data with optional voice_sample_path
      * @returns {string} HTML string for the voice clone section
@@ -993,6 +1208,9 @@ export class PersonaCreator {
         const llmTempRaw = parseFloat(document.getElementById('persona-llm-temperature')?.value || '0');
         const llmTemperature = llmTempRaw > 0 ? llmTempRaw : null;
 
+        // Phase 9: Collect capability profile from the capabilities section
+        const capProfile = this._collectCapabilityProfile();
+
         const payload = {
             name,
             system_prompt: prompt,
@@ -1005,6 +1223,7 @@ export class PersonaCreator {
             llm_endpoint: llmEndpoint,
             llm_model: llmModel,
             llm_temperature: llmTemperature,
+            capability_profile: capProfile,
         };
 
         const saveBtn = document.getElementById('btn-persona-save');

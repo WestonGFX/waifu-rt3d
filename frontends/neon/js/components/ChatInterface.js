@@ -1059,6 +1059,11 @@ export class ChatInterface {
             // Store metadata for setThinking() status bar fallback
             this._lastMetadata = metadata;
 
+            // Phase 9: Show capability mismatch warning from server
+            if (metadata?.capability_warning) {
+                toast.info(metadata.capability_warning, 6000);
+            }
+
             // Use the best available token stats: prefer frontend counters (real-time),
             // fall back to server metadata when frontend counters are 0
             const finalTokenCount = this.tokenCount > 0

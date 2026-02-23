@@ -800,6 +800,54 @@ def migrate_to_v14(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v15(con: sqlite3.Connection) -> bool:
+    """Apply schema v15 migration (Phase 9: Capability-Aware Characters).
+
+    Adds:
+        - ``capability_profile`` (TEXT) — JSON blob storing per-character LLM
+          capability metadata: model tier requirement, context budget, feature
+          flags (tool use, thinking, vision), prompt style, penalties, and notes.
+          NULL = use global defaults (backward-compatible, zero disruption).
+
+    The capability profile allows the chat pipeline to adapt system prompts,
+    gate features, budget context windows, and warn users when there's a
+    mismatch between persona requirements and the loaded model.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if column already existed.
+
+    Raises:
+        sqlite3.Error: If migration fails.
+
+    Example:
+        >>> if migrate_to_v15(con):
+        ...     print("Migrated to v15")
+    """
+    columns = {row[1] for row in con.execute("PRAGMA table_info(characters)")}
+    if 'capability_profile' in columns:
+        logger.info("Schema v15 logic: capability_profile column exists. Ensuring version is 15.")
+        cur = con.cursor()
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (15)")
+        con.commit()
+        return False
+
+    try:
+        logger.info("Applying schema v15 migration (Phase 9: capability profiles)...")
+        cur = con.cursor()
+        cur.execute("ALTER TABLE characters ADD COLUMN capability_profile TEXT")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (15)")
+        con.commit()
+        logger.info("✅ Schema v15 migration complete (capability_profile column added)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v15 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -926,16 +974,23 @@ def ensure_db():
             if migrate_to_v14(con):
                 version = 14
 
+        # Upgrade from v14 to v15 (Phase 9: capability-aware characters)
+        if version < 15:
+            logger.info("Upgrading database schema from v14 to v15...")
+            logger.info("  - Adding capability_profile to characters (per-character LLM capability metadata)")
+            if migrate_to_v15(con):
+                version = 15
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 14:
-            raise RuntimeError(f"Database initialization failed: Expected v14, got v{final_version}")
+        if final_version < 15:
+            raise RuntimeError(f"Database initialization failed: Expected v15, got v{final_version}")
 
-        if final_version > 14:
-            logger.warning(f"Database is newer than application (v{final_version} > v14). Some features might be unused.")
+        if final_version > 15:
+            logger.warning(f"Database is newer than application (v{final_version} > v15). Some features might be unused.")
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v14 supports character diary)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v15 supports capability profiles)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

@@ -478,6 +478,47 @@ def health_check():
         },
     }
 
+# ── Phase 9: Model tier estimation ──────────────────────────────
+# Maps approximate parameter counts to intelligence tiers for
+# capability mismatch detection.
+_TIER_RANK = {"tiny": 1, "small": 2, "medium": 3, "large": 4, "xl": 5, "unknown": 3}
+
+
+def _estimate_model_tier(model_name: str) -> str:
+    """Estimate model intelligence tier from model name heuristics.
+
+    Parses common naming patterns (e.g. 'gemma-3-12b', 'qwen3-8b-q4')
+    to guess parameter count and return a tier classification.
+
+    Args:
+        model_name: LLM model identifier string.
+
+    Returns:
+        One of: ``"tiny"``, ``"small"``, ``"medium"``, ``"large"``, ``"xl"``, ``"unknown"``
+
+    Example:
+        >>> _estimate_model_tier("qwen3-8b-instruct-q4")
+        'medium'
+        >>> _estimate_model_tier("gemma-3-27b")
+        'large'
+    """
+    import re as _re
+    name = model_name.lower()
+    match = _re.search(r'(\d+\.?\d*)b', name)
+    if not match:
+        return "unknown"
+    params = float(match.group(1))
+    if params <= 3:
+        return "tiny"
+    elif params <= 7:
+        return "small"
+    elif params <= 14:
+        return "medium"
+    elif params <= 32:
+        return "large"
+    return "xl"
+
+
 def _parse_emotion_gesture(text: str) -> tuple:
     """Extract [emotion:X] and [gesture:X] tags from an LLM reply.
 
@@ -1183,11 +1224,12 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         char_diary = None
         char_diary_date = None
         char_last_emotion = "neutral"
+        _raw_cap_ns = None  # Phase 9: raw capability_profile for non-stream
         try:
             cur.execute(
                 "SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate, "
                 "llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, first_chat_date, "
-                "diary, diary_date "
+                "diary, diary_date, capability_profile "
                 "FROM characters WHERE id=?",
                 (char_id,)
             )
@@ -1216,8 +1258,36 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 char_first_chat_date = row[10]
                 char_diary = row[11]
                 char_diary_date = row[12]
+                _raw_cap_ns = row[13]
         except Exception as e:
             logger.error(f"Error fetching character data: {e}")
+
+        # ── Phase 9: Parse capability profile (non-streaming) ──────
+        cap_ns: dict = {}
+        _cap_warning_ns = None
+        if _raw_cap_ns:
+            try:
+                cap_ns = json.loads(_raw_cap_ns) if isinstance(_raw_cap_ns, str) else (_raw_cap_ns or {})
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if cap_ns.get("repeat_penalty") is not None:
+            cfg["repeat_penalty"] = float(cap_ns["repeat_penalty"])
+        if cap_ns.get("frequency_penalty") is not None:
+            cfg["frequency_penalty"] = float(cap_ns["frequency_penalty"])
+        _cap_max_tokens_ns = int(cap_ns.get("max_tokens", -1))
+        _prompt_style_ns = cap_ns.get("prompt_style", "default")
+        if _prompt_style_ns == "minimal":
+            system_prompt = system_prompt.replace("[emotion:", "(emotion:").replace("[gesture:", "(gesture:")
+            system_prompt += "\nExpress emotions naturally in your text."
+        _required_tier_ns = cap_ns.get("model_tier")
+        if _required_tier_ns:
+            _actual_tier_ns = _estimate_model_tier(cfg.get("llm", {}).get("model", ""))
+            if _TIER_RANK.get(_actual_tier_ns, 3) < _TIER_RANK.get(_required_tier_ns, 3):
+                _cap_warning_ns = (
+                    f"Character requires '{_required_tier_ns}' tier model "
+                    f"but loaded model appears to be '{_actual_tier_ns}'."
+                )
+        # ── End Phase 9 capability profile (non-streaming) ─────────
 
         # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, emotion, filter)
         sections = _build_prompt_sections(
@@ -1239,10 +1309,15 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         if vector_store:
             memories = vector_store.query_memory(text, char_id=char_id)
 
-        # History limit: 0 = unlimited (fetch all messages for session)
-        # Check both nested (llm.history_limit) and top-level (history_limit) for compat
-        max_history = cfg.get("llm", {}).get("history_limit",
-                      cfg.get("history_limit", 0))
+        # Phase 9: Capability-aware context budget (non-streaming)
+        _context_budget_ns = cap_ns.get("context_budget")
+        if _context_budget_ns and int(_context_budget_ns) > 0:
+            _usable = int(_context_budget_ns) - 1000
+            max_history = max(4, _usable // 100)
+        else:
+            max_history = cfg.get("llm", {}).get("history_limit",
+                          cfg.get("history_limit", 0))
+
         if max_history > 0:
             cur.execute(
                 "SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
@@ -1272,6 +1347,8 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             # Build Qwen3 thinking-mode override when enabled and model is Qwen3
             llm_model_name = cfg["llm"].get("model", "")
             qwen3_thinking = cfg.get("llm", {}).get("qwen3_thinking_mode", False)
+            if cap_ns.get("supports_thinking") is False:
+                qwen3_thinking = False
             extra_body = None
             if "qwen3" in llm_model_name.lower():
                 extra_body = {"chat_template_kwargs": {"enable_thinking": bool(qwen3_thinking)}}
@@ -1282,7 +1359,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 cfg["llm"]["endpoint"],
                 cfg["llm"]["api_key"],
                 temperature=cfg.get("temperature", 0.7),
-                max_tokens=-1,  # -1 = unlimited output (LM Studio default)
+                max_tokens=_cap_max_tokens_ns,  # Phase 9: per-character output limit
                 repeat_penalty=cfg.get("repeat_penalty"),
                 frequency_penalty=cfg.get("frequency_penalty"),
                 extra_body=extra_body,
@@ -1759,10 +1836,12 @@ async def chat_stream(req: Request):
     _is_daily_first = False
     _stream_diary = None
     _stream_diary_date = None
+    _raw_cap = None  # Phase 9: raw capability_profile JSON string
     try:
         cur.execute(
             "SELECT system_prompt, llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, "
-            "voice_id, tts_provider, tts_pitch, tts_rate, first_chat_date, diary, diary_date "
+            "voice_id, tts_provider, tts_pitch, tts_rate, first_chat_date, diary, diary_date, "
+            "capability_profile "
             "FROM characters WHERE id=?",
             (char_id,)
         )
@@ -1792,12 +1871,56 @@ async def chat_stream(req: Request):
             stream_char_first_chat_date = row[10]
             _stream_diary = row[11]
             _stream_diary_date = row[12]
+            # Phase 9: Capability profile — per-character LLM capability metadata
+            _raw_cap = row[13]
 
             # Apply voice params to chunked TTS config now that we have char data
             if voice_params and use_chunked_tts:
                 tts_chunked_cfg.update(voice_params)
     except Exception as e:
         logger.error(f"Error fetching character data: {e}")
+
+    # ── Phase 9: Parse capability profile ──────────────────────────
+    # The capability_profile JSON blob provides per-character LLM settings:
+    # context_budget, repeat/frequency penalty overrides, max_tokens,
+    # feature flags (tools, thinking, vision), and prompt_style.
+    cap: dict = {}
+    _capability_warning = None
+    if _raw_cap:
+        try:
+            cap = json.loads(_raw_cap) if isinstance(_raw_cap, str) else (_raw_cap or {})
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(f"[Phase9] Invalid capability_profile JSON for char_id={char_id}")
+
+    # Capability: per-character penalty overrides (take priority over global config)
+    if cap.get("repeat_penalty") is not None:
+        cfg["repeat_penalty"] = float(cap["repeat_penalty"])
+    if cap.get("frequency_penalty") is not None:
+        cfg["frequency_penalty"] = float(cap["frequency_penalty"])
+
+    # Capability: per-character max output tokens (-1 = unlimited, the default)
+    _cap_max_tokens = int(cap.get("max_tokens", -1))
+
+    # Capability: prompt style adaptation for different model families
+    _prompt_style = cap.get("prompt_style", "default")
+    if _prompt_style == "minimal":
+        # Strip bracket-based emotion/gesture instructions — small models
+        # get confused by [emotion:X] syntax and waste tokens trying to parse it
+        system_prompt = system_prompt.replace("[emotion:", "(emotion:").replace("[gesture:", "(gesture:")
+        system_prompt += "\nExpress emotions naturally in your text."
+
+    # Capability: model tier mismatch warning (9-3)
+    _required_tier = cap.get("model_tier")
+    if _required_tier:
+        _actual_tier = _estimate_model_tier(cfg.get("llm", {}).get("model", ""))
+        if _TIER_RANK.get(_actual_tier, 3) < _TIER_RANK.get(_required_tier, 3):
+            _capability_warning = (
+                f"Character requires '{_required_tier}' tier model "
+                f"but loaded model appears to be '{_actual_tier}'. "
+                f"Response quality may be degraded."
+            )
+            logger.info(f"[Phase9] Tier mismatch for char_id={char_id}: {_capability_warning}")
+    # ── End Phase 9 capability profile ─────────────────────────────
 
     # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, vocab, emotion, filter)
     sections = _build_prompt_sections(
@@ -1832,7 +1955,16 @@ async def chat_stream(req: Request):
         except (ValueError, TypeError):
             pass
 
-    max_history = cfg.get("llm", {}).get("history_limit", cfg.get("history_limit", 0))
+    # Phase 9: Capability-aware context budget — if character has a context_budget,
+    # derive max_history from token estimate instead of using raw message count.
+    _context_budget = cap.get("context_budget")
+    if _context_budget and int(_context_budget) > 0:
+        # Estimate: average message ~100 tokens, reserve 1000 for system+response
+        _usable_tokens = int(_context_budget) - 1000
+        max_history = max(4, _usable_tokens // 100)
+    else:
+        max_history = cfg.get("llm", {}).get("history_limit", cfg.get("history_limit", 0))
+
     if max_history > 0:
         cur.execute("SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
                     (session_id, max_history))
@@ -1860,7 +1992,10 @@ async def chat_stream(req: Request):
     routed_model = router.route(text) if router else cfg["llm"]["model"]
 
     # Build Qwen3 thinking-mode override when enabled and model is Qwen3
+    # Phase 9: Gate thinking mode on character capability flag too
     qwen3_thinking = cfg.get("llm", {}).get("qwen3_thinking_mode", False)
+    if cap.get("supports_thinking") is False:
+        qwen3_thinking = False  # Character explicitly disables thinking mode
     stream_extra_body = None
     if "qwen3" in routed_model.lower():
         stream_extra_body = {"chat_template_kwargs": {"enable_thinking": bool(qwen3_thinking)}}
@@ -1879,7 +2014,7 @@ async def chat_stream(req: Request):
                 cfg["llm"]["endpoint"],
                 cfg["llm"]["api_key"],
                 temperature=cfg.get("temperature", 0.7),
-                max_tokens=-1,
+                max_tokens=_cap_max_tokens,  # Phase 9: per-character output limit (-1 = unlimited)
                 repeat_penalty=cfg.get("repeat_penalty"),
                 frequency_penalty=cfg.get("frequency_penalty"),
                 extra_body=stream_extra_body,
@@ -2057,6 +2192,8 @@ async def chat_stream(req: Request):
                 "is_daily_first": _is_daily_first,
                 # Token budget for the context window dashboard widget
                 "context_budget": _context_budget_summary(sections, hist, cfg),
+                # Phase 9: capability mismatch warning (if character needs a bigger model)
+                "capability_warning": _capability_warning,
             }
             yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
@@ -3137,7 +3274,7 @@ def list_characters():
                    personality_traits, live2d_model, model_type, avatar_2d_url, vrm_model_url,
                    greeting_text, greeting_animation, background_url, background_mode, voice_sample_path,
                    llm_endpoint, llm_model, llm_temperature, last_emotion, voice_config,
-                   expr_portraits, first_chat_date, diary, diary_date
+                   expr_portraits, first_chat_date, diary, diary_date, capability_profile
             FROM characters
             ORDER BY id ASC
         """)
@@ -3187,6 +3324,7 @@ def list_characters():
             "first_chat_date": row[22] if len(row) > 22 else None,
             "diary": row[23] if len(row) > 23 else None,
             "diary_date": row[24] if len(row) > 24 else None,
+            "capability_profile": row[25] if len(row) > 25 else None,
         }
         characters.append(char)
     conn.close()
@@ -3235,6 +3373,7 @@ async def create_character(req: Request):
         "llm_temperature": body.get("llm_temperature"),
         "voice_config": json.dumps(body.get("voice_config", {})) if body.get("voice_config") else "",
         "vocab_categories": json.dumps(body.get("vocab_categories", [])) if body.get("vocab_categories") else "",
+        "capability_profile": json.dumps(body.get("capability_profile", {})) if body.get("capability_profile") else None,
         "live2d_model": "",
         "model_type": "3d",
     }
@@ -3278,12 +3417,17 @@ async def update_character(character_id: int, req: Request):
         "background_mode", "voice_sample_path", "vocab_categories",
         "llm_endpoint", "llm_model", "llm_temperature", "last_emotion",
         "voice_config",  # v13: extended per-character voice settings JSON (#77)
+        "capability_profile",  # v15: Phase 9 per-character LLM capability metadata
     ]
     for field in fields:
         if field in body:
             updates.append(f"{field}=?")
-            params.append(body[field])
-            
+            # JSON-encode dict/list values before storing
+            val = body[field]
+            if field == "capability_profile" and isinstance(val, dict):
+                val = json.dumps(val)
+            params.append(val)
+
     if "personality_traits" in body:
         updates.append("personality_traits=?")
         params.append(json.dumps(body["personality_traits"]))

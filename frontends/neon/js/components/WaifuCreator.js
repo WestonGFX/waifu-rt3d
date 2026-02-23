@@ -280,6 +280,7 @@ export class WaifuCreator {
             llm_model: '',
             llm_temperature: 0,
             vocab_categories: [],
+            capability_profile: {},
         };
     }
 
@@ -320,6 +321,12 @@ export class WaifuCreator {
             this.formData.vocab_categories = typeof char.vocab_categories === 'string'
                 ? JSON.parse(char.vocab_categories) : (char.vocab_categories || []);
         } catch { this.formData.vocab_categories = []; }
+
+        // Phase 9: Capability profile
+        try {
+            this.formData.capability_profile = typeof char.capability_profile === 'string'
+                ? JSON.parse(char.capability_profile) : (char.capability_profile || {});
+        } catch { this.formData.capability_profile = {}; }
     }
 
     /**
@@ -354,6 +361,8 @@ export class WaifuCreator {
                 if (val('wc-llm-endpoint') !== undefined) this.formData.llm_endpoint = val('wc-llm-endpoint');
                 if (val('wc-llm-model') !== undefined) this.formData.llm_model = val('wc-llm-model');
                 if (val('wc-llm-temp') !== undefined) this.formData.llm_temperature = parseFloat(val('wc-llm-temp')) || 0;
+                // Phase 9: Collect capability profile fields
+                this.formData.capability_profile = this._collectCapabilityFields();
                 break;
 
             case 4: // Scene
@@ -524,7 +533,15 @@ export class WaifuCreator {
             <hr class="wc-divider">
 
             <div class="wc-field">
-                <label class="wc-label">2D Avatar (Portrait)</label>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label class="wc-label">2D Avatar (Portrait)</label>
+                    <button id="wc-generate-icon" class="btn-config" style="padding:4px 12px; font-size:0.72rem;
+                            border-color:rgba(157,80,255,0.5); background:rgba(157,80,255,0.1);
+                            color:rgba(157,80,255,0.9);"
+                            title="AI-generate a character portrait">
+                        ✨ Generate Icon
+                    </button>
+                </div>
                 <div class="wc-hint">Used in chat bubbles and the character roster</div>
                 <div class="wc-avatar-grid">
                     ${avatarCards}
@@ -572,6 +589,9 @@ export class WaifuCreator {
 
         // Avatar upload
         c.querySelector('#wc-upload-avatar')?.addEventListener('click', () => this._uploadFile('image'));
+
+        // Generate Icon (AI portrait)
+        c.querySelector('#wc-generate-icon')?.addEventListener('click', () => this._generateIcon());
     }
 
     /**
@@ -666,6 +686,15 @@ export class WaifuCreator {
                     <div class="wc-hint">0 = use global default, 0.1–2.0 for per-character override</div>
                 </div>
             </div>
+
+            <hr class="wc-divider">
+
+            <div class="wc-collapsible-header" id="wc-cap-toggle">
+                <span class="wc-caret">&#9654;</span> CAPABILITY PROFILE
+            </div>
+            <div class="wc-collapsible-body" id="wc-cap-section">
+                ${this._renderCapabilityFields()}
+            </div>
         `;
     }
 
@@ -689,13 +718,157 @@ export class WaifuCreator {
             }
         });
 
-        // Collapsible toggle
+        // Collapsible toggle — LLM overrides
         const toggle = c?.querySelector('#wc-llm-toggle');
         const section = c?.querySelector('#wc-llm-section');
         toggle?.addEventListener('click', () => {
             toggle.classList.toggle('open');
             section?.classList.toggle('open');
         });
+
+        // Collapsible toggle — Capability profile
+        const capToggle = c?.querySelector('#wc-cap-toggle');
+        const capSection = c?.querySelector('#wc-cap-section');
+        capToggle?.addEventListener('click', () => {
+            capToggle.classList.toggle('open');
+            capSection?.classList.toggle('open');
+        });
+
+        // Context budget slider live label
+        const ctxSlider = c?.querySelector('#wc-cap-ctx-budget');
+        const ctxLabel = c?.querySelector('#wc-cap-ctx-val');
+        ctxSlider?.addEventListener('input', () => {
+            if (ctxLabel) ctxLabel.textContent = ctxSlider.value;
+        });
+    }
+
+    /**
+     * Render capability profile form fields for the Brain tab.
+     *
+     * Uses `wc-cap-*` prefixed IDs to avoid collisions with PersonaCreator's
+     * `cap-*` IDs when both are in the DOM.
+     *
+     * @returns {string} HTML string for the capability profile form
+     * @private
+     */
+    _renderCapabilityFields() {
+        const cap = this.formData.capability_profile || {};
+        const tier = cap.model_tier || 'medium';
+        const ctxBudget = cap.context_budget || 8192;
+        const repPenalty = cap.repeat_penalty ?? '';
+        const freqPenalty = cap.frequency_penalty ?? '';
+        const maxTok = cap.max_tokens ?? -1;
+        const tools = cap.supports_tools ?? false;
+        const thinking = cap.supports_thinking ?? false;
+        const vision = cap.supports_vision ?? false;
+        const pStyle = cap.prompt_style || 'default';
+        const notes = cap.notes || '';
+
+        return `
+            <div style="display:flex; flex-direction:column; gap:12px; margin-top:8px;">
+                <div class="wc-field">
+                    <label class="wc-label" for="wc-cap-model-tier">Model Tier Requirement</label>
+                    <select id="wc-cap-model-tier" class="wc-select">
+                        <option value="tiny" ${tier === 'tiny' ? 'selected' : ''}>Tiny (1-3B)</option>
+                        <option value="small" ${tier === 'small' ? 'selected' : ''}>Small (3-7B)</option>
+                        <option value="medium" ${tier === 'medium' ? 'selected' : ''}>Medium (7-14B)</option>
+                        <option value="large" ${tier === 'large' ? 'selected' : ''}>Large (14-32B)</option>
+                        <option value="xl" ${tier === 'xl' ? 'selected' : ''}>XL (32B+)</option>
+                    </select>
+                    <div class="wc-hint">Minimum model size this character needs. Shows a warning if a smaller model is loaded.</div>
+                </div>
+                <div class="wc-field">
+                    <label class="wc-label">
+                        Context Budget (tokens)
+                        <span id="wc-cap-ctx-val" style="color:var(--neon-cyan); margin-left:8px; font-weight:400;">${ctxBudget}</span>
+                    </label>
+                    <input id="wc-cap-ctx-budget" type="range" min="1024" max="131072" step="1024"
+                           value="${ctxBudget}" style="width:100%; accent-color:var(--neon-cyan);">
+                    <div style="display:flex; justify-content:space-between; font-size:0.6rem; color:var(--text-muted);">
+                        <span>1K</span><span>8K</span><span>32K</span><span>128K</span>
+                    </div>
+                    <div class="wc-hint">Max tokens per request. Lower = faster responses, fewer history messages.</div>
+                </div>
+                <div style="display:flex; gap:12px;">
+                    <div class="wc-field" style="flex:1;">
+                        <label class="wc-label" for="wc-cap-repeat-penalty">Repeat Penalty</label>
+                        <input id="wc-cap-repeat-penalty" class="wc-input" type="number" min="0" max="2" step="0.05"
+                               value="${repPenalty}" placeholder="Global">
+                    </div>
+                    <div class="wc-field" style="flex:1;">
+                        <label class="wc-label" for="wc-cap-freq-penalty">Freq Penalty</label>
+                        <input id="wc-cap-freq-penalty" class="wc-input" type="number" min="0" max="2" step="0.05"
+                               value="${freqPenalty}" placeholder="Global">
+                    </div>
+                    <div class="wc-field" style="flex:1;">
+                        <label class="wc-label" for="wc-cap-max-tokens">Max Tokens</label>
+                        <input id="wc-cap-max-tokens" class="wc-input" type="number" min="-1" max="32768" step="100"
+                               value="${maxTok}" placeholder="-1 (∞)">
+                    </div>
+                </div>
+                <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                    <label class="wc-label" style="cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:normal;">
+                        <input id="wc-cap-supports-tools" type="checkbox" ${tools ? 'checked' : ''}>
+                        Supports Tool Use
+                    </label>
+                    <label class="wc-label" style="cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:normal;">
+                        <input id="wc-cap-supports-thinking" type="checkbox" ${thinking ? 'checked' : ''}>
+                        Supports Thinking (CoT)
+                    </label>
+                    <label class="wc-label" style="cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:normal;">
+                        <input id="wc-cap-supports-vision" type="checkbox" ${vision ? 'checked' : ''}>
+                        Supports Vision
+                    </label>
+                </div>
+                <div class="wc-field">
+                    <label class="wc-label" for="wc-cap-prompt-style">Prompt Style</label>
+                    <select id="wc-cap-prompt-style" class="wc-select">
+                        <option value="default" ${pStyle === 'default' ? 'selected' : ''}>Default</option>
+                        <option value="minimal" ${pStyle === 'minimal' ? 'selected' : ''}>Minimal (tiny models)</option>
+                        <option value="chatml" ${pStyle === 'chatml' ? 'selected' : ''}>ChatML</option>
+                        <option value="alpaca" ${pStyle === 'alpaca' ? 'selected' : ''}>Alpaca</option>
+                    </select>
+                    <div class="wc-hint">How to format the system prompt. "Minimal" strips bracket syntax for tiny models.</div>
+                </div>
+                <div class="wc-field">
+                    <label class="wc-label" for="wc-cap-notes">Notes</label>
+                    <input id="wc-cap-notes" class="wc-input" type="text"
+                           value="${this._esc(notes)}"
+                           placeholder="e.g. Tuned for Gemma-3-12b Q4 on RTX 5080">
+                </div>
+            </div>`;
+    }
+
+    /**
+     * Collect capability profile form values from `#wc-cap-*` elements.
+     *
+     * @returns {Object} Capability profile dict for the API payload
+     * @private
+     */
+    _collectCapabilityFields() {
+        const c = this.content;
+        const tier = c?.querySelector('#wc-cap-model-tier')?.value || 'medium';
+        const ctxBudget = parseInt(c?.querySelector('#wc-cap-ctx-budget')?.value || '8192');
+        const repPenalty = parseFloat(c?.querySelector('#wc-cap-repeat-penalty')?.value);
+        const freqPenalty = parseFloat(c?.querySelector('#wc-cap-freq-penalty')?.value);
+        const maxTok = parseInt(c?.querySelector('#wc-cap-max-tokens')?.value ?? '-1');
+        const tools = c?.querySelector('#wc-cap-supports-tools')?.checked || false;
+        const thinking = c?.querySelector('#wc-cap-supports-thinking')?.checked || false;
+        const vision = c?.querySelector('#wc-cap-supports-vision')?.checked || false;
+        const pStyle = c?.querySelector('#wc-cap-prompt-style')?.value || 'default';
+        const notes = c?.querySelector('#wc-cap-notes')?.value?.trim() || '';
+
+        const profile = { model_tier: tier, context_budget: ctxBudget };
+        if (!isNaN(repPenalty)) profile.repeat_penalty = repPenalty;
+        if (!isNaN(freqPenalty)) profile.frequency_penalty = freqPenalty;
+        profile.max_tokens = isNaN(maxTok) ? -1 : maxTok;
+        profile.supports_tools = tools;
+        profile.supports_thinking = thinking;
+        profile.supports_vision = vision;
+        if (pStyle !== 'default') profile.prompt_style = pStyle;
+        if (notes) profile.notes = notes;
+
+        return profile;
     }
 
     /**
@@ -996,6 +1169,59 @@ export class WaifuCreator {
         };
 
         input.click();
+    }
+
+    /**
+     * Generate an AI portrait icon for the character using the image gen pipeline.
+     *
+     * Calls POST /api/image-gen/portrait with a prompt derived from the
+     * character's name and personality traits. If in edit mode, the endpoint
+     * auto-updates avatar_2d_url in the database.
+     *
+     * @private
+     */
+    async _generateIcon() {
+        const btn = this.content?.querySelector('#wc-generate-icon');
+        if (!btn) return;
+
+        const name = this.formData.name || 'character';
+        const traits = (this.formData.personality_traits || []).join(', ');
+        const traitStr = traits ? `, ${traits}` : '';
+        const prompt = `${name}, anime character portrait, upper body, detailed face${traitStr}, high quality, studio lighting`;
+
+        btn.disabled = true;
+        btn.textContent = '⌛ Generating...';
+
+        try {
+            const body = {
+                prompt,
+                character_name: name,
+                character_id: this.editingCharId || null,
+            };
+            const res = await fetch('/api/image-gen/portrait', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const result = await res.json();
+
+            if (result.ok && result.url) {
+                toast.success('Portrait generated!', 2000);
+                this.formData.avatar_2d_url = result.url;
+                // Refresh images and re-render the appearance tab to show new avatar
+                await this._fetchImages();
+                this._switchTab(this.currentTab);
+            } else {
+                toast.error(result.error || 'Generation failed', 4000);
+            }
+        } catch (err) {
+            toast.error(`Generate icon failed: ${err.message}`, 5000);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '✨ Generate Icon';
+            }
+        }
     }
 
     /**

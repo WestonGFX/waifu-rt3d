@@ -335,6 +335,35 @@ export class PersonaCreator {
                 </div>
                 ` : ''}
 
+                ${isEdit ? `
+                <div id="persona-diary-section" class="persona-field" style="margin-top:6px;">
+                    <label style="color:var(--text-main); font-weight:600; display:block; margin-bottom:4px;">
+                        ✍ Character Diary
+                        <span id="diary-date-label" style="margin-left:8px; font-size:0.72rem; color:var(--text-muted); font-weight:400;">
+                            ${tpl.diary_date ? `Last entry: ${tpl.diary_date}` : 'No entry yet'}
+                        </span>
+                    </label>
+                    <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;">
+                        After each session, ask the character to write a diary entry from their perspective.
+                        The entry is injected into the next session's system prompt for continuity.
+                    </div>
+                    <div id="diary-content" style="
+                        background:rgba(0,10,20,0.5); border:1px solid rgba(255,255,255,0.08);
+                        border-radius:8px; padding:10px 12px; font-size:0.8rem; color:var(--text-main);
+                        font-style:italic; min-height:48px; max-height:140px; overflow-y:auto;
+                        margin-bottom:8px; line-height:1.5; white-space:pre-wrap;
+                    ">${tpl.diary ? this._escapeHtml(tpl.diary) : '<span style="color:var(--text-muted);">No diary entry yet — generate one after a chat session.</span>'}</div>
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <button id="btn-write-diary" style="padding:6px 14px; border-radius:6px;
+                                border:1px solid rgba(0,240,255,0.4); background:rgba(0,240,255,0.08);
+                                color:var(--neon-cyan); font-size:0.78rem; cursor:pointer;">
+                            ✍ Write Diary Entry
+                        </button>
+                        <span id="diary-gen-status" style="font-size:0.75rem; color:var(--text-muted);"></span>
+                    </div>
+                </div>
+                ` : ''}
+
                 ${isEdit ? this._renderKnowledgeBaseSection() : ''}
 
                 <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px;">
@@ -374,6 +403,54 @@ export class PersonaCreator {
         // Phase 8A: expression pack section (edit mode only)
         if (isEdit && tpl.id) {
             this._initExpressionPackSection(tpl);
+        }
+
+        // #57 Diary: wire "Write Diary Entry" button (edit mode only)
+        const diaryBtn = document.getElementById('btn-write-diary');
+        if (diaryBtn && tpl.id) {
+            diaryBtn.onclick = () => this._writeDiaryEntry(tpl.id);
+        }
+    }
+
+    /**
+     * Generate a diary entry for the character via the backend LLM.
+     * Updates the diary display panel on success.
+     *
+     * @private
+     * @param {number} charId - Character ID to write diary for
+     */
+    async _writeDiaryEntry(charId) {
+        const btn = document.getElementById('btn-write-diary');
+        const status = document.getElementById('diary-gen-status');
+        const content = document.getElementById('diary-content');
+        const dateLabel = document.getElementById('diary-date-label');
+
+        if (!btn || !status || !content) return;
+
+        btn.disabled = true;
+        btn.textContent = '⌛ Writing...';
+        if (status) status.textContent = 'Asking the character to reflect...';
+
+        try {
+            const res = await fetch(`/api/characters/${charId}/diary`, { method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+
+            if (data.ok && data.diary) {
+                content.textContent = data.diary;
+                if (dateLabel) dateLabel.textContent = `Last entry: ${data.diary_date}`;
+                if (status) status.textContent = '✓ Written!';
+                setTimeout(() => { if (status) status.textContent = ''; }, 3000);
+            } else {
+                if (status) status.textContent = `Error: ${data.error || 'Unknown error'}`;
+            }
+        } catch (err) {
+            if (status) status.textContent = `Failed: ${err.message}`;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '✍ Write Diary Entry';
         }
     }
 

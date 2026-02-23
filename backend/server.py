@@ -871,7 +871,8 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         try:
             cur.execute(
                 "SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate, "
-                "llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, first_chat_date "
+                "llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, first_chat_date, "
+                "diary, diary_date "
                 "FROM characters WHERE id=?",
                 (char_id,)
             )
@@ -898,6 +899,14 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                     cfg["temperature"] = float(row[7])
                 char_last_chat_date = row[8]
                 char_first_chat_date = row[10]
+
+                # Diary context injection (#57): prepend latest diary entry if present
+                char_diary = row[11]
+                char_diary_date = row[12]
+                if char_diary:
+                    _diary_label = f"[YOUR DIARY — {char_diary_date}]" if char_diary_date else "[YOUR DIARY]"
+                    system_prompt += f"\n\n{_diary_label}\n{char_diary}"
+
                 # Daily greeting context injection (#54): inject note on first chat of the day
                 from datetime import datetime as _dt_c
                 _today_c = _dt_c.now().strftime('%Y-%m-%d')
@@ -1352,7 +1361,7 @@ async def chat_stream(req: Request):
     try:
         cur.execute(
             "SELECT system_prompt, llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, "
-            "voice_id, tts_provider, tts_pitch, tts_rate, first_chat_date "
+            "voice_id, tts_provider, tts_pitch, tts_rate, first_chat_date, diary, diary_date "
             "FROM characters WHERE id=?",
             (char_id,)
         )
@@ -1380,6 +1389,13 @@ async def chat_stream(req: Request):
             if row[9]:
                 voice_params['tts_rate'] = row[9]
             stream_char_first_chat_date = row[10]
+
+            # Diary context injection (#57): prepend latest diary entry if present
+            _stream_diary = row[11]
+            _stream_diary_date = row[12]
+            if _stream_diary:
+                _dlabel = f"[YOUR DIARY — {_stream_diary_date}]" if _stream_diary_date else "[YOUR DIARY]"
+                system_prompt += f"\n\n{_dlabel}\n{_stream_diary}"
 
             # Apply voice params to chunked TTS config now that we have char data
             if voice_params and use_chunked_tts:
@@ -2765,7 +2781,7 @@ def list_characters():
                    personality_traits, live2d_model, model_type, avatar_2d_url, vrm_model_url,
                    greeting_text, greeting_animation, background_url, background_mode, voice_sample_path,
                    llm_endpoint, llm_model, llm_temperature, last_emotion, voice_config,
-                   expr_portraits, first_chat_date
+                   expr_portraits, first_chat_date, diary, diary_date
             FROM characters
             ORDER BY id ASC
         """)
@@ -2813,6 +2829,8 @@ def list_characters():
             "voice_config": row[20] if len(row) > 20 else None,
             "expr_portraits": row[21] if len(row) > 21 else None,
             "first_chat_date": row[22] if len(row) > 22 else None,
+            "diary": row[23] if len(row) > 23 else None,
+            "diary_date": row[24] if len(row) > 24 else None,
         }
         characters.append(char)
     conn.close()
@@ -3568,6 +3586,145 @@ def reset_relationship(char_id: int):
         )
     conn.commit()
     return {"ok": True}
+
+
+# ── Character Diary (#57) ─────────────────────────────────────────────────────
+
+@app.get("/api/characters/{char_id}/diary")
+def get_character_diary(char_id: int):
+    """Retrieve the latest diary entry for a character.
+
+    The diary is a short, first-person narrative the character wrote after
+    their most recent chat session. It can be used to show character
+    continuity between sessions.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        {"ok": True, "diary": "...", "diary_date": "YYYY-MM-DD"} or
+        {"ok": True, "diary": None, "diary_date": None} if no entry yet.
+    """
+    conn = db()
+    row = conn.execute(
+        "SELECT diary, diary_date FROM characters WHERE id = ?", (char_id,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, "Character not found")
+    return {"ok": True, "diary": row[0], "diary_date": row[1]}
+
+
+@app.post("/api/characters/{char_id}/diary")
+async def generate_character_diary(char_id: int, req: Request):
+    """Generate a diary entry for a character based on a recent session.
+
+    Asks the LLM to write a short, first-person diary entry from the
+    character's perspective, referencing the conversation that just ended.
+    The entry is saved to ``characters.diary`` and injected into the system
+    prompt at the start of the next session.
+
+    Args:
+        char_id: Character ID.
+        req: Optional JSON body with ``session_id`` (int) to pick which session
+             to write about. Defaults to the character's most recent session.
+
+    Returns:
+        {"ok": True, "diary": "...", "diary_date": "YYYY-MM-DD"}
+
+    Example:
+        POST /api/characters/3/diary
+        Body: {"session_id": 12}
+    """
+    body: dict = {}
+    try:
+        body = await req.json()
+    except Exception:
+        pass
+
+    conn = db()
+
+    # Load character metadata
+    char_row = conn.execute(
+        "SELECT name, system_prompt, last_emotion FROM characters WHERE id = ?",
+        (char_id,)
+    ).fetchone()
+    if not char_row:
+        raise HTTPException(404, "Character not found")
+    char_name = char_row[0] or "Character"
+    char_system_prompt = char_row[1] or ""
+    char_emotion = char_row[2] or "neutral"
+
+    # Determine which session to summarize
+    session_id = body.get("session_id")
+    if session_id:
+        msgs = conn.execute(
+            "SELECT role, text FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id",
+            (session_id,)
+        ).fetchall()
+    else:
+        # Use the most recent session that belongs to this character
+        sess_row = conn.execute(
+            "SELECT id FROM sessions WHERE character_id = ? ORDER BY updated_at DESC LIMIT 1",
+            (char_id,)
+        ).fetchone()
+        if not sess_row:
+            return {"ok": False, "error": "No sessions found for this character"}
+        msgs = conn.execute(
+            "SELECT role, text FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id",
+            (sess_row[0],)
+        ).fetchall()
+
+    if not msgs:
+        return {"ok": False, "error": "No messages found to write diary about"}
+
+    # Build conversation excerpt (last 30 messages to stay within context)
+    excerpt = "\n".join(
+        f"{'[User]' if r[0] == 'user' else f'[{char_name}]'}: {r[1][:300]}"
+        for r in msgs[-30:]
+    )
+
+    # Diary generation prompt — first-person, 2–3 sentences, in character
+    diary_prompt = (
+        f"You are {char_name}. Based on your personality and the conversation below, "
+        f"write a short diary entry (2–4 sentences) in the first person, as if you are "
+        f"writing in your personal diary tonight. Reflect on the conversation, your "
+        f"feelings, and anything memorable. Stay in character. "
+        f"Current mood: {char_emotion}.\n\n"
+        f"CONVERSATION:\n{excerpt}\n\n"
+        f"DIARY ENTRY ({char_name}'s words only):"
+    )
+
+    cfg = load_config()
+    try:
+        from backend.llm.registry import get_client
+        adapter = get_client(cfg)
+        res = await run_in_threadpool(
+            adapter.chat,
+            [{"role": "user", "content": diary_prompt}],
+            cfg["llm"]["model"],
+            cfg["llm"]["endpoint"],
+            cfg["llm"]["api_key"],
+            temperature=0.75,
+            max_tokens=300,
+        )
+    except Exception as exc:
+        logger.error(f"[Diary] LLM call failed for char {char_id}: {exc}")
+        raise HTTPException(500, f"LLM error: {exc}")
+
+    if not res.get("ok"):
+        raise HTTPException(500, res.get("error", "LLM error"))
+
+    diary_text = res["reply"].strip()
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    conn.execute(
+        "UPDATE characters SET diary = ?, diary_date = ? WHERE id = ?",
+        (diary_text, today, char_id)
+    )
+    conn.commit()
+
+    logger.info(f"[Diary] Written for char {char_id} ({char_name}) on {today}")
+    return {"ok": True, "diary": diary_text, "diary_date": today}
 
 
 @app.get("/api/sessions/{session_id}/emotions")

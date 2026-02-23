@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v12)
+- Database schema migrations (v3 → v4 → … → v14)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -16,6 +16,8 @@ Migration Strategy:
     - v9 → v10: GPT-SoVITS voice_sample_prompt column (Phase 6H)
     - v10 → v11: Per-character LLM temperature + mood persistence (Phase 7B)
     - v11 → v12: Expression portraits JSON column (Phase 8A)
+    - v12 → v13: Anniversary tracking + per-character voice config (Phase 7D)
+    - v13 → v14: Character diary column (Phase 7C #57)
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -754,15 +756,59 @@ def migrate_to_v13(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v14(con: sqlite3.Connection) -> bool:
+    """Upgrade database from v13 to v14 (Phase 7C #57: character diary).
+
+    Changes in v14:
+        - ``diary`` (TEXT) — Latest diary entry written by the character LLM after
+          a session. Stored as plain text; injected into system prompt on next session.
+        - ``diary_date`` (TEXT) — ISO date the diary was last written.
+
+    Args:
+        con: Active SQLite connection with the database.
+
+    Returns:
+        bool: True if migration was applied, False if already at v14.
+
+    Example:
+        >>> if migrate_to_v14(con):
+        ...     print("Migrated to v14")
+    """
+    columns = {row[1] for row in con.execute("PRAGMA table_info(characters)")}
+    if 'diary' in columns:
+        logger.info("Schema v14 logic: diary column exists. Ensuring version is 14.")
+        cur = con.cursor()
+        for col, typedef in [('diary_date', 'TEXT')]:
+            if col not in columns:
+                cur.execute(f"ALTER TABLE characters ADD COLUMN {col} {typedef}")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (14)")
+        con.commit()
+        return False
+
+    try:
+        logger.info("Applying schema v14 migration (Phase 7C: character diary)...")
+        cur = con.cursor()
+        cur.execute("ALTER TABLE characters ADD COLUMN diary TEXT")
+        cur.execute("ALTER TABLE characters ADD COLUMN diary_date TEXT")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (14)")
+        con.commit()
+        logger.info("✅ Schema v14 migration complete (diary, diary_date added)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v14 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
     Migration Paths:
-        - v0 (empty) → v4 → … → v13
-        - v3 → v4 → … → v13
-        - v11 → v12 → v13
-        - v12 → v13
-        - v13 → no-op (already current)
+        - v0 (empty) → v4 → … → v14
+        - v3 → v4 → … → v14
+        - v11 → v12 → v13 → v14
+        - v13 → v14
+        - v14 → no-op (already current)
 
     The function is idempotent - safe to run multiple times.
     Will log all migration steps and verify final state.
@@ -872,16 +918,24 @@ def ensure_db():
             if migrate_to_v13(con):
                 version = 13
 
+        # Upgrade from v13 to v14 (Phase 7C #57: character diary)
+        if version < 14:
+            logger.info("Upgrading database schema from v13 to v14...")
+            logger.info("  - Adding diary to characters (LLM-written session diary entry)")
+            logger.info("  - Adding diary_date to characters (date of latest diary entry)")
+            if migrate_to_v14(con):
+                version = 14
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 13:
-            raise RuntimeError(f"Database initialization failed: Expected v13, got v{final_version}")
+        if final_version < 14:
+            raise RuntimeError(f"Database initialization failed: Expected v14, got v{final_version}")
 
-        if final_version > 13:
-            logger.warning(f"Database is newer than application (v{final_version} > v13). Some features might be unused.")
+        if final_version > 14:
+            logger.warning(f"Database is newer than application (v{final_version} > v14). Some features might be unused.")
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v13 supports first_chat_date, voice_config)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v14 supports character diary)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

@@ -83,3 +83,35 @@ export interface VoiceEntry {
   description: string;
   installed?: boolean;
 }
+
+export interface TTSModel {
+  id: string;
+  engine: string;
+  name: string;
+  language: string;
+  gender: string;
+  description: string;
+  size_mb: number;
+  voice_id: string;
+  sample_url: string;
+  tags: string[];
+  installed: boolean;
+  installed_at?: string;
+}
+
+export interface TTSModelsResponse {
+  models: TTSModel[];
+  catalog_updated: string;
+  total_installed_mb: number;
+}
+
+export interface DownloadProgress {
+  model_id: string;
+  status: 'downloading' | 'complete' | 'error' | 'idle';
+  progress: number;
+  bytes_done: number;
+  bytes_total: number;
+  file_index: number;
+  file_count: number;
+  error?: string;
+}

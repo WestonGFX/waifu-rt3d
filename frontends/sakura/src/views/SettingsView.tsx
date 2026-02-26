@@ -1,6 +1,7 @@
 import { useAppStore } from '../stores/appStore';
 import { useTheme } from '../hooks/useTheme';
 import { SettingField } from '../components/SettingField';
+import { TTSModelsPanel } from '../components/TTSModelsPanel';
 
 /** Settings view with progressive disclosure (Standard/Advanced) and Compact Mode. */
 export function SettingsView() {
@@ -109,6 +110,16 @@ export function SettingsView() {
               {Number(config.speech_rate || 1).toFixed(1)}
             </span>
           </SettingField>
+        </div>
+      </section>
+
+      {/* Voice Models */}
+      <section className="mb-6">
+        <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+          Voice Models
+        </h3>
+        <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: 'var(--radius-card)', border: '1px solid var(--color-border)' }} className="p-4">
+          <TTSModelsPanel />
         </div>
       </section>
 

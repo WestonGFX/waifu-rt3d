@@ -1,4 +1,4 @@
-import type { AppConfig, Character, ChatResponse, Session, VoiceEntry } from './types';
+import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse } from './types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
@@ -93,6 +93,12 @@ export const api = {
     const params = provider ? `?provider=${provider}` : '';
     return get<{ voices: VoiceEntry[] }>(`/api/tts/voices${params}`).then(d => d.voices);
   },
+
+  // TTS Model Management
+  getTTSModels: () => get<TTSModelsResponse>('/api/tts/models'),
+  installTTSModel: (modelId: string) => post<{ ok: boolean }>('/api/tts/models/install', { model_id: modelId }),
+  deleteTTSModel: (modelId: string) => del<{ ok: boolean }>(`/api/tts/models/${encodeURIComponent(modelId)}`),
+  refreshTTSCatalog: () => post<{ ok: boolean; count: number }>('/api/tts/models/refresh-catalog', {}),
 
   // Files
   scanVrm: () => get<{ models: string[] }>('/api/scan/vrm').then(d => d.models),

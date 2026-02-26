@@ -173,12 +173,18 @@ export function SettingsView() {
         <div style={{ backgroundColor: 'var(--color-surface)', borderRadius: 'var(--radius-card)', border: '1px solid var(--color-border)' }} className="px-4">
           <SettingField label="Ambient Idle" description="Show idle status messages like 'daydreaming...' in chat header."
             tooltip="Purely cosmetic — no LLM calls. Toggles status text cycling in chat header.">
-            <input type="checkbox" defaultChecked className="accent-[var(--color-accent)]" />
+            <input type="checkbox"
+              checked={config.ambient_idle !== false}
+              onChange={(e) => saveConfig({ ambient_idle: e.target.checked })}
+              className="accent-[var(--color-accent)]" />
           </SettingField>
 
           <SettingField label="Proactive Messages" description="Character sends unprompted check-in messages after idle time." advanced
             tooltip="Uses a lightweight LLM call after configurable idle minutes. Can be set to 5, 15, 30, or 60 minutes.">
-            <input type="checkbox" className="accent-[var(--color-accent)]" />
+            <input type="checkbox"
+              checked={Boolean(config.proactive_messages)}
+              onChange={(e) => saveConfig({ proactive_messages: e.target.checked })}
+              className="accent-[var(--color-accent)]" />
           </SettingField>
         </div>
       </section>

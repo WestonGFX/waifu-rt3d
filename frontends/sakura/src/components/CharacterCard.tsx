@@ -1,5 +1,22 @@
 import type { Character } from '../lib/types';
 
+/** Image extensions the browser can render as a background-image. */
+const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i;
+
+/**
+ * Returns true if the URL points to a renderable image file.
+ * VRM, ONNX, and other non-image files return false.
+ */
+function isImageUrl(url?: string): boolean {
+  if (!url) return false;
+  try {
+    const path = new URL(url, window.location.origin).pathname;
+    return IMAGE_EXTS.test(path);
+  } catch {
+    return IMAGE_EXTS.test(url);
+  }
+}
+
 interface CharacterCardProps {
   character: Character;
   onClick: () => void;
@@ -17,6 +34,8 @@ interface CharacterCardProps {
  * @param timestamp - Optional timestamp string for the last message
  */
 export function CharacterCard({ character, onClick, lastMessage, timestamp }: CharacterCardProps) {
+  const hasImage = isImageUrl(character.avatar_url);
+
   return (
     <button
       onClick={onClick}
@@ -29,12 +48,17 @@ export function CharacterCard({ character, onClick, lastMessage, timestamp }: Ch
       }}
     >
       <div
-        className="w-12 h-12 rounded-full bg-cover bg-center flex-shrink-0"
+        className="w-12 h-12 rounded-full bg-cover bg-center flex-shrink-0 flex items-center justify-center"
         style={{
-          backgroundImage: character.avatar_url ? `url(${character.avatar_url})` : undefined,
-          backgroundColor: character.avatar_url ? undefined : 'var(--color-border)'
+          backgroundImage: hasImage ? `url(${character.avatar_url})` : undefined,
+          backgroundColor: hasImage ? undefined : 'var(--color-accent)',
+          color: 'white',
+          fontSize: '1.1rem',
+          fontWeight: 600
         }}
-      />
+      >
+        {!hasImage && (character.name?.[0] ?? '?')}
+      </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
           <span className="font-semibold text-sm truncate" style={{ color: 'var(--color-text-primary)' }}>

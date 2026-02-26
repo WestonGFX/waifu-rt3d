@@ -2,6 +2,19 @@ import { Volume2 } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
 
+/** Image extensions the browser can render in an img tag. */
+const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i;
+
+/** Returns true if the URL points to a renderable image (not VRM/3D model). */
+function isImageUrl(url?: string): boolean {
+  if (!url) return false;
+  try {
+    return IMAGE_EXTS.test(new URL(url, window.location.origin).pathname);
+  } catch {
+    return IMAGE_EXTS.test(url);
+  }
+}
+
 interface DialogueBubbleProps {
   message: ChatMessage;
   character?: Character;
@@ -39,8 +52,15 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying }: D
         }}
       >
         <div className="flex items-center gap-2 mb-2">
-          {character?.avatar_url && (
-            <img src={character.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+          {isImageUrl(character?.avatar_url) ? (
+            <img src={character!.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+          ) : (
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: 'var(--color-accent)', color: 'white', fontSize: '0.8rem', fontWeight: 600 }}
+            >
+              {character?.name?.[0] ?? '?'}
+            </div>
           )}
           <span className="font-semibold text-sm" style={{ color: 'var(--color-accent)' }}>
             {character?.name || 'Assistant'}

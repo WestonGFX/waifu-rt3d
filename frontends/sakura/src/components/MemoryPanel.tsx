@@ -17,12 +17,12 @@ export function MemoryPanel() {
   const [budget, setBudget] = useState<ContextBudget | null>(null);
 
   useEffect(() => {
-    if (!memoryPanelOpen) return;
-    fetch('/api/context-budget/0')
+    if (!memoryPanelOpen || !activeCharacter?.id) return;
+    fetch(`/api/context-budget/${activeCharacter.id}`)
       .then(r => r.ok ? r.json() : null)
       .then(setBudget)
       .catch(() => setBudget(null));
-  }, [memoryPanelOpen]);
+  }, [memoryPanelOpen, activeCharacter?.id]);
 
   return (
     <AnimatePresence>

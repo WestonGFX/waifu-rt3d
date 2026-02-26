@@ -104,6 +104,7 @@ const SETTINGS_SCHEMA = {
         icon: "🗣️",
         fields: [
             { id: "_voice_picker", name: "Default Voice", type: "custom", desc: "Select the default TTS voice for all characters.", tooltip: "🎤 Choose from installed local voices (Kokoro, Piper) and cloud voices (Edge-TTS). Install more voices in the TTS Models tab." },
+            { id: "tts_volume", name: "Volume", type: "slider", min: 0, max: 1.0, step: 0.05, default: 1.0, desc: "Master volume for TTS audio playback.", tooltip: "💡 Controls the volume of all voice audio. 100% is full volume. Adjust if voices are too loud or too quiet." },
             { id: "speech_rate", name: "Speech Rate", type: "slider", min: 0.5, max: 2.0, step: 0.1, default: 1.0, desc: "Speed of TTS output.", tooltip: "💡 1.0 is normal speed. Lower for dramatic delivery, higher for quick responses." },
             { id: "pitch_shift", name: "Pitch Shift", type: "slider", min: -10, max: 10, step: 1, default: 0, desc: "Semitone shift for voice.", tooltip: "💡 Adjust the pitch of the AI's voice. Negative = deeper, positive = higher." },
             { id: "voice_stability", name: "Voice Stability", type: "slider", min: 0, max: 1.0, step: 0.1, default: 0.5, desc: "Consistent vs Expressive.", tooltip: "💡 Low = more expressive and varied. High = more consistent but robotic." },
@@ -1321,7 +1322,9 @@ export class SettingsModal {
                         });
                         const data = await res.json();
                         if (data.ok && data.url) {
-                            new Audio(data.url).play();
+                            const _pa = new Audio(data.url);
+                            _pa.volume = typeof this.tempConfig['tts_volume'] === 'number' ? this.tempConfig['tts_volume'] : 1.0;
+                            _pa.play();
                             btn.innerHTML = '&#x2714; Playing...';
                             setTimeout(() => { btn.innerHTML = '&#x25B6; Preview Voice'; btn.disabled = false; }, 4000);
                         } else {
@@ -2664,6 +2667,7 @@ export class SettingsModal {
             .then(data => {
                 if (data.ok && data.url) {
                     this._ttsPreviewAudio = new Audio(data.url);
+                    this._ttsPreviewAudio.volume = typeof this.tempConfig['tts_volume'] === 'number' ? this.tempConfig['tts_volume'] : 1.0;
                     this._ttsPreviewAudio.onended = () => { btn.disabled = false; btn.innerHTML = '&#9654; Preview'; };
                     this._ttsPreviewAudio.onerror = () => { btn.disabled = false; btn.innerHTML = '&#9654; Preview'; };
                     this._ttsPreviewAudio.play();
@@ -2679,6 +2683,7 @@ export class SettingsModal {
             btn.disabled = true;
             btn.textContent = 'Playing...';
             this._ttsPreviewAudio = new Audio(sampleUrl);
+            this._ttsPreviewAudio.volume = typeof this.tempConfig['tts_volume'] === 'number' ? this.tempConfig['tts_volume'] : 1.0;
             this._ttsPreviewAudio.onended = () => { btn.disabled = false; btn.innerHTML = '&#9654; Preview'; };
             this._ttsPreviewAudio.onerror = () => {
                 btn.disabled = false;

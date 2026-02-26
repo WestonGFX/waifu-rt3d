@@ -872,6 +872,8 @@ export class ChatInterface {
                 }
 
                 const audio = new Audio(url);
+                const ttsVol = state.state.config?.tts_volume;
+                audio.volume = typeof ttsVol === 'number' ? ttsVol : 1.0;
                 audio.onended = drainAudioQueue;
                 // On error: log it and skip to the next chunk rather than stalling
                 audio.onerror = (err) => {
@@ -1299,6 +1301,8 @@ export class ChatInterface {
 
             // Create audio element — stored so interrupt_mode can pause it on VAD trigger
             const audio = new Audio(data.url);
+            const manualVol = state.state.config?.tts_volume;
+            audio.volume = typeof manualVol === 'number' ? manualVol : 1.0;
             this._currentAudio = audio;
 
             // Create visualizer canvas inside the bubble
@@ -2261,6 +2265,8 @@ export class ChatInterface {
                     const audioUrl = data.url || data.audio_url;
                     if (data.ok && audioUrl) {
                         const audio = new Audio(audioUrl);
+                        const replayVol = state.state.config?.tts_volume;
+                        audio.volume = typeof replayVol === 'number' ? replayVol : 1.0;
                         audio.play().catch(() => {});
                         // Sync lips with VRM viewer
                         const viewerIframe = document.querySelector('.viewport-layer iframe');

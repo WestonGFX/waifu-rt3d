@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Download, Trash2, Play, RefreshCw, Package } from 'lucide-react';
+import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
 import type { TTSModel, DownloadProgress } from '../lib/types';
 
@@ -123,6 +124,8 @@ export function TTSModelsPanel() {
       return;
     }
     const audio = new Audio(sampleUrl);
+    const vol = useAppStore.getState().config?.tts_volume;
+    audio.volume = typeof vol === 'number' ? Number(vol) : 1.0;
     audioRef.current = audio;
     setPlayingId(modelId);
     audio.onended = () => setPlayingId(null);

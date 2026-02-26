@@ -50,6 +50,8 @@ export function ChatThread() {
   const playAudio = (msg: { id: string; audioUrl?: string }) => {
     if (!msg.audioUrl) return;
     const audio = new Audio(msg.audioUrl);
+    const vol = useAppStore.getState().config?.tts_volume;
+    audio.volume = typeof vol === 'number' ? vol : 1.0;
     setPlayingAudioId(msg.id);
     audio.onended = () => setPlayingAudioId(null);
     audio.play().catch(() => setPlayingAudioId(null));

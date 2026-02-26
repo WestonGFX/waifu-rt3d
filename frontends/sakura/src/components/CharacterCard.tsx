@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import type { Character } from '../lib/types';
+import { api } from '../lib/api';
 
 /** Image extensions the browser can render as a background-image. */
 const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i;
@@ -35,6 +37,22 @@ function resolveAvatarUrl(character: Character): string | null {
   return null;
 }
 
+/** Converts 0-1 affinity score to a human-readable relationship tier label. */
+function affinityLabel(v: number): string {
+  if (v >= 0.85) return 'Devoted';
+  if (v >= 0.7)  return 'Close';
+  if (v >= 0.55) return 'Friendly';
+  if (v >= 0.4)  return 'Neutral';
+  return 'Distant';
+}
+
+/** Color for the affinity bar based on score. */
+function affinityColor(v: number): string {
+  if (v >= 0.7) return 'var(--color-success)';
+  if (v >= 0.4) return 'var(--color-accent)';
+  return 'var(--color-text-tertiary)';
+}
+
 interface CharacterCardProps {
   character: Character;
   onClick: () => void;
@@ -43,18 +61,30 @@ interface CharacterCardProps {
 }
 
 /**
- * Compact card showing a character's avatar, name, and last message preview.
- * Used in the ChatsView character list. Features hover-lift effect and
- * accent-tinted shadow for a premium feel.
+ * Compact card showing a character's avatar, name, relationship level, and
+ * message preview. Used in the ChatsView character list.
  *
- * @param character - The character data to display
- * @param onClick - Callback when the card is tapped (opens chat thread)
- * @param lastMessage - Optional last message preview text
- * @param timestamp - Optional timestamp string for the last message
+ * Lazily fetches relationship data (affinity, interactions) on mount to show
+ * a small affinity bar and tier label (Devoted / Close / Friendly / etc.)
+ * matching Neon's character grid behavior.
  */
 export function CharacterCard({ character, onClick, lastMessage, timestamp }: CharacterCardProps) {
   const avatarUrl = resolveAvatarUrl(character);
   const hasImage = avatarUrl !== null;
+  const [imgFailed, setImgFailed] = useState(false);
+  const [affinity, setAffinity] = useState<number | null>(null);
+  const [interactions, setInteractions] = useState<number>(0);
+
+  useEffect(() => {
+    api.getRelationship(character.id)
+      .then(rel => {
+        setAffinity(rel.affinity);
+        setInteractions(rel.interactions);
+      })
+      .catch(() => {});
+  }, [character.id]);
+
+  const showImage = hasImage && !imgFailed;
 
   return (
     <button
@@ -67,31 +97,70 @@ export function CharacterCard({ character, onClick, lastMessage, timestamp }: Ch
         border: '1px solid var(--color-border-subtle)',
       }}
     >
-      {/* Avatar circle with accent ring on hover (handled by CSS) */}
-      <div
-        className="w-12 h-12 rounded-full bg-cover bg-center flex-shrink-0 flex items-center justify-center ring-2 ring-transparent transition-all duration-200"
-        style={{
-          backgroundImage: hasImage ? `url(${avatarUrl})` : undefined,
-          backgroundColor: hasImage ? undefined : 'var(--color-accent)',
-          color: 'var(--color-accent-text)',
-          fontSize: '1.1rem',
-          fontWeight: 600
-        }}
-      >
-        {!hasImage && (character.name?.[0] ?? '?')}
-      </div>
+      {/* Avatar */}
+      {showImage ? (
+        <img
+          src={avatarUrl!}
+          alt={character.name || ''}
+          onError={() => setImgFailed(true)}
+          className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+        />
+      ) : (
+        <div
+          className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center"
+          style={{
+            backgroundColor: hasImage && !imgFailed ? undefined : 'var(--color-accent)',
+            color: 'var(--color-accent-text)',
+            fontSize: '1.1rem',
+            fontWeight: 600,
+          }}
+        >
+          {character.name?.[0] ?? '?'}
+        </div>
+      )}
+
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
           <span className="font-semibold text-sm truncate" style={{ color: 'var(--color-text-primary)' }}>
             {character.name}
           </span>
-          {timestamp && (
-            <span className="text-[10px] flex-shrink-0 ml-2" style={{ color: 'var(--color-text-tertiary)' }}>
-              {timestamp}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+            {affinity !== null && (
+              <span className="text-[9px] font-medium" style={{ color: affinityColor(affinity) }}>
+                {affinityLabel(affinity)}
+              </span>
+            )}
+            {timestamp && (
+              <span className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
+                {timestamp}
+              </span>
+            )}
+          </div>
         </div>
-        <p className="text-xs truncate mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+
+        {/* Affinity mini-bar + interaction count */}
+        {affinity !== null && (
+          <div className="flex items-center gap-2 mt-0.5 mb-0.5">
+            <div style={{ width: 48, height: 2, borderRadius: 99, backgroundColor: 'var(--color-border)' }}>
+              <div
+                style={{
+                  width: `${Math.round(affinity * 100)}%`,
+                  height: '100%',
+                  borderRadius: 99,
+                  backgroundColor: affinityColor(affinity),
+                  transition: 'width 0.4s ease',
+                }}
+              />
+            </div>
+            {interactions > 0 && (
+              <span className="text-[9px]" style={{ color: 'var(--color-text-tertiary)' }}>
+                {interactions} chats
+              </span>
+            )}
+          </div>
+        )}
+
+        <p className="text-xs truncate" style={{ color: 'var(--color-text-secondary)' }}>
           {lastMessage || character.greeting_message || 'Start a conversation...'}
         </p>
       </div>

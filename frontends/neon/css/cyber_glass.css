@@ -727,6 +727,8 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
     gap: 0.25rem;
     margin-left: 0.5rem;
     padding: 0.2rem 0.5rem;
+    appearance: none;
+    -webkit-appearance: none;
     background: rgba(0, 240, 255, 0.08);
     border: 1px solid rgba(0, 240, 255, 0.25);
     border-radius: var(--radius-sm);

@@ -469,11 +469,12 @@ interface GeneralTabProps {
 function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMode, compactMode, toggleCompactMode }: GeneralTabProps) {
   return (
     <>
-      {/* Appearance */}
+      {/* Theme */}
       <section className="mb-6">
-        <SectionHeader title="Appearance" />
+        <SectionHeader title="Theme" />
         <div style={cardStyle} className="px-4">
-          <SettingField label="Theme" description="4 premium themes — warm sakura or cool crystal, each in light and dark.">
+          <SettingField label="Color Theme" description="4 premium themes — warm sakura or cool crystal, each in light and dark."
+            tooltip="Changes all colors, shadows, and accents across the entire UI.">
             <select
               value={theme}
               onChange={(e) => setTheme(e.target.value as 'sakura' | 'crystal' | 'dark-sakura' | 'dark-crystal')}
@@ -489,7 +490,13 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
               </optgroup>
             </select>
           </SettingField>
+        </div>
+      </section>
 
+      {/* Layout */}
+      <section className="mb-6">
+        <SectionHeader title="Layout" />
+        <div style={cardStyle} className="px-4">
           <SettingField label="Chat Layout" description="How chat and 3D model are arranged."
             tooltip="Chat-first shows the conversation full width. Model-first gives the 3D model most of the screen. Split shows both side-by-side.">
             <select
@@ -503,7 +510,8 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
             </select>
           </SettingField>
 
-          <SettingField label="Chat Font Size" description="Size of chat message text." advanced>
+          <SettingField label="Chat Font Size" description="Size of chat message text."
+            tooltip="Affects all chat bubbles. Small=12px, Medium=14px, Large=16px.">
             <select
               value={String(cfg('chat_font_size', 'medium'))}
               onChange={(e) => save('chat_font_size', e.target.value)}
@@ -515,7 +523,8 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
             </select>
           </SettingField>
 
-          <SettingField label="Show Timestamps" description="Show time on each chat bubble." advanced>
+          <SettingField label="Show Timestamps" description="Show time on each chat bubble."
+            tooltip="Displays the message timestamp on hover.">
             <input
               type="checkbox"
               checked={cfg('show_timestamps', true) as boolean}
@@ -524,27 +533,8 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
             />
           </SettingField>
 
-          <SettingField label="Typewriter Effect" description="Animate AI responses word by word." advanced
-            tooltip="AI responses appear word-by-word for a visual novel feel.">
-            <input
-              type="checkbox"
-              checked={cfg('typewriter_enabled', false) as boolean}
-              onChange={(e) => save('typewriter_enabled', e.target.checked)}
-              className="accent-[var(--color-accent)]"
-            />
-          </SettingField>
-
-          {Boolean(cfg('typewriter_enabled', false)) && (
-            <SliderField
-              label="Typewriter Speed" description="Words per second." advanced
-              value={Number(cfg('typewriter_speed', 15))}
-              min={5} max={40} step={1}
-              onChange={(v) => save('typewriter_speed', v)}
-              format={(v) => `${v} w/s`}
-            />
-          )}
-
-          <SettingField label="Interface Sounds" description="Clicks and beeps for UI interactions." advanced>
+          <SettingField label="Interface Sounds" description="Subtle clicks and beeps for UI interactions."
+            tooltip="Plays cyberpunk-style audio feedback on button clicks and events.">
             <input
               type="checkbox"
               checked={cfg('ui_sounds', false) as boolean}
@@ -553,7 +543,7 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
             />
           </SettingField>
 
-          <SettingField label="Frontend" description="Switch between Sakura (modern) and Neon (cyberpunk) interfaces.">
+          <SettingField label="Frontend" description="Switch between Sakura and Neon interfaces.">
             <button
               onClick={async () => {
                 try {
@@ -573,6 +563,91 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
             >
               Switch to Neon
             </button>
+          </SettingField>
+        </div>
+      </section>
+
+      {/* Chat Effects */}
+      <section className="mb-6">
+        <SectionHeader title="Chat Effects" />
+        <div style={cardStyle} className="px-4">
+          <SettingField label="Typewriter Effect" description="Animate AI responses word by word."
+            tooltip="AI responses appear word-by-word for a visual novel feel. Disable for instant display.">
+            <input
+              type="checkbox"
+              checked={cfg('typewriter_enabled', false) as boolean}
+              onChange={(e) => save('typewriter_enabled', e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+
+          {Boolean(cfg('typewriter_enabled', false)) && (
+            <SliderField
+              label="Typewriter Speed" description="Words revealed per second."
+              tooltip="Higher = faster reveal. 15 w/s is a good default for readability."
+              value={Number(cfg('typewriter_speed', 15))}
+              min={5} max={40} step={1}
+              onChange={(v) => save('typewriter_speed', v)}
+              format={(v) => `${v} w/s`}
+            />
+          )}
+        </div>
+      </section>
+
+      {/* 3D Viewport */}
+      <section className="mb-6">
+        <SectionHeader title="3D Viewport" />
+        <div style={cardStyle} className="px-4">
+          <SettingField label="Scene Lighting" description="Lighting mood for the 3D viewport."
+            tooltip="Studio is neutral. Warm sunset, cool moonlight, and neon are atmospheric.">
+            <select
+              value={String(cfg('lighting_preset', 'studio'))}
+              onChange={(e) => save('lighting_preset', e.target.value)}
+              className="text-sm px-2 py-1 rounded" style={selectStyle}
+            >
+              <option value="studio">Studio</option>
+              <option value="warm_sunset">Warm Sunset</option>
+              <option value="cool_moonlight">Cool Moonlight</option>
+              <option value="dramatic">Dramatic</option>
+              <option value="neon">Neon</option>
+            </select>
+          </SettingField>
+
+          <SettingField label="Shadow Quality" description="3D character shadow rendering."
+            tooltip="Off = fastest. Soft = realistic blur (recommended). Sharp = hard-edged shadows.">
+            <select
+              value={String(cfg('shadow_quality', 'off'))}
+              onChange={(e) => save('shadow_quality', e.target.value)}
+              className="text-sm px-2 py-1 rounded" style={selectStyle}
+            >
+              <option value="off">Off</option>
+              <option value="soft">Soft</option>
+              <option value="sharp">Sharp</option>
+            </select>
+          </SettingField>
+
+          <SettingField label="FPS Cap" description="Limit 3D render frame rate." advanced
+            tooltip="Capping FPS reduces GPU load. Useful if running in the background or on battery.">
+            <select
+              value={String(cfg('fps_target', 'Unlimited'))}
+              onChange={(e) => save('fps_target', e.target.value)}
+              className="text-sm px-2 py-1 rounded" style={selectStyle}
+            >
+              <option value="30">30 FPS</option>
+              <option value="60">60 FPS</option>
+              <option value="120">120 FPS</option>
+              <option value="Unlimited">Unlimited</option>
+            </select>
+          </SettingField>
+
+          <SettingField label="Anti-Aliasing" description="Smooth jagged edges on 3D models." advanced
+            tooltip="Smooths stair-step edges. Disabling saves ~10-15% GPU. Requires page reload.">
+            <input
+              type="checkbox"
+              checked={cfg('antialias', true) as boolean}
+              onChange={(e) => save('antialias', e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
           </SettingField>
         </div>
       </section>
@@ -897,6 +972,7 @@ function VoiceTab({ save, cfg }: TabProps) {
 
           <SliderField
             label="Volume" description="Master volume for TTS audio playback."
+            tooltip="Controls volume of all TTS audio. 100% is full volume. Applies to voice preview and in-chat playback."
             value={Number(cfg('tts_volume', 1.0))}
             min={0} max={1.0} step={0.05}
             onChange={(v) => save('tts_volume', v)}
@@ -939,7 +1015,8 @@ function VoiceTab({ save, cfg }: TabProps) {
             format={(v) => v.toFixed(1)}
           />
 
-          <SettingField label="Interrupt Mode" description="Stop AI talking when you speak." advanced>
+          <SettingField label="Interrupt Mode" description="Stop AI talking when you speak." advanced
+            tooltip="When enabled, sending a new message while TTS is playing will stop playback immediately.">
             <input
               type="checkbox"
               checked={cfg('interrupt_mode', true) as boolean}

@@ -79,6 +79,10 @@ export const api = {
   // Sessions
   getSessions: () => get<{ sessions: Session[] }>('/api/sessions').then(d => d.sessions),
   createSession: (charId: number) => post<Session>('/api/sessions', { character_id: charId }),
+  createNamedSession: (title: string) => post<{ id: number; title: string }>('/api/sessions', { title }),
+  updateSession: (id: number, data: { title?: string; is_pinned?: boolean; is_archived?: boolean }) =>
+    put<{ ok: boolean }>(`/api/sessions/${id}`, data),
+  deleteSession: (id: number) => del<{ ok: boolean; deleted_messages: number }>(`/api/sessions/${id}`),
   getMessages: (sessionId: number) =>
     get<{ messages: Array<{ id: number; role: string; content: string; created_at: string }> }>(
       `/api/sessions/${sessionId}/messages`

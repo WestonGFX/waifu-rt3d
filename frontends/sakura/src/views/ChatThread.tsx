@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { DialogueBubble } from '../components/DialogueBubble';
 import { StatusBar } from '../components/StatusBar';
 import { ModelPanel } from '../components/ModelPanel';
+import { SessionDrawer } from '../components/SessionDrawer';
 
 /**
  * Full-screen chat thread view with visual novel style dialogue.
@@ -17,6 +18,7 @@ export function ChatThread() {
   const { messages, draft, loading, setDraft, sendMessage, setContext, loadHistory } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
 
   useEffect(() => {
     if (!activeCharacter) return;
@@ -63,7 +65,7 @@ export function ChatThread() {
     <div className="flex h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
       {/* Chat column */}
       <div className="flex flex-col flex-1 min-w-0">
-        <StatusBar character={activeCharacter} />
+        <StatusBar character={activeCharacter} onOpenSessions={() => setSessionsOpen(true)} />
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 max-w-3xl mx-auto w-full">
           {messages.map((msg) => (
             <DialogueBubble
@@ -120,6 +122,14 @@ export function ChatThread() {
 
       {/* Model panel */}
       <ModelPanel character={activeCharacter} />
+
+      {/* Session management drawer */}
+      <SessionDrawer
+        open={sessionsOpen}
+        onClose={() => setSessionsOpen(false)}
+        characterId={activeCharacter.id}
+        characterName={activeCharacter.name}
+      />
     </div>
   );
 }

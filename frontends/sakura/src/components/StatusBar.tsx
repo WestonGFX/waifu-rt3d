@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Eye } from 'lucide-react';
+import { ArrowLeft, Eye, MessageSquare } from 'lucide-react';
 import type { Character } from '../lib/types';
 import { useAppStore } from '../stores/appStore';
 
@@ -18,7 +18,7 @@ const IDLE_PHRASES = [
  * Cycles through ambient idle phrases every 10 seconds to give the character
  * a sense of life even when no messages are being exchanged.
  */
-export function StatusBar({ character }: { character: Character }) {
+export function StatusBar({ character, onOpenSessions }: { character: Character; onOpenSessions?: () => void }) {
   const { closeChatThread, toggleModelPanel, modelPanelOpen } = useAppStore();
   const [idlePhrase, setIdlePhrase] = useState(IDLE_PHRASES[0]);
 
@@ -66,6 +66,16 @@ export function StatusBar({ character }: { character: Character }) {
           {idlePhrase}
         </p>
       </div>
+      {onOpenSessions && (
+        <button
+          onClick={onOpenSessions}
+          className="p-2 rounded-lg transition-all duration-200"
+          style={{ color: 'var(--color-text-tertiary)' }}
+          title="Chat threads"
+        >
+          <MessageSquare size={18} />
+        </button>
+      )}
       <button
         onClick={toggleModelPanel}
         className="p-2 rounded-lg transition-all duration-200"

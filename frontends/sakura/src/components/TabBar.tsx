@@ -4,7 +4,7 @@ import { useAppStore } from '../stores/appStore';
 
 const TABS = [
   { id: 'chats', label: 'Chats', icon: MessageCircle },
-  { id: 'discover', label: 'Discover', icon: Search },
+  { id: 'discover', label: 'Characters', icon: Search },
   { id: 'create', label: 'Create', icon: Sparkles },
   { id: 'memory', label: 'Memory', icon: Brain },
   { id: 'settings', label: 'Settings', icon: Settings }

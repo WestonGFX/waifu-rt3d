@@ -17,6 +17,24 @@ function isImageUrl(url?: string): boolean {
   }
 }
 
+/**
+ * Resolve the best avatar image URL for a character.
+ * Uses the same fallback logic as Neon's CharacterGrid:
+ * 1. avatar_url if it's a renderable image
+ * 2. Convention-based pixel portrait: /files/images/{name}_pixel_portrait.png
+ *    where {name} is extracted from parentheses or first word lowercased
+ */
+function resolveAvatarUrl(character: Character): string | null {
+  if (isImageUrl(character.avatar_url)) return character.avatar_url!;
+  // Extract clean name: "Fox (Rin)" → "rin", "Tsundere (Raine)" → "raine"
+  const parenMatch = character.name?.match(/\(([^)]+)\)/);
+  const cleanName = parenMatch
+    ? parenMatch[1].trim().toLowerCase()
+    : (character.name?.split(/\s/)[0] || '').toLowerCase();
+  if (cleanName) return `/files/images/${cleanName}_pixel_portrait.png`;
+  return null;
+}
+
 interface CharacterCardProps {
   character: Character;
   onClick: () => void;
@@ -35,7 +53,8 @@ interface CharacterCardProps {
  * @param timestamp - Optional timestamp string for the last message
  */
 export function CharacterCard({ character, onClick, lastMessage, timestamp }: CharacterCardProps) {
-  const hasImage = isImageUrl(character.avatar_url);
+  const avatarUrl = resolveAvatarUrl(character);
+  const hasImage = avatarUrl !== null;
 
   return (
     <button
@@ -52,7 +71,7 @@ export function CharacterCard({ character, onClick, lastMessage, timestamp }: Ch
       <div
         className="w-12 h-12 rounded-full bg-cover bg-center flex-shrink-0 flex items-center justify-center ring-2 ring-transparent transition-all duration-200"
         style={{
-          backgroundImage: hasImage ? `url(${character.avatar_url})` : undefined,
+          backgroundImage: hasImage ? `url(${avatarUrl})` : undefined,
           backgroundColor: hasImage ? undefined : 'var(--color-accent)',
           color: 'var(--color-accent-text)',
           fontSize: '1.1rem',

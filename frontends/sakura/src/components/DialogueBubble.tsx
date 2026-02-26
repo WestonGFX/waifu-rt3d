@@ -15,6 +15,17 @@ function isImageUrl(url?: string): boolean {
   }
 }
 
+/** Resolve avatar with pixel portrait fallback (same as CharacterCard). */
+function resolveAvatarUrl(name?: string, avatarUrl?: string): string | null {
+  if (isImageUrl(avatarUrl)) return avatarUrl!;
+  const parenMatch = name?.match(/\(([^)]+)\)/);
+  const cleanName = parenMatch
+    ? parenMatch[1].trim().toLowerCase()
+    : (name?.split(/\s/)[0] || '').toLowerCase();
+  if (cleanName) return `/files/images/${cleanName}_pixel_portrait.png`;
+  return null;
+}
+
 interface DialogueBubbleProps {
   message: ChatMessage;
   character?: Character;
@@ -53,8 +64,8 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying }: D
         }}
       >
         <div className="flex items-center gap-2 mb-2">
-          {isImageUrl(character?.avatar_url) ? (
-            <img src={character!.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+          {resolveAvatarUrl(character?.name, character?.avatar_url) ? (
+            <img src={resolveAvatarUrl(character?.name, character?.avatar_url)!} alt="" className="w-8 h-8 rounded-full object-cover" />
           ) : (
             <div
               className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"

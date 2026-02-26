@@ -10,6 +10,7 @@ export interface Character {
   tts_provider?: string;
   model_type?: string;
   model_vrm?: string;
+  vrm_model_url?: string;
   live2d_model?: string;
   background_url?: string;
   background_mode?: string;

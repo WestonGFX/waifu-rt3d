@@ -18,15 +18,17 @@ export function ModelPanel({ character }: ModelPanelProps) {
   const { modelPanelOpen, toggleModelPanel } = useAppStore();
   const { iframeRef, loadCharacter, setCameraPreset } = useViewer();
 
+  const vrmUrl = character.vrm_model_url || character.model_vrm;
+
   useEffect(() => {
-    if (modelPanelOpen && character.model_vrm) {
+    if (modelPanelOpen && vrmUrl) {
       const timer = setTimeout(() => {
-        loadCharacter(character.model_vrm!);
+        loadCharacter(vrmUrl);
         setCameraPreset('bust');
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [modelPanelOpen, character.model_vrm, loadCharacter, setCameraPreset]);
+  }, [modelPanelOpen, vrmUrl, loadCharacter, setCameraPreset]);
 
   return (
     <AnimatePresence>

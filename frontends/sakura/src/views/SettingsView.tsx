@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Brain, Volume2, Palette, Shield, Image, Settings, Package
+  Brain, Volume2, Palette, Shield, Image, Settings, Package, User
 } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useTheme } from '../hooks/useTheme';
 import { SettingField } from '../components/SettingField';
+import { VoicePicker } from '../components/VoicePicker';
 import { TTSModelsPanel } from '../components/TTSModelsPanel';
+import { api } from '../lib/api';
 
 /* ─── Helper: deep-get nested config key like "llm.model" ──────────── */
 function cfgGet(config: Record<string, unknown>, key: string, fallback: unknown = ''): unknown {
@@ -32,7 +34,7 @@ const cardStyle: React.CSSProperties = {
 };
 
 /* ─── Tab definitions ──────────────────────────────────────────────── */
-type SettingsTab = 'general' | 'brain' | 'voice' | 'character' | 'safety' | 'aiart' | 'system' | 'tts_models';
+type SettingsTab = 'general' | 'character' | 'brain' | 'voice' | 'safety' | 'aiart' | 'system' | 'tts_models';
 
 interface TabDef {
   id: SettingsTab;
@@ -42,6 +44,7 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { id: 'general', label: 'General', icon: <Palette size={15} /> },
+  { id: 'character', label: 'Character', icon: <User size={15} /> },
   { id: 'brain', label: 'Brain', icon: <Brain size={15} /> },
   { id: 'voice', label: 'Voice', icon: <Volume2 size={15} /> },
   { id: 'safety', label: 'Safety', icon: <Shield size={15} /> },
@@ -138,6 +141,9 @@ export function SettingsView() {
             compactMode={compactMode} toggleCompactMode={toggleCompactMode}
           />
         )}
+        {activeTab === 'character' && (
+          <CharacterTab />
+        )}
         {activeTab === 'brain' && (
           <BrainTab config={config} save={save} cfg={cfg} lmModels={lmModels} lmLoading={lmLoading} fetchLmModels={fetchLmModels} />
         )}
@@ -203,6 +209,239 @@ function SliderField({
         </span>
       </div>
     </SettingField>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Tab: Character (active character's appearance, model, voice)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+function CharacterTab() {
+  const { activeCharacter, setActiveCharacter, characters, loadCharacters } = useAppStore();
+  const [vrmModels, setVrmModels] = useState<string[]>([]);
+  const [images, setImages] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [localData, setLocalData] = useState({
+    avatar_url: '',
+    model_vrm: '',
+    background_url: '',
+    background_mode: 'transparent',
+    voice_id: '',
+    tts_provider: 'edge-tts',
+  });
+
+  // Load file lists + sync from active character
+  useEffect(() => {
+    api.scanVrm().then(setVrmModels).catch(() => {});
+    api.scanImages().then(setImages).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (activeCharacter) {
+      setLocalData({
+        avatar_url: activeCharacter.avatar_url || '',
+        model_vrm: activeCharacter.vrm_model_url || activeCharacter.model_vrm || '',
+        background_url: activeCharacter.background_url || '',
+        background_mode: activeCharacter.background_mode || 'transparent',
+        voice_id: activeCharacter.voice_id || '',
+        tts_provider: activeCharacter.tts_provider || 'edge-tts',
+      });
+    }
+  }, [activeCharacter]);
+
+  const saveCharacter = async () => {
+    if (!activeCharacter) return;
+    setSaving(true);
+    try {
+      // Map frontend field names to backend API field names
+      const payload = {
+        avatar_url: localData.avatar_url,
+        vrm_model_url: localData.model_vrm,
+        background_url: localData.background_url,
+        background_mode: localData.background_mode,
+        voice_id: localData.voice_id,
+        tts_provider: localData.tts_provider,
+      };
+      const updated = await api.updateCharacter(activeCharacter.id, payload);
+      setActiveCharacter({ ...activeCharacter, ...updated, ...localData });
+      await loadCharacters();
+    } catch (err) {
+      console.error('Failed to save character:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAvatarUpload = async (file: File) => {
+    try {
+      const result = await api.uploadAvatar(file);
+      if (result.url) {
+        setLocalData(d => ({ ...d, avatar_url: result.url }));
+      }
+    } catch (err) {
+      console.error('Upload failed:', err);
+    }
+  };
+
+  if (!activeCharacter) {
+    return (
+      <div className="text-center py-12 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+        Select a character from the Chats tab to edit their appearance.
+      </div>
+    );
+  }
+
+  const avatarImages = images.filter(f => /\.(png|jpe?g|gif|webp|svg)$/i.test(f));
+
+  return (
+    <>
+      {/* Active character selector */}
+      <section className="mb-6">
+        <SectionHeader title={`Editing: ${activeCharacter.name}`} />
+        <div style={cardStyle} className="px-4">
+          <SettingField label="Active Character" description="Switch which character you're editing.">
+            <select
+              value={activeCharacter.id}
+              onChange={(e) => {
+                const char = characters.find(c => c.id === Number(e.target.value));
+                if (char) setActiveCharacter(char);
+              }}
+              className="text-sm px-2 py-1 rounded" style={selectStyle}
+            >
+              {characters.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </SettingField>
+        </div>
+      </section>
+
+      {/* Avatar / Icon */}
+      <section className="mb-6">
+        <SectionHeader title="Avatar & Appearance" />
+        <div style={cardStyle} className="px-4">
+          <SettingField label="Avatar Image" description="Profile picture shown in chat bubbles and character list."
+            tooltip="Select from scanned images or upload a new one. VRM files are not valid avatar images.">
+            <div className="flex items-center gap-2">
+              <select
+                value={localData.avatar_url}
+                onChange={(e) => setLocalData(d => ({ ...d, avatar_url: e.target.value }))}
+                className="text-sm px-2 py-1 rounded w-48" style={selectStyle}
+              >
+                <option value="">None (use initial)</option>
+                {avatarImages.map(img => (
+                  <option key={img} value={`/files/images/${img}`}>{img}</option>
+                ))}
+                {localData.avatar_url && !avatarImages.some(i => `/files/images/${i}` === localData.avatar_url) && (
+                  <option value={localData.avatar_url}>{localData.avatar_url} (current)</option>
+                )}
+              </select>
+              <label
+                className="text-xs px-2 py-1 rounded cursor-pointer"
+                style={{ ...selectStyle, color: 'var(--color-accent)' }}
+              >
+                Upload
+                <input type="file" accept="image/*" className="hidden"
+                  onChange={(e) => { if (e.target.files?.[0]) handleAvatarUpload(e.target.files[0]); }} />
+              </label>
+            </div>
+          </SettingField>
+
+          {/* Avatar preview */}
+          {localData.avatar_url && /\.(png|jpe?g|gif|webp|svg)$/i.test(localData.avatar_url) && (
+            <div className="py-2 flex justify-center">
+              <img src={localData.avatar_url} alt="Avatar preview"
+                className="w-20 h-20 rounded-full object-cover"
+                style={{ border: '2px solid var(--color-accent)' }} />
+            </div>
+          )}
+
+          <SettingField label="VRM Model" description="3D model file for the viewport."
+            tooltip="Place .vrm files in backend/storage/avatars/ to see them here.">
+            <select
+              value={localData.model_vrm}
+              onChange={(e) => setLocalData(d => ({ ...d, model_vrm: e.target.value }))}
+              className="text-sm px-2 py-1 rounded w-48" style={selectStyle}
+            >
+              <option value="">None</option>
+              {vrmModels.map(m => (
+                <option key={m} value={m}>{m.split('/').pop()}</option>
+              ))}
+            </select>
+          </SettingField>
+
+          <SettingField label="Background Image" description="Shown behind the 3D avatar in the viewport.">
+            <select
+              value={localData.background_url}
+              onChange={(e) => setLocalData(d => ({ ...d, background_url: e.target.value }))}
+              className="text-sm px-2 py-1 rounded w-48" style={selectStyle}
+            >
+              <option value="">None</option>
+              {images.map(img => (
+                <option key={img} value={`/files/images/${img}`}>{img}</option>
+              ))}
+            </select>
+          </SettingField>
+
+          <SettingField label="Background Mode" description="How the viewport background is rendered.">
+            <select
+              value={localData.background_mode}
+              onChange={(e) => setLocalData(d => ({ ...d, background_mode: e.target.value }))}
+              className="text-sm px-2 py-1 rounded" style={selectStyle}
+            >
+              <option value="transparent">Transparent</option>
+              <option value="image">Image</option>
+              <option value="color">Color</option>
+              <option value="video">Video</option>
+              <option value="gradient">Gradient</option>
+            </select>
+          </SettingField>
+        </div>
+      </section>
+
+      {/* Per-character voice */}
+      <section className="mb-6">
+        <SectionHeader title="Voice" />
+        <div style={cardStyle} className="px-4">
+          <SettingField label="TTS Provider" description="Override the global voice provider for this character.">
+            <select
+              value={localData.tts_provider}
+              onChange={(e) => setLocalData(d => ({ ...d, tts_provider: e.target.value }))}
+              className="text-sm px-2 py-1 rounded" style={selectStyle}
+            >
+              <option value="edge-tts">Edge-TTS (Cloud)</option>
+              <option value="kokoro">Kokoro (Local)</option>
+              <option value="piper">Piper (Local)</option>
+              <option value="chatterbox">Chatterbox (Local)</option>
+              <option value="elevenlabs">ElevenLabs (Cloud)</option>
+            </select>
+          </SettingField>
+
+          <SettingField label="Voice" description="Pick a voice for this character.">
+            <VoicePicker
+              value={localData.voice_id}
+              provider={localData.tts_provider}
+              onChange={(voiceId, provider) => setLocalData(d => ({ ...d, voice_id: voiceId, tts_provider: provider }))}
+            />
+          </SettingField>
+        </div>
+      </section>
+
+      {/* Save button */}
+      <div className="flex justify-end">
+        <button
+          onClick={saveCharacter}
+          disabled={saving}
+          className="px-5 py-2 text-sm font-medium rounded-lg disabled:opacity-50"
+          style={{
+            backgroundColor: 'var(--color-accent)',
+            color: 'var(--color-accent-text)',
+          }}
+        >
+          {saving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -582,14 +821,19 @@ function VoiceTab({ save, cfg }: TabProps) {
       const res = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: 'Hello! This is a voice preview test.', provider: cfg('tts.provider', 'edge-tts') }),
+        body: JSON.stringify({
+          text: 'Hello! This is a voice preview test.',
+          provider: cfg('tts.provider', 'edge-tts'),
+          voice_id: cfg('tts.voice_id', cfg('voice_id', '')),
+        }),
       });
       if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.volume = Number(cfg('tts_volume', 1.0));
-        audio.play();
+        const data = await res.json();
+        if (data.ok && data.url) {
+          const audio = new Audio(data.url);
+          audio.volume = Number(cfg('tts_volume', 1.0));
+          audio.play();
+        }
       }
     } catch (err) {
       console.error('Voice preview failed:', err);

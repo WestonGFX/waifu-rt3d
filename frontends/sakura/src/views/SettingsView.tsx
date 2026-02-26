@@ -241,6 +241,7 @@ function CharacterTab() {
   const [images, setImages] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [localData, setLocalData] = useState({
     avatar_url: '',
     model_vrm: '',
@@ -443,6 +444,41 @@ function CharacterTab() {
               provider={localData.tts_provider}
               onChange={(voiceId, provider) => setLocalData(d => ({ ...d, voice_id: voiceId, tts_provider: provider }))}
             />
+          </SettingField>
+        </div>
+      </section>
+
+      {/* Relationship reset */}
+      <section className="mb-4">
+        <SectionHeader title="Relationship" />
+        <div style={cardStyle} className="px-4">
+          <SettingField label="Reset Relationship" description="Reset affinity, mood, and trust back to 0.5 neutral.">
+            {!confirmReset ? (
+              <button
+                onClick={() => setConfirmReset(true)}
+                className="text-xs px-3 py-1.5 rounded-lg"
+                style={{ color: 'var(--color-danger, #f44)', border: '1px solid var(--color-danger, #f44)' }}
+              >
+                Reset
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => { await api.resetRelationship(activeCharacter.id); setConfirmReset(false); }}
+                  className="text-xs px-3 py-1.5 rounded-lg font-semibold"
+                  style={{ backgroundColor: 'var(--color-danger, #f44)', color: '#fff' }}
+                >
+                  Confirm Reset
+                </button>
+                <button
+                  onClick={() => setConfirmReset(false)}
+                  className="text-xs px-2 py-1.5 rounded-lg"
+                  style={{ color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </SettingField>
         </div>
       </section>

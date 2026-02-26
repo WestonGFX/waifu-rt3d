@@ -139,6 +139,10 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               <span className="inline-block w-0.5 h-4 ml-0.5 animate-pulse align-text-bottom"
                 style={{ backgroundColor: 'var(--color-accent)' }} />
             </span>
+          ) : message.status === 'failed' ? (
+            <span style={{ color: 'var(--color-danger, #f44)', fontStyle: 'italic' }}>
+              {message.text}
+            </span>
           ) : (
             <HighlightedText text={message.text} query={searchQuery} />
           )}

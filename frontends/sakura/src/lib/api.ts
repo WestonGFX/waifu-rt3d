@@ -129,6 +129,8 @@ export const api = {
     get<{ ok: boolean; relationship: { affinity: number; mood: number; trust: number; interactions: number; last_updated: number | null } }>(
       `/api/characters/${charId}/relationship`
     ).then(d => d.relationship),
+  resetRelationship: (charId: number) =>
+    post<{ ok: boolean }>(`/api/characters/${charId}/relationship/reset`, {}),
 
   // LLM generation proxy (for AI character generation, etc.)
   llmGenerate: (messages: Array<{ role: string; content: string }>, temperature = 0.9, maxTokens = 500) =>

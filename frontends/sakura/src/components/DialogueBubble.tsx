@@ -24,15 +24,16 @@ interface DialogueBubbleProps {
 
 /**
  * Visual novel style message bubble.
- * User messages render as right-aligned accent-colored bubbles.
+ * User messages render as right-aligned accent-gradient bubbles.
  * Assistant messages render as left-aligned cards with avatar, name, and hover metadata.
+ * Uses CSS animations from dialogue.css for entrance and components.css for typing dots.
  */
 export function DialogueBubble({ message, character, onPlayAudio, isPlaying }: DialogueBubbleProps) {
   if (message.role === 'user') {
     return (
       <div className="flex justify-end mb-3">
         <div
-          className="dialogue-you px-4 py-2.5 max-w-[75%] text-sm"
+          className="dialogue-bubble dialogue-you px-4 py-2.5 max-w-[75%] text-sm"
           style={{ borderRadius: 'var(--radius-card)' }}
         >
           {message.text}
@@ -57,7 +58,12 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying }: D
           ) : (
             <div
               className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ backgroundColor: 'var(--color-accent)', color: 'white', fontSize: '0.8rem', fontWeight: 600 }}
+              style={{
+                background: 'var(--color-accent-gradient)',
+                color: 'var(--color-accent-text)',
+                fontSize: '0.8rem',
+                fontWeight: 600
+              }}
             >
               {character?.name?.[0] ?? '?'}
             </div>
@@ -68,8 +74,11 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying }: D
           {message.audioUrl && onPlayAudio && (
             <button
               onClick={onPlayAudio}
-              className="ml-auto p-1 transition-opacity"
-              style={{ color: 'var(--color-accent)' }}
+              className="ml-auto p-1.5 rounded-lg transition-all duration-200"
+              style={{
+                color: isPlaying ? 'var(--color-accent-text)' : 'var(--color-accent)',
+                background: isPlaying ? 'var(--color-accent-gradient)' : 'transparent',
+              }}
             >
               <Volume2 size={14} className={isPlaying ? 'animate-pulse' : ''} />
             </button>
@@ -77,7 +86,11 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying }: D
         </div>
         <div className="text-sm leading-relaxed" style={{ color: 'var(--color-text-primary)' }}>
           {message.status === 'pending' ? (
-            <span className="animate-pulse" style={{ color: 'var(--color-text-secondary)' }}>thinking...</span>
+            <div className="flex items-center gap-1 py-1">
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+            </div>
           ) : (
             message.text
           )}

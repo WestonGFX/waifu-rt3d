@@ -26,7 +26,8 @@ interface CharacterCardProps {
 
 /**
  * Compact card showing a character's avatar, name, and last message preview.
- * Used in the ChatsView character list.
+ * Used in the ChatsView character list. Features hover-lift effect and
+ * accent-tinted shadow for a premium feel.
  *
  * @param character - The character data to display
  * @param onClick - Callback when the card is tapped (opens chat thread)
@@ -39,20 +40,21 @@ export function CharacterCard({ character, onClick, lastMessage, timestamp }: Ch
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-3 p-3 transition-colors duration-150 text-left"
+      className="character-card w-full flex items-center gap-3 p-3 text-left transition-all duration-200"
       style={{
         backgroundColor: 'var(--color-surface)',
         borderRadius: 'var(--radius-card)',
         boxShadow: 'var(--shadow-card)',
-        border: '1px solid var(--color-border)'
+        border: '1px solid var(--color-border-subtle)',
       }}
     >
+      {/* Avatar circle with accent ring on hover (handled by CSS) */}
       <div
-        className="w-12 h-12 rounded-full bg-cover bg-center flex-shrink-0 flex items-center justify-center"
+        className="w-12 h-12 rounded-full bg-cover bg-center flex-shrink-0 flex items-center justify-center ring-2 ring-transparent transition-all duration-200"
         style={{
           backgroundImage: hasImage ? `url(${character.avatar_url})` : undefined,
           backgroundColor: hasImage ? undefined : 'var(--color-accent)',
-          color: 'white',
+          color: 'var(--color-accent-text)',
           fontSize: '1.1rem',
           fontWeight: 600
         }}
@@ -65,7 +67,7 @@ export function CharacterCard({ character, onClick, lastMessage, timestamp }: Ch
             {character.name}
           </span>
           {timestamp && (
-            <span className="text-xs flex-shrink-0 ml-2" style={{ color: 'var(--color-text-secondary)' }}>
+            <span className="text-[10px] flex-shrink-0 ml-2" style={{ color: 'var(--color-text-tertiary)' }}>
               {timestamp}
             </span>
           )}

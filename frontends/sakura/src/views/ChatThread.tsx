@@ -60,7 +60,7 @@ export function ChatThread() {
   if (!activeCharacter) return null;
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
       {/* Chat column */}
       <div className="flex flex-col flex-1 min-w-0">
         <StatusBar character={activeCharacter} />
@@ -75,11 +75,15 @@ export function ChatThread() {
             />
           ))}
         </div>
+
+        {/* Composer bar */}
         <div
           className="sticky bottom-0 p-3"
           style={{
-            backgroundColor: 'var(--color-surface)',
-            borderTop: '1px solid var(--color-border)'
+            backgroundColor: 'color-mix(in srgb, var(--color-surface) 85%, transparent)',
+            backdropFilter: 'var(--blur-surface)',
+            WebkitBackdropFilter: 'var(--blur-surface)',
+            borderTop: '1px solid var(--color-border-subtle)'
           }}
         >
           <div className="max-w-3xl mx-auto flex items-end gap-2">
@@ -89,7 +93,7 @@ export function ChatThread() {
               onKeyDown={handleKeyDown}
               placeholder="Say something..."
               rows={1}
-              className="flex-1 resize-none px-4 py-2.5 text-sm outline-none"
+              className="flex-1 resize-none px-4 py-2.5 text-sm outline-none transition-all duration-200"
               style={{
                 backgroundColor: 'var(--color-background)',
                 borderRadius: 'var(--radius-input)',
@@ -100,11 +104,12 @@ export function ChatThread() {
             <button
               onClick={handleSend}
               disabled={!draft.trim() || loading}
-              className="p-2.5 transition-colors disabled:opacity-40"
+              className="p-2.5 transition-all duration-200 disabled:opacity-40"
               style={{
-                backgroundColor: 'var(--color-accent)',
+                background: 'var(--color-accent-gradient)',
                 color: 'var(--color-accent-text)',
-                borderRadius: 'var(--radius-button)'
+                borderRadius: 'var(--radius-button)',
+                boxShadow: !draft.trim() || loading ? 'none' : '0 2px 8px var(--color-accent-soft)'
               }}
             >
               <Send size={16} />

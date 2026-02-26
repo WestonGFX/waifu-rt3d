@@ -58,7 +58,7 @@ export function App() {
       {inChatThread ? (
         <ChatThread />
       ) : (
-        <div className="pb-12">
+        <div className="pb-14">
           <ViewRouter />
           <TabBar />
         </div>

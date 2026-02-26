@@ -28,10 +28,12 @@ export function TabBar() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 h-12 flex items-center justify-around"
+      className="fixed bottom-0 left-0 right-0 h-14 flex items-center justify-around"
       style={{
-        backgroundColor: 'var(--color-surface)',
-        borderTop: '1px solid var(--color-border)',
+        backgroundColor: 'color-mix(in srgb, var(--color-surface) 80%, transparent)',
+        backdropFilter: 'var(--blur-surface)',
+        WebkitBackdropFilter: 'var(--blur-surface)',
+        borderTop: '1px solid var(--color-border-subtle)',
         zIndex: 50
       }}
     >
@@ -48,13 +50,25 @@ export function TabBar() {
                 setActiveTab(tab.id);
               }
             }}
-            className="flex flex-col items-center gap-0.5 px-4 py-1 transition-colors duration-150"
+            className="relative flex flex-col items-center gap-0.5 px-4 py-1.5 transition-all duration-200"
             style={{
-              color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)'
+              color: active ? 'var(--color-accent)' : 'var(--color-text-tertiary)'
             }}
           >
             <Icon size={20} strokeWidth={active ? 2.5 : 1.5} />
-            <span className="text-[10px] font-medium">{tab.label}</span>
+            <span
+              className="text-[10px] font-medium"
+              style={{ opacity: active ? 1 : 0.7 }}
+            >
+              {tab.label}
+            </span>
+            {/* Active indicator dot */}
+            {active && (
+              <span
+                className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
+                style={{ backgroundColor: 'var(--color-accent)' }}
+              />
+            )}
           </button>
         );
       })}

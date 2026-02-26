@@ -30,7 +30,8 @@ const selectStyle: React.CSSProperties = {
 const cardStyle: React.CSSProperties = {
   backgroundColor: 'var(--color-surface)',
   borderRadius: 'var(--radius-card)',
-  border: '1px solid var(--color-border)',
+  border: '1px solid var(--color-border-subtle)',
+  boxShadow: 'var(--shadow-card)',
 };
 
 /* ─── Tab definitions ──────────────────────────────────────────────── */
@@ -113,22 +114,30 @@ export function SettingsView() {
       {/* Tab bar */}
       <div
         className="flex gap-1 p-2 overflow-x-auto flex-shrink-0"
-        style={{ borderBottom: '1px solid var(--color-border)' }}
+        style={{
+          borderBottom: '1px solid var(--color-border-subtle)',
+          backgroundColor: 'var(--color-surface)',
+        }}
       >
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors"
-            style={{
-              backgroundColor: activeTab === tab.id ? 'var(--color-accent)' : 'transparent',
-              color: activeTab === tab.id ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
-            }}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map(tab => {
+          const active = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              data-active={active}
+              className="settings-tab-pill flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all duration-200"
+              style={{
+                background: active ? 'var(--color-accent-gradient)' : 'transparent',
+                color: active ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
+                boxShadow: active ? '0 1px 4px var(--color-accent-soft)' : 'none',
+              }}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab content */}
@@ -452,7 +461,7 @@ function CharacterTab() {
 interface GeneralTabProps {
   config: Record<string, unknown>; save: (k: string, v: unknown) => void;
   cfg: (k: string, fb?: unknown) => unknown;
-  theme: string; setTheme: (t: 'sakura' | 'crystal') => void;
+  theme: string; setTheme: (t: 'sakura' | 'crystal' | 'dark-sakura' | 'dark-crystal') => void;
   advancedMode: boolean; toggleAdvancedMode: () => void;
   compactMode: boolean; toggleCompactMode: () => void;
 }
@@ -464,14 +473,20 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
       <section className="mb-6">
         <SectionHeader title="Appearance" />
         <div style={cardStyle} className="px-4">
-          <SettingField label="Theme" description="Choose between warm sakura pink or cool crystal blue.">
+          <SettingField label="Theme" description="4 premium themes — warm sakura or cool crystal, each in light and dark.">
             <select
               value={theme}
-              onChange={(e) => setTheme(e.target.value as 'sakura' | 'crystal')}
+              onChange={(e) => setTheme(e.target.value as 'sakura' | 'crystal' | 'dark-sakura' | 'dark-crystal')}
               className="text-sm px-2 py-1 rounded" style={selectStyle}
             >
-              <option value="sakura">Sakura</option>
-              <option value="crystal">Crystal</option>
+              <optgroup label="Light">
+                <option value="sakura">Sakura</option>
+                <option value="crystal">Crystal</option>
+              </optgroup>
+              <optgroup label="Dark">
+                <option value="dark-sakura">Dark Sakura</option>
+                <option value="dark-crystal">Dark Crystal</option>
+              </optgroup>
             </select>
           </SettingField>
 

@@ -1,17 +1,40 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Dialogue — Visual Novel Style Chat Bubbles
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Assistant message card */
 .dialogue-her {
   border-left: 3px solid var(--color-accent);
+  backdrop-filter: var(--blur-surface);
 }
 
+/* User message bubble — accent gradient */
 .dialogue-you {
-  background-color: var(--color-accent);
+  background: var(--color-accent-gradient);
   color: var(--color-accent-text);
+  box-shadow: 0 2px 8px var(--color-accent-soft);
 }
 
+/* Hover metadata reveal */
 .dialogue-meta {
   opacity: 0;
-  transition: opacity 150ms ease;
+  transition: opacity 200ms ease;
 }
-
 .dialogue-bubble:hover .dialogue-meta {
   opacity: 1;
+}
+
+/* Message entrance animation */
+.dialogue-bubble {
+  animation: bubbleIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes bubbleIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

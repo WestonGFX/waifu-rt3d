@@ -13,7 +13,7 @@ const IDLE_PHRASES = [
 
 /**
  * Chat header with character name, online indicator, idle status, and model panel toggle.
- * Sticky at the top of the ChatThread view.
+ * Sticky at the top of the ChatThread view with frosted-glass backdrop.
  *
  * Cycles through ambient idle phrases every 10 seconds to give the character
  * a sense of life even when no messages are being exchanged.
@@ -34,30 +34,45 @@ export function StatusBar({ character }: { character: Character }) {
 
   return (
     <header
-      className="sticky top-0 z-40 flex items-center gap-3 px-4 h-12"
+      className="sticky top-0 z-40 flex items-center gap-3 px-4 h-14"
       style={{
-        backgroundColor: 'var(--color-surface)',
-        borderBottom: '1px solid var(--color-border)'
+        backgroundColor: 'color-mix(in srgb, var(--color-surface) 85%, transparent)',
+        backdropFilter: 'var(--blur-surface)',
+        WebkitBackdropFilter: 'var(--blur-surface)',
+        borderBottom: '1px solid var(--color-border-subtle)'
       }}
     >
-      <button onClick={closeChatThread} className="p-1" style={{ color: 'var(--color-text-secondary)' }}>
+      <button
+        onClick={closeChatThread}
+        className="p-1.5 rounded-lg transition-colors duration-150"
+        style={{ color: 'var(--color-text-secondary)' }}
+      >
         <ArrowLeft size={20} />
       </button>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-sm truncate">{character.name}</span>
-          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--color-success)' }} />
+          <span className="font-semibold text-sm truncate" style={{ color: 'var(--color-text-primary)' }}>
+            {character.name}
+          </span>
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{
+              backgroundColor: 'var(--color-success)',
+              boxShadow: '0 0 6px var(--color-success)'
+            }}
+          />
         </div>
-        <p className="text-[10px] truncate" style={{ color: 'var(--color-text-secondary)' }}>
+        <p className="text-[10px] truncate" style={{ color: 'var(--color-text-tertiary)' }}>
           {idlePhrase}
         </p>
       </div>
       <button
         onClick={toggleModelPanel}
-        className="p-1.5 rounded-lg transition-colors"
+        className="p-2 rounded-lg transition-all duration-200"
         style={{
-          color: modelPanelOpen ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-          backgroundColor: modelPanelOpen ? 'var(--color-accent)' + '15' : 'transparent'
+          color: modelPanelOpen ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+          backgroundColor: modelPanelOpen ? 'var(--color-accent-soft)' : 'transparent',
+          boxShadow: modelPanelOpen ? 'var(--shadow-glow)' : 'none'
         }}
       >
         <Eye size={18} />

@@ -102,6 +102,12 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying }: D
               <span className="typing-dot" />
               <span className="typing-dot" />
             </div>
+          ) : message.status === 'streaming' ? (
+            <span>
+              {message.text}
+              <span className="inline-block w-0.5 h-4 ml-0.5 animate-pulse align-text-bottom"
+                style={{ backgroundColor: 'var(--color-accent)' }} />
+            </span>
           ) : (
             message.text
           )}

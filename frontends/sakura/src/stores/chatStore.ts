@@ -8,15 +8,67 @@ interface ChatState {
   loading: boolean;
   sessionId: number | null;
   charId: number | null;
+  /** Active AbortController for cancelling in-flight streaming requests. */
+  abortController: AbortController | null;
 
   setDraft: (text: string) => void;
   setContext: (sessionId: number, charId: number) => void;
   sendMessage: (text: string, speak?: boolean) => Promise<void>;
+  abortMessage: () => void;
   loadHistory: (sessionId: number) => Promise<void>;
   clear: () => void;
 }
 
 const genId = () => crypto.randomUUID();
+
+/**
+ * Parse SSE events from a ReadableStream response body.
+ * Uses manual chunked parsing because EventSource only supports GET,
+ * but /api/chat/stream requires POST with a JSON body.
+ */
+async function parseSSEStream(
+  response: Response,
+  onEvent: (type: string, data: unknown) => void
+): Promise<void> {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // SSE events are separated by double newlines
+    const events = buffer.split('\n\n');
+    buffer = events.pop()!; // Keep incomplete tail for next iteration
+
+    for (const eventBlock of events) {
+      if (!eventBlock.trim()) continue;
+
+      const lines = eventBlock.split('\n');
+      let eventType = 'message';
+      let eventData = '';
+
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          eventType = line.slice(7).trim();
+        } else if (line.startsWith('data: ')) {
+          eventData = line.slice(6);
+        }
+      }
+
+      if (!eventData) continue;
+
+      try {
+        onEvent(eventType, JSON.parse(eventData));
+      } catch (e) {
+        console.warn('[SSE] Parse error:', e, eventData);
+      }
+    }
+  }
+}
 
 export const useChatStore = create<ChatState>()((set, get) => ({
   messages: [],
@@ -24,6 +76,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   loading: false,
   sessionId: null,
   charId: null,
+  abortController: null,
 
   setDraft: (text) => set({ draft: text }),
 
@@ -43,11 +96,21 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set({ messages });
   },
 
+  abortMessage: () => {
+    const { abortController } = get();
+    if (abortController) {
+      abortController.abort();
+      set({ abortController: null, loading: false });
+    }
+  },
+
   sendMessage: async (text, speak = true) => {
     const { sessionId, charId, loading } = get();
     if (loading || sessionId == null || !charId) return;
     const trimmed = text.trim();
     if (!trimmed) return;
+
+    const controller = new AbortController();
 
     const userMsg: ChatMessage = {
       id: genId(),
@@ -56,8 +119,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       createdAt: Date.now(),
       status: 'sent'
     };
+    const assistantId = genId();
     const assistantMsg: ChatMessage = {
-      id: genId(),
+      id: assistantId,
       role: 'assistant',
       text: '',
       createdAt: Date.now(),
@@ -67,46 +131,121 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set((s) => ({
       messages: [...s.messages, userMsg, assistantMsg],
       loading: true,
-      draft: ''
+      draft: '',
+      abortController: controller
     }));
 
+    let fullText = '';
+    let tokenCount = 0;
+    const streamStart = performance.now();
+
+    /** Helper to patch the assistant message in-place. */
+    const patchAssistant = (patch: Partial<ChatMessage>) => {
+      set((s) => ({
+        messages: s.messages.map((m) =>
+          m.id === assistantId ? { ...m, ...patch } : m
+        )
+      }));
+    };
+
     try {
-      const res = await api.sendChat({
-        text: trimmed,
-        session_id: sessionId,
-        char_id: charId,
-        speak
+      const response = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: trimmed,
+          session_id: sessionId,
+          character_id: charId,
+          speak
+        }),
+        signal: controller.signal
       });
 
-      set((s) => ({
-        messages: s.messages.map((m) =>
-          m.id === assistantMsg.id
-            ? {
-                ...m,
-                text: res.reply,
-                status: 'sent' as const,
-                emotion: res.emotion,
-                gesture: res.gesture ?? undefined,
-                audioUrl: res.audio ?? undefined,
-                tokens: res.tokens_used,
-                tokensPerSecond: res.tokens_per_second,
-                latencyMs: res.ttft_ms,
-                model: res.model,
-                serverMessageId: res.assistant_message_id
-              }
-            : m
-        ),
-        loading: false
-      }));
-    } catch {
-      set((s) => ({
-        messages: s.messages.map((m) =>
-          m.id === assistantMsg.id
-            ? { ...m, text: 'Failed to get response.', status: 'failed' as const }
-            : m
-        ),
-        loading: false
-      }));
+      if (!response.ok) {
+        throw new Error(`Stream request failed: ${response.status}`);
+      }
+
+      await parseSSEStream(response, (eventType, data: any) => {
+        switch (eventType) {
+          case 'processing':
+            // LLM is processing input — keep typing dots but note input tokens
+            patchAssistant({ status: 'pending' });
+            break;
+
+          case 'generating':
+            // First token incoming — switch from dots to streaming
+            patchAssistant({ status: 'streaming', text: '' });
+            break;
+
+          case 'token':
+            // Individual token — append to running text
+            fullText += data.t;
+            tokenCount++;
+            patchAssistant({ status: 'streaming', text: fullText });
+            break;
+
+          case 'audio_chunk':
+            // Sentence-level TTS chunk — play first chunk immediately
+            if (data.index === 0 && data.url) {
+              patchAssistant({ audioUrl: data.url });
+            }
+            break;
+
+          case 'done': {
+            // Stream complete — apply final metadata
+            const elapsed = (performance.now() - streamStart) / 1000;
+            const serverTokens = data.token_count || tokenCount;
+            const speed = data.tokens_per_second || (elapsed > 0.2 ? serverTokens / elapsed : 0);
+
+            patchAssistant({
+              text: data.reply || fullText,
+              status: 'sent',
+              emotion: data.emotion,
+              gesture: data.gesture ?? undefined,
+              audioUrl: data.audio_url || data.tts_chunked ? undefined : undefined,
+              tokens: serverTokens,
+              tokensPerSecond: Math.round(speed * 10) / 10,
+              latencyMs: data.generation_time_ms,
+              model: data.model,
+              serverMessageId: data.assistant_message_id
+            });
+
+            // If there's a single (non-chunked) audio URL, use it
+            if (data.audio_url) {
+              patchAssistant({ audioUrl: data.audio_url });
+            }
+            break;
+          }
+
+          case 'error':
+            patchAssistant({
+              text: `Error: ${data.error || 'Unknown stream error'}`,
+              status: 'failed'
+            });
+            break;
+        }
+      });
+
+      // If we never got a 'done' event, finalize with what we have
+      const current = get().messages.find(m => m.id === assistantId);
+      if (current?.status === 'streaming') {
+        patchAssistant({ status: 'sent' });
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        // User cancelled — mark as sent with partial text
+        patchAssistant({
+          text: fullText || '(cancelled)',
+          status: 'sent'
+        });
+      } else {
+        patchAssistant({
+          text: `Failed to get response: ${err.message}`,
+          status: 'failed'
+        });
+      }
+    } finally {
+      set({ loading: false, abortController: null });
     }
   }
 }));

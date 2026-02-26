@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Square } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
@@ -9,13 +9,13 @@ import { ModelPanel } from '../components/ModelPanel';
 import { SessionDrawer } from '../components/SessionDrawer';
 
 /**
- * Full-screen chat thread view with visual novel style dialogue.
- * Includes StatusBar header, scrollable message list, input composer,
- * and an optional slide-out 3D ModelPanel on the right.
+ * Full-screen chat thread view with SSE streaming dialogue.
+ * Includes StatusBar header, scrollable message list, input composer
+ * with send/cancel toggle, and an optional slide-out 3D ModelPanel.
  */
 export function ChatThread() {
   const { activeCharacter } = useAppStore();
-  const { messages, draft, loading, setDraft, sendMessage, setContext, loadHistory } = useChatStore();
+  const { messages, draft, loading, setDraft, sendMessage, abortMessage, setContext, loadHistory } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [sessionsOpen, setSessionsOpen] = useState(false);
@@ -32,10 +32,16 @@ export function ChatThread() {
       .catch(console.error);
   }, [activeCharacter, setContext, loadHistory]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or text streams in
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages.length]);
+    const el = scrollRef.current;
+    if (!el) return;
+    // Only auto-scroll if user is near the bottom (within 150px)
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+    if (nearBottom) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }
+  }, [messages]);
 
   const handleSend = () => {
     if (!draft.trim() || loading) return;
@@ -103,19 +109,34 @@ export function ChatThread() {
                 color: 'var(--color-text-primary)'
               }}
             />
-            <button
-              onClick={handleSend}
-              disabled={!draft.trim() || loading}
-              className="p-2.5 transition-all duration-200 disabled:opacity-40"
-              style={{
-                background: 'var(--color-accent-gradient)',
-                color: 'var(--color-accent-text)',
-                borderRadius: 'var(--radius-button)',
-                boxShadow: !draft.trim() || loading ? 'none' : '0 2px 8px var(--color-accent-soft)'
-              }}
-            >
-              <Send size={16} />
-            </button>
+            {loading ? (
+              <button
+                onClick={abortMessage}
+                className="p-2.5 transition-all duration-200"
+                style={{
+                  backgroundColor: 'var(--color-error, #f44)',
+                  color: '#fff',
+                  borderRadius: 'var(--radius-button)',
+                }}
+                title="Cancel generation"
+              >
+                <Square size={16} />
+              </button>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={!draft.trim()}
+                className="p-2.5 transition-all duration-200 disabled:opacity-40"
+                style={{
+                  background: 'var(--color-accent-gradient)',
+                  color: 'var(--color-accent-text)',
+                  borderRadius: 'var(--radius-button)',
+                  boxShadow: !draft.trim() ? 'none' : '0 2px 8px var(--color-accent-soft)'
+                }}
+              >
+                <Send size={16} />
+              </button>
+            )}
           </div>
         </div>
       </div>

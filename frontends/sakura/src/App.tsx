@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MemoryPanel } from './components/MemoryPanel';
 import { SettingsDrawer } from './components/SettingsDrawer';
@@ -7,6 +7,7 @@ import { ChatThread } from './views/ChatThread';
 import { CreateView } from './views/CreateView';
 import { useAppStore } from './stores/appStore';
 import { useTheme } from './hooks/useTheme';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 /**
  * Root layout — desktop-first with left sidebar + main content area.
@@ -25,7 +26,11 @@ import { useTheme } from './hooks/useTheme';
  * - Settings & Memory: slide-out overlay drawers (right side)
  */
 export function App() {
-  const { loadCharacters, loadConfig, activeCharacter, sidebarSection } = useAppStore();
+  const {
+    loadCharacters, loadConfig, activeCharacter, sidebarSection,
+    openOverlay, closeOverlay, activeOverlay, toggleSidebar,
+    setSidebarSection
+  } = useAppStore();
   const { theme } = useTheme();
 
   useEffect(() => {
@@ -33,6 +38,23 @@ export function App() {
     loadCharacters().catch(console.error);
     loadConfig().catch(console.error);
   }, []);
+
+  // Global keyboard shortcuts
+  const shortcuts = useMemo(() => [
+    { key: 'ctrl+,', action: () => openOverlay('settings'), description: 'Open settings' },
+    { key: 'ctrl+m', action: () => openOverlay('memory'), description: 'Open memory manager' },
+    { key: 'ctrl+n', action: () => setSidebarSection('create'), description: 'New character' },
+    { key: 'ctrl+b', action: () => toggleSidebar(), description: 'Toggle sidebar' },
+    {
+      key: 'escape',
+      action: () => {
+        if (activeOverlay) closeOverlay();
+      },
+      description: 'Close overlay'
+    },
+  ], [openOverlay, closeOverlay, activeOverlay, toggleSidebar, setSidebarSection]);
+
+  useKeyboardShortcuts(shortcuts);
 
   /** Determine what to render in the main content area. */
   const mainContent = (() => {

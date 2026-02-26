@@ -12,7 +12,7 @@ interface ChatState {
   abortController: AbortController | null;
   setDraft: (text: string) => void;
   setContext: (sessionId: number, charId: number) => void;
-  sendMessage: (text: string, speak?: boolean) => Promise<void>;
+  sendMessage: (text: string, speak?: boolean, incognito?: boolean) => Promise<void>;
   abortMessage: () => void;
   loadHistory: (sessionId: number) => Promise<void>;
   clear: () => void;
@@ -103,7 +103,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
-  sendMessage: async (text, speak = true) => {
+  sendMessage: async (text, speak = true, incognito = false) => {
     const { sessionId, charId, loading } = get();
     if (loading || sessionId == null || !charId) return;
     const trimmed = text.trim();
@@ -155,7 +155,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           text: trimmed,
           session_id: sessionId,
           character_id: charId,
-          speak
+          speak,
+          ...(incognito && { incognito: true }),
         }),
         signal: controller.signal
       });

@@ -20,6 +20,7 @@ export function ChatThread() {
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [incognito, setIncognito] = useState(false);
 
   useEffect(() => {
     if (!activeCharacter) return;
@@ -46,7 +47,7 @@ export function ChatThread() {
 
   const handleSend = () => {
     if (!draft.trim() || loading) return;
-    sendMessage(draft);
+    sendMessage(draft, true, incognito);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -130,17 +131,29 @@ export function ChatThread() {
           }}
         >
           <div className="max-w-3xl mx-auto flex items-end gap-2">
+            {/* Incognito toggle — messages won't be saved to DB */}
+            <button
+              onClick={() => setIncognito(v => !v)}
+              title={incognito ? 'Incognito: messages not saved. Click to disable.' : 'Enable incognito mode'}
+              className="p-2 rounded-lg transition-all duration-200 flex-shrink-0 text-base leading-none"
+              style={{
+                opacity: incognito ? 1 : 0.35,
+                backgroundColor: incognito ? 'var(--color-accent-soft)' : 'transparent',
+              }}
+            >
+              👻
+            </button>
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Say something..."
+              placeholder={incognito ? 'Incognito — not saved...' : 'Say something...'}
               rows={1}
               className="flex-1 resize-none px-4 py-2.5 text-sm outline-none transition-all duration-200"
               style={{
                 backgroundColor: 'var(--color-background)',
                 borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--color-border)',
+                border: incognito ? '1px solid var(--color-accent)' : '1px solid var(--color-border)',
                 color: 'var(--color-text-primary)'
               }}
             />

@@ -479,12 +479,24 @@
                     spine.rotation.x -= (p.confidence - 0.5) * 0.03;
                 }
 
-                // A-pose arm baseline — higher layers (Talk, Gesture) override
-                // with animated values; this ensures arms return to rest when idle
+                // Arm baseline — arms hang at sides naturally.
+                // Higher layers (Talk, Gesture) override with animated values.
                 const lArm = this.getBone('leftUpperArm');
                 const rArm = this.getBone('rightUpperArm');
-                if (lArm) lArm.rotation.z = -1.2;
-                if (rArm) rArm.rotation.z = 1.2;
+                if (lArm) lArm.rotation.z = -1.45;
+                if (rArm) rArm.rotation.z = 1.45;
+
+                // Forearms: slight elbow bend (hands in front of thighs)
+                const lFore = this.getBone('leftLowerArm');
+                const rFore = this.getBone('rightLowerArm');
+                if (lFore) lFore.rotation.y = 0.15;
+                if (rFore) rFore.rotation.y = -0.15;
+
+                // Hands: relaxed curl (not stiff open paddles)
+                const lHand = this.getBone('leftHand');
+                const rHand = this.getBone('rightHand');
+                if (lHand) { lHand.rotation.z = -0.15; lHand.rotation.x = 0.1; }
+                if (rHand) { rHand.rotation.z = 0.15; rHand.rotation.x = 0.1; }
             }
         }
 
@@ -556,7 +568,7 @@
                         name: 'arm_adjust', duration: 1.5,
                         apply(t, p, B) {
                             const arm = B('leftUpperArm');
-                            if (arm) arm.rotation.z = -1.2 + Math.sin(t * Math.PI) * 0.1;
+                            if (arm) arm.rotation.z = -1.45 + Math.sin(t * Math.PI) * 0.1;
                         }
                     },
                     {
@@ -581,7 +593,7 @@
                             const arm = B('rightUpperArm');
                             if (arm) {
                                 const blend = Math.sin(t * Math.PI);
-                                arm.rotation.z = 1.2 * (1 - blend * 0.5);
+                                arm.rotation.z = 1.45 * (1 - blend * 0.5);
                                 arm.rotation.x = blend * 0.3;
                             }
                         }
@@ -592,8 +604,8 @@
                         apply(t, p, B) {
                             const la = B('leftUpperArm'), ra = B('rightUpperArm');
                             const blend = Math.sin(t * Math.PI * 0.5);
-                            if (la) { la.rotation.z = -1.2 + blend * 0.3; la.rotation.x = blend * 0.2; }
-                            if (ra) { ra.rotation.z = 1.2 - blend * 0.3; ra.rotation.x = blend * 0.2; }
+                            if (la) { la.rotation.z = -1.45 + blend * 0.3; la.rotation.x = blend * 0.2; }
+                            if (ra) { ra.rotation.z = 1.45 - blend * 0.3; ra.rotation.x = blend * 0.2; }
                         }
                     },
                     {
@@ -613,7 +625,7 @@
                             const arm = B('rightUpperArm');
                             if (arm) {
                                 const blend = Math.sin(t * Math.PI / 3);
-                                arm.rotation.z = 1.2 - blend * 0.5;
+                                arm.rotation.z = 1.45 - blend * 0.5;
                                 arm.rotation.y = blend * 0.3;
                             }
                         }
@@ -625,7 +637,7 @@
                             const arm = B('leftUpperArm');
                             if (arm) {
                                 const blend = Math.sin(t * Math.PI);
-                                arm.rotation.z = -1.2 + blend * 0.6;
+                                arm.rotation.z = -1.45 + blend * 0.6;
                                 arm.rotation.x = blend * 0.4;
                             }
                         }
@@ -637,7 +649,7 @@
                             const arm = B('rightUpperArm');
                             if (arm) {
                                 const blend = Math.sin(t * Math.PI * 0.5);
-                                arm.rotation.z = 1.2 - blend * 0.8;
+                                arm.rotation.z = 1.45 - blend * 0.8;
                                 arm.rotation.x = -blend * 0.3;
                             }
                         }
@@ -658,8 +670,8 @@
                         apply(t, p, B) {
                             const la = B('leftUpperArm'), ra = B('rightUpperArm');
                             const blend = Math.sin(t * Math.PI * 0.4);
-                            if (la) { la.rotation.z = -1.2 - blend * 0.3; la.rotation.y = -blend * 0.4; }
-                            if (ra) { ra.rotation.z = 1.2 + blend * 0.3; ra.rotation.y = blend * 0.4; }
+                            if (la) { la.rotation.z = -1.45 - blend * 0.3; la.rotation.y = -blend * 0.4; }
+                            if (ra) { ra.rotation.z = 1.45 + blend * 0.3; ra.rotation.y = blend * 0.4; }
                         }
                     },
                     {
@@ -669,7 +681,7 @@
                             const arm = B('rightUpperArm');
                             if (arm) {
                                 const blend = Math.sin(t * Math.PI * 0.5);
-                                arm.rotation.z = 1.2 - blend * 0.8;
+                                arm.rotation.z = 1.45 - blend * 0.8;
                                 arm.rotation.y = Math.sin(t * Math.PI * 2) * 0.1;
                             }
                         }
@@ -681,7 +693,7 @@
                             const arm = B('rightUpperArm');
                             if (arm) {
                                 const blend = Math.sin(t * Math.PI);
-                                arm.rotation.z = 1.2 - blend * 0.9;
+                                arm.rotation.z = 1.45 - blend * 0.9;
                                 arm.rotation.x = -blend * 0.2;
                             }
                         }
@@ -711,8 +723,8 @@
                             const la = B('leftUpperArm'), ra = B('rightUpperArm');
                             const spine = B('spine');
                             const blend = Math.sin(t * Math.PI / 3);
-                            if (la) la.rotation.z = -1.2 - blend * 0.5;
-                            if (ra) ra.rotation.z = 1.2 + blend * 0.5;
+                            if (la) la.rotation.z = -1.45 - blend * 0.5;
+                            if (ra) ra.rotation.z = 1.45 + blend * 0.5;
                             if (spine) spine.rotation.x = -blend * 0.04;
                         }
                     },
@@ -879,11 +891,11 @@
                 const rArm = this.getBone('rightUpperArm');
                 const handAmp = 0.08 * spread * expressScale;
                 if (lArm) {
-                    lArm.rotation.z = -1.2 + Math.sin(t * 1.8) * handAmp;
+                    lArm.rotation.z = -1.45 + Math.sin(t * 1.8) * handAmp;
                     lArm.rotation.x = Math.sin(t * 1.3) * handAmp * 0.5;
                 }
                 if (rArm) {
-                    rArm.rotation.z = 1.2 - Math.sin(t * 2.1 + 1) * handAmp;
+                    rArm.rotation.z = 1.45 - Math.sin(t * 2.1 + 1) * handAmp;
                     rArm.rotation.x = Math.sin(t * 1.5 + 0.5) * handAmp * 0.5;
                 }
 
@@ -1020,7 +1032,7 @@
                         apply(t, amp, B) {
                             const arm = B('rightUpperArm');
                             if (arm) {
-                                arm.rotation.z = (1.2 - 1.2 * amp);
+                                arm.rotation.z = (1.45 - 1.45 * amp);
                                 arm.rotation.x = Math.sin(t * Math.PI * 3) * 0.3 * amp;
                             }
                         }
@@ -1033,8 +1045,8 @@
                             const v = Math.sin(t * Math.PI / 1.2) * amp;
                             if (ls) ls.rotation.y = -0.15 * v;
                             if (rs) rs.rotation.y = 0.15 * v;
-                            if (la) la.rotation.z = -1.2 + 0.2 * v;
-                            if (ra) ra.rotation.z = 1.2 - 0.2 * v;
+                            if (la) la.rotation.z = -1.45 + 0.2 * v;
+                            if (ra) ra.rotation.z = 1.45 - 0.2 * v;
                         }
                     },
                     bow: {
@@ -1051,15 +1063,15 @@
                         apply(t, amp, B) {
                             const la = B('leftUpperArm'), ra = B('rightUpperArm');
                             const cycle = Math.sin(t * Math.PI * 4) * amp;
-                            if (la) { la.rotation.z = -1.2 + 0.5 * amp; la.rotation.x = 0.3 * amp + cycle * 0.1; }
-                            if (ra) { ra.rotation.z = 1.2 - 0.5 * amp; ra.rotation.x = 0.3 * amp - cycle * 0.1; }
+                            if (la) { la.rotation.z = -1.45 + 0.5 * amp; la.rotation.x = 0.3 * amp + cycle * 0.1; }
+                            if (ra) { ra.rotation.z = 1.45 - 0.5 * amp; ra.rotation.x = 0.3 * amp - cycle * 0.1; }
                         }
                     },
                     think: {
                         duration: 2.0,
                         apply(t, amp, B) {
                             const ra = B('rightUpperArm'), head = B('head');
-                            if (ra) { ra.rotation.z = 1.2 - 0.6 * amp; ra.rotation.x = 0.3 * amp; }
+                            if (ra) { ra.rotation.z = 1.45 - 0.6 * amp; ra.rotation.x = 0.3 * amp; }
                             if (head) head.rotation.z = Math.sin(t * 0.5) * 0.1 * amp;
                         }
                     },
@@ -1068,7 +1080,7 @@
                         apply(t, amp, B) {
                             const ra = B('rightUpperArm');
                             if (ra) {
-                                ra.rotation.z = 1.2 - 0.9 * amp;
+                                ra.rotation.z = 1.45 - 0.9 * amp;
                                 ra.rotation.x = -0.2 * amp;
                             }
                         }
@@ -1078,8 +1090,8 @@
                         apply(t, amp, B) {
                             const la = B('leftUpperArm'), ra = B('rightUpperArm');
                             const hips = B('hips');
-                            if (la) la.rotation.z = -1.2 - 0.8 * amp;
-                            if (ra) ra.rotation.z = 1.2 + 0.8 * amp;
+                            if (la) la.rotation.z = -1.45 - 0.8 * amp;
+                            if (ra) ra.rotation.z = 1.45 + 0.8 * amp;
                             if (hips) hips.position.y = Math.sin(t * Math.PI * 3) * 0.01 * amp;
                         }
                     },
@@ -1099,8 +1111,8 @@
                                 hips.rotation.y = Math.sin(t * Math.PI * 2) * 0.1 * amp;
                                 hips.position.y = Math.abs(Math.sin(t * Math.PI * 3)) * 0.015 * amp;
                             }
-                            if (la) la.rotation.z = -1.2 + Math.sin(t * Math.PI * 2.5) * 0.4 * amp;
-                            if (ra) ra.rotation.z = 1.2 - Math.sin(t * Math.PI * 2.5 + 1) * 0.4 * amp;
+                            if (la) la.rotation.z = -1.45 + Math.sin(t * Math.PI * 2.5) * 0.4 * amp;
+                            if (ra) ra.rotation.z = 1.45 - Math.sin(t * Math.PI * 2.5 + 1) * 0.4 * amp;
                         }
                     },
                     foot_tap: {
@@ -1114,8 +1126,8 @@
                         duration: 2.5,
                         apply(t, amp, B) {
                             const la = B('leftUpperArm'), ra = B('rightUpperArm');
-                            if (la) { la.rotation.z = -1.2 + 0.4 * amp; la.rotation.x = 0.5 * amp; }
-                            if (ra) { ra.rotation.z = 1.2 - 0.4 * amp; ra.rotation.x = 0.5 * amp; }
+                            if (la) { la.rotation.z = -1.45 + 0.4 * amp; la.rotation.x = 0.5 * amp; }
+                            if (ra) { ra.rotation.z = 1.45 - 0.4 * amp; ra.rotation.x = 0.5 * amp; }
                         }
                     },
                     shake: {
@@ -1806,7 +1818,7 @@
                         const rightArm = getBone('rightUpperArm');
                         const rightHand = getBone('rightHand');
                         if (rightArm) {
-                            rightArm.rotation.z = -eased * 1.2;
+                            rightArm.rotation.z = -eased * 1.45;
                             rightArm.rotation.x = eased * 0.3;
                         }
                         if (rightHand) rightHand.rotation.z = Math.sin(t * Math.PI * 4) * 0.4;
@@ -2366,15 +2378,25 @@
                     return vrm.humanoid.getBoneNode(name);
                 };
 
-                // --- Arms: bring down from T-pose to relaxed A-pose ---
-                // In VRM 1.x normalized space: positive Z rotation RAISES the arm
-                // (right-hand rule: arm's local +X toward hand, +Y up → +Z rotates arm tip UP).
-                // Negative Z swings the arm DOWN toward the hip.
-                // Value -0.7 rad ≈ 40° below horizontal — natural standing A-pose.
+                // --- Arms: bring down from T-pose to natural hang ---
+                // VRM normalized space: negative Z swings arm DOWN toward hip.
+                // -1.45 rad ≈ 83° below horizontal — arms hanging at sides naturally.
                 const leftUpperArm = bone('leftUpperArm');
                 const rightUpperArm = bone('rightUpperArm');
-                if (leftUpperArm) leftUpperArm.rotation.z = -1.2;
-                if (rightUpperArm) rightUpperArm.rotation.z = 1.2;
+                if (leftUpperArm) leftUpperArm.rotation.z = -1.45;
+                if (rightUpperArm) rightUpperArm.rotation.z = 1.45;
+
+                // --- Forearms: slight elbow bend so hands sit in front of thighs ---
+                const leftLowerArm = bone('leftLowerArm');
+                const rightLowerArm = bone('rightLowerArm');
+                if (leftLowerArm) leftLowerArm.rotation.y = 0.15;
+                if (rightLowerArm) rightLowerArm.rotation.y = -0.15;
+
+                // --- Hands: relaxed curl (not stiff open paddles) ---
+                const leftHand = bone('leftHand');
+                const rightHand = bone('rightHand');
+                if (leftHand) { leftHand.rotation.z = -0.15; leftHand.rotation.x = 0.1; }
+                if (rightHand) { rightHand.rotation.z = 0.15; rightHand.rotation.x = 0.1; }
 
                 // --- Spine: very slight natural S-curve ---
                 const spine = bone('spine');

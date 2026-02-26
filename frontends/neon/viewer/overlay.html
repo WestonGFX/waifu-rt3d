@@ -264,14 +264,24 @@
                 scene.add(vrm.scene);
                 currentVrm = vrm;
 
-                // Natural A-pose arms
+                // Natural standing pose — arms at sides, hands relaxed
                 const getBone = n => vrm.humanoid.getNormalizedBoneNode
                     ? vrm.humanoid.getNormalizedBoneNode(n)
                     : vrm.humanoid.getBoneNode(n);
                 const lArm = getBone('leftUpperArm');
                 const rArm = getBone('rightUpperArm');
-                if (lArm) lArm.rotation.z = -1.2;
-                if (rArm) rArm.rotation.z = 1.2;
+                if (lArm) lArm.rotation.z = -1.45;
+                if (rArm) rArm.rotation.z = 1.45;
+                // Forearms: slight elbow bend
+                const lFore = getBone('leftLowerArm');
+                const rFore = getBone('rightLowerArm');
+                if (lFore) lFore.rotation.y = 0.15;
+                if (rFore) rFore.rotation.y = -0.15;
+                // Hands: relaxed curl
+                const lHand = getBone('leftHand');
+                const rHand = getBone('rightHand');
+                if (lHand) { lHand.rotation.z = -0.15; lHand.rotation.x = 0.1; }
+                if (rHand) { rHand.rotation.z = 0.15; rHand.rotation.x = 0.1; }
 
                 lipSync = new AudioLipSync(vrm);
                 blinkController = new BlinkController(vrm);
@@ -372,11 +382,19 @@
                 const chest = getBone('chest') || getBone('spine');
                 if (chest) chest.rotation.x = Math.sin(t * 2) * 0.003;
 
-                // Maintain A-pose arm baseline
+                // Maintain natural arm/hand baseline
                 const lArm = getBone('leftUpperArm');
                 const rArm = getBone('rightUpperArm');
-                if (lArm) lArm.rotation.z = -1.2;
-                if (rArm) rArm.rotation.z = 1.2;
+                if (lArm) lArm.rotation.z = -1.45;
+                if (rArm) rArm.rotation.z = 1.45;
+                const lFore = getBone('leftLowerArm');
+                const rFore = getBone('rightLowerArm');
+                if (lFore) lFore.rotation.y = 0.15;
+                if (rFore) rFore.rotation.y = -0.15;
+                const lHand = getBone('leftHand');
+                const rHand = getBone('rightHand');
+                if (lHand) { lHand.rotation.z = -0.15; lHand.rotation.x = 0.1; }
+                if (rHand) { rHand.rotation.z = 0.15; rHand.rotation.x = 0.1; }
             }
 
             renderer.render(scene, camera);

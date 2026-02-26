@@ -1,198 +1,39 @@
-# 🎭 Waifu-RT3D
+# Waifu-RT3D
 
-> **AI Companion Platform** — 3D anime avatars + local/cloud LLM integration, multi-provider TTS/STT, OBS overlay, and streamer tools.
+> **AI Companion Platform** — 3D anime avatars with personality-driven animation, local/cloud LLM integration, 9-provider TTS, offline STT, agentic tool use, and OBS streaming overlays.
 
-[![Version](https://img.shields.io/badge/version-6.0-blueviolet)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](requirements.txt)
-[![Branch](https://img.shields.io/badge/branch-integrate%2Fmaster-orange)](#)
-[![Tests](https://img.shields.io/badge/tests-31%20passed-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-98%20passed-brightgreen)](backend/tests/)
+[![Schema](https://img.shields.io/badge/DB%20schema-v16-purple)](#)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+<p align="center">
+  <img src="frontends/neon/favicon.svg" alt="Waifu-RT3D" width="80" />
+</p>
 
 ---
 
 ## What Is This?
 
-Waifu-RT3D is a **full-stack AI companion platform** that:
-- Renders a **3D VRM anime character** with real-time lip sync, idle/talking animations, and expression blending
-- Chats with you via **local or cloud LLMs** (LM Studio, Ollama, Gemini, Claude, OpenAI)
-- Speaks to you with **multi-provider TTS** (Edge TTS, Kokoro, Chatterbox, GPT-SoVITS, ElevenLabs, Fish Audio, Piper, XTTS)
-- Listens via **local or cloud STT** (Faster-Whisper offline, Whisper API, browser WebSpeech)
-- Exposes an **OBS Browser Source overlay** for streamers
-- Tracks **relationship scores** (affinity, mood, trust) that evolve over time
+Waifu-RT3D is a **full-stack AI companion platform** where 3D anime characters come alive with personality-driven animations, natural conversation, and expressive voices — all running locally on your machine with optional cloud providers.
+
+**Key highlights:**
+- **3D VRM characters** with real-time lip sync, personality-driven idle fidgets, emotion posture, and mouse gaze tracking
+- **Local-first LLMs** via LM Studio, Ollama, or any OpenAI-compatible endpoint — plus Gemini and Claude cloud options
+- **9 TTS providers** including fully offline options (Kokoro, Piper, Chatterbox, Edge-TTS)
+- **Agentic characters** that can use tools — search memory, write diary entries, modify their own traits, generate images, and message other characters
+- **OBS Browser Source overlay** for streamers with transparent background and live subtitles
+- **Create-a-Waifu** full-page character creator with personality animation sliders
+- **Desktop pet mode** — floating transparent window with mini-chat overlay
 
 ---
 
-## ✅ Implemented Features (by phase)
-
-### Phase 0–1: Foundation
-- FastAPI backend with SQLite (WAL mode, FTS5 full-text search)
-- VRM / GLB / GLTF model upload and rendering (Three.js + `@pixiv/three-vrm`)
-- Multi-character system — swap personas mid-session
-- Session persistence — chat history survives refreshes
-- Cyberpunk "Neon" UI with bento-grid layout (no framework, vanilla JS modules)
-
-### Phase 2: LLM Integration
-- LM Studio REST API adapter (local LLMs, privacy-first)
-- Ollama adapter (local LLMs)
-- OpenAI-compatible adapter (any OpenAI-style endpoint)
-- Conversation history with configurable length limit
-- System prompt per character
-- History auto-summarization when limit is reached
-- Per-session context injection
-
-### Phase 3: TTS & Voice
-- **Edge TTS** (Microsoft, free, 400+ neural voices)
-- **Fish Audio** (cloud/self-host)
-- **Piper** (fully offline, ONNX)
-- **XTTS Server** (local GPU)
-- **ElevenLabs** (API, premium quality)
-- **Pinokio/Generic REST** (community TTS servers)
-- Per-character voice settings (voice ID, rate, pitch)
-- Audio file serving from `/files/audio/`
-
-### Phase 3G: VRM Character System
-- Multi-character roster with card-based UI
-- Character export / import as JSON (share with others)
-- Voice sample upload for voice-cloning adapters
-- Relationship score tracking (affinity, mood, trust)
-- Character docs (upload reference PDFs/text)
-
-### Phase 4A: UX Polish
-- Error log panel (last N server errors, copyable)
-- Glow intensity slider
-- FPS cap control
-- Viewer ↔ chat postMessage bridge
-- Screenshot capture
-
-### Phase 5: Advanced Features
-- **Kokoro TTS** adapter (local, high quality)
-- **Chatterbox TTS** adapter (local, expressive)
-- Per-character LLM routing (`llm_endpoint`, `llm_model`)
-- Qwen3 thinking mode toggle
-- Vocab manager (custom word pronunciations)
-- LM Studio live model management UI
-- Hotkey editor (customisable keyboard shortcuts)
-- Cyberpunk iOS-inspired theme variant
-
-### Phase 6: Lip Sync, Streaming TTS, STT, OBS (v6.0 — current)
-
-| Sub-phase | Feature | Notes |
-|---|---|---|
-| **6A** | Settings dot-notation save/load fix | `llm.qwen3_thinking_mode`, `tts.exaggeration` now persist correctly |
-| **6B** | Character API exposes `llm_endpoint` + `llm_model` | Per-character LLM routing fully wired end-to-end |
-| **6C** | Real-time spectral centroid lip sync | WebAudio FFT → VRM mouth shapes (aa/ih/oh/ou). Works with ALL TTS providers |
-| **6D** | Idle vs. talking motion split | `MOTION_IDLE` / `MOTION_TALK` constants — character visually reacts to speech |
-| **6E** | `_clean_for_tts()` preprocessor | Strips `[tags]`, `(parens)`, `*actions*`, markdown before TTS; DB stores full text |
-| **6G** | Sentence-chunked streaming TTS | First audio chunk in ~1–2s vs. 8–15s; AudioQueue plays chunks in order |
-| **6H** | **GPT-SoVITS** TTS adapter | Local voice cloning on port 9880, anime-optimised |
-| **6I** | **Faster-Whisper** local STT | `/api/asr/transcribe` endpoint; offline, GPU/CPU, VAD filter |
-| **6J** | OBS streaming overlay | `overlay.html` + `/ws/overlay` WebSocket; transparent browser source |
-
-### Phase 7A: Quick Wins (current sprint)
-
-| Item | Feature |
-|---|---|
-| **#64** | GitHub Actions CI — pytest + ESLint on every PR |
-| **#11** | TTS audio cache — content-addressed file cache, instant repeat phrases |
-| **#32** | Markdown rendering in AI chat bubbles (marked.js) |
-| **#47** | Audio chunk preloading — next chunk fetched while current plays |
-| **#52** | Connection quality dot (green/yellow/red latency indicator) |
-| **#51** | Backend offline banner + watchdog polling |
-| **#1** | **Google Gemini** LLM adapter (Flash/Pro/2.5, OpenAI-compat + native SDK) |
-| **#2** | **Anthropic Claude** LLM adapter (Haiku/Sonnet/Opus, streaming SSE) |
-
----
-
-## 🚧 Planned Features (not yet implemented)
-
-> Items marked ⭐ are high priority.
-
-### AI / LLM
-- [ ] ⭐ **#3** Per-character LLM temperature slider
-- [ ] ⭐ **#4** Long-term memory via RAG (sentence-transformers embeddings)
-- [ ] **#5** "Compress history" manual button
-- [ ] **#6** Per-session system prompt override (inline text area)
-- [ ] **#7** LLM quick-controls bar (temperature knob, max-tokens slider)
-- [ ] **#8** Multi-provider model benchmarking tool
-
-### TTS / Voice
-- [ ] ⭐ **#9** Google Cloud TTS adapter (WaveNet + Journey voices)
-- [ ] **#10** Azure Cognitive Services TTS (400+ neural voices)
-- [ ] **#12** Voice preview button in Settings (play sample)
-- [ ] **#13** Per-message TTS replay (speaker icon on each AI bubble)
-- [ ] **#14** In-chat TTS speed control (0.5×–2× slider)
-- [ ] **#15** Background ambient sound layer (rain, café, lo-fi)
-- [ ] **#16** SSML stress/pause support (`...` → `<break>`, CAPS → `<emphasis>`)
-
-### STT / Voice Input
-- [ ] ⭐ **#17** Google Cloud Speech-to-Text adapter
-- [ ] **#18** Push-to-talk hotkey (hold Space to record)
-- [ ] **#19** Wake word activation ("Hey Rin") via Picovoice WASM
-- [ ] **#20** ASR confidence display + minimum threshold
-
-### VRM / 3D Character
-- [ ] ⭐ **#21** Mixamo FBX body animations (dance, twerk, wave) — **BLOCKED: user must download FBX files from mixamo.com**
-- [ ] **#22** Hand/finger pose presets (heart hands, peace sign, thumbs up)
-- [ ] **#23** Eye contact / gaze tracking (follow camera)
-- [ ] **#24** Expression blend transitions (lerp over 0.3s, no snap)
-- [ ] **#25** Party/disco lighting mode (triggered by dance animation)
-- [ ] **#26** Shadow quality toggle (Off / Soft / Sharp)
-- [ ] **#27** Camera preset buttons (Bust / Full Body / Face Close-up)
-- [ ] **#28** VRM hot-reload button (no page refresh)
-
-### UI / UX
-- [ ] **#29** Light/pastel theme option
-- [ ] **#30** Font size accessibility (S/M/L)
-- [ ] **#31** Chat search (Ctrl+F, highlight matches)
-- [ ] **#33** Export chat to PDF or Markdown
-- [ ] **#35** Message reactions (❤️ 😂 👍 — stored in DB)
-- [ ] **#36** Pinned messages panel
-
-### Desktop / Electron
-- [ ] ⭐ **#37** Electron desktop shell (macOS `.app` + Windows `.exe`)
-- [ ] **#38** System tray icon with quick-chat popup
-- [ ] **#39** Global OS hotkey (⌘+Shift+W toggle)
-- [ ] ⭐ **#40** Desktop pet mode (transparent always-on-top window)
-- [ ] **#41** Auto-start on login
-- [ ] **#42** OS-native notifications
-
-### Streaming / OBS
-- [ ] ⭐ **#43** Twitch chat integration (tmi.js → LLM)
-- [ ] **#44** Subtitle word-by-word reveal in overlay
-- [ ] **#45** Stream alert overlays (follower/sub/bit events)
-- [ ] **#46** OBS scene switcher API (switch scene on speech start/stop)
-
-### Performance & Reliability
-- [ ] **#48** VRM model instance cache (Map<url, VRM>, no re-load on switch)
-- [ ] **#50** LLM timeout recovery UI (30s silence → Retry/Cancel buttons)
-- [ ] **#54** Daily greeting (auto-sent on first open each day)
-- [ ] **#55** Birthday/special date memory
-- [ ] **#56** Mood persistence between sessions
-
-### Companion / Social
-- [ ] **#57** Character diary (LLM writes 2–3 sentence entry after session)
-- [ ] **#58** Companion stats page (messages, hours, emotions, topics)
-
-### Frontend / UI Shell
-- [ ] ⭐ **#65** Multi-frontend switcher (Neon / V2 React / Classic)
-- [ ] ⭐ **#66** V2 React frontend activation (React 19 + Vite 7 + R3F + Tailwind v4)
-- [ ] **#67** Settings panel: System Config tab
-- [ ] **#68** Frontend hot-switch without page reload
-
-### Developer & Operations
-- [ ] **#59** Docker Compose setup (one-command boot)
-- [ ] **#60** Live model-switching API (`POST /api/llm/switch`)
-- [ ] **#61** Plugin / custom slash command system
-- [ ] **#62** Webhook outbound events (Zapier/n8n integration)
-
----
-
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - **Python 3.11+**
 - **LM Studio** (recommended) or any OpenAI-compatible LLM endpoint
-- macOS / Linux (Windows supported via WSL or native)
+- macOS / Linux / Windows (WSL or native)
 
 ### Installation
 
@@ -204,10 +45,10 @@ cd waifu-rt3d
 # Install Python deps
 pip install -r requirements.txt
 
-# Optional: install TTS engines
+# Optional: local TTS/STT engines
 pip install edge-tts          # Microsoft Edge TTS (free, recommended)
-pip install faster-whisper    # Local offline STT (CPU or GPU)
-pip install kokoro-onnx       # Kokoro TTS (local high quality)
+pip install faster-whisper    # Offline STT (CPU or GPU)
+pip install kokoro-onnx       # Kokoro TTS (local, high quality)
 
 # Run
 python backend/server.py
@@ -215,138 +56,271 @@ python backend/server.py
 
 Open **http://localhost:8080** in your browser.
 
+> **First run:** The app creates `backend/config/app.json` with defaults and initializes the SQLite database. Point your LLM settings at a running LM Studio instance and you're ready to chat.
+
 ---
 
-## ⚙️ Configuration
+## Features
 
-All settings are stored in `backend/storage/app.json` and editable via **Settings** (gear icon or `Ctrl+,`).
+### 3D Character System
+- **VRM model rendering** — Three.js + `@pixiv/three-vrm`, supports VRM 0.x and 1.x
+- **6-layer animation pipeline** (Phase 6F) — personality-driven movement:
+  - L0 BasePose: breathing rhythm scaled by energy/nervousness
+  - L1 IdleBehavior: 22 fidgets gated by personality (hair twirl, hip cock, peace sign, etc.)
+  - L2 Emotion: additive posture from current mood (happy bounce, sad slouch, pouty sway)
+  - L3 Talk: illustrative hand gestures and head nods during speech
+  - L4 Gesture: 14 triggered animations (wave, bow, dance, clap, think, etc.)
+  - L5 LookAt: mouse tracking + idle gaze wander (always additive)
+- **Personality profiles** — 5 floats (energy, confidence, nervousness, expressiveness, playfulness) that scale every animation parameter
+- **Multi-band lip sync** — FFT spectral analysis drives 3 visemes (aa/ou/ee) for natural mouth movement
+- **Expression blending** — smooth transitions between emotions (happy, sad, angry, surprised, confused, thinking)
+- **Camera presets** — Full Body / Bust / Face with smooth tween transitions
+- **Disco/party lighting** — RGB point lights with hue cycling
+- **Shadow quality toggle** — Off / Soft / Sharp
+- **Desktop pet mode** — transparent floating window with mini chat overlay
 
-### LLM Providers
+### LLM Integration
+- **LM Studio** — local GPU inference, privacy-first (recommended)
+- **Ollama** — local CPU/GPU
+- **OpenAI-compatible** — any endpoint (OpenAI, Together, Groq, etc.)
+- **Google Gemini** — Flash/Pro/2.5 with native SDK
+- **Anthropic Claude** — Haiku/Sonnet/Opus with streaming SSE
+- Per-character LLM routing (different models per character)
+- Per-character temperature slider
+- Conversation history with configurable limit + auto-compression
+- Qwen3 thinking mode toggle
+- History auto-summarization at 90% of limit
 
-| Provider | Config `provider` | Notes |
-|---|---|---|
-| LM Studio | `lmstudio-rest` | Local GPU, privacy-first |
-| Ollama | `ollama` | Local CPU/GPU |
-| OpenAI-compatible | `local` | Any OpenAI-style endpoint |
-| **Google Gemini** | `gemini` | Flash/Pro/2.5, needs `api_key` |
-| **Anthropic Claude** | `claude` | Haiku/Sonnet/Opus, needs `api_key` |
-| OpenAI | `local` | Set `endpoint` to `https://api.openai.com/v1` |
+### Agentic Characters (Phase 10)
+Characters with agentic mode enabled can autonomously use tools during conversation:
+- **Memory search** — RAG-powered retrieval from conversation history
+- **Diary writing** — LLM writes session diary entries that persist
+- **Self-modification** — change own greeting, traits, background
+- **Relationship tracking** — check and respond to affinity/mood/trust scores
+- **Image generation** — trigger AI art via ComfyUI/SD adapters
+- **Voice synthesis** — generate speech with per-character voice config
+- **Knowledge base** — search uploaded character documents
+- **Cross-character messaging** — characters can talk to each other
+- **Webhook events** — fire outbound webhooks for Zapier/n8n integration
 
-### TTS Providers
+### TTS (Text-to-Speech) — 9 Providers
 
-| Provider | `tts.provider` | Quality | Notes |
-|---|---|---|---|
-| Edge TTS | `edge-tts` | Good | Free, 400+ neural voices |
-| Kokoro | `kokoro` | Excellent | Local, ONNX, fast |
-| Chatterbox | `chatterbox` | Excellent | Local, expressive |
-| GPT-SoVITS | `gptsovits` | Best | Voice cloning, needs GPU |
-| ElevenLabs | `elevenlabs` | Premium | Cloud, paid |
-| Fish Audio | `fish_audio` | Great | Cloud/self-host |
-| Piper | `piper_local` | Good | Fully offline |
-| XTTS | `xtts_server` | Good | Local server |
+| Provider | Config Key | Type | Quality | Notes |
+|----------|-----------|------|---------|-------|
+| Edge TTS | `edge-tts` | Cloud (free) | Good | 400+ neural voices, no API key needed |
+| Kokoro | `kokoro` | Local | Excellent | ONNX, fast, 15+ voices |
+| Chatterbox | `chatterbox` | Local | Excellent | Zero-shot voice cloning, expressive |
+| GPT-SoVITS | `gptsovits` | Local | Best | Voice cloning, anime-optimized, needs GPU |
+| Piper | `piper_local` | Local | Good | Fully offline, ONNX voice packs |
+| XTTS | `xtts_server` | Local | Good | Local server, voice cloning |
+| ElevenLabs | `elevenlabs` | Cloud | Premium | Paid API |
+| Fish Audio | `fish_audio` | Cloud | Great | Cloud or self-hosted |
+| Pinokio/Generic | `pinokio` | Local | Varies | Any REST TTS server |
 
-### STT Providers
+Additional TTS features:
+- **Sentence-chunked streaming** — first audio in ~1-2s instead of 8-15s
+- **Content-addressed audio cache** — instant repeat phrases
+- **Emotion-modulated speech** — rate/pitch adjust per emotion
+- **Per-character voice settings** — voice ID, rate, pitch overrides
+- **Voice sample upload** — for voice cloning adapters (Chatterbox, GPT-SoVITS, XTTS)
+- **Voice preview button** — test voices before assigning
 
-| Provider | `asr.provider` | Notes |
-|---|---|---|
-| Faster-Whisper | `faster_whisper` | Local, offline, CPU/GPU |
+### STT (Speech-to-Text)
+
+| Provider | Config Key | Notes |
+|----------|-----------|-------|
+| Faster-Whisper | `faster_whisper` | Local, offline, CPU or GPU, VAD filter |
 | Whisper API | `whisper_api` | OpenAI cloud |
-| Browser WebSpeech | (none) | Browser built-in, online only |
+| Browser WebSpeech | `browser` | Built-in, online only |
+
+- **VAD threshold slider** — adjust noise gate sensitivity
+- **ASR confidence display** — minimum threshold to accept transcription
+- **Live transcription preview** — see words as you speak
+
+### Character Management
+- **Create-a-Waifu** — full-page character creator with tabbed wizard (Identity, Appearance, Voice, Personality)
+- **Personality animation sliders** — 5 sliders that control how the character moves in 3D
+- **Character roster** — card-based grid with quick-edit and character switching
+- **Character export/import** — share characters as JSON packages
+- **Capability profiles** — per-character LLM requirements (model tier, context budget, feature flags)
+- **Relationship scores** — affinity, mood, trust that evolve through conversation
+- **Daily greeting injection** — auto-sent on first chat of the day
+- **Mood persistence** — emotion carries between sessions
+- **Character diary** — LLM-written session summaries that influence future behavior
+- **Anniversary tracking** — milestone detection based on first chat date
+
+### UI / UX
+- **Cyberpunk "Neon" bento-grid layout** — no framework, vanilla JS modules
+- **Markdown chat rendering** — code blocks, bold, lists in AI responses
+- **Token counter** — real-time generation stats (tokens, tok/s, latency)
+- **Timestamps toggle** — show/hide message timestamps
+- **Font size control** — S/M/L accessibility setting
+- **Keyboard shortcuts** — customizable hotkey editor
+- **Connection quality indicator** — green/yellow/red latency dot
+- **Backend offline banner** — auto-reconnect with watchdog polling
+- **TTS audio cache widget** — view/clear synthesized audio cache
+- **FPS counter** — in-viewer overlay + settings panel display
+- **Screenshot capture** — export current viewport as PNG
+
+### OBS Streaming Overlay
+- Add as **Browser Source**: `http://localhost:8080/viewer/overlay.html`
+- Transparent background — character floats over your stream
+- Live subtitles from AI responses
+- Receives speak/animate events via WebSocket (`/ws/overlay`)
 
 ---
 
-## 📡 OBS Streaming Overlay
+## Configuration
 
-Add as a **Browser Source** in OBS:
+Settings are stored in `backend/config/app.json` and editable via the in-app **Settings** panel (gear icon or `Ctrl+,`).
 
-1. URL: `http://localhost:8080/viewer/overlay.html`
-2. Width: `1920`, Height: `1080`
-3. Enable "Shutdown source when not visible" (optional)
-4. The character appears transparent over your stream with subtitle bar
+### LLM Setup
 
-The overlay receives speak/animate events from the backend via WebSocket (`/ws/overlay`).
+```json
+{
+  "llm": {
+    "provider": "lmstudio",
+    "endpoint": "http://127.0.0.1:1234/v1",
+    "model": "",
+    "api_key": "lm-studio"
+  }
+}
+```
+
+Set `provider` to: `lmstudio`, `ollama`, `local` (OpenAI-compat), `gemini`, or `claude`.
+
+### TTS Setup
+
+```json
+{
+  "tts": {
+    "provider": "edge-tts",
+    "voice_id": "en-US-AriaNeural"
+  }
+}
+```
+
+Most local TTS engines (Kokoro, Chatterbox, XTTS) require running a separate server. Edge-TTS works out of the box with just `pip install edge-tts`.
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 waifu-rt3d/
 ├── backend/
-│   ├── server.py              # FastAPI server (~3500 lines)
-│   ├── preflight.py           # DB migrations (schema v10)
+│   ├── server.py              # FastAPI server (main application)
+│   ├── preflight.py           # DB migrations (schema v3 → v16)
 │   ├── llm/
-│   │   ├── registry.py        # Adapter factory
+│   │   ├── registry.py        # LLM adapter factory
 │   │   └── adapters/          # openai_compat, ollama, lmstudio, gemini, claude_api
 │   ├── tts/
-│   │   ├── registry.py        # TTS factory
+│   │   ├── registry.py        # TTS adapter factory
 │   │   └── adapters/          # edge_tts, kokoro, chatterbox, gptsovits, elevenlabs, …
-│   └── asr/
-│       ├── registry.py        # STT factory
-│       └── adapters/          # faster_whisper, whisper_api, whisper_local
+│   ├── asr/
+│   │   ├── registry.py        # STT adapter factory
+│   │   └── adapters/          # faster_whisper, whisper_api
+│   ├── agent/
+│   │   ├── runner.py          # Agentic loop (XML tool call parser)
+│   │   ├── tools/             # 11 agent tools (voice, diary, memory, image, etc.)
+│   │   └── registry.py        # Tool registry
+│   ├── models/
+│   │   └── manager.py         # LM Studio model manager integration
+│   ├── memory/
+│   │   └── vector_store.py    # RAG vector store (sentence-transformers)
+│   ├── config/
+│   │   └── app.json           # Runtime configuration
+│   ├── storage/
+│   │   ├── app.db             # SQLite database (schema v16)
+│   │   ├── avatars/           # Uploaded VRM/GLB files
+│   │   ├── audio/             # Generated TTS audio cache
+│   │   └── images/            # AI-generated images
+│   └── tests/                 # 98 pytest tests
 ├── frontends/
-│   └── neon/                  # Cyberpunk bento-grid UI (vanilla JS modules)
+│   └── neon/                  # Cyberpunk bento-grid UI
 │       ├── index.html
 │       ├── js/
 │       │   ├── core/          # StateManager, EventBus, Logger, API
-│       │   ├── components/    # ChatInterface, SettingsModal, CharacterGrid, …
+│       │   ├── components/    # ChatInterface, SettingsModal, WaifuCreator, …
 │       │   └── utils/         # Toast, KeyboardShortcuts
+│       ├── css/               # Cyber glass theme stylesheets
 │       └── viewer/
-│           ├── viewer.html    # Three.js VRM renderer with lip sync
+│           ├── viewer.html    # Three.js VRM renderer (6-layer animation)
 │           └── overlay.html   # OBS transparent overlay
-├── tests/
-│   └── test_phase6_helpers.py # 31 unit tests (no server required)
-└── .github/
-    └── workflows/
-        └── test.yml           # CI: pytest + ESLint on every PR
+└── docs/
+    ├── plans/                 # Design docs and implementation plans
+    ├── USER_GUIDE.md
+    ├── VRM_INTEGRATION.md
+    └── CHANGELOG.md
 ```
 
 ### Key API Endpoints
 
 | Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/health` | Health check (version, LLM/DB status) |
+|--------|------|-------------|
+| `GET` | `/api/health` | Health check (version, uptime, LLM/DB status) |
 | `GET/POST` | `/api/characters` | List / create characters |
-| `PUT` | `/api/characters/{id}` | Update character |
+| `PUT` | `/api/characters/{id}` | Update character (all fields) |
 | `GET` | `/api/characters/{id}/export` | Export character as JSON |
 | `POST` | `/api/characters/import` | Import character from JSON |
-| `GET` | `/api/characters/{id}/relationship` | Get affinity/mood/trust scores |
+| `GET` | `/api/characters/{id}/relationship` | Affinity/mood/trust scores |
 | `POST` | `/api/chat` | Non-streaming chat |
 | `GET` | `/api/chat/stream` | SSE streaming chat (with chunked TTS) |
 | `POST` | `/api/tts` | Direct TTS synthesis |
 | `POST` | `/api/asr/transcribe` | Faster-Whisper STT |
+| `GET` | `/api/tts/cache` | Audio cache stats |
+| `GET` | `/api/v2/telemetry/summary` | Error/latency metrics |
+| `GET` | `/api/v2/memory/search` | RAG memory search |
 | `WS` | `/ws/overlay` | OBS overlay WebSocket |
 
+### Database Schema (v16)
+
+The SQLite database auto-migrates on startup. Key tables:
+- **sessions** — chat sessions with summary and archive support
+- **messages** — chat history with emotion, branching (parent_id), token stats
+- **characters** — full character profiles (34 columns including animation_profile, capability_profile, diary, voice config)
+- **character_relationships** — affinity/mood/trust scores per character
+- **prompt_templates** — reusable system prompt templates
+- **character_docs** — uploaded reference documents
+
 ---
 
-## 🧪 Running Tests
+## Running Tests
 
 ```bash
-pytest tests/ -v
+# Run all 98 tests
+python -m pytest backend/tests/ -v
+
+# Quick run (stop on first failure)
+python -m pytest backend/tests/ -x --tb=short
 ```
 
-All 31 tests run without a live server — they test helpers (`_clean_for_tts`, `_parse_emotion_gesture`, TTS adapter cache, etc.) directly.
+Tests cover: API endpoints, character CRUD, agentic tool execution, capability profiles, telemetry, memory search, routing, and chat pipeline.
 
 ---
 
-## 🔮 Roadmap
+## Roadmap
 
-See [Master Improvement Menu](docs/IMPROVEMENT_MENU.md) (~128 items) for the full roadmap.
+### Coming Soon
+- **TTS Model Manager** — browse, download, and manage local TTS voice packs on-demand ([design doc](docs/plans/2026-02-25-tts-model-manager-design.md))
+- **Voice picker dropdown** — replace free-text voice ID with searchable installed-voice selector
+- **TTS provider health checks** — verify which engines are running
 
-**Next major milestones:**
-1. **Phase 7B** — Gemini/Claude in Settings UI, relationship bond card, daily greeting
-2. **Phase 8** — Electron desktop app + desktop pet mode
-3. **Phase 9** — Twitch chat integration + Mixamo animations (6F)
-4. **Phase 10** — V2 React frontend activation
-
----
-
-## 📝 Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for version history.
+### Future
+- Electron desktop app (macOS + Windows)
+- Twitch chat integration
+- V2 React frontend (React 19 + Vite + R3F + Tailwind v4)
+- Docker Compose one-command setup
+- Plugin / extension system
 
 ---
 
-## 📄 License
+## Changelog
+
+See [docs/CHANGELOG.md](docs/CHANGELOG.md) for version history.
+
+---
+
+## License
 
 MIT — see [LICENSE](LICENSE).

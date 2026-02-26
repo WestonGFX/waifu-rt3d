@@ -1,7 +1,7 @@
 # Layered Procedural Animation System — Design
 
-> **Phase 6F Replacement** — Instead of Mixamo FBX animations, enhance the procedural
-> system with a layered architecture and per-character personality profiles.
+> Layered animation architecture with per-character personality profiles.
+> Extended with AnimationMixer clip system (ClipLayer L6) for .glb/.gltf playback.
 
 ## Goal
 

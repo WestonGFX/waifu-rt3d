@@ -4093,6 +4093,38 @@ def list_characters():
     conn.close()
     return {"characters": characters}
 
+@app.get("/api/characters/recent-messages")
+def get_recent_messages_per_character():
+    """Return the last assistant message and its timestamp for each character.
+
+    Uses a single GROUP BY query rather than per-character round-trips.
+    Messages are linked to characters via the char_id column on messages.
+
+    Returns:
+        {"ok": True, "recent": {char_id: {"text": str, "ts": float}}}
+    """
+    conn = db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT char_id, text, MAX(ts) as last_ts
+            FROM messages
+            WHERE role = 'assistant' AND char_id IS NOT NULL
+            GROUP BY char_id
+        """)
+        recent = {}
+        for row in cur.fetchall():
+            char_id, text, ts = row
+            # Truncate long messages for preview display
+            preview = (text[:120] + "…") if text and len(text) > 120 else (text or "")
+            recent[str(char_id)] = {"text": preview, "ts": ts}
+    except Exception:
+        recent = {}
+    finally:
+        conn.close()
+    return {"ok": True, "recent": recent}
+
+
 @app.post("/api/characters")
 async def create_character(req: Request):
     """Create a new character with all supported fields.

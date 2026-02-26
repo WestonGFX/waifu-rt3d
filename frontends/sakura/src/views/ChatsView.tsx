@@ -53,13 +53,32 @@ function StatsBar() {
   );
 }
 
+/** Format a Unix timestamp as a relative time string (e.g. "2h ago", "3d ago"). */
+function relativeTime(ts: number | undefined): string | undefined {
+  if (!ts) return undefined;
+  const diffSec = Math.floor(Date.now() / 1000 - ts);
+  if (diffSec < 60) return 'just now';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  if (diffSec < 604800) return `${Math.floor(diffSec / 86400)}d ago`;
+  return new Date(ts * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 /**
  * Character list view — the main "Chats" tab.
  * Shows a compact stats bar (messages, sessions, memories) followed by
  * tappable character cards. Clicking a card opens the ChatThread.
+ * Last message previews and relative timestamps are fetched once on mount.
  */
 export function ChatsView() {
   const { characters, selectCharacter } = useAppStore();
+  const [recentMessages, setRecentMessages] = useState<Record<string, { text: string; ts: number }>>({});
+
+  useEffect(() => {
+    api.getRecentMessagesPerChar()
+      .then(setRecentMessages)
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="p-4 max-w-2xl mx-auto">
@@ -92,13 +111,18 @@ export function ChatsView() {
             </p>
           </div>
         ) : (
-          characters.map((char) => (
-            <CharacterCard
-              key={char.id}
-              character={char}
-              onClick={() => selectCharacter(char)}
-            />
-          ))
+          characters.map((char) => {
+            const recent = recentMessages[String(char.id)];
+            return (
+              <CharacterCard
+                key={char.id}
+                character={char}
+                onClick={() => selectCharacter(char)}
+                lastMessage={recent?.text}
+                timestamp={relativeTime(recent?.ts)}
+              />
+            );
+          })
         )}
       </div>
     </div>

@@ -72,6 +72,9 @@ export const api = {
 
   // Characters
   getCharacters: () => get<{ characters: Character[] }>('/api/characters').then(d => d.characters),
+  getRecentMessagesPerChar: () =>
+    get<{ ok: boolean; recent: Record<string, { text: string; ts: number }> }>('/api/characters/recent-messages')
+      .then(d => d.recent),
   createCharacter: (data: Partial<Character>) => post<Character>('/api/characters', data),
   updateCharacter: (id: number, data: Partial<Character>) => put<Character>(`/api/characters/${id}`, data),
   deleteCharacter: (id: number) => del<{ ok: boolean }>(`/api/characters/${id}`),

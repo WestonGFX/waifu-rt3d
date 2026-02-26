@@ -2,6 +2,14 @@ import { Volume2 } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
 
+/** Maps detected emotion tags to emoji for display in the message header. */
+const EMOTION_EMOJI: Record<string, string> = {
+  happy: '😊', excited: '✨', sad: '🥺', angry: '😤',
+  nervous: '😰', surprised: '😮', embarrassed: '😳', shy: '🫣',
+  flirty: '💕', teasing: '😏', cool: '😎', thoughtful: '🤔',
+  neutral: '', love: '❤️', playful: '🎉', serious: '😐',
+};
+
 /** Image extensions the browser can render in an img tag. */
 const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i;
 
@@ -100,6 +108,11 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
           <span className="font-semibold text-sm" style={{ color: 'var(--color-accent)' }}>
             {character?.name || 'Assistant'}
           </span>
+          {message.emotion && message.emotion !== 'neutral' && EMOTION_EMOJI[message.emotion] && (
+            <span title={message.emotion} style={{ fontSize: '0.85rem', lineHeight: 1 }}>
+              {EMOTION_EMOJI[message.emotion]}
+            </span>
+          )}
           {message.audioUrl && onPlayAudio && (
             <button
               onClick={onPlayAudio}

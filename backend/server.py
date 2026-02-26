@@ -5531,16 +5531,25 @@ async def lm_studio_models():
         data = r.json()
         models = data if isinstance(data, list) else data.get("data", [])
 
-        # Find the currently configured model
+        # Find the active model: prefer the currently loaded model in LM Studio
+        # over the configured model in app.json (user may have switched models
+        # in LM Studio without updating the config yet).
         configured_model = cfg.get("llm", {}).get("model", "")
         active_model = None
-        for m in models:
+        loaded_models = [m for m in models if m.get("state") == "loaded"]
+
+        # First pass: find a loaded model matching the config
+        for m in loaded_models:
             model_id = m.get("id", "")
             if configured_model and (configured_model in model_id or model_id in configured_model):
                 active_model = m
                 break
 
-        # If no exact match, use the first loaded model
+        # Second pass: use any loaded model (handles model switches)
+        if not active_model and loaded_models:
+            active_model = loaded_models[0]
+
+        # Fallback: use first model in list regardless of state
         if not active_model and models:
             active_model = models[0]
 

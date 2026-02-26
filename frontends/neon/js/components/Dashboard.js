@@ -248,8 +248,9 @@ export class Dashboard {
 
     /**
      * Update the sidebar LLM status badge.
-     * Shows provider name (e.g. "LM Studio (local)") when connected,
-     * "OFFLINE" otherwise.
+     * Shows short provider name (e.g. "OpenAI" / "Claude") with green/red
+     * color to indicate connection status. Avoids layout jitter by keeping
+     * text short and not including model names or "(local)" suffixes.
      *
      * @param {boolean} connected - Whether the stats API responded successfully
      * @param {string} [providerLabel] - Human-readable provider name from /api/stats
@@ -257,14 +258,11 @@ export class Dashboard {
     _updateSidebarStatus(connected, providerLabel) {
         const el = document.getElementById('sidebar-llm-status');
         if (!el) return;
-        if (connected && providerLabel) {
-            el.textContent = providerLabel;
-            el.className = 'subtitle connected';
-        } else if (connected) {
-            el.textContent = 'ONLINE';
+        if (connected) {
+            el.textContent = providerLabel || 'Online';
             el.className = 'subtitle connected';
         } else {
-            el.textContent = 'OFFLINE';
+            el.textContent = 'Offline';
             el.className = 'subtitle disconnected';
         }
     }

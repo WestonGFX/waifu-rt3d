@@ -1122,14 +1122,12 @@ export class SettingsModal {
                     detectBtn.innerText = '...';
                     detectBtn.disabled = true;
                     try {
-                        // Use cached model info from Dashboard, or fetch fresh
-                        let model = window.activeModelInfo;
-                        if (!model) {
-                            const data = await (await fetch('/api/lm-studio/models')).json();
-                            model = data.active_model;
-                        }
-                        if (model && model.max_context_length) {
-                            const ctx = model.max_context_length;
+                        // Always fetch fresh — cached model info may be stale
+                        // after switching models in LM Studio.
+                        const data = await (await fetch('/api/lm-studio/models')).json();
+                        const model = data.active_model;
+                        if (model && (model.loaded_context_length || model.max_context_length)) {
+                            const ctx = model.loaded_context_length || model.max_context_length;
                             input.value = ctx;
                             input.max = Math.max(def.max, ctx); // Expand slider if needed
                             disp.innerText = ctx;

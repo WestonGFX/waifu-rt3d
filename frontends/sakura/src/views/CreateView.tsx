@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Upload, Check, Zap, Shuffle, Sparkles, Lock, Unlock, Loader2 } from 'lucide-react';
 import { WizardStep } from '../components/WizardStep';
@@ -137,6 +137,40 @@ The personality trait scores should be 0.0-1.0 floats that match the character's
 /* ═══════════════════════════════════════════════════════════════════════
    CreateView Component
    ═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Compact inline VRM preview iframe.
+ * Sends a postMessage to the shared viewer to load the given VRM URL
+ * after the iframe has had time to initialize.
+ */
+function VrmPreview({ url }: { url: string }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: 'load_character', url },
+        '*'
+      );
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: 'set_camera', preset: 'bust' },
+        '*'
+      );
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [url]);
+
+  return (
+    <div className="mt-2 rounded-xl overflow-hidden" style={{ height: 220, border: '1px solid var(--color-border-subtle)' }}>
+      <iframe
+        ref={iframeRef}
+        src="/shared/viewer/viewer.html"
+        className="w-full h-full border-0"
+        title="VRM preview"
+      />
+    </div>
+  );
+}
 
 /** 5-step character creation wizard with animated transitions, preset templates, shuffle, and AI generation. */
 export function CreateView() {
@@ -540,7 +574,7 @@ export function CreateView() {
                 </label>
               </div>
 
-              {/* VRM model picker */}
+              {/* VRM model picker + live preview */}
               <div>
                 <label className="text-sm font-medium block mb-1">3D Model (VRM)</label>
                 <select
@@ -557,6 +591,7 @@ export function CreateView() {
                 <p className="text-[10px] mt-1" style={{ color: 'var(--color-text-tertiary)' }}>
                   VRM files in your avatars folder appear here. Drop .vrm files into backend/storage/avatars/.
                 </p>
+                {data.model_vrm && <VrmPreview url={data.model_vrm} />}
               </div>
 
               {/* Avatar preview */}

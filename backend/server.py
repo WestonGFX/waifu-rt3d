@@ -543,7 +543,16 @@ def legacy_index():
 @app.get("/sakura")
 @app.get("/sakura/{full_path:path}")
 async def sakura_frontend(full_path: str = ""):
-    """Serve the Sakura React frontend (SPA fallback)."""
+    """Serve the Sakura React frontend (SPA fallback).
+
+    Static assets (JS/CSS in ``dist/assets/``) are served directly;
+    all other paths return ``index.html`` for client-side routing.
+    """
+    # Serve static asset files directly (JS, CSS, etc.)
+    if full_path.startswith("assets/"):
+        asset = FRONTEND_SAKURA_DIST / full_path
+        if asset.exists() and asset.is_file():
+            return FileResponse(str(asset))
     index = FRONTEND_SAKURA_DIST / "index.html"
     if index.exists():
         return FileResponse(str(index))

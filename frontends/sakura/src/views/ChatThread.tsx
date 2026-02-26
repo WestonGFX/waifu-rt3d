@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
+import { api } from '../lib/api';
 import { DialogueBubble } from '../components/DialogueBubble';
 import { StatusBar } from '../components/StatusBar';
 import { ModelPanel } from '../components/ModelPanel';
@@ -13,14 +14,21 @@ import { ModelPanel } from '../components/ModelPanel';
  */
 export function ChatThread() {
   const { activeCharacter } = useAppStore();
-  const { messages, draft, loading, setDraft, sendMessage, setContext } = useChatStore();
+  const { messages, draft, loading, setDraft, sendMessage, setContext, loadHistory } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeCharacter) return;
-    setContext(0, activeCharacter.id);
-  }, [activeCharacter, setContext]);
+    // Create (or resume) a chat session for this character.
+    // The backend returns the most recent open session or creates a new one.
+    api.createSession(activeCharacter.id)
+      .then((session) => {
+        setContext(session.id, activeCharacter.id);
+        if (session.id) loadHistory(session.id);
+      })
+      .catch(console.error);
+  }, [activeCharacter, setContext, loadHistory]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

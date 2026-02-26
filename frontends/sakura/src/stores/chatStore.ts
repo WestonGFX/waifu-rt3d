@@ -45,7 +45,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   sendMessage: async (text, speak = true) => {
     const { sessionId, charId, loading } = get();
-    if (loading || !sessionId || !charId) return;
+    if (loading || sessionId == null || !charId) return;
     const trimmed = text.trim();
     if (!trimmed) return;
 

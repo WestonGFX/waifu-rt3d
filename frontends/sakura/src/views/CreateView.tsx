@@ -122,9 +122,9 @@ function randomPersonality(): Record<string, number> {
  * Instructs JSON output with specific fields for parsing.
  */
 const PERSONA_LENGTH_GUIDE: Record<string, { prompt: string; words: string }> = {
-  short: { prompt: '2-3 sentences', words: '~30-60 words' },
-  medium: { prompt: '4-6 sentences with more detail about mannerisms, likes/dislikes, and speech patterns', words: '~80-150 words' },
-  long: { prompt: '8-12 sentences — a rich, detailed personality covering backstory, mannerisms, speech patterns, likes, dislikes, fears, dreams, and relationship dynamics', words: '~200-350 words' },
+  short: { prompt: '4-6 sentences covering core personality, speech style, and a notable quirk', words: '~60-120 words' },
+  medium: { prompt: '8-12 sentences with detail about mannerisms, likes/dislikes, speech patterns, and relationship dynamics', words: '~150-300 words' },
+  long: { prompt: '16-24 sentences — a rich, detailed personality covering backstory, mannerisms, speech patterns, likes, dislikes, fears, dreams, relationship dynamics, and how she acts in different emotional states', words: '~400-700 words' },
 };
 
 function buildGenPrompt(length: 'short' | 'medium' | 'long'): string {
@@ -245,7 +245,7 @@ export function CreateView() {
       .join(', ');
 
     try {
-      const maxTokens = personaLength === 'short' ? 400 : personaLength === 'medium' ? 700 : 1200;
+      const maxTokens = personaLength === 'short' ? 600 : personaLength === 'medium' ? 1200 : 2400;
       const result = await api.llmGenerate([
         { role: 'system', content: buildGenPrompt(personaLength) },
         { role: 'user', content: `Create an anime girlfriend character with these traits: ${tagString}` },

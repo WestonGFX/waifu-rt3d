@@ -720,20 +720,17 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
 
 /* --- Toggle View Button --- */
 /* Positioned below AI status container (top-left) to avoid overlapping both status and toolbar */
-.btn-toggle-view {
-    position: absolute;
-    top: 52px;
-    left: var(--space-md);
-    z-index: 20;
+/* 3D Toggle — inline within the ai-status-container bar */
+.btn-toggle-view-inline {
     display: none;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.25rem 0.5rem;
-    background: rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(0.5rem);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    margin-left: 0.5rem;
+    padding: 0.2rem 0.5rem;
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid rgba(0, 240, 255, 0.25);
     border-radius: var(--radius-sm);
-    color: var(--text-muted);
+    color: var(--neon-cyan);
     font-family: var(--font-mono);
     font-size: 0.6rem;
     letter-spacing: 0.05em;
@@ -742,18 +739,17 @@ main.main-view .chat-layer .input-area textarea.input-field::placeholder {
     white-space: nowrap;
 }
 
-.btn-toggle-view:hover {
-    color: var(--neon-cyan);
+.btn-toggle-view-inline:hover {
+    color: #fff;
     border-color: var(--neon-cyan);
-    background: rgba(0, 240, 255, 0.08);
+    background: rgba(0, 240, 255, 0.18);
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
 }
 
 /* Only show toggle button in Toggle View mode */
-.main-view.layout-toggle .btn-toggle-view {
+.main-view.layout-toggle .btn-toggle-view-inline {
     display: flex;
 }
-
-/* Toggle button is top-left, viewport toolbar is top-right — no overlap */
 
 /* ═══ VIEWPORT TOOLBAR (top-right of 3D viewport) ═══ */
 .viewport-toolbar {

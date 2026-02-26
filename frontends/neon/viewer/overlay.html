@@ -270,8 +270,8 @@
                     : vrm.humanoid.getBoneNode(n);
                 const lArm = getBone('leftUpperArm');
                 const rArm = getBone('rightUpperArm');
-                if (lArm) lArm.rotation.z = -0.7;
-                if (rArm) rArm.rotation.z = 0.7;
+                if (lArm) lArm.rotation.z = -1.2;
+                if (rArm) rArm.rotation.z = 1.2;
 
                 lipSync = new AudioLipSync(vrm);
                 blinkController = new BlinkController(vrm);
@@ -375,8 +375,8 @@
                 // Maintain A-pose arm baseline
                 const lArm = getBone('leftUpperArm');
                 const rArm = getBone('rightUpperArm');
-                if (lArm) lArm.rotation.z = -0.7;
-                if (rArm) rArm.rotation.z = 0.7;
+                if (lArm) lArm.rotation.z = -1.2;
+                if (rArm) rArm.rotation.z = 1.2;
             }
 
             renderer.render(scene, camera);
@@ -390,14 +390,20 @@
             if (urlParam) {
                 loadVRM(urlParam);
             } else {
-                // Fetch active character's VRM from backend config
+                // Fetch active character's VRM from backend config + characters list
                 try {
-                    const state = await (await fetch('/api/state')).json();
-                    const chars = state.characters || [];
-                    const activeId = state.currentCharacterId || (chars[0]?.id);
-                    const char = chars.find(c => c.id == activeId) || chars[0];
-                    if (char?.vrm_model_url) {
-                        loadVRM(char.vrm_model_url);
+                    const cfg = await (await fetch('/api/config')).json();
+                    // model_vrm in config is the active character's VRM path
+                    if (cfg.model_vrm) {
+                        loadVRM(cfg.model_vrm);
+                    } else {
+                        // Fallback: look up from characters list
+                        const data = await (await fetch('/api/characters')).json();
+                        const chars = data.characters || [];
+                        const first = chars[0];
+                        if (first?.vrm_model_url) {
+                            loadVRM(first.vrm_model_url);
+                        }
                     }
                 } catch (e) {
                     console.warn('[Overlay] Could not fetch active character:', e);

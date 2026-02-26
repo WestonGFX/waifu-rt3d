@@ -6,6 +6,7 @@
     grid-template-columns: repeat(2, 1fr);
     gap: 0.375rem;
     padding: 0.375rem;
+    contain: layout style;
 }
 
 /* Individual Card — fixed aspect ratio, never overlaps */

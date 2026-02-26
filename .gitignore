@@ -18,6 +18,7 @@ debug.log
 server_log*.txt
 server_output*.txt
 startup_error.log
+backend/logs/
 
 # ── macOS ────────────────────────────────────────────────────────────────────
 .DS_Store

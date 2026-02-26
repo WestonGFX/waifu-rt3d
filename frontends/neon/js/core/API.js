@@ -84,8 +84,12 @@ export class API {
                 // Final failure or non-retryable error
                 console.error(`[API] Request Failed: ${endpoint}`, error);
 
-                // Show user-visible error toast (skip for user-initiated aborts)
-                if (!isAborted) {
+                // Show user-visible error toast (skip for user-initiated aborts
+                // and when the backend-offline banner is already visible to avoid
+                // duplicate error notifications)
+                const offlineBanner = document.getElementById('backend-offline-banner');
+                const bannerVisible = offlineBanner && offlineBanner.style.display !== 'none';
+                if (!isAborted && !bannerVisible) {
                     const errorMsg = error.message || 'Network request failed';
                     toast.error(`API Error: ${errorMsg}`, 5000);
                 }

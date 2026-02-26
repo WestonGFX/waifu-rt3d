@@ -61,7 +61,7 @@
           </div>
           <input id="session-search" type="text" placeholder="Search threads..."
                  style="width:100%; box-sizing:border-box; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.06); border-radius:4px; padding:4px 8px; color:var(--text-secondary); font-size:0.65rem; margin-bottom:4px; outline:none; display:none;">
-          <div id="session-list" style="max-height:120px; overflow-y:auto;">
+          <div id="session-list" style="max-height:120px; overflow-y:auto; contain:layout style;">
             <div style="padding:8px; color:var(--text-muted); font-size:0.7rem;">Loading...</div>
           </div>
         </div>
@@ -88,11 +88,7 @@
       <small>Settings &rarr; Character &rarr; VRM Model</small>
     </div>
   </div>
-  <!-- Toggle View Button (visible only in Toggle View layout mode) -->
-  <button id="btn-toggle-view" class="btn-toggle-view" title="Toggle 3D Viewport">
-    <span id="toggle-view-icon">&#x1F441;</span>
-    <span id="toggle-view-label">SHOW 3D</span>
-  </button>
+  <!-- Toggle View Button — moved inline into ai-status-container above -->
 
   <!-- Viewport Toolbar (top-right corner) -->
   <!-- Backend connection quality indicator (#51 watchdog, #52 quality dot) -->
@@ -127,6 +123,11 @@
       <span id="ai-status-top" class="ai-status-label ai-status-feed">NO CHARACTER SELECTED</span>
       <span id="neural-link-status" class="ai-status-label">LLM: READY</span>
     </div>
+    <!-- 3D Toggle — inline with status bar for clean placement -->
+    <button id="btn-toggle-view" class="btn-toggle-view-inline" title="Toggle 3D Viewport">
+      <span id="toggle-view-icon">&#x1F441;</span>
+      <span id="toggle-view-label">SHOW 3D</span>
+    </button>
   </div>
 <!-- Chat Overlay (Bottom half, gradient fade) -->
 <div class="chat-layer">

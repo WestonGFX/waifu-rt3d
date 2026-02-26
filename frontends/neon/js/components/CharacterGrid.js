@@ -52,8 +52,11 @@ export class CharacterGrid {
      */
     render(characters) {
         if (!this.container) return;
-        this.container.innerHTML = '';
         this.container.className = 'character-grid-container'; // CSS Grid class
+
+        // Reconcile: build new content in a DocumentFragment, then swap once
+        // to avoid mid-render repaint flash from innerHTML = '' + slow append loop
+        const frag = document.createDocumentFragment();
 
         // 1. Add "Create New" Button
         const createCard = document.createElement('div');
@@ -72,14 +75,16 @@ export class CharacterGrid {
         };
         createCard.onmouseenter = () => createCard.style.opacity = '1';
         createCard.onmouseleave = () => createCard.style.opacity = '0.8';
-        this.container.appendChild(createCard);
+        frag.appendChild(createCard);
 
         if (!characters || characters.length === 0) {
             const msg = document.createElement('div');
             msg.style.padding = '20px';
             msg.style.color = 'var(--text-muted)';
             msg.innerText = 'No entities found.';
-            this.container.appendChild(msg);
+            frag.appendChild(msg);
+            this.container.innerHTML = '';
+            this.container.appendChild(frag);
             return;
         }
 
@@ -209,8 +214,12 @@ export class CharacterGrid {
                 });
             }
 
-            this.container.appendChild(card);
+            frag.appendChild(card);
         });
+
+        // Single DOM swap — one repaint instead of N+1
+        this.container.innerHTML = '';
+        this.container.appendChild(frag);
     }
 
     /**

@@ -65,6 +65,28 @@ if os.getenv("WAIFU_LOG_JSON", "0") == "1":
     logging.root.addHandler(_json_handler)
 
 
+# --- FILE LOGGING ---
+# Always write full debug logs to a rotating file so errors from test sessions
+# can be reviewed later (even if the user didn't see the terminal output).
+# Files are stored in backend/logs/ which is gitignored.
+_log_dir = os.path.join(ROOT_DIR, "backend", "logs")
+os.makedirs(_log_dir, exist_ok=True)
+_file_handler = logging.handlers.RotatingFileHandler(
+    os.path.join(_log_dir, "waifu.log"),
+    maxBytes=5 * 1024 * 1024,  # 5 MB per file
+    backupCount=3,
+    encoding="utf-8",
+)
+_file_handler.setLevel(logging.DEBUG)
+_file_handler.setFormatter(logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+))
+logging.root.addHandler(_file_handler)
+# Also capture uvicorn access logs to file (without the quiet filter)
+logging.getLogger("uvicorn.access").addHandler(_file_handler)
+
+
 # --- QUIET POLLING FILTER ---
 # Suppress uvicorn access-log spam for high-frequency polling endpoints
 # (health check every 10s, stats every 10s, art-status every 15s).
@@ -587,6 +609,45 @@ def get_logs():
     while not LOG_QUEUE.empty():
         logs.append(LOG_QUEUE.get_nowait())
     return {"logs": logs}
+
+
+@app.get("/api/logs/file")
+def get_log_file(lines: int = 200, level: str = ""):
+    """Read the last N lines from the persistent log file.
+
+    Useful for reviewing errors from previous test sessions without
+    needing the terminal output.
+
+    Args:
+        lines: Number of recent lines to return (default 200, max 2000).
+        level: Optional filter — only return lines containing this level
+               (e.g. "ERROR", "WARNING").
+
+    Returns:
+        dict: {"lines": list[str], "file": str, "total": int}
+
+    Example:
+        >>> GET /api/logs/file?lines=50&level=ERROR
+        {"lines": ["2026-02-26 12:00:01 [ERROR] ..."], "file": "backend/logs/waifu.log", "total": 3}
+    """
+    log_path = os.path.join(ROOT_DIR, "backend", "logs", "waifu.log")
+    lines = min(max(lines, 1), 2000)
+
+    if not os.path.exists(log_path):
+        return {"lines": [], "file": log_path, "total": 0}
+
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            all_lines = f.readlines()
+
+        tail = all_lines[-lines:]
+        if level:
+            level_upper = level.upper()
+            tail = [ln for ln in tail if f"[{level_upper}]" in ln]
+
+        return {"lines": [ln.rstrip() for ln in tail], "file": log_path, "total": len(tail)}
+    except Exception as e:
+        return {"lines": [], "file": log_path, "total": 0, "error": str(e)}
 
 
 @app.get("/api/health")

@@ -743,6 +743,7 @@ export class ChatInterface {
                 this._showQueuedBadge();
             }
             // 'discard' → fall through and do nothing
+            this.input.focus(); // Re-select input after queue/steer/discard
             return;
         }
 
@@ -751,6 +752,7 @@ export class ChatInterface {
         if (this.sendBtn) this.sendBtn.disabled = true;
         this.input.value = '';
         this.input.style.height = '';
+        this.input.focus(); // Re-select input so user can keep typing
 
         // Multi-character chat intercept
         if (this._multiChatIds && this._multiChatIds.length > 1) {
@@ -770,13 +772,16 @@ export class ChatInterface {
         // Abort controller for cancellation
         this.currentRequestAbortController = new AbortController();
 
-        // Timeout warning at 30s — show a non-blocking in-chat banner instead of a
+        // Timeout warning — show a non-blocking in-chat banner instead of a
         // browser confirm() dialog (which blocks browser events and breaks automation).
+        // Default 90s is generous enough for large models on modest hardware;
+        // first-token latency for 32B+ models at Q4 can be 30-60s on consumer GPUs.
         this._timeoutBanner = null;
+        const timeoutMs = (state.config?.llm_timeout_warning ?? 90) * 1000;
         this.timeoutWarningTimer = setTimeout(() => {
             if (!this.isThinking) return;
             this._showTimeoutBanner(text);
-        }, 30000);
+        }, timeoutMs);
 
         const startTime = performance.now();
 
@@ -1753,7 +1758,9 @@ export class ChatInterface {
         // Store sessions for context menu actions
         this._sessionCache = sessions;
 
-        listEl.innerHTML = sessions.map(s => {
+        // Build in DocumentFragment to minimize repaint flicker
+        const frag = document.createDocumentFragment();
+        sessions.forEach(s => {
             const isActive = s.id === state.state.currentSessionId;
             const isPinned = s.is_pinned;
             const ts = s.last_message_ts || s.created_ts;
@@ -1762,30 +1769,27 @@ export class ChatInterface {
                 : '';
             const title = s.title || `Session ${s.id}`;
             const msgCount = s.message_count || 0;
-            const pinIcon = isPinned ? '<span style="color:var(--neon-cyan); font-size:0.55rem; margin-right:3px;" title="Pinned">&#x1F4CC;</span>' : '';
 
-            return `
-                <div class="session-item ${isActive ? 'active' : ''} ${isPinned ? 'pinned' : ''}"
-                     data-session-id="${s.id}">
-                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
-                        ${pinIcon}${this._escapeHtml(title)}
-                    </span>
-                    <span style="font-size:0.58rem; opacity:0.5; margin-left:6px; flex-shrink:0; white-space:nowrap;">${msgCount} ${date}</span>
-                </div>
+            const el = document.createElement('div');
+            el.className = `session-item${isActive ? ' active' : ''}${isPinned ? ' pinned' : ''}`;
+            el.dataset.sessionId = s.id;
+            el.innerHTML = `
+                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
+                    ${isPinned ? '<span style="color:var(--neon-cyan); font-size:0.55rem; margin-right:3px;" title="Pinned">&#x1F4CC;</span>' : ''}${this._escapeHtml(title)}
+                </span>
+                <span style="font-size:0.58rem; opacity:0.5; margin-left:6px; flex-shrink:0; white-space:nowrap;">${msgCount} ${date}</span>
             `;
-        }).join('');
-
-        // Bind click + right-click handlers
-        listEl.querySelectorAll('[data-session-id]').forEach(el => {
-            const sessionId = parseInt(el.dataset.sessionId);
-
-            el.onclick = () => state.selectSession(sessionId);
-
+            el.onclick = () => state.selectSession(s.id);
             el.oncontextmenu = (e) => {
                 e.preventDefault();
-                this._showSessionContextMenu(e, sessionId);
+                this._showSessionContextMenu(e, s.id);
             };
+            frag.appendChild(el);
         });
+
+        // Single DOM swap
+        listEl.innerHTML = '';
+        listEl.appendChild(frag);
     }
 
     /**
@@ -2558,7 +2562,7 @@ export class ChatInterface {
         `;
 
         banner.innerHTML = `
-            <span style="flex:1;">⏳ Still waiting for AI response… (${Math.floor(30)}s+)</span>
+            <span style="flex:1;">⏳ Still waiting for AI response…</span>
             <button id="timeout-cancel-btn" style="
                 padding: 3px 10px; background: rgba(255,60,0,0.2);
                 border: 1px solid rgba(255,80,0,0.4); border-radius: 4px;

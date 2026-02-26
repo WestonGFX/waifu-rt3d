@@ -38,6 +38,7 @@ interface AppState {
   setActiveCharacter: (char: Character) => void;
   selectCharacter: (char: Character) => void;
   loadCharacters: () => Promise<void>;
+  deleteCharacter: (id: number) => Promise<void>;
 
   // Config
   config: AppConfig;
@@ -100,6 +101,16 @@ export const useAppStore = create<AppState>()(
       loadCharacters: async () => {
         const characters = await api.getCharacters();
         set({ characters });
+      },
+      deleteCharacter: async (id) => {
+        await api.deleteCharacter(id);
+        const characters = await api.getCharacters();
+        // If we just deleted the active character, clear it
+        const activeCharacter = get().activeCharacter;
+        set({
+          characters,
+          activeCharacter: activeCharacter?.id === id ? null : activeCharacter,
+        });
       },
 
       // Config

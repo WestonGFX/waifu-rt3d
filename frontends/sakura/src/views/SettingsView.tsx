@@ -226,10 +226,11 @@ function SliderField({
    ═══════════════════════════════════════════════════════════════════════ */
 
 function CharacterTab() {
-  const { activeCharacter, setActiveCharacter, characters, loadCharacters } = useAppStore();
+  const { activeCharacter, setActiveCharacter, characters, loadCharacters, deleteCharacter } = useAppStore();
   const [vrmModels, setVrmModels] = useState<Array<{ name: string; url: string }>>([]);
   const [images, setImages] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [localData, setLocalData] = useState({
     avatar_url: '',
     model_vrm: '',
@@ -436,8 +437,41 @@ function CharacterTab() {
         </div>
       </section>
 
-      {/* Save button */}
-      <div className="flex justify-end">
+      {/* Save + Delete buttons */}
+      <div className="flex items-center justify-between gap-3">
+        {/* Delete with two-step confirmation */}
+        {!confirmDelete ? (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+            style={{ color: 'var(--color-danger, #f44)', border: '1px solid var(--color-danger, #f44)', background: 'transparent' }}
+          >
+            Delete Character
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-xs" style={{ color: 'var(--color-danger, #f44)' }}>
+              Permanently delete {activeCharacter.name}?
+            </span>
+            <button
+              onClick={async () => {
+                await deleteCharacter(activeCharacter.id);
+                setConfirmDelete(false);
+              }}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg"
+              style={{ backgroundColor: 'var(--color-danger, #f44)', color: '#fff' }}
+            >
+              Yes, delete
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="px-3 py-1.5 text-xs rounded-lg"
+              style={{ color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
         <button
           onClick={saveCharacter}
           disabled={saving}

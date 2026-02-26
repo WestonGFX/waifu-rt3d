@@ -112,7 +112,7 @@ function rollTags(locked: Record<string, string>): Record<string, string> {
 }
 
 /** Random personality slider values within sensible bounds. */
-function randomPersonality(): Record<string, number> {
+function randomPersonality(): { energy: number; confidence: number; nervousness: number; expressiveness: number; playfulness: number } {
   const r = () => Math.round((0.2 + Math.random() * 0.6) * 10) / 10;
   return { energy: r(), confidence: r(), nervousness: r(), expressiveness: r(), playfulness: r() };
 }

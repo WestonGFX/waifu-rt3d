@@ -1,9 +1,62 @@
+import { useEffect, useState } from 'react';
+import { MessageCircle, Database, Activity } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { CharacterCard } from '../components/CharacterCard';
+import { api } from '../lib/api';
+
+interface AppStats {
+  total_messages?: number;
+  total_sessions?: number;
+  total_memories?: number;
+  llm_provider?: string;
+}
+
+/**
+ * Compact row of app telemetry stats: message count, sessions, memories.
+ * Fetched once on mount from /api/stats.
+ */
+function StatsBar() {
+  const [stats, setStats] = useState<AppStats | null>(null);
+
+  useEffect(() => {
+    api.getStats()
+      .then(s => setStats(s as AppStats))
+      .catch(() => {});
+  }, []);
+
+  const items: Array<{ icon: React.ReactNode; label: string; value: number | string }> = [
+    { icon: <MessageCircle size={11} />, label: 'Messages', value: stats?.total_messages ?? '—' },
+    { icon: <Activity size={11} />, label: 'Sessions', value: stats?.total_sessions ?? '—' },
+    { icon: <Database size={11} />, label: 'Memories', value: stats?.total_memories ?? '—' },
+  ];
+
+  return (
+    <div
+      className="flex items-center gap-4 px-4 py-2.5 rounded-xl mb-4"
+      style={{
+        backgroundColor: 'var(--color-surface)',
+        border: '1px solid var(--color-border-subtle)',
+      }}
+    >
+      {items.map(item => (
+        <div key={item.label} className="flex items-center gap-1.5">
+          <span style={{ color: 'var(--color-text-tertiary)' }}>{item.icon}</span>
+          <span className="text-xs tabular-nums font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+            {item.value}
+          </span>
+          <span className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
+            {item.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /**
  * Character list view — the main "Chats" tab.
- * Displays all characters as tappable cards that open a ChatThread.
+ * Shows a compact stats bar (messages, sessions, memories) followed by
+ * tappable character cards. Clicking a card opens the ChatThread.
  */
 export function ChatsView() {
   const { characters, selectCharacter } = useAppStore();
@@ -16,9 +69,12 @@ export function ChatsView() {
       >
         Chats
       </h2>
-      <p className="text-xs mb-4" style={{ color: 'var(--color-text-tertiary)' }}>
+      <p className="text-xs mb-3" style={{ color: 'var(--color-text-tertiary)' }}>
         {characters.length} character{characters.length !== 1 ? 's' : ''}
       </p>
+
+      <StatsBar />
+
       <div className="flex flex-col gap-2">
         {characters.length === 0 ? (
           <div

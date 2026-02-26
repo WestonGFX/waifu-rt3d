@@ -124,6 +124,12 @@ export const api = {
   // Stats (LLM status, uptime, etc.)
   getStats: () => get<Record<string, unknown>>('/api/stats'),
 
+  // Relationship
+  getRelationship: (charId: number) =>
+    get<{ ok: boolean; relationship: { affinity: number; mood: number; trust: number; interactions: number; last_updated: number | null } }>(
+      `/api/characters/${charId}/relationship`
+    ).then(d => d.relationship),
+
   // LLM generation proxy (for AI character generation, etc.)
   llmGenerate: (messages: Array<{ role: string; content: string }>, temperature = 0.9, maxTokens = 500) =>
     post<{ text: string }>('/api/llm/generate', { messages, temperature, max_tokens: maxTokens }),

@@ -99,6 +99,7 @@ export function ChatThread() {
           onOpenSessions={() => setSessionsOpen(true)}
           onSearchChange={setSearchQuery}
           onExport={handleExport}
+          messageCount={messages.length}
         />
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 max-w-3xl mx-auto w-full">
           {searchQuery && (

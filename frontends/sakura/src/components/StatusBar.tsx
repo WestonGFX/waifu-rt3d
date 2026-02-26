@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Eye, MessageSquare, Search, Download, X } from 'lucide-react';
 import type { Character } from '../lib/types';
 import { useAppStore } from '../stores/appStore';
+import { api } from '../lib/api';
 
 const IDLE_PHRASES = [
   'daydreaming...',
@@ -11,23 +12,94 @@ const IDLE_PHRASES = [
   'gazing out the window...'
 ];
 
+/** Maps 0-1 score to a warm→cool hue via CSS color-mix. */
+function scoreColor(v: number): string {
+  if (v >= 0.7) return 'var(--color-success)';
+  if (v >= 0.4) return 'var(--color-accent)';
+  return 'var(--color-text-tertiary)';
+}
+
+interface RelationshipData {
+  affinity: number;
+  mood: number;
+  trust: number;
+  interactions: number;
+}
+
 /**
- * Chat header with character name, online indicator, idle status, and model panel toggle.
- * Sticky at the top of the ChatThread view with frosted-glass backdrop.
+ * Three tiny colored progress bars (affinity, mood, trust) showing the
+ * current character's relationship health. Re-fetches whenever messageCount
+ * changes (i.e. after each assistant reply).
+ */
+function RelationshipBar({ charId, messageCount }: { charId: number; messageCount: number }) {
+  const [rel, setRel] = useState<RelationshipData | null>(null);
+
+  useEffect(() => {
+    api.getRelationship(charId)
+      .then(setRel)
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [charId, messageCount]);
+
+  if (!rel) return null;
+
+  const stats: Array<{ key: keyof RelationshipData; emoji: string; label: string }> = [
+    { key: 'affinity', emoji: '♥', label: 'Affinity' },
+    { key: 'mood',     emoji: '✦', label: 'Mood' },
+    { key: 'trust',    emoji: '◈', label: 'Trust' },
+  ];
+
+  return (
+    <div className="flex items-center gap-2.5 mt-0.5">
+      {stats.map(({ key, emoji, label }) => (
+        <div key={key} className="flex items-center gap-1" title={`${label}: ${(rel[key] as number * 100).toFixed(0)}%`}>
+          <span style={{ fontSize: '8px', color: scoreColor(rel[key] as number), lineHeight: 1 }}>
+            {emoji}
+          </span>
+          <div
+            style={{ width: 22, height: 2.5, borderRadius: 99, backgroundColor: 'var(--color-border)' }}
+          >
+            <div
+              style={{
+                width: `${Math.round((rel[key] as number) * 100)}%`,
+                height: '100%',
+                borderRadius: 99,
+                backgroundColor: scoreColor(rel[key] as number),
+                transition: 'width 0.6s ease',
+              }}
+            />
+          </div>
+        </div>
+      ))}
+      <span className="text-[9px]" style={{ color: 'var(--color-text-tertiary)' }}>
+        {rel.interactions}×
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Chat header with character name, online indicator, idle status, relationship
+ * bars, and toolbar buttons (sessions, search, export, 3D viewer toggle).
  *
  * Cycles through ambient idle phrases every 10 seconds to give the character
  * a sense of life even when no messages are being exchanged.
+ *
+ * Relationship stats (affinity, mood, trust) are fetched on mount and after
+ * each assistant reply via the messageCount prop.
  */
 export function StatusBar({
   character,
   onOpenSessions,
   onSearchChange,
   onExport,
+  messageCount = 0,
 }: {
   character: Character;
   onOpenSessions?: () => void;
   onSearchChange?: (query: string) => void;
   onExport?: () => void;
+  messageCount?: number;
 }) {
   const { toggleModelPanel, modelPanelOpen } = useAppStore();
   const [idlePhrase, setIdlePhrase] = useState(IDLE_PHRASES[0]);
@@ -95,6 +167,7 @@ export function StatusBar({
           <p className="text-[10px] truncate" style={{ color: 'var(--color-text-tertiary)' }}>
             {idlePhrase}
           </p>
+          <RelationshipBar charId={character.id} messageCount={messageCount} />
         </div>
 
         {onOpenSessions && (

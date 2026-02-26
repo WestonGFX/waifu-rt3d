@@ -345,6 +345,76 @@ export class ViewerBridge {
         this._post({ type: 'setPersonality', payload: profile });
     }
 
+    // ── Clip Animation API ──────────────────────────────────
+
+    /**
+     * Load an animation clip from a .glb/.gltf file into the viewer's clip library.
+     * Once loaded, the clip can be played by name via playAnimation().
+     *
+     * @param {string} url - URL of the .glb/.gltf animation file
+     * @param {string} name - Friendly name to reference this animation
+     * @returns {Promise<{name: string, duration: number, tracks: number}>}
+     *
+     * @example
+     *   const info = await viewerBridge.loadAnimation('/animations/wave.glb', 'wave');
+     *   console.log(`Loaded ${info.name}: ${info.duration}s`);
+     */
+    loadAnimation(url, name) {
+        return new Promise((resolve, reject) => {
+            this._pendingCallbacks['animationLoaded'] = (data) => resolve(data);
+            this._pendingCallbacks['animationError'] = (data) => reject(new Error(data.error));
+            this._post({ type: 'loadAnimation', payload: { url, name } });
+            setTimeout(() => {
+                if (this._pendingCallbacks['animationLoaded']) {
+                    delete this._pendingCallbacks['animationLoaded'];
+                    delete this._pendingCallbacks['animationError'];
+                    reject(new Error('Animation load timeout'));
+                }
+            }, 30000);
+        });
+    }
+
+    /**
+     * Play a previously loaded animation clip by name.
+     * While playing, procedural animations (breathing, idle, talk) are suppressed.
+     *
+     * @param {string} name - Clip name from loadAnimation()
+     * @param {Object} [opts] - Playback options
+     * @param {boolean} [opts.loop=false] - Loop the animation
+     * @param {number} [opts.fadeIn=0.3] - Crossfade duration in seconds
+     * @param {number} [opts.timeScale=1.0] - Playback speed multiplier
+     */
+    playAnimation(name, opts = {}) {
+        this._post({ type: 'playAnimation', payload: { name, ...opts } });
+    }
+
+    /**
+     * Stop the currently playing animation clip with a fade-out.
+     * Procedural animations resume automatically after fade completes.
+     *
+     * @param {number} [fadeDuration=0.3] - Fade-out duration in seconds
+     */
+    stopAnimation(fadeDuration = 0.3) {
+        this._post({ type: 'stopAnimation', payload: { fadeDuration } });
+    }
+
+    /**
+     * List all loaded animation clips in the viewer's library.
+     * @returns {Promise<Array<{name: string, duration: number, tracks: number}>>}
+     */
+    listAnimations() {
+        return new Promise((resolve) => {
+            this._pendingCallbacks['animationList'] = (data) => resolve(data.clips || []);
+            this._post({ type: 'listAnimations' });
+            setTimeout(() => {
+                if (this._pendingCallbacks['animationList']) {
+                    delete this._pendingCallbacks['animationList'];
+                    resolve([]);
+                }
+            }, 5000);
+        });
+    }
+
     /**
      * Apply custom lighting configuration.
      * @param {Object} config - {key: {color, intensity, position}, fill: {...}, ambient: {...}}

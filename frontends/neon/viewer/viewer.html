@@ -301,10 +301,11 @@
 
 
         // ══════════════════════════════════════════════════════════
-        // Layered Animation System — Phase 6F
-        // 6 layers processed per frame in order:
+        // Layered Animation System — Phase 6F + Clip Extension
+        // 7 layers processed per frame in order:
         //   L0 BasePose, L1 IdleBehavior, L2 EmotionModifier,
-        //   L3 TalkBehavior, L4 GestureOverride, L5 LookAt
+        //   L3 TalkBehavior, L4 GestureOverride, L5 LookAt,
+        //   L6 ClipPlayback (AnimationMixer)
         // ══════════════════════════════════════════════════════════
 
         /**
@@ -409,22 +410,41 @@
 
             /**
              * Per-frame update — runs all layers in order with suppression logic.
+             * Suppression hierarchy:
+             *   Clip (L6) playing → suppress L0–L4 (full body override)
+             *   Gesture (L4) playing → suppress L1, L3
+             *   Talk (L3) active → suppress L1
+             * LookAt (L5) and Clip (L6) always run.
              * @param {number} dt - Delta time in seconds
              */
             update(dt) {
+                const clip = this.getLayer('clip');
                 const gesture = this.getLayer('gesture');
                 const talk = this.getLayer('talk');
                 const idle = this.getLayer('idle');
+                const basePose = this.getLayer('basePose');
+                const emotion = this.getLayer('emotion');
 
-                // Suppression: Talk active → suppress Idle
-                if (idle) {
-                    idle.enabled = !(talk && talk.active);
-                }
-
-                // Suppression: Gesture playing → suppress Idle and Talk
-                if (gesture && gesture.isPlaying) {
+                // Suppression: Clip playing → suppress all procedural layers
+                // The AnimationMixer writes directly to bones, so procedural
+                // layers would fight it on every frame.
+                if (clip && clip.isPlaying) {
+                    if (basePose) basePose.enabled = false;
                     if (idle) idle.enabled = false;
+                    if (emotion) emotion.enabled = false;
                     if (talk) talk.enabled = false;
+                    if (gesture) gesture.enabled = false;
+                } else {
+                    // Suppression: Talk active → suppress Idle
+                    if (idle) {
+                        idle.enabled = !(talk && talk.active);
+                    }
+
+                    // Suppression: Gesture playing → suppress Idle and Talk
+                    if (gesture && gesture.isPlaying) {
+                        if (idle) idle.enabled = false;
+                        if (talk) talk.enabled = false;
+                    }
                 }
 
                 for (const layer of this.layers) {
@@ -432,8 +452,11 @@
                 }
 
                 // Re-enable for next frame evaluation
+                if (basePose) basePose.enabled = true;
                 if (idle) idle.enabled = true;
+                if (emotion) emotion.enabled = true;
                 if (talk) talk.enabled = true;
+                if (gesture) gesture.enabled = true;
             }
         }
 
@@ -520,104 +543,181 @@
 
             /** @type {Array<{name:string, duration:number, requires?:(p:Object)=>boolean, apply:(t:number,p:Object,getBone:(s:string)=>any)=>void}>} */
             static get FIDGETS() {
-                // Only subtle body movements — no dramatic arm gestures.
-                // Arm-based animations (wave, peace sign, etc.) should come from
-                // proper animation clips (VRMA/BVH) once the clip system is built,
-                // not from procedural bone rotation which looks robotic.
+                // Subtle multi-bone body movements for natural idle behavior.
+                // Arm-based gestures (wave, point, etc.) are handled by GestureLayer (L4)
+                // or ClipLayer (L6) for proper clip-driven arm animation.
+                // Each fidget coordinates 2–4 bones for realistic weight distribution.
                 return [
                     {
-                        name: 'weight_shift', duration: 2,
+                        name: 'weight_shift', duration: 2.5,
                         apply(t, p, B) {
-                            const hips = B('hips');
-                            if (hips) hips.rotation.y = Math.sin(t * Math.PI) * 0.04;
+                            // Full-body weight shift: hips lead, spine counter-rotates,
+                            // shoulders follow to maintain balance
+                            const phase = Math.sin(t * Math.PI * 0.8);
+                            const hips = B('hips'), spine = B('spine'), chest = B('chest');
+                            if (hips) {
+                                hips.rotation.y = phase * 0.04;
+                                hips.rotation.z = phase * 0.02;
+                            }
+                            if (spine) spine.rotation.z = phase * -0.015;
+                            if (chest) chest.rotation.z = phase * -0.01;
                         }
                     },
                     {
-                        name: 'shoulder_roll', duration: 1.5,
+                        name: 'shoulder_roll', duration: 2,
                         apply(t, p, B) {
+                            // Asymmetric shoulder roll with neck sympathy
                             const ls = B('leftShoulder'), rs = B('rightShoulder');
-                            const v = Math.sin(t * Math.PI * 2) * 0.05;
+                            const neck = B('neck');
+                            const phase = t * Math.PI;
+                            const v = Math.sin(phase) * 0.05;
                             if (ls) ls.rotation.z = v;
-                            if (rs) rs.rotation.z = -v * 0.7;
+                            if (rs) rs.rotation.z = -v * 0.5;   // delayed follower
+                            if (neck) neck.rotation.z = v * 0.2; // neck sympathizes
                         }
                     },
                     {
-                        name: 'head_tilt', duration: 1,
+                        name: 'head_tilt', duration: 1.5,
                         apply(t, p, B) {
-                            const head = B('head');
-                            if (head) head.rotation.z = Math.sin(t * Math.PI) * 0.08;
+                            // Head tilt with subtle neck follow-through
+                            const head = B('head'), neck = B('neck');
+                            const tilt = Math.sin(t * Math.PI / 1.5) * 0.08;
+                            if (neck) neck.rotation.z = tilt * 0.3;
+                            if (head) head.rotation.z = tilt;
                         }
                     },
                     {
-                        name: 'look_around', duration: 2,
+                        name: 'look_around', duration: 2.5,
                         apply(t, p, B) {
-                            const head = B('head');
+                            // Curious look: neck turns first, head follows with slight delay
+                            const head = B('head'), neck = B('neck');
+                            const yaw = Math.sin(t * Math.PI * 0.8) * 0.15;
+                            const pitch = Math.sin(t * Math.PI * 0.5) * 0.05;
+                            if (neck) neck.rotation.y = yaw * 0.4;
                             if (head) {
-                                head.rotation.y = Math.sin(t * Math.PI) * 0.15;
-                                head.rotation.x = Math.sin(t * Math.PI * 0.7) * 0.05;
+                                head.rotation.y = yaw;
+                                head.rotation.x = pitch;
                             }
                         }
                     },
                     {
-                        name: 'deep_breath', duration: 3,
+                        name: 'deep_breath', duration: 3.5,
                         apply(t, p, B) {
+                            // Full deep breath: chest expands, shoulders lift slightly
                             const chest = B('chest') || B('spine');
-                            if (chest) {
-                                const inhale = Math.sin(t * Math.PI * 0.667) * 0.015;
-                                chest.rotation.x = inhale;
-                            }
+                            const ls = B('leftShoulder'), rs = B('rightShoulder');
+                            const inhale = Math.sin(t * Math.PI * 0.571) * 0.015;
+                            if (chest) chest.rotation.x = inhale;
+                            // Shoulders lift on inhale (positive phase)
+                            const shoulderLift = Math.max(0, inhale) * 2;
+                            if (ls) ls.rotation.z = shoulderLift * 0.03;
+                            if (rs) rs.rotation.z = -shoulderLift * 0.03;
                         }
                     },
                     {
                         name: 'subtle_sway', duration: 3,
                         apply(t, p, B) {
+                            // Gentle pendulum sway: hips and spine counter-rotate
                             const hips = B('hips'), spine = B('spine');
+                            const head = B('head');
                             const s = Math.sin(t * Math.PI * 0.667) * 0.02;
                             if (hips) hips.rotation.z = s;
                             if (spine) spine.rotation.z = s * -0.5;
+                            if (head) head.rotation.z = s * -0.3; // head stays level
                         }
                     },
                     {
                         name: 'ankle_cross', duration: 3,
                         apply(t, p, B) {
-                            const lLeg = B('leftUpperLeg');
-                            if (lLeg) lLeg.rotation.z = Math.sin(t * Math.PI * 0.5) * 0.04;
+                            // Leg cross with compensating hip shift
+                            const lLeg = B('leftUpperLeg'), hips = B('hips');
+                            const v = Math.sin(t * Math.PI * 0.5) * 0.04;
+                            if (lLeg) lLeg.rotation.z = v;
+                            if (hips) hips.rotation.z = v * 0.3; // lean into it
                         }
                     },
                     {
-                        name: 'hip_cock', duration: 2,
+                        name: 'hip_cock', duration: 2.5,
                         requires: (p) => p.confidence > 0.6,
                         apply(t, p, B) {
-                            const hips = B('hips'), spine = B('spine');
-                            const blend = Math.sin(t * Math.PI * 0.5);
+                            // Sassy hip pop: hips shift, spine and chest counter-balance
+                            const hips = B('hips'), spine = B('spine'), chest = B('chest');
+                            const blend = Math.sin(t * Math.PI * 0.4);
                             if (hips) { hips.rotation.z = blend * 0.06; hips.rotation.y = blend * 0.03; }
                             if (spine) spine.rotation.z = blend * -0.03;
+                            if (chest) chest.rotation.z = blend * -0.02;
                         }
                     },
                     {
                         name: 'curtsy_bob', duration: 2,
                         requires: (p) => p.playfulness > 0.5,
                         apply(t, p, B) {
-                            const hips = B('hips'), spine = B('spine');
+                            // Small dip with head bob — playful personality only
+                            const hips = B('hips'), spine = B('spine'), head = B('head');
                             const dip = Math.sin(t * Math.PI * 0.5);
                             if (hips) hips.position.y = -dip * 0.02;
                             if (spine) spine.rotation.x = dip * 0.04;
+                            if (head) head.rotation.x = dip * 0.03;
                         }
                     },
                     {
-                        name: 'bounce', duration: 1,
+                        name: 'bounce', duration: 1.2,
                         requires: (p) => p.energy > 0.6,
                         apply(t, p, B) {
-                            const hips = B('hips');
-                            if (hips) hips.position.y = Math.abs(Math.sin(t * Math.PI * 2)) * 0.015;
+                            // Energetic bounce: hips bob, shoulders bounce in sync
+                            const hips = B('hips'), ls = B('leftShoulder'), rs = B('rightShoulder');
+                            const v = Math.abs(Math.sin(t * Math.PI * 1.67)) * 0.015;
+                            if (hips) hips.position.y = v;
+                            if (ls) ls.rotation.z = v * 1.5;
+                            if (rs) rs.rotation.z = -v * 1.5;
                         }
                     },
                     {
                         name: 'foot_tap', duration: 2,
                         requires: (p) => p.energy > 0.4,
                         apply(t, p, B) {
-                            const leg = B('rightUpperLeg');
-                            if (leg) leg.rotation.x = Math.abs(Math.sin(t * Math.PI * 3)) * 0.03;
+                            // Foot tap with matching hip micro-bounce
+                            const leg = B('rightUpperLeg'), hips = B('hips');
+                            const tap = Math.abs(Math.sin(t * Math.PI * 3)) * 0.03;
+                            if (leg) leg.rotation.x = tap;
+                            if (hips) hips.position.y = tap * 0.15; // tiny sympathetic lift
+                        }
+                    },
+                    {
+                        name: 'neck_stretch', duration: 2,
+                        apply(t, p, B) {
+                            // Neck roll/stretch — subtle self-comfort behavior
+                            const neck = B('neck'), head = B('head');
+                            const ls = B('leftShoulder');
+                            const phase = t * Math.PI * 0.5;
+                            if (neck) {
+                                neck.rotation.z = Math.sin(phase) * 0.08;
+                                neck.rotation.x = Math.sin(phase * 0.7) * 0.03;
+                            }
+                            if (head) head.rotation.z = Math.sin(phase) * 0.04;
+                            if (ls) ls.rotation.z = -Math.abs(Math.sin(phase)) * 0.03; // dip shoulder
+                        }
+                    },
+                    {
+                        name: 'settle', duration: 2,
+                        apply(t, p, B) {
+                            // Full-body settle: micro-squat then return — like resettling stance
+                            const hips = B('hips'), spine = B('spine'), chest = B('chest');
+                            const dip = Math.sin(t * Math.PI * 0.5);
+                            if (hips) hips.position.y = -Math.abs(dip) * 0.01;
+                            if (spine) spine.rotation.x = dip * 0.01;
+                            if (chest) chest.rotation.x = dip * -0.005;
+                        }
+                    },
+                    {
+                        name: 'head_nod_slow', duration: 2,
+                        requires: (p) => p.nervousness < 0.5,
+                        apply(t, p, B) {
+                            // Slow contemplative nod, as if lost in thought
+                            const head = B('head'), neck = B('neck');
+                            const v = Math.sin(t * Math.PI * 0.5) * 0.06;
+                            if (neck) neck.rotation.x = v * 0.3;
+                            if (head) head.rotation.x = v;
                         }
                     },
                 ];
@@ -771,6 +871,8 @@
                 const expressScale = 0.5 + p.expressiveness;
                 const spread = 0.5 + p.confidence * 0.5 - p.nervousness * 0.3;
 
+                // Arms: subtle gestural movement while speaking.
+                // Upper arms oscillate at slightly different frequencies for asymmetry.
                 const lArm = this.getBone('leftUpperArm');
                 const rArm = this.getBone('rightUpperArm');
                 const handAmp = 0.08 * spread * expressScale;
@@ -783,12 +885,22 @@
                     rArm.rotation.x = Math.sin(t * 1.5 + 0.5) * handAmp * 0.5;
                 }
 
+                // Forearms: gentle wrist rotation that accompanies speech gestures
+                const lFore = this.getBone('leftLowerArm');
+                const rFore = this.getBone('rightLowerArm');
+                if (lFore) lFore.rotation.y = 0.15 + Math.sin(t * 1.4) * handAmp * 0.3;
+                if (rFore) rFore.rotation.y = -0.15 - Math.sin(t * 1.7 + 0.8) * handAmp * 0.3;
+
+                // Head nods: periodic agreement nods, more frequent with playfulness
                 this._nodTimer += dt;
                 const head = this.getBone('head');
+                const neck = this.getBone('neck');
                 if (this._nodTimer >= this._nodCooldown && head) {
                     const nodProgress = (this._nodTimer - this._nodCooldown) / 0.3;
                     if (nodProgress < 1) {
-                        head.rotation.x = Math.sin(nodProgress * Math.PI) * 0.08;
+                        const nodV = Math.sin(nodProgress * Math.PI) * 0.08;
+                        head.rotation.x = nodV;
+                        if (neck) neck.rotation.x = nodV * 0.3; // neck follows head
                     } else {
                         this._nodTimer = 0;
                         const playBoost = 1 + p.playfulness * 0.5;
@@ -796,15 +908,24 @@
                     }
                 }
 
+                // Playful head tilt while talking
                 if (head && p.playfulness > 0.4) {
                     head.rotation.z = Math.sin(t * 0.7) * 0.04 * p.playfulness;
                 }
 
+                // Spine: slight forward lean (engaged posture) during speech
                 const spine = this.getBone('spine');
                 if (spine) {
                     spine.rotation.x = -0.015 * expressScale;
                 }
 
+                // Shoulders: micro-movement that accompanies expressive speech
+                const ls = this.getBone('leftShoulder');
+                const rs = this.getBone('rightShoulder');
+                if (ls) ls.rotation.z = Math.sin(t * 1.1) * 0.015 * expressScale;
+                if (rs) rs.rotation.z = -Math.sin(t * 1.3 + 0.5) * 0.015 * expressScale;
+
+                // Periodic weight shift (every ~4s) — restless energy while speaking
                 this._shiftTimer += dt;
                 if (this._shiftTimer > 4) {
                     const hips = this.getBone('hips');
@@ -1022,6 +1143,186 @@
                         }
                     },
                 };
+            }
+        }
+
+        /**
+         * L6: Clip playback — plays Three.js AnimationClips via AnimationMixer.
+         * Supports .glb/.gltf animation files (and VRMA when loader is installed).
+         * Write mode: OVERRIDE — suppresses L0–L4 on all bones while playing.
+         *
+         * Usage flow:
+         *   1. loadClip(url, name) → fetches .glb, extracts AnimationClip, stores in library
+         *   2. playClip(name, opts) → creates/plays an AnimationAction with crossfade
+         *   3. stopClip() → fades out current action, returns control to procedural layers
+         *
+         * The mixer writes directly to the VRM scene's bones. While a clip is playing,
+         * the AnimationDirector suppresses lower layers to prevent fighting.
+         */
+        class ClipLayer extends AnimationLayer {
+            /**
+             * @param {Object} vrm - The loaded VRM model
+             * @param {THREE.Scene} scene - The Three.js scene (needed for mixer root)
+             */
+            constructor(vrm, scene) {
+                super(vrm, 'clip');
+                this.scene = scene;
+                this.mixer = new THREE.AnimationMixer(vrm.scene);
+                this.clipLibrary = {};  // name → THREE.AnimationClip
+                this.currentAction = null;
+                this.isPlaying = false;
+                this._fadeOutDuration = 0.3;
+                this._loader = null;    // lazy-init GLTFLoader
+            }
+
+            /**
+             * Load an animation clip from a .glb/.gltf URL and store it by name.
+             *
+             * @param {string} url - URL of the .glb/.gltf animation file
+             * @param {string} name - Friendly name to reference this clip
+             * @returns {Promise<{name: string, duration: number, tracks: number}>}
+             *
+             * @example
+             *   await clipLayer.loadClip('/animations/wave.glb', 'wave');
+             */
+            async loadClip(url, name) {
+                if (!this._loader) {
+                    // GLTFLoader is already imported at the top of the file
+                    this._loader = new GLTFLoader();
+                    // Register VRM loader plugin so VRMA files can be loaded too
+                    this._loader.register((parser) => new VRMLoaderPlugin(parser));
+                }
+
+                return new Promise((resolve, reject) => {
+                    this._loader.load(url, (gltf) => {
+                        // VRMA files store animations in userData.vrmAnimations
+                        // Standard GLB/GLTF stores them in gltf.animations
+                        const animations = gltf.animations || [];
+                        if (animations.length === 0) {
+                            reject(new Error(`No animations found in ${url}`));
+                            return;
+                        }
+
+                        // Store all clips; the first one gets the requested name
+                        const primary = animations[0];
+                        primary.name = name;
+                        this.clipLibrary[name] = primary;
+
+                        // Store extras with indexed names (wave_1, wave_2, etc.)
+                        for (let i = 1; i < animations.length; i++) {
+                            const extraName = `${name}_${i}`;
+                            animations[i].name = extraName;
+                            this.clipLibrary[extraName] = animations[i];
+                        }
+
+                        console.log(`[ClipLayer] Loaded "${name}" (${primary.duration.toFixed(1)}s, ${primary.tracks.length} tracks)`);
+                        resolve({
+                            name,
+                            duration: primary.duration,
+                            tracks: primary.tracks.length,
+                        });
+                    }, undefined, (err) => {
+                        console.error(`[ClipLayer] Failed to load ${url}:`, err);
+                        reject(err);
+                    });
+                });
+            }
+
+            /**
+             * Play a previously loaded clip by name.
+             *
+             * @param {string} name - Clip name from loadClip()
+             * @param {Object} [opts] - Playback options
+             * @param {boolean} [opts.loop=false] - Loop the animation
+             * @param {number} [opts.fadeIn=0.3] - Crossfade duration in seconds
+             * @param {number} [opts.timeScale=1.0] - Playback speed multiplier
+             * @param {number} [opts.weight=1.0] - Blend weight (0–1)
+             * @returns {boolean} True if playback started
+             */
+            playClip(name, opts = {}) {
+                const clip = this.clipLibrary[name];
+                if (!clip) {
+                    console.warn(`[ClipLayer] Clip "${name}" not found in library`);
+                    return false;
+                }
+
+                const {
+                    loop = false,
+                    fadeIn = 0.3,
+                    timeScale = 1.0,
+                    weight = 1.0,
+                } = opts;
+
+                // Fade out any currently playing action
+                if (this.currentAction) {
+                    this.currentAction.fadeOut(fadeIn);
+                }
+
+                const action = this.mixer.clipAction(clip);
+                action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+                action.clampWhenFinished = !loop;
+                action.timeScale = timeScale;
+                action.setEffectiveWeight(weight);
+                action.reset().fadeIn(fadeIn).play();
+
+                this.currentAction = action;
+                this.isPlaying = true;
+
+                // Listen for clip completion (non-looping only)
+                if (!loop) {
+                    const onFinished = (e) => {
+                        if (e.action === action) {
+                            this.mixer.removeEventListener('finished', onFinished);
+                            this.isPlaying = false;
+                            this.currentAction = null;
+                            console.log(`[ClipLayer] Clip "${name}" finished`);
+                        }
+                    };
+                    this.mixer.addEventListener('finished', onFinished);
+                }
+
+                console.log(`[ClipLayer] Playing "${name}" (loop=${loop}, speed=${timeScale})`);
+                return true;
+            }
+
+            /**
+             * Stop the currently playing clip with a fade-out.
+             * @param {number} [fadeDuration=0.3] - Fade-out duration
+             */
+            stopClip(fadeDuration = 0.3) {
+                if (this.currentAction) {
+                    this.currentAction.fadeOut(fadeDuration);
+                    // Delayed cleanup after fade completes
+                    setTimeout(() => {
+                        if (this.currentAction) {
+                            this.currentAction.stop();
+                            this.currentAction = null;
+                        }
+                        this.isPlaying = false;
+                    }, fadeDuration * 1000 + 50);
+                }
+            }
+
+            /**
+             * List all loaded clips in the library.
+             * @returns {Array<{name: string, duration: number, tracks: number}>}
+             */
+            listClips() {
+                return Object.entries(this.clipLibrary).map(([name, clip]) => ({
+                    name,
+                    duration: clip.duration,
+                    tracks: clip.tracks.length,
+                }));
+            }
+
+            /**
+             * Per-frame update — advances the AnimationMixer.
+             * @param {number} dt - Delta time in seconds
+             */
+            update(dt) {
+                if (this.mixer) {
+                    this.mixer.update(dt);
+                }
             }
         }
 
@@ -2370,6 +2671,7 @@
                         animationDirector.addLayer(new TalkLayer(vrm));
                         animationDirector.addLayer(new GestureLayer(vrm));
                         animationDirector.addLayer(new LookAtLayer(vrm, canvas));
+                        animationDirector.addLayer(new ClipLayer(vrm, scene));
 
                         // Auto-frame camera based on model's actual height
                         const headBone = vrm.humanoid.getRawBoneNode('head');
@@ -2563,6 +2865,47 @@
                         if (gl) gl.playSequence(payload);
                     }
                 }
+                // ── Clip Animation API (AnimationMixer) ──────────────
+                else if (type === 'loadAnimation') {
+                    // Load a .glb/.gltf animation clip into the library.
+                    // payload: { url: string, name: string }
+                    // Responds with: { type: 'animationLoaded', name, duration, tracks } or error
+                    if (animationDirector && payload?.url && payload?.name) {
+                        const cl = animationDirector.getLayer('clip');
+                        if (cl) {
+                            cl.loadClip(payload.url, payload.name)
+                                .then(info => {
+                                    window.parent.postMessage({ type: 'animationLoaded', ...info }, '*');
+                                })
+                                .catch(err => {
+                                    window.parent.postMessage({ type: 'animationError', name: payload.name, error: err.message }, '*');
+                                });
+                        }
+                    }
+                }
+                else if (type === 'playAnimation') {
+                    // Play a loaded clip. payload: { name, loop?, fadeIn?, timeScale?, weight? }
+                    if (animationDirector && payload?.name) {
+                        const cl = animationDirector.getLayer('clip');
+                        if (cl) cl.playClip(payload.name, payload);
+                    }
+                }
+                else if (type === 'stopAnimation') {
+                    // Stop current clip. payload: { fadeDuration? }
+                    if (animationDirector) {
+                        const cl = animationDirector.getLayer('clip');
+                        if (cl) cl.stopClip(payload?.fadeDuration || 0.3);
+                    }
+                }
+                else if (type === 'listAnimations') {
+                    // Return all loaded clips. Responds with: { type: 'animationList', clips: [...] }
+                    if (animationDirector) {
+                        const cl = animationDirector.getLayer('clip');
+                        const clips = cl ? cl.listClips() : [];
+                        window.parent.postMessage({ type: 'animationList', clips }, '*');
+                    }
+                }
+                // ── End Clip Animation API ────────────────────────────
                 else if (type === 'setPersonality') {
                     if (animationDirector && payload) {
                         animationDirector.setPersonality(payload);

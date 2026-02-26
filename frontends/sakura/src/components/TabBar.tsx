@@ -41,7 +41,13 @@ export function TabBar() {
         return (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              if (tab.id === 'memory') {
+                useAppStore.getState().toggleMemoryPanel();
+              } else {
+                setActiveTab(tab.id);
+              }
+            }}
             className="flex flex-col items-center gap-0.5 px-4 py-1 transition-colors duration-150"
             style={{
               color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)'

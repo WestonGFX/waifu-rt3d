@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { TabBar } from './components/TabBar';
+import { MemoryPanel } from './components/MemoryPanel';
 import { ChatsView } from './views/ChatsView';
 import { ChatThread } from './views/ChatThread';
 import { DiscoverView } from './views/DiscoverView';
@@ -14,7 +15,7 @@ function ViewRouter() {
     case 'chats': return <ChatsView />;
     case 'discover': return <DiscoverView />;
     case 'create': return <CreateView />;
-    case 'memory': return <div className="p-6"><h2 className="text-xl font-semibold">Memory</h2></div>;
+    case 'memory': return <ChatsView />;
     case 'settings': return <SettingsView />;
     default: return <ChatsView />;
   }
@@ -40,6 +41,7 @@ export function App() {
           <TabBar />
         </div>
       )}
+      <MemoryPanel />
     </div>
   );
 }

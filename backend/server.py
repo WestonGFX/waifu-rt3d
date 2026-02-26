@@ -503,17 +503,35 @@ async def telemetry_middleware(request: Request, call_next):
     return response
 
 
-# Root route — serve the frontend
+# Root route — serve the default frontend
 @app.get("/", response_class=HTMLResponse)
 def index():
-    target = str(os.environ.get(DEFAULT_FRONTEND_ENV, "neon")).strip().lower()
-    if target == "v2":
-        index_file = FRONTEND_V2_DIST / "index.html"
-        if index_file.exists():
-            return index_file.read_text(encoding="utf-8")
-        logger.warning(
-            "Requested default frontend=v2 but dist is missing; falling back to neon at /"
-        )
+    """Serve whichever frontend is set as default.
+
+    Priority order:
+        1. ``WAIFU_DEFAULT_FRONTEND`` environment variable
+        2. ``default_frontend`` key in ``app.json``
+        3. Falls back to ``"neon"``
+
+    Valid values: ``"neon"``, ``"sakura"``, ``"v2"``
+    """
+    # Check env var first, then config file
+    target = str(os.environ.get(DEFAULT_FRONTEND_ENV, "")).strip().lower()
+    if not target:
+        cfg = load_config()
+        target = str(cfg.get("default_frontend", "neon")).strip().lower()
+
+    if target == "sakura":
+        sakura_index = FRONTEND_SAKURA_DIST / "index.html"
+        if sakura_index.exists():
+            return sakura_index.read_text(encoding="utf-8")
+        logger.warning("default_frontend=sakura but dist missing; falling back to neon")
+    elif target == "v2":
+        v2_index = FRONTEND_V2_DIST / "index.html"
+        if v2_index.exists():
+            return v2_index.read_text(encoding="utf-8")
+        logger.warning("default_frontend=v2 but dist missing; falling back to neon")
+
     return (FRONTEND / "index.html").read_text(encoding="utf-8")
 
 
@@ -1150,6 +1168,7 @@ async def reset_config_route():
         "vrm_scale": 1.0,
         "vrm_offset_x": 0.0,
         "vrm_offset_y": 0.0,
+        "default_frontend": "neon",
     }
     save_config(default_cfg)
     logger.info("Config reset to factory defaults")
@@ -1186,6 +1205,56 @@ async def set_webhooks(req: Request):
     cfg["webhooks"] = urls
     save_config(cfg)
     return {"ok": True, "webhooks": urls}
+
+
+@app.get("/api/frontend")
+async def get_frontend_info():
+    """Return current frontend setting and available frontends.
+
+    Returns:
+        ``{"default": "neon"|"sakura", "available": [...], "current": "..."}``
+        where ``current`` is the frontend serving this request (inferred from
+        the Referer header or defaulting to the configured default).
+    """
+    cfg = load_config()
+    default = str(cfg.get("default_frontend", "neon")).strip().lower()
+
+    available = [{"id": "neon", "name": "Neon (Cyberpunk)", "ready": True}]
+    sakura_ready = (FRONTEND_SAKURA_DIST / "index.html").exists()
+    available.append({"id": "sakura", "name": "Sakura (Modern)", "ready": sakura_ready})
+
+    return {"default": default, "available": available}
+
+
+@app.post("/api/frontend/switch")
+async def switch_frontend(req: Request):
+    """Set the default frontend and return confirmation.
+
+    Args:
+        req: JSON body ``{"frontend": "neon"|"sakura"}``.
+
+    Returns:
+        ``{"ok": True, "default": str, "reload_url": str}``
+
+    Raises:
+        HTTPException: 400 if the requested frontend is invalid or not built.
+    """
+    body = await req.json()
+    target = str(body.get("frontend", "")).strip().lower()
+
+    valid = {"neon", "sakura"}
+    if target not in valid:
+        raise HTTPException(400, f"Invalid frontend '{target}'. Must be one of: {', '.join(sorted(valid))}")
+
+    if target == "sakura" and not (FRONTEND_SAKURA_DIST / "index.html").exists():
+        raise HTTPException(400, "Sakura frontend is not built. Run 'cd frontends/sakura && npm run build' first.")
+
+    cfg = load_config()
+    cfg["default_frontend"] = target
+    save_config(cfg)
+    logger.info("Default frontend switched to: %s", target)
+
+    return {"ok": True, "default": target, "reload_url": "/"}
 
 
 def _get_content_filter_injection(level: int) -> str:

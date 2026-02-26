@@ -347,6 +347,7 @@ const SETTINGS_SCHEMA = {
             { id: "log_limit", name: "Log Buffer Size", type: "slider", min: 100, max: 1000, step: 100, default: 200, desc: "Lines to keep in memory.", tooltip: "💡 How many log lines to keep in the developer console. Higher = more history but more memory." },
             { id: "save_logs_auto", name: "Auto-Save Logs", type: "toggle", default: false, desc: "Save logs on exit.", tooltip: "💡 Automatically saves the debug log to a file when you close the app." },
             { id: "_webhooks_ui", name: "Outbound Webhooks", type: "custom", desc: "POST chat replies to external URLs (#62).", tooltip: "📤 Register URLs that receive a JSON payload after each AI response: {character, reply, emotion, session_id, timestamp}." },
+            { id: "_frontend_switcher", name: "Switch Frontend", type: "custom", desc: "Switch between Neon (cyberpunk) and Sakura (modern) UIs.", tooltip: "Saves your choice and reloads the page with the selected frontend." },
             { id: "reset_all", name: "Factory Reset", type: "button", action: "reset", desc: "Wipe all settings.", tooltip: "⚠️ Resets ALL settings to defaults. Characters and chat history are NOT affected." },
             { id: "_open_error_log", name: "Error Log", type: "button", action: "open_error_log", desc: "View JS errors and backend log output.", tooltip: "🐛 Opens the developer console on the Errors tab. Shows JS exceptions and backend error lines." }
         ]
@@ -1709,6 +1710,54 @@ export class SettingsModal {
                 } catch (err) {
                     saveBtn.textContent = `✘ ${err.message}`;
                     setTimeout(() => { saveBtn.textContent = '💾 Save Webhooks'; saveBtn.disabled = false; }, 3000);
+                }
+            };
+        } else if (def.type === 'custom' && def.id === '_frontend_switcher') {
+            // Frontend switcher: shows current frontend and a button to switch
+            const switchWrap = document.createElement('div');
+            switchWrap.style.cssText = 'display:flex; align-items:center; gap:12px; width:100%;';
+
+            const label = document.createElement('span');
+            label.style.cssText = 'font-size:0.8rem; color:var(--text-muted);';
+            label.textContent = 'Current: Neon';
+
+            const switchBtn = document.createElement('button');
+            switchBtn.className = 'btn-config';
+            switchBtn.style.cssText = 'padding:6px 16px; font-size:0.8rem; cursor:pointer;';
+            switchBtn.textContent = 'Switch to Sakura';
+
+            switchWrap.appendChild(label);
+            switchWrap.appendChild(switchBtn);
+            row.appendChild(switchWrap);
+
+            // Check if Sakura is available
+            fetch('/api/frontend').then(r => r.json()).then(d => {
+                const sakura = (d.available || []).find(f => f.id === 'sakura');
+                if (!sakura || !sakura.ready) {
+                    switchBtn.disabled = true;
+                    switchBtn.title = 'Sakura frontend not built';
+                    switchBtn.textContent = 'Sakura (not built)';
+                }
+            }).catch(() => {});
+
+            switchBtn.onclick = async () => {
+                switchBtn.textContent = 'Switching...';
+                switchBtn.disabled = true;
+                try {
+                    const res = await fetch('/api/frontend/switch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ frontend: 'sakura' }),
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        window.location.href = data.reload_url || '/';
+                    } else {
+                        throw new Error(data.detail || 'Switch failed');
+                    }
+                } catch (err) {
+                    switchBtn.textContent = `Error: ${err.message}`;
+                    setTimeout(() => { switchBtn.textContent = 'Switch to Sakura'; switchBtn.disabled = false; }, 3000);
                 }
             };
         } else if (def.type === 'custom' && def.id === '_vocab_manager_btn') {

@@ -57,6 +57,32 @@ export function SettingsView() {
               <option value="split">Split</option>
             </select>
           </SettingField>
+
+          <SettingField label="Frontend" description="Switch between Sakura (modern) and Neon (cyberpunk) interfaces.">
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/frontend/switch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ frontend: 'neon' }),
+                  });
+                  const data = await res.json();
+                  if (data.ok) window.location.href = data.reload_url || '/';
+                } catch (err) {
+                  console.error('Frontend switch failed:', err);
+                }
+              }}
+              className="text-sm px-3 py-1 rounded cursor-pointer"
+              style={{
+                backgroundColor: 'var(--color-background)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text-primary)',
+              }}
+            >
+              Switch to Neon
+            </button>
+          </SettingField>
         </div>
       </section>
 

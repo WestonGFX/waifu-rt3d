@@ -118,12 +118,20 @@ function randomPersonality(): Record<string, number> {
 }
 
 /**
- * System prompt sent to the LLM for AI character generation.
+ * Build the system prompt for AI character generation based on desired persona length.
  * Instructs JSON output with specific fields for parsing.
  */
-const AI_GEN_SYSTEM_PROMPT = `You are a character designer for an anime girlfriend chat simulator. When given personality tags, create a unique anime girlfriend character. You MUST respond with ONLY valid JSON, no markdown, no explanation. Use this exact format:
-{"name":"<creative japanese/anime-style name>","personality":"<2-3 sentence personality description written as a system prompt, starting with 'You are...'>","greeting":"<a short in-character greeting message, 1-2 sentences>","appearance":"<brief physical appearance description: hair, eyes, outfit style>","energy":0.5,"confidence":0.5,"nervousness":0.3,"expressiveness":0.5,"playfulness":0.5}
+const PERSONA_LENGTH_GUIDE: Record<string, { prompt: string; words: string }> = {
+  short: { prompt: '2-3 sentences', words: '~30-60 words' },
+  medium: { prompt: '4-6 sentences with more detail about mannerisms, likes/dislikes, and speech patterns', words: '~80-150 words' },
+  long: { prompt: '8-12 sentences — a rich, detailed personality covering backstory, mannerisms, speech patterns, likes, dislikes, fears, dreams, and relationship dynamics', words: '~200-350 words' },
+};
+
+function buildGenPrompt(length: 'short' | 'medium' | 'long'): string {
+  return `You are a character designer for an anime girlfriend chat simulator. When given personality tags, create a unique anime girlfriend character. You MUST respond with ONLY valid JSON, no markdown, no explanation. Use this exact format:
+{"name":"<creative japanese/anime-style name>","personality":"<${PERSONA_LENGTH_GUIDE[length].prompt} personality description written as a system prompt, starting with 'You are...'>","greeting":"<a short in-character greeting message, 1-2 sentences>","appearance":"<brief physical appearance description: hair, eyes, outfit style>","energy":0.5,"confidence":0.5,"nervousness":0.3,"expressiveness":0.5,"playfulness":0.5}
 The personality trait scores should be 0.0-1.0 floats that match the character's personality. Be creative and make each character feel unique and alive.`;
+}
 
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -132,7 +140,7 @@ The personality trait scores should be 0.0-1.0 floats that match the character's
 
 /** 5-step character creation wizard with animated transitions, preset templates, shuffle, and AI generation. */
 export function CreateView() {
-  const { loadCharacters, setSidebarSection, selectCharacter, llmStatus } = useAppStore();
+  const { loadCharacters, setSidebarSection, selectCharacter, llmStatus, advancedMode, compactMode } = useAppStore();
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState<'left' | 'right'>('left');
   const [data, setData] = useState<Partial<Character>>({
@@ -175,6 +183,7 @@ export function CreateView() {
   const [genError, setGenError] = useState('');
   const [rolledTags, setRolledTags] = useState<Record<string, string>>({});
   const [lockedTags, setLockedTags] = useState<Record<string, string>>({});
+  const [personaLength, setPersonaLength] = useState<'short' | 'medium' | 'long'>('short');
 
   const patch = (updates: Partial<Character>) => setData(prev => ({ ...prev, ...updates }));
 
@@ -236,10 +245,11 @@ export function CreateView() {
       .join(', ');
 
     try {
+      const maxTokens = personaLength === 'short' ? 400 : personaLength === 'medium' ? 700 : 1200;
       const result = await api.llmGenerate([
-        { role: 'system', content: AI_GEN_SYSTEM_PROMPT },
+        { role: 'system', content: buildGenPrompt(personaLength) },
         { role: 'user', content: `Create an anime girlfriend character with these traits: ${tagString}` },
-      ], 0.9, 500);
+      ], 0.9, maxTokens);
 
       const text = result.text?.trim();
       if (!text) throw new Error('Empty LLM response');
@@ -383,6 +393,32 @@ export function CreateView() {
                 </button>
               </div>
 
+              {/* ─── Persona length slider (for AI Generate) ─── */}
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: 'var(--color-text-tertiary)' }}>
+                  AI persona length:
+                </span>
+                <input
+                  type="range"
+                  min="0" max="2" step="1"
+                  value={personaLength === 'short' ? 0 : personaLength === 'medium' ? 1 : 2}
+                  onChange={e => {
+                    const v = parseInt(e.target.value);
+                    setPersonaLength(v === 0 ? 'short' : v === 1 ? 'medium' : 'long');
+                  }}
+                  className="flex-1"
+                  style={{ maxWidth: '120px' }}
+                />
+                <span className="text-[10px] font-medium" style={{ color: 'var(--color-accent)' }}>
+                  {personaLength}
+                  {advancedMode && !compactMode && (
+                    <span className="ml-1" style={{ color: 'var(--color-text-tertiary)', fontWeight: 400 }}>
+                      ({PERSONA_LENGTH_GUIDE[personaLength].words})
+                    </span>
+                  )}
+                </span>
+              </div>
+
               {/* ─── Rolled tag pills (shown after AI Generate) ─── */}
               {Object.keys(rolledTags).length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
@@ -423,9 +459,16 @@ export function CreateView() {
 
               {/* ─── Manual form fields ─── */}
               <div>
-                <label className="text-sm font-medium block mb-1">Name</label>
+                <label className="text-sm font-medium block mb-1">
+                  Name <span style={{ color: 'var(--color-accent)' }}>*</span>
+                </label>
                 <input type="text" value={data.name || ''} onChange={e => patch({ name: e.target.value })}
                   placeholder="e.g. Sakura" className="w-full text-sm px-3 py-2 rounded" style={fieldStyle} />
+                {!data.name && (
+                  <p className="text-[10px] mt-1" style={{ color: 'var(--color-text-tertiary)' }}>
+                    Required — pick a template, shuffle, or type a name
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-sm font-medium block mb-1">Role / Persona</label>
@@ -448,6 +491,12 @@ export function CreateView() {
               <div>
                 <label className="text-sm font-medium block mb-2">Avatar Image</label>
                 <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto p-1">
+                  {images.filter(url => IMAGE_EXTS.test(url)).length === 0 && (
+                    <div className="col-span-5 text-center py-6" style={{ color: 'var(--color-text-tertiary)' }}>
+                      <p className="text-xs">No images found</p>
+                      <p className="text-[10px] mt-1">Upload an avatar below or add images to backend/storage/images/</p>
+                    </div>
+                  )}
                   {images.filter(url => IMAGE_EXTS.test(url)).map(url => (
                     <button
                       key={url}
@@ -623,7 +672,8 @@ export function CreateView() {
         </button>
         {step < STEPS.length - 1 ? (
           <button onClick={next}
-            className="px-4 py-2 text-sm font-medium"
+            disabled={step === 0 && !data.name}
+            className="px-4 py-2 text-sm font-medium disabled:opacity-30"
             style={{ background: 'var(--color-accent-gradient)', color: 'var(--color-accent-text)', borderRadius: 'var(--radius-button)' }}>
             Next
           </button>

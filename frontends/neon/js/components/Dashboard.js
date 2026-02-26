@@ -173,8 +173,16 @@ export class Dashboard {
             // GPU/VRAM row
             this._updateGpuStat(data.gpu);
 
+            // LLM response time is set by ChatInterface after each response.
+            // Show a meaningful placeholder until the first chat message.
             if (!llmTimeEl.innerText || llmTimeEl.innerText === '--') {
-                llmTimeEl.innerText = '--';
+                llmTimeEl.innerText = 'no chat';
+                llmTimeEl.style.color = 'var(--text-muted)';
+            }
+            const ttftEl = document.getElementById('stat-ttft');
+            if (ttftEl && (!ttftEl.innerText || ttftEl.innerText === '--')) {
+                ttftEl.innerText = 'no chat';
+                ttftEl.style.color = 'var(--text-muted)';
             }
 
             // Update sidebar LLM status with provider name
@@ -300,8 +308,9 @@ export class Dashboard {
                 }
             }
 
-            // Override sidebar label with model name — more specific than provider
-            this._updateSidebarStatus(true, shortName);
+            // Model name belongs in the telemetry MODEL row (stat-model-name),
+            // NOT in the sidebar label — that's reserved for provider name from
+            // updateStats(). Writing both causes a visible flip-flop every 10-30s.
         } catch (e) {
             console.debug('[Dashboard] Model info unavailable:', e.message);
         }

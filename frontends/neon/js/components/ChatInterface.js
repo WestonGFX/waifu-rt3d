@@ -559,7 +559,10 @@ export class ChatInterface {
         if (this.prefillStartTime) {
             const ttft = ((this.streamStartTime - this.prefillStartTime) / 1000).toFixed(2);
             const ttftEl = document.getElementById('stat-ttft');
-            if (ttftEl) ttftEl.textContent = ttft + 's';
+            if (ttftEl) {
+                ttftEl.textContent = ttft + 's';
+                ttftEl.style.color = '';  // Reset from "no chat" muted color
+            }
         }
 
         const label = document.getElementById('neural-link-status');
@@ -1044,6 +1047,7 @@ export class ChatInterface {
             const responseTimeMs = Math.round(performance.now() - startTime);
             if (window.llmTimeEl) {
                 window.llmTimeEl.innerText = responseTimeMs + 'ms';
+                window.llmTimeEl.style.color = '';  // Reset from "no chat" muted color
                 window.llmTimeEl.classList.toggle('crit', responseTimeMs > 5000);
             }
 

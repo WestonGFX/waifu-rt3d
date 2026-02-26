@@ -130,10 +130,48 @@ export class VocabManager {
 
             const bar = document.getElementById('vocab-stats-bar');
             if (bar && this.stats) {
-                bar.textContent = `${this.stats.total} entries (${this.stats.base_count} base + ${this.stats.user_count} custom) · ${this.stats.category_count} categories`;
+                bar.innerHTML = `${this.stats.total} entries (${this.stats.base_count} base + ${this.stats.user_count} custom) · ${this.stats.category_count} categories`
+                    + `<span id="vocab-context-usage" style="margin-left:8px; color:var(--text-muted);"></span>`;
             }
+
+            // Fetch context budget to show vocab's token footprint
+            this._loadContextUsage();
         } catch (err) {
             console.warn('[VocabManager] Failed to load meta:', err);
+        }
+    }
+
+    /**
+     * Fetch context budget from backend and display vocab's token footprint.
+     * Shows how many tokens the Vocabulary section uses out of the total context.
+     * Non-critical — silently degrades if no session is active.
+     * @private
+     */
+    async _loadContextUsage() {
+        const el = document.getElementById('vocab-context-usage');
+        if (!el) return;
+        try {
+            const sid = window.app?.state?.state?.currentSessionId;
+            if (!sid) { el.textContent = ''; return; }
+
+            const res = await fetch(`/api/context-budget/${sid}`);
+            if (!res.ok) return;
+            const data = await res.json();
+
+            const vocabSection = (data.sections || []).find(s => s.name === 'Vocabulary');
+            const vocabTokens = vocabSection?.tokens || 0;
+            const totalTokens = data.total_tokens || 0;
+            const contextLimit = data.context_limit || 131072;
+
+            if (vocabTokens > 0) {
+                const pct = ((vocabTokens / contextLimit) * 100).toFixed(1);
+                el.innerHTML = `· <span style="color:#ff6b6b;">VOCAB: ${vocabTokens.toLocaleString()} tok</span> `
+                    + `<span style="color:var(--text-dim);">(${pct}% of ${Math.round(contextLimit / 1024)}K ctx)</span>`;
+            } else {
+                el.textContent = '· vocab not injected (no active chat)';
+            }
+        } catch (err) {
+            // Non-critical — silently degrade
         }
     }
 

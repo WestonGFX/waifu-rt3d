@@ -243,3 +243,169 @@ textarea.input-field {
 .toggle-switch.on::after {
     transform: translateX(1.25rem);
 }
+
+/* ── TTS Models Panel ───────────────────────────────────────────────── */
+
+.tts-models-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding: 8px 0;
+}
+
+.tts-refresh-btn {
+    color: var(--neon-cyan, #00f0ff);
+    border-color: rgba(0, 240, 255, 0.25);
+}
+
+.tts-filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.tts-filter-select {
+    padding: 6px 10px;
+    background: rgba(0, 10, 20, 0.6);
+    border: 1px solid var(--glass-border);
+    color: var(--text-main, #eee);
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-family: var(--font-mono);
+    cursor: pointer;
+}
+
+.tts-model-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    max-height: calc(80vh - 280px);
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.tts-model-card {
+    background: rgba(0, 10, 20, 0.5);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.tts-model-card:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.tts-card-installed {
+    border-color: rgba(0, 240, 255, 0.3);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.05);
+}
+
+.tts-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.tts-card-name {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--text-main, #eee);
+}
+
+.tts-engine-badge {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 2px 6px;
+    border: 1px solid;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    white-space: nowrap;
+}
+
+.tts-card-meta {
+    display: flex;
+    gap: 10px;
+    font-size: 0.72rem;
+    color: var(--text-muted, #888);
+    font-family: var(--font-mono);
+}
+
+.tts-card-desc {
+    font-size: 0.72rem;
+    color: var(--text-muted, #999);
+    line-height: 1.3;
+}
+
+.tts-card-note {
+    font-size: 0.65rem;
+    color: var(--neon-yellow, #ffe066);
+    opacity: 0.8;
+    font-style: italic;
+}
+
+.tts-card-tags {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.tts-tag {
+    font-size: 0.6rem;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-muted, #aaa);
+    font-family: var(--font-mono);
+}
+
+.tts-card-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.tts-card-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.tts-progress-bar {
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.tts-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--neon-cyan, #00f0ff), var(--neon-green, #00ff88));
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.tts-progress-text {
+    font-size: 0.65rem;
+    color: var(--text-muted, #888);
+    font-family: var(--font-mono);
+    min-width: 32px;
+    text-align: right;
+}
+
+/* Responsive: single column on narrow screens */
+@media (max-width: 640px) {
+    .tts-model-grid {
+        grid-template-columns: 1fr;
+    }
+}

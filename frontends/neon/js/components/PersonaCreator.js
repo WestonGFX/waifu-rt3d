@@ -16,6 +16,7 @@
 import { state } from '../core/StateManager.js';
 import { API } from '../core/API.js';
 import { toast } from '../utils/Toast.js';
+import { buildVoicePicker } from '../utils/VoicePicker.js';
 
 /** Persona templates for quick-start creation */
 const TEMPLATES = [
@@ -231,10 +232,10 @@ export class PersonaCreator {
                 </div>
 
                 <div class="persona-field">
-                    <label style="color:var(--text-main); font-weight:600; display:block; margin-bottom:4px;">Voice ID</label>
-                    <input id="persona-voice" type="text" class="input-field" value="${this._escapeHtml(tpl.voice_id || '')}"
-                           placeholder="e.g. default_v1 (leave empty for default)"
-                           style="width:100%; padding:10px; background:rgba(0,10,20,0.6); border:1px solid var(--glass-border); color:var(--text-main); border-radius:8px;">
+                    <label style="color:var(--text-main); font-weight:600; display:block; margin-bottom:4px;">Voice</label>
+                    <div id="persona-voice-picker-container"></div>
+                    <input id="persona-voice" type="hidden" value="${this._escapeHtml(tpl.voice_id || '')}">
+                    <div style="font-size:0.65rem; color:var(--text-muted); margin-top:2px;">Select a voice or "Manage Voices..." to install more</div>
                 </div>
 
                 <div class="persona-field">
@@ -445,6 +446,9 @@ export class PersonaCreator {
         if (diaryBtn && tpl.id) {
             diaryBtn.onclick = () => this._writeDiaryEntry(tpl.id);
         }
+
+        // Initialize voice picker (shared between create and edit flows)
+        this._initVoicePicker(tpl);
     }
 
     /**
@@ -497,8 +501,9 @@ export class PersonaCreator {
      */
     _renderEditMode(char) {
         this._renderFormStep(char);
-        // Bind voice clone + knowledge doc + vocab handlers after DOM is ready
+        // Bind voice picker + voice clone + knowledge doc + vocab handlers after DOM is ready
         requestAnimationFrame(() => {
+            this._initVoicePicker(char);
             this._bindVoiceCloneEvents();
             this._loadKnowledgeDocs();
             // Parse vocab_categories (stored as JSON string or array in DB)
@@ -945,6 +950,28 @@ export class PersonaCreator {
     _getSelectedVocabCategories() {
         const checkboxes = document.querySelectorAll('.vocab-cat-checkbox:checked');
         return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    /**
+     * Initialize the voice picker dropdown in the persona form.
+     * Updates the hidden persona-voice input when a voice is selected.
+     *
+     * @private
+     * @param {Object} tpl - Template or character data with voice_id
+     */
+    _initVoicePicker(tpl) {
+        const container = document.getElementById('persona-voice-picker-container');
+        if (!container) return;
+
+        buildVoicePicker({
+            containerId: 'persona-voice-picker-container',
+            currentVoiceId: tpl.voice_id || '',
+            onChange: ({ provider, voiceId }) => {
+                // Update the hidden input so _save() picks it up
+                const hidden = document.getElementById('persona-voice');
+                if (hidden) hidden.value = voiceId;
+            },
+        });
     }
 
     /**

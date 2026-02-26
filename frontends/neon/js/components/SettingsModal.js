@@ -1,6 +1,7 @@
 import { state } from '../core/StateManager.js';
 import { logger } from '../core/Logger.js';
 import { toast } from '../utils/Toast.js';
+import { buildVoicePicker, refreshAllPickers, invalidateVoiceCache } from '../utils/VoicePicker.js';
 
 const SETTINGS_SCHEMA = {
     brain: {
@@ -102,6 +103,7 @@ const SETTINGS_SCHEMA = {
         label: "VOICE (TTS/ASR)",
         icon: "🗣️",
         fields: [
+            { id: "_voice_picker", name: "Default Voice", type: "custom", desc: "Select the default TTS voice for all characters.", tooltip: "🎤 Choose from installed local voices (Kokoro, Piper) and cloud voices (Edge-TTS). Install more voices in the TTS Models tab." },
             { id: "speech_rate", name: "Speech Rate", type: "slider", min: 0.5, max: 2.0, step: 0.1, default: 1.0, desc: "Speed of TTS output.", tooltip: "💡 1.0 is normal speed. Lower for dramatic delivery, higher for quick responses." },
             { id: "pitch_shift", name: "Pitch Shift", type: "slider", min: -10, max: 10, step: 1, default: 0, desc: "Semitone shift for voice.", tooltip: "💡 Adjust the pitch of the AI's voice. Negative = deeper, positive = higher." },
             { id: "voice_stability", name: "Voice Stability", type: "slider", min: 0, max: 1.0, step: 0.1, default: 0.5, desc: "Consistent vs Expressive.", tooltip: "💡 Low = more expressive and varied. High = more consistent but robotic." },
@@ -345,6 +347,11 @@ const SETTINGS_SCHEMA = {
             { id: "reset_all", name: "Factory Reset", type: "button", action: "reset", desc: "Wipe all settings.", tooltip: "⚠️ Resets ALL settings to defaults. Characters and chat history are NOT affected." },
             { id: "_open_error_log", name: "Error Log", type: "button", action: "open_error_log", desc: "View JS errors and backend log output.", tooltip: "🐛 Opens the developer console on the Errors tab. Shows JS exceptions and backend error lines." }
         ]
+    },
+    tts_models: {
+        label: "TTS MODELS",
+        icon: "📦",
+        fields: []
     }
 };
 
@@ -1009,6 +1016,10 @@ export class SettingsModal {
     switchTab(tabId) {
         this.currentTab = tabId;
         this.galleryPage = 0; // Reset pagination when switching tabs
+        // Stop TTS stats polling when leaving TTS Models tab
+        if (tabId !== 'tts_models' && this._ttsStatsInterval) {
+            clearInterval(this._ttsStatsInterval);
+        }
 
         // Update Sidebar UI
         document.querySelectorAll('.tab-btn').forEach(b => {
@@ -1018,6 +1029,12 @@ export class SettingsModal {
         // Render Fields
         const container = document.getElementById('settings-scroll-area');
         container.innerHTML = `<h3>${SETTINGS_SCHEMA[tabId].label}</h3><hr style="border-color:var(--glass-border); margin-bottom:20px;">`;
+
+        // TTS Models tab has its own custom renderer
+        if (tabId === 'tts_models') {
+            this._renderTTSModelsPanel(container);
+            return;
+        }
 
         SETTINGS_SCHEMA[tabId].fields.forEach(field => {
             this.renderField(field, container);
@@ -1544,6 +1561,32 @@ export class SettingsModal {
             }
 
             row.appendChild(wrapper);
+        } else if (def.type === 'custom' && def.id === '_voice_picker') {
+            // Voice picker dropdown for default TTS voice selection
+            const pickerWrap = document.createElement('div');
+            pickerWrap.id = 'settings-voice-picker-container';
+            row.appendChild(pickerWrap);
+
+            // Get current provider and voice_id from config
+            const ttsCfg = this.tempConfig.tts || {};
+            const curProvider = ttsCfg.provider || this.tempConfig.tts_provider || '';
+            const curVoiceId = ttsCfg.voice_id || this.tempConfig.voice_id || '';
+
+            // Defer picker init to next frame (after DOM append)
+            requestAnimationFrame(() => {
+                buildVoicePicker({
+                    containerId: 'settings-voice-picker-container',
+                    currentProvider: curProvider,
+                    currentVoiceId: curVoiceId,
+                    onChange: ({ provider, voiceId }) => {
+                        // Update nested tts config
+                        if (!this.tempConfig.tts) this.tempConfig.tts = {};
+                        if (provider) this.tempConfig.tts.provider = provider;
+                        if (voiceId) this.tempConfig.tts.voice_id = voiceId;
+                        this.markDirty();
+                    },
+                });
+            });
         } else if (def.type === 'custom' && def.id === '_tts_cache') {
             // TTS cache management widget (#76): shows cache stats and a clear button.
             // Stats are fetched immediately so they're current when the Voice tab opens.
@@ -2163,6 +2206,377 @@ export class SettingsModal {
                 btn.innerText = "APPLY CHANGES";
                 btn.disabled = false;
             }, 2000);
+        }
+    }
+
+    // ==================== TTS MODELS PANEL ====================
+
+    /**
+     * Render the TTS Models management panel with browsable catalog,
+     * filter bar, voice cards, install/delete buttons, and SSE progress.
+     *
+     * @param {HTMLElement} container - The settings scroll area element
+     * @private
+     */
+    async _renderTTSModelsPanel(container) {
+        container.innerHTML = `
+            <h3>TTS MODELS</h3>
+            <hr style="border-color:var(--glass-border); margin-bottom:20px;">
+            <div class="tts-models-header">
+                <span id="tts-models-stats" style="color:var(--text-muted); font-size:0.78rem; font-family:var(--font-mono);">Loading catalog...</span>
+                <button class="btn-config tts-refresh-btn" id="tts-refresh-catalog" style="padding:4px 12px; font-size:0.75rem;">Refresh Catalog</button>
+            </div>
+            <div class="tts-filter-bar">
+                <select id="tts-filter-engine" class="tts-filter-select">
+                    <option value="">All Engines</option>
+                    <option value="kokoro">Kokoro</option>
+                    <option value="piper">Piper</option>
+                </select>
+                <select id="tts-filter-lang" class="tts-filter-select">
+                    <option value="">All Languages</option>
+                    <option value="en">English</option>
+                    <option value="ja">Japanese</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    <option value="de">German</option>
+                </select>
+                <select id="tts-filter-gender" class="tts-filter-select">
+                    <option value="">All Genders</option>
+                    <option value="female">Female</option>
+                    <option value="male">Male</option>
+                </select>
+            </div>
+            <div id="tts-model-grid" class="tts-model-grid">
+                <div style="color:var(--text-muted); padding:20px; text-align:center;">Loading...</div>
+            </div>
+        `;
+
+        // Bind filter events
+        ['tts-filter-engine', 'tts-filter-lang', 'tts-filter-gender'].forEach(id => {
+            document.getElementById(id)?.addEventListener('change', () => this._filterTTSModels());
+        });
+
+        // Refresh catalog button
+        document.getElementById('tts-refresh-catalog')?.addEventListener('click', async () => {
+            const btn = document.getElementById('tts-refresh-catalog');
+            if (btn) { btn.disabled = true; btn.textContent = 'Refreshing...'; }
+            try {
+                const res = await fetch('/api/tts/models/refresh-catalog', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    toast.success(`Catalog refreshed: ${data.count} voices`);
+                } else {
+                    toast.warning(data.error || data.detail || 'Refresh failed — using cached catalog');
+                }
+            } catch (err) {
+                toast.warning(`Could not refresh — using cached catalog`);
+            }
+            if (btn) { btn.disabled = false; btn.textContent = 'Refresh Catalog'; }
+            // Reload the panel
+            await this._loadTTSModels();
+        });
+
+        // Load models
+        await this._loadTTSModels();
+
+        // Poll stats every 5s while this tab is active (updates disk usage in real time)
+        clearInterval(this._ttsStatsInterval);
+        this._ttsStatsInterval = setInterval(async () => {
+            if (this.currentTab !== 'tts_models') {
+                clearInterval(this._ttsStatsInterval);
+                return;
+            }
+            try {
+                const res = await fetch('/api/tts/models');
+                if (!res.ok) return;
+                const data = await res.json();
+                const newModels = data.models || [];
+                const installedCount = newModels.filter(m => m.installed).length;
+                const oldInstalled = (this._ttsModelsData || []).filter(m => m.installed).length;
+                // Update stats header
+                const statsEl = document.getElementById('tts-models-stats');
+                if (statsEl) {
+                    statsEl.textContent = `${installedCount} installed / ${newModels.length} available · ${data.total_installed_mb} MB on disk`;
+                }
+                // If install count changed, re-render cards
+                if (installedCount !== oldInstalled) {
+                    this._ttsModelsData = newModels;
+                    this._filterTTSModels();
+                }
+            } catch { /* silent */ }
+        }, 5000);
+    }
+
+    /**
+     * Fetch the TTS model catalog from the backend and render voice cards.
+     * @private
+     */
+    async _loadTTSModels() {
+        try {
+            const res = await fetch('/api/tts/models');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            this._ttsModelsData = data.models || [];
+
+            // Update stats
+            const statsEl = document.getElementById('tts-models-stats');
+            const installedCount = this._ttsModelsData.filter(m => m.installed).length;
+            if (statsEl) {
+                statsEl.textContent = `${installedCount} installed / ${this._ttsModelsData.length} available · ${data.total_installed_mb} MB on disk`;
+            }
+
+            this._filterTTSModels();
+        } catch (err) {
+            const grid = document.getElementById('tts-model-grid');
+            if (grid) grid.innerHTML = `<div style="color:var(--neon-magenta); padding:20px;">Failed to load catalog: ${err.message}</div>`;
+        }
+    }
+
+    /**
+     * Apply current filter selections and re-render the voice card grid.
+     * @private
+     */
+    _filterTTSModels() {
+        const engine = document.getElementById('tts-filter-engine')?.value || '';
+        const lang = document.getElementById('tts-filter-lang')?.value || '';
+        const gender = document.getElementById('tts-filter-gender')?.value || '';
+
+        let models = this._ttsModelsData || [];
+
+        if (engine) models = models.filter(m => m.engine === engine);
+        if (lang) models = models.filter(m => m.language?.startsWith(lang));
+        if (gender) models = models.filter(m => m.gender === gender);
+
+        // Sort: installed first, then by name
+        models.sort((a, b) => {
+            if (a.installed !== b.installed) return b.installed ? 1 : -1;
+            return a.name.localeCompare(b.name);
+        });
+
+        this._renderTTSModelCards(models);
+    }
+
+    /**
+     * Render voice cards into the grid.
+     *
+     * @param {Array} models - Filtered list of model entries from the catalog
+     * @private
+     */
+    _renderTTSModelCards(models) {
+        const grid = document.getElementById('tts-model-grid');
+        if (!grid) return;
+
+        if (models.length === 0) {
+            grid.innerHTML = '<div style="color:var(--text-muted); padding:20px; text-align:center; grid-column:1/-1;">No voices match your filters.</div>';
+            return;
+        }
+
+        grid.innerHTML = models.map(m => {
+            const engineColor = m.engine === 'kokoro' ? 'var(--neon-cyan, #00f0ff)' : 'var(--neon-green, #00ff88)';
+            const engineLabel = m.engine === 'kokoro' ? 'KOKORO' : 'PIPER';
+            const genderIcon = m.gender === 'female' ? '♀' : '♂';
+            const sizeLabel = m.size_mb < 1 ? `${Math.round(m.size_mb * 1024)} KB` : `${m.size_mb} MB`;
+            const installedClass = m.installed ? 'tts-card-installed' : '';
+            const serverNote = m.engine === 'kokoro' ? '<div class="tts-card-note">Requires Kokoro server</div>' : '';
+
+            return `
+                <div class="tts-model-card ${installedClass}" data-model-id="${m.id}">
+                    <div class="tts-card-header">
+                        <span class="tts-card-name">${m.name}</span>
+                        <span class="tts-engine-badge" style="color:${engineColor}; border-color:${engineColor};">${engineLabel}</span>
+                    </div>
+                    <div class="tts-card-meta">
+                        <span>${genderIcon} ${m.gender}</span>
+                        <span>${m.language}</span>
+                        <span>${sizeLabel}</span>
+                    </div>
+                    <div class="tts-card-desc">${m.description || ''}</div>
+                    ${serverNote}
+                    <div class="tts-card-tags">${(m.tags || []).map(t => `<span class="tts-tag">${t}</span>`).join('')}</div>
+                    <div class="tts-card-actions">
+                        ${m.sample_url ? `<button class="btn-config tts-btn-preview" data-sample="${m.sample_url}" data-model-id="${m.id}" data-installed="${m.installed}" style="padding:3px 10px; font-size:0.72rem;">&#9654; Preview</button>` : ''}
+                        ${m.installed
+                            ? `<button class="btn-config tts-btn-delete" data-model-id="${m.id}" style="padding:3px 10px; font-size:0.72rem; color:var(--neon-magenta); border-color:rgba(255,0,255,0.3);">Delete</button>`
+                            : `<button class="btn-config tts-btn-install" data-model-id="${m.id}" style="padding:3px 10px; font-size:0.72rem; color:var(--neon-green,#00ff88); border-color:rgba(0,255,136,0.3);">Install</button>`
+                        }
+                    </div>
+                    <div class="tts-card-progress" id="tts-progress-${m.id.replace(/\//g, '-')}" style="display:none;">
+                        <div class="tts-progress-bar"><div class="tts-progress-fill"></div></div>
+                        <span class="tts-progress-text">0%</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Bind card button events
+        grid.querySelectorAll('.tts-btn-install').forEach(btn => {
+            btn.addEventListener('click', () => this._installTTSModel(btn.dataset.modelId));
+        });
+        grid.querySelectorAll('.tts-btn-delete').forEach(btn => {
+            btn.addEventListener('click', () => this._deleteTTSModel(btn.dataset.modelId));
+        });
+        grid.querySelectorAll('.tts-btn-preview').forEach(btn => {
+            btn.addEventListener('click', () => this._previewTTSModel(btn));
+        });
+    }
+
+    /**
+     * Start installing a TTS model. Shows progress bar via SSE.
+     *
+     * @param {string} modelId - The model ID to install (e.g. "kokoro/af_sky")
+     * @private
+     */
+    async _installTTSModel(modelId) {
+        const safeId = modelId.replace(/\//g, '-');
+        const progressEl = document.getElementById(`tts-progress-${safeId}`);
+        const card = document.querySelector(`.tts-model-card[data-model-id="${modelId}"]`);
+        const installBtn = card?.querySelector('.tts-btn-install');
+
+        if (installBtn) { installBtn.disabled = true; installBtn.textContent = 'Starting...'; }
+        if (progressEl) progressEl.style.display = 'flex';
+
+        try {
+            // Fire async download
+            const res = await fetch('/api/tts/models/install', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model_id: modelId }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${res.status}`);
+            }
+
+            // Open SSE for progress updates
+            const evtSource = new EventSource('/api/tts/models/install/status');
+            evtSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    const fill = progressEl?.querySelector('.tts-progress-fill');
+                    const text = progressEl?.querySelector('.tts-progress-text');
+
+                    if (data.status === 'downloading') {
+                        const pct = Math.round((data.progress || 0) * 100);
+                        if (fill) fill.style.width = `${pct}%`;
+                        if (text) text.textContent = `${pct}%`;
+                    } else if (data.status === 'complete') {
+                        evtSource.close();
+                        if (fill) fill.style.width = '100%';
+                        if (text) text.textContent = 'Done!';
+                        toast.success(`Installed ${modelId}`);
+                        invalidateVoiceCache();
+                        // Reload panel — ensure fresh data from backend
+                        setTimeout(async () => {
+                            await this._loadTTSModels();
+                            await refreshAllPickers();
+                        }, 800);
+                    } else if (data.status === 'error') {
+                        evtSource.close();
+                        toast.error(`Install failed: ${data.error}`);
+                        if (progressEl) progressEl.style.display = 'none';
+                        if (installBtn) { installBtn.disabled = false; installBtn.textContent = 'Install'; }
+                    } else if (data.status === 'idle') {
+                        evtSource.close();
+                    }
+                } catch { /* ignore parse errors */ }
+            };
+
+            evtSource.onerror = () => {
+                evtSource.close();
+                if (progressEl) progressEl.style.display = 'none';
+                if (installBtn) { installBtn.disabled = false; installBtn.textContent = 'Install'; }
+            };
+        } catch (err) {
+            toast.error(`Install failed: ${err.message}`);
+            if (progressEl) progressEl.style.display = 'none';
+            if (installBtn) { installBtn.disabled = false; installBtn.textContent = 'Install'; }
+        }
+    }
+
+    /**
+     * Delete an installed TTS model.
+     *
+     * @param {string} modelId - The model ID to delete
+     * @private
+     */
+    async _deleteTTSModel(modelId) {
+        if (!confirm(`Delete voice model "${modelId}"? You can re-install it later.`)) return;
+
+        try {
+            const res = await fetch(`/api/tts/models/${encodeURIComponent(modelId)}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${res.status}`);
+            }
+            toast.success(`Deleted ${modelId}`);
+            invalidateVoiceCache();
+            await this._loadTTSModels();
+            refreshAllPickers();
+        } catch (err) {
+            toast.error(`Delete failed: ${err.message}`);
+        }
+    }
+
+    /**
+     * Preview a TTS voice — play sample_url pre-install, or live synthesis post-install.
+     *
+     * @param {HTMLElement} btn - The preview button element
+     * @private
+     */
+    _previewTTSModel(btn) {
+        const sampleUrl = btn.dataset.sample;
+        const modelId = btn.dataset.modelId;
+        const installed = btn.dataset.installed === 'true';
+
+        // Stop any currently playing preview
+        if (this._ttsPreviewAudio) {
+            this._ttsPreviewAudio.pause();
+            this._ttsPreviewAudio = null;
+        }
+
+        if (installed) {
+            // Live synthesis via the TTS endpoint
+            const entry = (this._ttsModelsData || []).find(m => m.id === modelId);
+            if (!entry) return;
+            btn.disabled = true;
+            btn.textContent = 'Playing...';
+            fetch('/api/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: 'Hello! This is a voice preview.',
+                    provider: entry.engine,
+                    voice_id: entry.voice_id,
+                    format: 'mp3',
+                }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok && data.url) {
+                    this._ttsPreviewAudio = new Audio(data.url);
+                    this._ttsPreviewAudio.onended = () => { btn.disabled = false; btn.innerHTML = '&#9654; Preview'; };
+                    this._ttsPreviewAudio.onerror = () => { btn.disabled = false; btn.innerHTML = '&#9654; Preview'; };
+                    this._ttsPreviewAudio.play();
+                } else {
+                    btn.disabled = false;
+                    btn.innerHTML = '&#9654; Preview';
+                    toast.warning('Preview synthesis failed');
+                }
+            })
+            .catch(() => { btn.disabled = false; btn.innerHTML = '&#9654; Preview'; });
+        } else if (sampleUrl) {
+            // Play pre-recorded sample from HuggingFace
+            btn.disabled = true;
+            btn.textContent = 'Playing...';
+            this._ttsPreviewAudio = new Audio(sampleUrl);
+            this._ttsPreviewAudio.onended = () => { btn.disabled = false; btn.innerHTML = '&#9654; Preview'; };
+            this._ttsPreviewAudio.onerror = () => {
+                btn.disabled = false;
+                btn.innerHTML = '&#9654; Preview';
+                toast.warning('Sample audio not available');
+            };
+            this._ttsPreviewAudio.play();
         }
     }
 }

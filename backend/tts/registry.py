@@ -51,7 +51,7 @@ def get_tts(cfg):
     if prov == "piper_local": return PiperLocalAdapter(audio_dir)
     if prov == "xtts_server": return XTTSAdapter(audio_dir)
     if prov == "edge-tts": return EdgeTTSAdapter(audio_dir)
-    if prov == "kokoro": return KokoroAdapter(audio_dir)
+    if prov in ("kokoro", "local"): return KokoroAdapter(audio_dir)
     if prov == "chatterbox": return ChatterboxAdapter(audio_dir)
     if prov == "gptsovits": return GPTSoVITSAdapter(audio_dir)
     return EdgeTTSAdapter(audio_dir)  # Ultimate fallback

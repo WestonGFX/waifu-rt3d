@@ -1,0 +1,421 @@
+[
+  {
+    "id": "kokoro/af_sky",
+    "engine": "kokoro",
+    "name": "Sky",
+    "language": "en-US",
+    "gender": "female",
+    "description": "Warm, natural American female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_sky.pt",
+        "path": "kokoro/af_sky.pt"
+      }
+    ],
+    "voice_id": "af_sky",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_sky.pt",
+    "tags": [
+      "natural",
+      "warm"
+    ]
+  },
+  {
+    "id": "kokoro/af_bella",
+    "engine": "kokoro",
+    "name": "Bella",
+    "language": "en-US",
+    "gender": "female",
+    "description": "Soft, gentle American female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_bella.pt",
+        "path": "kokoro/af_bella.pt"
+      }
+    ],
+    "voice_id": "af_bella",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_bella.pt",
+    "tags": [
+      "soft",
+      "gentle"
+    ]
+  },
+  {
+    "id": "kokoro/af_sarah",
+    "engine": "kokoro",
+    "name": "Sarah",
+    "language": "en-US",
+    "gender": "female",
+    "description": "Clear, professional American female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_sarah.pt",
+        "path": "kokoro/af_sarah.pt"
+      }
+    ],
+    "voice_id": "af_sarah",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_sarah.pt",
+    "tags": [
+      "clear",
+      "professional"
+    ]
+  },
+  {
+    "id": "kokoro/af_nova",
+    "engine": "kokoro",
+    "name": "Nova",
+    "language": "en-US",
+    "gender": "female",
+    "description": "Energetic, youthful American female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_nova.pt",
+        "path": "kokoro/af_nova.pt"
+      }
+    ],
+    "voice_id": "af_nova",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_nova.pt",
+    "tags": [
+      "energetic",
+      "youthful"
+    ]
+  },
+  {
+    "id": "kokoro/af_nicole",
+    "engine": "kokoro",
+    "name": "Nicole",
+    "language": "en-US",
+    "gender": "female",
+    "description": "Mature, elegant American female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_nicole.pt",
+        "path": "kokoro/af_nicole.pt"
+      }
+    ],
+    "voice_id": "af_nicole",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_nicole.pt",
+    "tags": [
+      "mature",
+      "elegant"
+    ]
+  },
+  {
+    "id": "kokoro/af_heart",
+    "engine": "kokoro",
+    "name": "Heart",
+    "language": "en-US",
+    "gender": "female",
+    "description": "Sweet, affectionate American female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_heart.pt",
+        "path": "kokoro/af_heart.pt"
+      }
+    ],
+    "voice_id": "af_heart",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_heart.pt",
+    "tags": [
+      "sweet",
+      "affectionate"
+    ]
+  },
+  {
+    "id": "kokoro/af_river",
+    "engine": "kokoro",
+    "name": "River",
+    "language": "en-US",
+    "gender": "female",
+    "description": "Calm, flowing American female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_river.pt",
+        "path": "kokoro/af_river.pt"
+      }
+    ],
+    "voice_id": "af_river",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_river.pt",
+    "tags": [
+      "calm",
+      "flowing"
+    ]
+  },
+  {
+    "id": "kokoro/af_jessica",
+    "engine": "kokoro",
+    "name": "Jessica",
+    "language": "en-US",
+    "gender": "female",
+    "description": "Friendly, conversational American female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_jessica.pt",
+        "path": "kokoro/af_jessica.pt"
+      }
+    ],
+    "voice_id": "af_jessica",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_jessica.pt",
+    "tags": [
+      "friendly",
+      "conversational"
+    ]
+  },
+  {
+    "id": "kokoro/bf_emma",
+    "engine": "kokoro",
+    "name": "Emma",
+    "language": "en-GB",
+    "gender": "female",
+    "description": "Crisp, articulate British female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/bf_emma.pt",
+        "path": "kokoro/bf_emma.pt"
+      }
+    ],
+    "voice_id": "bf_emma",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/bf_emma.pt",
+    "tags": [
+      "british",
+      "articulate"
+    ]
+  },
+  {
+    "id": "kokoro/bf_isabella",
+    "engine": "kokoro",
+    "name": "Isabella",
+    "language": "en-GB",
+    "gender": "female",
+    "description": "Elegant, refined British female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/bf_isabella.pt",
+        "path": "kokoro/bf_isabella.pt"
+      }
+    ],
+    "voice_id": "bf_isabella",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/bf_isabella.pt",
+    "tags": [
+      "elegant",
+      "refined"
+    ]
+  },
+  {
+    "id": "kokoro/jf_alpha",
+    "engine": "kokoro",
+    "name": "Alpha (JP)",
+    "language": "ja-JP",
+    "gender": "female",
+    "description": "Bright, anime-style Japanese female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/jf_alpha.pt",
+        "path": "kokoro/jf_alpha.pt"
+      }
+    ],
+    "voice_id": "jf_alpha",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/jf_alpha.pt",
+    "tags": [
+      "anime",
+      "bright"
+    ]
+  },
+  {
+    "id": "kokoro/jf_nezumi",
+    "engine": "kokoro",
+    "name": "Nezumi (JP)",
+    "language": "ja-JP",
+    "gender": "female",
+    "description": "Cute, playful Japanese female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/jf_nezumi.pt",
+        "path": "kokoro/jf_nezumi.pt"
+      }
+    ],
+    "voice_id": "jf_nezumi",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/jf_nezumi.pt",
+    "tags": [
+      "cute",
+      "playful"
+    ]
+  },
+  {
+    "id": "kokoro/ef_dora",
+    "engine": "kokoro",
+    "name": "Dora (ES)",
+    "language": "es-ES",
+    "gender": "female",
+    "description": "Warm, melodic Spanish female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/ef_dora.pt",
+        "path": "kokoro/ef_dora.pt"
+      }
+    ],
+    "voice_id": "ef_dora",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/ef_dora.pt",
+    "tags": [
+      "warm",
+      "melodic"
+    ]
+  },
+  {
+    "id": "kokoro/ff_siwis",
+    "engine": "kokoro",
+    "name": "Siwis (FR)",
+    "language": "fr-FR",
+    "gender": "female",
+    "description": "Clear, elegant French female",
+    "size_mb": 0.3,
+    "files": [
+      {
+        "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/ff_siwis.pt",
+        "path": "kokoro/ff_siwis.pt"
+      }
+    ],
+    "voice_id": "ff_siwis",
+    "sample_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/ff_siwis.pt",
+    "tags": [
+      "clear",
+      "elegant"
+    ]
+  },
+  {
+    "id": "piper/en_US-amy-medium",
+    "engine": "piper",
+    "name": "Amy",
+    "language": "en-US",
+    "gender": "female",
+    "description": "Medium quality American female",
+    "size_mb": 63,
+    "files": [
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx",
+        "path": "piper/en_US-amy-medium.onnx"
+      },
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json",
+        "path": "piper/en_US-amy-medium.onnx.json"
+      }
+    ],
+    "voice_id": "piper/en_US-amy-medium",
+    "sample_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/samples/speaker_0.mp3",
+    "tags": [
+      "clear",
+      "american"
+    ]
+  },
+  {
+    "id": "piper/en_GB-alba-medium",
+    "engine": "piper",
+    "name": "Alba (UK)",
+    "language": "en-GB",
+    "gender": "female",
+    "description": "Medium quality British female",
+    "size_mb": 63,
+    "files": [
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alba/medium/en_GB-alba-medium.onnx",
+        "path": "piper/en_GB-alba-medium.onnx"
+      },
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alba/medium/en_GB-alba-medium.onnx.json",
+        "path": "piper/en_GB-alba-medium.onnx.json"
+      }
+    ],
+    "voice_id": "piper/en_GB-alba-medium",
+    "sample_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alba/medium/samples/speaker_0.mp3",
+    "tags": [
+      "british",
+      "clear"
+    ]
+  },
+  {
+    "id": "piper/en_GB-jenny_dioco-medium",
+    "engine": "piper",
+    "name": "Jenny (UK)",
+    "language": "en-GB",
+    "gender": "female",
+    "description": "Medium quality British female, conversational",
+    "size_mb": 63,
+    "files": [
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx",
+        "path": "piper/en_GB-jenny_dioco-medium.onnx"
+      },
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx.json",
+        "path": "piper/en_GB-jenny_dioco-medium.onnx.json"
+      }
+    ],
+    "voice_id": "piper/en_GB-jenny_dioco-medium",
+    "sample_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/jenny_dioco/medium/samples/speaker_0.mp3",
+    "tags": [
+      "conversational",
+      "british"
+    ]
+  },
+  {
+    "id": "piper/ja_JP-kokoro-medium",
+    "engine": "piper",
+    "name": "Kokoro (JP)",
+    "language": "ja-JP",
+    "gender": "female",
+    "description": "Medium quality Japanese female",
+    "size_mb": 63,
+    "files": [
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/ja/ja_JP/kokoro/medium/ja_JP-kokoro-medium.onnx",
+        "path": "piper/ja_JP-kokoro-medium.onnx"
+      },
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/ja/ja_JP/kokoro/medium/ja_JP-kokoro-medium.onnx.json",
+        "path": "piper/ja_JP-kokoro-medium.onnx.json"
+      }
+    ],
+    "voice_id": "piper/ja_JP-kokoro-medium",
+    "sample_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/ja/ja_JP/kokoro/medium/samples/speaker_0.mp3",
+    "tags": [
+      "japanese",
+      "anime"
+    ]
+  },
+  {
+    "id": "piper/fr_FR-siwis-medium",
+    "engine": "piper",
+    "name": "Siwis (FR)",
+    "language": "fr-FR",
+    "gender": "female",
+    "description": "Medium quality French female",
+    "size_mb": 63,
+    "files": [
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx",
+        "path": "piper/fr_FR-siwis-medium.onnx"
+      },
+      {
+        "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx.json",
+        "path": "piper/fr_FR-siwis-medium.onnx.json"
+      }
+    ],
+    "voice_id": "piper/fr_FR-siwis-medium",
+    "sample_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/siwis/medium/samples/speaker_0.mp3",
+    "tags": [
+      "french",
+      "elegant"
+    ]
+  }
+]

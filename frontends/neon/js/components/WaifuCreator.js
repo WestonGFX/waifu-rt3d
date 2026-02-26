@@ -18,6 +18,7 @@ import { state } from '../core/StateManager.js';
 import { API } from '../core/API.js';
 import { bus } from '../core/EventBus.js';
 import { toast } from '../utils/Toast.js';
+import { buildVoicePicker } from '../utils/VoicePicker.js';
 
 /** Persona templates — reused from PersonaCreator.js */
 const TEMPLATES = [
@@ -363,7 +364,7 @@ export class WaifuCreator {
 
             case 2: // Voice
                 if (val('wc-tts-provider') !== undefined) this.formData.tts_provider = val('wc-tts-provider');
-                if (val('wc-voice-id') !== undefined) this.formData.voice_id = val('wc-voice-id');
+                // voice_id is set by VoicePicker onChange callback
                 break;
 
             case 3: // Brain
@@ -675,9 +676,9 @@ export class WaifuCreator {
             </div>
 
             <div class="wc-field">
-                <label class="wc-label" for="wc-voice-id">Voice ID</label>
-                <input id="wc-voice-id" class="wc-input" type="text" placeholder="e.g. en-US-AriaNeural" value="${this._esc(this.formData.voice_id)}">
-                <div class="wc-hint">Provider-specific voice identifier (see provider docs)</div>
+                <label class="wc-label">Voice</label>
+                <div id="wc-voice-picker-container"></div>
+                <div class="wc-hint">Select a voice or click "Manage Voices..." to install more</div>
             </div>
 
             <div class="wc-field">
@@ -704,6 +705,35 @@ export class WaifuCreator {
      */
     _bindVoiceEvents() {
         this.content?.querySelector('#wc-voice-preview')?.addEventListener('click', () => this._previewVoice());
+
+        // Initialize voice picker dropdown
+        const provider = this.formData.tts_provider || '';
+        buildVoicePicker({
+            containerId: 'wc-voice-picker-container',
+            currentProvider: provider,
+            currentVoiceId: this.formData.voice_id || '',
+            onChange: ({ provider: prov, voiceId }) => {
+                this.formData.tts_provider = prov;
+                this.formData.voice_id = voiceId;
+            },
+        });
+
+        // When TTS provider dropdown changes, refresh picker filtered to that provider
+        const provSelect = this.content?.querySelector('#wc-tts-provider');
+        if (provSelect) {
+            provSelect.addEventListener('change', () => {
+                const newProv = provSelect.value;
+                buildVoicePicker({
+                    containerId: 'wc-voice-picker-container',
+                    currentProvider: newProv,
+                    currentVoiceId: this.formData.voice_id || '',
+                    onChange: ({ provider: prov, voiceId }) => {
+                        this.formData.tts_provider = prov;
+                        this.formData.voice_id = voiceId;
+                    },
+                });
+            });
+        }
     }
 
     /**
@@ -1294,11 +1324,11 @@ export class WaifuCreator {
     async _previewVoice() {
         this._stopPreviewAudio();
 
-        const provider = this.content?.querySelector('#wc-tts-provider')?.value || '';
-        const voiceId = this.content?.querySelector('#wc-voice-id')?.value || '';
+        const provider = this.formData.tts_provider || this.content?.querySelector('#wc-tts-provider')?.value || '';
+        const voiceId = this.formData.voice_id || '';
 
         if (!voiceId) {
-            toast.warning('Enter a Voice ID to preview', 2000);
+            toast.warning('Select a voice to preview', 2000);
             return;
         }
 
@@ -1393,17 +1423,27 @@ export class WaifuCreator {
                 // Edit mode — PUT
                 await API.put(`characters/${this.editingCharId}`, payload);
                 toast.success(`${payload.name} updated!`, 2000);
+
+                // Refresh character list and navigate back
+                await state.loadCharacters();
+                window.location.hash = '';
             } else {
-                // Create mode — POST
-                await API.post('characters', payload);
+                // Create mode — POST, then switch to the new character
+                const created = await API.post('characters', payload);
                 toast.success(`${payload.name} created!`, 2000);
+
+                // Refresh list so the new character appears
+                await state.loadCharacters();
+
+                // Select the new character and start a fresh chat
+                if (created && created.id) {
+                    await state.selectCharacter(created.id);
+                    await state.createSession(`Chat with ${payload.name}`);
+                }
+
+                // Navigate back to the main view (now showing new char's chat)
+                window.location.hash = '';
             }
-
-            // Refresh character list
-            await state.loadCharacters();
-
-            // Navigate back
-            window.location.hash = '';
         } catch (err) {
             toast.error(`Save failed: ${err.message}`, 5000);
         } finally {

@@ -69,6 +69,9 @@ test-results/
 # ── ML Models (large binary files — tracked separately or via Git LFS) ───────
 backend/storage/models/
 
+# ── TTS Voice Models (downloaded on-demand via Model Manager) ────────────────
+backend/storage/tts_models/
+
 # ── Telemetry Snapshots (large generated data, not source) ───────────────────
 docs/telemetry/*.csv
 docs/telemetry/*.txt

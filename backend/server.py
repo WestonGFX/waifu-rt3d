@@ -78,6 +78,11 @@ class _QuietPollingFilter(logging.Filter):
         "/api/healthcheck",
         "/api/stats",
         "/api/image-gen/status",
+        "/api/lm-studio/models",
+        "/api/logs",
+        "/api/tts/models",
+        "/api/tts/models/install/status",
+        "/api/tts/voices",
         "/favicon.svg",
         "/favicon.ico",
     })
@@ -119,7 +124,7 @@ async def lifespan(app: FastAPI):
     the modern FastAPI lifespan context manager.  Code before ``yield``
     runs at startup; code after ``yield`` runs at shutdown.
     """
-    global model_manager, vector_store
+    global model_manager, vector_store, tts_model_mgr
 
     try:
         from backend import preflight
@@ -135,7 +140,7 @@ async def lifespan(app: FastAPI):
         try:
             from backend.memory.vector_store import VectorStore
             vector_store = VectorStore(storage_path=str(STORAGE / "memory"))
-            logger.info("Vector Store Initialized")
+            logger.debug("Vector Store Initialized")
         except Exception as e:
             vector_store = None
             logger.warning(f"Vector Store unavailable, session-only memory mode active: {e}")
@@ -172,6 +177,13 @@ async def lifespan(app: FastAPI):
     model_manager = ModelManager(cfg)
     logger.info("Model Manager Initialized")
 
+    # TTS Voice Model Manager — catalog, download, delete voice packs
+    from backend.tts.model_manager import TTSModelManager
+    tts_model_mgr = TTSModelManager(
+        model_dir=cfg.get("tts", {}).get("model_dir") if cfg.get("tts", {}).get("model_dir") else None
+    )
+    logger.info(f"TTS Model Manager Initialized ({len(tts_model_mgr.load_catalog())} voices in catalog)")
+
     # Start background maintenance tasks
     import asyncio as _asyncio
 
@@ -179,15 +191,15 @@ async def lifespan(app: FastAPI):
     audio_max_age = int(cfg.get("audio_cleanup_days", 7))
     if audio_max_age > 0:
         _asyncio.create_task(_audio_cleanup_loop(audio_max_age))
-        logger.info(f"Audio cleanup task started (max_age={audio_max_age} days)")
+        logger.debug(f"Audio cleanup task started (max_age={audio_max_age} days)")
 
     # DB vacuum (#106): SQLite VACUUM runs weekly to reclaim fragmented space
     _asyncio.create_task(_db_vacuum_loop(interval_days=7))
-    logger.info("DB vacuum task started (weekly)")
+    logger.debug("DB vacuum task started (weekly)")
 
     # DB backup (#118): daily timestamped copy to STORAGE/_backups/, 7-day retention
     _asyncio.create_task(_db_backup_loop(interval_days=1, retention=7))
-    logger.info("DB backup task started (daily, 7-day retention)")
+    logger.debug("DB backup task started (daily, 7-day retention)")
 
     yield
 
@@ -280,6 +292,7 @@ def db():
 
 model_manager = None
 vector_store = None
+tts_model_mgr = None
 
 # Vocabulary manager — loaded at startup, provides vocab context for LLM
 from backend.vocab.manager import VocabManager
@@ -2595,6 +2608,164 @@ def clear_tts_cache():
             pass
     logger.info(f"TTS cache cleared: {deleted} file(s) removed")
     return {"ok": True, "deleted": deleted}
+
+
+# ==================== TTS MODEL MANAGEMENT ====================
+
+@app.get("/api/tts/voices")
+def get_tts_voices(provider: str = None):
+    """Return installed voices for the voice picker dropdown.
+
+    Merges installed Kokoro/Piper voices with always-available Edge-TTS voices.
+
+    Args:
+        provider: Optional filter — ``"kokoro"``, ``"piper"``, or ``"edge-tts"``.
+
+    Returns:
+        dict: ``{"voices": [{"id": str, "name": str, "provider": str, "language": str}, ...]}``
+
+    Example:
+        >>> GET /api/tts/voices?provider=edge-tts
+        {"voices": [{"id": "en-US-AriaNeural", "name": "Aria ...", ...}]}
+    """
+    if not tts_model_mgr:
+        raise HTTPException(500, "TTS Model Manager not ready")
+    return tts_model_mgr.get_voices(provider=provider)
+
+
+@app.get("/api/tts/models")
+def get_tts_models():
+    """Return the full voice catalog with install status per entry.
+
+    Returns:
+        dict: ``{"models": [...], "catalog_updated": str, "total_installed_mb": float}``
+
+    Example:
+        >>> GET /api/tts/models
+        {"models": [...], "catalog_updated": "2026-02-25T...", "total_installed_mb": 0.3}
+    """
+    if not tts_model_mgr:
+        raise HTTPException(500, "TTS Model Manager not ready")
+    return tts_model_mgr.get_models()
+
+
+@app.post("/api/tts/models/install")
+async def install_tts_model(request: Request):
+    """Start an async download of a voice model from the catalog.
+
+    Fires the download as a background task and returns immediately.
+    Poll ``GET /api/tts/models/install/status`` (SSE) for progress.
+
+    Args:
+        request: JSON body with ``{"model_id": "kokoro/af_sky"}``.
+
+    Returns:
+        dict: ``{"ok": True, "message": "Download started"}`` or error.
+
+    Example:
+        >>> POST /api/tts/models/install {"model_id": "kokoro/af_sky"}
+        {"ok": true, "message": "Download started for kokoro/af_sky"}
+    """
+    if not tts_model_mgr:
+        raise HTTPException(500, "TTS Model Manager not ready")
+
+    body = await request.json()
+    model_id = body.get("model_id")
+    if not model_id:
+        raise HTTPException(400, "model_id is required")
+
+    # Check if download is already in progress
+    if tts_model_mgr._download_lock.locked():
+        raise HTTPException(409, "Another download is already in progress")
+
+    import asyncio as _asyncio
+    _asyncio.create_task(tts_model_mgr.install_model(model_id))
+    return {"ok": True, "message": f"Download started for {model_id}"}
+
+
+@app.get("/api/tts/models/install/status")
+async def tts_install_status():
+    """SSE stream of the current download progress.
+
+    Sends JSON events every 0.5s with download state. Closes when
+    the download completes, errors, or no download is active.
+
+    Returns:
+        StreamingResponse: ``text/event-stream`` with progress events.
+
+    Example:
+        >>> GET /api/tts/models/install/status
+        data: {"model_id": "kokoro/af_sky", "status": "downloading", "progress": 0.45, ...}
+        data: {"model_id": "kokoro/af_sky", "status": "complete"}
+    """
+    if not tts_model_mgr:
+        raise HTTPException(500, "TTS Model Manager not ready")
+
+    async def event_stream():
+        """Yield SSE events polling _current_download state."""
+        idle_count = 0
+        while True:
+            status = tts_model_mgr.get_download_status()
+            if not status:
+                idle_count += 1
+                if idle_count > 10:  # 5 seconds of no activity
+                    yield f"data: {json.dumps({'status': 'idle'})}\n\n"
+                    break
+                await asyncio.sleep(0.5)
+                continue
+
+            idle_count = 0
+            yield f"data: {json.dumps(status)}\n\n"
+
+            if status.get("status") in ("complete", "error"):
+                break
+
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.delete("/api/tts/models/{model_id:path}")
+def delete_tts_model(model_id: str):
+    """Delete an installed TTS voice model.
+
+    Args:
+        model_id: The model ID to delete (e.g. ``"kokoro/af_sky"``).
+
+    Returns:
+        dict: ``{"ok": True, "model_id": str}`` on success.
+
+    Example:
+        >>> DELETE /api/tts/models/kokoro/af_sky
+        {"ok": true, "model_id": "kokoro/af_sky"}
+    """
+    if not tts_model_mgr:
+        raise HTTPException(500, "TTS Model Manager not ready")
+    result = tts_model_mgr.delete_model(model_id)
+    if not result["ok"]:
+        raise HTTPException(404, result["error"])
+    return result
+
+
+@app.post("/api/tts/models/refresh-catalog")
+async def refresh_tts_catalog():
+    """Fetch the latest voice catalog from the configured remote URL.
+
+    Returns:
+        dict: ``{"ok": True, "count": int}`` on success.
+
+    Example:
+        >>> POST /api/tts/models/refresh-catalog
+        {"ok": true, "count": 35}
+    """
+    if not tts_model_mgr:
+        raise HTTPException(500, "TTS Model Manager not ready")
+    cfg = load_config()
+    catalog_url = cfg.get("tts", {}).get("catalog_url")
+    result = await tts_model_mgr.refresh_catalog(catalog_url)
+    if not result["ok"]:
+        raise HTTPException(502, result["error"])
+    return result
 
 
 # ==================== SESSION MANAGEMENT ====================

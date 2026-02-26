@@ -2030,7 +2030,6 @@
             gl.playGesture(gesture);
             console.log(`[Viewer] Auto-gesture: ${emotion} → ${gesture}`);
         }
-        }
 
         // ══════════════════════════════════════════════════════════
         // Main Init
@@ -2424,9 +2423,10 @@
                             VRMUtils.rotateVRM0(vrm);
                         }
                         // combineMorphs merges duplicate morph targets across meshes in VRM 0.x.
-                        // Without this, setValue('blink') may only affect the head mesh, leaving
-                        // body/accessory meshes with a half-blink — a common VRM 0 artifact.
-                        VRMUtils.combineMorphs(vrm);
+                        // Only available in newer three-vrm builds; skip gracefully if absent.
+                        if (typeof VRMUtils.combineMorphs === 'function') {
+                            VRMUtils.combineMorphs(vrm);
+                        }
 
                         scene.add(vrm.scene);
                         currentVrm = vrm;
@@ -2643,7 +2643,6 @@
                         const gl = animationDirector.getLayer('gesture');
                         if (gl) gl.playGesture(gesture);
                     }
-                }
                 }
                 else if (type === 'playGestureSequence') {
                     if (animationDirector && payload) {

@@ -124,7 +124,7 @@ async def lifespan(app: FastAPI):
     the modern FastAPI lifespan context manager.  Code before ``yield``
     runs at startup; code after ``yield`` runs at shutdown.
     """
-    global model_manager, vector_store, tts_model_mgr
+    global model_manager, vector_store, tts_model_mgr, _lms_model_lock
 
     try:
         from backend import preflight
@@ -176,6 +176,12 @@ async def lifespan(app: FastAPI):
     from backend.models.manager import ModelManager
     model_manager = ModelManager(cfg)
     logger.info("Model Manager Initialized")
+
+    # LM Studio model switching lock + seed active model from config
+    import asyncio as _aio_lock
+    _lms_model_lock = _aio_lock.Lock()
+    global _active_lms_model
+    _active_lms_model = cfg.get("llm", {}).get("model", "")
 
     # TTS Voice Model Manager — catalog, download, delete voice packs
     from backend.tts.model_manager import TTSModelManager
@@ -293,6 +299,63 @@ def db():
 model_manager = None
 vector_store = None
 tts_model_mgr = None
+
+# Track the currently loaded LM Studio model to avoid loading duplicates.
+# When a per-character model override requests a different model, the old
+# one is unloaded first so only one LLM occupies VRAM at a time.
+_active_lms_model: Optional[str] = None
+_lms_model_lock = None  # asyncio.Lock, initialized in lifespan
+
+
+async def _ensure_lms_model(requested_model: str) -> None:
+    """Ensure the requested model is loaded in LM Studio, unloading others.
+
+    When characters have different ``llm_model`` settings, LM Studio would
+    otherwise accumulate multiple loaded models and blow through VRAM.
+    This function unloads the previously active model before loading the
+    new one, keeping exactly one LLM in memory.
+
+    Args:
+        requested_model: The model ID the next chat request needs.
+
+    Note:
+        No-op if ``model_manager`` is unavailable, the model hasn't changed,
+        or LM Studio isn't the backend (non-LM-Studio endpoints ignore this).
+    """
+    global _active_lms_model
+    if not model_manager or not requested_model:
+        return
+    if requested_model == _active_lms_model:
+        return
+
+    if _lms_model_lock is None:
+        return
+
+    async with _lms_model_lock:
+        # Double-check after acquiring lock
+        if requested_model == _active_lms_model:
+            return
+
+        try:
+            # Unload whatever is currently loaded
+            if _active_lms_model:
+                logger.info(f"[LMS Switch] Unloading {_active_lms_model} for {requested_model}")
+                model_manager.unload_model(_active_lms_model)
+
+            # Load the requested model
+            logger.info(f"[LMS Switch] Loading {requested_model}")
+            result = model_manager.load_model(requested_model)
+            if result.get("ok"):
+                _active_lms_model = requested_model
+            else:
+                logger.warning(f"[LMS Switch] Load failed: {result.get('error')}")
+                # Still update tracking — the request will proceed and LM Studio
+                # may auto-load on demand
+                _active_lms_model = requested_model
+        except Exception as e:
+            logger.warning(f"[LMS Switch] Model switch failed: {e}")
+            _active_lms_model = requested_model
+
 
 # Vocabulary manager — loaded at startup, provides vocab context for LLM
 from backend.vocab.manager import VocabManager
@@ -1403,6 +1466,11 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         except Exception as e:
             logger.error(f"Error fetching character data: {e}")
 
+        # ── LM Studio model auto-switch (non-streaming) ──────────
+        _resolved_model_ns = cfg.get("llm", {}).get("model", "")
+        if _resolved_model_ns:
+            await _ensure_lms_model(_resolved_model_ns)
+
         # ── Phase 9: Parse capability profile (non-streaming) ──────
         cap_ns: dict = {}
         _cap_warning_ns = None
@@ -2023,6 +2091,13 @@ async def chat_stream(req: Request):
                 tts_chunked_cfg.update(voice_params)
     except Exception as e:
         logger.error(f"Error fetching character data: {e}")
+
+    # ── LM Studio model auto-switch ──────────────────────────────────
+    # Ensure only the active character's model is loaded in LM Studio
+    # to avoid blowing VRAM with multiple models simultaneously.
+    _resolved_model = cfg.get("llm", {}).get("model", "")
+    if _resolved_model:
+        await _ensure_lms_model(_resolved_model)
 
     # ── Phase 9: Parse capability profile ──────────────────────────
     # The capability_profile JSON blob provides per-character LLM settings:

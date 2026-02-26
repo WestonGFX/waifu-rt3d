@@ -258,7 +258,7 @@
                 const vrm = gltf.userData.vrm;
                 if (!vrm) return;
 
-                VRMUtils.combineMorphs(vrm);
+                if (typeof VRMUtils.combineMorphs === 'function') VRMUtils.combineMorphs(vrm);
                 if ((vrm.meta?.metaVersion ?? '0') === '0') VRMUtils.rotateVRM0(vrm);
 
                 scene.add(vrm.scene);

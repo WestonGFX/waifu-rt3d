@@ -7,7 +7,7 @@
   "pitch_shift": 0,
   "voice_stability": 0.5,
   "interrupt_mode": true,
-  "visual_mode": "2D (Live2D)",
+  "visual_mode": "3D (VRM)",
   "theme": "Blurple",
   "bg_mode": "Void",
   "glow_intensity": 50,

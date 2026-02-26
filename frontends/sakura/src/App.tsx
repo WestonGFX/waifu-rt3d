@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MemoryPanel } from './components/MemoryPanel';
+import { VocabPanel } from './components/VocabPanel';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ChatThread } from './views/ChatThread';
@@ -43,6 +44,7 @@ export function App() {
   const shortcuts = useMemo(() => [
     { key: 'ctrl+,', action: () => openOverlay('settings'), description: 'Open settings' },
     { key: 'ctrl+m', action: () => openOverlay('memory'), description: 'Open memory manager' },
+    { key: 'ctrl+k', action: () => openOverlay('vocab'), description: 'Open vocabulary manager' },
     { key: 'ctrl+n', action: () => setSidebarSection('create'), description: 'New character' },
     { key: 'ctrl+b', action: () => toggleSidebar(), description: 'Toggle sidebar' },
     {
@@ -76,6 +78,7 @@ export function App() {
       {/* Overlay drawers */}
       <SettingsDrawer />
       <MemoryPanel />
+      <VocabPanel />
     </div>
   );
 }

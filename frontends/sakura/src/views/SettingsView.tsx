@@ -1354,6 +1354,8 @@ function AIArtTab({ save, cfg }: TabProps) {
    ═══════════════════════════════════════════════════════════════════════ */
 
 function SystemTab({ save, cfg }: TabProps) {
+  const { openOverlay } = useAppStore();
+
   const handleFactoryReset = async () => {
     if (!confirm('Reset ALL settings to defaults? Characters and chat history are NOT affected.')) return;
     try {
@@ -1466,6 +1468,21 @@ function SystemTab({ save, cfg }: TabProps) {
               onChange={(e) => save('show_fps_overlay', e.target.checked)}
               className="accent-[var(--color-accent)]"
             />
+          </SettingField>
+        </div>
+      </section>
+
+      <section className="mb-6">
+        <SectionHeader title="Vocabulary" />
+        <div style={cardStyle} className="px-4">
+          <SettingField label="Browse Vocabulary" description="Explore the 2537-entry e-girl/VTuber slang library, add custom entries, and import/export.">
+            <button
+              onClick={() => openOverlay('vocab')}
+              className="text-sm px-3 py-1 rounded cursor-pointer"
+              style={selectStyle}
+            >
+              Open Vocabulary Manager
+            </button>
           </SettingField>
         </div>
       </section>

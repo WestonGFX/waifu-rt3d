@@ -106,6 +106,19 @@ export interface TTSModelsResponse {
   total_installed_mb: number;
 }
 
+export interface VocabEntry {
+  eg_id: string;
+  term: string;
+  meaning: string;
+  category: string;
+  register: string;
+  emotion: string;
+  pos: string;
+  language: string;
+  aliases: string[];
+  _source: 'base' | 'user';
+}
+
 export interface DownloadProgress {
   model_id: string;
   status: 'downloading' | 'complete' | 'error' | 'idle';

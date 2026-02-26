@@ -1,4 +1,4 @@
-import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse } from './types';
+import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse, VocabEntry } from './types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
@@ -140,5 +140,31 @@ export const api = {
     const form = new FormData();
     form.append('file', file);
     return fetch('/api/upload/avatar', { method: 'POST', body: form }).then(r => r.json());
-  }
+  },
+
+  // Vocabulary
+  getVocabEntries: (params: { category?: string; register?: string; source?: string; search?: string; page?: number; size?: number }) => {
+    const q = new URLSearchParams();
+    if (params.category) q.set('category', params.category);
+    if (params.register) q.set('register', params.register);
+    if (params.source) q.set('source', params.source);
+    if (params.search) q.set('search', params.search);
+    if (params.page != null) q.set('page', String(params.page));
+    if (params.size != null) q.set('size', String(params.size));
+    return get<{ ok: boolean; entries: VocabEntry[]; total: number; page: number; size: number }>(`/api/vocab?${q}`);
+  },
+  getVocabCategories: () =>
+    get<{ ok: boolean; categories: string[] }>('/api/vocab/categories').then(d => d.categories),
+  getVocabStats: () =>
+    get<{ ok: boolean; stats: { total: number; base_count: number; user_count: number; category_count: number } }>('/api/vocab/stats').then(d => d.stats),
+  addVocabEntry: (entry: Partial<VocabEntry>) =>
+    post<{ ok: boolean; entry: VocabEntry }>('/api/vocab', entry),
+  updateVocabEntry: (egId: string, patch: Partial<VocabEntry>) =>
+    put<{ ok: boolean; entry: VocabEntry }>(`/api/vocab/${encodeURIComponent(egId)}`, patch),
+  deleteVocabEntry: (egId: string) =>
+    del<{ ok: boolean }>(`/api/vocab/${encodeURIComponent(egId)}`),
+  exportVocab: () =>
+    get<{ ok: boolean; entries: VocabEntry[]; count: number }>('/api/vocab/export'),
+  importVocab: (entries: Partial<VocabEntry>[]) =>
+    post<{ ok: boolean; imported: number; total_user: number }>('/api/vocab/import', { entries }),
 };

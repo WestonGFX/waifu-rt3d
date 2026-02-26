@@ -8,7 +8,7 @@ type SidebarSection = 'chats' | 'characters' | 'create';
 type ChatLayout = 'chat-first' | 'model-first' | 'split';
 
 /** Overlay drawers that slide out over the main content. */
-type Overlay = 'settings' | 'memory' | null;
+type Overlay = 'settings' | 'memory' | 'vocab' | null;
 
 /** LLM brain connection status shown in sidebar header. */
 interface LlmStatus {
@@ -25,7 +25,7 @@ interface AppState {
 
   // Overlay drawers (settings, memory)
   activeOverlay: Overlay;
-  openOverlay: (overlay: 'settings' | 'memory') => void;
+  openOverlay: (overlay: 'settings' | 'memory' | 'vocab') => void;
   closeOverlay: () => void;
   /** When set, SettingsView opens to this tab on next open. Cleared after use. */
   settingsInitTab: string | null;

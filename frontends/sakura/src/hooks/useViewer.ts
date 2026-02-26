@@ -32,5 +32,44 @@ export function useViewer() {
     post({ type: 'playAudio', audioUrl });
   }, [post]);
 
-  return { iframeRef, loadCharacter, setEmotion, playGesture, setCameraPreset, playAudio };
+  /**
+   * Request available VRM blend shape names from the viewer.
+   * The viewer responds via postMessage({ type: 'blendShapeList', shapes }).
+   * Resolves with an empty array if no model is loaded or the request times out.
+   */
+  const getAvailableBlendShapes = useCallback((): Promise<string[]> => {
+    return new Promise((resolve) => {
+      const timeoutId = setTimeout(() => {
+        window.removeEventListener('message', handler);
+        resolve([]);
+      }, 2000);
+
+      function handler(event: MessageEvent) {
+        if (event.data?.type === 'blendShapeList') {
+          clearTimeout(timeoutId);
+          window.removeEventListener('message', handler);
+          resolve(event.data.shapes || []);
+        }
+      }
+
+      window.addEventListener('message', handler);
+      post({ type: 'getAvailableBlendShapes' });
+    });
+  }, [post]);
+
+  /** Set a single VRM blend shape weight (0–1). */
+  const setBlendShape = useCallback((name: string, value: number) => {
+    post({ type: 'setBlendShape', payload: { name, value } });
+  }, [post]);
+
+  /** Set multiple blend shapes at once. */
+  const setBlendShapes = useCallback((shapes: Record<string, number>) => {
+    post({ type: 'setBlendShapes', payload: shapes });
+  }, [post]);
+
+  return {
+    iframeRef,
+    loadCharacter, setEmotion, playGesture, setCameraPreset, playAudio,
+    getAvailableBlendShapes, setBlendShape, setBlendShapes,
+  };
 }

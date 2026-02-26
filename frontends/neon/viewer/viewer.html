@@ -2615,6 +2615,20 @@
                         ambientLight.intensity = 0.3; // dim base to let colours pop
                     }
                 }
+                else if (type === 'setRenderQuality') {
+                    // Pixel ratio control: Low=1, Medium=1.5, High=native, Ultra=2x
+                    const q = payload?.quality || 'High (Native)';
+                    const ratioMap = {
+                        'Low (1x)': 1,
+                        'Medium (1.5x)': 1.5,
+                        'High (Native)': window.devicePixelRatio,
+                        'Ultra (2x)': Math.max(2, window.devicePixelRatio)
+                    };
+                    const ratio = ratioMap[q] || window.devicePixelRatio;
+                    renderer.setPixelRatio(ratio);
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                    console.log(`[Viewer] Render quality: ${q} (pixel ratio: ${ratio})`);
+                }
                 else if (type === 'setShadowQuality') {
                     // Shadow quality toggle (#26): Off / Soft / Sharp
                     const q = payload?.quality || 'off';

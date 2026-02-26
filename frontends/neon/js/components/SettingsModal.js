@@ -152,7 +152,8 @@ const SETTINGS_SCHEMA = {
         label: "APPEARANCE",
         icon: "🎨",
         fields: [
-            { id: "visual_mode", name: "Avatar Engine", type: "select", options: ["3D (VRM)", "2D (Live2D)"], default: "3D (VRM)", desc: "Choose rendering engine.", tooltip: "💡 VRM = 3D models with full body/face animation. Live2D = 2D animated portraits." },
+            { id: "visual_mode", name: "Avatar Engine", type: "select", options: ["3D (VRM)", "2D (Live2D)"], default: "3D (VRM)", desc: "Choose rendering engine.", tooltip: "💡 VRM = 3D models with full body/face animation. Live2D = 2D animated portraits (Cubism 4). Live2D requires .model3.json files — see docs/live2d-setup.md for model setup." },
+            { id: "_live2d_status", name: "Live2D Engine Status", type: "custom", desc: "Cubism runtime availability check." },
             { id: "theme", name: "Visual Theme", type: "select", options: ["Synthwave UI (Dark)", "Zen (Light)", "Anime Pop", "Bubblegum", "Dracula", "Nord", "Hacker", "Blurple", "iOS Messages", "iOS Dark"], default: "Synthwave UI (Dark)", desc: "Global color scheme.", tooltip: "💡 Changes the entire UI color palette. Use Theme Editor below for fine-grained control." },
             { id: "bg_mode", name: "Dynamic Background", type: "select", options: ["Void", "Bento Gradient", "Digital Rain", "City Video"], default: "Bento Gradient", desc: "Background animation style.", tooltip: "💡 Decorative background behind the main UI panels." },
             { id: "glow_intensity", name: "Neon Glow Intensity", type: "slider", min: 0, max: 100, default: 50, desc: "Brightness of UI elements.", tooltip: "💡 Controls the strength of neon glow effects. Set to 0 for a more subtle look." },
@@ -167,6 +168,8 @@ const SETTINGS_SCHEMA = {
             { id: "fps_target", name: "FPS Cap (3D Viewport)", type: "select", options: ["30", "60", "120", "Unlimited"], default: "Unlimited", desc: "Limit 3D render frame rate.", tooltip: "💡 Capping FPS reduces GPU load. Useful if the app is running in the background or on battery." },
             { id: "show_fps_overlay", name: "Show FPS Overlay (in Viewport)", type: "toggle", default: false, desc: "Display live FPS counter inside the 3D model window.", tooltip: "💡 Shows a small FPS readout in the corner of the 3D viewport for quick performance checks." },
             { id: "shadow_quality", name: "Shadow Quality", type: "select", options: ["off", "soft", "sharp"], default: "off", desc: "3D character shadow rendering quality.", tooltip: "💡 Off = no shadows (fastest). Soft = realistic blur (recommended). Sharp = hard-edged shadows." },
+            { id: "render_quality", name: "Render Quality (3D)", type: "select", options: ["Low (1x)", "Medium (1.5x)", "High (Native)", "Ultra (2x)"], default: "High (Native)", desc: "Pixel ratio for 3D viewport. Lower = faster.", tooltip: "💡 Controls 3D render resolution. Low = 1x pixel ratio (fastest, blurry). High = your display's native resolution. Ultra = supersampled (sharpest, heavy)." },
+            { id: "antialias", name: "Anti-Aliasing (3D)", type: "toggle", default: true, desc: "Smooth jagged edges on 3D models. Disable for GPU savings.", tooltip: "💡 Smooths stair-step edges on 3D models. Disabling saves ~10-15% GPU. Requires page reload." },
             { id: "_open_theme_editor", name: "Theme Editor", type: "button", action: "theme_editor", desc: "Fine-tune CSS variables, create and export custom themes.", tooltip: "🎨 Opens a live editor for every CSS variable. Save custom themes and share them." }
         ]
     },
@@ -1729,6 +1732,59 @@ export class SettingsModal {
 
             // Load templates after DOM insertion
             requestAnimationFrame(() => this._loadTemplatesUI(wrapper));
+        } else if (def.type === 'custom' && def.id === '_live2d_status') {
+            // Live2D engine status check — shows whether the Cubism runtime is
+            // loaded and usable, plus links to install instructions if missing.
+            const statusWrap = document.createElement('div');
+            statusWrap.style.cssText = 'padding:10px 14px; border-radius:8px; font-size:0.8rem; font-family:var(--font-mono); line-height:1.6;';
+            row.appendChild(statusWrap);
+
+            requestAnimationFrame(() => {
+                const hasCubism4 = typeof window.Live2DCubismCore !== 'undefined';
+                // Also check inside the viewer iframe (where Live2D actually renders)
+                let iframeCubism = false;
+                try {
+                    const iframe = document.querySelector('#viewer-frame, iframe[src*="viewer"]');
+                    if (iframe?.contentWindow?.Live2DCubismCore) iframeCubism = true;
+                } catch (_) { /* cross-origin or not loaded */ }
+
+                const available = hasCubism4 || iframeCubism;
+
+                if (available) {
+                    statusWrap.style.background = 'rgba(57, 255, 20, 0.06)';
+                    statusWrap.style.border = '1px solid rgba(57, 255, 20, 0.15)';
+                    statusWrap.innerHTML = `
+                        <div style="color:var(--neon-green); font-family:var(--font-display); margin-bottom:4px;">
+                            &#x2714; CUBISM 4 CORE — LOADED
+                        </div>
+                        <div style="color:var(--text-muted); font-size:0.72rem;">
+                            Live2D rendering is available. Set <strong>Avatar Engine</strong> above to
+                            <span style="color:var(--neon-cyan);">live2d</span> and load a .moc3 model to use it.
+                        </div>
+                    `;
+                } else {
+                    statusWrap.style.background = 'rgba(255, 0, 60, 0.06)';
+                    statusWrap.style.border = '1px solid rgba(255, 0, 60, 0.15)';
+                    statusWrap.innerHTML = `
+                        <div style="color:var(--neon-magenta); font-family:var(--font-display); margin-bottom:6px;">
+                            &#x26A0; CUBISM CORE — NOT FOUND
+                        </div>
+                        <div style="color:var(--text-muted); font-size:0.72rem; margin-bottom:8px;">
+                            The Live2D avatar engine requires the <strong>Cubism 4 SDK for Web</strong> runtime
+                            (<code>live2dcubismcore.min.js</code>) to render .moc3 models. Without it, the Live2D
+                            avatar mode will not work.
+                        </div>
+                        <div style="color:var(--text-dim); font-size:0.7rem; line-height:1.7;">
+                            <strong style="color:var(--neon-cyan);">To install:</strong><br>
+                            1. Download the Cubism SDK from
+                               <span style="color:var(--neon-cyan);">live2d.com/sdk/download/native/</span><br>
+                            2. Copy <code>live2dcubismcore.min.js</code> into
+                               <code>frontends/neon/lib/</code><br>
+                            3. Reload this page — this status will turn green.
+                        </div>
+                    `;
+                }
+            });
         }
 
         container.appendChild(row);
@@ -2175,6 +2231,12 @@ export class SettingsModal {
                 if (this.tempConfig.shadow_quality !== undefined) {
                     viewerIframe.contentWindow.postMessage(
                         { type: 'setShadowQuality', payload: { quality: this.tempConfig.shadow_quality } }, '*'
+                    );
+                }
+                // Apply render quality (pixel ratio) live
+                if (this.tempConfig.render_quality !== undefined) {
+                    viewerIframe.contentWindow.postMessage(
+                        { type: 'setRenderQuality', payload: { quality: this.tempConfig.render_quality } }, '*'
                     );
                 }
             }

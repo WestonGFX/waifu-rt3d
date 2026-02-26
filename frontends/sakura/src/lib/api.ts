@@ -94,6 +94,8 @@ export const api = {
     return get<{ voices: VoiceEntry[] }>(`/api/tts/voices${params}`).then(d => d.voices);
   },
 
+  getDefaultVoice: () => get<{ voice_id: string; provider: string; name: string }>('/api/tts/voices/default'),
+
   // TTS Model Management
   getTTSModels: () => get<TTSModelsResponse>('/api/tts/models'),
   installTTSModel: (modelId: string) => post<{ ok: boolean }>('/api/tts/models/install', { model_id: modelId }),

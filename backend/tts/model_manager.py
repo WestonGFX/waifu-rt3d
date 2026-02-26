@@ -204,6 +204,45 @@ class TTSModelManager:
 
         return {"voices": voices}
 
+    def get_default_voice(self) -> dict:
+        """Return the recommended default voice for new characters.
+
+        Priority: if exactly one local voice (Kokoro/Piper) is installed,
+        use it. Otherwise fall back to the first Edge-TTS voice.
+
+        Returns:
+            ``{"voice_id": str, "provider": str, "name": str}``
+
+        Example:
+            >>> default = mgr.get_default_voice()
+            >>> default["provider"] in ("kokoro", "piper", "edge-tts")
+            True
+        """
+        installed = self.get_installed()
+        catalog = self.load_catalog()
+
+        local_voices = []
+        for entry in catalog:
+            if entry["id"] in installed:
+                local_voices.append({
+                    "voice_id": entry["voice_id"],
+                    "provider": entry["engine"],
+                    "name": entry["name"],
+                })
+
+        if len(local_voices) == 1:
+            return local_voices[0]
+        if local_voices:
+            return local_voices[0]
+
+        # Fallback: first Edge-TTS voice
+        first_edge = EDGE_TTS_VOICES[0]
+        return {
+            "voice_id": first_edge["id"],
+            "provider": "edge-tts",
+            "name": first_edge["name"],
+        }
+
     async def install_model(
         self,
         model_id: str,

@@ -2866,6 +2866,24 @@ def get_tts_voices(provider: str = None):
     return tts_model_mgr.get_voices(provider=provider)
 
 
+@app.get("/api/tts/voices/default")
+def get_default_voice():
+    """Return the recommended default voice for new characters.
+
+    Priority: single installed local voice > first installed > first Edge-TTS.
+
+    Returns:
+        dict: ``{"voice_id": str, "provider": str, "name": str}``
+
+    Example:
+        >>> GET /api/tts/voices/default
+        {"voice_id": "en-US-AriaNeural", "provider": "edge-tts", "name": "Aria (Female, American)"}
+    """
+    if not tts_model_mgr:
+        raise HTTPException(500, "TTS Model Manager not ready")
+    return tts_model_mgr.get_default_voice()
+
+
 @app.get("/api/tts/models")
 def get_tts_models():
     """Return the full voice catalog with install status per entry.
@@ -4054,13 +4072,21 @@ async def create_character(req: Request):
     if not name or not system_prompt:
         raise HTTPException(400, "name and system_prompt required")
 
+    # Auto-assign default voice if none provided
+    voice_id = body.get("voice_id", "")
+    tts_provider = body.get("tts_provider", "")
+    if not voice_id and tts_model_mgr:
+        default_voice = tts_model_mgr.get_default_voice()
+        voice_id = default_voice["voice_id"]
+        tts_provider = tts_provider or default_voice["provider"]
+
     # All optional fields — mirrors the PUT endpoint's field list
     fields = {
         "avatar_url": body.get("avatar_url", ""),
         "avatar_2d_url": body.get("avatar_2d_url", ""),
         "vrm_model_url": body.get("vrm_model_url", ""),
-        "voice_id": body.get("voice_id", ""),
-        "tts_provider": body.get("tts_provider", ""),
+        "voice_id": voice_id,
+        "tts_provider": tts_provider,
         "tts_pitch": body.get("tts_pitch", ""),
         "tts_rate": body.get("tts_rate", ""),
         "personality_traits": json.dumps(body.get("personality_traits", [])),

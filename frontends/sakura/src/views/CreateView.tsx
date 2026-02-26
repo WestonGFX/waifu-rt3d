@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { WizardStep } from '../components/WizardStep';
 import { VoicePicker } from '../components/VoicePicker';
@@ -20,6 +20,22 @@ export function CreateView() {
     voice_id: '',
     tts_provider: 'edge-tts'
   });
+
+  // Auto-populate with the recommended default voice on mount
+  useEffect(() => {
+    fetch('/api/tts/voices/default')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.voice_id) {
+          setData(prev => ({
+            ...prev,
+            voice_id: prev.voice_id || d.voice_id,
+            tts_provider: prev.tts_provider || d.provider,
+          }));
+        }
+      })
+      .catch(() => {});
+  }, []);
   const [creating, setCreating] = useState(false);
 
   const patch = (updates: Partial<Character>) => setData(prev => ({ ...prev, ...updates }));

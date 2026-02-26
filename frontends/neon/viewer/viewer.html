@@ -512,7 +512,7 @@
         class IdleBehaviorLayer extends AnimationLayer {
             constructor(vrm) {
                 super(vrm, 'idle');
-                this._fidgetTimer = 3 + Math.random() * 5;
+                this._fidgetTimer = 6 + Math.random() * 9;
                 this._activeFidget = null;
                 this._fidgetTime = 0;
                 this._fidgetDuration = 0;
@@ -520,6 +520,10 @@
 
             /** @type {Array<{name:string, duration:number, requires?:(p:Object)=>boolean, apply:(t:number,p:Object,getBone:(s:string)=>any)=>void}>} */
             static get FIDGETS() {
+                // Only subtle body movements — no dramatic arm gestures.
+                // Arm-based animations (wave, peace sign, etc.) should come from
+                // proper animation clips (VRMA/BVH) once the clip system is built,
+                // not from procedural bone rotation which looks robotic.
                 return [
                     {
                         name: 'weight_shift', duration: 2,
@@ -565,13 +569,6 @@
                         }
                     },
                     {
-                        name: 'arm_adjust', duration: 1.5,
-                        apply(t, p, B) {
-                            const arm = B('leftUpperArm');
-                            if (arm) arm.rotation.z = -1.3 + Math.sin(t * Math.PI) * 0.1;
-                        }
-                    },
-                    {
                         name: 'subtle_sway', duration: 3,
                         apply(t, p, B) {
                             const hips = B('hips'), spine = B('spine');
@@ -588,27 +585,6 @@
                         }
                     },
                     {
-                        name: 'hand_to_chest', duration: 1.5,
-                        apply(t, p, B) {
-                            const arm = B('rightUpperArm');
-                            if (arm) {
-                                const blend = Math.sin(t * Math.PI);
-                                arm.rotation.z = 1.3 * (1 - blend * 0.5);
-                                arm.rotation.x = blend * 0.3;
-                            }
-                        }
-                    },
-                    {
-                        name: 'hand_clasp', duration: 2,
-                        requires: (p) => p.confidence > 0.4,
-                        apply(t, p, B) {
-                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
-                            const blend = Math.sin(t * Math.PI * 0.5);
-                            if (la) { la.rotation.z = -1.3 + blend * 0.3; la.rotation.x = blend * 0.2; }
-                            if (ra) { ra.rotation.z = 1.3 - blend * 0.3; ra.rotation.x = blend * 0.2; }
-                        }
-                    },
-                    {
                         name: 'hip_cock', duration: 2,
                         requires: (p) => p.confidence > 0.6,
                         apply(t, p, B) {
@@ -616,86 +592,6 @@
                             const blend = Math.sin(t * Math.PI * 0.5);
                             if (hips) { hips.rotation.z = blend * 0.06; hips.rotation.y = blend * 0.03; }
                             if (spine) spine.rotation.z = blend * -0.03;
-                        }
-                    },
-                    {
-                        name: 'hand_on_hip', duration: 3,
-                        requires: (p) => p.confidence > 0.5,
-                        apply(t, p, B) {
-                            const arm = B('rightUpperArm');
-                            if (arm) {
-                                const blend = Math.sin(t * Math.PI / 3);
-                                arm.rotation.z = 1.3 - blend * 0.5;
-                                arm.rotation.y = blend * 0.3;
-                            }
-                        }
-                    },
-                    {
-                        name: 'touch_face', duration: 1.5,
-                        requires: (p) => p.nervousness > 0.3,
-                        apply(t, p, B) {
-                            const arm = B('leftUpperArm');
-                            if (arm) {
-                                const blend = Math.sin(t * Math.PI);
-                                arm.rotation.z = -1.3 + blend * 0.6;
-                                arm.rotation.x = blend * 0.4;
-                            }
-                        }
-                    },
-                    {
-                        name: 'touch_hair', duration: 2,
-                        requires: (p) => p.nervousness > 0.3,
-                        apply(t, p, B) {
-                            const arm = B('rightUpperArm');
-                            if (arm) {
-                                const blend = Math.sin(t * Math.PI * 0.5);
-                                arm.rotation.z = 1.3 - blend * 0.8;
-                                arm.rotation.x = -blend * 0.3;
-                            }
-                        }
-                    },
-                    {
-                        name: 'fidget_hands', duration: 1.5,
-                        requires: (p) => p.nervousness > 0.4,
-                        apply(t, p, B) {
-                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
-                            const v = Math.sin(t * Math.PI * 4) * 0.03;
-                            if (la) la.rotation.x = v;
-                            if (ra) ra.rotation.x = -v;
-                        }
-                    },
-                    {
-                        name: 'hand_behind_back', duration: 2.5,
-                        requires: (p) => p.nervousness > 0.3 || p.playfulness > 0.4,
-                        apply(t, p, B) {
-                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
-                            const blend = Math.sin(t * Math.PI * 0.4);
-                            if (la) { la.rotation.z = -1.3 - blend * 0.3; la.rotation.y = -blend * 0.4; }
-                            if (ra) { ra.rotation.z = 1.3 + blend * 0.3; ra.rotation.y = blend * 0.4; }
-                        }
-                    },
-                    {
-                        name: 'hair_twirl', duration: 2,
-                        requires: (p) => p.playfulness > 0.5,
-                        apply(t, p, B) {
-                            const arm = B('rightUpperArm');
-                            if (arm) {
-                                const blend = Math.sin(t * Math.PI * 0.5);
-                                arm.rotation.z = 1.3 - blend * 0.8;
-                                arm.rotation.y = Math.sin(t * Math.PI * 2) * 0.1;
-                            }
-                        }
-                    },
-                    {
-                        name: 'peace_sign', duration: 1,
-                        requires: (p) => p.playfulness > 0.6,
-                        apply(t, p, B) {
-                            const arm = B('rightUpperArm');
-                            if (arm) {
-                                const blend = Math.sin(t * Math.PI);
-                                arm.rotation.z = 1.3 - blend * 0.9;
-                                arm.rotation.x = -blend * 0.2;
-                            }
                         }
                     },
                     {
@@ -714,18 +610,6 @@
                         apply(t, p, B) {
                             const hips = B('hips');
                             if (hips) hips.position.y = Math.abs(Math.sin(t * Math.PI * 2)) * 0.015;
-                        }
-                    },
-                    {
-                        name: 'stretch', duration: 3,
-                        requires: (p) => p.energy > 0.5,
-                        apply(t, p, B) {
-                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
-                            const spine = B('spine');
-                            const blend = Math.sin(t * Math.PI / 3);
-                            if (la) la.rotation.z = -1.3 - blend * 0.5;
-                            if (ra) ra.rotation.z = 1.3 + blend * 0.5;
-                            if (spine) spine.rotation.x = -blend * 0.04;
                         }
                     },
                     {
@@ -749,7 +633,7 @@
                     if (progress >= 1) {
                         this._activeFidget = null;
                         this._fidgetTime = 0;
-                        const baseWait = 3 + Math.random() * 5;
+                        const baseWait = 6 + Math.random() * 9;
                         this._fidgetTimer = baseWait * (1.3 - p.energy * 0.6);
                     } else {
                         let envelope = 1;
@@ -776,7 +660,7 @@
                         this._fidgetTime = 0;
                         this._fidgetDuration = pick.duration * (0.8 + p.expressiveness * 0.4);
                     }
-                    const baseWait = 3 + Math.random() * 5;
+                    const baseWait = 6 + Math.random() * 9;
                     this._fidgetTimer = baseWait * (1.3 - p.energy * 0.6);
                 }
             }
@@ -2021,13 +1905,16 @@
          * Emotions absent from the map (e.g. 'angry', 'neutral') trigger nothing —
          * stillness is intentional for those states.
          */
+        // Only head/body gestures — NO arm movement in auto-gestures.
+        // Arm gestures (wave, clap, celebrate, etc.) are still available for
+        // explicit AI-triggered playGesture() calls via postMessage.
         const EMOTION_GESTURE_MAP = {
-            happy:     ['wave', 'clap'],
-            excited:   ['celebrate'],
+            happy:     ['nod'],
+            excited:   ['nod'],
             sad:       ['shy'],
             surprised: ['tilt'],
-            thinking:  ['think'],
-            confused:  ['think'],
+            thinking:  ['tilt'],
+            confused:  ['tilt'],
         };
 
         /**
@@ -2046,7 +1933,7 @@
             if (!emotion || !gl) return;
             if (emotion === lastAutoGestureEmotion) return;  // dedup
             if (gl.isPlaying) return;                         // don't interrupt
-            if (Math.random() > 0.4) return;                  // 40% chance
+            if (Math.random() > 0.2) return;                  // 20% chance
             const candidates = EMOTION_GESTURE_MAP[emotion];
             if (!candidates || candidates.length === 0) return;
             lastAutoGestureEmotion = emotion;

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Pencil, Trash2, Check } from 'lucide-react';
+import { X, Plus, Pencil, Trash2, Check, Search } from 'lucide-react';
 import { api } from '../lib/api';
 import { useChatStore } from '../stores/chatStore';
 import type { Session } from '../lib/types';
@@ -23,6 +23,16 @@ export function SessionDrawer({ open, onClose, characterId, characterName }: Ses
   const [sessions, setSessions] = useState<Session[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  /** Filter sessions by search query (matches title). */
+  const filteredSessions = useMemo(() => {
+    if (!searchQuery.trim()) return sessions;
+    const q = searchQuery.toLowerCase();
+    return sessions.filter(s =>
+      (s.title || `Session ${s.id}`).toLowerCase().includes(q)
+    );
+  }, [sessions, searchQuery]);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -136,14 +146,33 @@ export function SessionDrawer({ open, onClose, characterId, characterName }: Ses
               </div>
             </div>
 
+            {/* Search */}
+            <div className="px-3 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+              <div className="relative">
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-tertiary)' }} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search threads..."
+                  className="w-full text-xs pl-7 pr-2 py-1.5 rounded-lg outline-none"
+                  style={{
+                    backgroundColor: 'var(--color-background)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text-primary)',
+                  }}
+                />
+              </div>
+            </div>
+
             {/* Session list */}
             <div className="flex-1 overflow-y-auto p-2">
-              {sessions.length === 0 ? (
+              {filteredSessions.length === 0 ? (
                 <p className="text-xs text-center py-8" style={{ color: 'var(--color-text-tertiary)' }}>
                   No chat threads yet
                 </p>
               ) : (
-                sessions.map(session => {
+                filteredSessions.map(session => {
                   const active = session.id === sessionId;
                   const editing = editingId === session.id;
 

@@ -227,7 +227,7 @@ function SliderField({
 
 function CharacterTab() {
   const { activeCharacter, setActiveCharacter, characters, loadCharacters } = useAppStore();
-  const [vrmModels, setVrmModels] = useState<string[]>([]);
+  const [vrmModels, setVrmModels] = useState<Array<{ name: string; url: string }>>([]);
   const [images, setImages] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [localData, setLocalData] = useState({
@@ -241,7 +241,7 @@ function CharacterTab() {
 
   // Load file lists + sync from active character
   useEffect(() => {
-    api.scanVrm().then(setVrmModels).catch(() => {});
+    api.scanVrm().then(models => setVrmModels(models.map(m => ({ name: m.name, url: m.url })))).catch(() => {});
     api.scanImages().then(setImages).catch(() => {});
   }, []);
 
@@ -374,7 +374,7 @@ function CharacterTab() {
             >
               <option value="">None</option>
               {vrmModels.map(m => (
-                <option key={m} value={m}>{m.split('/').pop()}</option>
+                <option key={m.url} value={m.url}>{m.name}</option>
               ))}
             </select>
           </SettingField>

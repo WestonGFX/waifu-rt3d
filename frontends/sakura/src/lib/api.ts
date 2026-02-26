@@ -95,7 +95,17 @@ export const api = {
   // TTS
   getVoices: (provider?: string) => {
     const params = provider ? `?provider=${provider}` : '';
-    return get<{ voices: VoiceEntry[] }>(`/api/tts/voices${params}`).then(d => d.voices);
+    return get<{ voices: Array<Record<string, unknown>> }>(`/api/tts/voices${params}`).then(d =>
+      (d.voices || []).map(v => ({
+        id: String(v.id || ''),
+        engine: String(v.engine || v.provider || 'unknown'),
+        name: String(v.name || v.id || ''),
+        language: String(v.language || ''),
+        gender: String(v.gender || ''),
+        description: String(v.description || ''),
+        installed: Boolean(v.installed),
+      } satisfies VoiceEntry))
+    );
   },
 
   getDefaultVoice: () => get<{ voice_id: string; provider: string; name: string }>('/api/tts/voices/default'),
@@ -107,8 +117,10 @@ export const api = {
   refreshTTSCatalog: () => post<{ ok: boolean; count: number }>('/api/tts/models/refresh-catalog', {}),
 
   // Files
-  scanVrm: () => get<{ models: string[] }>('/api/scan/vrm').then(d => d.models),
-  scanImages: () => get<{ images: string[] }>('/api/scan/images').then(d => d.images),
+  scanVrm: () => get<{ models: Array<{ name: string; file: string; url: string; size: number }> }>('/api/scan/vrm').then(d => d.models),
+  scanImages: () => get<{ images: Array<string | { file: string; url: string; name: string }> }>('/api/scan/images').then(d =>
+    (d.images || []).map(img => typeof img === 'string' ? img : img.file)
+  ),
   // Stats (LLM status, uptime, etc.)
   getStats: () => get<Record<string, unknown>>('/api/stats'),
 

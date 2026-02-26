@@ -10,7 +10,6 @@ interface ChatState {
   charId: number | null;
   /** Active AbortController for cancelling in-flight streaming requests. */
   abortController: AbortController | null;
-
   setDraft: (text: string) => void;
   setContext: (sessionId: number, charId: number) => void;
   sendMessage: (text: string, speak?: boolean) => Promise<void>;

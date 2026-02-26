@@ -153,11 +153,11 @@ export function CreateView() {
 
   // Gallery images + VRM models from server
   const [images, setImages] = useState<string[]>([]);
-  const [vrmModels, setVrmModels] = useState<string[]>([]);
+  const [vrmModels, setVrmModels] = useState<Array<{ name: string; url: string }>>([]);
 
   useEffect(() => {
     api.scanImages().then(setImages).catch(() => {});
-    api.scanVrm().then(setVrmModels).catch(() => {});
+    api.scanVrm().then(models => setVrmModels(models.map(m => ({ name: m.name, url: m.url })))).catch(() => {});
   }, []);
 
   // Auto-populate with the recommended default voice on mount
@@ -550,10 +550,9 @@ export function CreateView() {
                   style={fieldStyle}
                 >
                   <option value="">None (2D only)</option>
-                  {vrmModels.map(url => {
-                    const name = url.split('/').pop() || url;
-                    return <option key={url} value={url}>{name}</option>;
-                  })}
+                  {vrmModels.map(m => (
+                    <option key={m.url} value={m.url}>{m.name}</option>
+                  ))}
                 </select>
                 <p className="text-[10px] mt-1" style={{ color: 'var(--color-text-tertiary)' }}>
                   VRM files in your avatars folder appear here. Drop .vrm files into backend/storage/avatars/.

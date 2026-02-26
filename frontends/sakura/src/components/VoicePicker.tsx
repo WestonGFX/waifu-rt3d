@@ -17,7 +17,8 @@ export function VoicePicker({ value, provider, onChange }: VoicePickerProps) {
   }, [provider]);
 
   const grouped = voices.reduce<Record<string, VoiceEntry[]>>((acc, v) => {
-    const key = v.engine.charAt(0).toUpperCase() + v.engine.slice(1);
+    const eng = v.engine || 'Unknown';
+    const key = eng.charAt(0).toUpperCase() + eng.slice(1);
     (acc[key] ??= []).push(v);
     return acc;
   }, {});

@@ -250,6 +250,7 @@ from pathlib import Path
 FRONTEND = Path(ROOT_DIR) / "frontends" / "neon"
 FRONTEND_DASHBOARD_DIST = Path(ROOT_DIR) / "frontends" / "dashboard" / "dist"
 FRONTEND_V2_DIST = Path(ROOT_DIR) / "frontends" / "v2" / "dist"
+FRONTEND_SAKURA_DIST = Path(ROOT_DIR) / "frontends" / "sakura" / "dist"
 STORAGE  = Path(ROOT_DIR) / "backend" / "storage"
 CONFIG   = Path(ROOT_DIR) / "backend" / "config" / "app.json"
 DEFAULT_FRONTEND_ENV = "WAIFU_DEFAULT_FRONTEND"
@@ -521,6 +522,19 @@ def legacy_index():
     return (FRONTEND / "index.html").read_text(encoding="utf-8")
 
 
+@app.get("/sakura")
+@app.get("/sakura/{full_path:path}")
+async def sakura_frontend(full_path: str = ""):
+    """Serve the Sakura React frontend (SPA fallback)."""
+    index = FRONTEND_SAKURA_DIST / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return JSONResponse(
+        {"error": "Sakura frontend not built. Run: cd frontends/sakura && npm run build"},
+        status_code=404
+    )
+
+
 @app.get("/v2", response_class=HTMLResponse)
 def v2_index():
     index_file = FRONTEND_V2_DIST / "index.html"
@@ -589,6 +603,10 @@ def logo_png():
     return JSONResponse({"error": "not found"}, status_code=404)
 
 # Mount Static Files
+# Sakura frontend (built React app)
+if FRONTEND_SAKURA_DIST.exists() and (FRONTEND_SAKURA_DIST / "assets").exists():
+    app.mount("/sakura/assets", StaticFiles(directory=str(FRONTEND_SAKURA_DIST / "assets")), name="sakura-assets")
+
 app.mount("/shared", StaticFiles(directory=str(Path(ROOT_DIR) / "frontends" / "shared")), name="shared")
 app.mount("/assets", StaticFiles(directory=str(FRONTEND / "assets")), name="assets")
 app.mount("/files", StaticFiles(directory=str(STORAGE)), name="files")

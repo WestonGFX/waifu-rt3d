@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { TabBar } from './components/TabBar';
 import { MemoryPanel } from './components/MemoryPanel';
 import { ChatsView } from './views/ChatsView';
@@ -9,16 +10,37 @@ import { SettingsView } from './views/SettingsView';
 import { useAppStore } from './stores/appStore';
 import { useTheme } from './hooks/useTheme';
 
+/**
+ * Tab-based view router with animated transitions.
+ * Uses Framer Motion's AnimatePresence for smooth fade+slide on tab switch.
+ */
 function ViewRouter() {
   const { activeTab } = useAppStore();
-  switch (activeTab) {
-    case 'chats': return <ChatsView />;
-    case 'discover': return <DiscoverView />;
-    case 'create': return <CreateView />;
-    case 'memory': return <ChatsView />;
-    case 'settings': return <SettingsView />;
-    default: return <ChatsView />;
-  }
+
+  const view = (() => {
+    switch (activeTab) {
+      case 'chats': return <ChatsView />;
+      case 'discover': return <DiscoverView />;
+      case 'create': return <CreateView />;
+      case 'memory': return <ChatsView />;
+      case 'settings': return <SettingsView />;
+      default: return <ChatsView />;
+    }
+  })();
+
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={activeTab}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ duration: 0.15, ease: 'easeOut' }}
+      >
+        {view}
+      </motion.div>
+    </AnimatePresence>
+  );
 }
 
 export function App() {

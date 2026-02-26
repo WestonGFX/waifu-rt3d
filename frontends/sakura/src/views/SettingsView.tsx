@@ -70,10 +70,20 @@ export function SettingsView() {
   const {
     advancedMode, toggleAdvancedMode,
     compactMode, toggleCompactMode,
-    config, saveConfig
+    config, saveConfig,
+    settingsInitTab,
   } = useAppStore();
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+
+  // Jump to tab requested by openSettingsTab() and clear the request
+  useEffect(() => {
+    if (settingsInitTab && TABS.some(t => t.id === settingsInitTab)) {
+      setActiveTab(settingsInitTab as SettingsTab);
+      // Clear the init tab via a zero-cost store write (openOverlay keeps overlay open)
+      useAppStore.setState({ settingsInitTab: null });
+    }
+  }, [settingsInitTab]);
 
   // LM Studio model auto-detect
   const [lmModels, setLmModels] = useState<LMStudioModel[]>([]);

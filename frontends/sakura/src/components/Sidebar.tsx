@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain, Settings,
-  ChevronLeft, ChevronRight, Search, Wifi, WifiOff
+  ChevronLeft, ChevronRight, Search, Wifi, WifiOff, Pencil
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
@@ -23,7 +23,7 @@ export function Sidebar() {
     sidebarSection, setSidebarSection,
     characters, activeCharacter, selectCharacter,
     llmStatus, pollLlmStatus,
-    openOverlay,
+    openOverlay, openSettingsTab,
   } = useAppStore();
 
   const [filter, setFilter] = useState('');
@@ -234,6 +234,7 @@ export function Sidebar() {
                       character={char}
                       active={activeCharacter?.id === char.id}
                       onSelect={() => selectCharacter(char)}
+                      onEdit={() => { selectCharacter(char); openSettingsTab('character'); }}
                     />
                   ))
                 )}
@@ -390,13 +391,14 @@ interface CharacterProfileCardProps {
   };
   active: boolean;
   onSelect: () => void;
+  onEdit: () => void;
 }
 
 /**
  * Richer character card for the Characters browser section.
  * Shows avatar, name, personality snippet, voice info, and VRM badge.
  */
-function CharacterProfileCard({ character, active, onSelect }: CharacterProfileCardProps) {
+function CharacterProfileCard({ character, active, onSelect, onEdit }: CharacterProfileCardProps) {
   const avatarUrl = resolveAvatarUrl(character.name, character.avatar_url);
   const [imgFailed, setImgFailed] = useState(false);
   const handleImgError = useCallback(() => setImgFailed(true), []);
@@ -408,59 +410,67 @@ function CharacterProfileCard({ character, active, onSelect }: CharacterProfileC
     : 'No personality set';
 
   return (
-    <button
-      onClick={onSelect}
-      className="sidebar-preset-card w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150"
+    <div
+      className="group sidebar-preset-card w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150 flex items-start gap-2.5"
       style={{
         backgroundColor: active ? 'var(--color-accent-soft)' : 'var(--color-background)',
         border: active
           ? '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)'
           : '1px solid var(--color-border-subtle)',
+        cursor: 'pointer',
       }}
+      onClick={onSelect}
     >
-      <div className="flex items-start gap-2.5">
-        {showImage ? (
-          <img
-            src={avatarUrl!}
-            alt={character.name || ''}
-            onError={handleImgError}
-            className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-          />
-        ) : (
-          <AvatarInitial initial={initial} size={10} rounded="rounded-lg" />
-        )}
-        <div className="min-w-0 flex-1">
-          <p
-            className="text-xs font-semibold truncate"
-            style={{ color: active ? 'var(--color-accent)' : 'var(--color-text-primary)' }}
-          >
-            {character.name || 'Unnamed'}
-          </p>
-          <p className="text-[10px] mt-0.5 leading-tight" style={{ color: 'var(--color-text-tertiary)' }}>
-            {snippet}
-          </p>
-          {/* Badges row */}
-          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-            {character.voice_id && (
-              <span
-                className="text-[9px] px-1.5 py-0.5 rounded-full"
-                style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}
-              >
-                {character.tts_provider || 'tts'}
-              </span>
-            )}
-            {character.model_vrm && (
-              <span
-                className="text-[9px] px-1.5 py-0.5 rounded-full"
-                style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}
-              >
-                3D
-              </span>
-            )}
-          </div>
+      {showImage ? (
+        <img
+          src={avatarUrl!}
+          alt={character.name || ''}
+          onError={handleImgError}
+          className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+        />
+      ) : (
+        <AvatarInitial initial={initial} size={10} rounded="rounded-lg" />
+      )}
+      <div className="min-w-0 flex-1">
+        <p
+          className="text-xs font-semibold truncate"
+          style={{ color: active ? 'var(--color-accent)' : 'var(--color-text-primary)' }}
+        >
+          {character.name || 'Unnamed'}
+        </p>
+        <p className="text-[10px] mt-0.5 leading-tight" style={{ color: 'var(--color-text-tertiary)' }}>
+          {snippet}
+        </p>
+        {/* Badges row */}
+        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+          {character.voice_id && (
+            <span
+              className="text-[9px] px-1.5 py-0.5 rounded-full"
+              style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}
+            >
+              {character.tts_provider || 'tts'}
+            </span>
+          )}
+          {character.model_vrm && (
+            <span
+              className="text-[9px] px-1.5 py-0.5 rounded-full"
+              style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}
+            >
+              3D
+            </span>
+          )}
         </div>
       </div>
-    </button>
+      {/* Edit shortcut — opens Settings > Character tab */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onEdit(); }}
+        className="p-1.5 rounded-lg opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity flex-shrink-0 self-start"
+        style={{ color: 'var(--color-text-tertiary)' }}
+        title="Edit character"
+      >
+        <Pencil size={12} />
+      </button>
+    </div>
   );
 }
 

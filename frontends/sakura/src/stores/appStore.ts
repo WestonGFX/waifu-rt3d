@@ -27,6 +27,9 @@ interface AppState {
   activeOverlay: Overlay;
   openOverlay: (overlay: 'settings' | 'memory') => void;
   closeOverlay: () => void;
+  /** When set, SettingsView opens to this tab on next open. Cleared after use. */
+  settingsInitTab: string | null;
+  openSettingsTab: (tab: string) => void;
 
   // LLM status
   llmStatus: LlmStatus;
@@ -80,6 +83,8 @@ export const useAppStore = create<AppState>()(
       activeOverlay: null,
       openOverlay: (overlay) => set({ activeOverlay: overlay }),
       closeOverlay: () => set({ activeOverlay: null }),
+      settingsInitTab: null,
+      openSettingsTab: (tab) => set({ activeOverlay: 'settings', settingsInitTab: tab }),
 
       // LLM status — polls /api/stats to detect provider & connectivity
       llmStatus: { connected: false, provider: '' },

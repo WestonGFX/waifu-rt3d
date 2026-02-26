@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { TabBar } from './components/TabBar';
 import { ChatsView } from './views/ChatsView';
+import { ChatThread } from './views/ChatThread';
 import { DiscoverView } from './views/DiscoverView';
 import { CreateView } from './views/CreateView';
 import { SettingsView } from './views/SettingsView';
@@ -20,7 +21,7 @@ function ViewRouter() {
 }
 
 export function App() {
-  const { loadCharacters, loadConfig } = useAppStore();
+  const { loadCharacters, loadConfig, inChatThread } = useAppStore();
   const { theme } = useTheme();
 
   useEffect(() => {
@@ -30,9 +31,15 @@ export function App() {
   }, []);
 
   return (
-    <div className="min-h-screen pb-12" style={{ backgroundColor: 'var(--color-background)' }}>
-      <ViewRouter />
-      <TabBar />
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
+      {inChatThread ? (
+        <ChatThread />
+      ) : (
+        <div className="pb-12">
+          <ViewRouter />
+          <TabBar />
+        </div>
+      )}
     </div>
   );
 }

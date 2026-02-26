@@ -1,0 +1,17 @@
+.dialogue-her {
+  border-left: 3px solid var(--color-accent);
+}
+
+.dialogue-you {
+  background-color: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+.dialogue-meta {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.dialogue-bubble:hover .dialogue-meta {
+  opacity: 1;
+}

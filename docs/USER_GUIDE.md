@@ -7,11 +7,30 @@
 - **Python 3.11+**
 - **LM Studio** (recommended) or any OpenAI-compatible LLM endpoint
 - macOS / Linux / Windows (WSL or native)
+- **Node.js 18+** (optional, only needed to build the Sakura frontend)
 
-### Setup
+### Option A: Interactive Installer (Recommended)
 
 ```bash
-# Clone
+git clone https://github.com/WestonGFX/waifu-rt3d.git
+cd waifu-rt3d
+./setup.sh
+```
+
+The installer guides you through:
+1. Python virtual environment creation
+2. Core dependency installation
+3. Optional TTS engine setup (Kokoro)
+4. Optional Sakura frontend build (requires Node.js 18+)
+5. Database initialization and migration
+
+**Other installer modes:**
+- `./setup.sh --repair` — Re-install deps, re-run migrations, verify config (fixes broken installs)
+- `./setup.sh --minimal` — Core deps only, skip TTS extras and Sakura build
+
+### Option B: Manual Setup
+
+```bash
 git clone https://github.com/WestonGFX/waifu-rt3d.git
 cd waifu-rt3d
 
@@ -22,6 +41,9 @@ pip install -r requirements.txt
 pip install edge-tts          # Microsoft Edge TTS (free, recommended)
 pip install faster-whisper    # Offline STT (CPU or GPU)
 pip install kokoro-onnx       # Kokoro TTS (local, high quality)
+
+# Optional: build the Sakura frontend (requires Node.js 18+)
+cd frontends/sakura && npm install && npm run build && cd ../..
 
 # Run
 python backend/server.py
@@ -253,7 +275,63 @@ Height: 1080
 
 ---
 
-## 9. Keyboard Shortcuts
+## 9. Sakura Frontend
+
+Sakura is a chat-first consumer UI built with React 19, designed as an alternative to the Neon cyberpunk dashboard. It emphasizes conversation over configuration.
+
+### Accessing Sakura
+
+- Visit **http://localhost:8080/sakura** directly
+- Or set `"default_frontend": "sakura"` in `backend/config/app.json` to make it the default at `/`
+- The Neon frontend remains available at `/neon` regardless of the default setting
+
+### Theme Modes
+
+Sakura has two visual themes, switchable in Settings:
+
+- **Sakura** (default) — Warm rose-pink palette (#FFF5F7 background, #E8788A accent). Soft cherry blossom aesthetic.
+- **Crystal** — Cool ice-blue palette (#F8FAFB background, #6B8AED accent). Clean and minimal.
+
+### Navigation
+
+A bottom tab bar provides access to five sections:
+
+| Tab | Shortcut | Description |
+|-----|----------|-------------|
+| **Chats** | `Ctrl+1` | Character list sorted by recent activity. Tap a character to open the chat thread. |
+| **Discover** | `Ctrl+2` | Placeholder for future community character browsing. |
+| **Create** | `Ctrl+3` | 5-step character creation wizard (Identity, Appearance, Voice, Personality, Review). |
+| **Memory** | `Ctrl+4` | Slide-out panel showing context budget, RAG status, and session stats. |
+| **Settings** | `Ctrl+5` | Progressive disclosure settings with Advanced and Compact mode toggles. |
+
+### Chat Thread
+
+The chat uses a visual novel dialogue style:
+- **Her messages** — Full-width card with character name, dialogue text, and small audio/info icons
+- **Your messages** — Right-aligned accent-colored bubbles
+
+The chat header shows the character's name, online status, and an ambient idle phrase (e.g., "daydreaming...", "humming a song~"). Click the **eye icon** to toggle the 3D model panel (slides in from the right, 40% width).
+
+### Character Creation Wizard
+
+The 5-step wizard guides you through:
+
+1. **Identity** — Name, greeting message, system prompt
+2. **Appearance** — VRM model selection from server
+3. **Voice** — TTS provider and voice picker with test button
+4. **Personality** — 5 animation sliders (energy, confidence, nervousness, expressiveness, playfulness)
+5. **Review** — Summary of all settings before creation
+
+### Settings
+
+Sakura's settings use progressive disclosure:
+- **Standard mode** (default) — Shows only essential settings: theme, voice, AI model, behavior
+- **Advanced mode** (toggle) — Reveals all settings including temperature, history limit, developer options
+- **Compact mode** (toggle) — Hides inline descriptions for a tighter layout, keeps hover tooltips
+
+---
+
+## 10. Keyboard Shortcuts
 
 Open the keyboard shortcut editor from **Settings > Shortcuts**.
 
@@ -266,28 +344,33 @@ Shortcuts are fully customizable via the in-app editor.
 
 ---
 
-## 10. Settings Reference
+## 11. Settings Reference
 
-Settings are stored in `backend/config/app.json` and editable via the Settings panel.
+Settings are stored in `backend/config/app.json` and editable via the Settings panel in both Neon and Sakura frontends.
 
-### Key Settings
+For the complete reference of all 75+ configuration keys with types, defaults, valid values, and descriptions, see **[SETTINGS_REFERENCE.md](SETTINGS_REFERENCE.md)**.
+
+### Quick Reference (Most Common)
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `llm.provider` | `lmstudio` | LLM provider |
+| `llm.provider` | `lmstudio` | LLM provider (`lmstudio`, `ollama`, `local`, `gemini`, `claude`) |
 | `llm.endpoint` | `http://127.0.0.1:1234/v1` | LLM API endpoint |
 | `llm.history_limit` | `30` | Max messages sent to LLM (0 = unlimited) |
+| `temperature` | `0.7` | LLM creativity (0.1–2.0) |
+| `context_limit` | `131072` | Max token context window |
 | `tts.provider` | `edge-tts` | TTS provider |
 | `tts.voice_id` | `en-US-AriaNeural` | Default voice |
-| `stt.provider` | `browser` | STT provider |
-| `vad_threshold` | `0.01` | VAD noise gate sensitivity |
-| `asr_min_confidence` | `0` | Min ASR confidence (0 = accept all) |
-| `shadow_quality` | `off` | Shadow quality (off/soft/sharp) |
-| `font_size` | `medium` | Chat font size (small/medium/large) |
+| `tts.auto_speak` | `true` | Auto-play TTS after each response |
+| `asr.provider` | `browser` | STT provider |
+| `vad_threshold` | `0.015` | VAD noise gate sensitivity (0.001–0.05) |
+| `shadow_quality` | `off` | 3D shadow quality (off/soft/sharp) |
+| `default_frontend` | `neon` | Which frontend to serve at `/` (`neon` or `sakura`) |
+| `content_filter_level` | `1` | Content safety (-1=NSFW, 0=model defaults, 1–3=filtered) |
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 ### Backend won't start
 
@@ -315,15 +398,23 @@ Settings are stored in `backend/config/app.json` and editable via the Settings p
 - Check browser console (F12) for loading errors
 - VRM 0.x and 1.x formats are both supported
 
+### Sakura frontend not loading
+
+- Ensure the frontend has been built: `cd frontends/sakura && npm install && npm run build`
+- Visit `/sakura` directly — it requires a production build (the dev server is separate)
+- For development: `cd frontends/sakura && npm run dev` (serves on port 5175 with hot reload)
+- Check that `frontends/sakura/dist/` exists and contains `index.html`
+
 ### Database issues
 
 - The database auto-migrates on startup (currently schema v16)
 - For corruption, delete `backend/storage/app.db` and restart (loses data)
+- You can also run `./setup.sh --repair` to re-run migrations and verify config
 - SQLite WAL mode is enabled for concurrent read/write
 
 ---
 
-## 12. Running Tests
+## 13. Running Tests
 
 ```bash
 # Run all 98 tests

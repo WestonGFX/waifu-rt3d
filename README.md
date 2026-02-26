@@ -5,6 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](requirements.txt)
 [![Tests](https://img.shields.io/badge/tests-98%20passed-brightgreen)](backend/tests/)
 [![Schema](https://img.shields.io/badge/DB%20schema-v16-purple)](#)
+[![Frontends](https://img.shields.io/badge/frontends-Neon%20%7C%20Sakura-ff69b4)](#dual-frontend-architecture)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 <p align="center">
@@ -35,10 +36,19 @@ Waifu-RT3D is a **full-stack AI companion platform** where 3D anime characters c
 - **LM Studio** (recommended) or any OpenAI-compatible LLM endpoint
 - macOS / Linux / Windows (WSL or native)
 
-### Installation
+### Option A: Interactive Installer (Recommended)
 
 ```bash
-# Clone
+git clone https://github.com/WestonGFX/waifu-rt3d.git
+cd waifu-rt3d
+./setup.sh
+```
+
+The installer walks you through Python venv creation, dependency installation, optional TTS/Sakura frontend setup, and database initialization. It also supports `--repair` (fix existing installs) and `--minimal` (core deps only).
+
+### Option B: Manual Installation
+
+```bash
 git clone https://github.com/WestonGFX/waifu-rt3d.git
 cd waifu-rt3d
 
@@ -49,6 +59,9 @@ pip install -r requirements.txt
 pip install edge-tts          # Microsoft Edge TTS (free, recommended)
 pip install faster-whisper    # Offline STT (CPU or GPU)
 pip install kokoro-onnx       # Kokoro TTS (local, high quality)
+
+# Optional: build Sakura frontend (requires Node.js 18+)
+cd frontends/sakura && npm install && npm run build && cd ../..
 
 # Run
 python backend/server.py
@@ -149,8 +162,18 @@ Additional TTS features:
 - **Character diary** — LLM-written session summaries that influence future behavior
 - **Anniversary tracking** — milestone detection based on first chat date
 
+### Dual Frontend Architecture
+
+Two complete frontends sharing the same backend:
+
+- **Neon** (default) — Cyberpunk bento-grid dashboard, vanilla JS, power-user focused
+- **Sakura** (new) — Clean, chat-first consumer UI with visual novel dialogue. React 19 + Vite + Tailwind CSS + Framer Motion. Two theme modes: Sakura (warm rose pink) and Crystal (cool ice blue).
+
+Switch frontends via `default_frontend` in config or visit `/neon` and `/sakura` directly. Both use the same API and share the 3D viewer iframe.
+
 ### UI / UX
 - **Cyberpunk "Neon" bento-grid layout** — no framework, vanilla JS modules
+- **Sakura chat-first layout** — React 19, visual novel dialogue bubbles, progressive disclosure settings, 5-step character creation wizard
 - **Markdown chat rendering** — code blocks, bold, lists in AI responses
 - **Token counter** — real-time generation stats (tokens, tok/s, latency)
 - **Timestamps toggle** — show/hide message timestamps
@@ -172,7 +195,7 @@ Additional TTS features:
 
 ## Configuration
 
-Settings are stored in `backend/config/app.json` and editable via the in-app **Settings** panel (gear icon or `Ctrl+,`).
+Settings are stored in `backend/config/app.json` and editable via the in-app **Settings** panel (gear icon or `Ctrl+,`). See [docs/SETTINGS_REFERENCE.md](docs/SETTINGS_REFERENCE.md) for the complete reference of all 75+ configuration keys.
 
 ### LLM Setup
 
@@ -237,19 +260,31 @@ waifu-rt3d/
 │   │   └── images/            # AI-generated images
 │   └── tests/                 # 98 pytest tests
 ├── frontends/
-│   └── neon/                  # Cyberpunk bento-grid UI
-│       ├── index.html
-│       ├── js/
-│       │   ├── core/          # StateManager, EventBus, Logger, API
-│       │   ├── components/    # ChatInterface, SettingsModal, WaifuCreator, …
-│       │   └── utils/         # Toast, KeyboardShortcuts
-│       ├── css/               # Cyber glass theme stylesheets
-│       └── viewer/
-│           ├── viewer.html    # Three.js VRM renderer (6-layer animation)
-│           └── overlay.html   # OBS transparent overlay
+│   ├── shared/                # Assets shared between frontends
+│   │   ├── viewer/            # Three.js VRM renderer + OBS overlay
+│   │   │   ├── viewer.html    # 6-layer animation pipeline
+│   │   │   └── overlay.html   # OBS transparent overlay
+│   │   └── lib/               # Three.js, GLTFLoader, Live2D, PixiJS
+│   ├── neon/                  # Cyberpunk bento-grid UI (vanilla JS)
+│   │   ├── index.html
+│   │   ├── js/
+│   │   │   ├── core/          # StateManager, EventBus, Logger, API
+│   │   │   ├── components/    # ChatInterface, SettingsModal, WaifuCreator, …
+│   │   │   └── utils/         # Toast, KeyboardShortcuts, VoicePicker
+│   │   └── css/               # Cyber glass theme stylesheets
+│   └── sakura/                # Chat-first consumer UI (React 19 + Vite)
+│       └── src/
+│           ├── views/         # ChatsView, ChatThread, CreateView, SettingsView
+│           ├── components/    # DialogueBubble, ModelPanel, TabBar, VoicePicker
+│           ├── hooks/         # useTheme, useViewer, useProactive
+│           ├── stores/        # Zustand (appStore, chatStore)
+│           ├── styles/        # Sakura + Crystal CSS themes
+│           └── lib/           # Typed API client, event bus
+├── setup.sh                   # Interactive installer (fresh + repair modes)
 └── docs/
     ├── plans/                 # Design docs and implementation plans
     ├── USER_GUIDE.md
+    ├── SETTINGS_REFERENCE.md  # All 75+ configuration keys
     ├── VRM_INTEGRATION.md
     └── CHANGELOG.md
 ```
@@ -301,17 +336,18 @@ Tests cover: API endpoints, character CRUD, agentic tool execution, capability p
 
 ## Roadmap
 
-### Coming Soon
-- **TTS Model Manager** — browse, download, and manage local TTS voice packs on-demand ([design doc](docs/plans/2026-02-25-tts-model-manager-design.md))
-- **Voice picker dropdown** — replace free-text voice ID with searchable installed-voice selector
-- **TTS provider health checks** — verify which engines are running
+### Recently Completed
+- **Sakura Frontend** — chat-first consumer UI with visual novel dialogue, two themes, progressive disclosure settings
+- **TTS Model Manager** — browse, download, and manage local TTS voice packs on-demand
+- **Voice picker dropdown** — grouped voice selector replacing free-text voice ID inputs
+- **Interactive installer** — `setup.sh` with fresh install, repair, and minimal modes
 
 ### Future
 - Electron desktop app (macOS + Windows)
 - Twitch chat integration
-- V2 React frontend (React 19 + Vite + R3F + Tailwind v4)
 - Docker Compose one-command setup
 - Plugin / extension system
+- TTS provider health checks — verify which engines are running
 
 ---
 

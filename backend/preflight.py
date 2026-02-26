@@ -1043,6 +1043,11 @@ def ensure_db():
         if final_version > 16:
             logger.warning(f"Database is newer than application (v{final_version} > v16). Some features might be unused.")
 
+        # Sync PRAGMA user_version with our schema_version table so external
+        # tools (DB Browser, etc.) can see the version without querying tables.
+        con.execute(f"PRAGMA user_version = {final_version}")
+        con.commit()
+
         logger.info(f"✅ Database ready (schema v{final_version} active — v16 supports animation profiles)")
 
     except Exception as e:

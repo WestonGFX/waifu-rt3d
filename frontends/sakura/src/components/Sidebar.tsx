@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain, Settings,
   ChevronLeft, ChevronRight, Plus, Search
@@ -338,11 +338,18 @@ interface SidebarCharItemProps {
 
 /**
  * Compact character row in the sidebar chat list.
- * Shows avatar circle, name, and a faint active highlight.
+ * Shows avatar circle (with onError fallback to initial), name, and active highlight.
+ *
+ * Uses an `<img>` tag with onError handler so that convention-based pixel portrait
+ * URLs that 404 gracefully fall back to a gradient initial circle.
  */
 function SidebarCharItem({ character, active, onClick }: SidebarCharItemProps) {
   const avatarUrl = resolveAvatarUrl(character.name, character.avatar_url);
-  const hasImage = avatarUrl !== null;
+  const [imgFailed, setImgFailed] = useState(false);
+  const handleImgError = useCallback(() => setImgFailed(true), []);
+
+  const showImage = avatarUrl !== null && !imgFailed;
+  const initial = character.name?.[0] ?? '?';
 
   return (
     <button
@@ -353,18 +360,26 @@ function SidebarCharItem({ character, active, onClick }: SidebarCharItemProps) {
         border: active ? '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)' : '1px solid transparent',
       }}
     >
-      <div
-        className="w-9 h-9 rounded-full bg-cover bg-center flex-shrink-0 flex items-center justify-center"
-        style={{
-          backgroundImage: hasImage ? `url(${avatarUrl})` : undefined,
-          backgroundColor: hasImage ? undefined : 'var(--color-accent)',
-          color: 'var(--color-accent-text)',
-          fontSize: '0.85rem',
-          fontWeight: 600,
-        }}
-      >
-        {!hasImage && (character.name?.[0] ?? '?')}
-      </div>
+      {showImage ? (
+        <img
+          src={avatarUrl!}
+          alt={character.name || ''}
+          onError={handleImgError}
+          className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+        />
+      ) : (
+        <div
+          className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center"
+          style={{
+            background: 'var(--color-accent-gradient)',
+            color: 'var(--color-accent-text)',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+          }}
+        >
+          {initial}
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <p
           className="text-xs font-semibold truncate"

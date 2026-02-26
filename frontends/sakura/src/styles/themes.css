@@ -1,0 +1,39 @@
+/* Sakura Mode (default) — warm rose */
+:root, [data-theme="sakura"] {
+  --color-background: #FFF5F7;
+  --color-surface: #FFFFFF;
+  --color-border: #F3E0E6;
+  --color-text-primary: #2D1B24;
+  --color-text-secondary: #9B8A92;
+  --color-accent: #E8788A;
+  --color-accent-hover: #D4566A;
+  --color-accent-text: #FFFFFF;
+  --color-success: #7BC9A0;
+  --color-warning: #F0C27A;
+  --color-danger: #E05A6D;
+  --shadow-card: 0 2px 12px rgba(232, 120, 138, 0.08);
+  --shadow-elevated: 0 8px 32px rgba(232, 120, 138, 0.12);
+  --radius-card: 16px;
+  --radius-button: 12px;
+  --radius-input: 10px;
+}
+
+/* Crystal Mode — cool ice */
+[data-theme="crystal"] {
+  --color-background: #F8FAFB;
+  --color-surface: #FFFFFF;
+  --color-border: #E2E8F0;
+  --color-text-primary: #1A202C;
+  --color-text-secondary: #94A3B8;
+  --color-accent: #6B8AED;
+  --color-accent-hover: #5472D4;
+  --color-accent-text: #FFFFFF;
+  --color-success: #68D391;
+  --color-warning: #F6BE5C;
+  --color-danger: #FC6B6B;
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --radius-card: 12px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+}

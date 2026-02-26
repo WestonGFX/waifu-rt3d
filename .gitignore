@@ -5,6 +5,7 @@ __pycache__/
 *.pyd
 *.egg-info/
 dist/
+!frontends/sakura/dist/
 build/
 venv/
 .venv/

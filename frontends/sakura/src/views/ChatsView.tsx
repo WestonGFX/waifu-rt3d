@@ -6,7 +6,7 @@ import { CharacterCard } from '../components/CharacterCard';
  * Displays all characters as tappable cards that open a ChatThread.
  */
 export function ChatsView() {
-  const { characters, openChatThread } = useAppStore();
+  const { characters, selectCharacter } = useAppStore();
 
   return (
     <div className="p-4 max-w-2xl mx-auto">
@@ -40,7 +40,7 @@ export function ChatsView() {
             <CharacterCard
               key={char.id}
               character={char}
-              onClick={() => openChatThread(char)}
+              onClick={() => selectCharacter(char)}
             />
           ))
         )}

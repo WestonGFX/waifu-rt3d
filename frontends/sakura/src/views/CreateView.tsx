@@ -14,7 +14,7 @@ const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i;
 
 /** 5-step character creation wizard with animated transitions. */
 export function CreateView() {
-  const { loadCharacters, setActiveTab } = useAppStore();
+  const { loadCharacters, setSidebarSection, selectCharacter } = useAppStore();
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState<'left' | 'right'>('left');
   const [data, setData] = useState<Partial<Character>>({
@@ -59,9 +59,14 @@ export function CreateView() {
   const create = async () => {
     setCreating(true);
     try {
-      await api.createCharacter(data);
+      const created = await api.createCharacter(data);
       await loadCharacters();
-      setActiveTab('chats');
+      // Switch to the new character's chat thread
+      if (created?.id) {
+        selectCharacter(created);
+      } else {
+        setSidebarSection('chats');
+      }
     } catch (e) {
       console.error('Failed to create character:', e);
     } finally {
@@ -90,7 +95,7 @@ export function CreateView() {
   };
 
   return (
-    <div className="p-4 max-w-xl mx-auto">
+    <div className="p-4 max-w-xl mx-auto h-screen overflow-y-auto">
       <h2
         className="text-xl font-bold mb-1 tracking-tight"
         style={{ color: 'var(--color-text-primary)' }}

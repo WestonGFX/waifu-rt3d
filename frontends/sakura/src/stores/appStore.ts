@@ -3,18 +3,30 @@ import { persist } from 'zustand/middleware';
 import type { Character, AppConfig } from '../lib/types';
 import { api } from '../lib/api';
 
-type Tab = 'chats' | 'discover' | 'create' | 'memory' | 'settings';
+/** Which section is expanded in the sidebar. */
+type SidebarSection = 'chats' | 'characters' | 'create';
 type ChatLayout = 'chat-first' | 'model-first' | 'split';
 
+/** Overlay drawers that slide out over the main content. */
+type Overlay = 'settings' | 'memory' | null;
+
 interface AppState {
-  // Navigation
-  activeTab: Tab;
-  setActiveTab: (tab: Tab) => void;
+  // Sidebar
+  sidebarCollapsed: boolean;
+  toggleSidebar: () => void;
+  sidebarSection: SidebarSection;
+  setSidebarSection: (section: SidebarSection) => void;
+
+  // Overlay drawers (settings, memory)
+  activeOverlay: Overlay;
+  openOverlay: (overlay: 'settings' | 'memory') => void;
+  closeOverlay: () => void;
 
   // Characters
   characters: Character[];
   activeCharacter: Character | null;
   setActiveCharacter: (char: Character) => void;
+  selectCharacter: (char: Character) => void;
   loadCharacters: () => Promise<void>;
 
   // Config
@@ -36,7 +48,9 @@ interface AppState {
   compactMode: boolean;
   toggleCompactMode: () => void;
 
-  // Chat thread navigation
+  // Legacy compat (kept for components that still reference these)
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
   inChatThread: boolean;
   openChatThread: (char: Character) => void;
   closeChatThread: () => void;
@@ -45,17 +59,28 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      activeTab: 'chats',
-      setActiveTab: (tab) => set({ activeTab: tab }),
+      // Sidebar
+      sidebarCollapsed: false,
+      toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      sidebarSection: 'chats',
+      setSidebarSection: (section) => set({ sidebarSection: section }),
 
+      // Overlay drawers
+      activeOverlay: null,
+      openOverlay: (overlay) => set({ activeOverlay: overlay }),
+      closeOverlay: () => set({ activeOverlay: null }),
+
+      // Characters
       characters: [],
       activeCharacter: null,
       setActiveCharacter: (char) => set({ activeCharacter: char }),
+      selectCharacter: (char) => set({ activeCharacter: char, sidebarSection: 'chats' }),
       loadCharacters: async () => {
         const characters = await api.getCharacters();
         set({ characters });
       },
 
+      // Config
       config: {},
       loadConfig: async () => {
         const config = await api.getConfig();
@@ -67,6 +92,7 @@ export const useAppStore = create<AppState>()(
         set({ config: merged });
       },
 
+      // Layout
       chatLayout: 'chat-first',
       setChatLayout: (layout) => set({ chatLayout: layout }),
       modelPanelOpen: false,
@@ -74,14 +100,22 @@ export const useAppStore = create<AppState>()(
       memoryPanelOpen: false,
       toggleMemoryPanel: () => set((s) => ({ memoryPanelOpen: !s.memoryPanelOpen })),
 
+      // Settings
       advancedMode: false,
       toggleAdvancedMode: () => set((s) => ({ advancedMode: !s.advancedMode })),
       compactMode: false,
       toggleCompactMode: () => set((s) => ({ compactMode: !s.compactMode })),
 
-      inChatThread: false,
-      openChatThread: (char) => set({ activeCharacter: char, inChatThread: true }),
-      closeChatThread: () => set({ inChatThread: false })
+      // Legacy compat — maps to new layout for components still using old API
+      activeTab: 'chats',
+      setActiveTab: (tab) => {
+        if (tab === 'settings') set({ activeOverlay: 'settings' });
+        else if (tab === 'memory') set({ activeOverlay: 'memory' });
+        else set({ sidebarSection: tab as SidebarSection });
+      },
+      inChatThread: true,
+      openChatThread: (char) => set({ activeCharacter: char }),
+      closeChatThread: () => set({ activeCharacter: null })
     }),
     {
       name: 'sakura-app',
@@ -89,7 +123,8 @@ export const useAppStore = create<AppState>()(
         chatLayout: s.chatLayout,
         advancedMode: s.advancedMode,
         compactMode: s.compactMode,
-        activeTab: s.activeTab
+        sidebarCollapsed: s.sidebarCollapsed,
+        sidebarSection: s.sidebarSection
       })
     }
   )

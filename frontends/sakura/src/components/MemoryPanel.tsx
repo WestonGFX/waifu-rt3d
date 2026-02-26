@@ -13,7 +13,9 @@ interface ContextBudget {
 
 /** Right slide-out panel showing memory bank, context info, and token budget. */
 export function MemoryPanel() {
-  const { memoryPanelOpen, toggleMemoryPanel, activeCharacter } = useAppStore();
+  const { activeOverlay, closeOverlay, activeCharacter } = useAppStore();
+  const memoryPanelOpen = activeOverlay === 'memory';
+  const toggleMemoryPanel = closeOverlay;
   const [budget, setBudget] = useState<ContextBudget | null>(null);
 
   useEffect(() => {

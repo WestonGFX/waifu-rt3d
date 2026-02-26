@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Eye, MessageSquare } from 'lucide-react';
+import { Eye, MessageSquare } from 'lucide-react';
 import type { Character } from '../lib/types';
 import { useAppStore } from '../stores/appStore';
 
@@ -19,7 +19,7 @@ const IDLE_PHRASES = [
  * a sense of life even when no messages are being exchanged.
  */
 export function StatusBar({ character, onOpenSessions }: { character: Character; onOpenSessions?: () => void }) {
-  const { closeChatThread, toggleModelPanel, modelPanelOpen } = useAppStore();
+  const { toggleModelPanel, modelPanelOpen } = useAppStore();
   const [idlePhrase, setIdlePhrase] = useState(IDLE_PHRASES[0]);
 
   useEffect(() => {
@@ -42,13 +42,6 @@ export function StatusBar({ character, onOpenSessions }: { character: Character;
         borderBottom: '1px solid var(--color-border-subtle)'
       }}
     >
-      <button
-        onClick={closeChatThread}
-        className="p-1.5 rounded-lg transition-colors duration-150"
-        style={{ color: 'var(--color-text-secondary)' }}
-      >
-        <ArrowLeft size={20} />
-      </button>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm truncate" style={{ color: 'var(--color-text-primary)' }}>

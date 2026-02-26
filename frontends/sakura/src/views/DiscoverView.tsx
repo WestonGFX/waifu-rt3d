@@ -52,7 +52,7 @@ const PRESETS = [
  * Shows Neon's 5 archetypes as browsable cards with one-click creation.
  */
 export function DiscoverView() {
-  const { loadCharacters, setActiveTab } = useAppStore();
+  const { loadCharacters, setSidebarSection } = useAppStore();
   const [creating, setCreating] = useState<string | null>(null);
 
   const createFromPreset = async (preset: typeof PRESETS[0]) => {
@@ -64,7 +64,7 @@ export function DiscoverView() {
         greeting_message: preset.greeting,
       });
       await loadCharacters();
-      setActiveTab('chats');
+      setSidebarSection('chats');
     } catch (e) {
       console.error('Failed to create character:', e);
     } finally {
@@ -136,7 +136,7 @@ export function DiscoverView() {
 
         {/* Custom card */}
         <button
-          onClick={() => setActiveTab('create')}
+          onClick={() => setSidebarSection('create')}
           className="character-card text-left p-4 transition-all duration-200"
           style={{
             backgroundColor: 'var(--color-surface)',

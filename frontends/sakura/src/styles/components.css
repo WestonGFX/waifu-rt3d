@@ -62,3 +62,30 @@ textarea:focus {
 }
 .typing-dot:nth-child(2) { animation-delay: 0.2s; }
 .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Sidebar — Desktop Navigation
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── Nav item hover ─────────────────────────────────────────────────── */
+.sidebar-nav-item:hover {
+  background-color: var(--color-accent-soft) !important;
+  color: var(--color-accent) !important;
+}
+
+/* ─── Character row hover ────────────────────────────────────────────── */
+.sidebar-char-item:hover {
+  background-color: color-mix(in srgb, var(--color-accent-soft) 50%, transparent) !important;
+}
+
+/* ─── Preset card hover ──────────────────────────────────────────────── */
+.sidebar-preset-card:hover {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 1px var(--color-accent-soft);
+}
+
+/* ─── Bottom toolbar button hover ────────────────────────────────────── */
+.sidebar-tool-btn:hover {
+  background-color: var(--color-accent-soft);
+  color: var(--color-accent) !important;
+}

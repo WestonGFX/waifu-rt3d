@@ -93,6 +93,10 @@ class AgentRunner:
             Event dicts describing tokens, tool calls, and tool results.
         """
         native_mode = hasattr(adapter, "supports_tools") and adapter.supports_tools()
+        # When the adapter supports tools but can't guarantee the model uses
+        # them (e.g. local models via LM Studio), inject XML tool descriptions
+        # as a fallback alongside the native tools parameter.
+        native_guaranteed = hasattr(adapter, "native_tools_guaranteed") and adapter.native_tools_guaranteed()
         working_messages = copy.deepcopy(messages)
 
         # Build OpenAI-format tool schemas for native mode adapters
@@ -101,8 +105,11 @@ class AgentRunner:
         for round_idx in range(self.max_rounds):
             logger.debug("AgentRunner round %d/%d (native=%s)", round_idx + 1, self.max_rounds, native_mode)
 
-            # In XML mode, inject tool prompt into system message
-            if not native_mode and tools:
+            # Inject XML tool prompt into system message when:
+            # - Not in native mode (XML is the only tool protocol), OR
+            # - In native mode but tools aren't guaranteed (local models) —
+            #   inject XML as fallback so the model can use either protocol
+            if tools and (not native_mode or not native_guaranteed):
                 call_messages = self._inject_tool_prompt(working_messages, tools)
             else:
                 call_messages = working_messages

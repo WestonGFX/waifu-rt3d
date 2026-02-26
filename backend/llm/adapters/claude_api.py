@@ -57,6 +57,10 @@ class ClaudeAPIAdapter(LLMAdapter):
         """Anthropic Claude API supports native tool use."""
         return True
 
+    def native_tools_guaranteed(self) -> bool:
+        """Claude always respects the tools parameter — no XML fallback needed."""
+        return True
+
     # ------------------------------------------------------------------ #
     # Internal helpers
     # ------------------------------------------------------------------ #

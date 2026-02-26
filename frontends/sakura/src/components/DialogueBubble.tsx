@@ -31,6 +31,24 @@ interface DialogueBubbleProps {
   character?: Character;
   onPlayAudio?: () => void;
   isPlaying?: boolean;
+  searchQuery?: string;
+}
+
+/** Highlight occurrences of `query` inside `text` using <mark> spans. */
+function HighlightedText({ text, query }: { text: string; query: string }) {
+  if (!query.trim()) return <>{text}</>;
+  const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query.toLowerCase() ? (
+          <mark key={i} style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent)', borderRadius: '2px', padding: '0 1px' }}>
+            {part}
+          </mark>
+        ) : part
+      )}
+    </>
+  );
 }
 
 /**
@@ -39,7 +57,7 @@ interface DialogueBubbleProps {
  * Assistant messages render as left-aligned cards with avatar, name, and hover metadata.
  * Uses CSS animations from dialogue.css for entrance and components.css for typing dots.
  */
-export function DialogueBubble({ message, character, onPlayAudio, isPlaying }: DialogueBubbleProps) {
+export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '' }: DialogueBubbleProps) {
   if (message.role === 'user') {
     return (
       <div className="flex justify-end mb-3">
@@ -47,7 +65,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying }: D
           className="dialogue-bubble dialogue-you px-4 py-2.5 max-w-[75%] text-sm"
           style={{ borderRadius: 'var(--radius-card)' }}
         >
-          {message.text}
+          <HighlightedText text={message.text} query={searchQuery} />
         </div>
       </div>
     );
@@ -109,7 +127,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying }: D
                 style={{ backgroundColor: 'var(--color-accent)' }} />
             </span>
           ) : (
-            message.text
+            <HighlightedText text={message.text} query={searchQuery} />
           )}
         </div>
         <MessageMeta message={message} />

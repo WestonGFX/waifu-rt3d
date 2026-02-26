@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Send, Square } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
@@ -19,6 +19,7 @@ export function ChatThread() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [sessionsOpen, setSessionsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (!activeCharacter) return;
@@ -55,6 +56,28 @@ export function ChatThread() {
     }
   };
 
+  // Filter messages by search query
+  const visibleMessages = useMemo(() => {
+    if (!searchQuery.trim()) return messages;
+    const q = searchQuery.toLowerCase();
+    return messages.filter(m => m.text?.toLowerCase().includes(q));
+  }, [messages, searchQuery]);
+
+  const handleExport = () => {
+    const lines = messages.map(m => {
+      const who = m.role === 'user' ? 'You' : (activeCharacter?.name ?? 'AI');
+      return `[${who}]: ${m.text}`;
+    });
+    const content = `${activeCharacter?.name ?? 'Chat'} — exported ${new Date().toLocaleString()}\n\n${lines.join('\n\n')}`;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(activeCharacter?.name ?? 'chat').replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const playAudio = (msg: { id: string; audioUrl?: string }) => {
     if (!msg.audioUrl) return;
     const audio = new Audio(msg.audioUrl);
@@ -71,15 +94,26 @@ export function ChatThread() {
     <div className="flex h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
       {/* Chat column */}
       <div className="flex flex-col flex-1 min-w-0">
-        <StatusBar character={activeCharacter} onOpenSessions={() => setSessionsOpen(true)} />
+        <StatusBar
+          character={activeCharacter}
+          onOpenSessions={() => setSessionsOpen(true)}
+          onSearchChange={setSearchQuery}
+          onExport={handleExport}
+        />
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 max-w-3xl mx-auto w-full">
-          {messages.map((msg) => (
+          {searchQuery && (
+            <p className="text-center text-xs mb-3" style={{ color: 'var(--color-text-tertiary)' }}>
+              {visibleMessages.length === 0 ? 'No messages match' : `${visibleMessages.length} message${visibleMessages.length === 1 ? '' : 's'} found`}
+            </p>
+          )}
+          {visibleMessages.map((msg) => (
             <DialogueBubble
               key={msg.id}
               message={msg}
               character={activeCharacter}
               onPlayAudio={() => playAudio(msg)}
               isPlaying={playingAudioId === msg.id}
+              searchQuery={searchQuery}
             />
           ))}
         </div>

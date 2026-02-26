@@ -589,6 +589,7 @@ def logo_png():
     return JSONResponse({"error": "not found"}, status_code=404)
 
 # Mount Static Files
+app.mount("/shared", StaticFiles(directory=str(Path(ROOT_DIR) / "frontends" / "shared")), name="shared")
 app.mount("/assets", StaticFiles(directory=str(FRONTEND / "assets")), name="assets")
 app.mount("/files", StaticFiles(directory=str(STORAGE)), name="files")
 app.mount("/frontend", StaticFiles(directory=str(FRONTEND)), name="frontend")

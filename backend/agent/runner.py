@@ -2,8 +2,8 @@
 
 The :class:`AgentRunner` drives multi-round conversations where the LLM
 can invoke tools, receive results, and continue generating.  It supports
-both native tool-calling (OpenAI-style) and XML-based tool calls for
-local models that lack a built-in tool protocol.
+both native tool-calling (OpenAI/Anthropic-style) and XML-based tool calls
+for local models that lack a built-in tool protocol.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import inspect
+import json
 import logging
 import time
 from typing import Any, AsyncGenerator
@@ -94,6 +95,9 @@ class AgentRunner:
         native_mode = hasattr(adapter, "supports_tools") and adapter.supports_tools()
         working_messages = copy.deepcopy(messages)
 
+        # Build OpenAI-format tool schemas for native mode adapters
+        tool_schemas = self.registry.get_schemas() if (native_mode and tools) else None
+
         for round_idx in range(self.max_rounds):
             logger.debug("AgentRunner round %d/%d (native=%s)", round_idx + 1, self.max_rounds, native_mode)
 
@@ -102,6 +106,11 @@ class AgentRunner:
                 call_messages = self._inject_tool_prompt(working_messages, tools)
             else:
                 call_messages = working_messages
+
+            # Build kwargs for the adapter, including tool schemas for native mode
+            adapter_kwargs = dict(llm_kwargs)
+            if native_mode and tool_schemas:
+                adapter_kwargs["tools"] = tool_schemas
 
             # Run the synchronous chat_stream in a threadpool and collect output
             tokens: list[str] = []
@@ -113,7 +122,7 @@ class AgentRunner:
                 cfg.get("model", ""),
                 cfg.get("endpoint", ""),
                 cfg.get("api_key", ""),
-                **llm_kwargs,
+                **adapter_kwargs,
             )
 
             # chat_stream returns a sync generator; iterate it in threadpool
@@ -127,10 +136,19 @@ class AgentRunner:
 
             full_text = "".join(tokens)
 
-            # Parse tool calls
+            # Parse tool calls — native mode with XML fallback for local
+            # models that ignore the tools parameter but output XML tags.
             parsed_calls: list[ToolCallParsed] = []
             if native_mode and native_tool_calls:
                 parsed_calls = parse_native_tool_calls(native_tool_calls)
+            elif native_mode and not native_tool_calls and full_text:
+                # Fallback: model was sent tools natively but didn't use the
+                # protocol — check if it emitted XML tool calls in its text
+                # instead (common with local models via LM Studio/llama.cpp
+                # that don't support the OpenAI function-calling spec).
+                parsed_calls = parse_xml_tool_calls(full_text)
+                if parsed_calls:
+                    logger.info("Native tool mode active but model used XML fallback (%d calls)", len(parsed_calls))
             elif not native_mode:
                 parsed_calls = parse_xml_tool_calls(full_text)
 
@@ -184,15 +202,27 @@ class AgentRunner:
                     },
                 }
 
-                # Append assistant message and tool result to working messages
-                # so the next round has context about what happened
-                assistant_content = call.text_before + f"[Called tool: {call.name}]"
-                working_messages.append({"role": "assistant", "content": assistant_content})
-                tool_result_text = (
-                    f"Tool '{call.name}' returned: "
-                    + (str(result.data) if result.ok else f"ERROR: {result.error}")
-                )
-                working_messages.append({"role": "user", "content": tool_result_text})
+                # Append tool call + result to working messages for the next round.
+                # Format depends on whether we're in native or XML mode.
+                # Use native format only if the model actually used native tool
+                # calling (not the XML fallback path).
+                result_text = str(result.data) if result.ok else f"ERROR: {result.error}"
+                used_native_protocol = native_mode and bool(native_tool_calls)
+
+                if used_native_protocol:
+                    # Native mode: use structured assistant/tool messages so the
+                    # LLM sees properly formatted tool interactions.
+                    self._append_native_tool_turn(
+                        working_messages, call, result_text, full_text
+                    )
+                else:
+                    # XML mode: append as plain text user/assistant turns
+                    assistant_content = (call.text_before or "") + f"[Called tool: {call.name}]"
+                    working_messages.append({"role": "assistant", "content": assistant_content})
+                    working_messages.append({
+                        "role": "user",
+                        "content": f"Tool '{call.name}' returned: {result_text}",
+                    })
 
             # Emit text_after from the last call (if any)
             last_call = parsed_calls[-1]
@@ -200,6 +230,50 @@ class AgentRunner:
                 yield {"event": "token", "data": {"text": last_call.text_after}}
 
         # Loop exhausted without a plain-text reply — that's okay, we just stop
+
+    @staticmethod
+    def _append_native_tool_turn(
+        messages: list[dict],
+        call: ToolCallParsed,
+        result_text: str,
+        full_text: str,
+    ) -> None:
+        """Append a native-format tool call + result turn to the message list.
+
+        For providers that support native tool calling (OpenAI, Anthropic),
+        the conversation history must include properly structured tool
+        messages rather than plain text descriptions of tool usage.
+
+        This uses the OpenAI format (``tool_calls`` on the assistant message,
+        ``role: "tool"`` for the result), which both the OpenAI-compat and
+        Claude adapters can translate as needed.
+
+        Args:
+            messages: Working message list to append to (mutated in place).
+            call: The parsed tool call.
+            result_text: Stringified tool result or error.
+            full_text: Full text output from the LLM (text before tool calls).
+        """
+        # Assistant message with tool_calls array (OpenAI format)
+        messages.append({
+            "role": "assistant",
+            "content": full_text if full_text.strip() else None,
+            "tool_calls": [{
+                "id": call.id,
+                "type": "function",
+                "function": {
+                    "name": call.name,
+                    "arguments": json.dumps(call.args or {}),
+                },
+            }],
+        })
+
+        # Tool result message
+        messages.append({
+            "role": "tool",
+            "tool_call_id": call.id,
+            "content": result_text,
+        })
 
     @staticmethod
     async def _execute_tool(

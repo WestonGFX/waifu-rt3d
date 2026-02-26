@@ -10,6 +10,12 @@ type ChatLayout = 'chat-first' | 'model-first' | 'split';
 /** Overlay drawers that slide out over the main content. */
 type Overlay = 'settings' | 'memory' | null;
 
+/** LLM brain connection status shown in sidebar header. */
+interface LlmStatus {
+  connected: boolean;
+  provider: string;
+}
+
 interface AppState {
   // Sidebar
   sidebarCollapsed: boolean;
@@ -21,6 +27,10 @@ interface AppState {
   activeOverlay: Overlay;
   openOverlay: (overlay: 'settings' | 'memory') => void;
   closeOverlay: () => void;
+
+  // LLM status
+  llmStatus: LlmStatus;
+  pollLlmStatus: () => Promise<void>;
 
   // Characters
   characters: Character[];
@@ -69,6 +79,18 @@ export const useAppStore = create<AppState>()(
       activeOverlay: null,
       openOverlay: (overlay) => set({ activeOverlay: overlay }),
       closeOverlay: () => set({ activeOverlay: null }),
+
+      // LLM status — polls /api/stats to detect provider & connectivity
+      llmStatus: { connected: false, provider: '' },
+      pollLlmStatus: async () => {
+        try {
+          const stats = await api.getStats();
+          const provider = (stats.llm_provider as string) || (stats.provider as string) || '';
+          set({ llmStatus: { connected: true, provider } });
+        } catch {
+          set({ llmStatus: { connected: false, provider: '' } });
+        }
+      },
 
       // Characters
       characters: [],

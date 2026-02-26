@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Upload, Check } from 'lucide-react';
+import { Upload, Check, Zap } from 'lucide-react';
 import { WizardStep } from '../components/WizardStep';
 import { VoicePicker } from '../components/VoicePicker';
 import { api } from '../lib/api';
@@ -8,6 +8,25 @@ import { useAppStore } from '../stores/appStore';
 import type { Character } from '../lib/types';
 
 const STEPS = ['Identity', 'Appearance', 'Voice', 'Personality', 'Review'];
+
+/** Preset archetypes for quick-start character creation. */
+const PRESETS = [
+  { name: 'Tsundere', icon: '🔥', desc: 'Hot-tempered but secretly caring',
+    prompt: "You are a sharp-tongued tsundere. You deny your feelings but secretly care deeply. You get flustered when complimented and use phrases like 'b-baka!' when embarrassed. You're competitive, proud, but ultimately loyal.",
+    greeting: "D-don't get the wrong idea! I'm only talking to you because I'm bored!" },
+  { name: 'Kuudere', icon: '❄️', desc: 'Cool, calm, barely shows emotion',
+    prompt: 'You are a kuudere — cool, logical, and rarely express emotion. You speak concisely and analytically. When you do show warmth, it\'s subtle and meaningful.',
+    greeting: '...Hello. I suppose we can talk, if you want.' },
+  { name: 'Genki', icon: '⚡', desc: 'Hyper-energetic and optimistic',
+    prompt: "You are a genki girl — always bursting with energy and enthusiasm! You love fun, games, and making people smile.",
+    greeting: "Hiii~! Oh my gosh, I'm SO happy to meet you!!" },
+  { name: 'Onee-san', icon: '🌸', desc: 'Mature, caring older sister type',
+    prompt: "You are an onee-san type — a mature, caring older sister figure. You're nurturing but can be teasing.",
+    greeting: 'Ara ara~ Welcome. Make yourself comfortable.' },
+  { name: 'Goth', icon: '🦇', desc: 'Mysterious, dark aesthetic',
+    prompt: 'You are a gothic character who loves the occult and speaks in dramatic metaphors. Despite the dark exterior, you have a kind heart.',
+    greeting: 'The ancient prophecy foretold your arrival...' },
+];
 
 /** Image extensions the browser can render. */
 const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i;
@@ -120,6 +139,45 @@ export function CreateView() {
         {step === 0 && (
           <WizardStep key="identity" direction={direction}>
             <div className="space-y-4">
+              {/* Quick-start from preset template */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap size={14} style={{ color: 'var(--color-accent)' }} />
+                  <label className="text-sm font-medium">Start from template</label>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {PRESETS.map(preset => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      onClick={() => patch({
+                        name: preset.name,
+                        system_prompt: preset.prompt,
+                        greeting_message: preset.greeting,
+                      })}
+                      className="flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-all text-center"
+                      style={{
+                        backgroundColor: data.name === preset.name ? 'var(--color-accent-soft)' : 'var(--color-background)',
+                        border: data.name === preset.name
+                          ? '1px solid var(--color-accent)'
+                          : '1px solid var(--color-border-subtle)',
+                      }}
+                      title={preset.desc}
+                    >
+                      <span className="text-lg">{preset.icon}</span>
+                      <span className="text-[10px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                        {preset.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] mt-1.5 px-0.5" style={{ color: 'var(--color-text-tertiary)' }}>
+                  Click a template to pre-fill, then customize below
+                </p>
+              </div>
+
+              <hr style={{ borderColor: 'var(--color-border-subtle)' }} />
+
               <div>
                 <label className="text-sm font-medium block mb-1">Name</label>
                 <input type="text" value={data.name || ''} onChange={e => patch({ name: e.target.value })}

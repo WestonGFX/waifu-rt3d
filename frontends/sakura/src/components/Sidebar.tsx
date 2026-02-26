@@ -1,40 +1,20 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain, Settings,
-  ChevronLeft, ChevronRight, Plus, Search
+  ChevronLeft, ChevronRight, Search, Wifi, WifiOff
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
-import { CharacterCard } from './CharacterCard';
-import { api } from '../lib/api';
-
-/** Preset archetypes for quick character creation. */
-const PRESETS = [
-  { name: 'Tsundere', icon: '🔥', desc: 'Hot-tempered but secretly caring',
-    prompt: "You are a sharp-tongued tsundere. You deny your feelings but secretly care deeply. You get flustered when complimented and use phrases like 'b-baka!' when embarrassed. You're competitive, proud, but ultimately loyal.",
-    greeting: "D-don't get the wrong idea! I'm only talking to you because I'm bored!" },
-  { name: 'Kuudere', icon: '❄️', desc: 'Cool, calm, barely shows emotion',
-    prompt: 'You are a kuudere — cool, logical, and rarely express emotion. You speak concisely and analytically. When you do show warmth, it\'s subtle and meaningful.',
-    greeting: '...Hello. I suppose we can talk, if you want.' },
-  { name: 'Genki', icon: '⚡', desc: 'Hyper-energetic and optimistic',
-    prompt: "You are a genki girl — always bursting with energy and enthusiasm! You love fun, games, and making people smile.",
-    greeting: "Hiii~! Oh my gosh, I'm SO happy to meet you!!" },
-  { name: 'Onee-san', icon: '🌸', desc: 'Mature, caring older sister type',
-    prompt: "You are an onee-san type — a mature, caring older sister figure. You're nurturing but can be teasing.",
-    greeting: 'Ara ara~ Welcome. Make yourself comfortable.' },
-  { name: 'Goth', icon: '🦇', desc: 'Mysterious, dark aesthetic',
-    prompt: 'You are a gothic character who loves the occult and speaks in dramatic metaphors. Despite the dark exterior, you have a kind heart.',
-    greeting: 'The ancient prophecy foretold your arrival...' },
-];
 
 /**
  * Desktop sidebar — primary navigation for the Sakura frontend.
  *
  * Three expandable sections:
- * - **Chats**: Character list, click to open chat in main content
- * - **Characters**: Preset archetypes for quick creation
- * - **Create**: Opens the full wizard in the main content area
+ * - **Chats**: Character list — select a character to open their chat thread
+ * - **Characters**: Browse all characters with avatar + personality info
+ * - **Create**: Wizard opens in the main content area
  *
+ * Header: "WAIFU.EXE" branding + LLM brain status (online/offline + provider)
  * Bottom toolbar: Memory Bank + Settings (open as overlay drawers)
  */
 export function Sidebar() {
@@ -42,33 +22,22 @@ export function Sidebar() {
     sidebarCollapsed, toggleSidebar,
     sidebarSection, setSidebarSection,
     characters, activeCharacter, selectCharacter,
-    loadCharacters,
+    llmStatus, pollLlmStatus,
     openOverlay,
   } = useAppStore();
 
   const [filter, setFilter] = useState('');
-  const [creating, setCreating] = useState<string | null>(null);
+
+  // Poll LLM status every 15s
+  useEffect(() => {
+    pollLlmStatus();
+    const interval = setInterval(pollLlmStatus, 15_000);
+    return () => clearInterval(interval);
+  }, [pollLlmStatus]);
 
   const filteredChars = filter
     ? characters.filter(c => c.name?.toLowerCase().includes(filter.toLowerCase()))
     : characters;
-
-  const createFromPreset = async (preset: typeof PRESETS[0]) => {
-    setCreating(preset.name);
-    try {
-      await api.createCharacter({
-        name: preset.name,
-        system_prompt: preset.prompt,
-        greeting_message: preset.greeting,
-      });
-      await loadCharacters();
-      setSidebarSection('chats');
-    } catch (e) {
-      console.error('Failed to create character:', e);
-    } finally {
-      setCreating(null);
-    }
-  };
 
   /** Section navigation items at the top of the sidebar. */
   const NAV_ITEMS = [
@@ -88,20 +57,59 @@ export function Sidebar() {
     >
       {/* ── Header ────────────────────────────────────────── */}
       <div
-        className="flex items-center gap-2 px-3 h-14 flex-shrink-0"
-        style={{ borderBottom: '1px solid var(--color-border-subtle)' }}
+        className="flex items-center gap-2 px-3 flex-shrink-0"
+        style={{
+          borderBottom: '1px solid var(--color-border-subtle)',
+          minHeight: sidebarCollapsed ? '56px' : '60px',
+          paddingTop: '10px',
+          paddingBottom: '10px',
+        }}
       >
-        {!sidebarCollapsed && (
-          <h1
-            className="text-sm font-bold tracking-tight flex-1 truncate"
-            style={{ color: 'var(--color-text-primary)' }}
+        {!sidebarCollapsed ? (
+          <div className="flex-1 min-w-0">
+            <h1
+              className="text-sm font-black tracking-tight leading-tight"
+              style={{ color: 'var(--color-text-primary)', fontFamily: 'monospace' }}
+            >
+              WAIFU.EXE
+            </h1>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[10px] font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
+                (Sakura)
+              </span>
+              <span className="text-[10px]" style={{ color: 'var(--color-border)' }}>|</span>
+              {llmStatus.connected ? (
+                <span className="flex items-center gap-1 text-[10px]" style={{ color: 'var(--color-success)' }}>
+                  <Wifi size={10} />
+                  {llmStatus.provider || 'Online'}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
+                  <WifiOff size={10} />
+                  Offline
+                </span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div
+            className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
+            style={{
+              background: llmStatus.connected ? 'var(--color-success)' : 'var(--color-border)',
+              opacity: 0.7,
+            }}
+            title={llmStatus.connected ? `LLM: ${llmStatus.provider || 'Online'}` : 'LLM: Offline'}
           >
-            Sakura
-          </h1>
+            {llmStatus.connected ? (
+              <Wifi size={14} style={{ color: 'white' }} />
+            ) : (
+              <WifiOff size={14} style={{ color: 'white' }} />
+            )}
+          </div>
         )}
         <button
           onClick={toggleSidebar}
-          className="p-1.5 rounded-lg transition-colors duration-150 ml-auto"
+          className="p-1.5 rounded-lg transition-colors duration-150 ml-auto flex-shrink-0"
           style={{ color: 'var(--color-text-tertiary)' }}
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
@@ -149,7 +157,7 @@ export function Sidebar() {
       {!sidebarCollapsed && (
         <div className="flex-1 overflow-y-auto px-2 pb-2" style={{ scrollbarWidth: 'thin' }}>
           <AnimatePresence mode="wait">
-            {/* ─── Chats section ─── */}
+            {/* ─── Chats section: character list for opening chat threads ─── */}
             {sidebarSection === 'chats' && (
               <motion.div
                 key="chats"
@@ -199,7 +207,7 @@ export function Sidebar() {
               </motion.div>
             )}
 
-            {/* ─── Characters (presets) section ─── */}
+            {/* ─── Characters section: browse/select characters with details ─── */}
             {sidebarSection === 'characters' && (
               <motion.div
                 key="characters"
@@ -207,52 +215,28 @@ export function Sidebar() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.1 }}
-                className="space-y-1.5"
+                className="space-y-2"
               >
-                <p className="text-[10px] px-1 mb-2" style={{ color: 'var(--color-text-tertiary)' }}>
-                  Quick-create from archetype
+                <p className="text-[10px] px-1 mb-1" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {characters.length} character{characters.length !== 1 ? 's' : ''} available
                 </p>
-                {PRESETS.map(preset => (
-                  <button
-                    key={preset.name}
-                    onClick={() => createFromPreset(preset)}
-                    disabled={creating !== null}
-                    className="sidebar-preset-card w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150 disabled:opacity-50"
-                    style={{
-                      backgroundColor: 'var(--color-background)',
-                      border: '1px solid var(--color-border-subtle)',
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">{preset.icon}</span>
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                          {preset.name}
-                          {creating === preset.name && (
-                            <span className="ml-1.5 text-[10px]" style={{ color: 'var(--color-accent)' }}>
-                              Creating...
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[10px] truncate" style={{ color: 'var(--color-text-tertiary)' }}>
-                          {preset.desc}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-                {/* Full wizard link */}
-                <button
-                  onClick={() => setSidebarSection('create')}
-                  className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg transition-colors"
-                  style={{
-                    border: '1px dashed var(--color-border)',
-                    color: 'var(--color-accent)',
-                  }}
-                >
-                  <Plus size={14} />
-                  <span className="text-xs font-medium">Custom (Full Wizard)</span>
-                </button>
+                {characters.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Users size={28} className="mx-auto mb-2" style={{ color: 'var(--color-text-tertiary)', opacity: 0.5 }} />
+                    <p className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
+                      No characters yet. Create one to get started.
+                    </p>
+                  </div>
+                ) : (
+                  characters.map(char => (
+                    <CharacterProfileCard
+                      key={char.id}
+                      character={char}
+                      active={activeCharacter?.id === char.id}
+                      onSelect={() => selectCharacter(char)}
+                    />
+                  ))
+                )}
               </motion.div>
             )}
 
@@ -309,7 +293,7 @@ export function Sidebar() {
 
 
 /* ═══════════════════════════════════════════════════════════════════════
-   Sidebar Character Item — compact row for the character list
+   Sidebar Character Item — compact row for the Chats list
    ═══════════════════════════════════════════════════════════════════════ */
 
 const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i;
@@ -326,7 +310,7 @@ function resolveAvatarUrl(name?: string, avatarUrl?: string): string | null {
   const cleanName = parenMatch
     ? parenMatch[1].trim().toLowerCase()
     : (name?.split(/\s/)[0] || '').toLowerCase();
-  if (cleanName) return `/files/images/${cleanName}_pixel_portrait.png`;
+  if (cleanName) return `/files/images/${cleanName}_portrait.png`;
   return null;
 }
 
@@ -339,9 +323,6 @@ interface SidebarCharItemProps {
 /**
  * Compact character row in the sidebar chat list.
  * Shows avatar circle (with onError fallback to initial), name, and active highlight.
- *
- * Uses an `<img>` tag with onError handler so that convention-based pixel portrait
- * URLs that 404 gracefully fall back to a gradient initial circle.
  */
 function SidebarCharItem({ character, active, onClick }: SidebarCharItemProps) {
   const avatarUrl = resolveAvatarUrl(character.name, character.avatar_url);
@@ -368,17 +349,7 @@ function SidebarCharItem({ character, active, onClick }: SidebarCharItemProps) {
           className="w-9 h-9 rounded-full object-cover flex-shrink-0"
         />
       ) : (
-        <div
-          className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center"
-          style={{
-            background: 'var(--color-accent-gradient)',
-            color: 'var(--color-accent-text)',
-            fontSize: '0.85rem',
-            fontWeight: 600,
-          }}
-        >
-          {initial}
-        </div>
+        <AvatarInitial initial={initial} size={9} />
       )}
       <div className="min-w-0 flex-1">
         <p
@@ -398,5 +369,120 @@ function SidebarCharItem({ character, active, onClick }: SidebarCharItemProps) {
         />
       )}
     </button>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Character Profile Card — richer card for the Characters browser
+   ═══════════════════════════════════════════════════════════════════════ */
+
+interface CharacterProfileCardProps {
+  character: {
+    id: number;
+    name?: string;
+    avatar_url?: string;
+    system_prompt?: string;
+    greeting_message?: string;
+    voice_id?: string;
+    tts_provider?: string;
+    model_vrm?: string;
+  };
+  active: boolean;
+  onSelect: () => void;
+}
+
+/**
+ * Richer character card for the Characters browser section.
+ * Shows avatar, name, personality snippet, voice info, and VRM badge.
+ */
+function CharacterProfileCard({ character, active, onSelect }: CharacterProfileCardProps) {
+  const avatarUrl = resolveAvatarUrl(character.name, character.avatar_url);
+  const [imgFailed, setImgFailed] = useState(false);
+  const handleImgError = useCallback(() => setImgFailed(true), []);
+
+  const showImage = avatarUrl !== null && !imgFailed;
+  const initial = character.name?.[0] ?? '?';
+  const snippet = character.system_prompt
+    ? character.system_prompt.slice(0, 80) + (character.system_prompt.length > 80 ? '...' : '')
+    : 'No personality set';
+
+  return (
+    <button
+      onClick={onSelect}
+      className="sidebar-preset-card w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150"
+      style={{
+        backgroundColor: active ? 'var(--color-accent-soft)' : 'var(--color-background)',
+        border: active
+          ? '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)'
+          : '1px solid var(--color-border-subtle)',
+      }}
+    >
+      <div className="flex items-start gap-2.5">
+        {showImage ? (
+          <img
+            src={avatarUrl!}
+            alt={character.name || ''}
+            onError={handleImgError}
+            className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+          />
+        ) : (
+          <AvatarInitial initial={initial} size={10} rounded="rounded-lg" />
+        )}
+        <div className="min-w-0 flex-1">
+          <p
+            className="text-xs font-semibold truncate"
+            style={{ color: active ? 'var(--color-accent)' : 'var(--color-text-primary)' }}
+          >
+            {character.name || 'Unnamed'}
+          </p>
+          <p className="text-[10px] mt-0.5 leading-tight" style={{ color: 'var(--color-text-tertiary)' }}>
+            {snippet}
+          </p>
+          {/* Badges row */}
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            {character.voice_id && (
+              <span
+                className="text-[9px] px-1.5 py-0.5 rounded-full"
+                style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}
+              >
+                {character.tts_provider || 'tts'}
+              </span>
+            )}
+            {character.model_vrm && (
+              <span
+                className="text-[9px] px-1.5 py-0.5 rounded-full"
+                style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}
+              >
+                3D
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Shared avatar initial circle
+   ═══════════════════════════════════════════════════════════════════════ */
+
+function AvatarInitial({ initial, size = 9, rounded = 'rounded-full' }: { initial: string; size?: number; rounded?: string }) {
+  return (
+    <div
+      className={`w-${size} h-${size} ${rounded} flex-shrink-0 flex items-center justify-center`}
+      style={{
+        background: 'var(--color-accent-gradient)',
+        color: 'var(--color-accent-text)',
+        fontSize: '0.85rem',
+        fontWeight: 600,
+        minWidth: `${size * 4}px`,
+        minHeight: `${size * 4}px`,
+      }}
+    >
+      {initial}
+    </div>
   );
 }

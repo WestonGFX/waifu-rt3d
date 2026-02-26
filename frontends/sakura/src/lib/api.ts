@@ -109,6 +109,9 @@ export const api = {
   // Files
   scanVrm: () => get<{ models: string[] }>('/api/scan/vrm').then(d => d.models),
   scanImages: () => get<{ images: string[] }>('/api/scan/images').then(d => d.images),
+  // Stats (LLM status, uptime, etc.)
+  getStats: () => get<Record<string, unknown>>('/api/stats'),
+
   uploadAvatar: (file: File) => {
     const form = new FormData();
     form.append('file', file);

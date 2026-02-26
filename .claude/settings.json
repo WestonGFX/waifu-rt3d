@@ -3,8 +3,13 @@
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
-        "command": "for f in $CLAUDE_EDITED_FILES; do if [[ \"$f\" == *.py ]]; then python -m py_compile \"$f\" || echo \"SYNTAX ERROR in $f\"; fi; done",
-        "description": "Auto-check Python syntax after every edit"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for f in $CLAUDE_EDITED_FILES; do if [[ \"$f\" == *.py ]]; then python -m py_compile \"$f\" || echo \"SYNTAX ERROR in $f\"; fi; done",
+            "description": "Auto-check Python syntax after every edit"
+          }
+        ]
       }
     ]
   }

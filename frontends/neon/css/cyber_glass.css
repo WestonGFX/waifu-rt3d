@@ -258,6 +258,8 @@
     overflow: hidden;
     background: var(--bg-void);
     transition: grid-template-columns 0.4s var(--ease-out-expo);
+    /* Stable compositor layer — prevents black flash during GPU recomposition */
+    will-change: transform;
 }
 
 /* Right panel hidden when not open — use visibility (not display:none)
@@ -312,6 +314,12 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    /* Promote to own GPU compositor layer — prevents Chrome from
+       rebuilding compositing layers when WebGL (VRM iframe) or
+       backdrop-filter triggers a full-page recomposition, which
+       causes a single-frame black flash on void/dark backgrounds. */
+    will-change: transform;
+    transform: translateZ(0);
 }
 
 /* Hover glow only on inner cards/widgets, not layout-level panels.

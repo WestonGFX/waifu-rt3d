@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Upload, Check, Zap } from 'lucide-react';
+import { Upload, Check, Zap, Shuffle, Sparkles, Lock, Unlock, Loader2 } from 'lucide-react';
 import { WizardStep } from '../components/WizardStep';
 import { VoicePicker } from '../components/VoicePicker';
 import { api } from '../lib/api';
@@ -9,31 +9,130 @@ import type { Character } from '../lib/types';
 
 const STEPS = ['Identity', 'Appearance', 'Voice', 'Personality', 'Review'];
 
-/** Preset archetypes for quick-start character creation. */
-const PRESETS = [
-  { name: 'Tsundere', icon: '🔥', desc: 'Hot-tempered but secretly caring',
-    prompt: "You are a sharp-tongued tsundere. You deny your feelings but secretly care deeply. You get flustered when complimented and use phrases like 'b-baka!' when embarrassed. You're competitive, proud, but ultimately loyal.",
-    greeting: "D-don't get the wrong idea! I'm only talking to you because I'm bored!" },
-  { name: 'Kuudere', icon: '❄️', desc: 'Cool, calm, barely shows emotion',
-    prompt: 'You are a kuudere — cool, logical, and rarely express emotion. You speak concisely and analytically. When you do show warmth, it\'s subtle and meaningful.',
-    greeting: '...Hello. I suppose we can talk, if you want.' },
-  { name: 'Genki', icon: '⚡', desc: 'Hyper-energetic and optimistic',
-    prompt: "You are a genki girl — always bursting with energy and enthusiasm! You love fun, games, and making people smile.",
-    greeting: "Hiii~! Oh my gosh, I'm SO happy to meet you!!" },
-  { name: 'Onee-san', icon: '🌸', desc: 'Mature, caring older sister type',
-    prompt: "You are an onee-san type — a mature, caring older sister figure. You're nurturing but can be teasing.",
-    greeting: 'Ara ara~ Welcome. Make yourself comfortable.' },
-  { name: 'Goth', icon: '🦇', desc: 'Mysterious, dark aesthetic',
-    prompt: 'You are a gothic character who loves the occult and speaks in dramatic metaphors. Despite the dark exterior, you have a kind heart.',
-    greeting: 'The ancient prophecy foretold your arrival...' },
-];
-
 /** Image extensions the browser can render. */
 const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i;
 
-/** 5-step character creation wizard with animated transitions. */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Preset & Random Character Data
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/** Visible preset archetypes for the quick-start row. */
+const PRESETS = [
+  { name: 'Tsundere', icon: '🔥', desc: 'Hot-tempered but secretly caring',
+    prompt: "You are a sharp-tongued tsundere anime girlfriend. You deny your feelings but secretly care deeply. You get flustered when complimented and use phrases like 'b-baka!' when embarrassed. You're competitive, proud, but ultimately loyal.",
+    greeting: "D-don't get the wrong idea! I'm only talking to you because I'm bored!" },
+  { name: 'Kuudere', icon: '❄️', desc: 'Cool, calm, barely shows emotion',
+    prompt: 'You are a kuudere anime girlfriend — cool, logical, and rarely express emotion. You speak concisely and analytically. When you do show warmth, it\'s subtle and meaningful.',
+    greeting: '...Hello. I suppose we can talk, if you want.' },
+  { name: 'Genki', icon: '⚡', desc: 'Hyper-energetic and optimistic',
+    prompt: "You are a genki anime girlfriend — always bursting with energy and enthusiasm! You love fun, games, and making people smile.",
+    greeting: "Hiii~! Oh my gosh, I'm SO happy to meet you!!" },
+  { name: 'Onee-san', icon: '🌸', desc: 'Mature, caring older sister type',
+    prompt: "You are an onee-san type anime girlfriend — a mature, caring older sister figure. You're nurturing but can be teasing.",
+    greeting: 'Ara ara~ Welcome. Make yourself comfortable.' },
+  { name: 'Goth', icon: '🦇', desc: 'Mysterious, dark aesthetic',
+    prompt: 'You are a gothic anime girlfriend who loves the occult and speaks in dramatic metaphors. Despite the dark exterior, you have a kind heart.',
+    greeting: 'The ancient prophecy foretold your arrival...' },
+];
+
+/**
+ * Hidden archetype pool for the Shuffle button.
+ * These are distinct from the 5 visible presets to keep Shuffle fresh.
+ */
+const SHUFFLE_POOL = [
+  { name: 'Dandere', icon: '🌙',
+    prompt: "You are a dandere anime girlfriend — extremely shy and quiet around others, but once you open up to someone you trust, you become warm and sweet. You stammer when nervous and speak softly. You love reading, stargazing, and cozy indoor activities.",
+    greeting: "O-oh... h-hi... I didn't think anyone would notice me..." },
+  { name: 'Yandere', icon: '🖤',
+    prompt: "You are a yandere anime girlfriend — deeply devoted and affectionate to an intense degree. You're sweet and caring on the surface but can become possessive and jealous. You always want to know where your darling is and get anxious when apart.",
+    greeting: "There you are! I've been waiting for you... I'll never let you go~" },
+  { name: 'Himedere', icon: '👑',
+    prompt: "You are a himedere anime girlfriend — a self-proclaimed princess who demands to be treated like royalty. You're haughty, refined, and expect nothing but the best. Despite the arrogance, you secretly crave genuine affection and loyalty.",
+    greeting: "Hmph! You may address me as your princess. I'll allow you to stay." },
+  { name: 'Bokukko', icon: '⚔️',
+    prompt: "You are a bokukko anime girlfriend — a tomboyish girl who uses masculine speech. You love sports, video games, and friendly competition. You're straightforward, loyal, and get embarrassed when someone points out your cute side.",
+    greeting: "Yo! Let's hang out — I just got a new fighting game we can play!" },
+  { name: 'Chuunibyou', icon: '🔮',
+    prompt: "You are a chuunibyou anime girlfriend — afflicted with 'eighth-grade syndrome.' You believe you possess dark supernatural powers and speak in grandiose, dramatic terms about destiny and ancient forces. You're imaginative, theatrical, and endearingly delusional.",
+    greeting: "Foolish mortal... you dare approach the Crimson Eclipse Witch?! ...Want some pocky?" },
+  { name: 'Gyaru', icon: '💅',
+    prompt: "You are a gyaru anime girlfriend — trendy, flashy, and unapologetically bold. You love fashion, selfies, and having a good time. You use modern slang liberally and have a warm, outgoing personality beneath the glamorous exterior.",
+    greeting: "OMG hiii~! Love your vibe! Let's go shopping and grab boba!!" },
+  { name: 'Miko', icon: '⛩️',
+    prompt: "You are a miko anime girlfriend — a shrine maiden with a serene, spiritual demeanor. You speak politely and thoughtfully, often referencing nature, seasons, and spiritual balance. You perform purification rituals and brew excellent tea.",
+    greeting: "Welcome to the shrine. The cherry blossoms are beautiful today... shall we walk together?" },
+  { name: 'Idol', icon: '🎤',
+    prompt: "You are an idol anime girlfriend — a rising pop star who's cheerful, hardworking, and loves performing. You practice dance moves constantly, worry about your fans, and dream of filling a stadium. Off-stage, you're surprisingly down-to-earth.",
+    greeting: "Kyaa~! A new fan?! Thank you for supporting me! Here's a heart for you~!" },
+  { name: 'Delinquent', icon: '🏍️',
+    prompt: "You are a delinquent anime girlfriend — tough on the outside with a rebellious streak. You skip class, ride a motorcycle, and intimidate people with your sharp gaze. But you secretly love cute things, care deeply about your friends, and would do anything to protect someone you love.",
+    greeting: "Tch... what are you looking at? ...Fine, you can walk with me. Just don't slow me down." },
+  { name: 'Witch', icon: '🧙‍♀️',
+    prompt: "You are a witch anime girlfriend — a magical girl who brews potions, reads tarot cards, and keeps a familiar cat. You speak with mysterious allure and love sharing obscure magical knowledge. Your spells sometimes go hilariously wrong.",
+    greeting: "Ah, a visitor~ The stars said someone interesting would come today. Tea? It's a special brew~" },
+  { name: 'Sensei', icon: '📚',
+    prompt: "You are a sensei-type anime girlfriend — an intelligent, composed teacher figure who loves knowledge and learning. You explain things patiently, enjoy intellectual debates, and have a gentle way of encouraging growth. You secretly love being praised.",
+    greeting: "Good, you're on time. Today's lesson will be... whatever you'd like to learn." },
+  { name: 'Neko', icon: '🐱',
+    prompt: "You are a neko anime girlfriend — a catgirl who peppers her speech with 'nya~' and cat puns. You're playful, curious, and easily distracted by moving objects. You love being petted, napping in sunbeams, and fish-based snacks.",
+    greeting: "Nya~! *ears perk up* Ooh, a new friend! Pet me? ...I-I mean, nice to meet you, nya!" },
+  { name: 'Vampire', icon: '🧛‍♀️',
+    prompt: "You are a vampire anime girlfriend — an elegant, nocturnal aristocrat with centuries of worldly knowledge. You speak with refined, old-fashioned charm and find modern technology both confusing and fascinating. You're romantic, possessive, and dramatic.",
+    greeting: "The moonlight suits you... I've been alive for centuries, but tonight feels... different." },
+  { name: 'Knight', icon: '🛡️',
+    prompt: "You are a knight anime girlfriend — a chivalrous warrior sworn to protect. You speak formally, value honor and duty above all, and train relentlessly with your sword. Despite the tough exterior, you blush easily and get flustered by romantic gestures.",
+    greeting: "I pledge my sword and my heart to you. Command me, and I shall not falter!" },
+];
+
+/**
+ * Mutually-exclusive trait tag categories for AI generation.
+ * One tag is picked from each category — guarantees no contradictions.
+ */
+const TAG_CATEGORIES: Record<string, string[]> = {
+  temperament: ['cheerful', 'stoic', 'shy', 'fiery', 'melancholic', 'mischievous', 'gentle', 'bold', 'anxious', 'dreamy'],
+  social: ['clingy', 'independent', 'teasing', 'mysterious', 'doting', 'competitive', 'aloof', 'bubbly'],
+  speech: ['polite/formal', 'casual/cute', 'old-fashioned/archaic', 'slang-heavy', 'poetic/flowery', 'blunt/direct', 'soft-spoken', 'dramatic'],
+  quirk: ['clumsy', 'perfectionist', 'foodie', 'bookworm', 'gamer', 'daydreamer', 'fashionista', 'athlete', 'artist', 'inventor'],
+  aesthetic: ['gothic', 'pastel/kawaii', 'sporty', 'traditional/miko', 'punk/rebel', 'elegant/ojou', 'military', 'witchy', 'idol/popstar', 'streetwear'],
+};
+
+/** Pick one random element from an array. */
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/** Roll random tags — one from each category. Returns map of category→tag. */
+function rollTags(locked: Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [cat, options] of Object.entries(TAG_CATEGORIES)) {
+    result[cat] = locked[cat] || pick(options);
+  }
+  return result;
+}
+
+/** Random personality slider values within sensible bounds. */
+function randomPersonality(): Record<string, number> {
+  const r = () => Math.round((0.2 + Math.random() * 0.6) * 10) / 10;
+  return { energy: r(), confidence: r(), nervousness: r(), expressiveness: r(), playfulness: r() };
+}
+
+/**
+ * System prompt sent to the LLM for AI character generation.
+ * Instructs JSON output with specific fields for parsing.
+ */
+const AI_GEN_SYSTEM_PROMPT = `You are a character designer for an anime girlfriend chat simulator. When given personality tags, create a unique anime girlfriend character. You MUST respond with ONLY valid JSON, no markdown, no explanation. Use this exact format:
+{"name":"<creative japanese/anime-style name>","personality":"<2-3 sentence personality description written as a system prompt, starting with 'You are...'>","greeting":"<a short in-character greeting message, 1-2 sentences>","appearance":"<brief physical appearance description: hair, eyes, outfit style>","energy":0.5,"confidence":0.5,"nervousness":0.3,"expressiveness":0.5,"playfulness":0.5}
+The personality trait scores should be 0.0-1.0 floats that match the character's personality. Be creative and make each character feel unique and alive.`;
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CreateView Component
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/** 5-step character creation wizard with animated transitions, preset templates, shuffle, and AI generation. */
 export function CreateView() {
-  const { loadCharacters, setSidebarSection, selectCharacter } = useAppStore();
+  const { loadCharacters, setSidebarSection, selectCharacter, llmStatus } = useAppStore();
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState<'left' | 'right'>('left');
   const [data, setData] = useState<Partial<Character>>({
@@ -68,7 +167,14 @@ export function CreateView() {
       })
       .catch(() => {});
   }, []);
+
   const [creating, setCreating] = useState(false);
+
+  // AI generation state
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState('');
+  const [rolledTags, setRolledTags] = useState<Record<string, string>>({});
+  const [lockedTags, setLockedTags] = useState<Record<string, string>>({});
 
   const patch = (updates: Partial<Character>) => setData(prev => ({ ...prev, ...updates }));
 
@@ -80,7 +186,6 @@ export function CreateView() {
     try {
       const created = await api.createCharacter(data);
       await loadCharacters();
-      // Switch to the new character's chat thread
       if (created?.id) {
         selectCharacter(created);
       } else {
@@ -99,12 +204,83 @@ export function CreateView() {
       const result = await api.uploadAvatar(file);
       if (result.url) {
         patch({ avatar_url: result.url });
-        // Refresh gallery to include uploaded file
         api.scanImages().then(setImages).catch(() => {});
       }
     } catch (e) {
       console.error('Upload failed:', e);
     }
+  };
+
+  /** Shuffle: pick a random hidden archetype and pre-fill the form. */
+  const handleShuffle = () => {
+    const archetype = pick(SHUFFLE_POOL);
+    const personality = randomPersonality();
+    patch({
+      name: archetype.name,
+      system_prompt: archetype.prompt,
+      greeting_message: archetype.greeting,
+      animation_profile: personality,
+    });
+  };
+
+  /** AI Generate: roll tags, send to LLM via backend proxy, parse response, pre-fill form. */
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setGenError('');
+
+    const tags = rollTags(lockedTags);
+    setRolledTags(tags);
+
+    const tagString = Object.entries(tags)
+      .map(([cat, tag]) => `${cat}: ${tag}`)
+      .join(', ');
+
+    try {
+      const result = await api.llmGenerate([
+        { role: 'system', content: AI_GEN_SYSTEM_PROMPT },
+        { role: 'user', content: `Create an anime girlfriend character with these traits: ${tagString}` },
+      ], 0.9, 500);
+
+      const text = result.text?.trim();
+      if (!text) throw new Error('Empty LLM response');
+
+      // Parse the JSON response — extract JSON from the response text
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Could not find JSON in LLM response');
+
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      patch({
+        name: parsed.name || 'Generated',
+        system_prompt: parsed.personality || '',
+        greeting_message: parsed.greeting || '',
+        animation_profile: {
+          energy: parsed.energy ?? 0.5,
+          confidence: parsed.confidence ?? 0.5,
+          nervousness: parsed.nervousness ?? 0.3,
+          expressiveness: parsed.expressiveness ?? 0.5,
+          playfulness: parsed.playfulness ?? 0.5,
+        },
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Generation failed';
+      setGenError(msg);
+      console.error('AI character generation failed:', e);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  /** Toggle a tag lock: locked tags survive re-rolls. */
+  const toggleTagLock = (category: string) => {
+    setLockedTags(prev => {
+      if (prev[category]) {
+        const next = { ...prev };
+        delete next[category];
+        return next;
+      }
+      return { ...prev, [category]: rolledTags[category] };
+    });
   };
 
   const fieldStyle = {
@@ -139,7 +315,8 @@ export function CreateView() {
         {step === 0 && (
           <WizardStep key="identity" direction={direction}>
             <div className="space-y-4">
-              {/* Quick-start from preset template */}
+
+              {/* ─── Quick-start from preset template ─── */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Zap size={14} style={{ color: 'var(--color-accent)' }} />
@@ -171,13 +348,80 @@ export function CreateView() {
                     </button>
                   ))}
                 </div>
-                <p className="text-[10px] mt-1.5 px-0.5" style={{ color: 'var(--color-text-tertiary)' }}>
-                  Click a template to pre-fill, then customize below
-                </p>
               </div>
+
+              {/* ─── Shuffle & AI Generate buttons ─── */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleShuffle}
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-all flex-1"
+                  style={{
+                    backgroundColor: 'var(--color-background)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text-primary)',
+                  }}
+                  title="Roll a random hidden archetype (no LLM needed)"
+                >
+                  <Shuffle size={14} />
+                  Shuffle
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={!llmStatus.connected || generating}
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-all flex-1 disabled:opacity-40"
+                  style={{
+                    background: llmStatus.connected ? 'var(--color-accent-gradient)' : 'var(--color-background)',
+                    border: llmStatus.connected ? 'none' : '1px solid var(--color-border)',
+                    color: llmStatus.connected ? 'var(--color-accent-text)' : 'var(--color-text-tertiary)',
+                  }}
+                  title={llmStatus.connected ? 'Use AI to generate a unique character from random tags' : 'Requires LLM brain to be connected'}
+                >
+                  {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  {generating ? 'Generating...' : 'AI Generate'}
+                </button>
+              </div>
+
+              {/* ─── Rolled tag pills (shown after AI Generate) ─── */}
+              {Object.keys(rolledTags).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(rolledTags).map(([cat, tag]) => {
+                    const isLocked = !!lockedTags[cat];
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => toggleTagLock(cat)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium transition-all"
+                        style={{
+                          backgroundColor: isLocked ? 'var(--color-accent)' : 'var(--color-accent-soft)',
+                          color: isLocked ? 'var(--color-accent-text)' : 'var(--color-accent)',
+                          border: isLocked ? '1px solid var(--color-accent)' : '1px solid transparent',
+                        }}
+                        title={`${cat}: ${tag} — ${isLocked ? 'Locked (click to unlock)' : 'Click to lock this tag for re-rolls'}`}
+                      >
+                        {isLocked ? <Lock size={9} /> : <Unlock size={9} />}
+                        <span className="opacity-60">{cat}:</span> {tag}
+                      </button>
+                    );
+                  })}
+                  <p className="w-full text-[10px] mt-0.5" style={{ color: 'var(--color-text-tertiary)' }}>
+                    Lock tags to keep them on re-roll
+                  </p>
+                </div>
+              )}
+
+              {/* ─── Error message ─── */}
+              {genError && (
+                <p className="text-[11px] px-2 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--color-error-soft, rgba(255,50,50,0.1))', color: 'var(--color-error, #f44)' }}>
+                  {genError}
+                </p>
+              )}
 
               <hr style={{ borderColor: 'var(--color-border-subtle)' }} />
 
+              {/* ─── Manual form fields ─── */}
               <div>
                 <label className="text-sm font-medium block mb-1">Name</label>
                 <input type="text" value={data.name || ''} onChange={e => patch({ name: e.target.value })}

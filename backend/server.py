@@ -1545,6 +1545,51 @@ def _context_budget_summary(
     }
 
 
+@app.post("/api/llm/generate")
+async def llm_generate(req: Request):
+    """Lightweight LLM proxy for frontend features that need raw completions.
+
+    Accepts a messages array and forwards it to the configured LLM endpoint.
+    Used by the character creator's AI Generate feature to create random personas.
+
+    Args:
+        req: JSON body with "messages" (list of {role, content} dicts),
+             optional "temperature" (float), optional "max_tokens" (int).
+
+    Returns:
+        {"text": str} — the LLM's response content.
+    """
+    import httpx
+
+    body = await req.json()
+    messages = body.get("messages", [])
+    if not messages:
+        raise HTTPException(400, "missing messages")
+
+    cfg = load_config() or {}
+    endpoint = _get_llm_endpoint(cfg)
+    model = cfg.get("llm", {}).get("model", "")
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10, read=120)) as client:
+            resp = await client.post(
+                f"{endpoint}/chat/completions",
+                json={
+                    "model": model or "default",
+                    "messages": messages,
+                    "temperature": body.get("temperature", 0.9),
+                    "max_tokens": body.get("max_tokens", 500),
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            return {"text": text}
+    except Exception as e:
+        logger.warning("llm/generate failed: %s", e)
+        raise HTTPException(502, f"LLM generation failed: {e}")
+
+
 @app.post("/api/chat")
 async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
     _telemetry_inc("chat.requests_total")

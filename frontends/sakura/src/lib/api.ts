@@ -112,6 +112,10 @@ export const api = {
   // Stats (LLM status, uptime, etc.)
   getStats: () => get<Record<string, unknown>>('/api/stats'),
 
+  // LLM generation proxy (for AI character generation, etc.)
+  llmGenerate: (messages: Array<{ role: string; content: string }>, temperature = 0.9, maxTokens = 500) =>
+    post<{ text: string }>('/api/llm/generate', { messages, temperature, max_tokens: maxTokens }),
+
   uploadAvatar: (file: File) => {
     const form = new FormData();
     form.append('file', file);

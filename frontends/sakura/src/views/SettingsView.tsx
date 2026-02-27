@@ -1656,7 +1656,7 @@ function AIArtTab({ save, cfg }: TabProps) {
         <SectionHeader title="Image Generation" />
         <div style={cardStyle} className="px-4">
           <SettingField label="Image Generator" description="Backend for AI image generation."
-            tooltip="ComfyUI: run locally on port 8188. Easy Diffusion: port 9000. Disabled: hide Generate buttons.">
+            tooltip="ComfyUI (recommended): run locally on port 8188, needs a workflow JSON + checkpoint. Easy Diffusion: just start the app, enable 'Allow Network Access' in its Settings → Server, then paste the URL here — no other config needed. See docs/IMAGE_GEN_GUIDE.md.">
             <select
               value={provider}
               onChange={(e) => { save('image_gen.provider', e.target.value); setGenStatus(null); }}
@@ -1690,7 +1690,7 @@ function AIArtTab({ save, cfg }: TabProps) {
           )}
 
           <SettingField label="Image Gen URL" description="URL of your image generation server."
-            tooltip="ComfyUI default: http://localhost:8188. Easy Diffusion: http://localhost:9000.">
+            tooltip="ComfyUI default: http://localhost:8188. Easy Diffusion: http://localhost:9000 (or your LAN machine IP, e.g. http://192.168.1.50:9000 for GPU offloading to another PC).">
             <input
               type="text"
               value={String(cfg('image_gen.endpoint', 'http://localhost:8188'))}

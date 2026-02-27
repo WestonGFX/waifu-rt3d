@@ -6,6 +6,21 @@
 
 - **Bias heavily toward ACTION over PLANNING.** If a plan file already exists, do not rewrite it — execute it. Only create a new plan if explicitly asked. When in doubt, write code.
 
+## Python / Venv
+
+This project uses a `.venv/` virtual environment built on **Homebrew Python 3.14**.
+
+**Always use these paths — never bare `python` or `python3` (Conda intercepts them):**
+
+| Task | Command |
+|------|---------|
+| Run server | `.venv/bin/python -m uvicorn backend.server:app --host 0.0.0.0 --port 8080` |
+| Run tests | `.venv/bin/python -m pytest backend/tests/ -q` |
+| Install a dep | `.venv/bin/pip install <package>` |
+| Quick activate | `source .venv/bin/activate` then use plain `python` / `pytest` |
+
+Or just use the provided wrapper: `./run.sh` (starts server) · `./run.sh test` (runs tests).
+
 ## Project Overview
 
 This project uses Python (FastAPI backend), JavaScript (frontend), CSS, and HTML. The main server file is `backend/server.py`. The frontend includes a 3D VRM viewer using Three.js (`frontends/neon/`). Always check for Python f-string backslash issues before committing.

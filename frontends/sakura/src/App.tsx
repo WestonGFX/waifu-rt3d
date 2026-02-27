@@ -4,6 +4,7 @@ import { MemoryPanel } from './components/MemoryPanel';
 import { VocabPanel } from './components/VocabPanel';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { ShortcutHelpModal } from './components/ShortcutHelpModal';
+import { OnboardingWizard } from './components/OnboardingWizard';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ChatThread } from './views/ChatThread';
 import { CreateView } from './views/CreateView';
@@ -31,8 +32,11 @@ export function App() {
   const {
     loadCharacters, loadConfig, activeCharacter, sidebarSection,
     openOverlay, closeOverlay, activeOverlay, toggleSidebar,
-    setSidebarSection
+    setSidebarSection, config, configLoaded
   } = useAppStore();
+
+  // Show onboarding wizard on first run (gated on configLoaded to avoid flash)
+  const showOnboarding = configLoaded && !config.onboarded;
   const { theme } = useTheme();
   const [showHelp, setShowHelp] = useState(false);
 
@@ -85,6 +89,9 @@ export function App() {
       <MemoryPanel />
       <VocabPanel />
       <ShortcutHelpModal open={showHelp} shortcuts={shortcuts} onClose={() => setShowHelp(false)} />
+
+      {/* First-run onboarding wizard — shown once, then config.onboarded = true */}
+      {showOnboarding && <OnboardingWizard onComplete={() => {}} />}
     </div>
   );
 }

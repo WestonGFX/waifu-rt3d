@@ -53,6 +53,8 @@ interface AppState {
 
   // Config
   config: AppConfig;
+  /** True once the first loadConfig() call has resolved (prevents onboarding flash). */
+  configLoaded: boolean;
   loadConfig: () => Promise<void>;
   saveConfig: (patch: Partial<AppConfig>) => Promise<void>;
 
@@ -134,9 +136,10 @@ export const useAppStore = create<AppState>()(
 
       // Config
       config: {},
+      configLoaded: false,
       loadConfig: async () => {
         const config = await api.getConfig();
-        set({ config });
+        set({ config, configLoaded: true });
       },
       saveConfig: async (patch) => {
         const merged = { ...get().config, ...patch };

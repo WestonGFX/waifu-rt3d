@@ -8,6 +8,7 @@ import { useTheme } from '../hooks/useTheme';
 import { SettingField } from '../components/SettingField';
 import { VoicePicker } from '../components/VoicePicker';
 import { TTSModelsPanel } from '../components/TTSModelsPanel';
+import { ModelManagerPanel } from '../components/ModelManagerPanel';
 import { api } from '../lib/api';
 
 /* ─── Helper: deep-get nested config key like "llm.model" ──────────── */
@@ -36,7 +37,7 @@ const cardStyle: React.CSSProperties = {
 };
 
 /* ─── Tab definitions ──────────────────────────────────────────────── */
-type SettingsTab = 'general' | 'character' | 'brain' | 'voice' | 'safety' | 'aiart' | 'system' | 'tts_models';
+type SettingsTab = 'general' | 'character' | 'brain' | 'voice' | 'safety' | 'aiart' | 'system' | 'tts_models' | 'lm_models';
 
 interface TabDef {
   id: SettingsTab;
@@ -53,6 +54,7 @@ const TABS: TabDef[] = [
   { id: 'aiart', label: 'AI Art', icon: <Image size={15} /> },
   { id: 'system', label: 'System', icon: <Settings size={15} /> },
   { id: 'tts_models', label: 'TTS Models', icon: <Package size={15} /> },
+  { id: 'lm_models', label: 'LM Models', icon: <Monitor size={15} /> },
 ];
 
 /* ─── LM Studio model type ─────────────────────────────────────────── */
@@ -184,6 +186,14 @@ export function SettingsView() {
             <SectionHeader title="Voice Model Manager" />
             <div style={cardStyle} className="p-4">
               <TTSModelsPanel />
+            </div>
+          </section>
+        )}
+        {activeTab === 'lm_models' && (
+          <section>
+            <SectionHeader title="LM Studio Model Manager" />
+            <div style={cardStyle} className="p-4">
+              <ModelManagerPanel />
             </div>
           </section>
         )}

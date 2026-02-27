@@ -1,5 +1,57 @@
 import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse, VocabEntry } from './types';
 
+// ─── LM Studio Model Manager types ───────────────────────────────────────────
+
+/** An LM Studio installed model entry (from /api/models/installed). */
+export interface LMStudioModel {
+  id: string;
+  /** 'loaded' when resident in VRAM, otherwise 'not-loaded' or absent. */
+  state?: string;
+  max_context_length?: number;
+  architecture?: string;
+  /** GGUF is the universal format; MLX is Apple-Silicon-only. */
+  format?: 'gguf' | 'mlx' | 'other';
+}
+
+/** A curated recommended model entry (from /api/models/recommend). */
+export interface RecommendedModel {
+  id: string;
+  name?: string;
+  tags?: string[];
+  description?: string;
+  /** Estimated VRAM required in MB (used for compatibility coloring). */
+  vram_required_mb?: number;
+  size_gb?: number;
+  downloads?: number;
+  recommended?: boolean;
+}
+
+/** A single file within a HuggingFace repo (from /api/models/details). */
+export interface ModelFile {
+  rfilename: string;
+  size?: number;
+}
+
+/** GPU/RAM info returned by /api/hardware. */
+export interface HardwareInfo {
+  gpu_name?: string;
+  /** Detected GPU VRAM in MB. */
+  vram_mb?: number;
+  ram_mb?: number;
+}
+
+/** Download progress snapshot from /api/models/download-status. */
+export interface DownloadStatus {
+  active: boolean;
+  repo_id?: string;
+  file?: string;
+  /** 0–100 percent complete. */
+  progress?: number;
+  speed_mb_s?: number;
+  eta_s?: number;
+  error?: string;
+}
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 /**
@@ -170,4 +222,24 @@ export const api = {
     get<{ ok: boolean; entries: VocabEntry[]; count: number }>('/api/vocab/export'),
   importVocab: (entries: Partial<VocabEntry>[]) =>
     post<{ ok: boolean; imported: number; total_user: number }>('/api/vocab/import', { entries }),
+
+  // LM Studio Model Manager
+  getInstalledModels: () =>
+    get<{ models: LMStudioModel[] }>('/api/models/installed').then(d => d.models ?? []),
+  getRecommendedModels: (type: string) =>
+    get<{ models: RecommendedModel[] }>(`/api/models/recommend?type=${type}`).then(d => d.models ?? []),
+  getModelDetails: (id: string) =>
+    get<{ files: ModelFile[] }>(`/api/models/details?id=${encodeURIComponent(id)}`),
+  getDownloadStatus: () =>
+    get<DownloadStatus>('/api/models/download-status'),
+  getHardwareInfo: () =>
+    get<HardwareInfo>('/api/hardware'),
+  installModel: (body: { repo_id: string; file: string }) =>
+    post<{ ok: boolean }>('/api/models/install', body),
+  loadModel: (identifier: string) =>
+    post<{ ok: boolean }>('/api/models/load', { identifier }),
+  unloadModel: (identifier: string) =>
+    post<{ ok: boolean }>('/api/models/unload', { identifier }),
+  deleteModel: (type: string, id: string) =>
+    del<{ ok: boolean }>(`/api/models/${type}/${encodeURIComponent(id)}`),
 };

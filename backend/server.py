@@ -4386,12 +4386,64 @@ def export_character(character_id: int):
         conn.close()
 
 
+@app.post("/api/characters/export/{char_id}")
+async def export_character_post(char_id: int):
+    """Export a character as a shareable JSON card (POST variant).
+
+    Sanitizes the character data by removing internal IDs and private fields.
+    The exported JSON can be imported by anyone using POST /api/characters/import.
+
+    Args:
+        char_id: The character's database ID.
+
+    Returns:
+        dict: {"ok": True, "character": sanitized_character_dict} with
+              schema_version and exported_at metadata fields.
+
+    Raises:
+        HTTPException: 404 if character not found.
+
+    Example:
+        >>> response = client.post("/api/characters/export/1")
+        >>> assert response.json()["ok"] == True
+    """
+    import datetime as _dt
+    conn = db()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT * FROM characters WHERE id=?", (char_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Character not found")
+
+        columns = [desc[0] for desc in cur.description]
+        char_data = dict(zip(columns, row))
+
+        # Parse personality_traits from JSON string so the export is readable
+        if char_data.get('personality_traits'):
+            try:
+                char_data['personality_traits'] = json.loads(char_data['personality_traits'])
+            except (json.JSONDecodeError, TypeError):
+                char_data['personality_traits'] = []
+
+        # Sanitize: strip internal/private fields before sharing
+        STRIP_FIELDS = {"id", "created_at", "updated_at", "session_count", "message_count"}
+        card = {k: v for k, v in char_data.items() if k not in STRIP_FIELDS and v is not None}
+        card["schema_version"] = 1
+        card["exported_at"] = _dt.datetime.utcnow().isoformat() + "Z"
+
+        return {"ok": True, "character": card}
+    finally:
+        conn.close()
+
+
 @app.post("/api/characters/import")
 async def import_character(req: Request):
     """Import a character from a JSON export package.
 
     Creates a new character from the provided data. Internal fields
-    like ``id`` and ``_export_*`` metadata are stripped.
+    like ``id``, ``_export_*``, ``schema_version``, and ``exported_at``
+    metadata are stripped before insert.
 
     Args:
         req: JSON body with character fields.
@@ -4406,8 +4458,8 @@ async def import_character(req: Request):
     if not name or not system_prompt:
         raise HTTPException(400, "name and system_prompt required")
 
-    # Strip export metadata
-    for key in ['_export_version', '_exported_at', 'id']:
+    # Strip export metadata (both old _export_* keys and new schema_version/exported_at)
+    for key in ['_export_version', '_exported_at', 'id', 'schema_version', 'exported_at']:
         body.pop(key, None)
 
     # Serialize personality_traits back to JSON string

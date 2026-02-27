@@ -212,6 +212,40 @@ export function CreateView() {
 
   const [creating, setCreating] = useState(false);
 
+  // JSON import state (Feature L)
+  const [importError, setImportError] = useState('');
+  const [importSuccess, setImportSuccess] = useState(false);
+
+  /**
+   * Handle importing a character from a JSON file.
+   * Reads the selected file, parses the JSON, strips export metadata fields,
+   * and calls createCharacter to persist the imported character.
+   *
+   * @param e - File input change event
+   */
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImportError('');
+    setImportSuccess(false);
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed: Record<string, unknown> = JSON.parse(text);
+      // Strip export metadata before sending to createCharacter
+      const { schema_version: _sv, exported_at: _ea, _export_version: _ev, _exported_at: _eoa, ...charData } = parsed;
+      void _sv; void _ea; void _ev; void _eoa;
+      await api.createCharacter(charData as Partial<Character>);
+      await loadCharacters();
+      setImportSuccess(true);
+      setSidebarSection('chats');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Import failed';
+      setImportError(msg);
+    }
+    // Reset file input so the same file can be re-selected if needed
+    e.target.value = '';
+  };
+
   // AI generation state
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState('');
@@ -359,6 +393,38 @@ export function CreateView() {
         {step === 0 && (
           <WizardStep key="identity" direction={direction}>
             <div className="space-y-4">
+
+              {/* ─── Import from JSON file ─── */}
+              <div style={{ marginBottom: 16 }}>
+                <label
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '7px 14px',
+                    borderRadius: 'var(--radius-button)',
+                    border: '1px solid var(--color-border)',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
+                  <Upload size={14} />
+                  Import from file
+                  <input
+                    type="file"
+                    accept=".json"
+                    style={{ display: 'none' }}
+                    onChange={handleImport}
+                  />
+                </label>
+                {importError && (
+                  <p style={{ color: 'var(--color-danger)', fontSize: 11, marginTop: 4 }}>{importError}</p>
+                )}
+                {importSuccess && (
+                  <p style={{ color: 'var(--color-success)', fontSize: 11, marginTop: 4 }}>Character imported!</p>
+                )}
+              </div>
 
               {/* ─── Quick-start from preset template ─── */}
               <div>

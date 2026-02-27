@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MemoryPanel } from './components/MemoryPanel';
 import { VocabPanel } from './components/VocabPanel';
@@ -39,6 +39,42 @@ export function App() {
   const showOnboarding = configLoaded && !config.onboarded;
   const { theme } = useTheme();
   const [showHelp, setShowHelp] = useState(false);
+
+  // PWA install prompt — captured from the browser's beforeinstallprompt event
+  const installPromptRef = useRef<Event & { prompt: () => Promise<void> } | null>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
+
+  useEffect(() => {
+    /**
+     * Capture the browser's install prompt so we can trigger it from our
+     * own button instead of the default browser UI.
+     *
+     * @param {Event} e - The BeforeInstallPromptEvent
+     */
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      installPromptRef.current = e as Event & { prompt: () => Promise<void> };
+      setShowInstallBtn(true);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    // Once installed, hide the button
+    window.addEventListener('appinstalled', () => setShowInstallBtn(false));
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    };
+  }, []);
+
+  /**
+   * Trigger the deferred browser install prompt and hide the button
+   * regardless of whether the user accepts or dismisses it.
+   */
+  const handleInstall = async () => {
+    const prompt = installPromptRef.current;
+    if (!prompt) return;
+    await prompt.prompt();
+    installPromptRef.current = null;
+    setShowInstallBtn(false);
+  };
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -92,6 +128,28 @@ export function App() {
 
       {/* First-run onboarding wizard — shown once, then config.onboarded = true */}
       {showOnboarding && <OnboardingWizard onComplete={() => {}} />}
+
+      {/* PWA install prompt — only visible when browser fires beforeinstallprompt */}
+      {showInstallBtn && (
+        <button
+          onClick={handleInstall}
+          style={{
+            position: 'fixed',
+            bottom: 16,
+            left: 16,
+            zIndex: 999,
+            fontSize: 11,
+            padding: '6px 10px',
+            borderRadius: 8,
+            border: '1px solid var(--color-border)',
+            backgroundColor: 'var(--color-surface)',
+            color: 'var(--color-text-secondary)',
+            cursor: 'pointer',
+          }}
+        >
+          ⬇ Install App
+        </button>
+      )}
     </div>
   );
 }

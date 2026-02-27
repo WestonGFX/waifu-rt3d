@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Share2 } from 'lucide-react';
 import type { Character } from '../lib/types';
 import { api } from '../lib/api';
 
@@ -84,6 +85,28 @@ export function CharacterCard({ character, onClick, lastMessage, timestamp }: Ch
       .catch(() => {});
   }, [character.id]);
 
+  /**
+   * Export the character as a JSON file download.
+   * Calls the export endpoint and triggers a browser download of the
+   * sanitized character card JSON. Stops propagation so the card's
+   * own onClick (open chat) is not triggered.
+   */
+  const handleExport = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const data = await api.exportCharacter(character.id);
+      const blob = new Blob([JSON.stringify(data.character, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(character.name ?? 'character').replace(/[^a-z0-9]/gi, '_')}_character.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+    }
+  };
+
   const showImage = hasImage && !imgFailed;
 
   return (
@@ -135,6 +158,27 @@ export function CharacterCard({ character, onClick, lastMessage, timestamp }: Ch
                 {timestamp}
               </span>
             )}
+            {/* Export/share button — does not open the chat */}
+            <button
+              type="button"
+              onClick={handleExport}
+              title="Export character card"
+              aria-label="Export character card"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '2px',
+                borderRadius: 4,
+                color: 'var(--color-text-tertiary)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                opacity: 0.6,
+              }}
+            >
+              <Share2 size={12} />
+            </button>
           </div>
         </div>
 

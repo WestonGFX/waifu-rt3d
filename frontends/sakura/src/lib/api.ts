@@ -155,6 +155,10 @@ export const api = {
   updateCharacter: (id: number, data: Partial<Character>) => put<Character>(`/api/characters/${id}`, data),
   deleteCharacter: (id: number) => del<{ ok: boolean }>(`/api/characters/${id}`),
 
+  // Character export/import (Feature L)
+  exportCharacter: (charId: number) =>
+    post<{ ok: boolean; character: Record<string, unknown> }>(`/api/characters/export/${charId}`, {}),
+
   // Sessions
   getSessions: () => get<{ sessions: Session[] }>('/api/sessions').then(d => d.sessions),
   createSession: (charId: number) => post<Session>('/api/sessions', { character_id: charId }),

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Lightbulb } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAppStore } from '../stores/appStore';
 
@@ -45,6 +45,22 @@ const PRESETS = [
     traits: ['mysterious', 'dramatic', 'dark', 'secretly-kind'],
     greeting: 'The ancient prophecy foretold your arrival... Welcome to the realm of shadows.',
   },
+  {
+    name: 'Dandere',
+    icon: '🌙',
+    desc: 'Quiet, shy, opens up slowly',
+    prompt: "You are a dandere — quiet and reserved, you rarely speak first. You often trail off mid-sentence and speak softly. Over time you warm up and reveal surprising depth. You observe more than you speak.",
+    traits: ['quiet', 'shy', 'observant', 'deep'],
+    greeting: '...Oh. H-hi. I wasn\'t expecting anyone...',
+  },
+  {
+    name: 'Mentor',
+    icon: '📚',
+    desc: 'Wise, patient, loves to teach',
+    prompt: "You are a wise mentor character. You speak thoughtfully and ask guiding questions rather than giving direct answers. You draw from a deep well of knowledge and experience. You genuinely enjoy helping others grow.",
+    traits: ['wise', 'patient', 'thoughtful', 'guiding'],
+    greeting: "Ah, a new student. Tell me — what is it you truly want to learn today?",
+  },
 ];
 
 /**
@@ -81,8 +97,16 @@ export function DiscoverView() {
         Discover
       </h2>
       <p className="text-xs mb-5" style={{ color: 'var(--color-text-tertiary)' }}>
-        Start with a preset archetype or create from scratch
+        Start with a preset archetype or build your own from scratch
       </p>
+
+      {/* Section label */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: 'var(--color-text-tertiary)' }}>
+          Archetypes
+        </span>
+        <div className="flex-1 h-px" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {PRESETS.map((preset) => (
@@ -156,6 +180,36 @@ export function DiscoverView() {
             </div>
           </div>
         </button>
+      </div>
+
+      {/* Tips section */}
+      <div className="flex items-center gap-2 mt-6 mb-3">
+        <span className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: 'var(--color-text-tertiary)' }}>
+          Tips
+        </span>
+        <div className="flex-1 h-px" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
+      </div>
+      <div className="flex flex-col gap-2">
+        {[
+          { icon: '💬', text: 'Preset characters use the same name as the archetype — rename them in Settings after creating.' },
+          { icon: '🎭', text: 'Edit the system prompt in Settings › Character to fine-tune personality, add backstory, or change speech patterns.' },
+          { icon: '🎙️', text: 'Assign a voice in the Voice tab. Edge-TTS works out of the box; Kokoro and Piper need a local server.' },
+          { icon: '🧠', text: 'The Memory panel (Ctrl+M) lets you add long-term facts the character will always remember.' },
+        ].map(tip => (
+          <div
+            key={tip.text}
+            className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl"
+            style={{
+              backgroundColor: 'var(--color-surface)',
+              border: '1px solid var(--color-border-subtle)',
+            }}
+          >
+            <Lightbulb size={12} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--color-accent)' }} />
+            <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              {tip.text}
+            </p>
+          </div>
+        ))}
       </div>
     </div>
   );

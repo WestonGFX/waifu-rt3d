@@ -13,6 +13,9 @@ import { SessionDrawer } from '../components/SessionDrawer';
  * Includes StatusBar header, scrollable message list, input composer
  * with send/cancel toggle, and an optional slide-out 3D ModelPanel.
  */
+/** After this many ms of silence, the character proactively sends a message. */
+const IDLE_MS = 5 * 60 * 1000;
+
 export function ChatThread() {
   const { activeCharacter } = useAppStore();
   const { messages, draft, loading, setDraft, sendMessage, abortMessage, setContext, loadHistory } = useChatStore();
@@ -21,6 +24,24 @@ export function ChatThread() {
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [incognito, setIncognito] = useState(false);
+
+  // Proactive idle messages — fire once after IDLE_MS of silence, reset on real sends
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleFired = useRef(false);
+
+  useEffect(() => {
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+    if (loading || messages.length === 0 || idleFired.current) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg?.role !== 'assistant' || lastMsg?.status !== 'sent') return;
+    idleTimer.current = setTimeout(() => {
+      if (!useChatStore.getState().loading) {
+        idleFired.current = true;
+        sendMessage('(The conversation has gone quiet. Continue naturally as your character.)', false, true);
+      }
+    }, IDLE_MS);
+    return () => { if (idleTimer.current) clearTimeout(idleTimer.current); };
+  }, [messages, loading, sendMessage]);
 
   useEffect(() => {
     if (!activeCharacter) return;
@@ -47,6 +68,7 @@ export function ChatThread() {
 
   const handleSend = () => {
     if (!draft.trim() || loading) return;
+    idleFired.current = false; // user is active — re-enable idle timer after this reply
     sendMessage(draft, true, incognito);
   };
 

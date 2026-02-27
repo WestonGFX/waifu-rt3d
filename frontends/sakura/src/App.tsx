@@ -1,8 +1,9 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MemoryPanel } from './components/MemoryPanel';
 import { VocabPanel } from './components/VocabPanel';
 import { SettingsDrawer } from './components/SettingsDrawer';
+import { ShortcutHelpModal } from './components/ShortcutHelpModal';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ChatThread } from './views/ChatThread';
 import { CreateView } from './views/CreateView';
@@ -33,6 +34,7 @@ export function App() {
     setSidebarSection
   } = useAppStore();
   const { theme } = useTheme();
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -48,14 +50,16 @@ export function App() {
     { key: 'alt+v', action: () => openOverlay('vocab'), description: 'Open vocabulary manager' },
     { key: 'alt+n', action: () => setSidebarSection('create'), description: 'New character' },
     { key: 'ctrl+\\', action: () => toggleSidebar(), description: 'Toggle sidebar' },
+    { key: '?', action: () => setShowHelp(h => !h), description: 'Show keyboard shortcuts' },
     {
       key: 'escape',
       action: () => {
+        if (showHelp) { setShowHelp(false); return; }
         if (activeOverlay) closeOverlay();
       },
       description: 'Close overlay'
     },
-  ], [openOverlay, closeOverlay, activeOverlay, toggleSidebar, setSidebarSection]);
+  ], [openOverlay, closeOverlay, activeOverlay, toggleSidebar, setSidebarSection, showHelp]);
 
   useKeyboardShortcuts(shortcuts);
 
@@ -80,6 +84,7 @@ export function App() {
       <SettingsDrawer />
       <MemoryPanel />
       <VocabPanel />
+      <ShortcutHelpModal open={showHelp} shortcuts={shortcuts} onClose={() => setShowHelp(false)} />
     </div>
   );
 }

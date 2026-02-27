@@ -76,7 +76,13 @@ class VectorStore:
             logger.error(f"Failed to store memory: {e}")
             return None
 
-    def query_memory(self, text: str, n_results: int = 3, char_id: Optional[int] = None) -> list:
+    def query_memory(
+        self,
+        text: str,
+        n_results: int = 3,
+        char_id: Optional[int] = None,
+        max_dist: float = 1.0,
+    ) -> list:
         """Retrieve relevant past memories via semantic similarity.
 
         Also queries character knowledge docs if char_id is provided,
@@ -86,6 +92,9 @@ class VectorStore:
             text: Query text to find similar memories for.
             n_results: Maximum number of results to return.
             char_id: Optional character ID to filter memories.
+            max_dist: Cosine distance ceiling (0-2); memories with
+                ``dist > max_dist`` are excluded.  Default 1.0 keeps
+                results with at least a 0.0 relevance score.
 
         Returns:
             List of memory dicts with text, role, dist, and metadata.
@@ -107,11 +116,14 @@ class VectorStore:
             if results.get('documents'):
                 for i, doc in enumerate(results['documents'][0]):
                     meta = results['metadatas'][0][i]
+                    dist = results['distances'][0][i] if 'distances' in results else 0
+                    if dist > max_dist:
+                        continue  # skip semantically unrelated memories
                     memories.append({
                         "id": results['ids'][0][i] if results.get('ids') else None,
                         "text": doc,
                         "role": meta['role'],
-                        "dist": results['distances'][0][i] if 'distances' in results else 0,
+                        "dist": dist,
                         "char_id": meta.get('char_id'),
                         "session_id": meta.get('session_id'),
                         "timestamp": meta.get('timestamp')
@@ -252,6 +264,73 @@ class VectorStore:
         except Exception as e:
             logger.error(f"Failed to store doc chunks: {e}")
         return stored
+
+    def query_doc_chunks(
+        self,
+        char_id: int,
+        query: str,
+        n_results: int = 3,
+        max_dist: float = 0.85,
+    ) -> list:
+        """Semantic search over a character's knowledge base documents.
+
+        Used by the ``read_knowledge`` agent tool to find relevant passages
+        from uploaded files.  Results are filtered by a maximum cosine
+        distance threshold to avoid returning irrelevant chunks.
+
+        Args:
+            char_id: Character whose documents to search.
+            query: Natural-language search query to embed.
+            n_results: Maximum number of chunks to return.
+            max_dist: Cosine distance ceiling (0-2); chunks with
+                ``dist > max_dist`` are excluded.  Default 0.85 keeps
+                results with a relevance score of ≥ 0.15.
+
+        Returns:
+            List of dicts with keys: ``text``, ``dist``, ``filename``,
+            ``doc_id``, ``chunk_index``.  Sorted by ascending distance
+            (most relevant first).
+
+        Example:
+            >>> results = store.query_doc_chunks(1, "favourite food", 3)
+            >>> results[0]["filename"]
+            'character_lore.txt'
+        """
+        try:
+            query_embedding = self.model.encode(query).tolist()
+            raw = self.docs_collection.query(
+                query_embeddings=[query_embedding],
+                n_results=n_results,
+                where={"char_id": char_id},
+            )
+
+            chunks = []
+            if raw.get("documents"):
+                for i, doc in enumerate(raw["documents"][0]):
+                    dist = (
+                        raw["distances"][0][i]
+                        if "distances" in raw
+                        else 0.0
+                    )
+                    if dist > max_dist:
+                        continue  # skip irrelevant results
+                    meta = raw["metadatas"][0][i] if raw.get("metadatas") else {}
+                    chunks.append(
+                        {
+                            "text": doc,
+                            "dist": dist,
+                            "filename": meta.get("filename", ""),
+                            "doc_id": meta.get("doc_id"),
+                            "chunk_index": meta.get("chunk_index", 0),
+                        }
+                    )
+
+            chunks.sort(key=lambda c: c["dist"])
+            return chunks
+
+        except Exception as e:
+            logger.error("Doc chunk query failed for char %s: %s", char_id, e)
+            return []
 
     def delete_doc_chunks(self, doc_id: int) -> bool:
         """Delete all chunks belonging to a document.

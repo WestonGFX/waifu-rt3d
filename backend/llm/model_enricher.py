@@ -330,8 +330,14 @@ def _detect_capabilities(
     # ── Tool / function calling ───────────────────────────────────────────
     supports_tools = bool(tags & _TOOL_TAGS) or any(p in name for p in _TOOL_PATTERNS)
     if not supports_tools:
-        # Heuristic: modern instruct-tuned members of major families support tools
-        is_instruct = "instruct" in name or "chat" in name or "it" in name
+        # Heuristic: modern instruct-tuned members of major families support tools.
+        # Use word-boundary patterns so "-it" or "-instruct" suffixes match but
+        # "community" does not (avoids false positive on lmstudio-community paths).
+        is_instruct = bool(
+            re.search(r"[-/.]instruct(?:[^a-z]|$)", name)
+            or re.search(r"[-/.]chat(?:[^a-z]|$)", name)
+            or re.search(r"[-/.](it|ift)(?:[^a-z]|$)", name)
+        )
         family_match = any(f in name for f in _TOOL_INSTRUCT_FAMILIES)
         if is_instruct and family_match:
             supports_tools = True

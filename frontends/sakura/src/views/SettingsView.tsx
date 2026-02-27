@@ -243,6 +243,41 @@ function CharacterTab() {
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  /** Download the active character as a .json file (id stripped for portability). */
+  const exportCharacter = () => {
+    if (!activeCharacter) return;
+    const { id: _id, ...exportable } = activeCharacter;
+    const blob = new Blob([JSON.stringify(exportable, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(activeCharacter.name || 'character').replace(/[^a-z0-9]/gi, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  /** Import a character from a .json file. Creates a new character (does not overwrite). */
+  const importCharacter = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError(null);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        if (!data.name || !data.system_prompt) throw new Error('Missing required fields: name, system_prompt');
+        const { id: _id, ...fields } = data; // strip id if present
+        await api.createCharacter(fields);
+        await loadCharacters();
+      } catch (err: unknown) {
+        setImportError(err instanceof Error ? err.message : 'Invalid character file');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // reset so same file can be re-imported
+  };
   const [localData, setLocalData] = useState({
     avatar_url: '',
     model_vrm: '',
@@ -487,6 +522,27 @@ function CharacterTab() {
       {/* Save + Delete buttons */}
       <div className="flex items-center justify-between gap-3">
         {/* Delete with two-step confirmation */}
+        {/* Export / Import */}
+        <button
+          onClick={exportCharacter}
+          className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+          style={{ color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)', background: 'transparent' }}
+          title="Download character as JSON"
+        >
+          Export
+        </button>
+        <label
+          className="px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer"
+          style={{ color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)', background: 'transparent' }}
+          title="Import character from JSON file"
+        >
+          Import
+          <input type="file" accept=".json,application/json" onChange={importCharacter} className="hidden" />
+        </label>
+        {importError && (
+          <span className="text-xs" style={{ color: 'var(--color-danger)' }}>{importError}</span>
+        )}
+
         {!confirmDelete ? (
           <button
             onClick={() => setConfirmDelete(true)}

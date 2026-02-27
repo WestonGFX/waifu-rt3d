@@ -80,6 +80,8 @@ export function SettingsView() {
   } = useAppStore();
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [savedFlash, setSavedFlash] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Jump to tab requested by openSettingsTab() and clear the request
   useEffect(() => {
@@ -108,6 +110,13 @@ export function SettingsView() {
 
   useEffect(() => { fetchLmModels(); }, [fetchLmModels]);
 
+  /** Flash the "Saved ✓" indicator for 1.5 s after a successful save. */
+  const flashSaved = () => {
+    setSavedFlash(true);
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setSavedFlash(false), 1500);
+  };
+
   /** Save a nested config key like "llm.model". */
   const save = (key: string, value: unknown) => {
     // For nested keys, merge properly with existing parent object
@@ -115,9 +124,9 @@ export function SettingsView() {
     if (parts.length === 2) {
       const [parent, child] = parts;
       const existing = (config[parent] as Record<string, unknown>) || {};
-      saveConfig({ [parent]: { ...existing, ...{ [child]: value } } });
+      saveConfig({ [parent]: { ...existing, ...{ [child]: value } } }).then(flashSaved).catch(() => {});
     } else {
-      saveConfig({ [key]: value });
+      saveConfig({ [key]: value }).then(flashSaved).catch(() => {});
     }
   };
 
@@ -128,7 +137,7 @@ export function SettingsView() {
     <div className="flex flex-col h-full">
       {/* Tab bar */}
       <div
-        className="flex gap-1 p-2 overflow-x-auto flex-shrink-0"
+        className="flex items-center gap-1 p-2 overflow-x-auto flex-shrink-0"
         style={{
           borderBottom: '1px solid var(--color-border-subtle)',
           backgroundColor: 'var(--color-surface)',
@@ -153,6 +162,16 @@ export function SettingsView() {
             </button>
           );
         })}
+        {/* Saved feedback — appears briefly after any setting is saved */}
+        {savedFlash && (
+          <span
+            className="ml-auto flex items-center gap-1 text-[10px] font-medium flex-shrink-0"
+            style={{ color: 'var(--color-success)' }}
+          >
+            <CheckCircle size={11} />
+            Saved
+          </span>
+        )}
       </div>
 
       {/* Tab content */}

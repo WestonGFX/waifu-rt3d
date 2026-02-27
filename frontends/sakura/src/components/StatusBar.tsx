@@ -19,6 +19,19 @@ function scoreColor(v: number): string {
   return 'var(--color-text-tertiary)';
 }
 
+/** Affinity tiers — map 0–1 affinity value to a label and accent color. */
+const AFFINITY_TIERS = [
+  { min: 0.90, label: 'Soulmate', color: 'var(--color-accent)' },
+  { min: 0.70, label: 'Devoted',  color: 'var(--color-success)' },
+  { min: 0.50, label: 'Close',    color: 'var(--color-accent)' },
+  { min: 0.30, label: 'Friendly', color: 'var(--color-text-secondary)' },
+  { min: 0.00, label: 'Neutral',  color: 'var(--color-text-tertiary)' },
+] as const;
+
+function getAffinityTier(affinity: number) {
+  return AFFINITY_TIERS.find(t => affinity >= t.min) ?? AFFINITY_TIERS[AFFINITY_TIERS.length - 1];
+}
+
 interface RelationshipData {
   affinity: number;
   mood: number;
@@ -43,6 +56,7 @@ function RelationshipBar({ charId, messageCount }: { charId: number; messageCoun
 
   if (!rel) return null;
 
+  const tier = getAffinityTier(rel.affinity);
   const stats: Array<{ key: keyof RelationshipData; emoji: string; label: string }> = [
     { key: 'affinity', emoji: '♥', label: 'Affinity' },
     { key: 'mood',     emoji: '✦', label: 'Mood' },
@@ -51,6 +65,23 @@ function RelationshipBar({ charId, messageCount }: { charId: number; messageCoun
 
   return (
     <div className="flex items-center gap-2.5 mt-0.5">
+      {/* Tier badge */}
+      <span
+        title={`Affinity: ${Math.round(rel.affinity * 100)}%`}
+        style={{
+          fontSize: 8,
+          fontWeight: 600,
+          padding: '1px 5px',
+          borderRadius: 99,
+          border: `1px solid ${tier.color}`,
+          color: tier.color,
+          lineHeight: 1.6,
+          letterSpacing: '0.02em',
+          flexShrink: 0,
+        }}
+      >
+        {tier.label}
+      </span>
       {stats.map(({ key, emoji, label }) => (
         <div key={key} className="flex items-center gap-1" title={`${label}: ${(rel[key] as number * 100).toFixed(0)}%`}>
           <span style={{ fontSize: '8px', color: scoreColor(rel[key] as number), lineHeight: 1 }}>

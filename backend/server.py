@@ -2638,12 +2638,15 @@ async def chat_stream(req: Request):
                 }
                 yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
-                _fire_webhooks({
-                    "character": stream_char_name if stream_char_name else "",
-                    "reply": clean_reply,
-                    "emotion": emotion,
-                    "session_id": session_id,
-                })
+                try:
+                    _fire_webhooks({
+                        "character": stream_char_name if stream_char_name else "",
+                        "reply": clean_reply,
+                        "emotion": emotion,
+                        "session_id": session_id,
+                    })
+                except Exception as _wh_err:
+                    logger.warning(f"Webhook fire failed (non-critical): {_wh_err}")
 
             except Exception as e:
                 logger.error(f"Agentic stream error: {e}", exc_info=True)
@@ -2848,12 +2851,15 @@ async def chat_stream(req: Request):
                 yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
                 # Fire outbound webhooks (#62) — non-blocking background threads
-                _fire_webhooks({
-                    "character": stream_char_name if stream_char_name else "",
-                    "reply": clean_reply,
-                    "emotion": emotion,
-                    "session_id": session_id,
-                })
+                try:
+                    _fire_webhooks({
+                        "character": stream_char_name if stream_char_name else "",
+                        "reply": clean_reply,
+                        "emotion": emotion,
+                        "session_id": session_id,
+                    })
+                except Exception as _wh_err:
+                    logger.warning(f"Webhook fire failed (non-critical): {_wh_err}")
 
             except Exception as e:
                 logger.error(f"Stream chat error: {e}", exc_info=True)

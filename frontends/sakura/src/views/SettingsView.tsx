@@ -1132,13 +1132,46 @@ interface BrainTabProps {
   lmModels: LMStudioModel[]; lmLoading: boolean; fetchLmModels: () => void;
 }
 
+/** Provider presets: clicking one auto-fills endpoint + provider key. */
+const PROVIDER_PRESETS = [
+  { label: 'LM Studio', provider: 'openai',  endpoint: 'http://localhost:1234/v1' },
+  { label: 'Ollama',    provider: 'ollama',  endpoint: 'http://localhost:11434/v1' },
+  { label: 'Claude',    provider: 'claude',  endpoint: 'https://api.anthropic.com' },
+  { label: 'OpenAI',    provider: 'openai',  endpoint: 'https://api.openai.com/v1' },
+] as const;
+
 function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabProps) {
   const currentModel = String(cfg('llm.model', ''));
+  const currentProvider = String(cfg('llm.provider', 'openai'));
+  const currentEndpoint = String(cfg('llm.endpoint', ''));
   const loadedModels = lmModels.filter(m => m.state === 'loaded');
   const unloadedModels = lmModels.filter(m => m.state !== 'loaded');
   const { activeCharacter } = useAppStore();
 
-  /** Auto-detect context window from loaded model. */
+  // Ollama model list (fetched separately from LM Studio)
+  const [ollamaModels, setOllamaModels] = useState<LMStudioModel[]>([]);
+  const [ollamaLoading, setOllamaLoading] = useState(false);
+  const fetchOllamaModels = useCallback(async () => {
+    setOllamaLoading(true);
+    try {
+      const models = await api.getOllamaModels();
+      setOllamaModels(models);
+    } catch { /* Ollama not reachable */ }
+    finally { setOllamaLoading(false); }
+  }, []);
+
+  // Auto-fetch Ollama model list when provider is set to ollama
+  useEffect(() => {
+    if (currentProvider === 'ollama') fetchOllamaModels();
+  }, [currentProvider, fetchOllamaModels]);
+
+  // When provider is ollama, show Ollama models; otherwise show LM Studio models
+  const isOllama = currentProvider === 'ollama';
+  const modelList = isOllama ? ollamaModels : lmModels;
+  const modelListLoading = isOllama ? ollamaLoading : lmLoading;
+  const refreshModels = isOllama ? fetchOllamaModels : fetchLmModels;
+
+  /** Auto-detect context window from the first loaded LM Studio model. */
   const autoDetectContext = () => {
     const loaded = loadedModels[0];
     if (loaded?.max_context_length) {
@@ -1180,21 +1213,51 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
       <section className="mb-6">
         <SectionHeader title="Language Model" />
         <div style={cardStyle} className="px-4">
+          {/* Provider preset quick-pick */}
+          <SettingField label="Backend" description="Choose your local AI runtime."
+            tooltip="Clicking a preset fills in the endpoint and provider automatically. You can still edit the endpoint manually.">
+            <div className="flex gap-1 flex-wrap">
+              {PROVIDER_PRESETS.map(p => {
+                const active = currentProvider === p.provider && currentEndpoint === p.endpoint;
+                return (
+                  <button
+                    key={p.label}
+                    onClick={() => { save('llm.provider', p.provider); save('llm.endpoint', p.endpoint); }}
+                    className="text-xs px-2.5 py-1 rounded transition-all"
+                    style={{
+                      background: active ? 'var(--color-accent-gradient)' : 'var(--color-surface-raised)',
+                      color: active ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
+                      border: `1px solid ${active ? 'var(--color-accent)' : 'var(--color-border-subtle)'}`,
+                    }}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+          </SettingField>
+
           {/* LLM Endpoint */}
-          <SettingField label="LLM Endpoint" description="OpenAI-compatible API URL (e.g. LM Studio, Ollama, llama.cpp)."
-            tooltip="Default: http://localhost:1234/v1. Change if your LLM server runs on a different port or machine.">
+          <SettingField label="LLM Endpoint" description="OpenAI-compatible API URL."
+            tooltip="LM Studio default: http://localhost:1234/v1 · Ollama: http://localhost:11434/v1 · Change if running on a different port or machine.">
             <input
               type="text"
-              value={String(cfg('llm.endpoint', ''))}
+              value={currentEndpoint}
               onChange={(e) => save('llm.endpoint', e.target.value)}
               placeholder="http://localhost:1234/v1"
               className="text-sm px-2 py-1 w-56 rounded" style={selectStyle}
             />
           </SettingField>
 
-          {/* Active Model dropdown */}
-          <SettingField label="Active Model" description="Select from LM Studio or type a model name."
-            tooltip="Shows models from LM Studio. Loaded models are marked. Click refresh to re-scan.">
+          {/* Active Model dropdown — shows LM Studio or Ollama models depending on provider */}
+          <SettingField
+            label="Active Model"
+            description={isOllama ? 'Select from installed Ollama models.' : 'Select from LM Studio or type a model name.'}
+            tooltip={isOllama
+              ? 'Ollama loads models on demand. Click ↻ to refresh.'
+              : 'Shows models from LM Studio. Loaded models are marked. Click ↻ to re-scan.'
+            }
+          >
             <div className="flex items-center gap-2">
               <select
                 value={currentModel}
@@ -1202,31 +1265,41 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
                 className="text-sm px-2 py-1 rounded w-48" style={selectStyle}
               >
                 <option value="">-- Select Model --</option>
-                {loadedModels.length > 0 && (
+                {/* LM Studio: separate Loaded / Available groups */}
+                {!isOllama && loadedModels.length > 0 && (
                   <optgroup label="Loaded (Active)">
                     {loadedModels.map(m => (
                       <option key={m.id} value={m.id}>{m.id}</option>
                     ))}
                   </optgroup>
                 )}
-                {unloadedModels.length > 0 && (
+                {!isOllama && unloadedModels.length > 0 && (
                   <optgroup label="Available">
                     {unloadedModels.map(m => (
                       <option key={m.id} value={m.id}>{m.id}</option>
                     ))}
                   </optgroup>
                 )}
-                {currentModel && !lmModels.find(m => m.id === currentModel) && (
+                {/* Ollama: flat list (loads on demand) */}
+                {isOllama && ollamaModels.length > 0 && (
+                  <optgroup label="Installed">
+                    {ollamaModels.map(m => (
+                      <option key={m.id} value={m.id}>{m.id}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {/* Manual entry fallback when model not in list */}
+                {currentModel && !modelList.find(m => m.id === currentModel) && (
                   <option value={currentModel}>{currentModel} (manual)</option>
                 )}
               </select>
               <button
-                onClick={fetchLmModels}
+                onClick={refreshModels}
                 className="text-xs px-2 py-1 rounded"
                 style={selectStyle}
                 title="Refresh model list"
               >
-                {lmLoading ? '...' : '↻'}
+                {modelListLoading ? '...' : '↻'}
               </button>
             </div>
           </SettingField>

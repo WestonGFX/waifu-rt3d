@@ -278,6 +278,8 @@ export const api = {
   // LM Studio Model Manager
   getInstalledModels: () =>
     get<{ models: LMStudioModel[] }>('/api/models/installed').then(d => d.models ?? []),
+  getOllamaModels: () =>
+    get<{ ok: boolean; models: LMStudioModel[] }>('/api/ollama/models').then(d => d.models ?? []),
   getRecommendedModels: (type: string) =>
     get<{ models: RecommendedModel[] }>(`/api/models/recommend?type=${type}`).then(d => d.models ?? []),
   getModelDetails: (id: string) =>

@@ -5672,6 +5672,61 @@ async def lm_studio_models():
         return {"ok": False, "error": str(e), "models": []}
 
 
+@app.get("/api/ollama/models")
+async def ollama_models():
+    """Query the local Ollama installation for installed models.
+
+    Calls ``GET /api/tags`` on the Ollama server (default port 11434) and
+    normalises the response into the same shape as ``/api/lm-studio/models``
+    so the frontend can use a single code path for both backends.
+
+    Returns:
+        dict: ``{ok: bool, models: list}`` where each model contains
+              ``id`` (name:tag), ``size`` (bytes), ``architecture``, and
+              ``quantization``.  ``state`` is always ``"not-loaded"`` because
+              Ollama loads models on demand per request.
+
+    Example:
+        >>> GET /api/ollama/models
+        {"ok": true, "models": [{"id": "llama3.2:latest", "architecture": "llama", ...}]}
+    """
+    cfg = load_config()
+    endpoint = _get_llm_endpoint(cfg)
+    # Derive base URL: strip /v1 suffix that the LLM endpoint contains
+    base_url = endpoint.replace("/v1", "").rstrip("/")
+    # If the configured endpoint doesn't point at Ollama's port, fall back to
+    # the standard Ollama default so the button works even when the user hasn't
+    # updated their endpoint yet.
+    if "11434" not in base_url:
+        base_url = "http://localhost:11434"
+
+    try:
+        import requests as req
+        r = req.get(f"{base_url}/api/tags", timeout=3)
+        if r.status_code != 200:
+            return {"ok": False, "error": f"Ollama returned {r.status_code}", "models": []}
+
+        raw_models = r.json().get("models", [])
+        models = [
+            {
+                "id": m.get("name", ""),
+                "size": m.get("size"),
+                "architecture": m.get("details", {}).get("family"),
+                "quantization": m.get("details", {}).get("quantization_level"),
+                "parameter_size": m.get("details", {}).get("parameter_size"),
+                # Ollama pulls models into local storage; they load on first use
+                "state": "not-loaded",
+                "format": "gguf",
+            }
+            for m in raw_models
+        ]
+        return {"ok": True, "models": models}
+
+    except Exception as e:
+        logger.warning(f"Could not query Ollama models: {e}")
+        return {"ok": False, "error": str(e), "models": []}
+
+
 @app.get("/api/models/capabilities")
 async def get_model_capabilities(model_id: str, context_length: int = None):
     """Enrich a model identifier with HuggingFace capability metadata.

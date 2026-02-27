@@ -1,34 +1,36 @@
-import requests
-import logging
-from .base import LLMAdapter
+"""Ollama LLM adapter.
 
-logger = logging.getLogger("waifu.llm.ollama")
+Delegates entirely to :class:`OpenAICompatAdapter` using Ollama's built-in
+OpenAI-compatible ``/v1/chat/completions`` endpoint, which supports streaming,
+tool calling, and all standard sampling parameters.
 
-class OllamaAdapter(LLMAdapter):
-    def chat(self, messages, model, endpoint, api_key, **kw):
-        # Ollama API: POST /api/chat
-        base_url = endpoint.rstrip('/')
-        url = f"{base_url}/api/chat"
-        
-        # Convert system prompt to Ollama format if needed, 
-        # but Ollama supports standard messages list now.
-        
-        payload = {
-            "model": model,
-            "messages": messages,
-            "stream": False,
-            "options": {
-                "temperature": kw.get("temperature", 0.7)
-            }
-        }
-        
-        try:
-            r = requests.post(url, json=payload, timeout=(5, 90))
-            if r.status_code != 200:
-                return {"ok": False, "error": f"Ollama Error {r.status_code}: {r.text}", "code": "ERR_OLLAMA"}
-                
-            data = r.json()
-            return {"ok": True, "reply": data.get("message", {}).get("content", ""), "raw": data}
-            
-        except Exception as e:
-            return {"ok": False, "error": str(e), "code": "ERR_CONN"}
+The native ``/api/chat`` route is **not** used here because it lacks tool
+calling support and requires a different streaming format.  Since Ollama 0.1.24
+the ``/v1`` path is the canonical way to consume Ollama from any OpenAI client.
+
+Usage:
+    Set ``llm.provider = "ollama"`` and ``llm.endpoint = "http://localhost:11434/v1"``
+    in ``backend/config/app.json``.  The ``get_client()`` factory in
+    ``backend/llm/registry.py`` will return this adapter automatically.
+
+Example:
+    >>> adapter = OllamaAdapter()
+    >>> for token in adapter.chat_stream(
+    ...     messages=[{"role": "user", "content": "Hi"}],
+    ...     model="llama3.2", endpoint="http://localhost:11434", api_key="",
+    ... ):
+    ...     print(token, end="")
+"""
+from .openai_compat import OpenAICompatAdapter
+
+
+class OllamaAdapter(OpenAICompatAdapter):
+    """LLM adapter for local Ollama installations.
+
+    Extends :class:`OpenAICompatAdapter` with no overrides — Ollama's
+    ``/v1/chat/completions`` endpoint is fully OpenAI-compatible.
+    Supports streaming, tool calling, and vision (for multimodal models).
+
+    Default endpoint: ``http://localhost:11434``
+    API key: not required (pass any non-empty string or leave blank)
+    """

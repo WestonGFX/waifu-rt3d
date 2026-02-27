@@ -151,12 +151,14 @@ class TestMoodTool:
             "gesture": "nod",
             "all_emotions": [{"label": "joy", "score": 0.85}],
         }
-        with patch(
-            "backend.emotion.advanced_sentiment.AdvancedSentimentAnalyzer"
-        ) as MockAnalyzer:
-            instance = MockAnalyzer.return_value
-            instance.analyze.return_value = mock_result
-
+        # Use sys.modules injection instead of patch() — the module imports
+        # transformers/torch at module level, so it can't be imported in CI.
+        # Injecting a MagicMock into sys.modules lets the mood tool's lazy
+        # `from backend.emotion.advanced_sentiment import AdvancedSentimentAnalyzer`
+        # resolve to our mock without touching the real module.
+        mock_module = MagicMock()
+        mock_module.AdvancedSentimentAnalyzer.return_value.analyze.return_value = mock_result
+        with patch.dict("sys.modules", {"backend.emotion.advanced_sentiment": mock_module}):
             result = await mood_tool.execute(
                 {"text": "I'm so happy today!"}, context
             )

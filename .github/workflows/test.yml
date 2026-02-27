@@ -23,12 +23,15 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
-          # lighter-weight test-only installs (no GPU packages)
-          pip install fastapi uvicorn httpx pytest pytest-asyncio
+          # Core server dependencies (chromadb excluded — tests mock the vector store)
+          pip install \
+            fastapi uvicorn starlette python-multipart psutil requests httpx \
+            edge-tts huggingface_hub
+          # Test runner
+          pip install pytest pytest-asyncio
 
       - name: Run unit tests
-        run: pytest tests/ -v --tb=short
+        run: pytest backend/tests/ -v --tb=short
 
   lint-frontend:
     name: Frontend lint (ESLint)
@@ -63,3 +66,25 @@ jobs:
           else
             echo "No ESLint config found — skipping lint"
           fi
+
+  frontend-tests:
+    name: Sakura frontend tests (Vitest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontends/sakura/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontends/sakura
+        run: npm ci
+
+      - name: Run Vitest
+        working-directory: frontends/sakura
+        run: npx vitest run

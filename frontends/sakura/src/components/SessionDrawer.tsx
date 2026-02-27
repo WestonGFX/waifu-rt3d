@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Pencil, Trash2, Check, Search } from 'lucide-react';
 import { api } from '../lib/api';
 import { useChatStore } from '../stores/chatStore';
+import { useAppStore } from '../stores/appStore';
 import type { Session } from '../lib/types';
 
 interface SessionDrawerProps {
@@ -20,10 +21,57 @@ interface SessionDrawerProps {
  */
 export function SessionDrawer({ open, onClose, characterId, characterName }: SessionDrawerProps) {
   const { sessionId, setContext, loadHistory } = useChatStore();
+  const { mobileMode } = useAppStore();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Swipe-to-delete state (mobile mode only) — refs to avoid 60fps re-renders
+  const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const activeSwipe = useRef<{ id: number; startX: number } | null>(null);
+
+  const setRowRef = (id: number) => (el: HTMLDivElement | null) => {
+    if (el) rowRefs.current.set(id, el);
+    else rowRefs.current.delete(id);
+  };
+
+  const onSwipeTouchStart = (e: React.TouchEvent, id: number) => {
+    if (!mobileMode) return;
+    activeSwipe.current = { id, startX: e.touches[0].clientX };
+  };
+
+  const onSwipeTouchMove = (e: React.TouchEvent, id: number) => {
+    if (!mobileMode || !activeSwipe.current || activeSwipe.current.id !== id) return;
+    const deltaX = Math.min(0, e.touches[0].clientX - activeSwipe.current.startX);
+    const el = rowRefs.current.get(id);
+    if (el) {
+      el.style.transform = `translateX(${deltaX}px)`;
+      el.style.opacity = String(Math.max(0.3, 1 + deltaX / 150));
+    }
+  };
+
+  const onSwipeTouchEnd = (_e: React.TouchEvent, id: number) => {
+    if (!mobileMode || !activeSwipe.current || activeSwipe.current.id !== id) return;
+    const el = rowRefs.current.get(id);
+    activeSwipe.current = null;
+    if (!el) return;
+    const match = el.style.transform.match(/translateX\((-?\d+(?:\.\d+)?)px\)/);
+    const offset = match ? parseFloat(match[1]) : 0;
+    if (offset < -100) {
+      // Crossed dismiss threshold → animate out and delete
+      el.style.transition = 'transform 0.2s, opacity 0.2s';
+      el.style.transform = 'translateX(-100%)';
+      el.style.opacity = '0';
+      setTimeout(() => deleteSession(id), 210);
+    } else {
+      // Snap back
+      el.style.transition = 'transform 0.25s, opacity 0.25s';
+      el.style.transform = 'translateX(0)';
+      el.style.opacity = '1';
+      setTimeout(() => { if (rowRefs.current.get(id)) rowRefs.current.get(id)!.style.transition = ''; }, 260);
+    }
+  };
 
   /** Filter sessions by search query (matches title). */
   const filteredSessions = useMemo(() => {
@@ -179,12 +227,16 @@ export function SessionDrawer({ open, onClose, characterId, characterName }: Ses
                   return (
                     <div
                       key={session.id}
+                      ref={setRowRef(session.id)}
                       className="group flex items-center gap-2 px-3 py-2 rounded-lg mb-1 transition-all duration-150 cursor-pointer"
                       style={{
                         backgroundColor: active ? 'var(--color-accent-soft)' : 'transparent',
                         border: active ? '1px solid var(--color-accent)' : '1px solid transparent',
                       }}
                       onClick={() => !editing && switchTo(session)}
+                      onTouchStart={e => onSwipeTouchStart(e, session.id)}
+                      onTouchMove={e => onSwipeTouchMove(e, session.id)}
+                      onTouchEnd={e => onSwipeTouchEnd(e, session.id)}
                     >
                       {editing ? (
                         <div className="flex-1 flex items-center gap-1">

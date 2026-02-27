@@ -237,10 +237,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       // Auto-title the session after the first exchange (fire-and-forget)
       if (isFirstExchange && sessionId && fullText) {
         const reply = (get().messages.find(m => m.id === assistantId)?.text || fullText).slice(0, 200);
-        api.llmGenerate([{
-          role: 'user',
-          content: `Create a very short (3–5 word) title for a conversation that starts:\nUser: "${trimmed}"\nAssistant: "${reply}"\nRespond with ONLY the title, no punctuation, no quotes.`
-        }], 0.7, 20)
+        api.llmGenerate([
+          {
+            role: 'system',
+            content: 'You generate short chat session titles. Output 3 to 5 words. No punctuation. No quotes. Nothing else.'
+          },
+          {
+            role: 'user',
+            content: `User said: ${trimmed}\nAssistant replied: ${reply}`
+          }
+        ], 0.7, 20)
           .then(r => api.updateSession(sessionId, { title: r.text.trim() }))
           .catch(() => {}); // non-critical, ignore failures
       }

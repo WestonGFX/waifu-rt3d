@@ -7,6 +7,14 @@ import { api } from '../lib/api';
 type SidebarSection = 'chats' | 'characters' | 'create';
 type ChatLayout = 'chat-first' | 'model-first' | 'split';
 
+/**
+ * UI density / layout mode.
+ * - normal:   full descriptions, standard spacing
+ * - compact:  hides field descriptions, tighter spacing
+ * - mobile:   hides descriptions + enables touch gestures (swipe-to-archive, etc.)
+ */
+export type LayoutMode = 'normal' | 'compact' | 'mobile';
+
 /** Overlay drawers that slide out over the main content. */
 type Overlay = 'settings' | 'memory' | 'vocab' | null;
 
@@ -56,10 +64,16 @@ interface AppState {
   memoryPanelOpen: boolean;
   toggleMemoryPanel: () => void;
 
-  // Settings
+  // Display mode
   advancedMode: boolean;
   toggleAdvancedMode: () => void;
+  layoutMode: LayoutMode;
+  setLayoutMode: (mode: LayoutMode) => void;
+  /** Computed: true when layoutMode is compact or mobile (hides descriptions). */
   compactMode: boolean;
+  /** Computed: true when layoutMode is mobile (enables touch gestures). */
+  mobileMode: boolean;
+  /** @deprecated Use setLayoutMode. Kept for backward compatibility. */
   toggleCompactMode: () => void;
 
   // Legacy compat (kept for components that still reference these)
@@ -138,11 +152,22 @@ export const useAppStore = create<AppState>()(
       memoryPanelOpen: false,
       toggleMemoryPanel: () => set((s) => ({ memoryPanelOpen: !s.memoryPanelOpen })),
 
-      // Settings
+      // Display mode
       advancedMode: false,
       toggleAdvancedMode: () => set((s) => ({ advancedMode: !s.advancedMode })),
+      layoutMode: 'normal',
+      setLayoutMode: (mode) => set({
+        layoutMode: mode,
+        compactMode: mode !== 'normal',
+        mobileMode: mode === 'mobile',
+      }),
       compactMode: false,
-      toggleCompactMode: () => set((s) => ({ compactMode: !s.compactMode })),
+      mobileMode: false,
+      toggleCompactMode: () => {
+        // Legacy shim: toggles between normal ↔ compact
+        const { layoutMode } = get();
+        get().setLayoutMode(layoutMode === 'compact' ? 'normal' : 'compact');
+      },
 
       // Legacy compat — maps to new layout for components still using old API
       activeTab: 'chats',
@@ -160,10 +185,21 @@ export const useAppStore = create<AppState>()(
       partialize: (s) => ({
         chatLayout: s.chatLayout,
         advancedMode: s.advancedMode,
-        compactMode: s.compactMode,
+        layoutMode: s.layoutMode,
         sidebarCollapsed: s.sidebarCollapsed,
         sidebarSection: s.sidebarSection
-      })
+      }),
+      // Migrate old compactMode: true → layoutMode: 'compact'
+      merge: (persisted: unknown, current) => {
+        const p = persisted as Partial<AppState & { compactMode?: boolean }>;
+        const merged = { ...current, ...p };
+        if (!p.layoutMode && p.compactMode) {
+          merged.layoutMode = 'compact';
+          merged.compactMode = true;
+          merged.mobileMode = false;
+        }
+        return merged;
+      },
     }
   )
 );

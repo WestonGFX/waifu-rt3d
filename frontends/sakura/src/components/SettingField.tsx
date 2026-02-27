@@ -12,7 +12,8 @@ interface SettingFieldProps {
 
 /** Reusable settings row with label, description, tooltip, and control slot. */
 export function SettingField({ label, description, tooltip, advanced, children }: SettingFieldProps) {
-  const { advancedMode, compactMode } = useAppStore();
+  const { advancedMode, layoutMode } = useAppStore();
+  const compactMode = layoutMode !== 'normal';
   const [showTooltip, setShowTooltip] = useState(false);
 
   if (advanced && !advancedMode) return null;

@@ -41,12 +41,13 @@ export function App() {
   }, []);
 
   // Global keyboard shortcuts
+  // Note: ctrl+k, ctrl+n, ctrl+b are Chrome reserved — use Alt or ctrl+\ instead.
   const shortcuts = useMemo(() => [
     { key: 'ctrl+,', action: () => openOverlay('settings'), description: 'Open settings' },
     { key: 'ctrl+m', action: () => openOverlay('memory'), description: 'Open memory manager' },
-    { key: 'ctrl+k', action: () => openOverlay('vocab'), description: 'Open vocabulary manager' },
-    { key: 'ctrl+n', action: () => setSidebarSection('create'), description: 'New character' },
-    { key: 'ctrl+b', action: () => toggleSidebar(), description: 'Toggle sidebar' },
+    { key: 'alt+v', action: () => openOverlay('vocab'), description: 'Open vocabulary manager' },
+    { key: 'alt+n', action: () => setSidebarSection('create'), description: 'New character' },
+    { key: 'ctrl+\\', action: () => toggleSidebar(), description: 'Toggle sidebar' },
     {
       key: 'escape',
       action: () => {

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Brain, Volume2, Palette, Shield, Image, Settings, Package, User
+  Brain, Volume2, Palette, Shield, Image, Settings, Package, User, Monitor
 } from 'lucide-react';
+import type { LayoutMode } from '../stores/appStore';
 import { useAppStore } from '../stores/appStore';
 import { useTheme } from '../hooks/useTheme';
 import { SettingField } from '../components/SettingField';
@@ -69,7 +70,7 @@ interface LMStudioModel {
 export function SettingsView() {
   const {
     advancedMode, toggleAdvancedMode,
-    compactMode, toggleCompactMode,
+    layoutMode, setLayoutMode,
     config, saveConfig,
     settingsInitTab,
   } = useAppStore();
@@ -157,7 +158,7 @@ export function SettingsView() {
             config={config} save={save} cfg={cfg}
             theme={theme} setTheme={setTheme}
             advancedMode={advancedMode} toggleAdvancedMode={toggleAdvancedMode}
-            compactMode={compactMode} toggleCompactMode={toggleCompactMode}
+            layoutMode={layoutMode} setLayoutMode={setLayoutMode}
           />
         )}
         {activeTab === 'character' && (
@@ -543,10 +544,10 @@ interface GeneralTabProps {
   cfg: (k: string, fb?: unknown) => unknown;
   theme: string; setTheme: (t: 'sakura' | 'crystal' | 'dark-sakura' | 'dark-crystal') => void;
   advancedMode: boolean; toggleAdvancedMode: () => void;
-  compactMode: boolean; toggleCompactMode: () => void;
+  layoutMode: LayoutMode; setLayoutMode: (m: LayoutMode) => void;
 }
 
-function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMode, compactMode, toggleCompactMode }: GeneralTabProps) {
+function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMode, layoutMode, setLayoutMode }: GeneralTabProps) {
   return (
     <>
       {/* Theme */}
@@ -771,39 +772,58 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
         </div>
       </section>
 
-      {/* Advanced / Compact toggles at bottom */}
+      {/* Display preferences */}
       <section className="mb-6">
-        <div
-          className="rounded-xl p-4 flex items-center justify-between"
-          style={{
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-          }}
-        >
-          <div>
-            <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
-              Display Preferences
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
-              Advanced shows extra settings. Compact hides descriptions.
-            </p>
-          </div>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 text-xs cursor-pointer">
-              <input
-                type="checkbox" checked={advancedMode} onChange={toggleAdvancedMode}
-                className="accent-[var(--color-accent)]"
-              />
-              <span style={{ color: 'var(--color-text-primary)' }}>Advanced</span>
-            </label>
-            <label className="flex items-center gap-2 text-xs cursor-pointer">
-              <input
-                type="checkbox" checked={compactMode} onChange={toggleCompactMode}
-                className="accent-[var(--color-accent)]"
-              />
-              <span style={{ color: 'var(--color-text-primary)' }}>Compact</span>
-            </label>
-          </div>
+        <SectionHeader title="Display" />
+        <div style={cardStyle} className="px-4">
+          {/* Advanced mode — independent checkbox */}
+          <SettingField
+            label="Advanced Mode"
+            description="Show extra settings and developer fields throughout the app."
+          >
+            <input
+              type="checkbox"
+              checked={advancedMode}
+              onChange={toggleAdvancedMode}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+
+          {/* Layout mode — mutually exclusive segmented control */}
+          <SettingField
+            label="Layout"
+            description="Normal shows all descriptions. Compact hides them. Mobile enables touch gestures."
+          >
+            <div
+              className="flex gap-0.5 p-0.5 rounded-lg"
+              style={{
+                backgroundColor: 'var(--color-background)',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              {(['normal', 'compact', 'mobile'] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setLayoutMode(mode)}
+                  className="px-3 py-1 rounded-md text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: layoutMode === mode
+                      ? 'var(--color-accent)'
+                      : 'transparent',
+                    color: layoutMode === mode
+                      ? 'var(--color-accent-text)'
+                      : 'var(--color-text-muted)',
+                  }}
+                >
+                  {mode === 'normal' ? (
+                    <span className="flex items-center gap-1">
+                      <Monitor size={10} /> Normal
+                    </span>
+                  ) : mode === 'compact' ? 'Compact' : 'Mobile'}
+                </button>
+              ))}
+            </div>
+          </SettingField>
         </div>
       </section>
     </>

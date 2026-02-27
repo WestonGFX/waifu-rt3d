@@ -40,6 +40,8 @@ interface DialogueBubbleProps {
   onPlayAudio?: () => void;
   isPlaying?: boolean;
   searchQuery?: string;
+  /** Feature E: called when the user clicks a dialogue choice button. */
+  onChoiceSelect?: (choice: string) => void;
 }
 
 /** Highlight occurrences of `query` inside `text` using <mark> spans. */
@@ -65,7 +67,7 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
  * Assistant messages render as left-aligned cards with avatar, name, and hover metadata.
  * Uses CSS animations from dialogue.css for entrance and components.css for typing dots.
  */
-export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '' }: DialogueBubbleProps) {
+export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect }: DialogueBubbleProps) {
   if (message.role === 'user') {
     return (
       <div className="flex justify-end mb-3">
@@ -161,6 +163,36 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
                 objectFit: 'contain',
               }}
             />
+          </div>
+        )}
+
+        {/* Feature E: Dialogue choice buttons */}
+        {message.choices && message.choices.length > 0 && onChoiceSelect && (
+          <div className="mt-3 flex flex-col gap-1.5">
+            {message.choices.map((choice, idx) => (
+              <button
+                key={idx}
+                onClick={() => onChoiceSelect(choice)}
+                className="text-left text-xs px-3 py-1.5 rounded-lg transition-all duration-150"
+                style={{
+                  border: '1px solid var(--color-border)',
+                  backgroundColor: 'var(--color-surface)',
+                  color: 'var(--color-text-primary)',
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--color-accent-soft)';
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--color-accent)';
+                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent)';
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--color-surface)';
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--color-border)';
+                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-primary)';
+                }}
+              >
+                {choice}
+              </button>
+            ))}
           </div>
         )}
 

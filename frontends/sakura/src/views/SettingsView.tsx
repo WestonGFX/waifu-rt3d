@@ -297,7 +297,11 @@ function CharacterTab() {
     background_mode: 'transparent',
     voice_id: '',
     tts_provider: 'edge-tts',
+    /** Feature H: per-emotion TTS voice overrides. Raw JSON string for editing. */
+    emotion_voice_overrides: '',
   });
+  /** Validation error message for the emotion_voice_overrides JSON field. */
+  const [evoError, setEvoError] = useState<string | null>(null);
 
   // Load file lists + sync from active character
   useEffect(() => {
@@ -314,22 +318,57 @@ function CharacterTab() {
         background_mode: activeCharacter.background_mode || 'transparent',
         voice_id: activeCharacter.voice_id || '',
         tts_provider: activeCharacter.tts_provider || 'edge-tts',
+        // Feature H: load as a pretty-printed JSON string for the textarea
+        emotion_voice_overrides: activeCharacter.emotion_voice_overrides
+          ? (() => {
+              try {
+                const parsed = typeof activeCharacter.emotion_voice_overrides === 'string'
+                  ? JSON.parse(activeCharacter.emotion_voice_overrides)
+                  : activeCharacter.emotion_voice_overrides;
+                return JSON.stringify(parsed, null, 2);
+              } catch {
+                return activeCharacter.emotion_voice_overrides as string;
+              }
+            })()
+          : '',
       });
+      setEvoError(null);
     }
   }, [activeCharacter]);
 
   const saveCharacter = async () => {
     if (!activeCharacter) return;
+
+    // Feature H: validate emotion_voice_overrides JSON before saving
+    let parsedEvo: Record<string, string> | null = null;
+    if (localData.emotion_voice_overrides.trim()) {
+      try {
+        parsedEvo = JSON.parse(localData.emotion_voice_overrides);
+        if (typeof parsedEvo !== 'object' || Array.isArray(parsedEvo) || parsedEvo === null) {
+          setEvoError('Must be a JSON object, e.g. {"happy": "voice_id"}');
+          return;
+        }
+        setEvoError(null);
+      } catch {
+        setEvoError('Invalid JSON — check syntax and try again.');
+        return;
+      }
+    } else {
+      setEvoError(null);
+    }
+
     setSaving(true);
     try {
       // Map frontend field names to backend API field names
-      const payload = {
+      const payload: Record<string, unknown> = {
         avatar_url: localData.avatar_url,
         vrm_model_url: localData.model_vrm,
         background_url: localData.background_url,
         background_mode: localData.background_mode,
         voice_id: localData.voice_id,
         tts_provider: localData.tts_provider,
+        // Feature H: send parsed object (backend JSON-encodes it) or null to clear
+        emotion_voice_overrides: parsedEvo,
       };
       const updated = await api.updateCharacter(activeCharacter.id, payload);
       setActiveCharacter({ ...activeCharacter, ...updated, ...localData });
@@ -492,6 +531,44 @@ function CharacterTab() {
               provider={localData.tts_provider}
               onChange={(voiceId, provider) => setLocalData(d => ({ ...d, voice_id: voiceId, tts_provider: provider }))}
             />
+          </SettingField>
+
+          {/* Feature H: Per-emotion voice overrides */}
+          <SettingField
+            label="Voice Overrides (by emotion)"
+            description={
+              <span>
+                Map emotions to different voice IDs.{' '}
+                <span style={{ color: 'var(--color-text-secondary)', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                  {'{'}&#34;happy&#34;: &#34;af_sky&#34;, &#34;sad&#34;: &#34;bm_lewis&#34;{'}'}
+                </span>
+              </span>
+            }
+          >
+            <div className="flex flex-col gap-1 w-full">
+              <textarea
+                rows={3}
+                value={localData.emotion_voice_overrides}
+                onChange={(e) => {
+                  setLocalData(d => ({ ...d, emotion_voice_overrides: e.target.value }));
+                  setEvoError(null);
+                }}
+                placeholder={'{\n  "happy": "af_sky",\n  "sad": "bm_lewis"\n}'}
+                className="text-xs px-2 py-1.5 rounded font-mono w-full resize-y"
+                style={{
+                  background: 'var(--color-surface)',
+                  border: `1px solid ${evoError ? 'var(--color-danger, #f44)' : 'var(--color-border)'}`,
+                  color: 'var(--color-text)',
+                  minHeight: '72px',
+                }}
+                spellCheck={false}
+              />
+              {evoError && (
+                <span className="text-xs" style={{ color: 'var(--color-danger, #f44)' }}>
+                  {evoError}
+                </span>
+              )}
+            </div>
           </SettingField>
         </div>
       </section>

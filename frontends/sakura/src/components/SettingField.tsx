@@ -4,7 +4,7 @@ import { useAppStore } from '../stores/appStore';
 
 interface SettingFieldProps {
   label: string;
-  description?: string;
+  description?: React.ReactNode;
   tooltip?: string;
   advanced?: boolean;
   children: React.ReactNode;

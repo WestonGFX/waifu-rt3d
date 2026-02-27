@@ -219,6 +219,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             break;
           }
 
+          case 'choices':
+            // Feature E: Dialogue choices block extracted from the LLM reply.
+            // Store on the message so DialogueBubble can render choice buttons.
+            if (Array.isArray(data.options) && data.options.length > 0) {
+              patchAssistant({ choices: data.options as string[], status: 'sent' });
+            }
+            break;
+
           case 'tool_result':
             // Agent tool finished — if the tool generated an image, attach the URL
             // to the current assistant message so DialogueBubble can render it.

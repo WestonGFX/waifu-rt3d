@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
+import { NotificationBadge } from './NotificationBadge';
 
 /**
  * Desktop sidebar — primary navigation for the Sakura frontend.
@@ -27,6 +28,12 @@ export function Sidebar() {
   } = useAppStore();
 
   const [filter, setFilter] = useState('');
+
+  /** Navigate to a character's chat when a notification is clicked. */
+  const handleNavigateToChar = useCallback((charId: number) => {
+    const char = characters.find(c => c.id === charId);
+    if (char) selectCharacter(char);
+  }, [characters, selectCharacter]);
 
   // Poll LLM status every 15s
   useEffect(() => {
@@ -132,6 +139,8 @@ export function Sidebar() {
                 color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
               }}
               title={sidebarCollapsed ? item.label : undefined}
+              aria-label={item.label}
+              aria-pressed={active}
             >
               <Icon size={18} strokeWidth={active ? 2.2 : 1.5} />
               {!sidebarCollapsed && (
@@ -283,10 +292,12 @@ export function Sidebar() {
           className="sidebar-tool-btn flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors flex-1"
           style={{ color: 'var(--color-text-tertiary)' }}
           title="Settings"
+          aria-label="Settings"
         >
           <Settings size={16} />
           {!sidebarCollapsed && <span className="text-[10px] font-medium">Settings</span>}
         </button>
+        <NotificationBadge onNavigateToChar={handleNavigateToChar} />
       </div>
     </aside>
   );

@@ -229,9 +229,17 @@ async def lifespan(app: FastAPI):
     _asyncio.create_task(_db_backup_loop(interval_days=1, retention=7))
     logger.debug("DB backup task started (daily, 7-day retention)")
 
+    # Proactive message scheduler (Feature C): check character_schedules every 5 minutes
+    # and queue messages into scheduled_messages for the frontend to pick up.
+    global _scheduler_task
+    _scheduler_task = _asyncio.create_task(_scheduler_loop(str(DB_PATH)))
+    logger.debug("Proactive message scheduler started (5-minute interval)")
+
     yield
 
-    # Shutdown: nothing to clean up currently
+    # Shutdown: cancel the scheduler loop gracefully.
+    if _scheduler_task and not _scheduler_task.done():
+        _scheduler_task.cancel()
     logger.info("Application shutdown complete")
 
 
@@ -987,6 +995,47 @@ def _apply_emotion_tts(tts_cfg: dict, emotion: str | None) -> None:
         tts_cfg['tts_pitch'] = f"+{pitch_hz}Hz" if pitch_hz >= 0 else f"{pitch_hz}Hz"
 
 
+def _pick_tts_voice(char: dict, emotion: str | None = None) -> str | None:
+    """Select the TTS voice for a character, with optional per-emotion override (Feature H).
+
+    Checks ``emotion_voice_overrides`` JSON first, then falls back to the
+    character's default ``voice_id`` if no emotion-specific voice is configured.
+    Parsing errors in the JSON blob are silently ignored (returns default).
+
+    Args:
+        char: Character dict from the database.  Must contain at least
+            ``voice_id`` and optionally ``emotion_voice_overrides``.
+        emotion: Current emotion/mood string (e.g. ``'happy'``, ``'sad'``,
+            ``'angry'``).  Pass ``None`` or ``'neutral'`` to skip override
+            lookup and use the default voice directly.
+
+    Returns:
+        Voice ID string, or ``None`` if no voice is configured for this
+        character.
+
+    Example:
+        >>> char = {"voice_id": "af_sky", "emotion_voice_overrides": '{"happy": "af_nicole"}'}
+        >>> _pick_tts_voice(char, "happy")
+        'af_nicole'
+        >>> _pick_tts_voice(char, "sad")
+        'af_sky'
+        >>> _pick_tts_voice(char, None)
+        'af_sky'
+    """
+    if emotion and emotion != "neutral":
+        overrides_json = char.get("emotion_voice_overrides")
+        if overrides_json:
+            try:
+                overrides = json.loads(overrides_json)
+                if isinstance(overrides, dict):
+                    override_voice = overrides.get(emotion)
+                    if override_voice and isinstance(override_voice, str):
+                        return override_voice
+            except (json.JSONDecodeError, TypeError):
+                pass  # Malformed JSON — fall through to default voice
+    return char.get("voice_id") or None
+
+
 def _fire_webhooks(payload: dict) -> None:
     """Fire outbound webhooks for each AI response (#62).
 
@@ -1636,7 +1685,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             cur.execute(
                 "SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate, "
                 "llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, first_chat_date, "
-                "diary, diary_date, capability_profile "
+                "diary, diary_date, capability_profile, emotion_voice_overrides "
                 "FROM characters WHERE id=?",
                 (char_id,)
             )
@@ -1666,6 +1715,8 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 char_diary = row[11]
                 char_diary_date = row[12]
                 _raw_cap_ns = row[13]
+                # Feature H: emotion_voice_overrides — store for post-LLM TTS voice selection
+                voice_params['emotion_voice_overrides'] = row[14]
         except Exception as e:
             logger.error(f"Error fetching character data: {e}")
 
@@ -1827,6 +1878,13 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
 
                 tts_cfg = cfg.get("tts", {}).copy()
                 tts_cfg.update(voice_params)
+
+                # Feature H: Per-emotion voice override — emotion is fully known
+                # at this point (non-streaming path), so we can pick the best voice
+                # before constructing the TTS client.
+                _emotion_voice = _pick_tts_voice(voice_params, emotion)
+                if _emotion_voice:
+                    tts_cfg['voice_id'] = _emotion_voice
 
                 # Apply global speech_rate / pitch_shift only when the character
                 # hasn't already overridden them via tts_rate / tts_pitch columns.
@@ -2255,7 +2313,7 @@ async def chat_stream(req: Request):
         cur.execute(
             "SELECT system_prompt, llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, "
             "voice_id, tts_provider, tts_pitch, tts_rate, first_chat_date, diary, diary_date, "
-            "capability_profile, name "
+            "capability_profile, name, emotion_voice_overrides "
             "FROM characters WHERE id=?",
             (char_id,)
         )
@@ -2288,6 +2346,8 @@ async def chat_stream(req: Request):
             _stream_diary_date = row[12]
             # Phase 9: Capability profile — per-character LLM capability metadata
             _raw_cap = row[13]
+            # Feature H: emotion_voice_overrides — store for post-stream TTS voice selection
+            voice_params['emotion_voice_overrides'] = row[15]
 
             # Apply voice params to chunked TTS config now that we have char data
             if voice_params and use_chunked_tts:
@@ -2365,7 +2425,11 @@ async def chat_stream(req: Request):
 
     # Emotional TTS hint for chunked TTS (#78): emotion won't be known until after streaming,
     # so use last_emotion (previous response's mood) as a continuity-based proxy.
+    # Feature H: Apply emotion voice override using last_emotion as proxy for the same reason.
     if use_chunked_tts:
+        _proxy_voice = _pick_tts_voice(voice_params, stream_char_last_emotion)
+        if _proxy_voice:
+            tts_chunked_cfg['voice_id'] = _proxy_voice
         _apply_emotion_tts(tts_chunked_cfg, stream_char_last_emotion)
 
     # Per-request TTS speed override (#14): frontend speed slider overrides global speech_rate
@@ -2539,6 +2603,10 @@ async def chat_stream(req: Request):
                 tts_url = None
                 if use_chunked_tts and tts_chunked_client and clean_reply.strip():
                     try:
+                        # Feature H: Per-emotion voice override — emotion now known post-stream
+                        _emo_voice_ag = _pick_tts_voice(voice_params, emotion)
+                        if _emo_voice_ag:
+                            tts_chunked_cfg['voice_id'] = _emo_voice_ag
                         _apply_emotion_tts(tts_chunked_cfg, emotion)
                         tts_text = _clean_for_tts(clean_reply)
                         tts_res = await run_in_threadpool(
@@ -4033,7 +4101,7 @@ def list_characters():
                    greeting_text, greeting_animation, background_url, background_mode, voice_sample_path,
                    llm_endpoint, llm_model, llm_temperature, last_emotion, voice_config,
                    expr_portraits, first_chat_date, diary, diary_date, capability_profile,
-                   tts_pitch, tts_rate, vocab_categories, animation_profile
+                   tts_pitch, tts_rate, vocab_categories, animation_profile, emotion_voice_overrides
             FROM characters
             ORDER BY id ASC
         """)
@@ -4088,6 +4156,8 @@ def list_characters():
             "tts_rate": row[27] if len(row) > 27 else None,
             "vocab_categories": row[28] if len(row) > 28 else None,
             "animation_profile": json.loads(row[29]) if len(row) > 29 and row[29] else None,
+            # Feature H: per-emotion TTS voice overrides (JSON string or None)
+            "emotion_voice_overrides": row[30] if len(row) > 30 else None,
         }
         characters.append(char)
     conn.close()
@@ -4178,6 +4248,8 @@ async def create_character(req: Request):
         "vocab_categories": json.dumps(body.get("vocab_categories", [])) if body.get("vocab_categories") else "",
         "capability_profile": json.dumps(body.get("capability_profile", {})) if body.get("capability_profile") else None,
         "animation_profile": json.dumps(body.get("animation_profile", {})) if body.get("animation_profile") else None,
+        # Feature H: per-emotion TTS voice overrides JSON blob
+        "emotion_voice_overrides": json.dumps(body.get("emotion_voice_overrides")) if body.get("emotion_voice_overrides") else None,
         "live2d_model": "",
         "model_type": "3d",
     }
@@ -4223,8 +4295,9 @@ async def update_character(character_id: int, req: Request):
         "voice_config",  # v13: extended per-character voice settings JSON (#77)
         "capability_profile",  # v15: Phase 9 per-character LLM capability metadata
         "animation_profile",  # v16: Phase 6F per-character animation personality traits
+        "emotion_voice_overrides",  # v19: Feature H per-emotion TTS voice override map
     ]
-    _json_fields = {"capability_profile", "voice_config", "vocab_categories", "animation_profile"}
+    _json_fields = {"capability_profile", "voice_config", "vocab_categories", "animation_profile", "emotion_voice_overrides"}
     for field in fields:
         if field in body:
             updates.append(f"{field}=?")
@@ -4347,9 +4420,10 @@ async def import_character(req: Request):
             'greeting_animation', 'background_url', 'background_mode', 'voice_sample_path',
             'vocab_categories', 'llm_endpoint', 'llm_model', 'llm_temperature',
             'voice_config', 'capability_profile', 'animation_profile',
+            'emotion_voice_overrides',  # Feature H: per-emotion TTS voice override map
         ]
         # JSON-encode dict/list fields before INSERT
-        for jf in ('voice_config', 'capability_profile', 'vocab_categories', 'animation_profile'):
+        for jf in ('voice_config', 'capability_profile', 'vocab_categories', 'animation_profile', 'emotion_voice_overrides'):
             if jf in body and isinstance(body[jf], (dict, list)):
                 body[jf] = json.dumps(body[jf])
         fields = []
@@ -5515,6 +5589,132 @@ async def _db_vacuum_loop(interval_days: int = 7) -> None:
             logger.warning(f"DB vacuum error: {_e}")
 
 
+# Module-level handle so the lifespan shutdown can cancel the scheduler task.
+_scheduler_task = None
+
+
+async def _scheduler_loop(db_path: str) -> None:
+    """Background loop that checks character schedules and generates proactive messages.
+
+    Runs every 5 minutes (300 seconds).  For each enabled schedule in
+    ``character_schedules`` the function decides whether the trigger condition
+    is met and, if so, inserts a new row into ``scheduled_messages`` for the
+    frontend to pick up via ``GET /api/scheduler/pending``.
+
+    Args:
+        db_path: Filesystem path to the SQLite database.
+    """
+    import asyncio as _asyncio
+
+    while True:
+        try:
+            await _asyncio.sleep(300)  # 5-minute polling interval
+            await run_in_threadpool(_run_scheduler_tick, db_path)
+        except _asyncio.CancelledError:
+            logger.info("Scheduler loop cancelled - shutting down")
+            break
+        except Exception as _e:
+            logger.warning("Scheduler loop error: %s", _e)
+
+
+def _run_scheduler_tick(db_path: str) -> None:
+    """Execute one scheduling tick: evaluate all enabled schedules and queue messages.
+
+    Args:
+        db_path: Filesystem path to the SQLite database.
+    """
+    import datetime as _dt
+
+    now = _dt.datetime.now()
+    now_ts = int(now.timestamp())
+    today_str = now.strftime("%Y-%m-%d")
+    now_total_minutes = now.hour * 60 + now.minute
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT cs.id, cs.char_id, cs.schedule_type, cs.time_of_day,
+                   cs.hours_away, cs.last_triggered, c.name
+            FROM character_schedules cs
+            JOIN characters c ON c.id = cs.char_id
+            WHERE cs.enabled = 1
+        """)
+        schedules = cur.fetchall()
+
+        for (sched_id, char_id, sched_type, time_of_day,
+             hours_away, last_triggered, char_name) in schedules:
+
+            should_fire = False
+
+            if sched_type == "time_of_day" and time_of_day:
+                try:
+                    t_h, t_m = int(time_of_day[:2]), int(time_of_day[3:])
+                    target_minutes = t_h * 60 + t_m
+                    diff = abs(now_total_minutes - target_minutes)
+                    # Account for midnight wrap-around
+                    diff = min(diff, 1440 - diff)
+                    in_window = diff <= 5
+                    already_fired_today = (
+                        last_triggered is not None
+                        and last_triggered.startswith(today_str)
+                    )
+                    should_fire = in_window and not already_fired_today
+                except (ValueError, IndexError):
+                    logger.warning("[Scheduler] Invalid time_of_day for schedule %s", sched_id)
+
+            elif sched_type == "hours_away" and hours_away:
+                row = cur.execute("""
+                    SELECT MAX(m.ts)
+                    FROM messages m
+                    JOIN sessions s ON s.id = m.session_id
+                    WHERE s.character_id = ? AND m.role = 'user'
+                """, (char_id,)).fetchone()
+                last_user_ts = row[0] if row and row[0] else None
+                away_secs = hours_away * 3600
+                user_away_long_enough = (
+                    (now_ts - int(last_user_ts)) >= away_secs
+                    if last_user_ts is not None else True
+                )
+                fired_recently = False
+                if last_triggered is not None:
+                    try:
+                        lt_ts = int(_dt.datetime.fromisoformat(last_triggered).timestamp())
+                        fired_recently = (now_ts - lt_ts) < away_secs
+                    except ValueError:
+                        pass
+                should_fire = user_away_long_enough and not fired_recently
+
+            if not should_fire:
+                continue
+
+            message_text = (
+                f"Hey! It's {char_name}. "
+                "I've been thinking about you - come chat with me when you get a chance!"
+            )
+            cur.execute(
+                "INSERT INTO scheduled_messages (char_id, text, triggered_at, delivered) "
+                "VALUES (?, ?, ?, 0)",
+                (char_id, message_text, now_ts)
+            )
+            cur.execute(
+                "UPDATE character_schedules SET last_triggered = ? WHERE id = ?",
+                (now.isoformat(), sched_id)
+            )
+            conn.commit()
+            logger.info(
+                "[Scheduler] Queued proactive message for char_id=%s ('%s')",
+                char_id, char_name
+            )
+    except Exception as _e:
+        logger.warning("[Scheduler] Tick error: %s", _e)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    finally:
+        conn.close()
+
 
 # NOTE: startup logic is now in the lifespan() context manager above.
 
@@ -6466,6 +6666,93 @@ async def video_gen_status(job_id: str):
                 logger.warning(f"[VideoGen] Failed to auto-assign video to character: {exc}")
 
     return status
+
+
+# --- SCHEDULER ENDPOINTS ---
+
+@app.get("/api/scheduler/pending")
+def get_scheduler_pending():
+    """Return all undelivered scheduled messages with character metadata.
+
+    Returns:
+        JSON with ok: true and pending list. Each item contains id, char_id,
+        char_name, char_avatar_url, text, triggered_at (Unix timestamp).
+
+    Example:
+        >>> GET /api/scheduler/pending
+        {"ok": true, "pending": [{"id": 1, "char_id": 5, ...}]}
+    """
+    conn = db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT sm.id, sm.char_id, c.name, c.avatar_url, sm.text, sm.triggered_at
+            FROM scheduled_messages sm
+            JOIN characters c ON c.id = sm.char_id
+            WHERE sm.delivered = 0
+            ORDER BY sm.triggered_at ASC
+        """)
+        rows = cur.fetchall()
+        pending = [
+            {
+                "id": row[0],
+                "char_id": row[1],
+                "char_name": row[2],
+                "char_avatar_url": row[3],
+                "text": row[4],
+                "triggered_at": row[5],
+            }
+            for row in rows
+        ]
+        return {"ok": True, "pending": pending}
+    except Exception as _exc:
+        logger.error("[Scheduler] Error fetching pending messages: %s", _exc)
+        raise HTTPException(status_code=500, detail="Failed to fetch pending messages")
+    finally:
+        conn.close()
+
+
+@app.post("/api/scheduler/acknowledge")
+async def acknowledge_scheduler_message(req: Request):
+    """Mark a scheduled message as delivered/acknowledged by the client.
+
+    Args:
+        req: JSON body with message_id (int).
+
+    Returns:
+        {"ok": true}
+
+    Raises:
+        HTTPException 400: If message_id is missing or not an integer.
+        HTTPException 500: If the database update fails.
+
+    Example:
+        >>> POST /api/scheduler/acknowledge
+        >>> {"message_id": 1}
+        {"ok": true}
+    """
+    body = await req.json()
+    message_id = body.get("message_id")
+    if message_id is None:
+        raise HTTPException(status_code=400, detail="'message_id' is required")
+    try:
+        message_id = int(message_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="'message_id' must be an integer")
+
+    conn = db()
+    try:
+        conn.execute(
+            "UPDATE scheduled_messages SET delivered = 1 WHERE id = ?",
+            (message_id,)
+        )
+        conn.commit()
+        return {"ok": True}
+    except Exception as _exc:
+        logger.error("[Scheduler] Error acknowledging message %s: %s", message_id, _exc)
+        raise HTTPException(status_code=500, detail="Failed to acknowledge message")
+    finally:
+        conn.close()
 
 
 # --- EXCEPTION HANDLERS ---

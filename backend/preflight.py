@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v16)
+- Database schema migrations (v3 → v4 → … → v19)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -20,6 +20,9 @@ Migration Strategy:
     - v13 → v14: Character diary column (Phase 7C #57)
     - v14 → v15: Capability-aware character profiles (Phase 9)
     - v15 → v16: Animation personality profiles (Phase 6F)
+    - v16 → v17: Scheduled proactive messages — character_schedules table (Feature C)
+    - v17 → v18: Scheduled proactive messages — scheduled_messages delivery queue (Feature C)
+    - v18 → v19: Per-emotion TTS voice overrides — emotion_voice_overrides column (Feature H)
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -894,15 +897,175 @@ def migrate_to_v16(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v17(con: sqlite3.Connection) -> bool:
+    """Apply schema v17 migration (Feature C: Scheduled Proactive Messages).
+
+    Adds the ``character_schedules`` table which stores per-character rules for
+    autonomous proactive messages.  Each row defines when the character should
+    reach out unprompted — either at a fixed time of day (morning/evening) or
+    after a configurable period of inactivity (away trigger).
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if table already existed (idempotent).
+
+    Raises:
+        sqlite3.Error: If migration fails.
+
+    Example:
+        >>> if migrate_to_v17(con):
+        ...     print("Migrated to v17")
+    """
+    cur = con.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='character_schedules'"
+    )
+    if cur.fetchone():
+        logger.info("Schema v17 logic: character_schedules table exists. Ensuring version is 17.")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (17)")
+        con.commit()
+        return False
+
+    logger.info("Applying schema v17 migration (Feature C: scheduled proactive messages)...")
+    try:
+        cur.execute("""
+            CREATE TABLE character_schedules (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id       INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                schedule_type TEXT    NOT NULL DEFAULT 'morning',
+                time_of_day   TEXT,
+                hours_away    REAL    DEFAULT 4.0,
+                enabled       INTEGER NOT NULL DEFAULT 1,
+                last_triggered TEXT,
+                created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_schedules_char ON character_schedules (char_id)"
+        )
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (17)")
+        con.commit()
+        logger.info("✅ Schema v17 migration complete (character_schedules table added)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v17 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v18(con: sqlite3.Connection) -> bool:
+    """Apply schema v18 migration (Feature C: Scheduled Messages Delivery Queue).
+
+    Adds the ``scheduled_messages`` table which stores AI-generated proactive
+    messages that the background scheduler has queued for delivery to the
+    frontend.  The frontend polls ``GET /api/scheduler/pending`` for unread
+    rows and acknowledges them via ``POST /api/scheduler/acknowledge``.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if table already existed (idempotent).
+
+    Raises:
+        sqlite3.Error: If migration fails.
+
+    Example:
+        >>> if migrate_to_v18(con):
+        ...     print("Migrated to v18")
+    """
+    cur = con.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='scheduled_messages'"
+    )
+    if cur.fetchone():
+        logger.info("Schema v18 logic: scheduled_messages table exists. Ensuring version is 18.")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (18)")
+        con.commit()
+        return False
+
+    logger.info("Applying schema v18 migration (Feature C: scheduled messages delivery queue)...")
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS scheduled_messages (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id      INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                text         TEXT    NOT NULL,
+                triggered_at INTEGER NOT NULL,
+                delivered    INTEGER NOT NULL DEFAULT 0,
+                created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+            )
+        """)
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_scheduled_messages_char "
+            "ON scheduled_messages (char_id, delivered)"
+        )
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (18)")
+        con.commit()
+        logger.info("✅ Schema v18 migration complete (scheduled_messages table added)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v18 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v19(con: sqlite3.Connection) -> bool:
+    """Apply schema v19 migration (Feature H: Voice Per Emotion).
+
+    Adds:
+        - ``emotion_voice_overrides`` (TEXT) — JSON blob mapping emotion names
+          to TTS voice IDs.  When the character expresses a specific emotion,
+          the corresponding voice is used instead of the default ``voice_id``.
+          Schema: ``{"happy": "af_nicole", "sad": "bm_lewis", "angry": "af_sky"}``.
+          NULL = no overrides; the character always uses its default voice.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if column already existed (idempotent).
+
+    Raises:
+        sqlite3.Error: If migration fails.
+
+    Example:
+        >>> if migrate_to_v19(con):
+        ...     print("Migrated to v19")
+    """
+    columns = {row[1] for row in con.execute("PRAGMA table_info(characters)")}
+    if 'emotion_voice_overrides' in columns:
+        logger.info("Schema v19 logic: emotion_voice_overrides column exists. Ensuring version is 19.")
+        cur = con.cursor()
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (19)")
+        con.commit()
+        return False
+
+    try:
+        logger.info("Applying schema v19 migration (Feature H: per-emotion TTS voice overrides)...")
+        cur = con.cursor()
+        cur.execute("ALTER TABLE characters ADD COLUMN emotion_voice_overrides TEXT DEFAULT NULL")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (19)")
+        con.commit()
+        logger.info("✅ Schema v19 migration complete (emotion_voice_overrides column added)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v19 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
     Migration Paths:
-        - v0 (empty) → v4 → … → v16
-        - v3 → v4 → … → v16
-        - v11 → v12 → v13 → v16
-        - v13 → v16
-        - v16 → no-op (already current)
+        - v0 (empty) → v4 → … → v19
+        - v3 → v4 → … → v19
+        - v11 → v12 → v13 → v19
+        - v18 → v19
+        - v19 → no-op (already current)
 
     The function is idempotent - safe to run multiple times.
     Will log all migration steps and verify final state.
@@ -1034,21 +1197,43 @@ def ensure_db():
             logger.info("  - Adding animation_profile to characters (layered animation personality)")
             if migrate_to_v16(con):
                 version = 16
+
+        # Upgrade from v16 to v17 (Feature C: scheduled proactive messages)
+        if version < 17:
+            logger.info("Upgrading database schema from v16 to v17...")
+            logger.info("  - Creating character_schedules table (proactive message scheduling)")
+            if migrate_to_v17(con):
+                version = 17
+
+        # Upgrade from v17 to v18 (Feature C: scheduled messages delivery queue)
+        if version < 18:
+            logger.info("Upgrading database schema from v17 to v18...")
+            logger.info("  - Creating scheduled_messages table (pending message delivery queue)")
+            if migrate_to_v18(con):
+                version = 18
+
+        # Upgrade from v18 to v19 (Feature H: per-emotion TTS voice overrides)
+        if version < 19:
+            logger.info("Upgrading database schema from v18 to v19...")
+            logger.info("  - Adding emotion_voice_overrides to characters (per-emotion TTS voice selection)")
+            if migrate_to_v19(con):
+                version = 19
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 16:
-            raise RuntimeError(f"Database initialization failed: Expected v16, got v{final_version}")
+        if final_version < 19:
+            raise RuntimeError(f"Database initialization failed: Expected v19, got v{final_version}")
 
-        if final_version > 16:
-            logger.warning(f"Database is newer than application (v{final_version} > v16). Some features might be unused.")
+        if final_version > 19:
+            logger.warning(f"Database is newer than application (v{final_version} > v19). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v16 supports animation profiles)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v19 adds per-emotion TTS voice overrides)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

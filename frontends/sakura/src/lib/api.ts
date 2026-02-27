@@ -296,4 +296,26 @@ export const api = {
     post<{ ok: boolean }>('/api/models/unload', { identifier }),
   deleteModel: (type: string, id: string) =>
     del<{ ok: boolean }>(`/api/models/${type}/${encodeURIComponent(id)}`),
+
+  // Character diary — latest diary entry written by the agent
+  getDiary: (charId: number) =>
+    get<{ ok: boolean; diary: string | null; diary_date: string | null }>(`/api/characters/${charId}/diary`),
+
+  // Character relationship timeline (Feature B)
+  getTimeline: (charId: number) =>
+    get<{ ok: boolean; timeline: Array<Record<string, unknown>> }>(`/api/characters/${charId}/timeline`),
+
+  // Character lifetime stats (Feature G)
+  getCharacterStats: (charId: number) =>
+    get<Record<string, unknown>>(`/api/characters/${charId}/stats`),
+
+  // Gesture/expression trigger for the VRM viewer (Feature D)
+  triggerGesture: (gesture: string | null, expression: string | null, intensity: number) =>
+    post<{ ok: boolean }>('/api/viewer/gesture', { gesture, expression, intensity }),
+
+  // Scheduler: pending proactive messages + delivery acknowledgement (Feature C)
+  getSchedulerPending: () =>
+    get<{ ok: boolean; pending: Array<{ id: number; char_id: number; char_name: string; char_avatar_url: string | null; text: string; triggered_at: string }> }>('/api/scheduler/pending'),
+  acknowledgeScheduled: (messageId: number) =>
+    post<{ ok: boolean }>('/api/scheduler/acknowledge', { message_id: messageId }),
 };

@@ -62,12 +62,12 @@ describe('SettingsView — character export / import', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAppStore.setState({
-      activeCharacter: CHAR as Parameters<typeof useAppStore.getState>['activeCharacter'],
-      characters: [CHAR] as Parameters<typeof useAppStore.getState>['characters'],
+      activeCharacter: CHAR as ReturnType<typeof useAppStore.getState>['activeCharacter'],
+      characters: [CHAR] as unknown as ReturnType<typeof useAppStore.getState>['characters'],
       config: {},
       configLoaded: true,
-      overlay: 'settings',
-    } as Parameters<typeof useAppStore.setState>[0]);
+      activeOverlay: 'settings',
+    } as unknown as Parameters<typeof useAppStore.setState>[0]);
   });
 
   // ── Export ─────────────────────────────────────────────────────────────────

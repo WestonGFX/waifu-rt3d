@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { SessionDrawer } from '../components/SessionDrawer';
 import { useAppStore } from '../stores/appStore';
@@ -27,8 +27,8 @@ vi.mock('../lib/api', () => ({
 // ── Store helpers ─────────────────────────────────────────────────────────────
 
 const SESSIONS = [
-  { id: 1, title: 'Alpha', is_pinned: false, is_archived: false, created_at: '' },
-  { id: 2, title: 'Beta', is_pinned: false, is_archived: false, created_at: '' },
+  { id: 1, title: 'Alpha', is_pinned: false, is_archived: false, created_at: '', character_id: 1, updated_at: '' },
+  { id: 2, title: 'Beta', is_pinned: false, is_archived: false, created_at: '', character_id: 1, updated_at: '' },
 ];
 
 function setMobileMode(on: boolean) {

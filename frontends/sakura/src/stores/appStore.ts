@@ -16,7 +16,24 @@ type ChatLayout = 'chat-first' | 'model-first' | 'split';
 export type LayoutMode = 'normal' | 'compact' | 'mobile';
 
 /** Overlay drawers that slide out over the main content. */
-type Overlay = 'settings' | 'memory' | 'vocab' | null;
+type Overlay = 'settings' | 'memory' | 'vocab' | 'diary' | 'stats' | 'timeline' | null;
+
+/**
+ * A pending scheduled character message that the user hasn't seen yet.
+ * Created by useSchedulerPoller when the backend reports undelivered proactive messages.
+ */
+export interface ScheduledNotification {
+  /** Locally unique ID (e.g. "sched-42-1709000000000"). */
+  id: string;
+  /** ID of the character who sent the message. */
+  charId: number;
+  charName: string;
+  charAvatarUrl?: string;
+  /** First 80 chars of the message text. */
+  preview: string;
+  /** Client timestamp when the notification was received. */
+  receivedAt: number;
+}
 
 /** LLM brain connection status shown in sidebar header. */
 interface LlmStatus {
@@ -31,9 +48,9 @@ interface AppState {
   sidebarSection: SidebarSection;
   setSidebarSection: (section: SidebarSection) => void;
 
-  // Overlay drawers (settings, memory)
+  // Overlay drawers (settings, memory, diary, stats, timeline, vocab)
   activeOverlay: Overlay;
-  openOverlay: (overlay: 'settings' | 'memory' | 'vocab') => void;
+  openOverlay: (overlay: 'settings' | 'memory' | 'vocab' | 'diary' | 'stats' | 'timeline') => void;
   closeOverlay: () => void;
   /** When set, SettingsView opens to this tab on next open. Cleared after use. */
   settingsInitTab: string | null;
@@ -77,6 +94,13 @@ interface AppState {
   mobileMode: boolean;
   /** @deprecated Use setLayoutMode. Kept for backward compatibility. */
   toggleCompactMode: () => void;
+
+  // Scheduled notifications (Feature C)
+  scheduledNotifications: ScheduledNotification[];
+  unreadNotificationCount: number;
+  addScheduledNotification: (n: ScheduledNotification) => void;
+  dismissScheduledNotification: (id: string) => void;
+  clearScheduledNotifications: () => void;
 
   // Legacy compat (kept for components that still reference these)
   activeTab: string;
@@ -171,6 +195,19 @@ export const useAppStore = create<AppState>()(
         const { layoutMode } = get();
         get().setLayoutMode(layoutMode === 'compact' ? 'normal' : 'compact');
       },
+
+      // Scheduled notifications (Feature C)
+      scheduledNotifications: [],
+      unreadNotificationCount: 0,
+      addScheduledNotification: (n) => set((s) => {
+        const updated = [...s.scheduledNotifications, n];
+        return { scheduledNotifications: updated, unreadNotificationCount: updated.length };
+      }),
+      dismissScheduledNotification: (id) => set((s) => {
+        const updated = s.scheduledNotifications.filter(n => n.id !== id);
+        return { scheduledNotifications: updated, unreadNotificationCount: updated.length };
+      }),
+      clearScheduledNotifications: () => set({ scheduledNotifications: [], unreadNotificationCount: 0 }),
 
       // Legacy compat — maps to new layout for components still using old API
       activeTab: 'chats',

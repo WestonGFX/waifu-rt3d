@@ -26,6 +26,14 @@ export interface Character {
     playfulness: number;
   };
   capability_profile?: string;
+  /**
+   * Feature H: Per-emotion TTS voice overrides.
+   * JSON string mapping emotion names to voice IDs, e.g.
+   * `'{"happy": "af_sky", "sad": "bm_lewis"}'`.
+   * When present and the character expresses a mapped emotion, the
+   * specified voice is used instead of the default `voice_id`.
+   */
+  emotion_voice_overrides?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -46,6 +54,11 @@ export interface ChatMessage {
   tokensPerSecond?: number;
   latencyMs?: number;
   model?: string;
+  /**
+   * Dialogue-choice options from Feature E.  When present, the frontend renders
+   * interactive choice buttons instead of the free-text composer for this turn.
+   */
+  choices?: string[];
 }
 
 export interface Session {

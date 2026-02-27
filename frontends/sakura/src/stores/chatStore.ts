@@ -110,6 +110,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (!trimmed) return;
 
     const controller = new AbortController();
+    // Capture before we add the new pair — true only on the first exchange
+    const isFirstExchange = get().messages.length === 0;
 
     const userMsg: ChatMessage = {
       id: genId(),
@@ -230,6 +232,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const current = get().messages.find(m => m.id === assistantId);
       if (current?.status === 'streaming') {
         patchAssistant({ status: 'sent' });
+      }
+
+      // Auto-title the session after the first exchange (fire-and-forget)
+      if (isFirstExchange && sessionId && fullText) {
+        const reply = (get().messages.find(m => m.id === assistantId)?.text || fullText).slice(0, 200);
+        api.llmGenerate([{
+          role: 'user',
+          content: `Create a very short (3–5 word) title for a conversation that starts:\nUser: "${trimmed}"\nAssistant: "${reply}"\nRespond with ONLY the title, no punctuation, no quotes.`
+        }], 0.7, 20)
+          .then(r => api.updateSession(sessionId, { title: r.text.trim() }))
+          .catch(() => {}); // non-critical, ignore failures
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {

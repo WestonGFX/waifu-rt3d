@@ -280,19 +280,40 @@ export function ModelPanel({ character }: ModelPanelProps) {
                 <ChevronLeft size={14} /> Hide
               </button>
               {vrmUrl && (
-                <button
-                  onClick={() => showExprEditor ? setShowExprEditor(false) : handleOpenExprEditor()}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs"
-                  style={{
-                    backgroundColor: showExprEditor ? 'var(--color-accent)' : 'var(--color-surface)',
-                    borderRadius: 'var(--radius-button)',
-                    boxShadow: 'var(--shadow-card)',
-                    color: showExprEditor ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
-                    border: '1px solid var(--color-border)',
-                  }}
-                >
-                  <Sliders size={14} /> Expressions
-                </button>
+                <>
+                  {/* Camera preset buttons */}
+                  {(['fullbody', 'bust', 'face'] as const).map(preset => (
+                    <button
+                      key={preset}
+                      onClick={() => setCameraPreset(preset)}
+                      className="px-2.5 py-1.5 text-xs capitalize"
+                      style={{
+                        backgroundColor: 'var(--color-surface)',
+                        borderRadius: 'var(--radius-button)',
+                        boxShadow: 'var(--shadow-card)',
+                        color: 'var(--color-text-secondary)',
+                        border: '1px solid var(--color-border)',
+                      }}
+                      title={`${preset.charAt(0).toUpperCase() + preset.slice(1)} view`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                  {/* Expression editor toggle */}
+                  <button
+                    onClick={() => showExprEditor ? setShowExprEditor(false) : handleOpenExprEditor()}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs"
+                    style={{
+                      backgroundColor: showExprEditor ? 'var(--color-accent)' : 'var(--color-surface)',
+                      borderRadius: 'var(--radius-button)',
+                      boxShadow: 'var(--shadow-card)',
+                      color: showExprEditor ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
+                      border: '1px solid var(--color-border)',
+                    }}
+                  >
+                    <Sliders size={14} /> Expressions
+                  </button>
+                </>
               )}
             </div>
           </div>

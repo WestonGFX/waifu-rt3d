@@ -80,6 +80,13 @@ export function ChatsView() {
       .catch(() => {});
   }, []);
 
+  // Sort characters by most recent message (desc), unseen characters last
+  const sortedCharacters = [...characters].sort((a, b) => {
+    const tsA = recentMessages[String(a.id)]?.ts ?? 0;
+    const tsB = recentMessages[String(b.id)]?.ts ?? 0;
+    return tsB - tsA;
+  });
+
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <h2
@@ -111,7 +118,7 @@ export function ChatsView() {
             </p>
           </div>
         ) : (
-          characters.map((char) => {
+          sortedCharacters.map((char) => {
             const recent = recentMessages[String(char.id)];
             return (
               <CharacterCard

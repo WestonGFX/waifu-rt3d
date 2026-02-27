@@ -1610,6 +1610,46 @@ function SafetyTab({ save, cfg }: TabProps) {
    ═══════════════════════════════════════════════════════════════════════ */
 
 function AIArtTab({ save, cfg }: TabProps) {
+  const { activeCharacter } = useAppStore();
+  const [genStatus, setGenStatus] = useState<{ available: boolean; provider: string } | null>(null);
+  const [genPrompt, setGenPrompt] = useState('');
+  const [genBusy, setGenBusy] = useState(false);
+  const [genResult, setGenResult] = useState<{ url: string; type: 'background' | 'portrait' } | null>(null);
+  const [genError, setGenError] = useState<string | null>(null);
+
+  const provider = String(cfg('image_gen.provider', 'disabled'));
+
+  // Check backend status whenever provider setting changes
+  useEffect(() => {
+    if (provider === 'disabled') { setGenStatus(null); return; }
+    api.getImageGenStatus()
+      .then(s => setGenStatus(s))
+      .catch(() => setGenStatus({ available: false, provider }));
+  }, [provider]);
+
+  async function generate(type: 'background' | 'portrait') {
+    if (!genPrompt.trim() || genBusy) return;
+    setGenBusy(true);
+    setGenError(null);
+    setGenResult(null);
+    try {
+      const fn = type === 'background' ? api.generateBackground : api.generatePortrait;
+      const res = await fn({
+        prompt: genPrompt.trim(),
+        character_id: activeCharacter?.id,
+      });
+      if (res.ok && res.url) {
+        setGenResult({ url: res.url, type });
+      } else {
+        setGenError(res.error || 'Generation failed');
+      }
+    } catch (e) {
+      setGenError(String(e));
+    } finally {
+      setGenBusy(false);
+    }
+  }
+
   return (
     <>
       <section className="mb-6">
@@ -1618,8 +1658,8 @@ function AIArtTab({ save, cfg }: TabProps) {
           <SettingField label="Image Generator" description="Backend for AI image generation."
             tooltip="ComfyUI: run locally on port 8188. Easy Diffusion: port 9000. Disabled: hide Generate buttons.">
             <select
-              value={String(cfg('image_gen.provider', 'disabled'))}
-              onChange={(e) => save('image_gen.provider', e.target.value)}
+              value={provider}
+              onChange={(e) => { save('image_gen.provider', e.target.value); setGenStatus(null); }}
               className="text-sm px-2 py-1 rounded" style={selectStyle}
             >
               <option value="disabled">Disabled</option>
@@ -1627,6 +1667,27 @@ function AIArtTab({ save, cfg }: TabProps) {
               <option value="easydiffusion">Easy Diffusion</option>
             </select>
           </SettingField>
+
+          {/* Live status badge — shown when provider is not disabled */}
+          {provider !== 'disabled' && (
+            <div className="py-3 flex items-center gap-2 text-xs border-t" style={{ borderColor: 'var(--color-border-subtle)', color: 'var(--color-text-secondary)' }}>
+              <span style={{ color: 'var(--color-text-tertiary)' }}>Status:</span>
+              {genStatus === null ? (
+                <span style={{ color: 'var(--color-text-tertiary)' }}>Checking…</span>
+              ) : genStatus.available ? (
+                <span style={{ color: 'var(--color-success, #4caf50)', fontWeight: 600 }}>● Online</span>
+              ) : (
+                <span style={{ color: 'var(--color-danger, #f44)', fontWeight: 600 }}>● Offline</span>
+              )}
+              <button
+                onClick={() => api.getImageGenStatus().then(setGenStatus).catch(() => setGenStatus({ available: false, provider }))}
+                className="ml-1 text-xs opacity-60 hover:opacity-100"
+                style={{ color: 'var(--color-accent)' }}
+              >
+                Recheck
+              </button>
+            </div>
+          )}
 
           <SettingField label="Image Gen URL" description="URL of your image generation server."
             tooltip="ComfyUI default: http://localhost:8188. Easy Diffusion: http://localhost:9000.">
@@ -1673,6 +1734,76 @@ function AIArtTab({ save, cfg }: TabProps) {
           />
         </div>
       </section>
+
+      {/* Generate test images — only shown when backend is available */}
+      {genStatus?.available && (
+        <section className="mb-6">
+          <SectionHeader title="Test Generate" />
+          <div style={cardStyle} className="p-4">
+            <p className="text-xs mb-3" style={{ color: 'var(--color-text-secondary)' }}>
+              Test your image gen setup. Generated images are saved to <code>storage/images/</code>.
+              If you specify a character, the background or avatar will be updated automatically.
+            </p>
+            <textarea
+              value={genPrompt}
+              onChange={(e) => setGenPrompt(e.target.value)}
+              placeholder="Describe the image… e.g. 'anime bedroom, lofi aesthetic, neon lights, night'"
+              rows={3}
+              className="w-full text-sm px-3 py-2 rounded mb-3"
+              style={{ ...selectStyle, resize: 'vertical' }}
+            />
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => generate('background')}
+                disabled={genBusy || !genPrompt.trim()}
+                className="px-4 py-1.5 text-sm rounded font-medium transition-opacity"
+                style={{
+                  background: 'var(--color-accent-gradient)',
+                  color: 'var(--color-accent-text)',
+                  opacity: genBusy || !genPrompt.trim() ? 0.5 : 1,
+                }}
+              >
+                {genBusy ? '⏳ Generating…' : '🖼 Background'}
+              </button>
+              <button
+                onClick={() => generate('portrait')}
+                disabled={genBusy || !genPrompt.trim()}
+                className="px-4 py-1.5 text-sm rounded font-medium transition-opacity"
+                style={{
+                  background: 'var(--color-surface)',
+                  color: 'var(--color-accent)',
+                  border: '1px solid var(--color-accent)',
+                  opacity: genBusy || !genPrompt.trim() ? 0.5 : 1,
+                }}
+              >
+                {genBusy ? '⏳ Generating…' : '👤 Portrait'}
+              </button>
+            </div>
+            {genError && (
+              <p className="mt-2 text-xs" style={{ color: 'var(--color-danger, #f44)' }}>{genError}</p>
+            )}
+            {genResult && (
+              <div className="mt-3">
+                <p className="text-xs mb-1 capitalize" style={{ color: 'var(--color-text-tertiary)' }}>
+                  Generated {genResult.type}
+                  {activeCharacter?.id ? ` — applied to ${activeCharacter.name}` : ''}:
+                </p>
+                <img
+                  src={genResult.url}
+                  alt={`Generated ${genResult.type}`}
+                  className="rounded-lg"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: 320,
+                    border: '1px solid var(--color-border-subtle)',
+                    objectFit: 'contain',
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="mb-6">
         <SectionHeader title="Video Generation" />

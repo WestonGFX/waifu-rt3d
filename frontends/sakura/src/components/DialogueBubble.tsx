@@ -147,6 +147,23 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
             <HighlightedText text={message.text} query={searchQuery} />
           )}
         </div>
+
+        {/* Generated image from agent's generate_image tool */}
+        {message.imageUrl && (
+          <div className="mt-2">
+            <img
+              src={message.imageUrl}
+              alt="Generated image"
+              className="rounded-lg max-w-full"
+              style={{
+                maxHeight: 360,
+                border: '1px solid var(--color-border-subtle)',
+                objectFit: 'contain',
+              }}
+            />
+          </div>
+        )}
+
         <MessageMeta message={message} />
       </div>
     </div>

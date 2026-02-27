@@ -200,6 +200,14 @@ export const api = {
   scanImages: () => get<{ images: Array<string | { file: string; url: string; name: string }> }>('/api/scan/images').then(d =>
     (d.images || []).map(img => typeof img === 'string' ? img : img.file)
   ),
+  // Image generation
+  getImageGenStatus: () =>
+    get<{ available: boolean; provider: string; model: string; endpoint: string }>('/api/image-gen/status'),
+  generateBackground: (body: { prompt: string; character_id?: number; width?: number; height?: number; steps?: number }) =>
+    post<{ ok: boolean; url?: string; filename?: string; error?: string }>('/api/image-gen/background', body),
+  generatePortrait: (body: { prompt: string; character_id?: number; width?: number; height?: number; steps?: number }) =>
+    post<{ ok: boolean; url?: string; filename?: string; error?: string }>('/api/image-gen/portrait', body),
+
   // Stats (LLM status, uptime, etc.)
   getStats: () => get<Record<string, unknown>>('/api/stats'),
 

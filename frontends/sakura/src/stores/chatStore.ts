@@ -219,6 +219,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             break;
           }
 
+          case 'tool_result':
+            // Agent tool finished — if the tool generated an image, attach the URL
+            // to the current assistant message so DialogueBubble can render it.
+            if (data.display === 'image' && data.data?.url) {
+              patchAssistant({ imageUrl: data.data.url });
+            }
+            break;
+
           case 'error':
             patchAssistant({
               text: `Error: ${data.error || 'Unknown stream error'}`,

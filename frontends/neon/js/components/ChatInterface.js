@@ -1100,10 +1100,12 @@ export class ChatInterface {
             }
 
             // Use the best available token stats: prefer frontend counters (real-time),
-            // fall back to server metadata when frontend counters are 0
+            // fall back to server metadata, and finally estimate from reply length so
+            // we never show "DONE: 0 tok" when we have text to estimate from.
             const finalTokenCount = this.tokenCount > 0
                 ? this.tokenCount
-                : (metadata?.token_count || 0);
+                : (metadata?.token_count || 0) ||
+                  (metadata?.reply ? Math.ceil(metadata.reply.length / 4) : 0);
             const genTime = this.streamStartTime
                 ? ((performance.now() - this.streamStartTime) / 1000).toFixed(1)
                 : metadata?.generation_time_ms > 0

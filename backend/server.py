@@ -5671,6 +5671,101 @@ async def lm_studio_models():
         logger.warning(f"Could not query LM Studio models: {e}")
         return {"ok": False, "error": str(e), "models": []}
 
+
+@app.get("/api/models/capabilities")
+async def get_model_capabilities(model_id: str, context_length: int = None):
+    """Enrich a model identifier with HuggingFace capability metadata.
+
+    Resolves ``model_id`` to a HuggingFace repo (or falls back to name
+    heuristics) and returns detected capabilities: tier, vision, tool use,
+    thinking mode, context window, and architecture family.
+
+    This endpoint is intentionally **not** cached — the UI should cache
+    results client-side to avoid redundant calls.
+
+    Args:
+        model_id: Model ID string in any format supported by the enricher
+            (LM Studio GGUF path, HF repo ID, short name, Ollama name).
+        context_length: Context window reported by the local LLM server.
+            Used as fallback when HF's config.json doesn't have the value.
+
+    Returns:
+        dict: ``{ok, model_id, hf_repo, source, tier, architecture,
+                  context_window, lm_context_length,
+                  supports_vision, supports_tools, supports_thinking}``
+
+    Example:
+        >>> GET /api/models/capabilities?model_id=lmstudio-community/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf
+        {
+          "ok": true,
+          "model_id": "lmstudio-community/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+          "hf_repo": "lmstudio-community/Qwen3-8B-GGUF",
+          "source": "hf",
+          "tier": "medium",
+          "architecture": "qwen3",
+          "context_window": 32768,
+          "lm_context_length": 8192,
+          "supports_vision": false,
+          "supports_tools": true,
+          "supports_thinking": true
+        }
+    """
+    if not model_id:
+        raise HTTPException(400, "model_id is required")
+    try:
+        from backend.llm.model_enricher import enrich_model
+        result = enrich_model(model_id, lm_context_length=context_length)
+        return {"ok": True, **result}
+    except Exception as exc:
+        logger.warning(f"Model capability enrichment failed for '{model_id}': {exc}")
+        raise HTTPException(500, str(exc))
+
+
+@app.get("/api/models/active-capabilities")
+async def get_active_model_capabilities():
+    """Auto-detect the loaded LM Studio model and return its capabilities.
+
+    Queries LM Studio for the currently loaded model, then enriches it with
+    HuggingFace metadata. Useful for the UI to show capability badges without
+    requiring the user to select a specific model.
+
+    Returns:
+        dict: Same shape as ``/api/models/capabilities``, plus an
+        ``"active_model_id"`` key. Returns ``{"ok": False, "error": ...}``
+        when LM Studio is unreachable or no model is loaded.
+
+    Example:
+        >>> GET /api/models/active-capabilities
+        {"ok": true, "active_model_id": "google/gemma-3-12b", "tier": "large", ...}
+    """
+    cfg = load_config()
+    endpoint = _get_llm_endpoint(cfg)
+    base_url = endpoint.replace("/v1", "").rstrip("/")
+
+    try:
+        import requests as _req
+        r = _req.get(f"{base_url}/api/v0/models", timeout=5)
+        if r.status_code != 200:
+            return {"ok": False, "error": f"LM Studio returned {r.status_code}"}
+
+        data = r.json()
+        models = data if isinstance(data, list) else data.get("data", [])
+        loaded = [m for m in models if m.get("state") == "loaded"]
+        if not loaded:
+            return {"ok": False, "error": "No model currently loaded in LM Studio"}
+
+        active = loaded[0]
+        from backend.llm.model_enricher import enrich_model
+        result = enrich_model(
+            active["id"],
+            lm_context_length=active.get("max_context_length"),
+        )
+        return {"ok": True, "active_model_id": active["id"], **result}
+    except Exception as exc:
+        logger.warning(f"Active capability detection failed: {exc}")
+        return {"ok": False, "error": str(exc)}
+
+
 # ==================== VOCABULARY SYSTEM ====================
 
 @app.get("/api/vocab")

@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Brain, Volume2, Palette, Shield, Image, Settings, Package, User, Monitor
+  Brain, Volume2, Palette, Shield, Image, Settings, Package, User, Monitor,
+  Eye, Wrench, Lightbulb, Cpu, RefreshCw, CheckCircle, HelpCircle, ExternalLink
 } from 'lucide-react';
+import type { ModelCapabilities } from '../lib/api';
 import type { LayoutMode } from '../stores/appStore';
 import { useAppStore } from '../stores/appStore';
 import { useTheme } from '../hooks/useTheme';
@@ -896,6 +898,230 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
   );
 }
 
+/* ─── ModelCapabilityCard ───────────────────────────────────────────────────
+   Shows HF-enriched capability badges for the selected model.
+   Tier, vision, tools, thinking, context window, architecture.
+   Also provides "Apply to character" to write the capability_profile.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+const TIER_COLORS: Record<string, string> = {
+  tiny: '#94a3b8', small: '#4ade80', medium: '#22d3ee',
+  large: '#a78bfa', xl: '#f472b6', unknown: '#6b7280',
+};
+
+const TIER_LABELS: Record<string, string> = {
+  tiny: 'Tiny (≤3B)', small: 'Small (≤7B)', medium: 'Medium (≤14B)',
+  large: 'Large (≤32B)', xl: 'XL (70B+)', unknown: 'Unknown',
+};
+
+/**
+ * Capability badge strip for the BrainTab.
+ * Fetches /api/models/capabilities when model selection changes (debounced 600ms).
+ */
+function ModelCapabilityCard({
+  modelId,
+  lmContextLength,
+  activeCharacterId,
+  onApply,
+}: {
+  modelId: string;
+  lmContextLength?: number;
+  activeCharacterId?: number | null;
+  onApply: (caps: ModelCapabilities) => void;
+}) {
+  const [caps, setCaps] = useState<ModelCapabilities | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [applied, setApplied] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchCaps = useCallback(async (id: string, ctx?: number) => {
+    if (!id.trim()) { setCaps(null); return; }
+    setLoading(true);
+    setError(null);
+    setApplied(false);
+    try {
+      const result = await api.getModelCapabilities(id, ctx);
+      if (result.ok) setCaps(result);
+      else setError('Detection failed');
+    } catch {
+      setError('Could not reach backend');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Debounce re-fetch when model ID or context changes
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchCaps(modelId, lmContextLength), 600);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [modelId, lmContextLength, fetchCaps]);
+
+  const handleApply = () => {
+    if (!caps) return;
+    onApply(caps);
+    setApplied(true);
+    setTimeout(() => setApplied(false), 2500);
+  };
+
+  const fmtCtx = (n?: number | null) => {
+    if (!n) return null;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
+    return String(n);
+  };
+
+  if (!modelId.trim()) return null;
+
+  return (
+    <div
+      className="mx-4 mb-3 rounded-lg px-3 py-2.5 text-xs"
+      style={{
+        backgroundColor: 'var(--color-background)',
+        border: '1px solid var(--color-border-subtle)',
+      }}
+    >
+      {loading && (
+        <div className="flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
+          <RefreshCw size={11} className="animate-spin" />
+          Detecting capabilities…
+        </div>
+      )}
+
+      {error && !loading && (
+        <div className="flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
+          <HelpCircle size={11} />
+          {error}
+        </div>
+      )}
+
+      {caps && !loading && (
+        <div className="flex flex-col gap-2">
+          {/* Badge row */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Tier */}
+            <span
+              className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+              style={{
+                color: TIER_COLORS[caps.tier] ?? '#6b7280',
+                border: `1px solid ${TIER_COLORS[caps.tier] ?? '#6b7280'}40`,
+                backgroundColor: `${TIER_COLORS[caps.tier] ?? '#6b7280'}15`,
+              }}
+              title={TIER_LABELS[caps.tier]}
+            >
+              {TIER_LABELS[caps.tier] ?? caps.tier}
+            </span>
+
+            {/* Architecture */}
+            {caps.architecture && (
+              <span
+                className="px-2 py-0.5 rounded-full text-[10px]"
+                style={{
+                  color: 'var(--color-text-secondary)',
+                  border: '1px solid var(--color-border-subtle)',
+                }}
+              >
+                {caps.architecture}
+              </span>
+            )}
+
+            {/* Context window (HF ground truth > LM Studio reported) */}
+            {(caps.context_window || caps.lm_context_length) && (
+              <span
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]"
+                style={{
+                  color: 'var(--color-text-secondary)',
+                  border: '1px solid var(--color-border-subtle)',
+                }}
+                title={
+                  caps.context_window
+                    ? `HuggingFace max: ${caps.context_window.toLocaleString()} tokens`
+                    : `LM Studio: ${caps.lm_context_length?.toLocaleString()} tokens`
+                }
+              >
+                <Cpu size={9} />
+                {fmtCtx(caps.context_window ?? caps.lm_context_length)} ctx
+              </span>
+            )}
+
+            {/* Feature flags */}
+            {caps.supports_tools && (
+              <span
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]"
+                style={{ color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)', backgroundColor: 'rgba(74,222,128,0.08)' }}
+                title="Supports function calling / tool use"
+              >
+                <Wrench size={9} /> Tools
+              </span>
+            )}
+            {caps.supports_vision && (
+              <span
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]"
+                style={{ color: '#22d3ee', border: '1px solid rgba(34,211,238,0.3)', backgroundColor: 'rgba(34,211,238,0.08)' }}
+                title="Supports vision / image inputs"
+              >
+                <Eye size={9} /> Vision
+              </span>
+            )}
+            {caps.supports_thinking && (
+              <span
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]"
+                style={{ color: '#a78bfa', border: '1px solid rgba(167,139,250,0.3)', backgroundColor: 'rgba(167,139,250,0.08)' }}
+                title="Extended reasoning / thinking mode available"
+              >
+                <Lightbulb size={9} /> Reasoning
+              </span>
+            )}
+          </div>
+
+          {/* Source + HF link + Apply button row */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2" style={{ color: 'var(--color-text-secondary)', opacity: 0.7 }}>
+              <span>
+                {caps.source === 'hf'
+                  ? 'via HuggingFace'
+                  : caps.source === 'heuristic'
+                  ? 'name heuristics'
+                  : 'estimated'}
+              </span>
+              {caps.hf_repo && (
+                <a
+                  href={`https://huggingface.co/${caps.hf_repo}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-0.5"
+                  style={{ color: 'var(--color-accent)' }}
+                  title={`View ${caps.hf_repo} on HuggingFace`}
+                >
+                  <ExternalLink size={9} /> HF
+                </a>
+              )}
+            </div>
+
+            {activeCharacterId != null && (
+              <button
+                onClick={handleApply}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] transition-all"
+                style={{
+                  background: applied
+                    ? 'rgba(74,222,128,0.15)'
+                    : 'var(--color-accent-gradient)',
+                  color: applied ? '#4ade80' : 'var(--color-accent-text)',
+                  border: applied ? '1px solid rgba(74,222,128,0.3)' : 'none',
+                }}
+                title="Write these detected capabilities to the active character's profile"
+              >
+                {applied ? <><CheckCircle size={9} /> Applied!</> : 'Apply to character'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    Tab: Brain (LLM)
    ═══════════════════════════════════════════════════════════════════════ */
@@ -910,6 +1136,7 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
   const currentModel = String(cfg('llm.model', ''));
   const loadedModels = lmModels.filter(m => m.state === 'loaded');
   const unloadedModels = lmModels.filter(m => m.state !== 'loaded');
+  const { activeCharacter } = useAppStore();
 
   /** Auto-detect context window from loaded model. */
   const autoDetectContext = () => {
@@ -918,6 +1145,35 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
       save('context_limit', loaded.max_context_length);
     }
   };
+
+  /**
+   * Apply HF-detected capabilities to the active character's capability_profile.
+   * Maps ModelCapabilities → the capability_profile JSON schema the backend expects.
+   */
+  const applyCapabilitiesToCharacter = useCallback(async (caps: ModelCapabilities) => {
+    if (!activeCharacter?.id) return;
+    const profile = {
+      model_tier: caps.tier === 'unknown' ? undefined : caps.tier,
+      context_budget: caps.context_window ?? caps.lm_context_length ?? undefined,
+      supports_tools: caps.supports_tools,
+      supports_vision: caps.supports_vision,
+      supports_thinking: caps.supports_thinking,
+      notes: caps.hf_repo
+        ? `Auto-detected from ${caps.hf_repo} (${caps.source})`
+        : `Auto-detected via ${caps.source}`,
+    };
+    try {
+      await api.updateCharacter(activeCharacter.id, {
+        capability_profile: JSON.stringify(profile),
+      });
+    } catch (err) {
+      console.error('Failed to save capability_profile:', err);
+    }
+  }, [activeCharacter]);
+
+  // Context length for the currently loaded model (for capability enrichment)
+  const loadedModelCtx = loadedModels.find(m => m.id === currentModel)?.max_context_length
+    ?? loadedModels[0]?.max_context_length;
 
   return (
     <>
@@ -975,6 +1231,19 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
             </div>
           </SettingField>
 
+        </div>
+
+        {/* Capability badge strip — shown whenever a model is selected */}
+        {currentModel && (
+          <ModelCapabilityCard
+            modelId={currentModel}
+            lmContextLength={loadedModelCtx}
+            activeCharacterId={activeCharacter?.id ?? null}
+            onApply={applyCapabilitiesToCharacter}
+          />
+        )}
+
+        <div style={cardStyle} className="px-4">
           {/* Context Window */}
           <SettingField label="Context Window" description="Max tokens for memory. Match your model's context length."
             tooltip="Set to your model's max context. Use Auto-Detect to query LM Studio.">

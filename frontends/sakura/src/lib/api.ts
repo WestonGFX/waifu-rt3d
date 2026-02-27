@@ -2,6 +2,30 @@ import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModels
 
 // ─── LM Studio Model Manager types ───────────────────────────────────────────
 
+/**
+ * Auto-detected model capabilities from HuggingFace + name heuristics.
+ * Returned by /api/models/capabilities and /api/models/active-capabilities.
+ */
+export interface ModelCapabilities {
+  model_id: string;
+  /** Resolved HuggingFace repo ID, e.g. "lmstudio-community/Qwen3-8B-GGUF". */
+  hf_repo: string | null;
+  /** "hf" = data from HuggingFace, "heuristic" = name patterns only, "unknown" = no data. */
+  source: 'hf' | 'heuristic' | 'unknown';
+  /** Intelligence tier based on parameter count. */
+  tier: 'tiny' | 'small' | 'medium' | 'large' | 'xl' | 'unknown';
+  /** Architecture family (e.g. "qwen3", "llama3", "gemma3"). */
+  architecture: string | null;
+  /** True max context window from HF config.json (tokens). */
+  context_window: number | null;
+  /** Context window currently reported by the local LLM server. */
+  lm_context_length: number | null;
+  supports_vision: boolean;
+  supports_tools: boolean;
+  /** Extended reasoning / chain-of-thought thinking mode. */
+  supports_thinking: boolean;
+}
+
 /** An LM Studio installed model entry (from /api/models/installed). */
 export interface LMStudioModel {
   id: string;
@@ -222,6 +246,26 @@ export const api = {
     get<{ ok: boolean; entries: VocabEntry[]; count: number }>('/api/vocab/export'),
   importVocab: (entries: Partial<VocabEntry>[]) =>
     post<{ ok: boolean; imported: number; total_user: number }>('/api/vocab/import', { entries }),
+
+  // Model capability enrichment via HuggingFace
+  /**
+   * Resolve a model ID to HuggingFace metadata and detect capabilities.
+   * Accepts any format: LM Studio GGUF path, HF repo ID, short name, Ollama name.
+   *
+   * @param modelId - Model identifier (e.g. "lmstudio-community/Qwen3-8B-GGUF/...")
+   * @param contextLength - Context window reported by the local LLM server (optional fallback)
+   */
+  getModelCapabilities: (modelId: string, contextLength?: number) => {
+    const params = new URLSearchParams({ model_id: modelId });
+    if (contextLength) params.set('context_length', String(contextLength));
+    return get<ModelCapabilities & { ok: boolean }>(`/api/models/capabilities?${params}`);
+  },
+  /**
+   * Auto-detect the currently loaded LM Studio model and return its capabilities.
+   * Returns {ok: false, error: string} when LM Studio is unreachable.
+   */
+  getActiveModelCapabilities: () =>
+    get<ModelCapabilities & { ok: boolean; active_model_id?: string }>('/api/models/active-capabilities'),
 
   // LM Studio Model Manager
   getInstalledModels: () =>

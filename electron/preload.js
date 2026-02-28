@@ -76,6 +76,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   /**
+   * Get the work area bounds of the display nearest to the pet window.
+   *
+   * @returns {Promise<{ x: number, y: number, width: number, height: number }>}
+   */
+  getScreenBounds: () => {
+    return ipcRenderer.invoke('get-screen-bounds');
+  },
+
+  /**
+   * Open a native file dialog for importing models.
+   * Returns base64-encoded file contents and filename, or null if cancelled.
+   *
+   * @param {'vrm' | 'live2d'} type - File type to filter for
+   * @returns {Promise<{ name: string, data: string } | null>}
+   */
+  openFileDialog: (type) => {
+    return ipcRenderer.invoke('open-file-dialog', type);
+  },
+
+  /**
    * Show a native right-click context menu on the pet window.
    * The main process builds and displays a native OS menu.
    *

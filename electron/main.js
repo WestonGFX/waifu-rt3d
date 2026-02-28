@@ -13,15 +13,28 @@
 const {
   app,
   BrowserWindow,
+  dialog,
   globalShortcut,
   Tray,
   Menu,
   ipcMain,
   nativeImage,
+  screen,
   shell,
 } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
+
+// ── GPU & Renderer Flags ─────────────────────────────────────────────────────
+//
+// These must be set before app.whenReady(). The transparent pet overlay with
+// WebGL is GPU-intensive — these flags ensure hardware acceleration is used
+// and the pet window isn't throttled when unfocused.
+
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -31,8 +44,13 @@ const store = new Store({
     petWindow: { x: 100, y: 100, width: 300, height: 500 },
     petMode: false,
     muted: false,
+    discordRPC: false,
+    discordAppId: '',
   },
 });
+
+// Discord RPC — opt-in, gracefully handles missing dependency
+const discord = require('./discord-rpc');
 
 /** Base URL of the running FastAPI server. */
 const BASE_URL = 'http://localhost:8080';
@@ -226,14 +244,81 @@ ipcMain.on('set-click-through', (_event, shouldPassThrough) => {
   }
 });
 
+/** Snap threshold in pixels — snap when window edge is within this distance. */
+const SNAP_DISTANCE = 20;
+
 /**
  * Move the pet window by a delta (for drag-to-move on the character).
+ * Includes screen-edge snapping when the window is dragged near display borders.
  */
 ipcMain.on('move-pet-window', (_event, deltaX, deltaY) => {
-  if (petWindow && !petWindow.isDestroyed()) {
-    const [x, y] = petWindow.getPosition();
-    petWindow.setPosition(x + deltaX, y + deltaY);
+  if (!petWindow || petWindow.isDestroyed()) return;
+
+  const [x, y] = petWindow.getPosition();
+  const [w, h] = petWindow.getSize();
+  let newX = x + deltaX;
+  let newY = y + deltaY;
+
+  // Get the work area of the display the window is currently on
+  const display = screen.getDisplayNearestPoint({ x: newX, y: newY });
+  const { x: areaX, y: areaY, width: areaW, height: areaH } = display.workArea;
+
+  // Snap to left edge
+  if (Math.abs(newX - areaX) < SNAP_DISTANCE) newX = areaX;
+  // Snap to right edge
+  if (Math.abs((newX + w) - (areaX + areaW)) < SNAP_DISTANCE) newX = areaX + areaW - w;
+  // Snap to top edge
+  if (Math.abs(newY - areaY) < SNAP_DISTANCE) newY = areaY;
+  // Snap to bottom edge
+  if (Math.abs((newY + h) - (areaY + areaH)) < SNAP_DISTANCE) newY = areaY + areaH - h;
+
+  petWindow.setPosition(newX, newY);
+});
+
+/**
+ * Get the work area bounds of the display nearest to the pet window.
+ * Used by the renderer for layout calculations.
+ *
+ * @returns {{ x: number, y: number, width: number, height: number }}
+ */
+ipcMain.handle('get-screen-bounds', () => {
+  if (!petWindow || petWindow.isDestroyed()) {
+    const primary = screen.getPrimaryDisplay();
+    return primary.workArea;
   }
+  const [x, y] = petWindow.getPosition();
+  const display = screen.getDisplayNearestPoint({ x, y });
+  return display.workArea;
+});
+
+/**
+ * Open a native file dialog for model import (VRM or Live2D archives).
+ * Returns the file contents as a base64-encoded string along with the filename,
+ * or null if the user cancelled.
+ *
+ * @param {'vrm' | 'live2d'} type - Which model type to filter for
+ * @returns {Promise<{ name: string, data: string } | null>} Base64 file data or null
+ */
+ipcMain.handle('open-file-dialog', async (_event, type) => {
+  const filters = type === 'vrm'
+    ? [{ name: 'VRM Models', extensions: ['vrm'] }]
+    : [{ name: 'Live2D Archives', extensions: ['zip'] }];
+
+  const parentWindow = mainWindow || petWindow;
+  const result = await dialog.showOpenDialog(parentWindow, {
+    title: `Import ${type === 'vrm' ? 'VRM Model' : 'Live2D Model'}`,
+    filters,
+    properties: ['openFile'],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) return null;
+
+  const fs = require('fs');
+  const filePath = result.filePaths[0];
+  const fileName = path.basename(filePath);
+  const fileData = fs.readFileSync(filePath).toString('base64');
+
+  return { name: fileName, data: fileData };
 });
 
 /**
@@ -450,10 +535,44 @@ function updateTrayMenu() {
         if (petWindow) petWindow.webContents.send('mute-changed', item.checked);
       },
     },
+    {
+      label: 'Discord Rich Presence',
+      type: 'checkbox',
+      checked: store.get('discordRPC', false),
+      click: async (item) => {
+        if (item.checked) {
+          const appId = store.get('discordAppId', '');
+          if (!appId) {
+            // No Application ID configured — prompt user
+            const { response, checkboxChecked } = await dialog.showMessageBox({
+              type: 'info',
+              title: 'Discord Rich Presence',
+              message: 'A Discord Application ID is required.\n\nCreate one at discord.com/developers/applications,\nthen set it in the app settings.',
+              buttons: ['OK'],
+            });
+            item.checked = false;
+            return;
+          }
+          const connected = await discord.initDiscordRPC(appId);
+          store.set('discordRPC', connected);
+          if (connected) {
+            discord.updatePresence({
+              characterName: cachedCharacters.find((c) => c.id === store.get('activeCharId'))?.name || 'Character',
+              activity: 'idle',
+            });
+          }
+        } else {
+          discord.destroyDiscordRPC();
+          store.set('discordRPC', false);
+        }
+        updateTrayMenu();
+      },
+    },
     { type: 'separator' },
     {
       label: 'Quit',
       click: () => {
+        discord.destroyDiscordRPC();
         app.quit();
       },
     },
@@ -466,6 +585,72 @@ function updateTrayMenu() {
 }
 
 // ── App Lifecycle ─────────────────────────────────────────────────────────────
+
+// ── Deep Link Protocol (waifu://) ────────────────────────────────────────────
+//
+// Register the waifu:// URL protocol so external apps and browser links
+// can open the app and navigate to specific screens.
+//
+// Supported routes:
+//   waifu://character/{id}  → open main window, navigate to character
+//   waifu://pet             → show/create pet window
+//   waifu://voice           → open main window + start voice mode
+
+if (process.defaultApp) {
+  // Dev mode: register with the full path to the executable
+  app.setAsDefaultProtocolClient('waifu', process.execPath, [__dirname]);
+} else {
+  app.setAsDefaultProtocolClient('waifu');
+}
+
+/**
+ * Handle a waifu:// deep link URL.
+ * Parses the URL and routes to the appropriate action.
+ *
+ * @param {string} url - The full deep link URL (e.g. "waifu://character/3")
+ */
+function handleDeepLink(url) {
+  if (!url || typeof url !== 'string') return;
+
+  try {
+    // Parse the URL — waifu://route/param
+    const parsed = new URL(url);
+    const route = parsed.hostname;
+    const pathParts = parsed.pathname.split('/').filter(Boolean);
+
+    switch (route) {
+      case 'character': {
+        const charId = parseInt(pathParts[0], 10);
+        if (!isNaN(charId)) {
+          createMainWindow();
+          // Small delay to let the window load before sending navigation
+          setTimeout(() => {
+            if (mainWindow) mainWindow.webContents.send('navigate-to-character', charId);
+          }, 500);
+        }
+        break;
+      }
+
+      case 'pet':
+        createPetWindow();
+        break;
+
+      case 'voice':
+        createMainWindow();
+        setTimeout(() => {
+          if (mainWindow) mainWindow.webContents.send('start-voice-mode');
+        }, 500);
+        break;
+
+      default:
+        // Unknown route — just open the main window
+        createMainWindow();
+        break;
+    }
+  } catch {
+    // Invalid URL — ignore
+  }
+}
 
 app.whenReady().then(() => {
   // Register global shortcut: Ctrl+Shift+P → toggle desktop pet
@@ -490,6 +675,11 @@ app.whenReady().then(() => {
   });
 });
 
+// macOS: handle deep link when app is already running
+app.on('open-url', (_event, url) => {
+  handleDeepLink(url);
+});
+
 // Quit when all windows are closed (except on macOS)
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -507,11 +697,15 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    // Focus existing window if someone tries to open a second instance
+  app.on('second-instance', (_event, commandLine) => {
+    // Focus existing window
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
     }
+
+    // Windows/Linux: deep link URL is passed as a command-line argument
+    const deepLinkUrl = commandLine.find((arg) => arg.startsWith('waifu://'));
+    if (deepLinkUrl) handleDeepLink(deepLinkUrl);
   });
 }

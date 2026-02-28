@@ -30,6 +30,12 @@ interface ElectronAPI {
   /** Get current app state from the main process. */
   getAppState: () => Promise<{ petMode: boolean; muted: boolean }>;
 
+  /** Get the work area bounds of the display nearest to the pet window. */
+  getScreenBounds: () => Promise<{ x: number; y: number; width: number; height: number }>;
+
+  /** Open a native file dialog for importing models. Returns base64 data or null if cancelled. */
+  openFileDialog: (type: 'vrm' | 'live2d') => Promise<{ name: string; data: string } | null>;
+
   /** Show a native right-click context menu on the pet window. */
   showPetContextMenu: (opts: { characterName: string; isMuted: boolean }) => void;
 

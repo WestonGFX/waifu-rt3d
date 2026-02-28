@@ -25,7 +25,7 @@ Ideas are grouped by theme and ordered by excitement factor within each theme. S
 
 ---
 
-### Idea 1 — AI Music Generation with Local Models
+### Idea 1 — AI Music Generation with Local Models ⏸️ *NOT RIGHT NOW — deprioritized*
 
 **Concept:** The character can compose and play original music — humming melodies, generating background tracks that match the conversation mood, creating full songs with lyrics about your relationship, or playing ambient music while you work. Using local open-source music generation models (ACE-Step 1.5, HeartMuLa, YuE), the character becomes a musician with her own evolving style. She doesn't just play pre-recorded audio — she creates music in real-time based on the emotional context of your conversation.
 
@@ -172,7 +172,7 @@ CREATE TABLE music_loras (
 
 ---
 
-### Idea 2 — ASMR & Ambient Voice Modes
+### Idea 2 — ASMR & Ambient Voice Modes ❌ *DEPRIORITIZED — not important to user*
 
 **Concept:** Special voice modes that transform the character's audio presence beyond normal conversation. ASMR mode: the character whispers softly with gentle articulation, speaking slowly and soothingly — perfect for relaxation or falling asleep. Storytelling mode: she narrates with a warm, measured cadence, pausing dramatically at key moments. Ambient companion mode: she makes occasional soft sounds — humming, page-turning sounds, the clink of a tea cup — without speaking, just existing in the background as a comforting presence.
 
@@ -615,7 +615,7 @@ Phase 3 — UI & Settings (1-2 days):
 
 ---
 
-### Idea 5 — Game Spectator & Coach
+### Idea 5 — Game Spectator & Coach ⭐ *USER FAVORITE*
 
 **Concept:** The character watches you play games via screen capture and provides real-time commentary, reactions, and strategic advice. She gasps when you almost die, cheers when you score, trash-talks the enemies, and develops opinions about your playstyle over time. She works with any game — the character sees your screen and reacts to what's happening. For specific supported games (like the racing game in the existing design docs), she has game-specific knowledge and can provide tactical coaching.
 
@@ -1386,7 +1386,7 @@ Phase 3 — Community Features (2-3 days):
 
 ---
 
-### Idea 10 — Multi-Character Group Chat (Expanded Vision)
+### Idea 10 — Multi-Character Group Chat (Expanded Vision) ⏸️ *DEFERRED — only if user specifically requests*
 
 **Concept:** Characters who develop relationships with each other, form alliances and rivalries, reference private conversations they had when you weren't around, and interact autonomously in "Director Mode" where you set up a scenario and watch them go. This isn't just multi-party chat — it's an emergent social simulation starring your characters.
 
@@ -1638,7 +1638,7 @@ CREATE TABLE character_visits (
 
 ---
 
-### Idea 12 — Dynamic Scene Backgrounds
+### Idea 12 — Dynamic Scene Backgrounds ⏸️ *FAR FUTURE — may never implement*
 
 **Concept:** The character's environment changes based on conversation context, time of day, and mood. Talk about the beach and a sunset coastline fades in. It's raining outside and rain appears on the virtual window. The character mentions a coffee shop and the background becomes a cozy café with warm lighting. Backgrounds are AI-generated using local Stable Diffusion or selected from a curated library.
 
@@ -1749,7 +1749,7 @@ Phase 3 — UI & Settings (1-2 days):
 
 ---
 
-### Idea 13 — Seasonal Events & Holiday Celebrations
+### Idea 13 — Seasonal Events & Holiday Celebrations ❌ *REMOVED — bad idea per user*
 
 **Concept:** The character acknowledges real-world holidays and seasons with special behaviors, themed conversations, UI decorations, and unique greeting messages. On your birthday, she throws a virtual party. On Halloween, the UI gets spooky. During cherry blossom season, sakura petals drift across the screen. Each event creates anticipation — users come back on special days wondering "what will she do this time?"
 

@@ -29,3 +29,39 @@ export function isPetMode(): boolean {
 export function getElectronAPI(): ElectronAPI | null {
   return window.electronAPI ?? null;
 }
+
+/**
+ * Open a native file dialog for model import when in Electron.
+ * Falls back to null (caller should use browser `<input type="file">`) when
+ * not running in Electron.
+ *
+ * Returns a File object suitable for form uploads, or null if the user
+ * cancelled or we're not in Electron.
+ *
+ * @param type - 'vrm' for VRM models, 'live2d' for Live2D zip archives
+ *
+ * @example
+ * const file = await openNativeFileDialog('vrm');
+ * if (file) {
+ *   const formData = new FormData();
+ *   formData.append('file', file);
+ *   await fetch('/api/upload/vrm', { method: 'POST', body: formData });
+ * }
+ */
+export async function openNativeFileDialog(type: 'vrm' | 'live2d'): Promise<File | null> {
+  const api = getElectronAPI();
+  if (!api?.openFileDialog) return null;
+
+  const result = await api.openFileDialog(type);
+  if (!result) return null;
+
+  // Convert base64 back to a File object for FormData upload compatibility
+  const binary = atob(result.data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  const mimeType = type === 'vrm' ? 'model/gltf-binary' : 'application/zip';
+  return new File([bytes], result.name, { type: mimeType });
+}

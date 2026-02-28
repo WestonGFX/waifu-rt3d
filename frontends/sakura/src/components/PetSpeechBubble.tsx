@@ -1,5 +1,6 @@
+import { useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { MessageSquare, Mic, Gamepad2, X } from 'lucide-react';
+import { MessageSquare, Mic, Gamepad2, X, Send } from 'lucide-react';
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 
@@ -8,10 +9,16 @@ interface PetSpeechBubbleProps {
   message: string;
   /** Character name (shown as label). */
   characterName: string;
+  /** Character ID for quick reply API calls. */
+  charId?: number;
+  /** Session ID for maintaining chat continuity (uses char's active session). */
+  sessionId?: number | null;
   /** Called when the user dismisses the bubble. */
   onDismiss: () => void;
   /** Called when the user wants to open the full chat window. */
   onOpenChat?: () => void;
+  /** Called when a quick reply is sent and a response received. */
+  onQuickReply?: (response: string) => void;
 }
 
 // ── Component ───────────────────────────────────────────────────────────────────
@@ -39,9 +46,48 @@ interface PetSpeechBubbleProps {
 export function PetSpeechBubble({
   message,
   characterName,
+  charId,
+  sessionId,
   onDismiss,
   onOpenChat,
+  onQuickReply,
 }: PetSpeechBubbleProps) {
+  const [showInput, setShowInput] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Send a quick reply via the chat API and update the bubble with the response.
+   * Uses the non-streaming /api/chat endpoint for simplicity.
+   */
+  const handleQuickReply = useCallback(async () => {
+    const text = inputValue.trim();
+    if (!text || !charId || isSending) return;
+
+    setIsSending(true);
+    setInputValue('');
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, char_id: charId, session_id: sessionId || 1 }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.reply || '';
+        if (reply && onQuickReply) onQuickReply(reply);
+      }
+    } catch {
+      // Network error — silently fail, pet window is non-critical
+    } finally {
+      setIsSending(false);
+      setShowInput(false);
+    }
+  }, [inputValue, charId, sessionId, isSending, onQuickReply]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10, scale: 0.9 }}
@@ -107,37 +153,93 @@ export function PetSpeechBubble({
         />
       </div>
 
+      {/* ── Quick Reply Input ─────────────────────────────────────────── */}
+      {showInput && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 6,
+            marginTop: 8,
+            padding: '0 2px',
+          }}
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleQuickReply(); }}
+            placeholder={isSending ? 'Sending...' : 'Quick reply...'}
+            disabled={isSending}
+            autoFocus
+            style={{
+              flex: 1,
+              padding: '7px 10px',
+              borderRadius: 10,
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+              background: 'rgba(15, 15, 25, 0.85)',
+              backdropFilter: 'blur(8px)',
+              color: '#e8e4f0',
+              fontSize: '0.78rem',
+              outline: 'none',
+            }}
+          />
+          <button
+            onClick={handleQuickReply}
+            disabled={isSending || !inputValue.trim()}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 10,
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+              background: 'rgba(139, 92, 246, 0.2)',
+              color: 'rgba(200, 180, 255, 0.9)',
+              cursor: isSending ? 'wait' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <Send size={14} />
+          </button>
+        </div>
+      )}
+
       {/* ── Action buttons ──────────────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: 8,
-          marginTop: 8,
-        }}
-      >
-        <ActionButton
-          icon={<MessageSquare size={14} />}
-          label="Chat"
-          onClick={onOpenChat}
-        />
-        <ActionButton
-          icon={<Mic size={14} />}
-          label="Voice"
-          onClick={onOpenChat}
-        />
-        <ActionButton
-          icon={<Gamepad2 size={14} />}
-          label="Play"
-          onClick={onOpenChat}
-        />
-        <ActionButton
-          icon={<X size={14} />}
-          label=""
-          onClick={onDismiss}
-          variant="dismiss"
-        />
-      </div>
+      {!showInput && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: 8,
+            marginTop: 8,
+          }}
+        >
+          <ActionButton
+            icon={<MessageSquare size={14} />}
+            label="Reply"
+            onClick={() => {
+              setShowInput(true);
+              // Focus after state update + render
+              setTimeout(() => inputRef.current?.focus(), 50);
+            }}
+          />
+          <ActionButton
+            icon={<Mic size={14} />}
+            label="Voice"
+            onClick={onOpenChat}
+          />
+          <ActionButton
+            icon={<Gamepad2 size={14} />}
+            label="Play"
+            onClick={onOpenChat}
+          />
+          <ActionButton
+            icon={<X size={14} />}
+            label=""
+            onClick={onDismiss}
+            variant="dismiss"
+          />
+        </div>
+      )}
     </motion.div>
   );
 }

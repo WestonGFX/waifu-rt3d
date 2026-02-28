@@ -2667,6 +2667,10 @@ async def chat_stream(req: Request):
                     "context_budget": _context_budget_summary(sections, hist, cfg),
                     "capability_warning": _capability_warning,
                 }
+                # Emit dedicated emotion event so chatStore can handle it independently
+                emotion_val = emotion or 'neutral'
+                intensity_val = 1.0 if emotion_val != 'neutral' else 0.0
+                yield f"event: emotion\ndata: {json.dumps({'type': 'emotion', 'emotion': emotion_val, 'intensity': intensity_val})}\n\n"
                 yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
                 try:
@@ -2879,6 +2883,10 @@ async def chat_stream(req: Request):
                     # Phase 9: capability mismatch warning (if character needs a bigger model)
                     "capability_warning": _capability_warning,
                 }
+                # Emit dedicated emotion event so chatStore can handle it independently
+                emotion_val = emotion or 'neutral'
+                intensity_val = 1.0 if emotion_val != 'neutral' else 0.0
+                yield f"event: emotion\ndata: {json.dumps({'type': 'emotion', 'emotion': emotion_val, 'intensity': intensity_val})}\n\n"
                 yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
                 # Fire outbound webhooks (#62) — non-blocking background threads

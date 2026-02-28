@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, Sliders, RotateCcw, Eye, EyeOff, Loader2, AlertTriangle, Box, RefreshCw, Sparkles, Wifi, WifiOff, X, Camera } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
+import { useChatStore } from '../stores/chatStore';
 import { useViewer } from '../hooks/useViewer';
 import { api } from '../lib/api';
 import type { Character } from '../lib/types';
@@ -181,6 +182,8 @@ function ExpressionEditor({ shapes, values, onChange, onResetAll }: ExpressionEd
 export function ModelPanel({ character }: ModelPanelProps) {
   const { modelPanelOpen, toggleModelPanel, setVrmStats, setViewportFps } = useAppStore();
   const { iframeRef, loadCharacter, setCameraPreset, getAvailableBlendShapes, setBlendShape, setBlendShapes } = useViewer();
+  /** Current emotion from chatStore — drives the emotion badge in the viewport overlay. */
+  const currentEmotion = useChatStore(s => s.currentEmotion);
   const [vrmModels, setVrmModels] = useState<Array<{ name: string; url: string }>>([]);
 
   // Expression editor state
@@ -529,6 +532,19 @@ export function ModelPanel({ character }: ModelPanelProps) {
                   {remoteUrl ? <Wifi size={9} /> : <Sparkles size={9} />}
                   {remoteUrl ? 'GPU' : motionBackend === 'motion_diffuse' ? 'AI' : 'Proc'}
                 </button>
+              )}
+              {/* B2: Emotion badge — shows active expression driven by the last LLM reply */}
+              {currentEmotion && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded-full"
+                  style={{
+                    backgroundColor: 'var(--color-accent-soft)',
+                    color: 'var(--color-accent)',
+                    fontWeight: 600,
+                  }}
+                >
+                  {currentEmotion.emotion} {Math.round(currentEmotion.intensity * 100)}%
+                </span>
               )}
             </div>
 

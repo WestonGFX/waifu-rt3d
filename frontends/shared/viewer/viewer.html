@@ -2992,6 +2992,13 @@
                         if (emotionLayer) emotionLayer.setEmotion(e.data.emotion, e.data.intensity || 0.7);
                     }
                     _triggerAutoGesture(e.data.emotion);
+                    // B2: auto-reset to neutral after 8s so the expression doesn't freeze permanently
+                    if (window._b2ResetTimer) clearTimeout(window._b2ResetTimer);
+                    if (e.data.emotion && e.data.emotion !== 'neutral') {
+                        window._b2ResetTimer = setTimeout(() => {
+                            if (expressionController) expressionController.setExpression('neutral', 0);
+                        }, 8000);
+                    }
                 }
                 else if (type === 'setEmotion') {
                     const emo = payload?.emotion || e.data.emotion;

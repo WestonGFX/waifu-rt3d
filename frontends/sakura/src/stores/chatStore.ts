@@ -10,12 +10,16 @@ interface ChatState {
   charId: number | null;
   /** Active AbortController for cancelling in-flight streaming requests. */
   abortController: AbortController | null;
+  /** Current emotion detected from the most recent assistant reply, or null when neutral. */
+  currentEmotion: { emotion: string; intensity: number } | null;
   setDraft: (text: string) => void;
   setContext: (sessionId: number, charId: number) => void;
   sendMessage: (text: string, speak?: boolean, incognito?: boolean, maxTokens?: number) => Promise<void>;
   abortMessage: () => void;
   loadHistory: (sessionId: number) => Promise<void>;
   clear: () => void;
+  /** Drive the VRM viewer's expression and mirror state into the store. */
+  setCurrentEmotion: (emotion: string, intensity: number) => void;
 }
 
 const genId = () => crypto.randomUUID();
@@ -76,8 +80,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   sessionId: null,
   charId: null,
   abortController: null,
+  currentEmotion: null,
 
   setDraft: (text) => set({ draft: text }),
+
+  setCurrentEmotion: (emotion, intensity) => {
+    set({ currentEmotion: emotion === 'neutral' ? null : { emotion, intensity } });
+    const frame = document.querySelector('iframe[src*="viewer"]') as HTMLIFrameElement | null;
+    frame?.contentWindow?.postMessage({ type: 'setExpression', emotion, intensity }, '*');
+  },
 
   setContext: (sessionId, charId) => set({ sessionId, charId, messages: [] }),
 
@@ -194,6 +205,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             }
             break;
 
+          case 'emotion': {
+            // Dedicated emotion SSE frame — fired just before 'done' by B2 backend
+            const { emotion, intensity } = data as { emotion: string; intensity: number };
+            get().setCurrentEmotion(emotion, intensity ?? 1.0);
+            break;
+          }
+
           case 'done': {
             // Stream complete — apply final metadata
             const elapsed = (performance.now() - streamStart) / 1000;
@@ -217,6 +235,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             if (data.audio_url) {
               patchAssistant({ audioUrl: data.audio_url });
             }
+
+            // Fallback: fire emotion if the dedicated 'emotion' SSE event was missed
+            if (data.emotion) get().setCurrentEmotion(data.emotion, 1.0);
             break;
           }
 

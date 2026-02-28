@@ -1,0 +1,9 @@
+{
+  "happy":        { "blendShapes": { "Joy": 0.8, "Blink": 0.05 }, "auto_intensity": true },
+  "sad":          { "blendShapes": { "Sorrow": 0.7, "Blink_L": 0.1, "Blink_R": 0.1 }, "auto_intensity": true },
+  "neutral":      { "blendShapes": {}, "auto_intensity": false },
+  "surprised":    { "blendShapes": { "Surprised": 0.9 }, "auto_intensity": true },
+  "confused":     { "blendShapes": { "Angry": 0.3, "Sorrow": 0.2 }, "auto_intensity": true },
+  "affectionate": { "blendShapes": { "Joy": 0.5, "Blink": 0.1 }, "auto_intensity": true },
+  "playful":      { "blendShapes": { "Joy": 0.6, "Surprised": 0.2 }, "auto_intensity": true }
+}

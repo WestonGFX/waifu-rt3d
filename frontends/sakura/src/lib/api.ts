@@ -561,6 +561,26 @@ export const api = {
     del<{ ok: boolean; deleted: number }>(`/api/characters/${charId}/user-facts/${factId}`),
 
   /**
+   * Fetch the author's note for a session.
+   *
+   * @param sessionId - Session primary key.
+   * @returns Current note text, injection position, and enabled flag.
+   */
+  getAuthorNote: (sessionId: number) =>
+    get<{ note: string; position: string; enabled: boolean }>(`/api/sessions/${sessionId}/author-note`),
+
+  /**
+   * Update the author's note for a session (partial patch).
+   *
+   * @param sessionId - Session primary key.
+   * @param patch - Fields to update (note, position, enabled).
+   */
+  updateAuthorNote: (sessionId: number, data: { note?: string; position?: string; enabled?: boolean }) =>
+    patch<{ ok: boolean; note: string; position: string; enabled: boolean }>(
+      `/api/sessions/${sessionId}/author-note`, data
+    ),
+
+  /**
    * Import a SillyTavern CHARA v2 PNG character card.
    *
    * @param file - PNG file with embedded CHARA v2 tEXt chunk.

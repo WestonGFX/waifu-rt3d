@@ -1518,6 +1518,49 @@ def migrate_to_v27(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v28(con: sqlite3.Connection) -> bool:
+    """Apply schema v28 migration (Feature B4: Author's Note / Soft Prompt Injection).
+
+    Adds three columns to the ``sessions`` table:
+
+    - ``author_note`` (TEXT): The director's note text, injected silently.
+    - ``author_note_position`` (TEXT): Injection position; one of
+      ``before_system``, ``after_system``, ``before_last``, ``after_last2``.
+    - ``author_note_enabled`` (INTEGER 0/1): Toggle without clearing the note.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v28.
+
+    Example:
+        >>> if migrate_to_v28(con):
+        ...     print("author_note columns added to sessions")
+    """
+    columns = {row[1] for row in con.execute("PRAGMA table_info(sessions)")}
+    if "author_note" in columns:
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (28)")
+        con.commit()
+        return False
+    try:
+        logger.info("Applying schema v28 migration (Feature B4: author's note)...")
+        for stmt in (
+            "ALTER TABLE sessions ADD COLUMN author_note TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE sessions ADD COLUMN author_note_position TEXT NOT NULL DEFAULT 'after_system'",
+            "ALTER TABLE sessions ADD COLUMN author_note_enabled INTEGER NOT NULL DEFAULT 0",
+        ):
+            con.execute(stmt)
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (28)")
+        con.commit()
+        logger.info("✅ Schema v28 migration complete (author_note on sessions)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v28 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -1741,21 +1784,28 @@ def ensure_db():
             if migrate_to_v27(con):
                 version = 27
 
+        # Upgrade from v27 to v28 (Feature B4: Author's Note / Soft Prompt Injection)
+        if version < 28:
+            logger.info("Upgrading database schema from v27 to v28...")
+            logger.info("  - Adding author_note columns to sessions (Feature B4: author's note)")
+            if migrate_to_v28(con):
+                version = 28
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 27:
-            raise RuntimeError(f"Database initialization failed: Expected v27, got v{final_version}")
+        if final_version < 28:
+            raise RuntimeError(f"Database initialization failed: Expected v28, got v{final_version}")
 
-        if final_version > 27:
-            logger.warning(f"Database is newer than application (v{final_version} > v27). Some features might be unused.")
+        if final_version > 28:
+            logger.warning(f"Database is newer than application (v{final_version} > v28). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v27 adds user knowledge graph)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v28 adds author's note injection)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

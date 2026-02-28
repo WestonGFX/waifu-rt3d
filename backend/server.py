@@ -1480,9 +1480,30 @@ def _build_prompt_sections(
 
     sections = []
 
+    # 0. Feature B4: Author's Note — "before_system" position (injected first)
+    _author_note_text = ""
+    _author_note_position = "after_system"
+    try:
+        _an_row = cur.execute(
+            "SELECT author_note, author_note_position, author_note_enabled FROM sessions WHERE id=?",
+            (session_id,),
+        ).fetchone()
+        if _an_row and _an_row[2] and _an_row[0] and _an_row[0].strip():
+            _author_note_text = _an_row[0].strip()
+            _author_note_position = _an_row[1] or "after_system"
+    except Exception:
+        pass
+
+    if _author_note_text and _author_note_position == "before_system":
+        sections.append(_section("Author's Note", f"[Author's Note: {_author_note_text}]"))
+
     # 1. Base system prompt
     if system_prompt:
         sections.append(_section("System Prompt", system_prompt))
+
+    # 1a. Feature B4: Author's Note — "after_system" position
+    if _author_note_text and _author_note_position == "after_system":
+        sections.append(_section("Author's Note", f"\n[Author's Note: {_author_note_text}]"))
 
     # 1b. Feature A4: Mood context prefix (time-of-day + session gap + affinity)
     if mood_enabled and char_name:
@@ -1600,6 +1621,12 @@ def _build_prompt_sections(
             )
             if vocab_text:
                 sections.append(_section(f"Vocabulary", vocab_text))
+
+    # 6b. Feature B4: Author's Note — "before_last" / "after_last2" positions
+    # For system-prompt-only injection these are equivalent to inserting just
+    # before the emotion/format instructions — still contextually recent.
+    if _author_note_text and _author_note_position in ("before_last", "after_last2"):
+        sections.append(_section("Author's Note", f"\n[Author's Note: {_author_note_text}]"))
 
     # 7. Emotion / gesture instructions
     emotion_instruction = (
@@ -6164,6 +6191,96 @@ async def update_session_tags(session_id: int, req: Request):
 
     logger.info(f"[Tags] Session {session_id} tags updated: {tags}")
     return {"tags": tags, "session_id": session_id}
+
+
+# ── Feature B4 — Author's Note / Soft Prompt Injection ────────────────────────
+
+@app.get("/api/sessions/{session_id}/author-note")
+async def get_author_note(session_id: int):
+    """Return the current author's note for a session.
+
+    Args:
+        session_id: Session to query.
+
+    Returns:
+        dict: ``{"note": str, "position": str, "enabled": bool}``
+
+    Raises:
+        HTTPException 404: If the session does not exist.
+    """
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT author_note, author_note_position, author_note_enabled FROM sessions WHERE id=?",
+            (session_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        raise HTTPException(404, "Session not found")
+    return {"note": row[0] or "", "position": row[1] or "after_system", "enabled": bool(row[2])}
+
+
+@app.patch("/api/sessions/{session_id}/author-note")
+async def update_author_note(session_id: int, req: Request):
+    """Update the author's note for a session.
+
+    Accepts a JSON body with any subset of:
+    - ``note`` (str): The director's note text.
+    - ``position`` (str): Injection position — one of ``before_system``,
+      ``after_system``, ``before_last``, ``after_last2``.
+    - ``enabled`` (bool): Toggle without clearing note text.
+
+    Args:
+        session_id: Session to update.
+        req: Partial JSON body with fields to update.
+
+    Returns:
+        dict: ``{"ok": True, "note": str, "position": str, "enabled": bool}``
+
+    Raises:
+        HTTPException 400: If the body is malformed or position is invalid.
+        HTTPException 404: If the session does not exist.
+
+    Example::
+
+        PATCH /api/sessions/7/author-note
+        Body: {"note": "[Be concise today.]", "enabled": true}
+    """
+    _valid_positions = {"before_system", "after_system", "before_last", "after_last2"}
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT author_note, author_note_position, author_note_enabled FROM sessions WHERE id=?",
+            (session_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Session not found")
+
+        note = body.get("note", row[0] or "")
+        position = body.get("position", row[1] or "after_system")
+        enabled = body.get("enabled", bool(row[2]))
+
+        if position not in _valid_positions:
+            raise HTTPException(400, f"position must be one of: {', '.join(sorted(_valid_positions))}")
+
+        conn.execute(
+            """UPDATE sessions
+               SET author_note=?, author_note_position=?, author_note_enabled=?
+               WHERE id=?""",
+            (str(note), position, int(enabled), session_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    logger.info(f"[AuthorNote] Session {session_id}: enabled={enabled}, pos={position}")
+    return {"ok": True, "note": note, "position": position, "enabled": enabled}
 
 
 # ── Feature #10 — Message Pinning ─────────────────────────────────────────────

@@ -262,6 +262,43 @@ function RelationshipBar({ charId, messageCount }: { charId: number; messageCoun
  * @param messageCount     - Total message count; triggers relationship/budget re-fetch.
  * @param sessionId        - Active session ID for the context budget bar.
  */
+
+/**
+ * Tiny badge shown in the StatusBar when an author's note is active for the
+ * current session.  Polls GET /api/sessions/{id}/author-note on mount and
+ * whenever sessionId changes.
+ *
+ * @param sessionId - Active session ID, or null/undefined when no session.
+ */
+function AuthorNoteBadge({ sessionId }: { sessionId?: number | null }) {
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    if (!sessionId) { setActive(false); return; }
+    api.getAuthorNote(sessionId)
+      .then(d => setActive(d.enabled && d.note.trim().length > 0))
+      .catch(() => setActive(false));
+  }, [sessionId]);
+  if (!active) return null;
+  return (
+    <span
+      className="flex-shrink-0"
+      title="Author's Note is active for this session"
+      style={{
+        fontSize: 9,
+        fontWeight: 700,
+        padding: '1px 5px',
+        borderRadius: 6,
+        color: 'var(--color-accent)',
+        backgroundColor: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
+        letterSpacing: '0.04em',
+        lineHeight: 1.5,
+      }}
+    >
+      AN
+    </span>
+  );
+}
+
 export function StatusBar({
   character,
   onOpenSessions,
@@ -407,6 +444,8 @@ export function StatusBar({
             >
               {getCurrentTimeSlot()}
             </span>
+            {/* Feature B4: Author's Note active badge */}
+            <AuthorNoteBadge sessionId={sessionId} />
           </div>
           <p className="text-xs truncate" style={{ color: 'var(--color-text-tertiary)' }}>
             {idlePhrase}

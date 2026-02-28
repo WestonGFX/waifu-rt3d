@@ -106,7 +106,7 @@ function generateChips(text: string, charName: string): string[] {
  * - Search, export, session history drawer
  */
 export function ChatThread() {
-  const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips } = useAppStore();
+  const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode } = useAppStore();
   const { messages, draft, loading, setDraft, sendMessage, abortMessage, setContext, loadHistory, sessionId } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -552,15 +552,18 @@ export function ChatThread() {
     <div className="flex h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
       {/* ── Chat column ─────────────────────────────────────────────────── */}
       <div className="flex flex-col flex-1 min-w-0">
-        <StatusBar
-          character={activeCharacter}
-          onOpenSessions={() => setSessionsOpen(true)}
-          onSearchChange={setSearchQuery}
-          onExport={handleExport}
-          onExportMarkdown={handleExportMarkdown}
-          messageCount={messages.length}
-          sessionId={sessionId}
-        />
+        {/* B1: Hide status bar in cinematic mode */}
+        {!cinematicMode && (
+          <StatusBar
+            character={activeCharacter}
+            onOpenSessions={() => setSessionsOpen(true)}
+            onSearchChange={setSearchQuery}
+            onExport={handleExport}
+            onExportMarkdown={handleExportMarkdown}
+            messageCount={messages.length}
+            sessionId={sessionId}
+          />
+        )}
 
         {/* Context budget bar — thin strip showing context window usage */}
         {contextUsagePct !== null && contextUsagePct > 0 && (

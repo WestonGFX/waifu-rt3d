@@ -92,6 +92,10 @@ interface AppState {
   memoryPanelOpen: boolean;
   toggleMemoryPanel: () => void;
 
+  // Cinematic mode (B1) — full-screen VN-style immersion
+  cinematicMode: boolean;
+  toggleCinematicMode: () => void;
+
   // Display mode
   advancedMode: boolean;
   toggleAdvancedMode: () => void;
@@ -227,6 +231,10 @@ export const useAppStore = create<AppState>()(
       toggleModelPanel: () => set((s) => ({ modelPanelOpen: !s.modelPanelOpen })),
       memoryPanelOpen: false,
       toggleMemoryPanel: () => set((s) => ({ memoryPanelOpen: !s.memoryPanelOpen })),
+
+      // Cinematic mode (B1)
+      cinematicMode: false,
+      toggleCinematicMode: () => set((s) => ({ cinematicMode: !s.cinematicMode })),
 
       // Display mode
       advancedMode: false,

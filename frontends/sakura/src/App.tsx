@@ -20,6 +20,7 @@ import { CharacterRelationshipWeb } from './components/CharacterRelationshipWeb'
 import { UniversePanel } from './components/UniversePanel';
 import { LorePanel } from './components/LorePanel';
 import { UserKnowledgePanel } from './components/UserKnowledgePanel';
+import { CinematicOverlay } from './components/CinematicOverlay';
 import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { ShortcutHelpModal } from './components/ShortcutHelpModal';
@@ -53,8 +54,8 @@ export function App() {
     loadCharacters, loadConfig, activeCharacter, sidebarSection,
     openOverlay, closeOverlay, activeOverlay, toggleSidebar,
     setSidebarSection, config, configLoaded,
-    customKeyBindings,
-    customTheme,
+    customKeyBindings, customTheme,
+    cinematicMode, toggleCinematicMode,
   } = useAppStore();
 
   // Show onboarding wizard on first run (gated on configLoaded to avoid flash)
@@ -172,17 +173,19 @@ export function App() {
     { key: k('Character stats',        'alt+z'),   action: () => openOverlay('stats'),           description: 'Character stats' },
     { key: k('Universe builder',       'alt+u'),   action: () => openOverlay('universes'),       description: 'Universe builder' },
     { key: k('Toggle sidebar',         'ctrl+\\'), action: () => toggleSidebar(),               description: 'Toggle sidebar' },
+    { key: k('Cinematic mode',         'ctrl+i'),  action: () => toggleCinematicMode(),         description: 'Cinematic mode' },
     { key: k('Show keyboard shortcuts','?'),       action: () => setShowHelp(h => !h),          description: 'Show keyboard shortcuts' },
     {
       key: k('Close overlay', 'escape'),
       action: () => {
+        if (cinematicMode) { toggleCinematicMode(); return; }
         if (showHelp) { setShowHelp(false); return; }
         if (activeOverlay) closeOverlay();
       },
       description: 'Close overlay'
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [openOverlay, closeOverlay, activeOverlay, toggleSidebar, setSidebarSection, showHelp, customKeyBindings]);
+  ], [openOverlay, closeOverlay, activeOverlay, toggleSidebar, setSidebarSection, showHelp, customKeyBindings, cinematicMode, toggleCinematicMode]);
 
   useKeyboardShortcuts(shortcuts);
 
@@ -198,7 +201,8 @@ export function App() {
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--color-background)' }}>
-      <Sidebar />
+      {/* B1: Hide sidebar in cinematic mode */}
+      {!cinematicMode && <Sidebar />}
       <main className="flex-1 min-w-0 h-screen overflow-hidden">
         {mainContent}
       </main>
@@ -248,6 +252,9 @@ export function App() {
         onClose={closeOverlay}
         onCompressed={closeOverlay}
       />
+
+      {/* B1: Cinematic immersion overlay — above everything except celebration */}
+      {cinematicMode && activeCharacter && <CinematicOverlay />}
 
       {/* Milestone celebration (full-screen, above everything) */}
       <MilestoneCelebration

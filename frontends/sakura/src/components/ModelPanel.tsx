@@ -180,7 +180,7 @@ function ExpressionEditor({ shapes, values, onChange, onResetAll }: ExpressionEd
  * Auto-resolves VRM model by character name if not explicitly set.
  */
 export function ModelPanel({ character }: ModelPanelProps) {
-  const { modelPanelOpen, toggleModelPanel, setVrmStats, setViewportFps } = useAppStore();
+  const { modelPanelOpen, toggleModelPanel, setVrmStats, setViewportFps, cinematicMode } = useAppStore();
   const { iframeRef, loadCharacter, setCameraPreset, getAvailableBlendShapes, setBlendShape, setBlendShapes } = useViewer();
   /** Current emotion from chatStore — drives the emotion badge in the viewport overlay. */
   const currentEmotion = useChatStore(s => s.currentEmotion);
@@ -428,14 +428,18 @@ export function ModelPanel({ character }: ModelPanelProps) {
 
   return (
     <AnimatePresence>
-      {modelPanelOpen && (
+      {(modelPanelOpen || cinematicMode) && (
         <motion.div
-          initial={{ width: 0, opacity: 0 }}
-          animate={{ width: '40%', opacity: 1 }}
-          exit={{ width: 0, opacity: 0 }}
+          initial={cinematicMode ? { opacity: 0 } : { width: 0, opacity: 0 }}
+          animate={cinematicMode ? { opacity: 1 } : { width: '40%', opacity: 1 }}
+          exit={cinematicMode ? { opacity: 0 } : { width: 0, opacity: 0 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
-          className="relative flex-shrink-0 h-full overflow-hidden"
-          style={{
+          className={cinematicMode ? undefined : 'relative flex-shrink-0 h-full overflow-hidden'}
+          style={cinematicMode ? {
+            position: 'fixed', inset: 0, zIndex: 100,
+            backgroundColor: 'var(--color-background)',
+            display: 'flex', flexDirection: 'column',
+          } : {
             borderLeft: '1px solid var(--color-border)',
             backgroundColor: 'var(--color-background)',
             display: 'flex',

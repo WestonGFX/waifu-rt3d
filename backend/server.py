@@ -160,13 +160,30 @@ async def lifespan(app: FastAPI):
         vector_store = None
         logger.info("Vector Store initialization skipped by WAIFU_DISABLE_VECTOR_STORE")
     else:
+        # Feature A3: Try TieredMemoryManager (sqlite-vec) first; fall back to ChromaDB.
         try:
-            from backend.memory.vector_store import VectorStore
-            vector_store = VectorStore(storage_path=str(STORAGE / "memory"))
-            logger.debug("Vector Store Initialized")
-        except Exception as e:
-            vector_store = None
-            logger.warning(f"Vector Store unavailable, session-only memory mode active: {e}")
+            from backend.memory.tiered_memory import TieredMemoryManager
+            _cfg_startup = load_config() or {}
+            _mem_cfg = _cfg_startup.get("memory", {})
+            _tiered = TieredMemoryManager(
+                db_path=str(STORAGE / "app.db"),
+                storage_path=str(STORAGE / "memory"),
+                decay_mode=_mem_cfg.get("decay_mode", "off"),
+                top_k=int(_mem_cfg.get("top_k", 5)),
+                salience_threshold=float(_mem_cfg.get("salience_threshold", 0.3)),
+            )
+            _tiered.init()
+            vector_store = _tiered
+            logger.info("✅ TieredMemoryManager (sqlite-vec) initialized")
+        except Exception as e_tiered:
+            logger.warning("TieredMemoryManager unavailable (%s), falling back to ChromaDB", e_tiered)
+            try:
+                from backend.memory.vector_store import VectorStore
+                vector_store = VectorStore(storage_path=str(STORAGE / "memory"))
+                logger.debug("Vector Store (ChromaDB fallback) initialized")
+            except Exception as e:
+                vector_store = None
+                logger.warning(f"Vector Store unavailable, session-only memory mode active: {e}")
 
     cfg = load_config()
 
@@ -4263,6 +4280,60 @@ def v2_memory_delete(memory_id: str):
     if not ok:
         raise HTTPException(500, "Failed to delete memory")
     return {"ok": True}
+
+
+@app.patch("/api/v2/memory/{memory_id}/promote")
+def v2_memory_promote(memory_id: str):
+    """Promote a memory to Tier 3 (permanent — never pruned).
+
+    Only available when the TieredMemoryManager (sqlite-vec) is active.
+
+    Args:
+        memory_id: The memory row ID to promote.
+
+    Returns:
+        dict: {"ok": True} on success.
+
+    Raises:
+        HTTPException 501: If vector store doesn't support tiering.
+        HTTPException 500: If promotion fails.
+
+    Example:
+        >>> PATCH /api/v2/memory/42/promote
+        {"ok": true}
+    """
+    from backend.memory.tiered_memory import TieredMemoryManager
+    if not vector_store or not isinstance(vector_store, TieredMemoryManager):
+        raise HTTPException(501, "Tier promotion requires TieredMemoryManager")
+    ok = vector_store.promote_to_permanent(memory_id)
+    if not ok:
+        raise HTTPException(500, "Failed to promote memory")
+    return {"ok": True}
+
+
+@app.post("/api/v2/memory/decay")
+def v2_memory_decay(weeks: int = 4):
+    """Run a manual decay pass (demote/prune old Tier-2 memories).
+
+    Args:
+        weeks: Age threshold in weeks. Memories older than this may be
+            demoted or pruned depending on the configured decay_mode.
+
+    Returns:
+        dict: {"affected": int} — number of memories changed.
+
+    Raises:
+        HTTPException 501: If tiered memory is not active.
+
+    Example:
+        >>> POST /api/v2/memory/decay?weeks=4
+        {"affected": 12}
+    """
+    from backend.memory.tiered_memory import TieredMemoryManager
+    if not vector_store or not isinstance(vector_store, TieredMemoryManager):
+        raise HTTPException(501, "Decay requires TieredMemoryManager")
+    affected = vector_store.run_decay(weeks_threshold=weeks)
+    return {"affected": affected}
 
 
 @app.get("/api/v2/memory/graph")

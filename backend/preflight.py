@@ -1561,6 +1561,113 @@ def migrate_to_v28(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v29(con: sqlite3.Connection) -> bool:
+    """Apply schema v29 migration (Feature A2: In-App Mini Games).
+
+    Creates the ``game_sessions`` table which stores per-character game history.
+    Each row captures one complete game: type (trivia, twenty_questions, etc.),
+    result (win/loss/draw), score, and duration.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v29.
+
+    Example:
+        >>> if migrate_to_v29(con):
+        ...     print("game_sessions table created")
+    """
+    tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "game_sessions" in tables:
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (29)")
+        con.commit()
+        return False
+    try:
+        logger.info("Applying schema v29 migration (Feature A2: mini games)...")
+        con.execute("""
+            CREATE TABLE game_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                game_type TEXT NOT NULL,
+                result TEXT NOT NULL DEFAULT 'in_progress',
+                score INTEGER NOT NULL DEFAULT 0,
+                max_score INTEGER NOT NULL DEFAULT 0,
+                duration_seconds INTEGER,
+                game_state TEXT,
+                played_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        con.execute("CREATE INDEX IF NOT EXISTS idx_game_sessions_char ON game_sessions(character_id)")
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (29)")
+        con.commit()
+        logger.info("✅ Schema v29 migration complete (game_sessions table)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v29 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v30(con: sqlite3.Connection) -> bool:
+    """Apply schema v30 migration (Feature A3: Tiered Episodic Memory).
+
+    Creates the ``memories`` table for structured per-tier memory storage.
+    The sqlite-vec ``memories_vec`` virtual table is created at runtime by
+    ``TieredMemoryManager`` (after loading the extension) — not here, because
+    sqlite-vec requires the extension to be loaded first which is not possible
+    during a bare sqlite3 connection in preflight.
+
+    Adds ``memory_decay_mode`` and ``memory_top_k`` to the config via the
+    app.json config file (handled by the application layer, not DB schema).
+
+    Schema additions:
+        ``memories`` table with columns:
+            id, character_id, session_id, role, text, tier, salience,
+            created_at, promoted_at.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v30.
+
+    Example:
+        >>> if migrate_to_v30(con):
+        ...     print("memories table created")
+    """
+    tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "memories" in tables:
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (30)")
+        con.commit()
+        return False
+    try:
+        logger.info("Applying schema v30 migration (Feature A3: tiered memory)...")
+        con.execute("""
+            CREATE TABLE memories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                session_id INTEGER,
+                role TEXT NOT NULL DEFAULT 'user',
+                text TEXT NOT NULL,
+                tier INTEGER NOT NULL DEFAULT 1,
+                salience REAL NOT NULL DEFAULT 0.5,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                promoted_at TEXT
+            )
+        """)
+        con.execute("CREATE INDEX IF NOT EXISTS idx_memories_char ON memories(character_id)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_memories_tier ON memories(tier)")
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (30)")
+        con.commit()
+        logger.info("✅ Schema v30 migration complete (memories table — sqlite-vec vec table created at runtime)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v30 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -1791,21 +1898,35 @@ def ensure_db():
             if migrate_to_v28(con):
                 version = 28
 
+        # Upgrade from v28 to v29 (Feature A2: In-App Mini Games)
+        if version < 29:
+            logger.info("Upgrading database schema from v28 to v29...")
+            logger.info("  - Creating game_sessions table (Feature A2: mini games)")
+            if migrate_to_v29(con):
+                version = 29
+
+        # Upgrade from v29 to v30 (Feature A3: Tiered Episodic Memory — sqlite-vec)
+        if version < 30:
+            logger.info("Upgrading database schema from v29 to v30...")
+            logger.info("  - Creating memories table and memories_vec virtual table (Feature A3)")
+            if migrate_to_v30(con):
+                version = 30
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 28:
-            raise RuntimeError(f"Database initialization failed: Expected v28, got v{final_version}")
+        if final_version < 30:
+            raise RuntimeError(f"Database initialization failed: Expected v30, got v{final_version}")
 
-        if final_version > 28:
-            logger.warning(f"Database is newer than application (v{final_version} > v28). Some features might be unused.")
+        if final_version > 30:
+            logger.warning(f"Database is newer than application (v{final_version} > v30). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v28 adds author's note injection)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v30 adds tiered memory)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

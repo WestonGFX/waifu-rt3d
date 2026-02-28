@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Trash2, ChevronLeft, ChevronRight, Database, Network, List } from 'lucide-react';
+import { X, Search, Trash2, ChevronLeft, ChevronRight, Database, Network, List, Star } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
 
@@ -23,6 +23,10 @@ interface Memory {
   timestamp?: number;
   score?: number;
   char_id?: number;
+  /** Tier: 1=Fleeting, 2=Recent, 3=Permanent (tiered memory mode only). */
+  tier?: number;
+  salience?: number;
+  created_at?: string;
 }
 
 const PAGE_SIZE = 12;
@@ -223,6 +227,18 @@ async function deleteMemory(id: string): Promise<void> {
   if (!res.ok) throw new Error(`${res.status}`);
 }
 
+async function promoteMemory(id: string): Promise<void> {
+  const res = await fetch(`/api/v2/memory/${encodeURIComponent(id)}/promote`, { method: 'PATCH' });
+  if (!res.ok) throw new Error(`${res.status}`);
+}
+
+const TIER_LABEL: Record<number, string> = { 1: 'Fleeting', 2: 'Recent', 3: 'Permanent' };
+const TIER_COLOR: Record<number, string> = {
+  1: 'var(--color-text-tertiary)',
+  2: 'var(--color-accent)',
+  3: '#f59e0b',
+};
+
 /* ═══════════════════════════════════════════════════════════════════════
    Component
    ═══════════════════════════════════════════════════════════════════════ */
@@ -258,6 +274,7 @@ export function MemoryPanel() {
   const [error, setError] = useState<string | null>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [promotingId, setPromotingId] = useState<string | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -324,6 +341,23 @@ export function MemoryPanel() {
       // Silently fail — could show toast later
     } finally {
       setDeletingId(null);
+    }
+  }, [isSearchMode, query, filterCharId, page, loadPage, doSearch]);
+
+  // Handle tier promotion (tiered memory mode only)
+  const handlePromote = useCallback(async (id: string) => {
+    setPromotingId(id);
+    try {
+      await promoteMemory(id);
+      if (isSearchMode && query) {
+        doSearch(query, filterCharId);
+      } else {
+        loadPage(page, filterCharId);
+      }
+    } catch {
+      // Non-critical; tier promotion is only available with TieredMemoryManager
+    } finally {
+      setPromotingId(null);
     }
   }, [isSearchMode, query, filterCharId, page, loadPage, doSearch]);
 
@@ -580,21 +614,50 @@ export function MemoryPanel() {
                       style={cardStyle}
                     >
                       {/* Meta row */}
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span
                           className="text-[9px] uppercase font-bold tracking-wider"
                           style={{ color: roleColor(mem.role) }}
                         >
                           {mem.role || 'unknown'}
                         </span>
+                        {/* Tier badge (tiered memory mode) */}
+                        {mem.tier != null && (
+                          <span
+                            className="text-[9px] font-bold px-1 rounded"
+                            style={{
+                              color: TIER_COLOR[mem.tier] ?? 'var(--color-text-tertiary)',
+                              border: `1px solid ${TIER_COLOR[mem.tier] ?? 'var(--color-border)'}`,
+                              opacity: 0.85,
+                            }}
+                          >
+                            T{mem.tier} {TIER_LABEL[mem.tier]}
+                          </span>
+                        )}
                         {mem.score != null && (
                           <span className="text-[9px] font-medium" style={{ color: 'var(--color-success)' }}>
                             {(mem.score * 100).toFixed(0)}%
                           </span>
                         )}
                         <span className="text-[9px] ml-auto" style={{ color: 'var(--color-text-tertiary)' }}>
-                          {formatTime(mem.timestamp)}
+                          {mem.created_at ? new Date(mem.created_at).toLocaleDateString() : formatTime(mem.timestamp)}
                         </span>
+                        {/* Promote to permanent (T3) — only shown for T1/T2 */}
+                        {mem.tier != null && mem.tier < 3 && (
+                          <button
+                            onClick={() => handlePromote(mem.id)}
+                            disabled={promotingId === mem.id}
+                            className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity p-0.5 rounded"
+                            style={{ color: '#f59e0b' }}
+                            title="Promote to Permanent (never pruned)"
+                          >
+                            {promotingId === mem.id ? (
+                              <span className="text-[9px]">…</span>
+                            ) : (
+                              <Star size={11} />
+                            )}
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDelete(mem.id)}
                           disabled={deletingId === mem.id}

@@ -621,14 +621,27 @@ export const api = {
    * @param characterId - Character playing the game.
    * @param topic - Optional topic/category hint.
    */
-  startGame: (gameType: string, characterId: number, topic?: string) =>
-    post('/api/games/start', { game_type: gameType, character_id: characterId, topic: topic ?? 'general knowledge' }),
+  /**
+   * Start a new mini-game session.
+   *
+   * @param gameType - One of the supported game type strings.
+   * @param characterId - Character playing the game.
+   * @param options - Extra options (topic, difficulty, pairs, theme, etc.).
+   */
+  startGame: (gameType: string, characterId: number, options: Record<string, unknown> = {}) =>
+    post('/api/games/start', { game_type: gameType, character_id: characterId, ...options }),
 
   /**
    * Submit a move in an active game session.
    *
-   * For trivia: pass `{ choice: 0 }`.
-   * For 20Q: pass `{ question: "Is it alive?" }` or `{ guess: "Totoro" }`.
+   * Payload varies by game type:
+   * - trivia: `{ choice: 0 }`
+   * - twenty_questions: `{ question: "..." }` or `{ guess: "..." }`
+   * - hangman: `{ letter: "a" }`
+   * - word_association: `{ word: "..." }` or `{ action: "end" }`
+   * - riddles: `{ guess: "..." }` or `{ action: "hint" }`
+   * - tictactoe: `{ cell: 0-8 }`
+   * - memory_match: `{ card_index: 0-N }`
    */
   gameMove: (sessionId: number, move: Record<string, unknown>) =>
     post(`/api/games/${sessionId}/move`, move),
@@ -640,4 +653,8 @@ export const api = {
   /** Get game history for a character. */
   getGameHistory: (characterId: number, limit = 20) =>
     get(`/api/games/history?character_id=${characterId}&limit=${limit}`),
+
+  /** Get personal best scores per game type for a character. */
+  getGameBestScores: (characterId: number) =>
+    get(`/api/games/best-scores?character_id=${characterId}`),
 };

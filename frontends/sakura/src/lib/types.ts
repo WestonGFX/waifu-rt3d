@@ -269,7 +269,14 @@ export interface VrmStats {
 // --- Feature A2: In-App Mini Games ---
 
 /** Supported mini-game types. */
-export type GameType = 'trivia' | 'twenty_questions';
+export type GameType =
+  | 'trivia'
+  | 'twenty_questions'
+  | 'hangman'
+  | 'word_association'
+  | 'riddles'
+  | 'tictactoe'
+  | 'memory_match';
 
 /** One trivia question as returned by the backend. */
 export interface TriviaQuestion {
@@ -285,32 +292,95 @@ export interface TwentyQEntry {
   a: string;
 }
 
-/** Public game state (thing masked for 20Q in progress). */
+/** One word in a Word Association chain. */
+export interface WaChainEntry {
+  word: string;
+  by: 'player' | 'ai';
+}
+
+/** A memory card as returned by the backend. */
+export interface MemoryCard {
+  id: number;
+  pair: number;
+  emoji: string;   // "?" when hidden
+  matched: boolean;
+}
+
+/** Public game state (secrets masked for in-progress games). */
 export interface GameState {
   // Common
   finished: boolean;
-  topic: string;
-  // Trivia-specific
+  topic?: string;
+  won?: boolean | null;
+  reaction?: string | null;
+  reveal?: string | null;
+
+  // Trivia
   questions?: TriviaQuestion[];
   current?: number;
   score?: number;
   current_question?: TriviaQuestion | null;
   last_correct?: boolean;
   last_answer?: number;
-  // 20Q-specific
+
+  // 20 Questions
   thing?: string;        // "???" while in progress
   category?: string;
   questions_list?: TwentyQEntry[];
   remaining?: number;
-  won?: boolean | null;
-  reveal?: string | null;
+
+  // Hangman
+  word?: string;         // revealed after game ends
+  display?: string;
+  guessed?: string[];
+  wrong?: string[];
+  max_wrong?: number;
+  hit?: boolean;
+
+  // Word Association
+  chain?: WaChainEntry[];
+  bonus?: number;
+  reason?: string | null;
+  max_length?: number;
+  min_win?: number;
+
+  // Riddles
+  riddle?: string;
+  answer?: string;       // "???" while in progress
+  hints?: string[];      // only unlocked hints sent
+  hints_used?: number;
+  guesses?: string[];
+  max_guesses?: number;
+  correct?: boolean;
+
+  // Tic-Tac-Toe
+  board?: string[];       // 9-element array: " ", "X", "O"
+  turn?: string;
+  winner?: string | null;
+  difficulty?: string;
+
+  // Memory Match
+  cards?: MemoryCard[];
+  size?: number;
+  flipped?: number[];
+  pairs_found?: number;
+  moves?: number;
+  matched?: boolean;
+  match_indices?: number[];
+}
+
+/** Per-game-type best score entry from GET /api/games/best-scores. */
+export interface GameBestScore {
+  best: number;   // 0.0–1.0 ratio
+  plays: number;
+  wins: number;
 }
 
 /** A completed game session summary from GET /api/games/history. */
 export interface GameSession {
   id: number;
   game_type: GameType;
-  result: 'win' | 'loss' | null;
+  result: 'win' | 'loss' | 'draw' | null;
   score: number | null;
   max_score: number | null;
   duration_seconds: number | null;
@@ -325,7 +395,7 @@ export interface GameStartResponse {
 
 /** Response from POST /api/games/{id}/move. */
 export interface GameMoveResponse {
-  event: 'correct' | 'wrong' | 'answered' | 'won' | 'lost' | 'guess_wrong' | 'unknown';
+  event: string;
   state: GameState;
   reaction: string | null;
 }

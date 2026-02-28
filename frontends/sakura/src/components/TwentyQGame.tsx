@@ -150,7 +150,7 @@ export function TwentyQGame({ sessionId, initialState, charName, onExit }: Props
       <div className="tq-input-row">
         <input
           className="tq-input"
-          placeholder={mode === 'question' ? 'Is it bigger than a house?' : 'I think it's…'}
+          placeholder={mode === 'question' ? 'Is it bigger than a house?' : 'I think it is...'}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}

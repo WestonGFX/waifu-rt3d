@@ -409,9 +409,14 @@ async def _ensure_lms_model(requested_model: str) -> None:
 # Feature A6: Lorebook / World Info — keyword-triggered context injection
 from backend.lore.matcher import match_lore
 
-# Feature A2: In-App Mini Games — trivia + 20 questions engines
+# Feature A2: In-App Mini Games — all game engines
 from backend.games import trivia as trivia_engine
 from backend.games import twenty_questions as tq_engine
+from backend.games import hangman as hangman_engine
+from backend.games import word_association as wa_engine
+from backend.games import riddles as riddles_engine
+from backend.games import tictactoe as ttt_engine
+from backend.games import memory_match as mm_engine
 
 # Vocabulary manager — loaded at startup, provides vocab context for LLM
 from backend.vocab.manager import VocabManager
@@ -9846,25 +9851,57 @@ async def start_game(body: dict):
     character_id = body.get("character_id")
     topic = body.get("topic", "general knowledge")
 
+    _ALL_GAME_TYPES = (
+        "trivia", "twenty_questions", "hangman", "word_association",
+        "riddles", "tictactoe", "memory_match",
+    )
+
     if not character_id:
         return JSONResponse({"error": "character_id required"}, status_code=400)
-    if game_type not in ("trivia", "twenty_questions"):
-        return JSONResponse({"error": "unsupported game_type"}, status_code=400)
+    if game_type not in _ALL_GAME_TYPES:
+        return JSONResponse({"error": f"unsupported game_type. Choose from: {_ALL_GAME_TYPES}"}, status_code=400)
 
     cfg = load_config() or {}
     from backend.llm.registry import get_client
     adapter = get_client(cfg)
 
-    # Build initial game state
+    # Build initial game state per game type
     if game_type == "trivia":
         questions = trivia_engine.generate_questions(topic, adapter, cfg)
         state = trivia_engine.new_state(topic, questions)
         public = dict(state)
         public["current_question"] = trivia_engine.current_question(state)
-    else:
+
+    elif game_type == "twenty_questions":
         thing, category = tq_engine.choose_thing(topic, adapter, cfg)
         state = tq_engine.new_state(topic, thing, category)
         public = tq_engine.public_state(state)
+
+    elif game_type == "hangman":
+        word, cat = hangman_engine.choose_word(topic, adapter, cfg)
+        state = hangman_engine.new_state(word, cat)
+        public = hangman_engine.public_state(state)
+
+    elif game_type == "word_association":
+        state = wa_engine.new_state(topic)
+        public = dict(state)
+
+    elif game_type == "riddles":
+        difficulty = body.get("difficulty", "medium")
+        riddle_data = riddles_engine.generate_riddle(difficulty, adapter, cfg)
+        state = riddles_engine.new_state(riddle_data, difficulty)
+        public = riddles_engine.public_state(state)
+
+    elif game_type == "tictactoe":
+        difficulty = body.get("difficulty", "hard")
+        state = ttt_engine.new_state(difficulty)
+        public = dict(state)
+
+    else:  # memory_match
+        pairs = int(body.get("pairs", 8))
+        theme = body.get("theme", "nature")
+        state = mm_engine.new_state(pairs, theme)
+        public = mm_engine.public_state(state)
 
     conn = db()
     try:
@@ -9934,7 +9971,7 @@ async def game_move(session_id: int, body: dict):
             if not state["finished"]:
                 public["current_question"] = trivia_engine.current_question(state)
 
-        else:  # twenty_questions
+        elif game_type == "twenty_questions":
             if "guess" in body:
                 state = tq_engine.process_guess(state, body["guess"], adapter, cfg)
                 event = "won" if state["won"] else "guess_wrong"
@@ -9950,17 +9987,110 @@ async def game_move(session_id: int, body: dict):
                 return JSONResponse({"error": "question or guess required"}, status_code=400)
             public = tq_engine.public_state(state)
 
-        # Persist updated state
+        elif game_type == "hangman":
+            letter = str(body.get("letter", "")).strip()
+            if not letter:
+                return JSONResponse({"error": "letter required"}, status_code=400)
+            state = hangman_engine.guess_letter(state, letter, adapter, cfg)
+            event = "hit" if state.get("hit") else "miss"
+            if state.get("finished"):
+                event = "won" if state["won"] else "lost"
+                reaction = state.get("reveal")
+            public = hangman_engine.public_state(state)
+
+        elif game_type == "word_association":
+            if "word" in body:
+                # Player submits a word
+                state = wa_engine.player_word(state, body["word"])
+                if state["finished"]:
+                    state = wa_engine.end_game(state, adapter, cfg)
+                    event = "won" if state["won"] else "lost"
+                    reaction = state.get("reaction")
+                else:
+                    # AI responds immediately
+                    ai_resp = wa_engine.ai_word(state, adapter, cfg)
+                    event = "ai_word" if not state["finished"] else ("won" if state["won"] else "lost")
+                    reaction = ai_resp
+                    if state["finished"]:
+                        state = wa_engine.end_game(state, adapter, cfg)
+                        reaction = state.get("reaction", ai_resp)
+            elif body.get("action") == "end":
+                state = wa_engine.end_game(state, adapter, cfg)
+                event = "ended"
+                reaction = state.get("reaction")
+            else:
+                return JSONResponse({"error": "word or action:end required"}, status_code=400)
+            public = dict(state)
+
+        elif game_type == "riddles":
+            if "guess" in body:
+                state = riddles_engine.submit_guess(state, body["guess"], adapter, cfg)
+                event = "correct" if state.get("correct") else "wrong"
+                if state["finished"]:
+                    event = "won" if state["won"] else "lost"
+                    reaction = state.get("reveal")
+            elif body.get("action") == "hint":
+                hint = riddles_engine.take_hint(state)
+                event = "hint"
+                reaction = hint or "No more hints available!"
+            else:
+                return JSONResponse({"error": "guess or action:hint required"}, status_code=400)
+            public = riddles_engine.public_state(state)
+
+        elif game_type == "tictactoe":
+            cell = body.get("cell")
+            if cell is None:
+                return JSONResponse({"error": "cell (0-8) required"}, status_code=400)
+            state = ttt_engine.player_move(state, int(cell), adapter, cfg)
+            if state["finished"]:
+                winner = state.get("winner")
+                event = "won" if winner == "X" else ("lost" if winner == "O" else "draw")
+                reaction = state.get("reaction")
+            else:
+                event = "moved"
+            public = dict(state)
+
+        elif game_type == "memory_match":
+            card_index = body.get("card_index")
+            if card_index is None:
+                return JSONResponse({"error": "card_index required"}, status_code=400)
+            state = mm_engine.flip_card(state, int(card_index), adapter, cfg)
+            event = "matched" if state.get("matched") else "flipped"
+            if state["finished"]:
+                event = "won"
+                reaction = state.get("reaction")
+            public = mm_engine.public_state(state)
+
+        else:
+            return JSONResponse({"error": "unknown game_type"}, status_code=400)
+
+        # Persist updated state + final scores
         result_val = None
         if state.get("finished"):
+            won = state.get("won")
+            result_val = "win" if won else ("loss" if won is False else "draw")
+            # Score/max by game type
             if game_type == "trivia":
-                result_val = "win" if state["score"] >= trivia_engine.ROUNDS // 2 else "loss"
-                _score = state["score"]
-                _max = trivia_engine.ROUNDS
-            else:
-                result_val = "win" if state.get("won") else "loss"
-                _score = 1 if state.get("won") else 0
+                _score, _max = state.get("score", 0), trivia_engine.ROUNDS
+            elif game_type == "twenty_questions":
+                _score, _max = (1 if state.get("won") else 0), 1
+            elif game_type == "hangman":
+                wrong = len(state.get("wrong", []))
+                _score = max(0, state.get("max_wrong", 6) - wrong)
+                _max = state.get("max_wrong", 6)
+            elif game_type == "word_association":
+                _score = state.get("score", 0)
+                _max = state.get("max_length", 30)
+            elif game_type == "riddles":
+                hints_used = state.get("hints_used", 0)
+                _score = max(0, 3 - hints_used) if state.get("won") else 0
+                _max = 3
+            elif game_type == "tictactoe":
+                _score = 1 if state.get("winner") == "X" else 0
                 _max = 1
+            else:  # memory_match
+                _score = state.get("pairs_found", 0)
+                _max = state.get("size", 8)
             conn.execute(
                 "UPDATE game_sessions SET game_state=?, result=?, score=?, max_score=? WHERE id=?",
                 (json.dumps(state), result_val, _score, _max, session_id),
@@ -10054,7 +10184,56 @@ async def get_game_state(session_id: int):
             state = tq_engine.public_state(state)
         elif game_type == "trivia":
             state["current_question"] = trivia_engine.current_question(state)
+        elif game_type == "hangman" and not state.get("finished"):
+            state = hangman_engine.public_state(state)
+        elif game_type == "riddles":
+            state = riddles_engine.public_state(state)
+        elif game_type == "memory_match" and not state.get("finished"):
+            state = mm_engine.public_state(state)
         return {"game_type": game_type, "state": state}
+    finally:
+        conn.close()
+
+
+@app.get("/api/games/best-scores")
+async def game_best_scores(character_id: int):
+    """Return the personal best score for each game type for a character.
+
+    A "best score" is the highest ``score / max_score`` ratio (as a float
+    0.0–1.0) achieved in a completed winning session for each game type.
+    Also returns total plays and wins per game type.
+
+    Args:
+        character_id: Character to query.
+
+    Returns:
+        ``{"best_scores": {game_type: {"best": float, "plays": int, "wins": int}}}``
+
+    Example:
+        >>> GET /api/games/best-scores?character_id=1
+        {"best_scores": {"trivia": {"best": 0.9, "plays": 5, "wins": 3}}}
+    """
+    conn = db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT game_type,
+                   COUNT(*) as plays,
+                   SUM(CASE WHEN result='win' THEN 1 ELSE 0 END) as wins,
+                   MAX(CASE WHEN result='win' AND max_score > 0
+                            THEN CAST(score AS REAL) / max_score
+                            ELSE 0.0 END) as best_ratio
+            FROM game_sessions
+            WHERE character_id = ?
+            GROUP BY game_type
+            """,
+            (character_id,),
+        ).fetchall()
+        best = {
+            r[0]: {"best": round(r[3] or 0.0, 3), "plays": r[1], "wins": r[2]}
+            for r in rows
+        }
+        return {"best_scores": best}
     finally:
         conn.close()
 

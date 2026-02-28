@@ -38,6 +38,8 @@ import { useWizardStore } from './stores/wizardStore';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ChatThread } from './views/ChatThread';
 import { CreateView } from './views/CreateView';
+import { PetView } from './views/PetView';
+import { isPetMode } from './lib/electron';
 import { useAppStore } from './stores/appStore';
 import { useChatStore } from './stores/chatStore';
 import { useTheme } from './hooks/useTheme';
@@ -59,7 +61,33 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
  *   "create" section is active, or WelcomeScreen as default
  * - Settings & Memory: slide-out overlay drawers (right side)
  */
+/**
+ * Top-level router that checks for the /pet route before rendering
+ * the full app. This avoids loading heavy components in pet mode.
+ */
 export function App() {
+  // Pet mode renders a completely separate component tree — no hooks
+  // from the main app are needed, so we check before any state setup.
+  if (isPetMode()) {
+    return <PetApp />;
+  }
+  return <MainApp />;
+}
+
+/** Minimal pet overlay app — just the character and speech bubble. */
+function PetApp() {
+  const { loadCharacters, loadConfig } = useAppStore();
+
+  useEffect(() => {
+    loadCharacters().catch(console.error);
+    loadConfig().catch(console.error);
+  }, []);
+
+  return <PetView />;
+}
+
+/** Full application with sidebar, chat, settings, overlays, etc. */
+function MainApp() {
   const {
     loadCharacters, loadConfig, activeCharacter, sidebarSection,
     openOverlay, closeOverlay, activeOverlay, toggleSidebar,

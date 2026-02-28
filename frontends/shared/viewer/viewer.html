@@ -2634,63 +2634,68 @@
             // User input is relayed to the main window via window.opener.postMessage()
             // and AI replies are received back as {type:'petReply', text} messages.
             const PET_MODE = new URLSearchParams(location.search).get('pet') === '1';
+            const NO_CHAT_OVERLAY = new URLSearchParams(location.search).get('noChatOverlay') === '1';
 
             if (PET_MODE) {
                 document.body.classList.add('pet-mode');
 
-                // Build chat overlay DOM
-                const petOverlay = document.createElement('div');
-                petOverlay.id = 'pet-overlay';
-                petOverlay.innerHTML = `
-                    <div id="pet-bubble" class="pet-bubble hidden"></div>
-                    <div id="pet-input-row">
-                        <input id="pet-input" type="text" placeholder="Say something\u2026" autocomplete="off">
-                        <button id="pet-send">\u2192</button>
-                    </div>`;
-                document.body.appendChild(petOverlay);
+                // Build chat overlay DOM only for standalone browser pet mode.
+                // In Electron pet mode (?noChatOverlay=1), PetSpeechBubble.tsx
+                // provides the interaction UI instead.
+                if (!NO_CHAT_OVERLAY) {
+                    const petOverlay = document.createElement('div');
+                    petOverlay.id = 'pet-overlay';
+                    petOverlay.innerHTML = `
+                        <div id="pet-bubble" class="pet-bubble hidden"></div>
+                        <div id="pet-input-row">
+                            <input id="pet-input" type="text" placeholder="Say something\u2026" autocomplete="off">
+                            <button id="pet-send">\u2192</button>
+                        </div>`;
+                    document.body.appendChild(petOverlay);
 
-                /**
-                 * Show a transient chat bubble in the pet overlay.
-                 * Auto-hides after 8 seconds.
-                 *
-                 * @param {string} text - Message text to display
-                 * @param {'user'|'assistant'} role - Bubble style variant
-                 */
-                function showPetBubble(text, role) {
-                    const bubble = document.getElementById('pet-bubble');
-                    if (!bubble) return;
-                    bubble.textContent = text;
-                    bubble.className = `pet-bubble ${role}`;
-                    bubble.classList.remove('hidden');
-                    clearTimeout(bubble._hideTimer);
-                    bubble._hideTimer = setTimeout(() => bubble.classList.add('hidden'), 8000);
-                }
-
-                /**
-                 * Read the pet input, relay the text to the main window via
-                 * window.opener.postMessage, and show a user bubble immediately
-                 * for instant visual feedback before the AI responds.
-                 */
-                function sendPetMessage() {
-                    const petInput = document.getElementById('pet-input');
-                    const text = petInput?.value?.trim();
-                    if (!text) return;
-                    petInput.value = '';
-                    showPetBubble('You: ' + text, 'user');
-                    window.opener?.postMessage({ type: 'petMessage', text }, '*');
-                }
-
-                document.getElementById('pet-send')?.addEventListener('click', sendPetMessage);
-                document.getElementById('pet-input')?.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') sendPetMessage();
-                });
-
-                // Handle AI replies and audio commands forwarded from the main window
-                window.addEventListener('message', (evt) => {
-                    if (evt.data?.type === 'petReply') {
-                        showPetBubble(evt.data.text, 'assistant');
+                    /**
+                     * Show a transient chat bubble in the pet overlay.
+                     * Auto-hides after 8 seconds.
+                     *
+                     * @param {string} text - Message text to display
+                     * @param {'user'|'assistant'} role - Bubble style variant
+                     */
+                    function showPetBubble(text, role) {
+                        const bubble = document.getElementById('pet-bubble');
+                        if (!bubble) return;
+                        bubble.textContent = text;
+                        bubble.className = `pet-bubble ${role}`;
+                        bubble.classList.remove('hidden');
+                        clearTimeout(bubble._hideTimer);
+                        bubble._hideTimer = setTimeout(() => bubble.classList.add('hidden'), 8000);
                     }
-                });
+
+                    /**
+                     * Read the pet input, relay the text to the main window via
+                     * window.opener.postMessage, and show a user bubble immediately
+                     * for instant visual feedback before the AI responds.
+                     */
+                    function sendPetMessage() {
+                        const petInput = document.getElementById('pet-input');
+                        const text = petInput?.value?.trim();
+                        if (!text) return;
+                        petInput.value = '';
+                        showPetBubble('You: ' + text, 'user');
+                        window.opener?.postMessage({ type: 'petMessage', text }, '*');
+                    }
+
+                    document.getElementById('pet-send')?.addEventListener('click', sendPetMessage);
+                    document.getElementById('pet-input')?.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') sendPetMessage();
+                    });
+
+                    // Handle AI replies and audio commands forwarded from the main window
+                    window.addEventListener('message', (evt) => {
+                        if (evt.data?.type === 'petReply') {
+                            showPetBubble(evt.data.text, 'assistant');
+                        }
+                    });
+                }
             }
 
             /**

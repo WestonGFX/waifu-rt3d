@@ -1145,6 +1145,38 @@ const THEME_PRESETS: ThemePreset[] = [
       border: '#402010',
     },
   },
+  {
+    id: 'bubblegum',
+    label: 'Bubblegum',
+    dataTheme: 'bubblegum',
+    swatchAccent: '#FF69B4',
+    swatchBg: '#FFF0F8',
+    customColors: null,
+  },
+  {
+    id: 'blurple',
+    label: 'Blurple',
+    dataTheme: 'blurple',
+    swatchAccent: '#5865F2',
+    swatchBg: '#1E1F22',
+    customColors: null,
+  },
+  {
+    id: 'catppuccin-latte',
+    label: 'Catppuccin Latte',
+    dataTheme: 'catppuccin-latte',
+    swatchAccent: '#8839EF',
+    swatchBg: '#EFF1F5',
+    customColors: null,
+  },
+  {
+    id: 'catppuccin-macchiato',
+    label: 'Catppuccin Macchiato',
+    dataTheme: 'catppuccin-macchiato',
+    swatchAccent: '#B7BDF8',
+    swatchBg: '#1E2030',
+    customColors: null,
+  },
 ];
 
 /**

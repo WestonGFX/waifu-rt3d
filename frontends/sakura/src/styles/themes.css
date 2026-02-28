@@ -227,6 +227,136 @@
   color-scheme: dark;
 }
 
+/* ─── Bubblegum (Light Pastel) — hot pink, sugar sweet ───────────── */
+[data-theme="bubblegum"] {
+  --color-background: #FFF0F8;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #FFF7FB;
+  --color-border: #F5CEDF;
+  --color-border-subtle: rgba(255, 105, 180, 0.10);
+  --color-text-primary: #2E1020;
+  --color-text-secondary: #A06080;
+  --color-text-tertiary: #D4A0BE;
+  --color-accent: #FF69B4;
+  --color-accent-hover: #E8559E;
+  --color-accent-soft: rgba(255, 105, 180, 0.12);
+  --color-accent-text: #FFFFFF;
+  --color-accent-gradient: linear-gradient(135deg, #FF69B4 0%, #FF1493 100%);
+  --color-success: #5EC99A;
+  --color-warning: #FFB347;
+  --color-danger: #FF4466;
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(255,105,180,0.10);
+  --shadow-elevated: 0 8px 32px rgba(255,105,180,0.14), 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-glow: 0 0 24px rgba(255,105,180,0.22);
+  --blur-surface: blur(20px) saturate(1.3);
+  --radius-card: 20px;
+  --radius-button: 14px;
+  --radius-input: 12px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.015;
+  --bg-ambience: rgba(255, 105, 180, 0.05);
+  color-scheme: light;
+}
+
+/* ─── Blurple (Dark) — Discord blue-purple + deep charcoal ────────── */
+[data-theme="blurple"] {
+  --color-background: #1E1F22;
+  --color-surface: #2B2D31;
+  --color-surface-raised: #313338;
+  --color-border: #3F4147;
+  --color-border-subtle: rgba(88, 101, 242, 0.14);
+  --color-text-primary: #DBDEE1;
+  --color-text-secondary: #949BA4;
+  --color-text-tertiary: #6D737C;
+  --color-accent: #5865F2;
+  --color-accent-hover: #4752C4;
+  --color-accent-soft: rgba(88, 101, 242, 0.15);
+  --color-accent-text: #FFFFFF;
+  --color-accent-gradient: linear-gradient(135deg, #5865F2 0%, #7289DA 100%);
+  --color-success: #5EC99A;
+  --color-warning: #FEE75C;
+  --color-danger: #ED4245;
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.28), 0 0 1px rgba(88,101,242,0.10);
+  --shadow-elevated: 0 8px 32px rgba(0,0,0,0.44), 0 0 1px rgba(88,101,242,0.08);
+  --shadow-glow: 0 0 32px rgba(88,101,242,0.18);
+  --blur-surface: blur(24px) saturate(1.2);
+  --radius-card: 12px;
+  --radius-button: 8px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.025;
+  --bg-ambience: rgba(88, 101, 242, 0.06);
+  color-scheme: dark;
+}
+
+/* ─── Catppuccin Latte (Light) — warm pastel, mauve accent ────────── */
+/* Official palette: https://catppuccin.com                            */
+[data-theme="catppuccin-latte"] {
+  --color-background: #EFF1F5;       /* Latte Base */
+  --color-surface: #E6E9EF;          /* Latte Mantle */
+  --color-surface-raised: #DCE0E8;   /* Latte Crust */
+  --color-border: #CCD0DA;           /* Latte Surface 2 */
+  --color-border-subtle: rgba(136, 57, 239, 0.08);
+  --color-text-primary: #4C4F69;     /* Latte Text */
+  --color-text-secondary: #7C7F93;   /* Latte Subtext 1 */
+  --color-text-tertiary: #8C8FA1;    /* Latte Subtext 0 */
+  --color-accent: #8839EF;           /* Latte Mauve */
+  --color-accent-hover: #7527D8;
+  --color-accent-soft: rgba(136, 57, 239, 0.10);
+  --color-accent-text: #FFFFFF;
+  --color-accent-gradient: linear-gradient(135deg, #8839EF 0%, #EA76CB 100%);
+  --color-success: #40A02B;          /* Latte Green */
+  --color-warning: #DF8E1D;          /* Latte Yellow */
+  --color-danger: #D20F39;           /* Latte Red */
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(136,57,239,0.06);
+  --shadow-elevated: 0 8px 32px rgba(136,57,239,0.10), 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-glow: 0 0 24px rgba(136,57,239,0.14);
+  --blur-surface: blur(20px) saturate(1.2);
+  --radius-card: 14px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.018;
+  --bg-ambience: rgba(136, 57, 239, 0.03);
+  color-scheme: light;
+}
+
+/* ─── Catppuccin Macchiato (Dark) — deep teal, lavender accents ───── */
+/* Official palette: https://catppuccin.com                            */
+[data-theme="catppuccin-macchiato"] {
+  --color-background: #1E2030;       /* Macchiato Base */
+  --color-surface: #181926;          /* Macchiato Mantle */
+  --color-surface-raised: #24273A;   /* Macchiato Crust (used as raised) */
+  --color-border: #363A4F;           /* Macchiato Surface 1 */
+  --color-border-subtle: rgba(183, 189, 248, 0.10);
+  --color-text-primary: #CAD3F5;     /* Macchiato Text */
+  --color-text-secondary: #B8C0E0;   /* Macchiato Subtext 1 */
+  --color-text-tertiary: #6E738D;    /* Macchiato Overlay 0 */
+  --color-accent: #B7BDF8;           /* Macchiato Lavender */
+  --color-accent-hover: #C6A0F6;     /* Macchiato Mauve (hover shifts to mauve) */
+  --color-accent-soft: rgba(183, 189, 248, 0.12);
+  --color-accent-text: #1E2030;
+  --color-accent-gradient: linear-gradient(135deg, #B7BDF8 0%, #C6A0F6 100%);
+  --color-success: #A6DA95;          /* Macchiato Green */
+  --color-warning: #EED49F;          /* Macchiato Yellow */
+  --color-danger: #ED8796;           /* Macchiato Red */
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.30), 0 0 1px rgba(183,189,248,0.08);
+  --shadow-elevated: 0 8px 32px rgba(0,0,0,0.48), 0 0 1px rgba(183,189,248,0.06);
+  --shadow-glow: 0 0 32px rgba(183,189,248,0.12);
+  --blur-surface: blur(24px) saturate(1.3);
+  --radius-card: 14px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.030;
+  --bg-ambience: rgba(183, 189, 248, 0.05);
+  color-scheme: dark;
+}
+
 /* ─── Dark Crystal — cool slate with blue accents ─────────────────── */
 [data-theme="dark-crystal"] {
   --color-background: #141619;

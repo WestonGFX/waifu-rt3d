@@ -3,7 +3,8 @@ import { persist } from 'zustand/middleware';
 
 export type ThemeMode =
   | 'sakura' | 'crystal' | 'dark-sakura' | 'dark-crystal'
-  | 'matcha' | 'lavender' | 'peach' | 'midnight';
+  | 'matcha' | 'lavender' | 'peach' | 'midnight'
+  | 'bubblegum' | 'blurple' | 'catppuccin-latte' | 'catppuccin-macchiato';
 
 interface ThemeStore {
   theme: ThemeMode;
@@ -12,7 +13,10 @@ interface ThemeStore {
 }
 
 /** Cycle order for the toggle shortcut (light themes first, then dark). */
-const CYCLE: ThemeMode[] = ['sakura', 'crystal', 'matcha', 'lavender', 'peach', 'dark-sakura', 'dark-crystal', 'midnight'];
+const CYCLE: ThemeMode[] = [
+  'sakura', 'crystal', 'catppuccin-latte', 'matcha', 'lavender', 'peach', 'bubblegum',
+  'dark-sakura', 'dark-crystal', 'midnight', 'blurple', 'catppuccin-macchiato',
+];
 
 export const useTheme = create<ThemeStore>()(
   persist(

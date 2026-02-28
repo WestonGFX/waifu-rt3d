@@ -49,3 +49,30 @@
   font-weight: 700;
   letter-spacing: -0.01em;
 }
+
+/* VN reader mode — cursor blink for typewriter effect */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* VN text box styles */
+.vn-textbox {
+  background: rgba(12, 8, 20, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0 12px 12px 12px;
+  padding: 14px 18px 16px;
+  backdrop-filter: blur(10px);
+  min-height: 96px;
+}
+
+.vn-name-tag {
+  font-family: var(--font-body);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-size: 0.82rem;
+  border-radius: 8px 8px 0 0;
+  padding: 3px 14px 3px 10px;
+  display: inline-block;
+  backdrop-filter: blur(4px);
+}

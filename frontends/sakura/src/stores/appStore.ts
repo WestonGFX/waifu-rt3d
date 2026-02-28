@@ -96,6 +96,10 @@ interface AppState {
   cinematicMode: boolean;
   toggleCinematicMode: () => void;
 
+  // Visual Novel reader mode (B3) — portrait + text-box layout
+  vnMode: boolean;
+  toggleVnMode: () => void;
+
   // Display mode
   advancedMode: boolean;
   toggleAdvancedMode: () => void;
@@ -235,6 +239,10 @@ export const useAppStore = create<AppState>()(
       // Cinematic mode (B1)
       cinematicMode: false,
       toggleCinematicMode: () => set((s) => ({ cinematicMode: !s.cinematicMode })),
+
+      // Visual Novel reader mode (B3)
+      vnMode: false,
+      toggleVnMode: () => set((s) => ({ vnMode: !s.vnMode })),
 
       // Display mode
       advancedMode: false,

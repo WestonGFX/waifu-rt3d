@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff } from 'lucide-react';
+import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv } from 'lucide-react';
+import { VNTextBox } from '../components/VNTextBox';
+import { VNPortrait } from '../components/VNPortrait';
 import { useAppStore } from '../stores/appStore';
 
 import type { ReplyLengthMode } from '../stores/appStore';
@@ -106,7 +108,7 @@ function generateChips(text: string, charName: string): string[] {
  * - Search, export, session history drawer
  */
 export function ChatThread() {
-  const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode } = useAppStore();
+  const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode } = useAppStore();
   const { messages, draft, loading, setDraft, sendMessage, abortMessage, setContext, loadHistory, sessionId } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -159,6 +161,13 @@ export function ChatThread() {
 
   // ── Feature D: Gesture picker state ────────────────────────────────────
   const [gesturePickerOpen, setGesturePickerOpen] = useState(false);
+
+  // ── Feature B3: VN reader — index of the message currently shown ────────
+  // Starts at last message; advances to next on each "advance" action.
+  const [vnMessageIdx, setVnMessageIdx] = useState(-1);
+  useEffect(() => {
+    if (vnMode && messages.length > 0) setVnMessageIdx(messages.length - 1);
+  }, [vnMode, messages.length]);
 
   // ── Feature A: Web Speech API dictation ─────────────────────────────────
   // SpeechRecognition is not in the default TS lib — store as unknown to avoid type errors
@@ -551,7 +560,7 @@ export function ChatThread() {
   return (
     <div className="flex h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
       {/* ── Chat column ─────────────────────────────────────────────────── */}
-      <div className="flex flex-col flex-1 min-w-0">
+      <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
         {/* B1: Hide status bar in cinematic mode */}
         {!cinematicMode && (
           <StatusBar
@@ -750,6 +759,122 @@ export function ChatThread() {
           {loading && <TypingIndicator name={activeCharacter.name} />}
         </div>
 
+        {/* ── Feature B3: VN Reader overlay ────────────────────────────── */}
+        {vnMode && (
+          <div
+            style={{
+              position: 'absolute', inset: 0, zIndex: 50,
+              backgroundColor: 'var(--color-background)',
+              display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Background scene */}
+            {activeCharacter.background_url ? (
+              <div
+                style={{
+                  position: 'absolute', inset: 0,
+                  backgroundImage: `url(${activeCharacter.background_url})`,
+                  backgroundSize: 'cover', backgroundPosition: 'center',
+                  filter: 'brightness(0.55) saturate(0.8)',
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  position: 'absolute', inset: 0,
+                  background: 'linear-gradient(160deg, #1a0a2e 0%, #0d1b2a 60%, #051015 100%)',
+                }}
+              />
+            )}
+
+            {/* Character portrait */}
+            <VNPortrait
+              avatarUrl={activeCharacter.avatar_url}
+              charName={activeCharacter.name}
+              dimmed={messages[vnMessageIdx]?.role === 'user'}
+              side="left"
+            />
+
+            {/* Dialogue text box at bottom */}
+            <div
+              style={{
+                position: 'relative', zIndex: 4,
+                padding: '0 40px 24px',
+                maxWidth: 860, width: '100%', margin: '0 auto',
+              }}
+            >
+              <VNTextBox
+                message={messages[vnMessageIdx]}
+                charName={activeCharacter.name}
+                onAdvance={() => {
+                  // Navigate forward through history; when at end do nothing
+                  setVnMessageIdx(i => Math.min(i + 1, messages.length - 1));
+                }}
+              />
+            </div>
+
+            {/* Navigation row */}
+            <div
+              style={{
+                position: 'absolute', top: 12, right: 12, zIndex: 10,
+                display: 'flex', gap: 6,
+              }}
+            >
+              {/* ← prev / → next message nav */}
+              <button
+                onClick={() => setVnMessageIdx(i => Math.max(i - 1, 0))}
+                disabled={vnMessageIdx <= 0}
+                style={{
+                  padding: '4px 10px', borderRadius: 6,
+                  background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.12)',
+                  color: 'rgba(255,255,255,0.65)', fontSize: 12, cursor: 'pointer',
+                  backdropFilter: 'blur(4px)',
+                  opacity: vnMessageIdx <= 0 ? 0.3 : 1,
+                }}
+              >
+                ◀
+              </button>
+              <button
+                onClick={() => setVnMessageIdx(i => Math.min(i + 1, messages.length - 1))}
+                disabled={vnMessageIdx >= messages.length - 1}
+                style={{
+                  padding: '4px 10px', borderRadius: 6,
+                  background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.12)',
+                  color: 'rgba(255,255,255,0.65)', fontSize: 12, cursor: 'pointer',
+                  backdropFilter: 'blur(4px)',
+                  opacity: vnMessageIdx >= messages.length - 1 ? 0.3 : 1,
+                }}
+              >
+                ▶
+              </button>
+              <span
+                style={{
+                  padding: '4px 10px', borderRadius: 6,
+                  background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.12)',
+                  color: 'rgba(255,255,255,0.4)', fontSize: 11,
+                  backdropFilter: 'blur(4px)',
+                }}
+              >
+                {vnMessageIdx + 1} / {messages.length}
+              </span>
+              <button
+                onClick={toggleVnMode}
+                title="Exit VN mode"
+                style={{
+                  padding: '4px 10px', borderRadius: 6,
+                  background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.12)',
+                  color: 'rgba(255,255,255,0.65)', fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', backdropFilter: 'blur(4px)',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                EXIT
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Composer bar ─────────────────────────────────────────────── */}
         <div
           className="sticky bottom-0 p-3"
@@ -861,6 +986,22 @@ export function ChatThread() {
                 style={{ color: 'var(--color-text-tertiary)' }}
               >
                 <BookOpen size={16} />
+              </button>
+
+              {/* Feature B3: Visual Novel reader mode toggle */}
+              <button
+                onClick={toggleVnMode}
+                title={vnMode ? 'Exit VN reader mode' : 'Visual Novel reader mode'}
+                aria-label="Toggle visual novel reader mode"
+                aria-pressed={vnMode}
+                className="p-2 rounded-lg transition-all duration-150 flex-shrink-0 text-base leading-none"
+                style={{
+                  backgroundColor: vnMode ? 'var(--color-accent-soft)' : 'transparent',
+                  color: vnMode ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                  boxShadow: vnMode ? '0 0 8px var(--color-accent-soft)' : 'none',
+                }}
+              >
+                <Tv size={16} />
               </button>
 
               {/* Gesture picker toggle button */}

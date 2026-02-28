@@ -1329,11 +1329,57 @@ def migrate_to_v23(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v24(con: sqlite3.Connection) -> bool:
+    """Apply schema v24 migration (Feature C4: Companion Opening Greeting).
+
+    Adds two columns to the ``characters`` table:
+        - ``greeting_enabled`` (INTEGER, default 1) -- whether the contextual
+          opening greeting is shown when the user selects this character.
+        - ``greeting_intensity`` (REAL, default 0.8) -- 0.0 (brief) to 1.0 (full)
+          controls how much context is woven into the greeting.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v24.
+
+    Example:
+        >>> if migrate_to_v24(con):
+        ...     print("Migrated to v24")
+    """
+    char_cols = {row[1] for row in con.execute("PRAGMA table_info(characters)")}
+    already_done = "greeting_enabled" in char_cols and "greeting_intensity" in char_cols
+    if already_done:
+        cur = con.cursor()
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (24)")
+        con.commit()
+        return False
+
+    try:
+        logger.info("Applying schema v24 migration (Feature C4: Opening Greeting)...")
+        cur = con.cursor()
+        if "greeting_enabled" not in char_cols:
+            cur.execute("ALTER TABLE characters ADD COLUMN greeting_enabled INTEGER DEFAULT 1")
+            logger.info("  - Added characters.greeting_enabled (Feature C4)")
+        if "greeting_intensity" not in char_cols:
+            cur.execute("ALTER TABLE characters ADD COLUMN greeting_intensity REAL DEFAULT 0.8")
+            logger.info("  - Added characters.greeting_intensity (Feature C4)")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (24)")
+        con.commit()
+        logger.info("✅ Schema v24 migration complete (greeting_enabled + greeting_intensity)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v24 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
     Migration Paths:
-        - v0 (empty) → v4 → … → v23
+        - v0 (empty) → v4 → … → v24
         - v3 → v4 → … → v23
         - v11 → v12 → v13 → v23
         - v21 → v22 → v23
@@ -1524,14 +1570,22 @@ def ensure_db():
             if migrate_to_v23(con):
                 version = 23
 
+        # Upgrade from v23 to v24 (Feature C4: Companion Opening Greeting)
+        if version < 24:
+            logger.info("Upgrading database schema from v23 to v24...")
+            logger.info("  - Adding greeting_enabled to characters (Feature C4)")
+            logger.info("  - Adding greeting_intensity to characters (Feature C4)")
+            if migrate_to_v24(con):
+                version = 24
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 23:
-            raise RuntimeError(f"Database initialization failed: Expected v23, got v{final_version}")
+        if final_version < 24:
+            raise RuntimeError(f"Database initialization failed: Expected v24, got v{final_version}")
 
-        if final_version > 23:
-            logger.warning(f"Database is newer than application (v{final_version} > v23). Some features might be unused.")
+        if final_version > 24:
+            logger.warning(f"Database is newer than application (v{final_version} > v24). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.

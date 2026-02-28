@@ -16,6 +16,7 @@ import { ModelPanel } from '../components/ModelPanel';
 import { SessionDrawer } from '../components/SessionDrawer';
 import { GesturePicker } from '../components/GesturePicker';
 import type { GestureName, ExpressionName } from '../components/GesturePicker';
+import { GreetingCard } from '../components/GreetingCard';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -147,6 +148,9 @@ export function ChatThread() {
   const [diaryText, setDiaryText] = useState<string | null>(null);
   const [diaryDate, setDiaryDate] = useState<string | null>(null);
   const [diaryDismissed, setDiaryDismissed] = useState(false);
+  const [greetingText, setGreetingText] = useState<string | null>(null);
+  const [greetingEmotion, setGreetingEmotion] = useState<string | undefined>(undefined);
+  const [greetingDismissed, setGreetingDismissed] = useState(false);
 
   // ── Task 3: Push-to-talk mic state ──────────────────────────────────────
   const [micState, setMicState] = useState<MicState>('idle');
@@ -186,6 +190,21 @@ export function ChatThread() {
         }
       })
       .catch(() => { /* diary not critical */ });
+  }, [activeCharacter?.id]);
+
+  // Feature C4: fetch contextual opening greeting on character switch
+  useEffect(() => {
+    setGreetingDismissed(false);
+    setGreetingText(null);
+    if (!activeCharacter?.id) return;
+    api.getGreeting(activeCharacter.id)
+      .then(res => {
+        if (res?.enabled && res.greeting?.trim()) {
+          setGreetingText(res.greeting);
+          setGreetingEmotion(res.emotion);
+        }
+      })
+      .catch(() => { /* greeting not critical */ });
   }, [activeCharacter?.id]);
 
   // Create/resume chat session when character changes
@@ -434,6 +453,7 @@ export function ChatThread() {
   const handleSend = useCallback(() => {
     if (!draft.trim() || loading) return;
     idleFired.current = false;
+    setGreetingDismissed(true); // dismiss greeting on first user message
     sendMessage(draft, true, incognito, effectiveMaxTokens);
   }, [draft, loading, sendMessage, incognito, effectiveMaxTokens]);
 
@@ -526,6 +546,7 @@ export function ChatThread() {
   if (!activeCharacter) return null;
 
   const showDiary = diaryText && !diaryDismissed;
+  const showGreeting = greetingText && !greetingDismissed;
 
   return (
     <div className="flex h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
@@ -598,6 +619,16 @@ export function ChatThread() {
               </button>
             </div>
           </div>
+        )}
+
+        {/* Feature C4: Opening greeting card */}
+        {showGreeting && (
+          <GreetingCard
+            charName={activeCharacter.name}
+            greeting={greetingText!}
+            emotion={greetingEmotion}
+            onDismiss={() => setGreetingDismissed(true)}
+          />
         )}
 
         {/* ── Message list ──────────────────────────────────────────────── */}

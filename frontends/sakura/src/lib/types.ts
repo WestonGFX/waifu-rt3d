@@ -64,6 +64,10 @@ export interface Character {
    * column on the characters table (schema v23).
    */
   mood_intensity?: number;
+  /** Feature C4: When true, shows a contextual LLM-generated greeting on character load (schema v24). */
+  greeting_enabled?: boolean;
+  /** Feature C4: 0.0–1.0 controls greeting length/depth (schema v24). */
+  greeting_intensity?: number;
   created_at?: string;
   updated_at?: string;
 }

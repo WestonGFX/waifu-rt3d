@@ -386,6 +386,10 @@ export const api = {
   getDiary: (charId: number) =>
     get<{ ok: boolean; diary: string | null; diary_date: string | null }>(`/api/characters/${charId}/diary`),
 
+  /** Feature C4: Fetch contextual opening greeting for a character (30-min cached). */
+  getGreeting: (charId: number) =>
+    get<{ ok: boolean; greeting?: string; emotion?: string; enabled: boolean }>(`/api/characters/${charId}/greeting`),
+
   // Character relationship timeline (Feature B)
   getTimeline: (charId: number) =>
     get<{ ok: boolean; timeline: Array<Record<string, unknown>> }>(`/api/characters/${charId}/timeline`),

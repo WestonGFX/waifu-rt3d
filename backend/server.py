@@ -5347,6 +5347,147 @@ async def generate_character_diary(char_id: int, req: Request):
     return {"ok": True, "diary": diary_text, "diary_date": today}
 
 
+# ── Companion Opening Greeting ──────────────────────────────────────────────────
+
+# 30-minute greeting cache keyed by char_id: {char_id: (generated_at_ts, greeting, emotion)}
+_greeting_cache: dict[int, tuple[float, str, str]] = {}
+_GREETING_CACHE_TTL = 1800  # 30 minutes
+
+
+@app.get("/api/characters/{char_id}/greeting")
+async def get_character_greeting(char_id: int):
+    """Generate (or return cached) a contextual opening greeting for a character.
+
+    The greeting is tailored to: time since last conversation, current time-of-day
+    mood slot, character's diary, and affinity level. Results are cached for 30
+    minutes so reopening the app doesn't re-invoke the LLM.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        {"ok": True, "greeting": str, "emotion": str, "enabled": bool}
+        If greeting_enabled is False, returns {"ok": True, "enabled": False}.
+    """
+    import time as _time
+    conn = db()
+    row = conn.execute(
+        "SELECT name, system_prompt, greeting_message, greeting_enabled, greeting_intensity, "
+        "diary, last_emotion FROM characters WHERE id = ?",
+        (char_id,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, "Character not found")
+
+    char_name, system_prompt, greeting_message, greeting_enabled, greeting_intensity, diary, last_emotion = row
+    greeting_enabled = bool(greeting_enabled if greeting_enabled is not None else 1)
+
+    if not greeting_enabled:
+        return {"ok": True, "enabled": False}
+
+    # Return cached greeting if fresh
+    now_ts = _time.time()
+    if char_id in _greeting_cache:
+        cached_at, cached_text, cached_emotion = _greeting_cache[char_id]
+        if now_ts - cached_at < _GREETING_CACHE_TTL:
+            return {"ok": True, "greeting": cached_text, "emotion": cached_emotion, "enabled": True}
+
+    # Get time since last session
+    last_sess = conn.execute(
+        "SELECT updated_at FROM sessions WHERE character_id = ? ORDER BY updated_at DESC LIMIT 1",
+        (char_id,)
+    ).fetchone()
+    gap_text = ""
+    if last_sess and last_sess[0]:
+        try:
+            from datetime import timezone as _tz
+            last_dt = datetime.fromisoformat(last_sess[0].replace("Z", "+00:00"))
+            gap_days = (datetime.now(_tz.utc) - last_dt.replace(tzinfo=_tz.utc if last_dt.tzinfo is None else last_dt.tzinfo)).days
+            if gap_days > 7:
+                gap_text = f"It has been {gap_days} days since you last spoke."
+            elif gap_days > 2:
+                gap_text = f"It has been {gap_days} days since your last conversation."
+            elif gap_days == 1:
+                gap_text = "You last spoke yesterday."
+        except Exception:
+            pass
+
+    # Get relationship affinity
+    rel_row = conn.execute(
+        "SELECT affinity FROM character_relationships WHERE char_id = ?", (char_id,)
+    ).fetchone()
+    affinity = float(rel_row[0]) if rel_row else 0.0
+
+    # Current time slot for context
+    from backend.mood.engine import _get_time_slot
+    hour = datetime.now().hour
+    time_slot = _get_time_slot(hour)
+
+    intensity = float(greeting_intensity) if greeting_intensity is not None else 0.8
+
+    # Build greeting prompt
+    context_parts = []
+    if gap_text:
+        context_parts.append(gap_text)
+    if diary:
+        context_parts.append(f"Your last diary entry: \"{diary[:200]}\"")
+    if affinity >= 70:
+        context_parts.append("You feel very close to this person.")
+    elif affinity <= 15:
+        context_parts.append("You are still getting to know this person.")
+
+    context_block = "\n".join(context_parts) if context_parts else "No prior context."
+
+    brevity = "1-2 warm sentences" if intensity < 0.5 else "2-3 sentences"
+    prompt = (
+        f"You are {char_name}. It is {time_slot.replace('_', ' ')}. "
+        f"The user just opened the app and is about to start chatting with you.\n\n"
+        f"Context:\n{context_block}\n\n"
+        f"Write a natural, in-character opening greeting ({brevity}). "
+        f"Reference the time gap if significant. Stay in your personality. "
+        f"Do not start with 'Oh' or clichés. Do not use the word 'greetings'. "
+        f"End with the [EMOTION: X, INTENSITY: Y] tag on its own line.\n\n"
+        f"Greeting:"
+    )
+
+    cfg = load_config()
+    try:
+        from backend.llm.registry import get_client
+        adapter = get_client(cfg)
+        res = await run_in_threadpool(
+            adapter.chat,
+            [{"role": "user", "content": prompt}],
+            cfg["llm"]["model"],
+            cfg["llm"]["endpoint"],
+            cfg["llm"]["api_key"],
+            temperature=0.8,
+            max_tokens=200,
+        )
+    except Exception as exc:
+        logger.error(f"[Greeting] LLM call failed for char {char_id}: {exc}")
+        # Graceful fallback: use the character's static greeting_message
+        fallback = greeting_message or f"Hey, good to see you again!"
+        return {"ok": True, "greeting": fallback, "emotion": "happy", "enabled": True}
+
+    if not res.get("ok"):
+        fallback = greeting_message or f"Hey, good to see you again!"
+        return {"ok": True, "greeting": fallback, "emotion": "happy", "enabled": True}
+
+    raw = res["reply"].strip()
+
+    # Strip emotion tag for clean display
+    import re as _re
+    emotion_match = _re.search(r'\[EMOTION:\s*(\w+)', raw, _re.IGNORECASE)
+    detected_emotion = emotion_match.group(1).lower() if emotion_match else (last_emotion or "happy")
+    clean_greeting = _re.sub(r'\[EMOTION:[^\]]*\]', '', raw).strip()
+
+    # Cache result
+    _greeting_cache[char_id] = (now_ts, clean_greeting, detected_emotion)
+
+    logger.info(f"[Greeting] Generated for char {char_id} ({char_name}), emotion={detected_emotion}")
+    return {"ok": True, "greeting": clean_greeting, "emotion": detected_emotion, "enabled": True}
+
+
 # ── Character Analytics Dashboard ──────────────────────────────────────────────
 
 # Stop words filtered from word-frequency analysis.  Kept as a module-level

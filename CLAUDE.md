@@ -35,6 +35,16 @@ After implementing UI/CSS changes, always test by reading the affected component
 
 List potential side effects before committing.
 
+## Documentation Triggers
+
+Update **README.md** when any of the following occur:
+1. **DB schema version bumps** — whenever `preflight.py` adds a new migration (v30 → v31 etc.), update the schema badge and add any new tables to the "Database Schema" section
+2. **Major feature implementations** — new features (not bug fixes) should be reflected in the Features section and Roadmap
+3. **New API endpoints** — add to the Key API Endpoints table
+4. **New themes** — update the Themes table and badge count
+
+Do NOT auto-update on every commit. Only when the above triggers apply.
+
 ## Bug Fixing
 
 When fixing bugs, limit changes to the minimum necessary to resolve the issue. Do not refactor surrounding code or make "improvements" unless explicitly asked. Large change sets introduce regressions in this codebase.

@@ -388,3 +388,199 @@
   --bg-ambience: rgba(123, 156, 240, 0.06);
   color-scheme: dark;
 }
+
+/* ─── Monokai Dark — warm dark with Wimer Hazenberg's iconic palette ─── */
+[data-theme="monokai"] {
+  --color-background: #272822;
+  --color-surface: #1C1D18;
+  --color-surface-raised: #3E3D32;
+  --color-border: #49483E;
+  --color-border-subtle: rgba(166, 226, 46, 0.10);
+  --color-text-primary: #F8F8F2;
+  --color-text-secondary: #75715E;
+  --color-text-tertiary: #49483E;
+  --color-accent: #A6E22E;           /* Monokai green */
+  --color-accent-hover: #B8F04A;
+  --color-accent-soft: rgba(166, 226, 46, 0.12);
+  --color-accent-text: #1C1D18;
+  --color-accent-gradient: linear-gradient(135deg, #A6E22E 0%, #E6DB74 100%);
+  --color-success: #A6E22E;
+  --color-warning: #E6DB74;          /* Monokai yellow */
+  --color-danger: #F92672;           /* Monokai pink */
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.30), 0 0 1px rgba(166,226,46,0.08);
+  --shadow-elevated: 0 8px 32px rgba(0,0,0,0.48), 0 0 1px rgba(166,226,46,0.06);
+  --shadow-glow: 0 0 32px rgba(166,226,46,0.12);
+  --blur-surface: blur(24px) saturate(1.2);
+  --radius-card: 14px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.025;
+  --bg-ambience: rgba(166, 226, 46, 0.04);
+  color-scheme: dark;
+}
+
+/* ─── Darcula — JetBrains' flagship dark, warm charcoal and steel blue ─ */
+[data-theme="darcula"] {
+  --color-background: #2B2B2B;
+  --color-surface: #1E1E1E;
+  --color-surface-raised: #3C3F41;
+  --color-border: #4B4B4B;
+  --color-border-subtle: rgba(104, 151, 187, 0.12);
+  --color-text-primary: #A9B7C6;
+  --color-text-secondary: #787878;
+  --color-text-tertiary: #5A5A5A;
+  --color-accent: #6897BB;           /* Darcula identifier blue */
+  --color-accent-hover: #7AABCF;
+  --color-accent-soft: rgba(104, 151, 187, 0.12);
+  --color-accent-text: #1E1E1E;
+  --color-accent-gradient: linear-gradient(135deg, #6897BB 0%, #CC7832 100%);
+  --color-success: #6A8759;          /* Darcula string green */
+  --color-warning: #CC7832;          /* Darcula keyword orange */
+  --color-danger: #FF6B68;
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.35), 0 0 1px rgba(104,151,187,0.08);
+  --shadow-elevated: 0 8px 32px rgba(0,0,0,0.50), 0 0 1px rgba(104,151,187,0.06);
+  --shadow-glow: 0 0 32px rgba(104,151,187,0.10);
+  --blur-surface: blur(24px) saturate(1.1);
+  --radius-card: 14px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.020;
+  --bg-ambience: rgba(104, 151, 187, 0.04);
+  color-scheme: dark;
+}
+
+/* ─── Dracula — Zeno Rocha's iconic purple dark theme ─────────────────── */
+[data-theme="dracula"] {
+  --color-background: #282A36;
+  --color-surface: #1E1F29;
+  --color-surface-raised: #44475A;
+  --color-border: #44475A;
+  --color-border-subtle: rgba(189, 147, 249, 0.12);
+  --color-text-primary: #F8F8F2;
+  --color-text-secondary: #6272A4;   /* Dracula comment */
+  --color-text-tertiary: #44475A;
+  --color-accent: #BD93F9;           /* Dracula purple */
+  --color-accent-hover: #CCA9FA;
+  --color-accent-soft: rgba(189, 147, 249, 0.12);
+  --color-accent-text: #282A36;
+  --color-accent-gradient: linear-gradient(135deg, #BD93F9 0%, #FF79C6 100%);
+  --color-success: #50FA7B;          /* Dracula green */
+  --color-warning: #F1FA8C;          /* Dracula yellow */
+  --color-danger: #FF5555;           /* Dracula red */
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.32), 0 0 1px rgba(189,147,249,0.10);
+  --shadow-elevated: 0 8px 32px rgba(0,0,0,0.50), 0 0 1px rgba(189,147,249,0.08);
+  --shadow-glow: 0 0 32px rgba(189,147,249,0.14);
+  --blur-surface: blur(24px) saturate(1.4);
+  --radius-card: 14px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.025;
+  --bg-ambience: rgba(189, 147, 249, 0.06);
+  color-scheme: dark;
+}
+
+/* ─── Tokyo Night — neon city dark, deep navy with sky blue accents ──── */
+[data-theme="tokyo-night"] {
+  --color-background: #1A1B2E;
+  --color-surface: #16161E;
+  --color-surface-raised: #1F2335;
+  --color-border: #292E42;
+  --color-border-subtle: rgba(122, 162, 247, 0.10);
+  --color-text-primary: #C0CAF5;
+  --color-text-secondary: #565F89;   /* Tokyo Night comment */
+  --color-text-tertiary: #3B4261;
+  --color-accent: #7AA2F7;           /* Tokyo Night blue */
+  --color-accent-hover: #89B4FA;
+  --color-accent-soft: rgba(122, 162, 247, 0.12);
+  --color-accent-text: #16161E;
+  --color-accent-gradient: linear-gradient(135deg, #7AA2F7 0%, #BB9AF7 100%);
+  --color-success: #9ECE6A;          /* Tokyo Night green */
+  --color-warning: #E0AF68;          /* Tokyo Night yellow */
+  --color-danger: #F7768E;           /* Tokyo Night red */
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.35), 0 0 1px rgba(122,162,247,0.08);
+  --shadow-elevated: 0 8px 32px rgba(0,0,0,0.52), 0 0 1px rgba(122,162,247,0.06);
+  --shadow-glow: 0 0 32px rgba(122,162,247,0.14);
+  --blur-surface: blur(24px) saturate(1.5);
+  --radius-card: 14px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.030;
+  --bg-ambience: rgba(122, 162, 247, 0.06);
+  color-scheme: dark;
+}
+
+/* ─── Pop Bubblegum — neo-brutalist, hard shadows, Vercel Pop aesthetic ─ */
+/* Hard offset box-shadows replace all blurred shadows for graphic impact.  */
+[data-theme="pop-bubblegum"] {
+  --color-background: #FFFBFE;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #FFF0F8;
+  --color-border: #000000;
+  --color-border-subtle: rgba(0, 0, 0, 0.15);
+  --color-text-primary: #0D0D0D;
+  --color-text-secondary: #444444;
+  --color-text-tertiary: #888888;
+  --color-accent: #FF2D78;           /* Hot saturated pink */
+  --color-accent-hover: #E6005C;
+  --color-accent-soft: rgba(255, 45, 120, 0.10);
+  --color-accent-text: #FFFFFF;
+  --color-accent-gradient: linear-gradient(135deg, #FF2D78 0%, #FF69B4 100%);
+  --color-success: #00C16A;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+  /* Hard pixel shadows — no blur, hard offset (neo-brutalist signature) */
+  --shadow-card: 3px 3px 0 #000;
+  --shadow-elevated: 5px 5px 0 #000;
+  --shadow-glow: 4px 4px 0 #FF2D78;
+  --blur-surface: none;
+  --radius-card: 8px;
+  --radius-button: 6px;
+  --radius-input: 6px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.0;
+  --bg-ambience: transparent;
+  color-scheme: light;
+}
+
+/* ─── Pop Lemonade — neo-brutalist, golden yellow, fresh citrus light ─── */
+/* Same hard-shadow neo-brutalist approach as Pop Bubblegum, warm lemon palette. */
+[data-theme="pop-lemonade"] {
+  --color-background: #FFFDE8;       /* Warm cream-yellow base */
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #FFF9C0;
+  --color-border: #000000;
+  --color-border-subtle: rgba(0, 0, 0, 0.15);
+  --color-text-primary: #0D0D0D;
+  --color-text-secondary: #444444;
+  --color-text-tertiary: #888888;
+  --color-accent: #F5C100;           /* Rich golden lemonade yellow */
+  --color-accent-hover: #D9A900;
+  --color-accent-soft: rgba(245, 193, 0, 0.14);
+  --color-accent-text: #0D0D0D;      /* Black text on yellow for contrast */
+  --color-accent-gradient: linear-gradient(135deg, #F5C100 0%, #FFD944 100%);
+  --color-success: #00B050;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+  /* Hard pixel shadows — same neo-brutalist signature as Pop Bubblegum */
+  --shadow-card: 3px 3px 0 #000;
+  --shadow-elevated: 5px 5px 0 #000;
+  --shadow-glow: 4px 4px 0 #F5C100;
+  --blur-surface: none;
+  --radius-card: 8px;
+  --radius-button: 6px;
+  --radius-input: 6px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.0;
+  --bg-ambience: transparent;
+  color-scheme: light;
+}

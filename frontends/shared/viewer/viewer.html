@@ -83,15 +83,15 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "/frontend/lib/three.module.js"
+                "three": "/shared/lib/three.module.js"
             }
         }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
-        import { GLTFLoader } from '/frontend/lib/GLTFLoader.js';
-        import { VRMLoaderPlugin, VRMUtils } from '/frontend/lib/three-vrm.module.min.js';
+        import { GLTFLoader } from '/shared/lib/GLTFLoader.js';
+        import { VRMLoaderPlugin, VRMUtils } from '/shared/lib/three-vrm.module.min.js';
 
         let currentVrm = null;
         let clock = new THREE.Clock();
@@ -461,6 +461,28 @@
         }
 
         /**
+         * Smooth value noise — returns value in [-1, 1] that never repeats within a session.
+         * Uses a quintic smoothstep between pseudo-random lattice values.
+         * Replaces Math.sin() for organic, non-repeating idle motion.
+         *
+         * @param {number} t - Time coordinate (use elapsed seconds * frequency)
+         * @param {number} seed - Seed offset so different channels don't correlate
+         * @returns {number} Smooth noise in [-1, 1]
+         */
+        function noise1D(t, seed = 0) {
+            const i = Math.floor(t) + seed * 1000;
+            const f = t - Math.floor(t);
+            // Quintic smoothstep: 6f^5 - 15f^4 + 10f^3 (zero first and second derivative at edges)
+            const u = f * f * f * (f * (f * 6 - 15) + 10);
+            // Simple integer hash → float in [0, 1]
+            const h = (n) => {
+                const x = Math.sin(n * 127.1 + 311.7) * 43758.5453123;
+                return x - Math.floor(x);
+            };
+            return (h(i) * (1 - u) + h(i + 1) * u) * 2 - 1;
+        }
+
+        /**
          * L0: Base pose — breathing rhythm and weight distribution.
          * Write mode: SET (=) on chest/spine.
          * Personality influence:
@@ -478,48 +500,59 @@
                 const t = this.time;
                 const p = this.personality;
 
-                // Breath rate: base 2Hz, faster with energy/nervousness
+                // Breath rate: base Hz varies organically with energy/nervousness.
+                // noise1D(t*0.8) drives the main breath cycle (~1.25s period).
+                // noise1D(t*0.25) adds a slower drift (deeper/shallower breathing).
+                // Using different seeds (0, 1) ensures X and Z rotations are
+                // independent — this prevents the "wobbling ship" correlated ellipse.
                 const rateScale = 1 + (p.energy - 0.5) * 0.6 + p.nervousness * 0.4;
-                const rateModulator = 2 * rateScale + Math.sin(t * 0.13) * 0.3;
-                const noiseLayer = Math.sin(t * 0.7) * 0.0008;
+                const breathAmpX = (0.022 + p.energy * 0.012) * rateScale;
+                const breathAmpZ = (0.010 + p.energy * 0.006) * rateScale;
 
-                // Deep breath cycle (~every 20s), bigger with energy
-                const deepCycle = Math.sin(t * 0.16);
-                const deepAmp = 0.003 + p.energy * 0.006;
-                const shallowAmp = 0.002 + p.energy * 0.002;
-                const breathAmp = deepCycle > 0.95 ? deepAmp : shallowAmp;
-                const breathStrength = Math.sin(t * rateModulator) * breathAmp + noiseLayer;
+                // Forward/back breath (X) and lateral sway (Z) use DIFFERENT seeds
+                // so they are uncorrelated — real breathing has independent axes.
+                const breathX = noise1D(t * 0.8, 0) * breathAmpX
+                              + noise1D(t * 0.25, 2) * breathAmpX * 0.35;
+                const breathZ = noise1D(t * 0.55, 1) * breathAmpZ
+                              + noise1D(t * 0.18, 3) * breathAmpZ * 0.4;
 
                 const chest = this.getBone('chest') || this.getBone('spine');
                 if (chest) {
-                    chest.rotation.x = breathStrength;
-                    chest.rotation.z = breathStrength * 0.5;
+                    chest.rotation.x = breathX;
+                    chest.rotation.z = breathZ;    // independent from X — no more ship wobble
                 }
 
-                // Confidence: subtle chest-out posture (spine extension)
+                // Spine confidence posture
                 const spine = this.getBone('spine');
                 if (spine && p.confidence > 0.5) {
                     spine.rotation.x -= (p.confidence - 0.5) * 0.03;
                 }
 
-                // Arm baseline — arms hang at sides naturally.
-                // Higher layers (Talk, Gesture) override with animated values.
-                const lArm = this.getBone('leftUpperArm');
-                const rArm = this.getBone('rightUpperArm');
-                if (lArm) lArm.rotation.z = -1.3;
-                if (rArm) rArm.rotation.z = 1.3;
+                // Head micro-drift — two independent low-frequency noises per axis.
+                // Amplitudes are intentionally tiny: below conscious notice but
+                // subconsciously read as "the character is alive and thinking."
+                const head = this.getBone('head');
+                if (head) {
+                    head.rotation.x += noise1D(t * 0.2, 10) * 0.010;  // slow forward/back tilt
+                    head.rotation.y += noise1D(t * 0.15, 11) * 0.014; // slow side-to-side turn
+                }
 
-                // Forearms: slight elbow bend (hands in front of thighs)
+                // Arm drape — maintained every frame so no other code needs to
+                // re-initialise the pose. After resetNormalizedPose(), the normalised
+                // leftUpperArm at rotation (0,0,0) is the T-pose (arm pointing outward).
+                // Z rotation of ±1.4 (≈80°) brings it to a natural hanging position.
+                // X rotation of 0.08 adds a slight forward lean for a relaxed look.
+                // These are SET (not additive) values; EmotionLayer / IdleLayer add
+                // small deltas on top.
+                const lArm  = this.getBone('leftUpperArm');
+                const rArm  = this.getBone('rightUpperArm');
                 const lFore = this.getBone('leftLowerArm');
                 const rFore = this.getBone('rightLowerArm');
-                if (lFore) lFore.rotation.y = 0.15;
-                if (rFore) rFore.rotation.y = -0.15;
-
-                // Hands: relaxed curl (not stiff open paddles)
-                const lHand = this.getBone('leftHand');
-                const rHand = this.getBone('rightHand');
-                if (lHand) { lHand.rotation.z = -0.15; lHand.rotation.x = 0.1; }
-                if (rHand) { rHand.rotation.z = 0.15; rHand.rotation.x = 0.1; }
+                const BASE_Z = 1.4;
+                if (lArm)  { lArm.rotation.z  = -BASE_Z; lArm.rotation.x  =  0.08; lArm.rotation.y  =  0.0; }
+                if (rArm)  { rArm.rotation.z  =  BASE_Z; rArm.rotation.x  =  0.08; rArm.rotation.y  =  0.0; }
+                if (lFore) { lFore.rotation.z = -0.08;   lFore.rotation.y = -0.04; lFore.rotation.x =  0.0; }
+                if (rFore) { rFore.rotation.z =  0.08;   rFore.rotation.y =  0.04; rFore.rotation.x =  0.0; }
             }
         }
 
@@ -720,6 +753,45 @@
                             if (head) head.rotation.x = v;
                         }
                     },
+                    {
+                        name: 'gentle_arm_sway', duration: 3.5,
+                        apply(t, p, B) {
+                            // Subtle pendulum arm swing — complements breathing.
+                            // Adds to the BasePoseLayer drape (which sets the base).
+                            const lArm = B('leftUpperArm'), rArm = B('rightUpperArm');
+                            const amp = 0.05 * (0.6 + p.energy * 0.8);
+                            const phase = Math.sin(t * Math.PI * 0.57);
+                            // Arms sway slightly counter-phase (natural balanced stance)
+                            if (lArm) { lArm.rotation.x += phase * amp;       lArm.rotation.z += phase * -0.015; }
+                            if (rArm) { rArm.rotation.x += phase * -amp * 0.7; rArm.rotation.z += phase *  0.015; }
+                        }
+                    },
+                    {
+                        name: 'arm_self_hug', duration: 3,
+                        requires: (p) => p.nervousness > 0.35,
+                        apply(t, p, B) {
+                            // Nervous self-hug: arms pull slightly inward and forearms fold in.
+                            const lArm = B('leftUpperArm'), rArm = B('rightUpperArm');
+                            const lFore = B('leftLowerArm'), rFore = B('rightLowerArm');
+                            const blend = Math.sin(t * Math.PI * 0.33) * 0.5 + 0.5;
+                            const s = p.nervousness * 0.5;
+                            if (lArm)  { lArm.rotation.y  += blend * 0.15 * s; lArm.rotation.z  -= blend * 0.07 * s; }
+                            if (rArm)  { rArm.rotation.y  -= blend * 0.15 * s; rArm.rotation.z  += blend * 0.07 * s; }
+                            if (lFore) lFore.rotation.y -= blend * 0.35 * s;
+                            if (rFore) rFore.rotation.y += blend * 0.35 * s;
+                        }
+                    },
+                    {
+                        name: 'hand_to_chin', duration: 2.2,
+                        requires: (p) => p.expressiveness > 0.3,
+                        apply(t, p, B) {
+                            // Thoughtful pose: left arm raises, forearm folds toward chin.
+                            const lArm = B('leftUpperArm'), lFore = B('leftLowerArm');
+                            const blend = Math.sin(t * Math.PI * 0.45);
+                            if (lArm)  { lArm.rotation.z  += blend * -0.18; lArm.rotation.x += blend * 0.12; }
+                            if (lFore) lFore.rotation.y -= blend * 0.55;
+                        }
+                    },
                 ];
             }
 
@@ -758,10 +830,13 @@
                         const pick = eligible[Math.floor(Math.random() * eligible.length)];
                         this._activeFidget = pick;
                         this._fidgetTime = 0;
-                        this._fidgetDuration = pick.duration * (0.8 + p.expressiveness * 0.4);
+                        // Blend-in/out duration: minimum 0.6s for slow, natural entrances
+                        this._fidgetDuration = Math.max(pick.duration, 0.6) * (0.8 + p.expressiveness * 0.4);
                     }
-                    const baseWait = 6 + Math.random() * 9;
-                    this._fidgetTimer = baseWait * (1.3 - p.energy * 0.6);
+                    // Increased minimum wait: 8–18s so fidgets feel occasional, not mechanical.
+                    // Energy personality reduces wait (energetic chars fidget more).
+                    const baseWait = 8 + Math.random() * 10;
+                    this._fidgetTimer = baseWait * (1.3 - p.energy * 0.5);
                 }
             }
         }
@@ -835,6 +910,53 @@
                         const ls = this.getBone('leftShoulder'), rs = this.getBone('rightShoulder');
                         if (ls) ls.rotation.z = 0.03 * intensity;
                         if (rs) rs.rotation.z = -0.03 * intensity;
+                        break;
+                    }
+                }
+
+                // ── Emotion-driven arm language (additive onto BasePoseLayer drape) ──
+                // BasePoseLayer sets the base arm position each frame; these are small
+                // deltas layered on top so arms always stay within a natural range.
+                const lArm  = this.getBone('leftUpperArm');
+                const rArm  = this.getBone('rightUpperArm');
+                const lFore = this.getBone('leftLowerArm');
+                const rFore = this.getBone('rightLowerArm');
+
+                switch (this.currentEmotion) {
+                    case 'happy':
+                    case 'excited': {
+                        // Open, expansive — arms lift slightly (positive z delta raises arm)
+                        const lift = 0.13 * intensity * (this.currentEmotion === 'excited' ? 1.4 : 1.0);
+                        if (lArm) lArm.rotation.z += lift;
+                        if (rArm) rArm.rotation.z -= lift;
+                        break;
+                    }
+                    case 'sad': {
+                        // Arms heavier, drooped further down, slight inward turn
+                        if (lArm)  { lArm.rotation.z  -= 0.09 * intensity; lArm.rotation.x  -= 0.04 * intensity; }
+                        if (rArm)  { rArm.rotation.z  += 0.09 * intensity; rArm.rotation.x  -= 0.04 * intensity; }
+                        if (lFore) lFore.rotation.z -= 0.04 * intensity;
+                        if (rFore) rFore.rotation.z += 0.04 * intensity;
+                        break;
+                    }
+                    case 'embarrassed':
+                    case 'shy': {
+                        // Arms pulled close to body — protective, self-conscious posture
+                        if (lArm) { lArm.rotation.y +=  0.14 * intensity; lArm.rotation.z -= 0.06 * intensity; }
+                        if (rArm) { rArm.rotation.y -= 0.14 * intensity; rArm.rotation.z += 0.06 * intensity; }
+                        break;
+                    }
+                    case 'angry': {
+                        // Tense, arms raised slightly — confrontational stance
+                        if (lArm) { lArm.rotation.z += 0.08 * intensity; lArm.rotation.y -= 0.05 * intensity; }
+                        if (rArm) { rArm.rotation.z -= 0.08 * intensity; rArm.rotation.y += 0.05 * intensity; }
+                        break;
+                    }
+                    case 'surprised': {
+                        // Slight arm startle — both arms pull in briefly
+                        const startle = Math.min(1, this.time * 2) * intensity * 0.07;
+                        if (lArm) lArm.rotation.x += startle;
+                        if (rArm) rArm.rotation.x += startle;
                         break;
                     }
                 }
@@ -1374,14 +1496,18 @@
                         head.rotation.x = this._mouseY * -0.08;
                     }
                 } else {
+                    // Gaze wander: pick a new imaginary "point of interest" every 2–5s.
+                    // Spread increased to ±0.45 rad yaw (≈26°) and ±0.18 rad pitch (≈10°)
+                    // so the head visibly turns — the original ±0.1 was imperceptible.
                     this._gazeTimer -= dt;
                     if (this._gazeTimer <= 0) {
-                        this._gazeTarget.x = (Math.random() - 0.5) * 0.2;
-                        this._gazeTarget.y = (Math.random() - 0.5) * 0.1;
-                        this._gazeTimer = 2 + Math.random() * 4;
+                        this._gazeTarget.x = (Math.random() - 0.5) * 0.9;   // yaw ±26°
+                        this._gazeTarget.y = (Math.random() - 0.5) * 0.36;  // pitch ±10°
+                        this._gazeTimer = 2 + Math.random() * 3;
                     }
-                    this._gazeCurrent.x += (this._gazeTarget.x - this._gazeCurrent.x) * dt * 2;
-                    this._gazeCurrent.y += (this._gazeTarget.y - this._gazeCurrent.y) * dt * 2;
+                    // Smooth interpolation — slow lerp (dt*1.2) gives a 1–2s easing to target
+                    this._gazeCurrent.x += (this._gazeTarget.x - this._gazeCurrent.x) * dt * 1.2;
+                    this._gazeCurrent.y += (this._gazeTarget.y - this._gazeCurrent.y) * dt * 1.2;
                     if (head) {
                         head.rotation.y = this._gazeCurrent.x;
                         head.rotation.x = this._gazeCurrent.y;
@@ -2284,13 +2410,33 @@
             // Orbit controls
             const controls = new SimpleOrbitControls(camera, canvas);
 
-            // Lighting (stored as refs for dynamic updates)
-            const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
-            keyLight.position.set(1, 2, 3);
-            const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
-            fillLight.position.set(-1, 1, -2);
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-            scene.add(keyLight, fillLight, ambientLight);
+            // ── Cinematic tone mapping (ACESFilmic gives the "film" look) ──────────
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.05;
+
+            // ── 3-point lighting rig ────────────────────────────────────────────────
+            // Key light: warm (3200K), upper-right-front — the main light source
+            const keyLight = new THREE.DirectionalLight(0xfff4e0, 1.6);
+            keyLight.position.set(1.5, 3, 2);
+            keyLight.castShadow = true;
+            keyLight.shadow.mapSize.width  = 1024;
+            keyLight.shadow.mapSize.height = 1024;
+            keyLight.shadow.camera.near   = 0.5;
+            keyLight.shadow.camera.far    = 20;
+            keyLight.shadow.radius        = 4;        // PCFSoft blur radius
+            // Fill light: cool (7000K), left-front — opens shadows without flattening
+            const fillLight = new THREE.DirectionalLight(0xd0e8ff, 0.55);
+            fillLight.position.set(-2, 1, 2);
+            // Rim light: neutral-white, from behind — separates character from background
+            const rimLight = new THREE.DirectionalLight(0xffffff, 0.75);
+            rimLight.position.set(0, 2.5, -3);
+            // Ambient: reduced so lights have actual contrast
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+            scene.add(keyLight, fillLight, rimLight, ambientLight);
+
+            // Soft shadows (PCFSoftShadowMap blurs shadow edges naturally)
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
             // Disco / party lighting (#25): three RGB point lights, hidden by default.
             // Hue cycles at different speeds when disco mode is active.
@@ -2556,48 +2702,14 @@
              * @param {Object} vrm - Loaded VRM instance
              */
             function applyNaturalPose(vrm) {
-                // MUST use normalized bones — three-vrm's vrm.update() propagates
-                // normalized bone transforms to raw bones each frame. Direct raw bone
-                // edits would be overwritten; normalized bone edits persist correctly.
-                const bone = (name) => {
-                    if (vrm.humanoid.getNormalizedBoneNode) {
-                        return vrm.humanoid.getNormalizedBoneNode(name);
-                    }
-                    return vrm.humanoid.getBoneNode(name);
-                };
-
-                // --- Arms: bring down from T-pose to natural hang ---
-                // VRM normalized space: negative Z swings arm DOWN toward hip.
-                // -1.3 rad ≈ 75° below horizontal — relaxed but avoids clipping into clothing.
-                const leftUpperArm = bone('leftUpperArm');
-                const rightUpperArm = bone('rightUpperArm');
-                if (leftUpperArm) leftUpperArm.rotation.z = -1.3;
-                if (rightUpperArm) rightUpperArm.rotation.z = 1.3;
-
-                // --- Forearms: slight elbow bend so hands sit in front of thighs ---
-                const leftLowerArm = bone('leftLowerArm');
-                const rightLowerArm = bone('rightLowerArm');
-                if (leftLowerArm) leftLowerArm.rotation.y = 0.15;
-                if (rightLowerArm) rightLowerArm.rotation.y = -0.15;
-
-                // --- Hands: relaxed curl (not stiff open paddles) ---
-                const leftHand = bone('leftHand');
-                const rightHand = bone('rightHand');
-                if (leftHand) { leftHand.rotation.z = -0.15; leftHand.rotation.x = 0.1; }
-                if (rightHand) { rightHand.rotation.z = 0.15; rightHand.rotation.x = 0.1; }
-
-                // --- Spine: very slight natural S-curve ---
-                const spine = bone('spine');
-                if (spine) spine.rotation.x = -0.02;
-
-                const chest = bone('chest');
-                if (chest) chest.rotation.x = 0.02;
-
-                // Head: tiny downward tilt (looking at user, not sky)
-                const head = bone('head');
-                if (head) head.rotation.x = 0.03;
-
-                console.log('[Viewer] Natural pose applied (normalized bones) v=FIX-20260219');
+                // Reset all normalised bone poses to the model's standard T-pose.
+                // This is model-agnostic and avoids the bind-pose mismatch that caused
+                // arms to point upward on non-standard VRM bind poses. Arms stay in
+                // the T-pose (horizontal); proper idle animation should come from VRMA.
+                if (vrm.humanoid.resetNormalizedPose) {
+                    vrm.humanoid.resetNormalizedPose();
+                }
+                console.log('[Viewer] Natural pose applied via resetNormalizedPose');
             }
 
             /**
@@ -2702,7 +2814,43 @@
                         _vrmFrameData = { targetY, camZ, modelHeight, headY };
 
                         console.log('[Viewer] VRM loaded successfully');
-                        window.parent.postMessage({ type: 'modelLoaded' }, '*');
+
+                        // Traverse scene to collect geometry statistics
+                        let triCount = 0, vertCount = 0, meshCount = 0;
+                        vrm.scene.traverse((child) => {
+                            if (child.isMesh && child.geometry) {
+                                meshCount++;
+                                const geo = child.geometry;
+                                vertCount += geo.attributes.position?.count || 0;
+                                triCount += geo.index
+                                    ? geo.index.count / 3
+                                    : (geo.attributes.position?.count || 0) / 3;
+                            }
+                        });
+                        // Blend shapes: VRM 1.0 uses _expressionMap; VRM 0.x uses _blendShapeGroups
+                        const em = vrm.expressionManager || vrm.blendShapeProxy;
+                        let blendShapeCount = 0;
+                        if (em?._expressionMap) blendShapeCount = em._expressionMap.size;
+                        else if (em?._blendShapeGroups) blendShapeCount = em._blendShapeGroups.length;
+                        // Bone count from humanoid spec
+                        const boneCount = vrm.humanoid?.humanBones
+                            ? Object.keys(vrm.humanoid.humanBones).length : 0;
+                        // VRM version from meta
+                        const vrmVersion = vrm.meta?.metaVersion
+                            ? String(vrm.meta.metaVersion)
+                            : (vrm.expressionManager ? '1.x' : '0.x');
+
+                        window.parent.postMessage({
+                            type: 'modelLoaded',
+                            stats: {
+                                triangles: Math.round(triCount),
+                                vertices: vertCount,
+                                meshes: meshCount,
+                                blendShapes: blendShapeCount,
+                                bones: boneCount,
+                                vrmVersion,
+                            }
+                        }, '*');
                     },
                     (progress) => {
                         // Optional: report loading progress
@@ -2903,6 +3051,54 @@
                         const cl = animationDirector.getLayer('clip');
                         const clips = cl ? cl.listClips() : [];
                         window.parent.postMessage({ type: 'animationList', clips }, '*');
+                    }
+                }
+                // ── AI-generated motion: apply JSON keyframe data as a runtime clip ──
+                // The backend sends { keyframes: [{time, bones: {boneName: {x,y,z}}}],
+                //                     duration, loop?, label? }
+                // Keyframe rotations are in radians (Euler XYZ).  The viewer converts
+                // them to quaternion tracks and plays them through ClipLayer.
+                else if (type === 'applyKeyframes') {
+                    const { keyframes, duration, loop = false, label = 'ai_motion' } = (payload || e.data);
+                    if (!keyframes || !Array.isArray(keyframes) || !animationDirector || !currentVrm) return;
+
+                    const cl = animationDirector.getLayer('clip');
+                    if (!cl) return;
+
+                    // Group keyframe data by bone name
+                    const boneData = {};
+                    for (const frame of keyframes) {
+                        if (!frame.bones) continue;
+                        for (const [boneName, euler] of Object.entries(frame.bones)) {
+                            if (!boneData[boneName]) boneData[boneName] = { times: [], quats: [] };
+                            const q = new THREE.Quaternion().setFromEuler(
+                                new THREE.Euler(euler.x || 0, euler.y || 0, euler.z || 0, 'XYZ')
+                            );
+                            boneData[boneName].times.push(frame.time);
+                            boneData[boneName].quats.push(q.x, q.y, q.z, q.w);
+                        }
+                    }
+
+                    // Build QuaternionKeyframeTracks targeting scene node names
+                    const tracks = [];
+                    for (const [boneName, data] of Object.entries(boneData)) {
+                        const boneNode = currentVrm.humanoid.getNormalizedBoneNode?.(boneName)
+                                      || currentVrm.humanoid.getBoneNode?.(boneName);
+                        if (!boneNode) continue;
+                        tracks.push(new THREE.QuaternionKeyframeTrack(
+                            `${boneNode.name}.quaternion`,
+                            new Float32Array(data.times),
+                            new Float32Array(data.quats)
+                        ));
+                    }
+
+                    if (tracks.length === 0) {
+                        console.warn('[Viewer] applyKeyframes: no matching bones found');
+                    } else {
+                        const clip = new THREE.AnimationClip(label, duration || -1, tracks);
+                        cl.clipLibrary[label] = clip;
+                        cl.playClip(label, { loop, fadeIn: 0.5 });
+                        console.log(`[Viewer] applyKeyframes: playing "${label}" (${tracks.length} bone tracks, ${keyframes.length} frames)`);
                     }
                 }
                 // ── End Clip Animation API ────────────────────────────

@@ -34,8 +34,43 @@ export interface Character {
    * specified voice is used instead of the default `voice_id`.
    */
   emotion_voice_overrides?: string | null;
+  /**
+   * Feature #6: AI-generated (or manually written) character backstory.
+   * Stored in the `backstory` column on the characters table (schema v20).
+   */
+  backstory?: string | null;
+  /**
+   * Feature #29: When true the scheduler skips all proactive messages for this
+   * character. Stored in the `day_off` column on the characters table (schema v21).
+   */
+  day_off?: boolean;
+  /**
+   * Feature #23: Universe / Shared World Builder.
+   * ID of the universe this character belongs to, or undefined/null when the
+   * character has no universe assignment (schema v22).
+   */
+  universe_id?: number | null;
   created_at?: string;
   updated_at?: string;
+}
+
+/**
+ * Feature #23: Universe / Shared World Builder.
+ * A named narrative universe that groups characters under a shared lore document.
+ * The lore text is automatically prepended to every member character's system
+ * prompt so they all share consistent world knowledge.
+ */
+export interface Universe {
+  /** Universe primary key. */
+  id: number;
+  /** Display name shown in the UI. */
+  name: string;
+  /** Lore document injected into member characters' system prompts. */
+  lore: string;
+  /** ISO datetime string of when the universe was created. */
+  created_at: string;
+  /** Number of characters currently assigned to this universe. */
+  character_count: number;
 }
 
 export interface ChatMessage {
@@ -59,6 +94,11 @@ export interface ChatMessage {
    * interactive choice buttons instead of the free-text composer for this turn.
    */
   choices?: string[];
+  /**
+   * Feature #10: Whether this message has been pinned by the user.
+   * Stored on the messages table (schema v20). Defaults to false.
+   */
+  pinned?: boolean;
 }
 
 export interface Session {
@@ -68,6 +108,11 @@ export interface Session {
   created_at: string;
   updated_at: string;
   message_count?: number;
+  /**
+   * Feature #9: User-defined tags for categorising a session (e.g. "roleplay", "fluff").
+   * Returned by GET /api/sessions and persisted via PATCH /api/sessions/{id}/tags.
+   */
+  tags?: string[];
 }
 
 export interface ChatResponse {
@@ -143,4 +188,20 @@ export interface DownloadProgress {
   file_index: number;
   file_count: number;
   error?: string;
+}
+
+/** VRM model geometry statistics computed by the 3D viewer at load time. */
+export interface VrmStats {
+  /** Total triangle count across all meshes. */
+  triangles: number;
+  /** Total vertex count. */
+  vertices: number;
+  /** Number of mesh objects. */
+  meshes: number;
+  /** Number of expression / blend shape targets. */
+  blendShapes: number;
+  /** Number of humanoid bones. */
+  bones: number;
+  /** VRM spec version: '0.x' or '1.x'. */
+  vrmVersion: string;
 }

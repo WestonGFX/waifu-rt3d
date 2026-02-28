@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Sliders, RotateCcw } from 'lucide-react';
+import { ChevronLeft, Sliders, RotateCcw, Eye, EyeOff, Loader2, AlertTriangle, Box, RefreshCw, Sparkles, Wifi, WifiOff, X, Camera } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useViewer } from '../hooks/useViewer';
 import { api } from '../lib/api';
@@ -179,7 +179,7 @@ function ExpressionEditor({ shapes, values, onChange, onResetAll }: ExpressionEd
  * Auto-resolves VRM model by character name if not explicitly set.
  */
 export function ModelPanel({ character }: ModelPanelProps) {
-  const { modelPanelOpen, toggleModelPanel } = useAppStore();
+  const { modelPanelOpen, toggleModelPanel, setVrmStats, setViewportFps } = useAppStore();
   const { iframeRef, loadCharacter, setCameraPreset, getAvailableBlendShapes, setBlendShape, setBlendShapes } = useViewer();
   const [vrmModels, setVrmModels] = useState<Array<{ name: string; url: string }>>([]);
 
@@ -188,24 +188,154 @@ export function ModelPanel({ character }: ModelPanelProps) {
   const [blendShapes, setBlendShapes_] = useState<string[]>([]);
   const [blendValues, setBlendValues] = useState<Record<string, number>>({});
 
-  // Fetch available VRM models once
+  /**
+   * VRM load state — tracks whether the model is loading, loaded, or failed.
+   * The viewer posts modelLoaded / modelFailed messages to window.
+   */
+  const [vrmLoadState, setVrmLoadState] = useState<'idle' | 'loading' | 'loaded' | 'failed'>('idle');
+  const [vrmFailReason, setVrmFailReason] = useState<string>('');
+
+  /** Whether the bottom control bar (camera presets, expressions) is visible. */
+  const [controlsVisible, setControlsVisible] = useState(true);
+
+  /** AI motion backend: 'procedural' | 'motion_diffuse' | null (unknown) */
+  const [motionBackend, setMotionBackend] = useState<string | null>(null);
+  /** Track the last emotion we generated motion for to avoid duplicate calls. */
+  const lastMotionEmotion = useRef<string | null>(null);
+
+  /** Remote GPU wizard state */
+  type WizardState = 'idle' | 'scanning' | 'found' | 'not_found' | 'connecting' | 'connected' | 'error';
+  const [wizardState, setWizardState] = useState<WizardState>('idle');
+  const [wizardServers, setWizardServers] = useState<Array<{ url: string; ip: string }>>([]);
+  const [wizardError, setWizardError] = useState('');
+  const [remoteUrl, setRemoteUrl] = useState('');
+  const [showWizard, setShowWizard] = useState(false);
+
+  /** Live 3D viewport FPS — posted by viewer.html every second. Used for the in-panel overlay. */
+  const [viewportFpsLocal, setViewportFpsLocal] = useState<number | null>(null);
+
+  /** Whether a screenshot capture is in-flight (postMessage sent, awaiting reply). */
+  const [screenshotPending, setScreenshotPending] = useState(false);
+  /** Timeout ref so we can reset screenshotPending if the viewer never replies. */
+  const screenshotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Fetch available VRM models + motion model status once
   useEffect(() => {
     api.scanVrm().then(models => {
       setVrmModels(models.map(m => ({ name: m.name, url: m.url })));
     }).catch(() => {});
+    api.getMotionModelStatus().then(s => setMotionBackend(s.active_backend)).catch(() => {});
   }, []);
 
   const vrmUrl = resolveVrmUrl(character, vrmModels);
 
+  // Listen for modelLoaded / modelFailed messages from the viewer iframe
+  useEffect(() => {
+    /**
+     * Handle postMessages from the shared 3D viewer.
+     * The viewer emits modelLoaded on success and modelFailed with a reason on error.
+     *
+     * @param {MessageEvent} e - Browser message event from the iframe.
+     */
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'modelLoaded') {
+        setVrmLoadState('loaded');
+        // Write geometry stats to app store so SettingsView can display them
+        if (e.data.stats) setVrmStats(e.data.stats);
+        // Auto-generate a neutral idle motion clip when the model first loads
+        api.generateMotion({ emotion: 'neutral', duration: 4, loop: true })
+          .then(data => {
+            const iframe = document.querySelector<HTMLIFrameElement>('iframe[src*="viewer"]');
+            iframe?.contentWindow?.postMessage({ type: 'applyKeyframes', ...data }, '*');
+            lastMotionEmotion.current = 'neutral';
+          })
+          .catch(() => {});
+      } else if (e.data?.type === 'modelFailed') {
+        setVrmLoadState('failed');
+        setVrmFailReason(String(e.data?.reason ?? 'Unknown error'));
+      } else if (e.data?.type === 'emotionChanged') {
+        // Viewer can emit this to trigger a fresh motion clip when emotion shifts
+        const emo: string = e.data?.emotion || 'neutral';
+        if (emo !== lastMotionEmotion.current) {
+          api.generateMotion({ emotion: emo, duration: 3.5, loop: true })
+            .then(data => {
+              const iframe = document.querySelector<HTMLIFrameElement>('iframe[src*="viewer"]');
+              iframe?.contentWindow?.postMessage({ type: 'applyKeyframes', ...data }, '*');
+              lastMotionEmotion.current = emo;
+            })
+            .catch(() => {});
+        }
+      } else if (e.data?.type === 'fpsUpdate') {
+        const fps = e.data.fps as number;
+        setViewportFpsLocal(fps);  // drives the in-panel FPS overlay
+        setViewportFps(fps);       // mirrors to store for SettingsView
+      } else if (e.data?.type === 'screenshotReady') {
+        if (screenshotTimeoutRef.current) {
+          clearTimeout(screenshotTimeoutRef.current);
+          screenshotTimeoutRef.current = null;
+        }
+        const a = document.createElement('a');
+        a.href = e.data.dataUrl as string;
+        a.download = `${character.name.toLowerCase().replace(/\s+/g, '-')}-screenshot.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setScreenshotPending(false);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [character]);
+
   useEffect(() => {
     if (modelPanelOpen && vrmUrl) {
+      // Reset load state and clear stale geometry stats each time we load a model
+      setVrmLoadState('loading');
+      setVrmFailReason('');
+      setVrmStats(null);
+      // Allow 800ms for the iframe to initialise before sending the load command
       const timer = setTimeout(() => {
         loadCharacter(vrmUrl);
         setCameraPreset('bust');
-      }, 500);
+      }, 800);
       return () => clearTimeout(timer);
+    } else if (!vrmUrl) {
+      setVrmLoadState('idle');
     }
   }, [modelPanelOpen, vrmUrl, loadCharacter, setCameraPreset]);
+
+  /**
+   * Retry loading the VRM model after a failure.
+   * Resets load state and re-sends the loadCharacter message.
+   */
+  const handleRetry = () => {
+    if (!vrmUrl) return;
+    setVrmLoadState('loading');
+    setVrmFailReason('');
+    setTimeout(() => {
+      loadCharacter(vrmUrl);
+      setCameraPreset('bust');
+    }, 400);
+  };
+
+  /**
+   * Request a PNG screenshot of the current 3D viewport from the viewer iframe.
+   * The screenshot is delivered asynchronously via a 'screenshotReady' postMessage.
+   */
+  const handleScreenshot = useCallback(() => {
+    // Guard against double-click before the first state commit disables the button
+    if (screenshotTimeoutRef.current) return;
+    const iframe = document.querySelector<HTMLIFrameElement>('iframe[src*="viewer"]');
+    if (!iframe?.contentWindow) return;
+    setScreenshotPending(true);
+    iframe.contentWindow.postMessage({ type: 'captureScreenshot' }, '*');
+    // Safety net: if the viewer never replies (crash, reload, unhandled message),
+    // reset pending state after 8 s so the button doesn't stay permanently disabled.
+    screenshotTimeoutRef.current = setTimeout(() => {
+      screenshotTimeoutRef.current = null;
+      setScreenshotPending(false);
+    }, 8_000);
+  }, []);
 
   // Load blend shapes when expression editor opens
   const handleOpenExprEditor = useCallback(async () => {
@@ -225,6 +355,63 @@ export function ModelPanel({ character }: ModelPanelProps) {
     const zeros = Object.fromEntries(blendShapes.map(s => [s, 0]));
     setBlendValues(zeros);
     setBlendShapes(zeros);
+  }
+
+  /**
+   * Kick off the remote GPU wizard: call /api/motion/discover (blocks ~8s on server),
+   * then update wizard state with whatever servers were found.
+   */
+  async function handleScanForGpu() {
+    setShowWizard(true);
+    setWizardState('scanning');
+    setWizardServers([]);
+    setWizardError('');
+    try {
+      const result = await api.discoverMotion();
+      if (result.servers.length > 0) {
+        setWizardServers(result.servers.map(s => ({ url: s.url, ip: s.ip })));
+        setWizardState('found');
+      } else {
+        setWizardState('not_found');
+      }
+    } catch {
+      setWizardState('error');
+      setWizardError('Scan failed — server may be unreachable.');
+    }
+  }
+
+  /**
+   * Connect to a discovered (or manually entered) remote GPU server URL.
+   * Saves the URL to the app config on success.
+   */
+  async function handleConnect(url: string) {
+    setWizardState('connecting');
+    try {
+      const res = await api.connectMotion(url);
+      if (res.ok) {
+        setWizardState('connected');
+        setRemoteUrl(url);
+        setMotionBackend(res.backend ?? 'procedural');
+      } else {
+        setWizardState('error');
+        setWizardError(res.message);
+      }
+    } catch {
+      setWizardState('error');
+      setWizardError(`Could not reach ${url}`);
+    }
+  }
+
+  /**
+   * Disconnect from the current remote GPU server (clears config).
+   * Falls back to local procedural generation immediately.
+   */
+  async function handleDisconnect() {
+    try { await api.disconnectMotion(); } catch { /* ignore */ }
+    setRemoteUrl('');
+    setWizardState('idle');
+    setShowWizard(false);
+    api.getMotionModelStatus().then(s => setMotionBackend(s.active_backend)).catch(() => {});
   }
 
   return (
@@ -247,25 +434,92 @@ export function ModelPanel({ character }: ModelPanelProps) {
           <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
             <iframe
               ref={iframeRef}
-              src="/shared/viewer/viewer.html"
+              src="/shared/viewer/viewer.html?v=6"
               className="w-full h-full border-0"
               title="3D Viewer"
             />
+
+            {/* ── Status overlays (cover iframe until model resolves) ── */}
             {!vrmUrl && (
               <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: 'var(--color-background)' }}>
                 <div className="text-center px-6">
-                  <p className="text-sm font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-                    No VRM model found
+                  <Box size={32} style={{ color: 'var(--color-border)', margin: '0 auto 12px' }} />
+                  <p className="text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                    No 3D model assigned
                   </p>
-                  <p className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
-                    Assign a 3D model in character settings or add a .vrm file named after this character to backend/storage/avatars/
+                  <p className="text-xs" style={{ color: 'var(--color-text-tertiary)', lineHeight: 1.6 }}>
+                    Open Settings → Character and assign a .vrm file,<br />
+                    or drop a file named <code style={{ opacity: 0.7 }}>{character.name.toLowerCase()}.vrm</code><br />
+                    into <code style={{ opacity: 0.7 }}>backend/storage/avatars/</code>
                   </p>
                 </div>
               </div>
             )}
+            {vrmUrl && vrmLoadState === 'loading' && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ backgroundColor: 'var(--color-background)', opacity: 0.9 }}>
+                <div className="text-center">
+                  <Loader2 size={28} className="animate-spin" style={{ color: 'var(--color-accent)', margin: '0 auto 8px' }} />
+                  <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Loading 3D model…</p>
+                </div>
+              </div>
+            )}
+            {vrmUrl && vrmLoadState === 'failed' && (
+              <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: 'var(--color-background)' }}>
+                <div className="text-center px-6">
+                  <AlertTriangle size={28} style={{ color: 'var(--color-danger, #f55)', margin: '0 auto 10px' }} />
+                  <p className="text-sm font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                    Failed to load 3D model
+                  </p>
+                  {vrmFailReason && (
+                    <p className="text-[10px] mb-3 font-mono" style={{ color: 'var(--color-text-tertiary)', wordBreak: 'break-all' }}>
+                      {vrmFailReason}
+                    </p>
+                  )}
+                  <button
+                    onClick={handleRetry}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg mx-auto"
+                    style={{
+                      backgroundColor: 'var(--color-accent-soft)',
+                      color: 'var(--color-accent)',
+                      border: '1px solid var(--color-accent)',
+                    }}
+                  >
+                    <RefreshCw size={12} /> Retry
+                  </button>
+                </div>
+              </div>
+            )}
 
-            {/* Controls overlay (bottom-left) */}
-            <div className="absolute bottom-4 left-4 flex items-center gap-2">
+            {/* ── FPS overlay — top-right corner of the 3D viewport (always visible) ── */}
+            {viewportFpsLocal !== null && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  zIndex: 10,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.05em',
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  backgroundColor: 'rgba(0,0,0,0.45)',
+                  color: viewportFpsLocal >= 50 ? '#4caf50' : viewportFpsLocal >= 25 ? '#ff9800' : '#f44336',
+                  pointerEvents: 'none',
+                }}
+                title={`3D viewport: ${viewportFpsLocal} FPS`}
+              >
+                {viewportFpsLocal} FPS
+              </div>
+            )}
+
+            {/* ── Bottom-left: "Close panel" (always) + camera/expr controls (toggleable) ── */}
+            <div
+              className="absolute bottom-0 left-0 right-0 flex items-end justify-between px-3 pb-3"
+              style={{ transition: 'opacity 0.2s', opacity: 0.85 }}
+            >
+              {/* Left: close-panel button */}
               <button
                 onClick={toggleModelPanel}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs"
@@ -276,47 +530,323 @@ export function ModelPanel({ character }: ModelPanelProps) {
                   color: 'var(--color-text-secondary)',
                   border: '1px solid var(--color-border)',
                 }}
+                title="Collapse the 3D panel"
               >
-                <ChevronLeft size={14} /> Hide
+                <ChevronLeft size={14} /> Close panel
               </button>
-              {vrmUrl && (
-                <>
-                  {/* Camera preset buttons */}
-                  {(['fullbody', 'bust', 'face'] as const).map(preset => (
+
+              {/* Right: camera + expr buttons (only when model loaded) + hide-controls toggle */}
+              <div className="flex items-center gap-2">
+                {vrmUrl && vrmLoadState === 'loaded' && controlsVisible && (
+                  <>
+                    {(['fullbody', 'bust', 'face'] as const).map(preset => (
+                      <button
+                        key={preset}
+                        onClick={() => setCameraPreset(preset)}
+                        className="px-2.5 py-1.5 text-xs capitalize"
+                        style={{
+                          backgroundColor: 'var(--color-surface)',
+                          borderRadius: 'var(--radius-button)',
+                          boxShadow: 'var(--shadow-card)',
+                          color: 'var(--color-text-secondary)',
+                          border: '1px solid var(--color-border)',
+                        }}
+                        title={`${preset.charAt(0).toUpperCase() + preset.slice(1)} camera view`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
                     <button
-                      key={preset}
-                      onClick={() => setCameraPreset(preset)}
-                      className="px-2.5 py-1.5 text-xs capitalize"
+                      onClick={() => showExprEditor ? setShowExprEditor(false) : handleOpenExprEditor()}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs"
                       style={{
-                        backgroundColor: 'var(--color-surface)',
+                        backgroundColor: showExprEditor ? 'var(--color-accent)' : 'var(--color-surface)',
                         borderRadius: 'var(--radius-button)',
                         boxShadow: 'var(--shadow-card)',
-                        color: 'var(--color-text-secondary)',
+                        color: showExprEditor ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
                         border: '1px solid var(--color-border)',
                       }}
-                      title={`${preset.charAt(0).toUpperCase() + preset.slice(1)} view`}
                     >
-                      {preset}
+                      <Sliders size={14} /> Expr
                     </button>
-                  ))}
-                  {/* Expression editor toggle */}
+                  </>
+                )}
+
+                {/* AI Motion backend badge + GPU server button */}
+                {vrmLoadState === 'loaded' && motionBackend && (
                   <button
-                    onClick={() => showExprEditor ? setShowExprEditor(false) : handleOpenExprEditor()}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs"
+                    onClick={() => remoteUrl ? handleDisconnect() : setShowWizard(v => !v)}
                     style={{
-                      backgroundColor: showExprEditor ? 'var(--color-accent)' : 'var(--color-surface)',
+                      display: 'flex', alignItems: 'center', gap: '3px',
+                      padding: '3px 8px', borderRadius: 'var(--radius-button)',
+                      background: remoteUrl
+                        ? 'color-mix(in srgb, var(--color-success, #39c96e) 15%, transparent)'
+                        : motionBackend === 'motion_diffuse'
+                          ? 'color-mix(in srgb, var(--color-accent) 18%, transparent)'
+                          : 'var(--color-surface)',
+                      border: `1px solid ${remoteUrl ? 'var(--color-success, #39c96e)' : 'var(--color-border)'}`,
+                      fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer',
+                      color: remoteUrl ? 'var(--color-success, #39c96e)'
+                           : motionBackend === 'motion_diffuse' ? 'var(--color-accent)'
+                           : 'var(--color-text-tertiary)',
+                      letterSpacing: '0.04em',
+                    }}
+                    title={remoteUrl
+                      ? `Connected to ${remoteUrl} — click to disconnect`
+                      : 'Click to find a Windows GPU motion server on your network'}
+                  >
+                    {remoteUrl ? <Wifi size={10} /> : <Sparkles size={10} />}
+                    {remoteUrl ? 'GPU Remote'
+                     : motionBackend === 'motion_diffuse' ? 'AI Motion'
+                     : 'Proc. Motion'}
+                  </button>
+                )}
+
+                {/* Screenshot — only when model is fully loaded */}
+                {vrmLoadState === 'loaded' && (
+                  <button
+                    onClick={handleScreenshot}
+                    disabled={screenshotPending}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                    style={{
+                      backgroundColor: 'var(--color-surface)',
                       borderRadius: 'var(--radius-button)',
                       boxShadow: 'var(--shadow-card)',
-                      color: showExprEditor ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
+                      color: 'var(--color-text-secondary)',
                       border: '1px solid var(--color-border)',
+                      opacity: screenshotPending ? 0.5 : 0.85,
+                      cursor: screenshotPending ? 'not-allowed' : 'pointer',
                     }}
+                    title="Capture 3D viewport as PNG"
+                    aria-label="Download viewport screenshot"
                   >
-                    <Sliders size={14} /> Expressions
+                    <Camera size={13} />
                   </button>
-                </>
-              )}
+                )}
+
+                {/* Toggle: show/hide the control buttons without closing the panel */}
+                <button
+                  onClick={() => setControlsVisible(v => !v)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                  style={{
+                    backgroundColor: controlsVisible ? 'var(--color-surface)' : 'var(--color-accent)',
+                    borderRadius: 'var(--radius-button)',
+                    boxShadow: 'var(--shadow-card)',
+                    color: controlsVisible ? 'var(--color-text-tertiary)' : 'var(--color-accent-text)',
+                    border: '1px solid var(--color-border)',
+                    opacity: controlsVisible ? 0.85 : 1,
+                  }}
+                  title={controlsVisible ? 'Hide controls for an unobstructed view' : 'Show controls'}
+                >
+                  {controlsVisible ? <EyeOff size={13} /> : <Eye size={13} />}
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* Remote GPU Wizard — slide up from bottom */}
+          <AnimatePresence>
+            {showWizard && (
+              <motion.div
+                key="gpu-wizard"
+                initial={{ height: 0 }}
+                animate={{ height: 'auto' }}
+                exit={{ height: 0 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                style={{
+                  borderTop: '1px solid var(--color-border)',
+                  backgroundColor: 'var(--color-background)',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                }}
+              >
+                <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {/* Header */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{
+                      fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.07em',
+                      color: 'var(--color-accent)', display: 'flex', alignItems: 'center', gap: '5px',
+                    }}>
+                      <Wifi size={11} /> GPU MOTION SERVER
+                    </span>
+                    <button
+                      onClick={() => setShowWizard(false)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', padding: '2px' }}
+                      aria-label="Close wizard"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+
+                  {/* Idle state */}
+                  {wizardState === 'idle' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <p style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                        Run animations on a Windows PC with an NVIDIA GPU for faster, higher-quality motion.
+                        Make sure the Windows PC is on the same WiFi network and the motion server is running.
+                      </p>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <button
+                          onClick={handleScanForGpu}
+                          style={{
+                            flex: 1, padding: '6px 10px', fontSize: '0.72rem', fontWeight: 600,
+                            backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)',
+                            border: 'none', borderRadius: 'var(--radius-button)', cursor: 'pointer',
+                          }}
+                        >
+                          Scan for GPU Server
+                        </button>
+                        <button
+                          onClick={() => setWizardState('not_found')}
+                          style={{
+                            padding: '6px 10px', fontSize: '0.72rem',
+                            backgroundColor: 'var(--color-surface)', color: 'var(--color-text-secondary)',
+                            border: '1px solid var(--color-border)', borderRadius: 'var(--radius-button)', cursor: 'pointer',
+                          }}
+                        >
+                          Enter IP
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Scanning */}
+                  {wizardState === 'scanning' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0' }}>
+                      <Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+                      <span style={{ fontSize: '0.71rem', color: 'var(--color-text-secondary)' }}>
+                        Scanning your network… (~8 seconds)
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Found servers */}
+                  {wizardState === 'found' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                      <p style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)', margin: '0 0 2px' }}>
+                        Found {wizardServers.length} server{wizardServers.length !== 1 ? 's' : ''} on your network:
+                      </p>
+                      {wizardServers.map(s => (
+                        <div key={s.url} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{
+                            flex: 1, fontSize: '0.71rem', fontFamily: 'var(--font-mono, monospace)',
+                            color: 'var(--color-text-primary)',
+                          }}>{s.url}</span>
+                          <button
+                            onClick={() => handleConnect(s.url)}
+                            style={{
+                              padding: '4px 12px', fontSize: '0.7rem', fontWeight: 600,
+                              backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)',
+                              border: 'none', borderRadius: 'var(--radius-button)', cursor: 'pointer',
+                            }}
+                          >
+                            Connect
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Not found / manual entry */}
+                  {wizardState === 'not_found' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <p style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)', margin: 0 }}>
+                        No servers found automatically. Enter the IP address of your Windows PC:
+                      </p>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          placeholder="http://192.168.1.100:8081"
+                          value={remoteUrl}
+                          onChange={e => setRemoteUrl(e.target.value)}
+                          style={{
+                            flex: 1, padding: '5px 8px', fontSize: '0.71rem',
+                            backgroundColor: 'var(--color-background)',
+                            border: '1px solid var(--color-border)',
+                            borderRadius: 'var(--radius-button)',
+                            color: 'var(--color-text-primary)',
+                          }}
+                        />
+                        <button
+                          onClick={() => remoteUrl && handleConnect(remoteUrl)}
+                          disabled={!remoteUrl}
+                          style={{
+                            padding: '5px 12px', fontSize: '0.7rem', fontWeight: 600,
+                            backgroundColor: remoteUrl ? 'var(--color-accent)' : 'var(--color-surface)',
+                            color: remoteUrl ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
+                            border: 'none', borderRadius: 'var(--radius-button)',
+                            cursor: remoteUrl ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          Connect
+                        </button>
+                      </div>
+                      <button
+                        onClick={handleScanForGpu}
+                        style={{
+                          padding: '4px', fontSize: '0.68rem', background: 'none',
+                          border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', textAlign: 'left',
+                        }}
+                      >
+                        ↺ Try scanning again
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Connecting */}
+                  {wizardState === 'connecting' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
+                      <Loader2 size={14} className="animate-spin" style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+                      <span style={{ fontSize: '0.71rem', color: 'var(--color-text-secondary)' }}>Connecting…</span>
+                    </div>
+                  )}
+
+                  {/* Connected */}
+                  {wizardState === 'connected' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Wifi size={13} style={{ color: 'var(--color-success, #39c96e)', flexShrink: 0 }} />
+                      <span style={{ fontSize: '0.71rem', color: 'var(--color-success, #39c96e)', fontWeight: 600 }}>
+                        Connected!
+                      </span>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', marginLeft: 4 }}>
+                        Motion now runs on your GPU PC.
+                      </span>
+                      <button
+                        onClick={handleDisconnect}
+                        style={{
+                          marginLeft: 'auto', padding: '3px 8px', fontSize: '0.68rem',
+                          background: 'none', border: '1px solid var(--color-border)',
+                          borderRadius: 'var(--radius-button)', color: 'var(--color-text-muted)', cursor: 'pointer',
+                        }}
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Error */}
+                  {wizardState === 'error' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <WifiOff size={13} style={{ color: '#f55', flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.71rem', color: '#f55' }}>{wizardError}</span>
+                      </div>
+                      <button
+                        onClick={() => setWizardState('idle')}
+                        style={{
+                          padding: '4px 10px', fontSize: '0.7rem', alignSelf: 'flex-start',
+                          backgroundColor: 'var(--color-surface)', color: 'var(--color-text-secondary)',
+                          border: '1px solid var(--color-border)', borderRadius: 'var(--radius-button)', cursor: 'pointer',
+                        }}
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Expression Editor — slide up from bottom when open */}
           <AnimatePresence>

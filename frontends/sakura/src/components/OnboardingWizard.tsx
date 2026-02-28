@@ -112,7 +112,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
         <MessageCircle size={36} style={{ color: 'var(--color-accent-text)' }} />
       </motion.div>
 
-      <h1 className="text-2xl font-bold mb-3 tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
+      <h1 className="char-name-display mb-3" style={{ color: 'var(--color-text-primary)', fontSize: '1.9rem' }}>
         Welcome to Waifu-RT3D
       </h1>
       <p className="text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>
@@ -124,8 +124,8 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
 
       <button
         onClick={onNext}
-        className="flex items-center gap-2 px-8 py-3 rounded-xl font-semibold text-sm transition-all"
-        style={{ background: 'var(--color-accent-gradient)', color: 'var(--color-accent-text)' }}
+        className="send-btn flex items-center gap-2 px-8 py-3 rounded-xl font-semibold text-sm transition-all"
+        style={{ background: 'var(--color-accent-gradient)', color: 'var(--color-accent-text)', boxShadow: '0 4px 18px var(--color-accent-soft)' }}
       >
         Get started <ChevronRight size={16} />
       </button>
@@ -189,7 +189,7 @@ function StepConnectLLM({ onNext, onSkip }: { onNext: () => void; onSkip: () => 
 
   return (
     <div className="w-full max-w-lg mx-auto px-4">
-      <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--color-text-primary)' }}>
+      <h2 className="char-name-display mb-1" style={{ color: 'var(--color-text-primary)', fontSize: '1.3rem' }}>
         Connect your LLM
       </h2>
       <p className="text-xs mb-5" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -341,7 +341,7 @@ function StepCreateCharacter({ onNext, onSkip }: { onNext: () => void; onSkip: (
 
   return (
     <div className="w-full max-w-lg mx-auto px-4">
-      <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--color-text-primary)' }}>
+      <h2 className="char-name-display mb-1" style={{ color: 'var(--color-text-primary)', fontSize: '1.3rem' }}>
         Create your first character
       </h2>
       <p className="text-xs mb-5" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -421,7 +421,7 @@ function StepDone({ onFinish }: { onFinish: () => void }) {
         <Check size={36} style={{ color: 'var(--color-accent-text)' }} />
       </motion.div>
 
-      <h2 className="text-2xl font-bold mb-3 tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
+      <h2 className="char-name-display mb-3" style={{ color: 'var(--color-text-primary)', fontSize: '1.9rem' }}>
         You're all set!
       </h2>
       <p className="text-sm mb-10" style={{ color: 'var(--color-text-secondary)' }}>
@@ -432,8 +432,8 @@ function StepDone({ onFinish }: { onFinish: () => void }) {
 
       <button
         onClick={onFinish}
-        className="flex items-center gap-2 px-8 py-3 rounded-xl font-semibold text-sm transition-all"
-        style={{ background: 'var(--color-accent-gradient)', color: 'var(--color-accent-text)' }}
+        className="send-btn flex items-center gap-2 px-8 py-3 rounded-xl font-semibold text-sm transition-all"
+        style={{ background: 'var(--color-accent-gradient)', color: 'var(--color-accent-text)', boxShadow: '0 4px 18px var(--color-accent-soft)' }}
       >
         Start chatting <ChevronRight size={16} />
       </button>

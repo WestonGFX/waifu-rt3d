@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Pencil, Trash2, Check, Search } from 'lucide-react';
+import { X, Plus, Pencil, Trash2, Check, Search, Minimize2, Tag } from 'lucide-react';
 import { api } from '../lib/api';
 import { useChatStore } from '../stores/chatStore';
 import { useAppStore } from '../stores/appStore';
 import type { Session } from '../lib/types';
+import { BranchingVisualizer } from './BranchingVisualizer';
 
 interface SessionDrawerProps {
   open: boolean;
@@ -21,11 +22,15 @@ interface SessionDrawerProps {
  */
 export function SessionDrawer({ open, onClose, characterId, characterName }: SessionDrawerProps) {
   const { sessionId, setContext, loadHistory } = useChatStore();
-  const { mobileMode } = useAppStore();
+  const { mobileMode, openOverlay } = useAppStore();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  /** Feature #9: id of the session whose tag input is currently open. */
+  const [tagInputId, setTagInputId] = useState<number | null>(null);
+  /** Feature #9: current value of the tag input field. */
+  const [tagInputValue, setTagInputValue] = useState('');
 
   // Swipe-to-delete state (mobile mode only) — refs to avoid 60fps re-renders
   const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -146,6 +151,59 @@ export function SessionDrawer({ open, onClose, characterId, characterName }: Ses
     }
   };
 
+  /**
+   * Feature #9: Remove a tag from a session and persist via PATCH.
+   * Updates the sessions array optimistically, then confirms with the backend.
+   *
+   * @param sessionId - The session to update
+   * @param tagToRemove - The tag string to remove
+   */
+  const removeTag = async (sessionId: number, tagToRemove: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    const newTags = (session.tags ?? []).filter(t => t !== tagToRemove);
+    // Optimistic update
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, tags: newTags } : s));
+    try {
+      await api.updateSessionTags(sessionId, newTags);
+    } catch (e) {
+      console.error('Failed to remove tag:', e);
+      // Revert on error
+      setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, tags: session.tags } : s));
+    }
+  };
+
+  /**
+   * Feature #9: Add a tag to a session (if not already present) and persist via PATCH.
+   * Normalises the tag to lowercase, trims whitespace, and ignores duplicates.
+   * Updates the sessions array optimistically before awaiting the backend call.
+   *
+   * @param sessionId - The session to update
+   * @param rawTag - Raw string from the tag input field
+   */
+  const addTag = async (sessionId: number, rawTag: string) => {
+    const tag = rawTag.trim().toLowerCase();
+    if (!tag) return;
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    const existing = session.tags ?? [];
+    if (existing.includes(tag)) {
+      setTagInputValue('');
+      return;
+    }
+    const newTags = [...existing, tag];
+    // Optimistic update
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, tags: newTags } : s));
+    setTagInputValue('');
+    try {
+      await api.updateSessionTags(sessionId, newTags);
+    } catch (e) {
+      console.error('Failed to add tag:', e);
+      // Revert on error
+      setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, tags: existing } : s));
+    }
+  };
+
   return (
     <AnimatePresence>
       {open && (
@@ -176,6 +234,15 @@ export function SessionDrawer({ open, onClose, characterId, characterName }: Ses
                 Chat Threads
               </h3>
               <div className="flex items-center gap-1">
+                <button
+                  onClick={() => { openOverlay('compression'); onClose(); }}
+                  className="p-1.5 rounded-lg transition-colors"
+                  style={{ color: 'var(--color-text-tertiary)' }}
+                  title="Compress context window"
+                  aria-label="Compress context window"
+                >
+                  <Minimize2 size={15} />
+                </button>
                 <button
                   onClick={createNew}
                   className="p-1.5 rounded-lg transition-colors"
@@ -266,6 +333,72 @@ export function SessionDrawer({ open, onClose, characterId, characterName }: Ses
                             <p className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
                               {session.message_count ?? 0} messages
                             </p>
+                            {/* Feature #9: Tag pills */}
+                            {(session.tags ?? []).length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {(session.tags ?? []).map(tag => (
+                                  <span
+                                    key={tag}
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full"
+                                    style={{
+                                      fontSize: '9px',
+                                      backgroundColor: 'var(--color-accent-soft)',
+                                      color: 'var(--color-accent)',
+                                      border: '1px solid var(--color-accent)',
+                                    }}
+                                  >
+                                    {tag}
+                                    {active && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); removeTag(session.id, tag); }}
+                                        className="ml-0.5 leading-none"
+                                        title={`Remove tag "${tag}"`}
+                                        style={{ color: 'var(--color-accent)' }}
+                                      >
+                                        ×
+                                      </button>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {/* Feature #9: Tag input (shown when session is active) */}
+                            {active && (
+                              <div className="mt-1.5" onClick={e => e.stopPropagation()}>
+                                {tagInputId === session.id ? (
+                                  <input
+                                    autoFocus
+                                    value={tagInputValue}
+                                    onChange={e => setTagInputValue(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') { addTag(session.id, tagInputValue); }
+                                      if (e.key === 'Escape') { setTagInputId(null); setTagInputValue(''); }
+                                    }}
+                                    onBlur={() => { setTagInputId(null); setTagInputValue(''); }}
+                                    placeholder="Add tag, press Enter"
+                                    className="text-[10px] px-2 py-0.5 rounded-full outline-none w-full"
+                                    style={{
+                                      backgroundColor: 'var(--color-background)',
+                                      border: '1px solid var(--color-accent)',
+                                      color: 'var(--color-text-primary)',
+                                    }}
+                                  />
+                                ) : (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setTagInputId(session.id); setTagInputValue(''); }}
+                                    className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full transition-colors"
+                                    style={{
+                                      color: 'var(--color-text-tertiary)',
+                                      border: '1px dashed var(--color-border)',
+                                    }}
+                                    title="Add tag"
+                                  >
+                                    <Tag size={8} />
+                                    Add tag
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
@@ -292,6 +425,28 @@ export function SessionDrawer({ open, onClose, characterId, characterName }: Ses
                 })
               )}
             </div>
+
+            {/* Branch tree for active session (#14) */}
+            {sessionId && (
+              <div
+                className="flex-shrink-0 px-3 pb-3"
+                style={{ borderTop: '1px solid var(--color-border-subtle)' }}
+              >
+                <p className="text-[9px] font-semibold uppercase tracking-wider mt-2 mb-1.5"
+                  style={{ color: 'var(--color-text-tertiary)' }}>
+                  Conversation Branches
+                </p>
+                <BranchingVisualizer
+                  sessionId={sessionId}
+                  onSwitchBranch={async (msgId) => {
+                    try {
+                      await fetch(`/api/messages/${msgId}/activate`, { method: 'POST' });
+                      if (sessionId) loadHistory(sessionId);
+                    } catch { /* non-critical */ }
+                  }}
+                />
+              </div>
+            )}
           </motion.div>
         </>
       )}

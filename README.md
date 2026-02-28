@@ -4,7 +4,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](requirements.txt)
 [![Tests](https://img.shields.io/badge/tests-98%20passed-brightgreen)](backend/tests/)
-[![Schema](https://img.shields.io/badge/DB%20schema-v16-purple)](#)
+[![Schema](https://img.shields.io/badge/DB%20schema-v21-purple)](#)
 [![Frontends](https://img.shields.io/badge/frontends-Neon%20%7C%20Sakura-ff69b4)](#dual-frontend-architecture)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -26,6 +26,9 @@ Waifu-RT3D is a **full-stack AI companion platform** where 3D anime characters c
 - **OBS Browser Source overlay** for streamers with transparent background and live subtitles
 - **Create-a-Waifu** full-page character creator with personality animation sliders
 - **Desktop pet mode** — floating transparent window with mini-chat overlay
+- **32 Sakura companion features** — Session summaries, context budget bar, mood board, branching visualizer, relationship web, character portfolio cards, session replay, ambient soundscapes, model arena, scenario library, global search, milestone celebrations, schedule editor, message reactions, incognito mode, and more
+- **Remote GPU motion server** — auto-discovers and connects to an animation server over LAN for real-time GPU-accelerated motion
+- **Mobile PWA** — full Sakura UI as installable Progressive Web App with bottom tab navigation
 
 ---
 
@@ -171,6 +174,29 @@ Two complete frontends sharing the same backend:
 
 Switch frontends via `default_frontend` in config or visit `/neon` and `/sakura` directly. Both use the same API and share the 3D viewer iframe.
 
+### Sakura Frontend — Feature Panels
+
+The Sakura UI ships with 16+ companion feature panels accessible via keyboard shortcuts or the overlay system:
+
+| Shortcut | Panel | Description |
+|----------|-------|-------------|
+| `alt+s` | Session Summary | Auto-generated session recap with stats and highlights |
+| `alt+h` | Schedule Editor | Set character availability windows and day-off toggles |
+| `alt+f` | Global Search | Full-text search across all messages (FTS5 + LIKE fallback) |
+| `alt+i` | Scenario Library | Browse and load pre-written scenario prompts |
+| `alt+b` | Mood Board Editor | Pin and annotate images to set visual context for conversations |
+| `alt+p` | Model Arena | Compare responses from two LLM configs side by side |
+| `alt+r` | Session Replay | Replay any previous session as a scrolling timeline |
+| `alt+o` | Character Portfolio | Card-based portfolio view of all characters with stats |
+| `alt+w` | Relationship Web | Visual graph of character affinity and trust scores |
+| `alt+a` | Analytics Panel | Word frequency, emotion arc, latency sparklines, TPS |
+| — | Context Budget Bar | Token usage indicator, color-coded green/yellow/red |
+| — | Milestone Celebration | Full-screen confetti on affinity tier advance |
+| — | Compression Preview | Preview context compression before it fires |
+| — | Message Reactions | Emoji reactions on individual messages |
+| — | Soundscape Player | Ambient audio loops (rain, café, forest, etc.) |
+| — | Backstory Generator | AI-generated character backstory from traits |
+
 ### UI / UX
 - **Cyberpunk "Neon" bento-grid layout** — no framework, vanilla JS modules
 - **Sakura chat-first layout** — React 19, visual novel dialogue bubbles, progressive disclosure settings, 5-step character creation wizard
@@ -254,7 +280,7 @@ waifu-rt3d/
 │   ├── config/
 │   │   └── app.json           # Runtime configuration
 │   ├── storage/
-│   │   ├── app.db             # SQLite database (schema v16)
+│   │   ├── app.db             # SQLite database (schema v21)
 │   │   ├── avatars/           # Uploaded VRM/GLB files
 │   │   ├── audio/             # Generated TTS audio cache
 │   │   └── images/            # AI-generated images
@@ -308,15 +334,16 @@ waifu-rt3d/
 | `GET` | `/api/v2/memory/search` | RAG memory search |
 | `WS` | `/ws/overlay` | OBS overlay WebSocket |
 
-### Database Schema (v16)
+### Database Schema (v21)
 
-The SQLite database auto-migrates on startup. Key tables:
+The SQLite database (schema v21) auto-migrates on startup. Key tables:
 - **sessions** — chat sessions with summary and archive support
 - **messages** — chat history with emotion, branching (parent_id), token stats
 - **characters** — full character profiles (34 columns including animation_profile, capability_profile, diary, voice config)
 - **character_relationships** — affinity/mood/trust scores per character
 - **prompt_templates** — reusable system prompt templates
 - **character_docs** — uploaded reference documents
+- **message_reactions** — emoji reactions per message (added v21)
 
 ---
 

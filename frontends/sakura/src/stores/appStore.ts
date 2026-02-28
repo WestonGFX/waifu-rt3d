@@ -1,10 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Character, AppConfig } from '../lib/types';
+import type { Character, AppConfig, VrmStats } from '../lib/types';
 import { api } from '../lib/api';
 
 /** Which section is expanded in the sidebar. */
 type SidebarSection = 'chats' | 'characters' | 'create';
+
+/** Controls how many tokens the LLM targets per response. */
+export type ReplyLengthMode = 'brief' | 'normal' | 'detailed' | 'auto';
 type ChatLayout = 'chat-first' | 'model-first' | 'split';
 
 /**
@@ -16,7 +19,13 @@ type ChatLayout = 'chat-first' | 'model-first' | 'split';
 export type LayoutMode = 'normal' | 'compact' | 'mobile';
 
 /** Overlay drawers that slide out over the main content. */
-type Overlay = 'settings' | 'memory' | 'vocab' | 'diary' | 'stats' | 'timeline' | null;
+type Overlay =
+  | 'settings' | 'memory' | 'vocab' | 'diary' | 'stats' | 'timeline' | 'analytics'
+  | 'summary' | 'schedule' | 'compression'
+  | 'search' | 'scenarios' | 'moodboard' | 'arena'
+  | 'portfolio' | 'replay' | 'relweb'
+  | 'universes'
+  | null;
 
 /**
  * A pending scheduled character message that the user hasn't seen yet.
@@ -48,9 +57,9 @@ interface AppState {
   sidebarSection: SidebarSection;
   setSidebarSection: (section: SidebarSection) => void;
 
-  // Overlay drawers (settings, memory, diary, stats, timeline, vocab)
+  // Overlay drawers (settings, memory, diary, stats, timeline, vocab, summary, schedule, compression)
   activeOverlay: Overlay;
-  openOverlay: (overlay: 'settings' | 'memory' | 'vocab' | 'diary' | 'stats' | 'timeline') => void;
+  openOverlay: (overlay: Exclude<Overlay, null>) => void;
   closeOverlay: () => void;
   /** When set, SettingsView opens to this tab on next open. Cleared after use. */
   settingsInitTab: string | null;
@@ -101,6 +110,34 @@ interface AppState {
   addScheduledNotification: (n: ScheduledNotification) => void;
   dismissScheduledNotification: (id: string) => void;
   clearScheduledNotifications: () => void;
+
+  // Custom keyboard bindings (#24) — keyed by shortcut description
+  customKeyBindings: Record<string, string>;
+  /** Override the key for a shortcut by description. Pass empty string to reset to default. */
+  setCustomKeyBinding: (description: string, key: string) => void;
+  resetCustomKeyBindings: () => void;
+
+  // Reply length / adaptive pacing (#21)
+  replyLengthMode: ReplyLengthMode;
+  setReplyLengthMode: (mode: ReplyLengthMode) => void;
+
+  // Custom theme palette (#15) — CSS var name → hex color string
+  customTheme: Record<string, string>;
+  /**
+   * Override a single CSS variable in the custom theme palette.
+   *
+   * @param varName - The CSS custom property name (e.g. '--color-accent').
+   * @param value   - The hex color string (e.g. '#e879f9').
+   */
+  setCustomThemeVar: (varName: string, value: string) => void;
+  /** Clear all custom theme overrides, restoring the base data-theme defaults. */
+  resetCustomTheme: () => void;
+
+  // VRM runtime performance data (not persisted — reset on page load)
+  vrmStats: VrmStats | null;
+  setVrmStats: (stats: VrmStats | null) => void;
+  viewportFps: number | null;
+  setViewportFps: (fps: number | null) => void;
 
   // Legacy compat (kept for components that still reference these)
   activeTab: string;
@@ -209,6 +246,36 @@ export const useAppStore = create<AppState>()(
       }),
       clearScheduledNotifications: () => set({ scheduledNotifications: [], unreadNotificationCount: 0 }),
 
+      // Custom keyboard bindings (#24)
+      customKeyBindings: {},
+      setCustomKeyBinding: (description, key) => set((s) => {
+        const bindings = { ...s.customKeyBindings };
+        if (key) {
+          bindings[description] = key;
+        } else {
+          delete bindings[description];
+        }
+        return { customKeyBindings: bindings };
+      }),
+      resetCustomKeyBindings: () => set({ customKeyBindings: {} }),
+
+      // Reply length / adaptive pacing (#21)
+      replyLengthMode: 'normal',
+      setReplyLengthMode: (mode) => set({ replyLengthMode: mode }),
+
+      // Custom theme palette (#15)
+      customTheme: {},
+      setCustomThemeVar: (varName, value) => set((s) => ({
+        customTheme: { ...s.customTheme, [varName]: value },
+      })),
+      resetCustomTheme: () => set({ customTheme: {} }),
+
+      // VRM runtime performance data (not persisted — reset on page load)
+      vrmStats: null,
+      setVrmStats: (stats) => set({ vrmStats: stats }),
+      viewportFps: null,
+      setViewportFps: (fps) => set({ viewportFps: fps }),
+
       // Legacy compat — maps to new layout for components still using old API
       activeTab: 'chats',
       setActiveTab: (tab) => {
@@ -227,7 +294,10 @@ export const useAppStore = create<AppState>()(
         advancedMode: s.advancedMode,
         layoutMode: s.layoutMode,
         sidebarCollapsed: s.sidebarCollapsed,
-        sidebarSection: s.sidebarSection
+        sidebarSection: s.sidebarSection,
+        customKeyBindings: s.customKeyBindings,
+        replyLengthMode: s.replyLengthMode,
+        customTheme: s.customTheme,
       }),
       // Migrate old compactMode: true → layoutMode: 'compact'
       merge: (persisted: unknown, current) => {

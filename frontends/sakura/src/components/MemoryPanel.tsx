@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Trash2, ChevronLeft, ChevronRight, Database } from 'lucide-react';
+import { X, Search, Trash2, ChevronLeft, ChevronRight, Database, Network, List } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
+import { useChatStore } from '../stores/chatStore';
 
 /* ═══════════════════════════════════════════════════════════════════════
    Types
@@ -25,6 +26,178 @@ interface Memory {
 }
 
 const PAGE_SIZE = 12;
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Memory Graph types
+   ═══════════════════════════════════════════════════════════════════════ */
+
+interface GraphNode {
+  id: string;
+  label: string;
+  role: 'user' | 'assistant' | 'memory';
+  x: number;
+  y: number;
+  score?: number;
+}
+
+interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  kind: 'sequence' | 'retrieval';
+}
+
+interface GraphData {
+  mode: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  stats: { sessionMessages: number; memoryHits: number; ragAvailable: boolean };
+}
+
+/** Color per node role — accent for user, pink for assistant, green for memory hits. */
+const GRAPH_ROLE_COLOR: Record<GraphNode['role'], string> = {
+  user:      'var(--color-accent)',
+  assistant: '#f472b6',
+  memory:    'var(--color-success, #4ade80)',
+};
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MemoryGraphView — pure SVG graph rendered from server-supplied coordinates
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Fetches `/api/v2/memory/graph` and renders an SVG diagram showing the
+ * current session's message flow plus any RAG memory-hit nodes.
+ *
+ * Node layout is computed server-side; the component only needs to position
+ * SVG primitives at the supplied x/y coordinates. No layout library required.
+ *
+ * @param sessionId - Active session ID.  Null = render placeholder.
+ * @param charId    - Active character ID used for RAG memory query.
+ */
+function MemoryGraphView({ sessionId, charId }: { sessionId: number | null; charId: number }) {
+  const [data, setData] = useState<GraphData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [tooltip, setTooltip] = useState<{ id: string; label: string } | null>(null);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    setLoading(true);
+    fetch(`/api/v2/memory/graph?session_id=${sessionId}&char_id=${charId}&limit=40`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: GraphData | null) => setData(d))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [sessionId, charId]);
+
+  if (!sessionId) {
+    return (
+      <p className="text-xs text-center py-6" style={{ color: 'var(--color-text-tertiary)' }}>
+        Open a conversation to see the graph.
+      </p>
+    );
+  }
+
+  if (loading) {
+    return (
+      <p className="text-xs text-center py-6" style={{ color: 'var(--color-text-tertiary)' }}>
+        Building graph…
+      </p>
+    );
+  }
+
+  if (!data || data.nodes.length === 0) {
+    return (
+      <p className="text-xs text-center py-6" style={{ color: 'var(--color-text-tertiary)' }}>
+        No messages yet — start a conversation.
+      </p>
+    );
+  }
+
+  const nodeMap = new Map<string, GraphNode>(data.nodes.map(n => [n.id, n]));
+  const maxX = Math.max(...data.nodes.map(n => n.x)) + 60;
+  const maxY = Math.max(...data.nodes.map(n => n.y)) + 60;
+
+  return (
+    <div>
+      {/* SVG canvas */}
+      <div className="overflow-x-auto rounded-xl" style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border-subtle)' }}>
+        <svg
+          viewBox={`0 0 ${maxX} ${maxY}`}
+          width="100%"
+          style={{ minHeight: 200, display: 'block' }}
+          onClick={() => setTooltip(null)}
+        >
+          {/* Edges */}
+          {data.edges.map(edge => {
+            const src = nodeMap.get(edge.source);
+            const tgt = nodeMap.get(edge.target);
+            if (!src || !tgt) return null;
+            return (
+              <line
+                key={edge.id}
+                x1={src.x} y1={src.y}
+                x2={tgt.x} y2={tgt.y}
+                stroke={edge.kind === 'retrieval' ? GRAPH_ROLE_COLOR.memory : 'var(--color-border)'}
+                strokeWidth={1.5}
+                strokeDasharray={edge.kind === 'retrieval' ? '5 3' : undefined}
+                opacity={0.6}
+              />
+            );
+          })}
+
+          {/* Nodes */}
+          {data.nodes.map(node => {
+            const color = GRAPH_ROLE_COLOR[node.role];
+            const r = node.role === 'memory' ? 10 : 12;
+            const isActive = tooltip?.id === node.id;
+            return (
+              <g
+                key={node.id}
+                onClick={e => { e.stopPropagation(); setTooltip(isActive ? null : { id: node.id, label: node.label }); }}
+                style={{ cursor: 'pointer' }}
+              >
+                <circle
+                  cx={node.x} cy={node.y} r={r}
+                  fill={color} fillOpacity={isActive ? 0.28 : 0.14}
+                  stroke={color} strokeWidth={isActive ? 2 : 1.5}
+                />
+                <text x={node.x} y={node.y + 3.5} textAnchor="middle" fontSize={7} fill={color} fontWeight={600}>
+                  {node.role === 'user' ? 'U' : node.role === 'assistant' ? 'A' : `${node.score != null ? `${(node.score * 100).toFixed(0)}%` : 'M'}`}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      {/* Tooltip — shows clicked node label */}
+      {tooltip && (
+        <div
+          className="mt-2 px-3 py-2 rounded-lg text-[11px] leading-relaxed"
+          style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border-subtle)', color: 'var(--color-text-secondary)', wordBreak: 'break-word' }}
+        >
+          {tooltip.label || '(empty)'}
+        </div>
+      )}
+
+      {/* Legend + stats */}
+      <div className="flex flex-wrap items-center gap-3 mt-2.5 text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
+        {(['user', 'assistant', 'memory'] as const).map(role => (
+          <span key={role} className="flex items-center gap-1">
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', backgroundColor: GRAPH_ROLE_COLOR[role] }} />
+            {role}
+          </span>
+        ))}
+        <span className="ml-auto">
+          {data.stats.sessionMessages} msgs
+          {data.stats.memoryHits > 0 && ` · ${data.stats.memoryHits} memories`}
+          {data.mode === 'rag' && ' · RAG'}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 /* ═══════════════════════════════════════════════════════════════════════
    Helpers — raw fetch wrappers for memory endpoints
@@ -66,7 +239,11 @@ async function deleteMemory(id: string): Promise<void> {
  */
 export function MemoryPanel() {
   const { activeOverlay, closeOverlay, activeCharacter, characters } = useAppStore();
+  const { sessionId } = useChatStore();
   const open = activeOverlay === 'memory';
+
+  /** 'list' = paginated memory browser, 'graph' = SVG session + RAG graph */
+  const [viewMode, setViewMode] = useState<'list' | 'graph'>('list');
 
   // Token budget
   const [budget, setBudget] = useState<ContextBudget | null>(null);
@@ -299,12 +476,43 @@ export function MemoryPanel() {
 
               {/* ── Memory Browser ────────────────────────────── */}
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-text-tertiary)' }}>
-                  Memory Store
-                </p>
+                {/* Section header with list/graph toggle */}
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+                    Memory Store
+                  </p>
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      onClick={() => setViewMode('list')}
+                      aria-pressed={viewMode === 'list'}
+                      title="List view"
+                      className="p-1 rounded transition-colors"
+                      style={{ color: viewMode === 'list' ? 'var(--color-accent)' : 'var(--color-text-tertiary)', backgroundColor: viewMode === 'list' ? 'var(--color-accent-soft)' : 'transparent' }}
+                    >
+                      <List size={12} />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('graph')}
+                      aria-pressed={viewMode === 'graph'}
+                      title="Graph view"
+                      className="p-1 rounded transition-colors"
+                      style={{ color: viewMode === 'graph' ? 'var(--color-accent)' : 'var(--color-text-tertiary)', backgroundColor: viewMode === 'graph' ? 'var(--color-accent-soft)' : 'transparent' }}
+                    >
+                      <Network size={12} />
+                    </button>
+                  </div>
+                </div>
 
-                {/* Search + Filter */}
-                <div className="flex gap-1.5 mb-3">
+                {/* Graph view */}
+                {viewMode === 'graph' && (
+                  <MemoryGraphView
+                    sessionId={typeof sessionId === 'number' ? sessionId : null}
+                    charId={activeCharacter?.id ?? 0}
+                  />
+                )}
+
+                {/* List view — search + filter + paginated list */}
+                {viewMode === 'list' && (<><div className="flex gap-1.5 mb-3">
                   <div className="relative flex-1">
                     <Search
                       size={12}
@@ -452,6 +660,7 @@ export function MemoryPanel() {
                     </button>
                   </div>
                 )}
+                </>)}
               </div>
             </div>
           </motion.div>

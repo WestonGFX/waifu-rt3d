@@ -28,6 +28,10 @@
   --radius-card: 16px;
   --radius-button: 12px;
   --radius-input: 10px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.025;
+  --bg-ambience: rgba(232, 120, 138, 0.04);
   color-scheme: light;
 }
 
@@ -56,6 +60,10 @@
   --radius-card: 14px;
   --radius-button: 10px;
   --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.020;
+  --bg-ambience: rgba(107, 138, 237, 0.04);
   color-scheme: light;
 }
 
@@ -84,6 +92,10 @@
   --radius-card: 16px;
   --radius-button: 12px;
   --radius-input: 10px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.035;
+  --bg-ambience: rgba(232, 138, 154, 0.06);
   color-scheme: dark;
 }
 
@@ -112,5 +124,9 @@
   --radius-card: 14px;
   --radius-button: 10px;
   --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.030;
+  --bg-ambience: rgba(123, 156, 240, 0.06);
   color-scheme: dark;
 }

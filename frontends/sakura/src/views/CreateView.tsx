@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Upload, Check, Zap, Shuffle, Sparkles, Lock, Unlock, Loader2 } from 'lucide-react';
+import { Upload, Check, Zap, Shuffle, Sparkles, Lock, Unlock, Loader2, X } from 'lucide-react';
 import { WizardStep } from '../components/WizardStep';
 import { VoicePicker } from '../components/VoicePicker';
 import { api } from '../lib/api';
@@ -174,7 +174,7 @@ function VrmPreview({ url }: { url: string }) {
 
 /** 5-step character creation wizard with animated transitions, preset templates, shuffle, and AI generation. */
 export function CreateView() {
-  const { loadCharacters, setSidebarSection, selectCharacter, llmStatus, advancedMode, compactMode } = useAppStore();
+  const { loadCharacters, setSidebarSection, selectCharacter, activeCharacter, llmStatus, advancedMode, compactMode } = useAppStore();
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState<'left' | 'right'>('left');
   const [data, setData] = useState<Partial<Character>>({
@@ -368,16 +368,40 @@ export function CreateView() {
   };
 
   return (
-    <div className="p-4 max-w-xl mx-auto h-screen overflow-y-auto">
+    <div className="p-4 max-w-xl mx-auto h-screen overflow-y-auto" style={{ position: 'relative' }}>
+      {/* Close button — navigates back to characters or chats depending on context */}
+      <button
+        onClick={() => activeCharacter ? setSidebarSection('chats') : setSidebarSection('characters')}
+        aria-label="Close character creator"
+        style={{
+          position: 'absolute',
+          top: 16,
+          right: 16,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 30,
+          height: 30,
+          borderRadius: '50%',
+          border: '1px solid var(--color-border)',
+          backgroundColor: 'var(--color-surface)',
+          color: 'var(--color-text-tertiary)',
+          cursor: 'pointer',
+          zIndex: 2,
+        }}
+      >
+        <X size={15} />
+      </button>
+
       <h2
-        className="text-xl font-bold mb-1 tracking-tight"
-        style={{ color: 'var(--color-text-primary)' }}
+        className="char-name-display mb-1"
+        style={{ color: 'var(--color-text-primary)', fontSize: '1.5rem' }}
       >
         Create Character
       </h2>
 
       {/* Progress bar */}
-      <div className="flex gap-1 mb-6 mt-3">
+      <div className="flex gap-1 mb-4 mt-3">
         {STEPS.map((s, i) => (
           <div key={s} className="flex-1 h-1 rounded-full transition-colors duration-300" style={{
             backgroundColor: i <= step ? 'var(--color-accent)' : 'var(--color-border)'
@@ -385,7 +409,7 @@ export function CreateView() {
         ))}
       </div>
       <p className="text-xs mb-4" style={{ color: 'var(--color-text-tertiary)' }}>
-        Step {step + 1}: {STEPS[step]}
+        Step {step + 1} of {STEPS.length} — <span style={{ color: 'var(--color-accent)' }}>{STEPS[step]}</span>
       </p>
 
       {/* Steps */}
@@ -480,7 +504,7 @@ export function CreateView() {
                   type="button"
                   onClick={handleGenerate}
                   disabled={!llmStatus.connected || generating}
-                  className="flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-all flex-1 disabled:opacity-40"
+                  className="send-btn flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-all flex-1 disabled:opacity-40"
                   style={{
                     background: llmStatus.connected ? 'var(--color-accent-gradient)' : 'var(--color-background)',
                     border: llmStatus.connected ? 'none' : '1px solid var(--color-border)',
@@ -491,6 +515,7 @@ export function CreateView() {
                   {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                   {generating ? 'Generating...' : 'AI Generate'}
                 </button>
+
               </div>
 
               {/* ─── Persona length slider (for AI Generate) ─── */}
@@ -740,7 +765,7 @@ export function CreateView() {
                   </div>
                 )}
                 <div>
-                  <h3 className="font-semibold text-sm">{data.name || 'Unnamed'}</h3>
+                  <h3 className="char-name-display" style={{ fontSize: '1rem', color: 'var(--color-text-primary)' }}>{data.name || 'Unnamed'}</h3>
                   <p className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
                     {data.tts_provider} / {data.voice_id || 'Default voice'}
                   </p>
@@ -773,14 +798,14 @@ export function CreateView() {
         {step < STEPS.length - 1 ? (
           <button onClick={next}
             disabled={step === 0 && !data.name}
-            className="px-4 py-2 text-sm font-medium disabled:opacity-30"
-            style={{ background: 'var(--color-accent-gradient)', color: 'var(--color-accent-text)', borderRadius: 'var(--radius-button)' }}>
+            className="send-btn px-4 py-2 text-sm font-medium disabled:opacity-30 transition-all duration-200"
+            style={{ background: 'var(--color-accent-gradient)', color: 'var(--color-accent-text)', borderRadius: 'var(--radius-button)', boxShadow: '0 2px 10px var(--color-accent-soft)' }}>
             Next
           </button>
         ) : (
           <button onClick={create} disabled={creating || !data.name}
-            className="px-4 py-2 text-sm font-medium disabled:opacity-50"
-            style={{ background: 'var(--color-accent-gradient)', color: 'var(--color-accent-text)', borderRadius: 'var(--radius-button)' }}>
+            className="send-btn px-4 py-2 text-sm font-medium disabled:opacity-50 transition-all duration-200"
+            style={{ background: 'var(--color-accent-gradient)', color: 'var(--color-accent-text)', borderRadius: 'var(--radius-button)', boxShadow: '0 2px 10px var(--color-accent-soft)' }}>
             {creating ? 'Creating...' : 'Create'}
           </button>
         )}

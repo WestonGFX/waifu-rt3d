@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain, Settings,
-  ChevronLeft, ChevronRight, Search, Wifi, WifiOff, Pencil
+  ChevronLeft, Search, Wifi, WifiOff, Pencil
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
@@ -57,7 +57,7 @@ export function Sidebar() {
     <aside
       className="sidebar flex flex-col h-screen flex-shrink-0 transition-all duration-300 relative"
       style={{
-        width: sidebarCollapsed ? '56px' : '280px',
+        width: sidebarCollapsed ? '56px' : '240px',
         backgroundColor: 'var(--color-surface)',
         borderRight: '1px solid var(--color-border-subtle)',
       }}
@@ -99,29 +99,38 @@ export function Sidebar() {
             </div>
           </div>
         ) : (
-          <div
-            className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
+          /* Collapsed state: the wifi indicator IS the toggle — no separate chevron needed
+             at 56px width, ml-auto would push a second button off-screen. */
+          <button
+            onClick={toggleSidebar}
+            className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0 mx-auto"
             style={{
               background: llmStatus.connected ? 'var(--color-success)' : 'var(--color-border)',
-              opacity: 0.7,
+              opacity: 0.85,
+              border: 'none',
+              cursor: 'pointer',
             }}
-            title={llmStatus.connected ? `LLM: ${llmStatus.provider || 'Online'}` : 'LLM: Offline'}
+            title="Expand sidebar"
+            aria-label="Expand sidebar"
           >
             {llmStatus.connected ? (
               <Wifi size={14} style={{ color: 'white' }} />
             ) : (
               <WifiOff size={14} style={{ color: 'white' }} />
             )}
-          </div>
+          </button>
         )}
-        <button
-          onClick={toggleSidebar}
-          className="p-1.5 rounded-lg transition-colors duration-150 ml-auto flex-shrink-0"
-          style={{ color: 'var(--color-text-tertiary)' }}
-          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
+        {!sidebarCollapsed && (
+          <button
+            onClick={toggleSidebar}
+            className="p-1.5 rounded-lg transition-colors duration-150 ml-auto flex-shrink-0"
+            style={{ color: 'var(--color-text-tertiary)' }}
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+          >
+            <ChevronLeft size={16} />
+          </button>
+        )}
       </div>
 
       {/* ── Section Nav ───────────────────────────────────── */}
@@ -365,8 +374,8 @@ function SidebarCharItem({ character, active, onClick }: SidebarCharItemProps) {
       )}
       <div className="min-w-0 flex-1">
         <p
-          className="text-xs font-semibold truncate"
-          style={{ color: active ? 'var(--color-accent)' : 'var(--color-text-primary)' }}
+          className="char-name-display truncate"
+          style={{ color: active ? 'var(--color-accent)' : 'var(--color-text-primary)', fontSize: '0.82rem' }}
         >
           {character.name || 'Unnamed'}
         </p>
@@ -444,8 +453,8 @@ function CharacterProfileCard({ character, active, onSelect, onEdit }: Character
       )}
       <div className="min-w-0 flex-1">
         <p
-          className="text-xs font-semibold truncate"
-          style={{ color: active ? 'var(--color-accent)' : 'var(--color-text-primary)' }}
+          className="char-name-display truncate"
+          style={{ color: active ? 'var(--color-accent)' : 'var(--color-text-primary)', fontSize: '0.8rem' }}
         >
           {character.name || 'Unnamed'}
         </p>

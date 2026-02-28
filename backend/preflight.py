@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v19)
+- Database schema migrations (v3 → v4 → … → v22)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -23,6 +23,9 @@ Migration Strategy:
     - v16 → v17: Scheduled proactive messages — character_schedules table (Feature C)
     - v17 → v18: Scheduled proactive messages — scheduled_messages delivery queue (Feature C)
     - v18 → v19: Per-emotion TTS voice overrides — emotion_voice_overrides column (Feature H)
+    - v19 → v20: Backstory generator, session tags, message pinning (Features 6/9/10)
+    - v20 → v21: Message reactions table + day_off flag on characters (Features 22/29)
+    - v21 → v22: Universe / Shared World Builder — universes table + universe_id FK on characters (#23)
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -1057,15 +1060,228 @@ def migrate_to_v19(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v20(con: sqlite3.Connection) -> bool:
+    """Apply schema v20 migration (Features 6/9/10: backstory, session tags, message pinning).
+
+    Adds:
+        - ``backstory`` (TEXT) on ``characters`` — LLM-generated character backstory text.
+          NULL = no backstory generated yet.
+        - ``tags`` (TEXT) on ``sessions`` — JSON array of string labels (e.g. ``["roleplay"]``).
+          Defaults to the empty JSON array ``'[]'``.
+        - ``pinned`` (INTEGER) on ``messages`` — 1 if the message is pinned, 0 otherwise.
+          Defaults to 0.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if all columns already existed (idempotent).
+
+    Raises:
+        sqlite3.Error: If migration fails.
+
+    Example:
+        >>> if migrate_to_v20(con):
+        ...     print("Migrated to v20")
+    """
+    char_cols = {row[1] for row in con.execute("PRAGMA table_info(characters)")}
+    sess_cols = {row[1] for row in con.execute("PRAGMA table_info(sessions)")}
+    msg_cols  = {row[1] for row in con.execute("PRAGMA table_info(messages)")}
+
+    already_done = (
+        'backstory' in char_cols
+        and 'tags'      in sess_cols
+        and 'pinned'    in msg_cols
+    )
+    if already_done:
+        logger.info("Schema v20 logic: all columns exist. Ensuring version is 20.")
+        cur = con.cursor()
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (20)")
+        con.commit()
+        return False
+
+    try:
+        logger.info("Applying schema v20 migration (Features 6/9/10: backstory, tags, pinning)...")
+        cur = con.cursor()
+
+        if 'backstory' not in char_cols:
+            cur.execute("ALTER TABLE characters ADD COLUMN backstory TEXT DEFAULT NULL")
+            logger.info("  - Added characters.backstory")
+
+        if 'tags' not in sess_cols:
+            cur.execute("ALTER TABLE sessions ADD COLUMN tags TEXT DEFAULT '[]'")
+            logger.info("  - Added sessions.tags")
+
+        if 'pinned' not in msg_cols:
+            cur.execute("ALTER TABLE messages ADD COLUMN pinned INTEGER DEFAULT 0")
+            logger.info("  - Added messages.pinned")
+
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (20)")
+        con.commit()
+        logger.info("✅ Schema v20 migration complete (backstory, tags, pinned columns added)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v20 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v21(con: sqlite3.Connection) -> bool:
+    """Apply schema v21 migration (Features 22/29: message reactions + day_off mode).
+
+    Adds:
+        - ``message_reactions`` table — stores emoji reactions attached to individual
+          messages.  Cascade-deletes when the parent message is removed.
+        - ``idx_reactions_message`` index on ``message_reactions(message_id)`` —
+          keeps reaction look-ups fast when fetching all reactions for a message.
+        - ``day_off`` (INTEGER) on ``characters`` — boolean flag (0/1).  When 1, the
+          background scheduler will skip all proactive/scheduled messages for that
+          character.  Defaults to 0 (normal scheduling).
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if all structures already existed
+        (idempotent).
+
+    Raises:
+        sqlite3.Error: If migration fails.
+
+    Example:
+        >>> if migrate_to_v21(con):
+        ...     print("Migrated to v21")
+    """
+    char_cols = {row[1] for row in con.execute("PRAGMA table_info(characters)")}
+    tables = {
+        row[0]
+        for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+
+    already_done = (
+        "message_reactions" in tables
+        and "day_off" in char_cols
+    )
+    if already_done:
+        logger.info("Schema v21 logic: message_reactions table and day_off column exist. Ensuring version is 21.")
+        cur = con.cursor()
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (21)")
+        con.commit()
+        return False
+
+    try:
+        logger.info("Applying schema v21 migration (Features 22/29: reactions, day_off)...")
+        cur = con.cursor()
+
+        if "message_reactions" not in tables:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS message_reactions (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+                    emoji      TEXT    NOT NULL,
+                    ts         INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+                )
+            """)
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_reactions_message "
+                "ON message_reactions(message_id)"
+            )
+            logger.info("  - Created message_reactions table + idx_reactions_message index")
+
+        if "day_off" not in char_cols:
+            cur.execute("ALTER TABLE characters ADD COLUMN day_off INTEGER DEFAULT 0")
+            logger.info("  - Added characters.day_off (Feature 29: Day Off Mode)")
+
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (21)")
+        con.commit()
+        logger.info("✅ Schema v21 migration complete (message_reactions, day_off added)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v21 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v22(con: sqlite3.Connection) -> bool:
+    """Apply schema v22 migration (Feature #23: Universe / Shared World Builder).
+
+    Adds:
+        - ``universes`` table — stores named universes, each with a ``lore`` text
+          document that is prepended to every member character's system prompt.
+          Columns: ``id``, ``name``, ``lore``, ``created_at``.
+        - ``universe_id`` (INTEGER) on ``characters`` — nullable FK referencing
+          ``universes(id) ON DELETE SET NULL``.  NULL means the character belongs to
+          no universe (backward-compatible, no disruption).
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if all structures already existed
+        (idempotent).
+
+    Raises:
+        sqlite3.Error: If migration fails.
+
+    Example:
+        >>> if migrate_to_v22(con):
+        ...     print("Migrated to v22")
+    """
+    tables = {
+        row[0]
+        for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    char_cols = {row[1] for row in con.execute("PRAGMA table_info(characters)")}
+
+    already_done = "universes" in tables and "universe_id" in char_cols
+    if already_done:
+        logger.info("Schema v22 logic: universes table and universe_id column exist. Ensuring version is 22.")
+        cur = con.cursor()
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (22)")
+        con.commit()
+        return False
+
+    try:
+        logger.info("Applying schema v22 migration (Feature #23: Universe / Shared World Builder)...")
+        cur = con.cursor()
+
+        if "universes" not in tables:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS universes (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name       TEXT    NOT NULL,
+                    lore       TEXT    DEFAULT '',
+                    created_at TEXT    DEFAULT (datetime('now'))
+                )
+            """)
+            logger.info("  - Created universes table")
+
+        if "universe_id" not in char_cols:
+            # SQLite does not support adding a FK inline via ALTER TABLE, but we can
+            # add a plain INTEGER column and enforce the relationship at the app layer.
+            # ON DELETE SET NULL semantics are enforced by the delete_universe endpoint.
+            cur.execute("ALTER TABLE characters ADD COLUMN universe_id INTEGER DEFAULT NULL")
+            logger.info("  - Added characters.universe_id (Feature #23: Universe membership)")
+
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (22)")
+        con.commit()
+        logger.info("✅ Schema v22 migration complete (universes table + universe_id column added)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v22 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
     Migration Paths:
-        - v0 (empty) → v4 → … → v19
-        - v3 → v4 → … → v19
-        - v11 → v12 → v13 → v19
-        - v18 → v19
-        - v19 → no-op (already current)
+        - v0 (empty) → v4 → … → v22
+        - v3 → v4 → … → v22
+        - v11 → v12 → v13 → v22
+        - v21 → v22
+        - v22 → no-op (already current)
 
     The function is idempotent - safe to run multiple times.
     Will log all migration steps and verify final state.
@@ -1219,21 +1435,46 @@ def ensure_db():
             if migrate_to_v19(con):
                 version = 19
 
+        # Upgrade from v19 to v20 (Features 6/9/10: backstory, session tags, message pinning)
+        if version < 20:
+            logger.info("Upgrading database schema from v19 to v20...")
+            logger.info("  - Adding backstory to characters (LLM-generated character backstory)")
+            logger.info("  - Adding tags to sessions (JSON array of string labels)")
+            logger.info("  - Adding pinned to messages (message pinning flag)")
+            if migrate_to_v20(con):
+                version = 20
+
+        # Upgrade from v20 to v21 (Features 22/29: message reactions + day_off mode)
+        if version < 21:
+            logger.info("Upgrading database schema from v20 to v21...")
+            logger.info("  - Creating message_reactions table (Feature 22: Message Reactions)")
+            logger.info("  - Adding day_off to characters (Feature 29: Day Off Mode)")
+            if migrate_to_v21(con):
+                version = 21
+
+        # Upgrade from v21 to v22 (Feature #23: Universe / Shared World Builder)
+        if version < 22:
+            logger.info("Upgrading database schema from v21 to v22...")
+            logger.info("  - Creating universes table (Feature #23: Universe Builder)")
+            logger.info("  - Adding universe_id to characters (Feature #23: Universe membership FK)")
+            if migrate_to_v22(con):
+                version = 22
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 19:
-            raise RuntimeError(f"Database initialization failed: Expected v19, got v{final_version}")
+        if final_version < 22:
+            raise RuntimeError(f"Database initialization failed: Expected v22, got v{final_version}")
 
-        if final_version > 19:
-            logger.warning(f"Database is newer than application (v{final_version} > v19). Some features might be unused.")
+        if final_version > 22:
+            logger.warning(f"Database is newer than application (v{final_version} > v22). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v19 adds per-emotion TTS voice overrides)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v22 adds Universe Builder)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

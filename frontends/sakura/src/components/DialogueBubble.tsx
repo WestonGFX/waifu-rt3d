@@ -1,6 +1,8 @@
-import { Volume2 } from 'lucide-react';
+import { useState } from 'react';
+import { Volume2, Pin } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
+import { api } from '../lib/api';
 
 /** Maps detected emotion tags to emoji for display in the message header. */
 const EMOTION_EMOJI: Record<string, string> = {
@@ -61,20 +63,122 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
   );
 }
 
+/** Tokenise markdown-flavoured text into typed segments for rendering. */
+function tokenizeMarkdown(text: string): Array<{ type: 'plain' | 'bold' | 'italic'; text: string }> {
+  const tokens: Array<{ type: 'plain' | 'bold' | 'italic'; text: string }> = [];
+  const regex = /\*\*(.+?)\*\*|\*([^*\n]+)\*/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) tokens.push({ type: 'plain', text: text.slice(lastIndex, match.index) });
+    if (match[1] !== undefined) tokens.push({ type: 'bold', text: match[1] });
+    else tokens.push({ type: 'italic', text: match[2] });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) tokens.push({ type: 'plain', text: text.slice(lastIndex) });
+  return tokens;
+}
+
+/**
+ * Renders LLM response text with basic markdown: **bold**, *italic*, and
+ * paragraph breaks (double newline). Single newlines become <br>.
+ * Search highlighting is preserved within plain text segments.
+ */
+function MarkdownText({ text, query }: { text: string; query: string }) {
+  const paragraphs = text.split(/\n\n+/);
+  return (
+    <>
+      {paragraphs.map((para, pi) => (
+        <p key={pi} style={{ margin: pi === 0 ? '0' : '0.55em 0 0' }}>
+          {tokenizeMarkdown(para).map((tok, ti) => {
+            const parts = tok.text.split('\n');
+            const inner = parts.map((part, si) => (
+              <span key={si}>
+                {query.trim() ? <HighlightedText text={part} query={query} /> : part}
+                {si < parts.length - 1 && <br />}
+              </span>
+            ));
+            if (tok.type === 'bold') return <strong key={ti}>{inner}</strong>;
+            if (tok.type === 'italic') return <em key={ti}>{inner}</em>;
+            return <span key={ti}>{inner}</span>;
+          })}
+        </p>
+      ))}
+    </>
+  );
+}
+
 /**
  * Visual novel style message bubble.
  * User messages render as right-aligned accent-gradient bubbles.
  * Assistant messages render as left-aligned cards with avatar, name, and hover metadata.
  * Uses CSS animations from dialogue.css for entrance and components.css for typing dots.
+ *
+ * Feature #10: Adds a pin button that appears on hover. Clicking it calls
+ * PUT /api/messages/{serverMessageId}/pin and tracks pinned state locally.
+ * Pinned messages show a filled Pin indicator in the top-right corner.
  */
 export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect }: DialogueBubbleProps) {
+  const [pinned, setPinned] = useState(message.pinned ?? false);
+  const [hovered, setHovered] = useState(false);
+
+  /**
+   * Feature #10: Toggle the pinned state of this message.
+   * Calls PUT /api/messages/{serverMessageId}/pin optimistically — the local
+   * state flips immediately and is only reverted if the server call fails.
+   * No-op when serverMessageId is not available (e.g. pending messages).
+   *
+   * @param e - Mouse event (stopped from propagating to the bubble)
+   */
+  const handleTogglePin = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!message.serverMessageId) return;
+    const next = !pinned;
+    setPinned(next);
+    try {
+      await api.pinMessage(message.serverMessageId, next);
+    } catch (err) {
+      console.error('Pin failed:', err);
+      setPinned(!next); // revert
+    }
+  };
+
   if (message.role === 'user') {
     return (
-      <div className="flex justify-end mb-3">
+      <div
+        className="flex justify-end mb-3"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
         <div
-          className="dialogue-bubble dialogue-you px-4 py-2.5 max-w-[75%] text-sm"
+          className="dialogue-bubble dialogue-you px-4 py-2.5 max-w-[75%] text-sm relative"
           style={{ borderRadius: 'var(--radius-card)' }}
         >
+          {/* Pin indicator (always visible when pinned) */}
+          {pinned && (
+            <span
+              className="absolute -top-1.5 -right-1.5 flex items-center justify-center w-4 h-4 rounded-full"
+              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+              title="Pinned"
+            >
+              <Pin size={9} />
+            </span>
+          )}
+          {/* Pin toggle button (visible on hover when serverMessageId exists) */}
+          {hovered && message.serverMessageId != null && (
+            <button
+              onClick={handleTogglePin}
+              className="absolute -top-1.5 -left-1.5 flex items-center justify-center w-4 h-4 rounded-full transition-all"
+              style={{
+                backgroundColor: pinned ? 'var(--color-accent)' : 'var(--color-surface)',
+                color: pinned ? 'var(--color-accent-text)' : 'var(--color-text-tertiary)',
+                border: '1px solid var(--color-border)',
+              }}
+              title={pinned ? 'Unpin message' : 'Pin message'}
+            >
+              <Pin size={9} />
+            </button>
+          )}
           <HighlightedText text={message.text} query={searchQuery} />
         </div>
       </div>
@@ -82,15 +186,45 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
   }
 
   return (
-    <div className="dialogue-bubble mb-3">
+    <div
+      className="dialogue-bubble mb-3"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <div
-        className="dialogue-her p-4"
+        className="dialogue-her p-4 relative"
         style={{
           backgroundColor: 'var(--color-surface)',
           borderRadius: 'var(--radius-card)',
           boxShadow: 'var(--shadow-card)'
         }}
       >
+        {/* Feature #10: Pinned indicator — shown when pinned and not hovering over the toggle button */}
+        {pinned && !(hovered && message.serverMessageId != null) && (
+          <span
+            className="absolute top-2 right-2 flex items-center justify-center w-4 h-4 rounded-full"
+            style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
+            title="Pinned"
+          >
+            <Pin size={9} />
+          </span>
+        )}
+        {/* Feature #10: Pin toggle button — visible on hover when serverMessageId is available */}
+        {hovered && message.serverMessageId != null && (
+          <button
+            onClick={handleTogglePin}
+            className="absolute top-2 right-2 flex items-center justify-center w-5 h-5 rounded-full transition-all"
+            style={{
+              backgroundColor: pinned ? 'var(--color-accent)' : 'var(--color-accent-soft)',
+              color: pinned ? 'var(--color-accent-text)' : 'var(--color-accent)',
+              border: '1px solid var(--color-accent)',
+              opacity: pinned ? 1 : 0.8,
+            }}
+            title={pinned ? 'Unpin message' : 'Pin message'}
+          >
+            <Pin size={10} />
+          </button>
+        )}
         <div className="flex items-center gap-2 mb-2">
           {resolveAvatarUrl(character?.name, character?.avatar_url) ? (
             <img src={resolveAvatarUrl(character?.name, character?.avatar_url)!} alt="" className="w-8 h-8 rounded-full object-cover" />
@@ -107,7 +241,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               {character?.name?.[0] ?? '?'}
             </div>
           )}
-          <span className="font-semibold text-sm" style={{ color: 'var(--color-accent)' }}>
+          <span className="char-name-display" style={{ color: 'var(--color-accent)', fontSize: '0.9rem' }}>
             {character?.name || 'Assistant'}
           </span>
           {message.emotion && message.emotion !== 'neutral' && EMOTION_EMOJI[message.emotion] && (
@@ -146,7 +280,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               {message.text}
             </span>
           ) : (
-            <HighlightedText text={message.text} query={searchQuery} />
+            <MarkdownText text={message.text} query={searchQuery} />
           )}
         </div>
 

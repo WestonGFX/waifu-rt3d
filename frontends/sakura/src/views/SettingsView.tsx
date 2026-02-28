@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Brain, Volume2, Palette, Shield, Image, Settings, Package, User, Monitor,
-  Eye, Wrench, Lightbulb, Cpu, RefreshCw, CheckCircle, HelpCircle, ExternalLink
+  Eye, Wrench, Lightbulb, Cpu, RefreshCw, CheckCircle, HelpCircle, ExternalLink, Wand2,
+  ChevronDown
 } from 'lucide-react';
 import type { ModelCapabilities } from '../lib/api';
-import type { LayoutMode } from '../stores/appStore';
+import type { LayoutMode, ReplyLengthMode } from '../stores/appStore';
 import { useAppStore } from '../stores/appStore';
 import { useTheme } from '../hooks/useTheme';
 import { SettingField } from '../components/SettingField';
@@ -22,6 +23,20 @@ function cfgGet(config: Record<string, unknown>, key: string, fallback: unknown 
     cur = (cur as Record<string, unknown>)[p];
   }
   return cur ?? fallback;
+}
+
+/* ─── VRM performance tier classification ───────────────────────────── */
+/**
+ * Map triangle count to a human-readable performance tier with color coding.
+ *
+ * @param triangles - Total triangle count of the loaded VRM model.
+ * @returns Tier metadata: label, color, background tint, and description.
+ */
+function getVrmTier(triangles: number) {
+  if (triangles < 20_000)  return { label: 'Light',    color: '#39c96e', bg: 'rgba(57,201,110,0.10)',  desc: 'Runs smoothly on any hardware' };
+  if (triangles < 60_000)  return { label: 'Moderate', color: '#3b82f6', bg: 'rgba(59,130,246,0.10)',  desc: 'Good performance on mainstream GPUs' };
+  if (triangles < 120_000) return { label: 'Detailed', color: '#f59e0b', bg: 'rgba(245,158,11,0.10)',  desc: 'High-end GPU recommended' };
+  return                          { label: 'High-res', color: '#f44336', bg: 'rgba(244,67,54,0.10)',   desc: 'Enthusiast GPU required for full performance' };
 }
 
 /* ─── Shared inline styles ─────────────────────────────────────────── */
@@ -162,16 +177,21 @@ export function SettingsView() {
             </button>
           );
         })}
-        {/* Saved feedback — appears briefly after any setting is saved */}
-        {savedFlash && (
-          <span
-            className="ml-auto flex items-center gap-1 text-[10px] font-medium flex-shrink-0"
-            style={{ color: 'var(--color-success)' }}
-          >
-            <CheckCircle size={11} />
-            Saved
-          </span>
-        )}
+        {/* Right-side status: auto-save hint (idle) or "Saved ✓" flash */}
+        <span
+          className="ml-auto flex items-center gap-1 flex-shrink-0 transition-all duration-300"
+          style={{
+            fontSize: '0.68rem',
+            fontWeight: savedFlash ? 600 : 400,
+            color: savedFlash ? 'var(--color-success, #39c96e)' : 'var(--color-text-muted)',
+            opacity: savedFlash ? 1 : 0.6,
+          }}
+        >
+          {savedFlash
+            ? <><CheckCircle size={11} /> Saved</>
+            : <><span style={{ fontSize: '0.6rem' }}>●</span> Auto-saves</>
+          }
+        </span>
       </div>
 
       {/* Tab content */}
@@ -268,13 +288,20 @@ function SliderField({
    ═══════════════════════════════════════════════════════════════════════ */
 
 function CharacterTab() {
-  const { activeCharacter, setActiveCharacter, characters, loadCharacters, deleteCharacter } = useAppStore();
+  const { activeCharacter, setActiveCharacter, characters, loadCharacters, deleteCharacter, advancedMode, vrmStats, viewportFps } = useAppStore();
   const [vrmModels, setVrmModels] = useState<Array<{ name: string; url: string }>>([]);
   const [images, setImages] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  /** Feature #6: local backstory text (loaded from activeCharacter.backstory). */
+  const [backstory, setBackstory] = useState('');
+  const [backstorySaving, setBackstorySaving] = useState(false);
+  const [generatingBackstory, setGeneratingBackstory] = useState(false);
+  /** Feature #29: Day Off mode — pauses proactive/scheduled messages. */
+  const [dayOff, setDayOff] = useState(activeCharacter?.day_off ?? false);
 
   /** Download the active character as a .json file (id stripped for portability). */
   const exportCharacter = () => {
@@ -352,6 +379,8 @@ function CharacterTab() {
           : '',
       });
       setEvoError(null);
+      // Feature #6: sync backstory from character row
+      setBackstory(activeCharacter.backstory || '');
     }
   }, [activeCharacter]);
 
@@ -392,6 +421,8 @@ function CharacterTab() {
       const updated = await api.updateCharacter(activeCharacter.id, payload);
       setActiveCharacter({ ...activeCharacter, ...updated, ...localData });
       await loadCharacters();
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
     } catch (err) {
       console.error('Failed to save character:', err);
     } finally {
@@ -407,6 +438,51 @@ function CharacterTab() {
       }
     } catch (err) {
       console.error('Upload failed:', err);
+    }
+  };
+
+  /**
+   * Feature #6: Call the AI backstory generator endpoint and populate the textarea.
+   * POST /api/characters/{id}/generate-backstory — no request body required.
+   * On success the returned `backstory` string replaces the current textarea value.
+   *
+   * @returns void — state is updated directly
+   */
+  const handleGenerateBackstory = async () => {
+    if (!activeCharacter) return;
+    setGeneratingBackstory(true);
+    try {
+      const result = await api.generateBackstory(activeCharacter.id);
+      if (result.backstory) {
+        setBackstory(result.backstory);
+      } else {
+        alert('Backstory generation returned empty. Check that your LLM is connected and running.');
+      }
+    } catch (err) {
+      console.error('Backstory generation failed:', err);
+      alert(`Backstory generation failed: ${err instanceof Error ? err.message : String(err)}\n\nMake sure your LLM server is running and configured in the Brain tab.`);
+    } finally {
+      setGeneratingBackstory(false);
+    }
+  };
+
+  /**
+   * Feature #6: Persist the current backstory textarea value to the backend.
+   * Calls api.updateCharacter with only the backstory field so other fields
+   * are not accidentally overwritten.
+   *
+   * @returns void — updates appStore on success
+   */
+  const handleSaveBackstory = async () => {
+    if (!activeCharacter) return;
+    setBackstorySaving(true);
+    try {
+      const updated = await api.updateCharacter(activeCharacter.id, { backstory });
+      setActiveCharacter({ ...activeCharacter, ...updated, backstory });
+    } catch (err) {
+      console.error('Failed to save backstory:', err);
+    } finally {
+      setBackstorySaving(false);
     }
   };
 
@@ -496,6 +572,82 @@ function CharacterTab() {
               ))}
             </select>
           </SettingField>
+
+          {/* VRM stats — shown when a model is loaded in the viewer */}
+          {vrmStats && localData.model_vrm && (() => {
+            const tier = getVrmTier(vrmStats.triangles);
+            return (
+              <div style={{ margin: '4px 0 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {/* Tier chip + triangle count (compact + advanced) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    padding: '2px 8px', borderRadius: 10, fontSize: '0.7rem', fontWeight: 600,
+                    backgroundColor: tier.bg, color: tier.color,
+                    border: `1px solid ${tier.color}44`,
+                  }}>
+                    ● {tier.label}
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>
+                    {vrmStats.triangles.toLocaleString()} triangles
+                  </span>
+                  {!advancedMode && (
+                    <span style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+                      — {tier.desc}
+                    </span>
+                  )}
+                </div>
+                {/* Advanced: full stats grid */}
+                {advancedMode && (
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '4px 12px', fontSize: '0.68rem',
+                    color: 'var(--color-text-secondary)',
+                    padding: '6px 8px',
+                    backgroundColor: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 6,
+                  }}>
+                    {([
+                      ['Triangles',    vrmStats.triangles.toLocaleString()],
+                      ['Vertices',     vrmStats.vertices.toLocaleString()],
+                      ['Meshes',       String(vrmStats.meshes)],
+                      ['Blend Shapes', String(vrmStats.blendShapes)],
+                      ['Bones',        String(vrmStats.bones)],
+                      ['VRM',          vrmStats.vrmVersion],
+                    ] as [string, string][]).map(([label, value]) => (
+                      <div key={label}>
+                        <div style={{ color: 'var(--color-text-muted)', fontSize: '0.62rem', marginBottom: 1 }}>{label}</div>
+                        <div style={{ fontWeight: 600, fontFamily: 'var(--font-mono, monospace)' }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Hint — VRM selected but viewer not yet opened */}
+          {!vrmStats && localData.model_vrm && (
+            <p style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', margin: '2px 0 8px' }}>
+              Open the 3D viewer to analyze model performance.
+            </p>
+          )}
+
+          {/* FPS performance warning — inline, no popups */}
+          {viewportFps !== null && viewportFps < 30 && localData.model_vrm && (
+            <div style={{
+              padding: '8px 10px', borderRadius: 6, marginBottom: 4,
+              backgroundColor: viewportFps < 20 ? 'rgba(244,67,54,0.08)' : 'rgba(245,158,11,0.08)',
+              border: `1px solid ${viewportFps < 20 ? 'rgba(244,67,54,0.25)' : 'rgba(245,158,11,0.25)'}`,
+              fontSize: '0.71rem', lineHeight: 1.5,
+              color: viewportFps < 20 ? '#f44336' : '#d97706',
+            }}>
+              <strong>⚠ {viewportFps < 20 ? 'Very low' : 'Low'} frame rate</strong>
+              {' '}({viewportFps} FPS). For better performance, try a lighter VRM model
+              or reduce Shadow Quality and Render Scale in the 3D Viewer settings.
+            </div>
+          )}
 
           <SettingField label="Background Image" description="Shown behind the 3D avatar in the viewport.">
             <select
@@ -627,6 +779,93 @@ function CharacterTab() {
         </div>
       </section>
 
+      {/* Feature #6: Backstory */}
+      <section className="mb-6">
+        <SectionHeader title="Backstory" />
+        <div style={cardStyle} className="px-4 py-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+              Backstory
+            </span>
+            <button
+              onClick={handleGenerateBackstory}
+              disabled={generatingBackstory}
+              className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full disabled:opacity-50 transition-colors"
+              style={{
+                backgroundColor: 'var(--color-accent-soft)',
+                color: 'var(--color-accent)',
+                border: '1px solid var(--color-accent)',
+              }}
+              title="Generate backstory with AI"
+            >
+              <Wand2 size={10} />
+              {generatingBackstory ? 'Generating...' : 'Generate'}
+            </button>
+          </div>
+          <p className="text-xs mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+            Narrative background for this character. Click Generate to create one with AI.
+          </p>
+          <textarea
+            rows={5}
+            value={backstory}
+            onChange={(e) => setBackstory(e.target.value)}
+            placeholder="Enter a backstory or click Generate to create one with AI..."
+            className="text-xs px-2 py-1.5 rounded w-full resize-y"
+            style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text)',
+              minHeight: '100px',
+            }}
+          />
+          <div className="flex justify-end mt-2">
+            <button
+              onClick={handleSaveBackstory}
+              disabled={backstorySaving}
+              className="text-xs px-3 py-1.5 rounded-lg disabled:opacity-50"
+              style={{
+                backgroundColor: 'var(--color-accent)',
+                color: 'var(--color-accent-text)',
+              }}
+            >
+              {backstorySaving ? 'Saving...' : 'Save Backstory'}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Feature #29: Day Off Mode */}
+      <section className="mb-6">
+        <SectionHeader title="Availability" />
+        <div style={cardStyle} className="px-4">
+          <SettingField
+            label="Day Off"
+            description="Pause all proactive and scheduled messages for this character today."
+            tooltip="When enabled, the scheduler skips this character entirely. The character will still reply normally when you send a message."
+          >
+            <input
+              type="checkbox"
+              checked={dayOff}
+              onChange={async (e) => {
+                const enabled = e.target.checked;
+                setDayOff(enabled);
+                if (activeCharacter) {
+                  try {
+                    await fetch(`/api/characters/${activeCharacter.id}/day-off`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ enabled }),
+                    });
+                    setActiveCharacter({ ...activeCharacter, day_off: enabled });
+                  } catch { setDayOff(!enabled); /* revert on error */ }
+                }
+              }}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+        </div>
+      </section>
+
       {/* Save + Delete buttons */}
       <div className="flex items-center justify-between gap-3">
         {/* Delete with two-step confirmation */}
@@ -686,13 +925,13 @@ function CharacterTab() {
         <button
           onClick={saveCharacter}
           disabled={saving}
-          className="px-5 py-2 text-sm font-medium rounded-lg disabled:opacity-50"
+          className="px-5 py-2 text-sm font-medium rounded-lg disabled:opacity-50 transition-colors duration-300"
           style={{
-            backgroundColor: 'var(--color-accent)',
+            backgroundColor: saveSuccess ? 'var(--color-success, #39c96e)' : 'var(--color-accent)',
             color: 'var(--color-accent-text)',
           }}
         >
-          {saving ? 'Saving...' : 'Save Changes'}
+          {saving ? 'Saving…' : saveSuccess ? '✓ Saved' : 'Save Changes'}
         </button>
       </div>
     </>
@@ -700,8 +939,625 @@ function CharacterTab() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
+   Theme Customization — preset swatches + custom color pickers
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/** localStorage key for persisted custom color overrides. */
+const CUSTOM_THEME_KEY = 'sakura-custom-theme';
+
+interface CustomThemeColors {
+  accent: string;
+  background: string;
+  surface: string;
+  textPrimary: string;
+  border: string;
+}
+
+/** Default color values that represent a neutral starting point for the
+ *  color pickers when no custom theme is saved.  These reflect the dark-sakura
+ *  palette so the pickers always show something sensible. */
+const DEFAULT_CUSTOM_COLORS: CustomThemeColors = {
+  accent: '#e88a9a',
+  background: '#1a1518',
+  surface: '#252022',
+  textPrimary: '#f0e6e8',
+  border: '#3a3234',
+};
+
+/** Maps each CSS variable name to the key in CustomThemeColors. */
+const CSS_VAR_MAP: Record<keyof CustomThemeColors, string> = {
+  accent: '--color-accent',
+  background: '--color-background',
+  surface: '--color-surface',
+  textPrimary: '--color-text-primary',
+  border: '--color-border',
+};
+
+/** A named preset that can set the data-theme attribute and/or inject
+ *  inline CSS variable overrides.  Setting customColors to null means the
+ *  preset relies purely on the data-theme CSS file. */
+interface ThemePreset {
+  id: string;
+  label: string;
+  /** data-theme value to apply, or null to leave the current one untouched */
+  dataTheme: 'sakura' | 'crystal' | 'dark-sakura' | 'dark-crystal' | null;
+  /** Accent swatch color for the visual card preview */
+  swatchAccent: string;
+  /** Background swatch color for the visual card preview */
+  swatchBg: string;
+  /** If present, these inline CSS vars are applied on top of data-theme */
+  customColors: CustomThemeColors | null;
+}
+
+const THEME_PRESETS: ThemePreset[] = [
+  {
+    id: 'dark',
+    label: 'Dark',
+    dataTheme: 'dark-sakura',
+    swatchAccent: '#e88a9a',
+    swatchBg: '#1a1518',
+    customColors: null,
+  },
+  {
+    id: 'light',
+    label: 'Light',
+    dataTheme: 'sakura',
+    swatchAccent: '#e8788a',
+    swatchBg: '#fdf5f7',
+    customColors: null,
+  },
+  {
+    id: 'sakura-custom',
+    label: 'Sakura',
+    dataTheme: 'dark-sakura',
+    swatchAccent: '#e879a0',
+    swatchBg: '#1a0d12',
+    customColors: {
+      accent: '#e879a0',
+      background: '#1a0d12',
+      surface: '#2a1020',
+      textPrimary: '#f5e0ea',
+      border: '#4a2030',
+    },
+  },
+  {
+    id: 'ocean',
+    label: 'Ocean',
+    dataTheme: 'dark-crystal',
+    swatchAccent: '#38bdf8',
+    swatchBg: '#0a1628',
+    customColors: {
+      accent: '#38bdf8',
+      background: '#0a1628',
+      surface: '#0f2040',
+      textPrimary: '#e0f0ff',
+      border: '#1a3a60',
+    },
+  },
+  {
+    id: 'forest',
+    label: 'Forest',
+    dataTheme: 'dark-sakura',
+    swatchAccent: '#4ade80',
+    swatchBg: '#0d1a0d',
+    customColors: {
+      accent: '#4ade80',
+      background: '#0d1a0d',
+      surface: '#152615',
+      textPrimary: '#e0f5e0',
+      border: '#204020',
+    },
+  },
+  {
+    id: 'sunset',
+    label: 'Sunset',
+    dataTheme: 'dark-sakura',
+    swatchAccent: '#fb923c',
+    swatchBg: '#1a0e08',
+    customColors: {
+      accent: '#fb923c',
+      background: '#1a0e08',
+      surface: '#281806',
+      textPrimary: '#fff0e0',
+      border: '#402010',
+    },
+  },
+];
+
+/**
+ * Applies a set of custom color overrides as inline CSS vars on the root
+ * element.  Inline style properties take precedence over attribute-matched
+ * rules, so they override whatever data-theme provides.
+ *
+ * @param colors - The color values to inject, or null to clear all overrides.
+ */
+function applyCustomColors(colors: CustomThemeColors | null): void {
+  const root = document.documentElement;
+  (Object.keys(CSS_VAR_MAP) as Array<keyof CustomThemeColors>).forEach((key) => {
+    if (colors) {
+      root.style.setProperty(CSS_VAR_MAP[key], colors[key]);
+    } else {
+      root.style.removeProperty(CSS_VAR_MAP[key]);
+    }
+  });
+}
+
+/**
+ * Saves custom theme colors to localStorage and applies them to the DOM.
+ *
+ * @param colors - The color values to persist, or null to clear saved overrides.
+ */
+function saveCustomTheme(colors: CustomThemeColors | null): void {
+  if (colors) {
+    localStorage.setItem(CUSTOM_THEME_KEY, JSON.stringify(colors));
+  } else {
+    localStorage.removeItem(CUSTOM_THEME_KEY);
+  }
+  applyCustomColors(colors);
+}
+
+/**
+ * Reads the persisted custom theme from localStorage and returns it, or null
+ * if no custom theme has been saved.
+ */
+function loadSavedCustomTheme(): CustomThemeColors | null {
+  try {
+    const raw = localStorage.getItem(CUSTOM_THEME_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as CustomThemeColors;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Self-contained "Theme Customization" section rendered inside GeneralTab.
+ * Reads and writes custom color overrides via the Zustand appStore so that
+ * they survive page reloads without any additional localStorage logic.
+ * App.tsx applies the persisted values on mount via a dedicated useEffect.
+ *
+ * @param props.setTheme - The useTheme setter, used to persist the base
+ *   data-theme value via Zustand when a preset is selected.
+ */
+function ThemeCustomizationSection({
+  setTheme,
+}: {
+  setTheme: (t: 'sakura' | 'crystal' | 'dark-sakura' | 'dark-crystal') => void;
+}) {
+  const { customTheme, setCustomThemeVar, resetCustomTheme } = useAppStore();
+
+  // Which preset card is visually "active" (best-effort match on mount)
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+  // Whether the custom color editor is expanded
+  const [expanded, setExpanded] = useState(false);
+
+  /**
+   * Derive a CustomThemeColors snapshot from the appStore's flat CSS-var map.
+   * Falls back to DEFAULT_CUSTOM_COLORS for vars not yet overridden so that
+   * the color pickers always show a sensible starting value.
+   */
+  const colors: CustomThemeColors = {
+    accent:      customTheme['--color-accent']      ?? DEFAULT_CUSTOM_COLORS.accent,
+    background:  customTheme['--color-background']  ?? DEFAULT_CUSTOM_COLORS.background,
+    surface:     customTheme['--color-surface']     ?? DEFAULT_CUSTOM_COLORS.surface,
+    textPrimary: customTheme['--color-text-primary'] ?? DEFAULT_CUSTOM_COLORS.textPrimary,
+    border:      customTheme['--color-border']      ?? DEFAULT_CUSTOM_COLORS.border,
+  };
+
+  // On mount: re-apply any values the store already has (covers the case where
+  // App.tsx's useEffect hasn't fired yet, e.g. when the overlay is opened fast).
+  useEffect(() => {
+    const saved = loadSavedCustomTheme();
+    if (saved && Object.keys(customTheme).length === 0) {
+      // Migrate legacy localStorage-only saves into the store on first open
+      (Object.keys(CSS_VAR_MAP) as Array<keyof CustomThemeColors>).forEach((key) => {
+        setCustomThemeVar(CSS_VAR_MAP[key], saved[key]);
+      });
+      setActivePreset('custom');
+    } else if (Object.keys(customTheme).length > 0) {
+      setActivePreset('custom');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * Handles clicking a named preset card.  Applies the data-theme change via
+   * the Zustand store (for persistence) and optionally injects custom CSS var
+   * overrides on top.
+   *
+   * @param preset - The preset definition to activate.
+   */
+  function handlePreset(preset: ThemePreset): void {
+    setActivePreset(preset.id);
+    if (preset.dataTheme) {
+      setTheme(preset.dataTheme);
+    }
+    if (preset.customColors) {
+      // Write each color var into the appStore and apply it to the DOM
+      (Object.keys(CSS_VAR_MAP) as Array<keyof CustomThemeColors>).forEach((key) => {
+        const cssVar = CSS_VAR_MAP[key];
+        const value = preset.customColors![key];
+        setCustomThemeVar(cssVar, value);
+        document.documentElement.style.setProperty(cssVar, value);
+      });
+      // Keep legacy localStorage in sync for backward compat
+      saveCustomTheme(preset.customColors);
+    } else {
+      // Pure data-theme preset — clear all inline overrides
+      resetCustomTheme();
+      applyCustomColors(null);
+      saveCustomTheme(null);
+    }
+  }
+
+  /**
+   * Handles a color picker change for a single variable.  Applies immediately
+   * to the DOM and persists via appStore (+ localStorage for backward compat).
+   *
+   * @param key - The color key to update.
+   * @param value - The new hex color string from the input[type=color].
+   */
+  function handleColorChange(key: keyof CustomThemeColors, value: string): void {
+    const cssVar = CSS_VAR_MAP[key];
+    setCustomThemeVar(cssVar, value);
+    document.documentElement.style.setProperty(cssVar, value);
+    setActivePreset('custom');
+    // Keep legacy localStorage in sync
+    const updated = { ...colors, [key]: value };
+    saveCustomTheme(updated);
+  }
+
+  /** Resets all inline CSS var overrides, clears appStore, and clears localStorage. */
+  function handleReset(): void {
+    resetCustomTheme();
+    applyCustomColors(null);
+    saveCustomTheme(null);
+    setActivePreset(null);
+  }
+
+  const colorFields: Array<{ key: keyof CustomThemeColors; label: string }> = [
+    { key: 'accent',      label: 'Accent' },
+    { key: 'background',  label: 'Background' },
+    { key: 'surface',     label: 'Surface' },
+    { key: 'textPrimary', label: 'Text' },
+    { key: 'border',      label: 'Border' },
+  ];
+
+  return (
+    <section className="mb-6">
+      <SectionHeader title="Theme Customization" />
+      <div style={cardStyle} className="px-4 py-1">
+
+        {/* ── Preset cards ─────────────────────────────────────────────── */}
+        <div className="py-3">
+          <p className="text-xs mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+            Choose a preset or customize individual colors below.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {THEME_PRESETS.map((preset) => {
+              const isActive = activePreset === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  onClick={() => handlePreset(preset)}
+                  aria-pressed={isActive}
+                  title={preset.label}
+                  style={{
+                    width: 80,
+                    border: isActive
+                      ? '2px solid var(--color-accent)'
+                      : '2px solid var(--color-border)',
+                    borderRadius: 'var(--radius-button)',
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    background: 'none',
+                    padding: 0,
+                    outline: 'none',
+                    flexShrink: 0,
+                  }}
+                >
+                  {/* Color swatch strip */}
+                  <div style={{ height: 28, background: preset.swatchBg, position: 'relative' }}>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 4,
+                        right: 6,
+                        width: 14,
+                        height: 14,
+                        borderRadius: '50%',
+                        background: preset.swatchAccent,
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                      }}
+                    />
+                  </div>
+                  {/* Label */}
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: isActive ? 600 : 400,
+                      padding: '3px 4px',
+                      background: 'var(--color-surface)',
+                      color: isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                      textAlign: 'center',
+                      lineHeight: '1.2',
+                    }}
+                  >
+                    {preset.label}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Divider ──────────────────────────────────────────────────── */}
+        <div style={{ height: 1, background: 'var(--color-border-subtle)', margin: '0 -16px' }} />
+
+        {/* ── Collapsible custom color editor ──────────────────────────── */}
+        <div className="py-2">
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1 text-xs font-medium w-full text-left py-1"
+            style={{ color: 'var(--color-text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}
+            aria-expanded={expanded}
+          >
+            <ChevronDown
+              size={13}
+              style={{
+                transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 150ms',
+              }}
+            />
+            Customize
+          </button>
+
+          {expanded && (
+            <div className="mt-2">
+              {/* 2-column color picker grid */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '8px 16px',
+                  marginBottom: 10,
+                }}
+              >
+                {colorFields.map(({ key, label }) => (
+                  <label
+                    key={key}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: 12,
+                      color: 'var(--color-text-primary)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      type="color"
+                      value={colors[key]}
+                      onChange={(e) => handleColorChange(key, e.target.value)}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        padding: 2,
+                        background: 'var(--color-surface)',
+                      }}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+
+              {/* Reset button */}
+              <button
+                onClick={handleReset}
+                className="text-xs px-3 py-1 rounded"
+                style={{
+                  ...selectStyle,
+                  cursor: 'pointer',
+                  color: 'var(--color-text-secondary)',
+                }}
+              >
+                Reset to Default
+              </button>
+            </div>
+          )}
+        </div>
+
+      </div>
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
    Tab: General (Appearance + Layout)
    ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── Shortcut Editor (Feature #24) ─────────────────────────────────────────
+   Maps every App.tsx shortcut description to its default key so Settings can
+   display and override them without App.tsx importing SettingsView.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+const DEFAULT_SHORTCUT_KEYS: Record<string, string> = {
+  'Open settings':           'ctrl+,',
+  'Open memory manager':     'ctrl+m',
+  'Open vocabulary manager': 'alt+v',
+  'Conversation analytics':  'alt+a',
+  'Session summary':         'alt+s',
+  'Character diary':         'alt+d',
+  'Relationship timeline':   'alt+t',
+  'Message schedules':       'alt+h',
+  'Global message search':   'alt+f',
+  'Scenario library':        'alt+i',
+  'Character mood board':    'alt+b',
+  'Model arena':             'alt+p',
+  'New character':           'alt+n',
+  'Toggle sidebar':          'ctrl+\\',
+  'Show keyboard shortcuts': '?',
+  'Character portfolio':     'alt+o',
+  'Session replay':          'alt+r',
+  'Relationship web':        'alt+w',
+  'Close overlay':           'escape',
+};
+
+/**
+ * Normalizes a KeyboardEvent to the same format used by useKeyboardShortcuts.
+ *
+ * @param e - The keyboard event to normalize.
+ * @returns A lowercase combo string like "ctrl+shift+k" or "escape".
+ */
+function normalizeCapture(e: React.KeyboardEvent): string {
+  const parts: string[] = [];
+  if (e.ctrlKey || e.metaKey) parts.push('ctrl');
+  if (e.shiftKey) parts.push('shift');
+  if (e.altKey) parts.push('alt');
+  const key = e.key.toLowerCase();
+  if (!['control', 'shift', 'alt', 'meta'].includes(key)) {
+    parts.push(key === ' ' ? 'space' : key);
+  }
+  return parts.join('+');
+}
+
+/**
+ * Settings section that lets users rebind all global keyboard shortcuts.
+ * Reads and writes to appStore's customKeyBindings map, which is persisted
+ * via localStorage through Zustand's partialize middleware.
+ */
+function ShortcutEditorSection() {
+  const { customKeyBindings, setCustomKeyBinding, resetCustomKeyBindings } = useAppStore();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [capturedKey, setCapturedKey] = useState('');
+
+  const startEdit = (desc: string) => { setEditing(desc); setCapturedKey(''); };
+
+  const handleCapture = (e: React.KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const combo = normalizeCapture(e);
+    if (combo) setCapturedKey(combo);
+  };
+
+  const saveEdit = () => {
+    if (editing && capturedKey) setCustomKeyBinding(editing, capturedKey);
+    setEditing(null);
+  };
+
+  return (
+    <section className="mb-6">
+      <SectionHeader title="Keyboard Shortcuts" />
+      <div style={cardStyle} className="px-4 pb-3">
+        <p className="text-xs py-2.5" style={{ color: 'var(--color-text-secondary)' }}>
+          Click Edit on any shortcut to rebind it. Custom bindings are shown in
+          <span style={{ color: 'var(--color-accent)' }}> accent color</span>.
+        </p>
+        <div>
+          {Object.entries(DEFAULT_SHORTCUT_KEYS).map(([desc, defaultKey]) => {
+            const current = customKeyBindings[desc] ?? defaultKey;
+            const isCustom = desc in customKeyBindings;
+            const isEditing = editing === desc;
+            return (
+              <div
+                key={desc}
+                className="flex items-center gap-3 py-1.5 px-2 rounded-lg"
+                style={{
+                  border: isEditing ? '1px solid var(--color-accent)' : '1px solid transparent',
+                  transition: 'border-color 0.15s',
+                }}
+              >
+                <span className="flex-1 text-xs" style={{ color: 'var(--color-text-primary)' }}>
+                  {desc}
+                </span>
+                {isEditing ? (
+                  <>
+                    {/* Invisible focusable div that captures key events */}
+                    <div
+                      role="textbox"
+                      aria-label={`Capture new key for ${desc}`}
+                      tabIndex={0}
+                      onKeyDown={handleCapture}
+                      // eslint-disable-next-line jsx-a11y/no-autofocus
+                      autoFocus
+                      className="text-xs px-3 py-1 rounded cursor-text select-none"
+                      style={{
+                        minWidth: 110,
+                        fontFamily: 'monospace',
+                        backgroundColor: 'var(--color-accent-soft)',
+                        color: capturedKey ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                        border: '1px solid var(--color-accent)',
+                      }}
+                    >
+                      {capturedKey || '— press keys —'}
+                    </div>
+                    <button
+                      onClick={saveEdit}
+                      disabled={!capturedKey}
+                      className="text-xs px-2 py-1 rounded disabled:opacity-40"
+                      style={{ backgroundColor: 'var(--color-accent)', color: '#fff' }}
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditing(null)}
+                      className="text-xs px-2 py-1 rounded"
+                      style={{ color: 'var(--color-text-tertiary)' }}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <kbd
+                      className="text-xs px-2 py-0.5 rounded"
+                      style={{
+                        backgroundColor: 'var(--color-background)',
+                        border: '1px solid var(--color-border)',
+                        color: isCustom ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      {current}
+                    </kbd>
+                    <button
+                      onClick={() => startEdit(desc)}
+                      className="text-[10px] px-2 py-0.5 rounded"
+                      aria-label={`Edit shortcut for ${desc}`}
+                      style={{ color: 'var(--color-text-tertiary)', border: '1px solid var(--color-border)' }}
+                    >
+                      Edit
+                    </button>
+                    {isCustom && (
+                      <button
+                        onClick={() => setCustomKeyBinding(desc, '')}
+                        className="text-[10px] px-2 py-0.5 rounded"
+                        aria-label={`Reset ${desc} to default`}
+                        style={{ color: 'var(--color-text-tertiary)' }}
+                      >
+                        ↺
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <button
+          onClick={resetCustomKeyBindings}
+          className="mt-3 text-xs px-3 py-1 rounded"
+          style={{ color: 'var(--color-text-tertiary)', border: '1px solid var(--color-border)' }}
+        >
+          Reset all to defaults
+        </button>
+      </div>
+    </section>
+  );
+}
 
 interface GeneralTabProps {
   config: Record<string, unknown>; save: (k: string, v: unknown) => void;
@@ -737,6 +1593,9 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
           </SettingField>
         </div>
       </section>
+
+      {/* Theme Customization */}
+      <ThemeCustomizationSection setTheme={setTheme} />
 
       {/* Layout */}
       <section className="mb-6">
@@ -990,6 +1849,9 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
           </SettingField>
         </div>
       </section>
+
+      {/* Keyboard Shortcuts editor (#24) */}
+      <ShortcutEditorSection />
     </>
   );
 }
@@ -1242,7 +2104,7 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
   const currentEndpoint = String(cfg('llm.endpoint', ''));
   const loadedModels = lmModels.filter(m => m.state === 'loaded');
   const unloadedModels = lmModels.filter(m => m.state !== 'loaded');
-  const { activeCharacter } = useAppStore();
+  const { activeCharacter, replyLengthMode, setReplyLengthMode } = useAppStore();
 
   // Ollama model list (fetched separately from LM Studio)
   const [ollamaModels, setOllamaModels] = useState<LMStudioModel[]>([]);
@@ -1492,6 +2354,29 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
               className="text-sm px-2 py-1 w-full rounded resize-y"
               style={selectStyle}
             />
+          </SettingField>
+
+          <SettingField
+            label="Reply Length"
+            description="How many tokens the AI targets per response. Auto adjusts based on your typing speed."
+          >
+            <div className="flex gap-1.5">
+              {(['brief', 'normal', 'detailed', 'auto'] as ReplyLengthMode[]).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setReplyLengthMode(mode)}
+                  aria-pressed={replyLengthMode === mode}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium capitalize transition-colors"
+                  style={{
+                    backgroundColor: replyLengthMode === mode ? 'var(--color-accent)' : 'var(--color-surface)',
+                    color: replyLengthMode === mode ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
+                    border: '1px solid ' + (replyLengthMode === mode ? 'var(--color-accent)' : 'var(--color-border)'),
+                  }}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
           </SettingField>
         </div>
       </section>
@@ -2008,6 +2893,154 @@ function AIArtTab({ save, cfg }: TabProps) {
    Tab: System & Dev
    ═══════════════════════════════════════════════════════════════════════ */
 
+/**
+ * Live performance stats for animation generation and 3D viewport.
+ * Polls /api/motion/stats every 5 seconds and listens for fpsUpdate messages
+ * from the viewer iframe.
+ *
+ * Renders:
+ *  - Animation backend (procedural / AI) + average & last latency
+ *  - Request success rate (ok / total)
+ *  - 3D viewport FPS (sourced from fpsUpdate postMessage)
+ */
+function PerformanceStatsSection() {
+  const [motionStats, setMotionStats] = useState<{
+    connected: boolean;
+    remote_url: string | null;
+    backend_name: string | null;
+    requests_total: number;
+    requests_ok: number;
+    avg_latency_ms: number | null;
+    last_latency_ms: number | null;
+    remote_avg_latency_ms: number | null;
+    remote_p95_latency_ms: number | null;
+  } | null>(null);
+  const [viewFps, setViewFps] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Poll motion stats
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      try {
+        const s = await api.getMotionStats();
+        if (active) { setMotionStats(s); setLoading(false); }
+      } catch { if (active) setLoading(false); }
+    }
+    load();
+    const id = setInterval(load, 5000);
+    return () => { active = false; clearInterval(id); };
+  }, []);
+
+  // Subscribe to FPS updates from the viewer iframe
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'fpsUpdate') setViewFps(e.data.fps as number);
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  /** Colour-code latency: green < 200ms, yellow < 1000ms, red ≥ 1000ms */
+  function latencyColor(ms: number | null) {
+    if (ms == null) return 'var(--color-text-muted)';
+    return ms < 200 ? 'var(--color-success, #39c96e)' : ms < 1000 ? '#e8a22a' : '#f44';
+  }
+
+  const statRow: React.CSSProperties = {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '7px 0', borderBottom: '1px solid var(--color-border-subtle)',
+    fontSize: '0.78rem',
+  };
+  const labelStyle: React.CSSProperties = { color: 'var(--color-text-secondary)' };
+  const valStyle: React.CSSProperties = { fontVariantNumeric: 'tabular-nums', fontWeight: 600 };
+
+  return (
+    <section className="mb-6">
+      <SectionHeader title="Performance" />
+      <div style={cardStyle} className="px-4 py-1">
+        {loading && (
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', padding: '10px 0' }}>
+            Loading stats…
+          </p>
+        )}
+        {!loading && (
+          <>
+            {/* 3D Viewport FPS */}
+            <div style={statRow}>
+              <span style={labelStyle}>3D Viewport FPS</span>
+              <span style={{
+                ...valStyle,
+                color: viewFps == null ? 'var(--color-text-muted)'
+                     : viewFps >= 50 ? 'var(--color-success, #39c96e)'
+                     : viewFps >= 25 ? '#e8a22a' : '#f44',
+              }}>
+                {viewFps != null ? `${viewFps} FPS` : 'Panel not open'}
+              </span>
+            </div>
+
+            {/* Motion backend */}
+            <div style={statRow}>
+              <span style={labelStyle}>Animation Backend</span>
+              <span style={{ ...valStyle, color: 'var(--color-text-primary)' }}>
+                {motionStats?.connected && motionStats.remote_url
+                  ? `Remote GPU (${motionStats.backend_name ?? 'procedural'})`
+                  : motionStats?.backend_name ?? 'procedural'}
+              </span>
+            </div>
+
+            {/* Remote URL (if connected) */}
+            {motionStats?.connected && motionStats.remote_url && (
+              <div style={statRow}>
+                <span style={labelStyle}>GPU Server</span>
+                <span style={{ ...valStyle, fontSize: '0.7rem', color: 'var(--color-success, #39c96e)', fontFamily: 'var(--font-mono, monospace)' }}>
+                  {motionStats.remote_url}
+                </span>
+              </div>
+            )}
+
+            {/* Avg latency (local proxy) */}
+            <div style={statRow}>
+              <span style={labelStyle}>Avg Animation Latency</span>
+              <span style={{ ...valStyle, color: latencyColor(motionStats?.avg_latency_ms ?? null) }}>
+                {motionStats?.avg_latency_ms != null ? `${motionStats.avg_latency_ms} ms` : '—'}
+              </span>
+            </div>
+
+            {/* Last latency */}
+            <div style={statRow}>
+              <span style={labelStyle}>Last Animation Latency</span>
+              <span style={{ ...valStyle, color: latencyColor(motionStats?.last_latency_ms ?? null) }}>
+                {motionStats?.last_latency_ms != null ? `${motionStats.last_latency_ms} ms` : '—'}
+              </span>
+            </div>
+
+            {/* Remote server p95 (shown only when connected) */}
+            {motionStats?.connected && (
+              <div style={statRow}>
+                <span style={labelStyle}>GPU Server p95 Latency</span>
+                <span style={{ ...valStyle, color: latencyColor(motionStats?.remote_p95_latency_ms ?? null) }}>
+                  {motionStats?.remote_p95_latency_ms != null ? `${motionStats.remote_p95_latency_ms} ms` : '—'}
+                </span>
+              </div>
+            )}
+
+            {/* Request counters */}
+            <div style={{ ...statRow, borderBottom: 'none' }}>
+              <span style={labelStyle}>Animation Requests</span>
+              <span style={{ ...valStyle, color: 'var(--color-text-primary)' }}>
+                {motionStats
+                  ? `${motionStats.requests_ok} / ${motionStats.requests_total} ok`
+                  : '—'}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function SystemTab({ save, cfg }: TabProps) {
   const { openOverlay } = useAppStore();
 
@@ -2127,6 +3160,8 @@ function SystemTab({ save, cfg }: TabProps) {
         </div>
       </section>
 
+      <PerformanceStatsSection />
+
       <section className="mb-6">
         <SectionHeader title="Vocabulary" />
         <div style={cardStyle} className="px-4">
@@ -2171,6 +3206,17 @@ function SystemTab({ save, cfg }: TabProps) {
             />
           </SettingField>
 
+          <SettingField label="Export All Data" description="Download a ZIP of all characters, sessions, messages, memories, and config. (#20)">
+            <a
+              href="/api/data/export"
+              download
+              className="text-sm px-3 py-1 rounded cursor-pointer inline-block"
+              style={{ ...selectStyle, textDecoration: 'none' }}
+            >
+              Download ZIP
+            </a>
+          </SettingField>
+
           <SettingField label="Factory Reset" description="Wipe all settings to defaults. Characters and history are kept.">
             <button
               onClick={handleFactoryReset}
@@ -2182,6 +3228,92 @@ function SystemTab({ save, cfg }: TabProps) {
           </SettingField>
         </div>
       </section>
+
+      <section className="mb-6">
+        <SectionHeader title="Webhooks" />
+        <div style={cardStyle} className="px-4">
+          <WebhookSection cfg={cfg} save={save} />
+        </div>
+      </section>
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Webhook Config Sub-Section (#7 — Sakura parity with Neon)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Fields for configuring outbound webhook URLs.
+ * Each URL is fired by the backend on the corresponding event.
+ * A "Test" button sends a GET request to verify reachability.
+ */
+function WebhookSection({ cfg, save }: Pick<TabProps, 'cfg' | 'save'>) {
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<Record<string, 'ok' | 'err'>>({});
+
+  /**
+   * Fires a GET to the given webhook URL and records pass/fail.
+   *
+   * @param key - Config key (used as result key)
+   * @param url - The webhook URL to test
+   */
+  const testWebhook = async (key: string, url: string) => {
+    if (!url) return;
+    setTesting(key);
+    try {
+      await fetch('/api/config/webhooks/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      setTestResult(r => ({ ...r, [key]: 'ok' }));
+    } catch {
+      setTestResult(r => ({ ...r, [key]: 'err' }));
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const webhooks = [
+    { key: 'webhook_on_message',       label: 'On Message',        description: 'Fired after every assistant reply.' },
+    { key: 'webhook_on_session_start', label: 'On Session Start',  description: 'Fired when a new session begins.' },
+    { key: 'webhook_on_emotion_change',label: 'On Emotion Change', description: 'Fired when the detected emotion changes.' },
+  ] as const;
+
+  return (
+    <>
+      {webhooks.map(({ key, label, description }) => {
+        const url = String(cfg(key, ''));
+        const result = testResult[key];
+        return (
+          <SettingField key={key} label={label} description={description} advanced>
+            <div className="flex items-center gap-2">
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => save(key, e.target.value)}
+                placeholder="https://..."
+                className="text-sm px-2 py-1 rounded w-52"
+                style={selectStyle}
+              />
+              <button
+                onClick={() => testWebhook(key, url)}
+                disabled={!url || testing === key}
+                className="text-xs px-2 py-1 rounded"
+                style={{
+                  ...selectStyle,
+                  opacity: (!url || testing === key) ? 0.4 : 1,
+                  color: result === 'ok' ? 'var(--color-success)' : result === 'err' ? '#ef4444' : 'var(--color-text-secondary)',
+                }}
+                title="Send a test ping to this URL"
+              >
+                {testing === key ? '…' : result === 'ok' ? '✓ OK' : result === 'err' ? '✗ Fail' : 'Test'}
+              </button>
+            </div>
+          </SettingField>
+        );
+      })}
     </>
   );
 }

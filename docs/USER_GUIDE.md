@@ -342,6 +342,25 @@ Default shortcuts:
 
 Shortcuts are fully customizable via the in-app editor.
 
+### Sakura Panel Shortcuts
+
+All overlay panels in the Sakura frontend are accessible via `alt+` shortcuts:
+
+| Shortcut | Panel |
+|----------|-------|
+| `alt+s` | Session Summary Panel |
+| `alt+h` | Schedule Editor |
+| `alt+f` | Global Search |
+| `alt+i` | Scenario Library |
+| `alt+b` | Mood Board Editor |
+| `alt+p` | Model Arena (LLM comparison) |
+| `alt+r` | Session Replay |
+| `alt+o` | Character Portfolio |
+| `alt+w` | Relationship Web |
+| `alt+a` | Analytics Panel |
+
+These shortcuts fire regardless of focus and are not remappable in the current release.
+
 ---
 
 ## 11. Settings Reference
@@ -407,14 +426,72 @@ For the complete reference of all 75+ configuration keys with types, defaults, v
 
 ### Database issues
 
-- The database auto-migrates on startup (currently schema v16)
+- The database auto-migrates on startup (currently schema v21)
 - For corruption, delete `backend/storage/app.db` and restart (loses data)
 - You can also run `./setup.sh --repair` to re-run migrations and verify config
 - SQLite WAL mode is enabled for concurrent read/write
 
 ---
 
-## 13. Running Tests
+## 13. Sakura Mobile PWA
+
+The Sakura frontend ships as a Progressive Web App (PWA) — installable to your home screen on iPhone, iPad, and Android, with a native-app feel.
+
+### Installing on iOS (Safari)
+
+1. Open **http://localhost:8080/sakura** in Safari on iPhone or iPad
+2. Tap the **Share** button (box with arrow icon) in the toolbar
+3. Tap **"Add to Home Screen"**
+4. Tap **"Add"** — the Waifu.EXE icon appears on your home screen
+
+### Installing on Android (Chrome)
+
+1. Open **http://localhost:8080/sakura** in Chrome on Android
+2. Chrome shows an **"Add to Home Screen"** banner automatically, or:
+3. Tap the **⋮ menu → "Add to Home Screen"**
+
+### Mobile UI Differences
+
+When accessed from a mobile device, the app switches to **MobileApp** layout:
+- **Bottom tab bar** with 5 tabs: Chats, Discover, Create, Memory, Settings
+- Swipe-friendly list views optimized for small screens
+- Same API and character data as the desktop experience
+
+> **Note:** The PWA requires your server to be reachable from the mobile device. On a LAN, use your Mac's local IP (e.g. `http://192.168.1.x:8080/sakura`) instead of `localhost`.
+
+---
+
+## 14. Remote GPU Motion Server
+
+The 3D viewer supports offloading animation generation to a Windows PC with an NVIDIA GPU on your local network, enabling higher-quality physics-based motion.
+
+### Setting Up
+
+1. On your Windows GPU machine, run the Waifu-RT3D motion server (see `backend/motion/README.md`)
+2. Ensure both machines are on the same WiFi network
+3. In the Sakura 3D viewer panel, click the **"Proc. Motion"** badge in the bottom bar to open the wizard
+
+### Wizard States
+
+The GPU wizard walks through 7 states:
+
+| State | Description |
+|-------|-------------|
+| **Idle** | Choose "Scan for GPU Server" or "Enter IP" manually |
+| **Scanning** | LAN subnet scan (~8 seconds) |
+| **Found** | Lists discovered servers — click "Connect" |
+| **Not Found** | Enter a server URL manually |
+| **Connecting** | Testing the connection |
+| **Connected** | Badge turns green, shows "GPU Remote" |
+| **Error** | Connection failed — shows error message |
+
+### Disconnecting
+
+Click the green **"GPU Remote"** badge and confirm to disconnect. The app falls back to local procedural generation immediately.
+
+---
+
+## 15. Running Tests
 
 ```bash
 # Run all 98 tests

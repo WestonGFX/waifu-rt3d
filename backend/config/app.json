@@ -51,7 +51,7 @@
   "bg_image": "/assets/characters/glitch/glitch_bedroom_bg.png",
   "background_mode": "image",
   "chat_layout": "Toggle View",
-  "fps_target": "120",
+  "fps_target": "60",
   "show_fps_overlay": true,
   "asr": {
     "provider": "browser",
@@ -60,8 +60,8 @@
   },
   "content_filter_level": 1,
   "image_gen": {
-    "provider": "disabled",
-    "endpoint": "http://localhost:8188",
+    "provider": "easydiffusion",
+    "endpoint": "http://10.0.0.202:9000/",
     "model": "z-image-turbo",
     "steps": 9,
     "width": 512,
@@ -70,5 +70,6 @@
   "video_gen": {
     "provider": "disabled",
     "endpoint": "http://localhost:8188"
-  }
+  },
+  "antialias": false
 }

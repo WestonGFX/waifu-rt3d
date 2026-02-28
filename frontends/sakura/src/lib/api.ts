@@ -1,4 +1,4 @@
-import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse, VocabEntry } from './types';
+import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse, VocabEntry, Universe } from './types';
 
 // ─── LM Studio Model Manager types ───────────────────────────────────────────
 
@@ -140,6 +140,24 @@ async function del<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/**
+ * Generic PATCH request with typed response.
+ *
+ * @param url - API endpoint path
+ * @param body - Request body (will be JSON-stringified)
+ * @returns Parsed JSON response
+ * @throws Error if response is not ok
+ */
+async function patch<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`PATCH ${url}: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
 /** Typed API client for the waifu-rt3d backend. */
 export const api = {
   // Config
@@ -159,17 +177,27 @@ export const api = {
   exportCharacter: (charId: number) =>
     post<{ ok: boolean; character: Record<string, unknown> }>(`/api/characters/export/${charId}`, {}),
 
+  // Feature #6: Backstory generator
+  generateBackstory: (charId: number) =>
+    post<{ ok: boolean; backstory: string }>(`/api/characters/${charId}/generate-backstory`, {}),
+
   // Sessions
   getSessions: () => get<{ sessions: Session[] }>('/api/sessions').then(d => d.sessions),
   createSession: (charId: number) => post<Session>('/api/sessions', { character_id: charId }),
   createNamedSession: (title: string) => post<{ id: number; title: string }>('/api/sessions', { title }),
   updateSession: (id: number, data: { title?: string; is_pinned?: boolean; is_archived?: boolean }) =>
     put<{ ok: boolean }>(`/api/sessions/${id}`, data),
+  // Feature #9: Update tags on a session
+  updateSessionTags: (id: number, tags: string[]) =>
+    patch<{ ok: boolean; tags: string[] }>(`/api/sessions/${id}/tags`, { tags }),
   deleteSession: (id: number) => del<{ ok: boolean; deleted_messages: number }>(`/api/sessions/${id}`),
   getMessages: (sessionId: number) =>
     get<{ messages: Array<{ id: number; role: string; content: string; created_at: string }> }>(
       `/api/sessions/${sessionId}/messages`
     ),
+  // Feature #10: Pin or unpin a message
+  pinMessage: (messageId: number, pinned: boolean) =>
+    put<{ ok: boolean }>(`/api/messages/${messageId}/pin`, { pinned }),
 
   // Chat
   sendChat: (req: { text: string; session_id: number; char_id: number; speak: boolean }) =>
@@ -198,6 +226,59 @@ export const api = {
   installTTSModel: (modelId: string) => post<{ ok: boolean }>('/api/tts/models/install', { model_id: modelId }),
   deleteTTSModel: (modelId: string) => del<{ ok: boolean }>(`/api/tts/models/${encodeURIComponent(modelId)}`),
   refreshTTSCatalog: () => post<{ ok: boolean; count: number }>('/api/tts/models/refresh-catalog', {}),
+
+  // AI Motion generation
+  getMotionModelStatus: () =>
+    get<{ procedural: boolean; motion_diffuse: boolean; active_backend: string; model_dir: string }>('/api/motion/model-status'),
+  generateMotion: (body: { emotion: string; intensity?: number; duration?: number; context?: string; label?: string; loop?: boolean }) =>
+    post<{ label: string; backend: string; duration: number; loop: boolean; keyframes: Array<{ time: number; bones: Record<string, { x: number; y: number; z: number }> }>; latency_ms?: number }>('/api/motion/generate', body),
+
+  /** Scan local network for GPU motion servers via UDP broadcast (blocks ~8s). */
+  discoverMotion: () =>
+    get<{ servers: Array<{ ip: string; port: number; version: string; url: string }> }>('/api/motion/discover'),
+
+  /** Connect to a remote GPU motion server (probe + save URL to config). */
+  connectMotion: (url: string) =>
+    post<{ ok: boolean; url: string; backend: string | null; message: string }>('/api/motion/connect', { url }),
+
+  /** Disconnect from the remote GPU server (clears saved URL). */
+  disconnectMotion: () =>
+    del<{ ok: boolean; message: string }>('/api/motion/connect'),
+
+  /**
+   * Get full context window usage breakdown for a session.
+   * Returns token counts per prompt section plus chat history.
+   */
+  getContextBudget: (sessionId: number, charId?: number) => {
+    const q = charId ? `?char_id=${charId}` : '';
+    return get<{
+      ok: boolean;
+      context_limit: number;
+      history_limit: number;
+      sections: Array<{ name: string; tokens: number; chars: number }>;
+      total_tokens: number;
+      remaining_tokens: number;
+      usage_pct: number;
+    }>(`/api/context-budget/${sessionId}${q}`);
+  },
+
+  /**
+   * Live motion + performance stats.
+   * Merges local proxy counters with the remote server's own histogram.
+   */
+  getMotionStats: () =>
+    get<{
+      connected: boolean;
+      remote_url: string | null;
+      backend_name: string | null;
+      requests_total: number;
+      requests_ok: number;
+      requests_failed: number;
+      avg_latency_ms: number | null;
+      last_latency_ms: number | null;
+      remote_avg_latency_ms: number | null;
+      remote_p95_latency_ms: number | null;
+    }>('/api/motion/stats'),
 
   // Files
   scanVrm: () => get<{ models: Array<{ name: string; file: string; url: string; size: number }> }>('/api/scan/vrm').then(d => d.models),
@@ -313,6 +394,10 @@ export const api = {
   getCharacterStats: (charId: number) =>
     get<Record<string, unknown>>(`/api/characters/${charId}/stats`),
 
+  // Conversation analytics dashboard
+  getCharacterAnalytics: (charId: number) =>
+    get<Record<string, unknown>>(`/api/characters/${charId}/analytics`),
+
   // Gesture/expression trigger for the VRM viewer (Feature D)
   triggerGesture: (gesture: string | null, expression: string | null, intensity: number) =>
     post<{ ok: boolean }>('/api/viewer/gesture', { gesture, expression, intensity }),
@@ -322,4 +407,59 @@ export const api = {
     get<{ ok: boolean; pending: Array<{ id: number; char_id: number; char_name: string; char_avatar_url: string | null; text: string; triggered_at: string }> }>('/api/scheduler/pending'),
   acknowledgeScheduled: (messageId: number) =>
     post<{ ok: boolean }>('/api/scheduler/acknowledge', { message_id: messageId }),
+
+  // ── Feature #23: Universe / Shared World Builder ──────────────────────────
+
+  /**
+   * List all universes with character counts.
+   *
+   * @returns Array of Universe objects sorted alphabetically by name.
+   */
+  getUniverses: () => get<Universe[]>('/api/universes'),
+
+  /**
+   * Create a new universe.
+   *
+   * @param data - Object with `name` (required) and `lore` (optional) fields.
+   * @returns The newly created universe (id, name, lore).
+   */
+  createUniverse: (data: { name: string; lore: string }) =>
+    post<{ id: number; name: string; lore: string }>('/api/universes', data),
+
+  /**
+   * Update an existing universe's name and lore.
+   *
+   * @param id   - Universe primary key.
+   * @param data - Object with updated `name` and `lore` fields.
+   * @returns {"ok": true}
+   */
+  updateUniverse: (id: number, data: { name: string; lore: string }) =>
+    put<{ ok: boolean }>(`/api/universes/${id}`, data),
+
+  /**
+   * Delete a universe.  Member characters have their universe_id set to NULL.
+   *
+   * @param id - Universe primary key.
+   * @returns {"ok": true}
+   */
+  deleteUniverse: (id: number) => del<{ ok: boolean }>(`/api/universes/${id}`),
+
+  /**
+   * Assign a character to a universe (overwrites any previous assignment).
+   *
+   * @param universeId - Target universe primary key.
+   * @param charId     - Character primary key.
+   * @returns {"ok": true}
+   */
+  assignCharacterToUniverse: (universeId: number, charId: number) =>
+    post<{ ok: boolean }>(`/api/universes/${universeId}/characters/${charId}`, {}),
+
+  /**
+   * Remove a character from their universe (sets universe_id to NULL).
+   *
+   * @param charId - Character primary key.
+   * @returns {"ok": true}
+   */
+  removeCharacterFromUniverse: (charId: number) =>
+    del<{ ok: boolean }>(`/api/universes/characters/${charId}`),
 };

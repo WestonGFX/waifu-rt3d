@@ -2,17 +2,18 @@
    Dialogue — Visual Novel Style Chat Bubbles
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* Assistant message card */
+/* Assistant message card — tinted surface with left accent stripe */
 .dialogue-her {
   border-left: 3px solid var(--color-accent);
   backdrop-filter: var(--blur-surface);
+  background-color: color-mix(in srgb, var(--color-surface) 92%, var(--color-accent) 8%);
 }
 
 /* User message bubble — accent gradient */
 .dialogue-you {
   background: var(--color-accent-gradient);
   color: var(--color-accent-text);
-  box-shadow: 0 2px 8px var(--color-accent-soft);
+  box-shadow: 0 2px 12px var(--color-accent-soft), 0 1px 3px rgba(0,0,0,0.05);
 }
 
 /* Hover metadata reveal */
@@ -24,17 +25,27 @@
   opacity: 1;
 }
 
-/* Message entrance animation */
+/* Message entrance animation — focus-blur materialise */
 .dialogue-bubble {
-  animation: bubbleIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation: bubbleIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 @keyframes bubbleIn {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
+    filter: blur(3px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+    filter: blur(0);
   }
+}
+
+/* Character name in chat headers — clean sans-serif, slightly heavier than body */
+.char-name-display {
+  font-family: var(--font-body, 'Nunito'), 'SF Pro Text', sans-serif;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }

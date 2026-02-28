@@ -4,6 +4,93 @@ All notable changes to this project are documented here. Phases are listed in re
 
 ---
 
+## [v7.0.0] - Feb 27, 2026 — 32-Feature Sprint + UX Design Pass
+
+### 32-Feature Sprint — Phases 1–3 (Feb 27, 2026)
+
+Largest feature batch to date: 32 companion features across three phases, all implemented in a single agent sprint.
+
+#### Phase 1 (#1–#10, #26)
+- **Session Summary Panel** (alt+s) — auto-generated session recap with token usage, message count, and highlights
+- **Context Budget Bar** — live token usage indicator in ChatThread, color-coded green/yellow/red
+- **Milestone Celebration** — full-screen confetti overlay on affinity tier advancement
+- **Schedule Editor** (alt+h) — UI to set character availability windows, day-off toggles, and schedule rules
+- **Markdown Export** — export conversation as formatted Markdown
+- **Backstory Generator** — AI-generates character backstory from existing traits
+- **Webhook Config UI** — in-app editor for outbound webhook URLs and event filters
+- **Compression Preview** — shows what context will be removed before compression fires
+- **Session Tags** — tag sessions for filtering and search
+- **Message Pinning** — pin important messages to a character's permanent record
+- **Incognito Mode Prominence** — incognito toggle promoted to primary visibility in ChatThread
+
+#### Phase 2 (#11–#20, #24)
+- **Global Search Panel** (alt+f) — full-text message search using FTS5 with LIKE fallback
+- **Soundscape Player** — ambient audio loops (rain, café, forest, etc.) controllable per-character
+- **Scenario Library** (alt+i) — browse and load pre-written scenario prompts into any conversation
+- **Waveform Visualizer** — live audio waveform display during TTS playback
+- **Mood Board Editor** (alt+b) — pin and annotate images to set visual context for conversations
+- **Branching Visualizer** — interactive tree view of branched conversation paths
+- **Model Arena** (alt+p) — compare responses from two different LLM configs side-by-side
+- **Theme Customization** — additional theme customization controls in Settings
+- **Data Export ZIP** — export all sessions, characters, and media as a ZIP archive
+- **Custom Keyboard Shortcuts** (#24) — user-configurable alt+* hotkeys for all panels
+
+#### Phase 3 (#22–#29)
+- **Message Reactions Bar** — emoji reactions on individual messages (GET/POST/DELETE endpoints)
+- **Character Portfolio Cards** (alt+o) — full-page portfolio view of character stats and history
+- **Session Replay Modal** (alt+r) — replay any previous session as a scrolling read-only timeline
+- **Character Relationship Web** (alt+w) — visual affinity graph across all characters
+- **Day-Off Toggle** — set characters to be "unavailable" via PATCH /api/characters/{id}/day-off
+- **Schema v21** — added `message_reactions` table and `day_off` column to characters
+
+**New API endpoints (Phase 1–3):**
+- `GET/POST/DELETE /api/messages/{id}/reactions`
+- `GET /api/characters/{id}/portfolio`
+- `PATCH /api/characters/{id}/day-off`
+- `GET /api/search/messages` (FTS5 + LIKE fallback)
+- `GET /api/data/export` (ZIP, BackgroundTask cleanup)
+- `POST /api/arena/compare` (sequential LLM, per-config error isolation)
+
+### UI/UX Design Pass — "Intimate Luxury Digital" Aesthetic (Feb 27, 2026)
+
+Complete visual language pass applied to all Sakura components:
+
+- **Typography**: Nunito (warm rounded body) + Fraunces italic weight-300 (editorial display serif) via Google Fonts
+  - `char-name-display` CSS class applied in StatusBar, DialogueBubble, Sidebar
+  - CSS vars: `--font-body`, `--font-display` across all 4 themes
+- **Film grain overlay**: `body::after` SVG feTurbulence at 2–3.5% opacity per theme (all 4 themes)
+- **Dialogue bubbles**: blur-in entrance animation (`bubbleIn` now includes `filter: blur(3px) → 0`), tinted assistant card background via `color-mix()`
+- **WelcomeScreen**: full redesign — kanji backdrop, petal drift CSS animation, Heart icon brand mark, staggered card entrance
+- **ChatThread empty state**: greeting card with avatar, Fraunces character name, quoted greeting message
+- **Composer textarea**: auto-resize via `useEffect + scrollHeight` (max 80px), personalized placeholder `Message {name}…`
+- **Petal + panel-enter animations** added to components.css
+- **"● Auto-saves" flash chip**: persistent save confirmation replaces transient toast
+
+### Bug Fixes (Feb 27, 2026)
+
+- **VRM loading fixed**: illegal `break` statement replaced with `return` in viewer.html message handler (lines 2965, 2968) — models now load correctly
+- **Relationship URL 404 fixed**: `/api/characters/relationship` → `/api/characters/{id}/relationship` across App.tsx, MobileApp.tsx, and CharacterRelationshipWeb.tsx
+- **Pydantic BaseModel import**: added missing import in server.py that caused startup failure after Phase 3 additions
+- **Remote GPU wizard**: 7-state machine in ModelPanel (`idle → scanning → found/not_found → connecting → connected/error`) with LAN subnet scan
+- **FPS badge**: 3D viewport FPS overlay in ModelPanel, posted from viewer.html via `fpsUpdate` postMessage
+
+### Feature K — Mobile PWA (Feb 27, 2026)
+
+Full Sakura UI as an installable Progressive Web App:
+
+- **MobileApp.tsx**: separate root component for mobile with bottom tab navigation
+- **TabBar**: fixed bottom bar with Chats, Discover, Create, Memory, Settings tabs
+- **ChatsView / DiscoverView**: mobile-optimized list and discovery views
+- **PWA manifest** (`manifest.json`) and service worker (`sw.js`) for offline capability and home screen installation
+- **Device detection** (`deviceDetect.ts`) routes mobile visitors to MobileApp automatically
+
+### Feature L — Character Discovery Hub (Feb 27, 2026)
+
+- **DiscoverView**: grid of character portfolio cards for browsing and importing community characters
+- **CharacterPortfolioCard**: full stats card with affinity tier, message count, and quick-start button
+
+---
+
 ## [v6.1.0-dev] - Feb 25, 2026 — Phase 6F
 
 ### Phase 6F — Layered Procedural Animation System (Feb 25, 2026)

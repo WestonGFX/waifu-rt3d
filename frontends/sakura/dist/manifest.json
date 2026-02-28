@@ -1,0 +1,35 @@
+{
+  "name": "Waifu.EXE",
+  "short_name": "Waifu",
+  "description": "AI companion with 3D avatar",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0d14",
+  "theme_color": "#ff6b9d",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/files/images/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/files/images/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["entertainment", "lifestyle"],
+  "shortcuts": [
+    {
+      "name": "Open Chat",
+      "url": "/",
+      "description": "Resume your conversation"
+    },
+    {
+      "name": "Create Character",
+      "url": "/?tab=create",
+      "description": "Create a new character"
+    }
+  ]
+}

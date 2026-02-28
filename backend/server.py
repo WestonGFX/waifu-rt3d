@@ -24,6 +24,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Request, WebSocket
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from starlette.staticfiles import StaticFiles
 import time
 
@@ -1546,7 +1547,18 @@ def _build_prompt_sections(
     )
     sections.append(_section("Emotion Instructions", emotion_instruction))
 
-    # 8. Content filter
+    # 8. Response formatting instruction
+    format_instruction = (
+        "\n\nRESPONSE STYLE:\n"
+        "Write like a real person — short paragraphs, natural rhythm. "
+        "Separate distinct thoughts with a blank line. "
+        "Avoid long walls of text. Vary sentence length; mix short punchy lines with longer ones. "
+        "Use **bold** only for genuine emphasis, not decoration. "
+        "Never use bullet points or numbered lists in casual conversation."
+    )
+    sections.append(_section("Response Format", format_instruction))
+
+    # 9. Content filter
     filter_text = _get_content_filter_injection(cfg.get("content_filter_level", 1))
     if filter_text:
         sections.append(_section("Content Filter", filter_text))
@@ -2259,6 +2271,8 @@ async def chat_stream(req: Request):
     incognito = bool(body.get("incognito", False))
     # Per-request TTS speed override (#14): frontend speed slider sends speech_rate for this response only
     request_speech_rate = body.get("speech_rate")  # float or None
+    # Per-request reply length override from adaptive pacing (#21)
+    request_max_tokens = body.get("max_tokens")  # int | None
 
     cfg = load_config() or {}
 
@@ -2404,6 +2418,23 @@ async def chat_stream(req: Request):
             logger.info(f"[Phase9] Tier mismatch for char_id={char_id}: {_capability_warning}")
     # ── End Phase 9 capability profile ─────────────────────────────
 
+    # ── Feature #23: Universe lore injection ────────────────────────
+    # If the character belongs to a universe, prepend the universe's lore
+    # document to the system prompt so every character in the same shared
+    # world has a consistent narrative backdrop.
+    try:
+        _universe_row = cur.execute(
+            "SELECT u.lore FROM universes u "
+            "JOIN characters c ON c.universe_id = u.id "
+            "WHERE c.id = ?",
+            (char_id,),
+        ).fetchone()
+        if _universe_row and _universe_row[0]:
+            system_prompt = f"[Universe Lore]\n{_universe_row[0]}\n\n{system_prompt}"
+    except Exception as _ue:
+        logger.warning(f"[Universe#23] Could not inject universe lore for char_id={char_id}: {_ue}")
+    # ── End Feature #23 ─────────────────────────────────────────────
+
     # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, vocab, emotion, filter)
     sections = _build_prompt_sections(
         cfg, system_prompt, char_id, session_id, cur,
@@ -2531,7 +2562,7 @@ async def chat_stream(req: Request):
                     llm_messages, adapter, cfg, _agent_tools,
                     context=_agent_context,
                     temperature=cfg.get("temperature", 0.7),
-                    max_tokens=_cap_max_tokens,
+                    max_tokens=int(request_max_tokens) if request_max_tokens is not None else _cap_max_tokens,
                     repeat_penalty=cfg.get("repeat_penalty"),
                     frequency_penalty=cfg.get("frequency_penalty"),
                     extra_body=stream_extra_body,
@@ -3142,26 +3173,28 @@ async def refresh_tts_catalog():
 
 @app.get("/api/sessions")
 def list_sessions(archived: bool = False, search: str = None):
-    """List all chat sessions with pin/archive status.
+    """List all chat sessions with pin/archive status and tags.
 
     Args:
         archived: If True, return archived sessions. If False (default), return active sessions.
         search: Optional search string to filter sessions by title.
 
     Returns:
-        {"sessions": [{id, title, created_ts, message_count, is_pinned, is_archived, last_message_ts}]}
+        {"sessions": [{id, title, created_ts, message_count, is_pinned, is_archived,
+                       last_message_ts, tags}]}
     """
     conn = db()
     cur = conn.cursor()
 
     try:
-        # Full query with pin/archive support — pinned first, then by most recent activity
+        # Full query with pin/archive/tags support — pinned first, then by most recent activity
         base_sql = """
             SELECT s.id, s.title, s.created_ts,
                    (SELECT COUNT(id) FROM messages WHERE session_id=s.id) as msg_count,
                    COALESCE(s.is_pinned, 0) as is_pinned,
                    COALESCE(s.is_archived, 0) as is_archived,
-                   (SELECT MAX(ts) FROM messages WHERE session_id=s.id) as last_msg_ts
+                   (SELECT MAX(ts) FROM messages WHERE session_id=s.id) as last_msg_ts,
+                   s.tags
             FROM sessions s
         """
         conditions = []
@@ -3181,11 +3214,11 @@ def list_sessions(archived: bool = False, search: str = None):
 
         cur.execute(base_sql + where + order, params)
     except Exception:
-        # Fallback for older schema without is_pinned/is_archived
+        # Fallback for older schema without is_pinned/is_archived/tags
         cur.execute("""
             SELECT s.id, s.title, s.created_ts,
                    (SELECT COUNT(id) FROM messages WHERE session_id=s.id),
-                   0, 0, NULL
+                   0, 0, NULL, NULL
             FROM sessions s ORDER BY s.created_ts DESC
         """)
 
@@ -3199,6 +3232,7 @@ def list_sessions(archived: bool = False, search: str = None):
             "is_pinned": bool(row[4]),
             "is_archived": bool(row[5]),
             "last_message_ts": row[6],
+            "tags": json.loads(row[7] or "[]"),
         })
     conn.close()
     return {"sessions": sessions}
@@ -3367,13 +3401,14 @@ def get_session_messages(session_id: int, include_branches: bool = False):
 
     Returns:
         dict: {"messages": [{id, role, text, ts, parent_id, is_active, emotion, char_id,
-                             token_count, input_token_count, generation_time_ms, tokens_per_second}, ...]}
+                             token_count, input_token_count, generation_time_ms,
+                             tokens_per_second, pinned}, ...]}
     """
     conn = db()
     cur = conn.cursor()
     try:
         cols = ("id, role, text, ts, parent_id, is_active, emotion, char_id, "
-                "token_count, input_token_count, generation_time_ms, tokens_per_second")
+                "token_count, input_token_count, generation_time_ms, tokens_per_second, pinned")
         if include_branches:
             cur.execute(
                 f"SELECT {cols} FROM messages WHERE session_id=? ORDER BY id ASC",
@@ -3413,6 +3448,8 @@ def get_session_messages(session_id: int, include_branches: bool = False):
                 msg["generation_time_ms"] = r[10]
             if len(r) > 11 and r[11] is not None:
                 msg["tokens_per_second"] = r[11]
+            # Pinned flag (v20 column)
+            msg["pinned"] = bool(r[12]) if len(r) > 12 and r[12] is not None else False
             messages.append(msg)
         return {"messages": messages}
     finally:
@@ -5201,6 +5238,906 @@ async def generate_character_diary(char_id: int, req: Request):
     return {"ok": True, "diary": diary_text, "diary_date": today}
 
 
+# ── Character Analytics Dashboard ──────────────────────────────────────────────
+
+# Stop words filtered from word-frequency analysis.  Kept as a module-level
+# frozenset so it is built once and shared across all requests.
+_ANALYTICS_STOP_WORDS: frozenset = frozenset({
+    "a", "an", "the", "is", "in", "it", "of", "to", "and", "or", "but",
+    "i", "you", "me", "my", "we", "he", "she", "they", "them", "their",
+    "your", "our", "his", "her", "its", "was", "are", "be", "been", "being",
+    "do", "does", "did", "will", "would", "could", "should", "have", "has",
+    "had", "not", "no", "so", "if", "on", "at", "as", "by", "for", "from",
+    "with", "this", "that", "these", "those", "what", "which", "who", "how",
+    "when", "where", "why", "just", "can", "up", "out", "then", "than",
+    "also", "about", "like", "know", "think", "get", "got", "oh", "well",
+    "all", "one", "two", "more", "very", "too", "much", "really", "still",
+    "re", "ll", "ve", "s", "t", "m", "d",
+})
+
+# Variant emotion names mapped to canonical tracked buckets for arc pivoting.
+_EMOTION_BUCKET_MAP: dict = {
+    "joy":     "happy",
+    "hype":    "happy",
+    "playful": "happy",
+    "flirt":   "love",
+    "tease":   "love",
+    "anger":   "angry",
+    "sass":    "angry",
+    "cringe":  "angry",
+    "shock":   "neutral",
+    "comfort": "neutral",
+}
+
+_TRACKED_EMOTIONS = ("happy", "sad", "love", "angry", "neutral")
+
+
+@app.get("/api/characters/{char_id}/analytics")
+def get_character_analytics(char_id: int):
+    """Return conversation analytics for a character's chat history.
+
+    Aggregates data from the ``messages`` table to produce word frequencies,
+    session activity sparkline, latency/TPS performance stats, emotional arc,
+    and conversation depth metrics.  All computation is pure Python on the
+    server; no additional dependencies are required.
+
+    Args:
+        char_id: Character ID to compute analytics for.
+
+    Returns:
+        A dict with:
+        - ``word_frequencies``: Top-30 ``{word, count}`` dicts (assistant msgs).
+        - ``session_sparkline``: ``{date, count}`` dicts for the last 90 days.
+        - ``latency_avg_ms``: Mean generation time in milliseconds (int).
+        - ``latency_p95_ms``: 95th-percentile generation time in ms (int).
+        - ``latency_trend``: ``"improving"`` | ``"stable"`` | ``"degrading"``.
+        - ``tps_avg``: Mean tokens per second (float).
+        - ``emotion_arc``: ``{date, happy, sad, love, angry, neutral}`` dicts
+          for the last 30 days, grouped and pivoted by day.
+        - ``total_messages``: Total active message count for this character.
+        - ``total_sessions``: Distinct session count.
+        - ``avg_messages_per_session``: Float mean session length.
+        - ``longest_session_messages``: Max message count in one session.
+
+    Raises:
+        HTTPException 404: If the character does not exist.
+
+    Example:
+        >>> GET /api/characters/1/analytics
+        {"word_frequencies": [{"word": "love", "count": 42}], ...}
+    """
+    from collections import Counter as _Counter
+
+    conn = db()
+    try:
+        # Validate character exists
+        char_row = conn.execute(
+            "SELECT id FROM characters WHERE id = ?", (char_id,)
+        ).fetchone()
+        if not char_row:
+            raise HTTPException(404, "Character not found")
+
+        # Guard: return an empty structure when there are fewer than 5 messages
+        total_row = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE char_id = ? AND is_active = 1",
+            (char_id,),
+        ).fetchone()
+        total_messages: int = total_row[0] if total_row else 0
+
+        _empty = {
+            "word_frequencies": [],
+            "session_sparkline": [],
+            "latency_avg_ms": 0,
+            "latency_p95_ms": 0,
+            "latency_trend": "stable",
+            "tps_avg": 0.0,
+            "emotion_arc": [],
+            "total_messages": total_messages,
+            "total_sessions": 0,
+            "avg_messages_per_session": 0.0,
+            "longest_session_messages": 0,
+        }
+        if total_messages < 5:
+            return _empty
+
+        # ── 1. Word frequency (assistant messages only) ───────────────────────
+        text_rows = conn.execute(
+            "SELECT text FROM messages"
+            " WHERE char_id = ? AND role = 'assistant' AND is_active = 1",
+            (char_id,),
+        ).fetchall()
+        word_counter: _Counter = _Counter()
+        for (raw_text,) in text_rows:
+            if not raw_text:
+                continue
+            for word in re.split(r'\W+', raw_text.lower()):
+                if len(word) > 2 and word not in _ANALYTICS_STOP_WORDS:
+                    word_counter[word] += 1
+        word_frequencies = [
+            {"word": w, "count": c}
+            for w, c in word_counter.most_common(30)
+        ]
+
+        # ── 2. Session sparkline — daily message counts, last 90 days ─────────
+        now_ts = int(time.time())
+        cutoff_90 = now_ts - (90 * 86400)
+        sparkline_rows = conn.execute(
+            """
+            SELECT date(ts, 'unixepoch') AS d, COUNT(*) AS cnt
+            FROM messages
+            WHERE char_id = ? AND ts > ? AND is_active = 1
+            GROUP BY d
+            ORDER BY d
+            """,
+            (char_id, cutoff_90),
+        ).fetchall()
+        session_sparkline = [{"date": row[0], "count": row[1]} for row in sparkline_rows]
+
+        # ── 3. Latency & TPS (last 200 assistant messages) ────────────────────
+        latency_rows = conn.execute(
+            """
+            SELECT generation_time_ms, tokens_per_second
+            FROM messages
+            WHERE char_id = ? AND role = 'assistant' AND is_active = 1
+              AND generation_time_ms IS NOT NULL AND generation_time_ms > 0
+            ORDER BY id DESC
+            LIMIT 200
+            """,
+            (char_id,),
+        ).fetchall()
+
+        latency_avg_ms = 0
+        latency_p95_ms = 0
+        latency_trend = "stable"
+        tps_avg = 0.0
+
+        if latency_rows:
+            latency_vals = [r[0] for r in latency_rows]
+            tps_vals = [r[1] for r in latency_rows if r[1] is not None and r[1] > 0]
+
+            latency_avg_ms = round(sum(latency_vals) / len(latency_vals))
+
+            # Percentile-95 via sorted index — avoids numpy dependency
+            sorted_latency = sorted(latency_vals)
+            p95_idx = max(0, int(len(sorted_latency) * 0.95) - 1)
+            latency_p95_ms = sorted_latency[p95_idx]
+
+            tps_avg = round(sum(tps_vals) / len(tps_vals), 1) if tps_vals else 0.0
+
+            # Trend: compare mean of newest 20 vs previous 20 (lower ms = improving)
+            if len(latency_vals) >= 40:
+                recent_mean = sum(latency_vals[:20]) / 20
+                older_mean = sum(latency_vals[20:40]) / 20
+                delta = (recent_mean - older_mean) / max(older_mean, 1)
+                if delta < -0.10:
+                    latency_trend = "improving"
+                elif delta > 0.10:
+                    latency_trend = "degrading"
+                # else: stays "stable"
+
+        # ── 4. Emotional arc — last 30 days, pivoted by day ───────────────────
+        cutoff_30 = now_ts - (30 * 86400)
+        emotion_rows = conn.execute(
+            """
+            SELECT date(ts, 'unixepoch') AS d, emotion, COUNT(*) AS cnt
+            FROM messages
+            WHERE char_id = ? AND ts > ? AND is_active = 1
+              AND role = 'assistant' AND emotion IS NOT NULL AND emotion != ''
+            GROUP BY d, emotion
+            ORDER BY d
+            """,
+            (char_id, cutoff_30),
+        ).fetchall()
+
+        # Pivot: { date -> { canonical_emotion -> count } }
+        arc_map: dict = {}
+        for d, emotion, cnt in emotion_rows:
+            if d not in arc_map:
+                arc_map[d] = {"date": d, **{e: 0 for e in _TRACKED_EMOTIONS}}
+            canonical = emotion.lower()
+            if canonical in arc_map[d]:
+                arc_map[d][canonical] += cnt
+            elif canonical in _EMOTION_BUCKET_MAP:
+                arc_map[d][_EMOTION_BUCKET_MAP[canonical]] += cnt
+        emotion_arc = sorted(arc_map.values(), key=lambda x: x["date"])
+
+        # ── 5. Conversation depth stats ───────────────────────────────────────
+        depth_row = conn.execute(
+            """
+            SELECT COUNT(DISTINCT s.id) AS session_cnt,
+                   MAX(sub.msg_cnt)     AS longest
+            FROM sessions s
+            JOIN (
+                SELECT session_id, COUNT(*) AS msg_cnt
+                FROM messages
+                WHERE char_id = ? AND is_active = 1
+                GROUP BY session_id
+            ) sub ON sub.session_id = s.id
+            WHERE s.character_id = ?
+            """,
+            (char_id, char_id),
+        ).fetchone()
+
+        total_sessions = depth_row[0] if depth_row else 0
+        longest_session_messages = depth_row[1] if depth_row else 0
+        avg_messages_per_session = (
+            round(total_messages / total_sessions, 1) if total_sessions > 0 else 0.0
+        )
+
+        return {
+            "word_frequencies": word_frequencies,
+            "session_sparkline": session_sparkline,
+            "latency_avg_ms": latency_avg_ms,
+            "latency_p95_ms": latency_p95_ms,
+            "latency_trend": latency_trend,
+            "tps_avg": tps_avg,
+            "emotion_arc": emotion_arc,
+            "total_messages": total_messages,
+            "total_sessions": total_sessions,
+            "avg_messages_per_session": avg_messages_per_session,
+            "longest_session_messages": longest_session_messages,
+        }
+
+    finally:
+        conn.close()
+
+
+# ── Feature #6 — Character Backstory Generator ─────────────────────────────────
+
+@app.post("/api/characters/{char_id}/generate-backstory")
+async def generate_character_backstory(char_id: int):
+    """Generate and persist an LLM-written backstory for a character.
+
+    Loads the character's name, personality traits, and system prompt from the
+    database, builds a third-person narrative prompt, calls the configured LLM,
+    and saves the result to ``characters.backstory``.
+
+    Args:
+        char_id: ID of the character to generate a backstory for.
+
+    Returns:
+        {"backstory": "<generated text>"}
+
+    Raises:
+        HTTPException 404: If the character does not exist.
+        HTTPException 500: If the LLM call fails.
+
+    Example:
+        POST /api/characters/2/generate-backstory
+        Response: {"backstory": "Born in the neon-lit streets of Neo Kyoto..."}
+    """
+    conn = db()
+    try:
+        char_row = conn.execute(
+            "SELECT name, system_prompt, personality_traits FROM characters WHERE id = ?",
+            (char_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not char_row:
+        raise HTTPException(404, "Character not found")
+
+    char_name        = char_row[0] or "Character"
+    system_prompt    = char_row[1] or ""
+    personality      = char_row[2] or "not specified"
+    scenario_snippet = system_prompt[:300]
+
+    backstory_prompt = (
+        f"Write a rich backstory (2-3 paragraphs) for an anime character named {char_name}. "
+        f"Their personality: {personality}. "
+        f"Their role/scenario: {scenario_snippet}. "
+        f"Write in third person, past tense."
+    )
+
+    cfg = load_config()
+    try:
+        from backend.llm.registry import get_client
+        adapter = get_client(cfg)
+        res = await run_in_threadpool(
+            adapter.chat,
+            [{"role": "user", "content": backstory_prompt}],
+            cfg["llm"]["model"],
+            cfg["llm"]["endpoint"],
+            cfg["llm"]["api_key"],
+            temperature=0.8,
+            max_tokens=600,
+        )
+    except Exception as exc:
+        logger.error(f"[Backstory] LLM call failed for char {char_id}: {exc}")
+        raise HTTPException(500, f"LLM error: {exc}")
+
+    if not res.get("ok"):
+        raise HTTPException(500, res.get("error", "LLM error"))
+
+    backstory_text = res["reply"].strip()
+
+    conn = db()
+    try:
+        conn.execute(
+            "UPDATE characters SET backstory = ? WHERE id = ?",
+            (backstory_text, char_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    logger.info(f"[Backstory] Generated for char {char_id} ({char_name})")
+    return {"backstory": backstory_text}
+
+
+# ── Feature #9 — Session Tags ──────────────────────────────────────────────────
+
+@app.patch("/api/sessions/{session_id}/tags")
+async def update_session_tags(session_id: int, req: Request):
+    """Replace the tag list on a session.
+
+    Accepts a JSON body with a ``tags`` key containing a list of strings.
+    The list is serialised as a JSON array and stored in ``sessions.tags``.
+
+    Args:
+        session_id: ID of the session to tag.
+        req: JSON body ``{"tags": ["roleplay", "fluff"]}``.
+
+    Returns:
+        {"tags": [...], "session_id": session_id}
+
+    Raises:
+        HTTPException 400: If the body is malformed or ``tags`` is not a list
+            of strings.
+        HTTPException 404: If the session does not exist.
+
+    Example:
+        PATCH /api/sessions/7/tags
+        Body: {"tags": ["comedy", "slice-of-life"]}
+        Response: {"tags": ["comedy", "slice-of-life"], "session_id": 7}
+    """
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+
+    tags = body.get("tags")
+    if not isinstance(tags, list):
+        raise HTTPException(400, "'tags' must be a list")
+    if not all(isinstance(t, str) for t in tags):
+        raise HTTPException(400, "Each tag must be a string")
+
+    tags_json = json.dumps(tags)
+
+    conn = db()
+    try:
+        row = conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Session not found")
+        conn.execute("UPDATE sessions SET tags = ? WHERE id = ?", (tags_json, session_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+    logger.info(f"[Tags] Session {session_id} tags updated: {tags}")
+    return {"tags": tags, "session_id": session_id}
+
+
+# ── Feature #10 — Message Pinning ─────────────────────────────────────────────
+
+@app.put("/api/messages/{message_id}/pin")
+async def pin_message(message_id: int, req: Request):
+    """Set or clear the pinned flag on a single message.
+
+    Args:
+        message_id: ID of the message to pin or unpin.
+        req: JSON body ``{"pinned": true}`` or ``{"pinned": false}``.
+
+    Returns:
+        {"message_id": message_id, "pinned": bool}
+
+    Raises:
+        HTTPException 400: If the body is malformed or ``pinned`` is not a bool.
+        HTTPException 404: If the message does not exist.
+
+    Example:
+        PUT /api/messages/42/pin
+        Body: {"pinned": true}
+        Response: {"message_id": 42, "pinned": true}
+    """
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+
+    pinned_val = body.get("pinned")
+    if not isinstance(pinned_val, bool):
+        raise HTTPException(400, "'pinned' must be a boolean")
+
+    pinned_int = 1 if pinned_val else 0
+
+    conn = db()
+    try:
+        row = conn.execute("SELECT id FROM messages WHERE id = ?", (message_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Message not found")
+        conn.execute("UPDATE messages SET pinned = ? WHERE id = ?", (pinned_int, message_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+    logger.info(f"[Pin] Message {message_id} pinned={pinned_val}")
+    return {"message_id": message_id, "pinned": pinned_val}
+
+
+# ── Feature #14 — Branch Activation ───────────────────────────────────────────
+
+@app.post("/api/messages/{message_id}/activate")
+async def activate_branch(message_id: int):
+    """Activate a branched message, deactivating its siblings.
+
+    Switches the active conversation path to the given message by setting
+    ``is_active=1`` on it and ``is_active=0`` on all other messages that
+    share the same ``parent_id`` (i.e. branch siblings).
+
+    This allows the user to navigate between regenerated-response branches
+    produced by ``POST /api/messages/{id}/regenerate``.
+
+    Args:
+        message_id: ID of the message to make active.
+
+    Returns:
+        dict: ``{"ok": True, "message_id": int, "deactivated": list[int]}``
+            where ``deactivated`` lists sibling message IDs that were set
+            to inactive.
+
+    Raises:
+        HTTPException: 404 if the message does not exist.
+
+    Example:
+        >>> POST /api/messages/42/activate
+        {"ok": true, "message_id": 42, "deactivated": [38]}
+    """
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT id, parent_id FROM messages WHERE id = ?", (message_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Message not found")
+
+        _msg_id, parent_id = row
+
+        # Deactivate all siblings that share the same parent
+        deactivated: list[int] = []
+        if parent_id is not None:
+            siblings = conn.execute(
+                "SELECT id FROM messages WHERE parent_id = ? AND id != ?",
+                (parent_id, message_id),
+            ).fetchall()
+            sibling_ids = [r[0] for r in siblings]
+            if sibling_ids:
+                placeholders = ",".join("?" * len(sibling_ids))
+                conn.execute(
+                    f"UPDATE messages SET is_active=0 WHERE id IN ({placeholders})",
+                    sibling_ids,
+                )
+                deactivated = sibling_ids
+
+        # Activate the target message
+        conn.execute("UPDATE messages SET is_active=1 WHERE id = ?", (message_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    logger.info(f"[Branch] Activated message {message_id}, deactivated {deactivated}")
+    return {"ok": True, "message_id": message_id, "deactivated": deactivated}
+
+
+@app.get("/api/sessions/{session_id}/pinned")
+def get_pinned_messages(session_id: int):
+    """Return all pinned messages for a session.
+
+    Fetches every message in the session where ``pinned = 1``, ordered by
+    insertion order (id ASC).
+
+    Args:
+        session_id: Session whose pinned messages are requested.
+
+    Returns:
+        {"messages": [{id, role, content, emotion, ts, pinned}, ...]}
+
+    Example:
+        GET /api/sessions/3/pinned
+        Response: {"messages": [{"id": 17, "role": "assistant", ...}]}
+    """
+    conn = db()
+    try:
+        rows = conn.execute(
+            "SELECT id, role, text, emotion, ts FROM messages "
+            "WHERE session_id = ? AND pinned = 1 ORDER BY id ASC",
+            (session_id,)
+        ).fetchall()
+    finally:
+        conn.close()
+
+    messages = [
+        {
+            "id":      r[0],
+            "role":    r[1],
+            "content": r[2],
+            "emotion": r[3],
+            "ts":      r[4],
+            "pinned":  True,
+        }
+        for r in rows
+    ]
+    return {"messages": messages}
+
+
+# ── Feature #22 — Message Reactions ───────────────────────────────────────────
+
+@app.get("/api/messages/{message_id}/reactions")
+def get_message_reactions(message_id: int):
+    """Return all emoji reactions attached to a message.
+
+    Fetches every row in ``message_reactions`` for the given message, ordered
+    by insertion time ascending so the UI can display them in the order they
+    were added.
+
+    Args:
+        message_id: ID of the parent message.
+
+    Returns:
+        {"reactions": [{"id": int, "emoji": str, "ts": int}, ...]}
+
+    Raises:
+        HTTPException 404: If the parent message does not exist.
+
+    Example:
+        >>> GET /api/messages/42/reactions
+        {"reactions": [{"id": 1, "emoji": "❤️", "ts": 1700000000}]}
+    """
+    conn = db()
+    try:
+        msg_row = conn.execute(
+            "SELECT id FROM messages WHERE id = ?", (message_id,)
+        ).fetchone()
+        if not msg_row:
+            raise HTTPException(404, "Message not found")
+
+        rows = conn.execute(
+            "SELECT id, emoji, ts FROM message_reactions "
+            "WHERE message_id = ? ORDER BY ts ASC, id ASC",
+            (message_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return {
+        "reactions": [{"id": r[0], "emoji": r[1], "ts": r[2]} for r in rows]
+    }
+
+
+@app.post("/api/messages/{message_id}/reactions")
+async def add_message_reaction(message_id: int, req: Request):
+    """Add an emoji reaction to a message.
+
+    Inserts a new row in ``message_reactions`` and returns the created object.
+    Duplicate emoji on the same message is allowed (same as Discord behaviour —
+    each tap/click creates an independent row so the caller can de-duplicate on
+    the frontend if desired).
+
+    Args:
+        message_id: ID of the message to react to.
+        req: JSON body ``{"emoji": str}`` — the reaction emoji character(s).
+
+    Returns:
+        The newly created reaction: {"id": int, "message_id": int, "emoji": str, "ts": int}
+
+    Raises:
+        HTTPException 400: If body is malformed or ``emoji`` is missing/empty.
+        HTTPException 404: If the parent message does not exist.
+
+    Example:
+        >>> POST /api/messages/42/reactions
+        >>> Body: {"emoji": "❤️"}
+        {"id": 7, "message_id": 42, "emoji": "❤️", "ts": 1700000000}
+    """
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+
+    emoji = body.get("emoji", "")
+    if not isinstance(emoji, str) or not emoji.strip():
+        raise HTTPException(400, "'emoji' must be a non-empty string")
+
+    emoji = emoji.strip()
+
+    conn = db()
+    try:
+        msg_row = conn.execute(
+            "SELECT id FROM messages WHERE id = ?", (message_id,)
+        ).fetchone()
+        if not msg_row:
+            raise HTTPException(404, "Message not found")
+
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO message_reactions (message_id, emoji) VALUES (?, ?)",
+            (message_id, emoji),
+        )
+        conn.commit()
+        reaction_id = cur.lastrowid
+
+        # Fetch the full row so the response includes the server-assigned ts.
+        row = conn.execute(
+            "SELECT id, message_id, emoji, ts FROM message_reactions WHERE id = ?",
+            (reaction_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    logger.info("[Reactions] Added reaction '%s' to message %s (reaction_id=%s)", emoji, message_id, reaction_id)
+    return {"id": row[0], "message_id": row[1], "emoji": row[2], "ts": row[3]}
+
+
+@app.delete("/api/messages/{message_id}/reactions/{reaction_id}")
+def delete_message_reaction(message_id: int, reaction_id: int):
+    """Delete a specific reaction from a message.
+
+    Removes the ``message_reactions`` row identified by ``reaction_id``.
+    The ``message_id`` path segment is validated to prevent cross-message
+    deletions.
+
+    Args:
+        message_id: ID of the parent message (used for ownership validation).
+        reaction_id: ID of the reaction row to delete.
+
+    Returns:
+        {"ok": True}
+
+    Raises:
+        HTTPException 404: If the reaction does not exist on the given message.
+
+    Example:
+        >>> DELETE /api/messages/42/reactions/7
+        {"ok": True}
+    """
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT id FROM message_reactions WHERE id = ? AND message_id = ?",
+            (reaction_id, message_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Reaction not found on this message")
+
+        conn.execute(
+            "DELETE FROM message_reactions WHERE id = ?", (reaction_id,)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    logger.info("[Reactions] Deleted reaction %s from message %s", reaction_id, message_id)
+    return {"ok": True}
+
+
+# ── Feature #27 — Character Portfolio Card (backend stub) ─────────────────────
+
+@app.get("/api/characters/{char_id}/portfolio")
+def get_character_portfolio(char_id: int):
+    """Return a summary object for rendering a character's portfolio card.
+
+    Aggregates data from the ``characters``, ``character_relationships``, and
+    ``messages`` tables into a single flat payload.  The actual card rendering
+    is performed client-side on an HTML Canvas; this endpoint only supplies the
+    data layer.
+
+    Affinity tier labels mirror the frontend StatusBar thresholds:
+        - 0.90+ → Soulmate
+        - 0.70+ → Devoted
+        - 0.50+ → Close
+        - 0.30+ → Friendly
+        - 0.00+ → Neutral
+
+    Args:
+        char_id: ID of the character to summarise.
+
+    Returns:
+        A dict with:
+        - ``name`` (str): Character display name.
+        - ``avatar_url`` (str | None): Avatar image URL.
+        - ``affinity_tier`` (str): Human-readable relationship tier label.
+        - ``affinity_pct`` (int): Affinity as 0-100 integer percentage.
+        - ``personality_traits`` (list[str]): Parsed traits array.
+        - ``top_emotions`` (list[[str, int]]): Up to 5 most-frequent emotions
+          from assistant messages, as ``[emotion, count]`` pairs.
+        - ``timeline_start`` (str | None): ISO timestamp of the first message
+          with this character, or null if there are no messages yet.
+        - ``total_messages`` (int): Total active message count.
+
+    Raises:
+        HTTPException 404: If the character does not exist.
+
+    Example:
+        >>> GET /api/characters/1/portfolio
+        {
+            "name": "Sakura",
+            "avatar_url": "/avatars/sakura.png",
+            "affinity_tier": "Friendly",
+            "affinity_pct": 45,
+            "personality_traits": ["cheerful", "curious"],
+            "top_emotions": [["happy", 12], ["neutral", 8]],
+            "timeline_start": "2026-01-15T00:00:00",
+            "total_messages": 234
+        }
+    """
+    conn = db()
+    try:
+        # Load core character fields
+        char_row = conn.execute(
+            "SELECT name, avatar_url, personality_traits, first_chat_date "
+            "FROM characters WHERE id = ?",
+            (char_id,),
+        ).fetchone()
+        if not char_row:
+            raise HTTPException(404, "Character not found")
+
+        char_name, avatar_url, traits_json, first_chat_date = char_row
+
+        # Parse personality traits (stored as a JSON array of strings)
+        personality_traits: list = []
+        try:
+            if traits_json:
+                personality_traits = json.loads(traits_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # Load relationship scores (ensure the row exists)
+        conn.execute(
+            "INSERT OR IGNORE INTO character_relationships (char_id) VALUES (?)",
+            (char_id,),
+        )
+        conn.commit()
+        rel_row = conn.execute(
+            "SELECT affinity FROM character_relationships WHERE char_id = ?",
+            (char_id,),
+        ).fetchone()
+        affinity_raw: float = rel_row[0] if rel_row else 0.5
+
+        # Map 0-1 affinity to a tier label — mirrors frontend StatusBar thresholds.
+        if affinity_raw >= 0.90:
+            affinity_tier = "Soulmate"
+        elif affinity_raw >= 0.70:
+            affinity_tier = "Devoted"
+        elif affinity_raw >= 0.50:
+            affinity_tier = "Close"
+        elif affinity_raw >= 0.30:
+            affinity_tier = "Friendly"
+        else:
+            affinity_tier = "Neutral"
+
+        affinity_pct = int(round(affinity_raw * 100))
+
+        # Top 5 emotions from active assistant messages
+        emotion_rows = conn.execute(
+            """
+            SELECT emotion, COUNT(*) AS cnt
+            FROM messages
+            WHERE char_id = ? AND role = 'assistant' AND is_active = 1
+              AND emotion IS NOT NULL AND emotion != ''
+            GROUP BY emotion
+            ORDER BY cnt DESC
+            LIMIT 5
+            """,
+            (char_id,),
+        ).fetchall()
+        top_emotions = [[r[0], r[1]] for r in emotion_rows]
+
+        # Timeline start — earliest message timestamp for this character
+        ts_row = conn.execute(
+            "SELECT MIN(ts) FROM messages WHERE char_id = ? AND is_active = 1",
+            (char_id,),
+        ).fetchone()
+        timeline_ts = ts_row[0] if ts_row and ts_row[0] else None
+
+        # Convert Unix timestamp → ISO string when available
+        timeline_start: str | None = None
+        if timeline_ts is not None:
+            import datetime as _dt
+            try:
+                timeline_start = _dt.datetime.utcfromtimestamp(int(timeline_ts)).isoformat()
+            except (ValueError, OSError):
+                pass
+        elif first_chat_date:
+            # Fallback: use first_chat_date column if no messages recorded yet
+            timeline_start = first_chat_date
+
+        # Total active message count
+        count_row = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE char_id = ? AND is_active = 1",
+            (char_id,),
+        ).fetchone()
+        total_messages = count_row[0] if count_row else 0
+
+    finally:
+        conn.close()
+
+    return {
+        "name":               char_name or "",
+        "avatar_url":         avatar_url or "",
+        "affinity_tier":      affinity_tier,
+        "affinity_pct":       affinity_pct,
+        "personality_traits": personality_traits,
+        "top_emotions":       top_emotions,
+        "timeline_start":     timeline_start,
+        "total_messages":     total_messages,
+    }
+
+
+# ── Feature #29 — Day Off Mode ─────────────────────────────────────────────────
+
+@app.patch("/api/characters/{char_id}/day-off")
+async def set_day_off(char_id: int, req: Request):
+    """Enable or disable Day Off Mode for a character.
+
+    When ``day_off`` is ``true``, the background scheduler will skip all
+    proactive and scheduled messages for that character.  Useful when the user
+    wants to take a break from a specific character without permanently
+    disabling their schedule.
+
+    Note — "one goodbye message" behaviour:
+        The original feature spec describes sending a single farewell message
+        when Day Off is first enabled.  This is deferred to a future
+        enhancement.  The scheduler currently skips the character entirely
+        while ``day_off = 1``; the frontend can display a local toast instead.
+
+    Args:
+        char_id: ID of the character to update.
+        req: JSON body ``{"enabled": bool}``.
+
+    Returns:
+        {"ok": True, "char_id": int, "day_off": bool}
+
+    Raises:
+        HTTPException 400: If body is malformed or ``enabled`` is not a bool.
+        HTTPException 404: If the character does not exist.
+
+    Example:
+        >>> PATCH /api/characters/3/day-off
+        >>> Body: {"enabled": true}
+        {"ok": True, "char_id": 3, "day_off": true}
+    """
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+
+    enabled = body.get("enabled")
+    if not isinstance(enabled, bool):
+        raise HTTPException(400, "'enabled' must be a boolean")
+
+    day_off_int = 1 if enabled else 0
+
+    conn = db()
+    try:
+        char_row = conn.execute(
+            "SELECT id FROM characters WHERE id = ?", (char_id,)
+        ).fetchone()
+        if not char_row:
+            raise HTTPException(404, "Character not found")
+
+        conn.execute(
+            "UPDATE characters SET day_off = ? WHERE id = ?",
+            (day_off_int, char_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    logger.info("[DayOff] char_id=%s day_off=%s", char_id, enabled)
+    return {"ok": True, "char_id": char_id, "day_off": enabled}
+
+
 @app.get("/api/sessions/{session_id}/emotions")
 def get_emotion_timeline(session_id: int):
     """Get the emotion timeline for a session.
@@ -5260,6 +6197,310 @@ def scan_vrm_models():
             "size": path.stat().st_size
         })
     return {"models": models}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  AI Motion Generation  (Level 3 — AI-driven procedural animation system)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Architecture overview:
+#   Level 1  — BasePoseLayer/EmotionLayer/IdleLayer procedural bone animation
+#              (viewer.html, no backend needed).
+#   Level 2  — User-supplied VRMA/GLB clips auto-loaded from /shared/animations/
+#   Level 3  — THIS: AI-generated JSON keyframe data streamed to the viewer.
+#
+# Motion model directory:  <project-root>/models/motion/
+# Supported backends (priority order):
+#   1. MotionDiffuse    — models/motion/motion_diffuse/  (text-to-motion, ~300 MB)
+#   2. Emotion-pose DB  — built-in, always available  (fast, no GPU needed)
+#
+# The viewer's `applyKeyframes` postMessage handler converts the JSON keyframe
+# payload into a Three.js AnimationClip and plays it via ClipLayer (L6).
+# ═══════════════════════════════════════════════════════════════════════════
+
+MOTION_MODELS_DIR = Path(ROOT_DIR) / "models" / "motion"
+
+# Map emotion labels to body language parameters used by the procedural generator.
+# Each entry drives sine-wave keyframe amplitudes for the most expressive bones.
+_EMOTION_MOTION_PARAMS: dict[str, dict] = {
+    "neutral":    {"energy": 0.4, "sway": 0.015, "headTilt": 0.04,  "armLift": 0.00,  "spineForward": 0.00},
+    "happy":      {"energy": 0.7, "sway": 0.025, "headTilt": 0.06,  "armLift": 0.10,  "spineForward": -0.01},
+    "excited":    {"energy": 1.0, "sway": 0.035, "headTilt": 0.08,  "armLift": 0.18,  "spineForward": -0.02},
+    "sad":        {"energy": 0.2, "sway": 0.008, "headTilt": 0.03,  "armLift": -0.08, "spineForward":  0.04},
+    "angry":      {"energy": 0.6, "sway": 0.010, "headTilt": 0.02,  "armLift": 0.07,  "spineForward": -0.01},
+    "shy":        {"energy": 0.3, "sway": 0.012, "headTilt": 0.07,  "armLift": -0.05, "spineForward":  0.03},
+    "embarrassed":{"energy": 0.3, "sway": 0.012, "headTilt": 0.07,  "armLift": -0.05, "spineForward":  0.03},
+    "surprised":  {"energy": 0.8, "sway": 0.005, "headTilt": 0.00,  "armLift": 0.12,  "spineForward": -0.03},
+    "thinking":   {"energy": 0.4, "sway": 0.010, "headTilt": 0.09,  "armLift": 0.05,  "spineForward":  0.01},
+    "pouty":      {"energy": 0.4, "sway": 0.018, "headTilt": 0.05,  "armLift": 0.00,  "spineForward":  0.02},
+}
+
+
+def _generate_procedural_keyframes(emotion: str, duration: float = 3.0, fps: int = 20) -> list[dict]:
+    """Generate sine-wave keyframe data for the given emotion.
+
+    Returns a list of frame dicts that the viewer's ``applyKeyframes`` handler
+    converts into a Three.js ``AnimationClip`` via ``QuaternionKeyframeTrack``.
+    Each frame: ``{"time": float, "bones": {boneName: {"x": rad, "y": rad, "z": rad}}}``
+
+    Args:
+        emotion: Emotion label (neutral / happy / sad / etc.)
+        duration: Clip duration in seconds.
+        fps: Keyframe density (20 fps is enough for smooth playback).
+
+    Returns:
+        List of keyframe dicts suitable for the ``applyKeyframes`` postMessage.
+    """
+    import math
+    params = _EMOTION_MOTION_PARAMS.get(emotion, _EMOTION_MOTION_PARAMS["neutral"])
+    frames = []
+    step = 1.0 / fps
+    t = 0.0
+    while t <= duration:
+        breath   = math.sin(t * 2.0 * math.pi * 0.4) * 0.008 * params["energy"]
+        sway     = math.sin(t * 2.0 * math.pi * 0.25) * params["sway"]
+        head_nod = math.sin(t * 2.0 * math.pi * 0.3)  * params["headTilt"]
+
+        frames.append({
+            "time": round(t, 3),
+            "bones": {
+                "hips":           {"x": 0.0,          "y": sway * 0.5, "z": sway * 0.3},
+                "spine":          {"x": breath + params["spineForward"], "y": 0.0, "z": sway * 0.5},
+                "chest":          {"x": breath * 1.3,  "y": 0.0,        "z": sway * 0.3},
+                "neck":           {"x": head_nod * 0.25, "y": 0.0,      "z": sway * -0.2},
+                "head":           {"x": head_nod * 0.6,  "y": 0.0,      "z": sway * -0.15},
+                # Arms: base drape kept in x/z; we only oscillate x slightly
+                "leftUpperArm":   {"x": 0.08 + math.sin(t * 1.1) * 0.04 * params["energy"],
+                                   "y": 0.0, "z": -1.4 + params["armLift"]},
+                "rightUpperArm":  {"x": 0.08 + math.sin(t * 1.3) * 0.03 * params["energy"],
+                                   "y": 0.0, "z":  1.4 - params["armLift"]},
+            }
+        })
+        t = round(t + step, 6)
+    return frames
+
+
+@app.get("/api/motion/model-status")
+def get_motion_model_status():
+    """Return which AI motion model backends are available.
+
+    Checks for downloaded model directories and returns a status dict.
+    The frontend uses this to show an "AI Motion Active" badge or a
+    "Download Model" button.
+
+    Returns:
+        dict: {
+            "procedural": True,
+            "motion_diffuse": bool,
+            "active_backend": str,
+            "model_dir": str,
+        }
+    """
+    motion_diffuse_ok = (MOTION_MODELS_DIR / "motion_diffuse").exists()
+    return {
+        "procedural": True,
+        "motion_diffuse": motion_diffuse_ok,
+        "active_backend": "motion_diffuse" if motion_diffuse_ok else "procedural",
+        "model_dir": str(MOTION_MODELS_DIR),
+    }
+
+
+class MotionGenerateRequest(BaseModel):
+    """Request body for POST /api/motion/generate.
+
+    Attributes:
+        emotion: Emotion label driving the animation.
+        intensity: 0–1 scale factor applied to all motion amplitudes.
+        duration: Clip length in seconds (clamped 1–10 s).
+        context: Optional recent chat text for AI backends as a semantic cue.
+        label: Viewer-side clip label (used as ClipLayer dictionary key).
+        loop: Whether the viewer should loop the clip.
+    """
+
+    emotion:   str   = "neutral"
+    intensity: float = 0.7
+    duration:  float = 3.0
+    context:   Optional[str] = None
+    label:     Optional[str] = None
+    loop:      bool  = True
+
+
+@app.post("/api/motion/generate")
+async def generate_motion(req: MotionGenerateRequest):
+    """Generate animation keyframe data for a given emotion.
+
+    Resolution order:
+      1. Remote motion server (if ``motion_remote_url`` is set in config)
+      2. Local AI model       (if models/motion/ has a supported backend)
+      3. Procedural fallback  (always available, instant)
+
+    The response is forwarded directly to the viewer iframe via the
+    ``applyKeyframes`` postMessage API.
+
+    Returns:
+        dict: {label, backend, duration, loop, keyframes}
+    """
+    import time as _time
+    _t0 = _time.monotonic()
+
+    emotion  = req.emotion.lower().strip()
+    duration = max(1.0, min(req.duration, 10.0))
+    label    = req.label or f"motion_{emotion}"
+
+    # ── 1. Remote motion server ────────────────────────────────────────────
+    cfg = load_config() or {}
+    remote_url = cfg.get("motion_remote_url", "").strip()
+    if remote_url:
+        try:
+            from backend.motion.remote_client import forward_generate
+            payload = {
+                "emotion": emotion, "intensity": req.intensity,
+                "duration": duration, "label": label,
+                "loop": req.loop,
+                "context": req.context,
+            }
+            data = await forward_generate(remote_url, payload)
+            data["latency_ms"] = round((_time.monotonic() - _t0) * 1000, 1)
+            return data
+        except Exception as _exc:
+            logger.warning("Remote motion server failed, falling back: %s", _exc)
+
+    # ── 2. Local AI model (stub — add runner imports here per model) ───────
+    # motionlcm_dir = MOTION_MODELS_DIR / "motionlcm"
+    # if motionlcm_dir.exists():
+    #     from backend.motion.motionlcm_runner import generate_clip
+    #     keyframes = await run_in_threadpool(generate_clip, emotion, req.context, duration)
+    #     backend   = "motionlcm"
+    # else:
+    backend   = "procedural"
+    keyframes = await run_in_threadpool(_generate_procedural_keyframes, emotion, duration)
+
+    # Scale by intensity (skip base arm-drape z values)
+    if abs(req.intensity - 1.0) > 0.01:
+        for frame in keyframes:
+            for bone, euler in frame["bones"].items():
+                if bone in ("leftUpperArm", "rightUpperArm"):
+                    euler["x"] *= req.intensity
+                else:
+                    euler["x"] *= req.intensity
+                    euler["y"] *= req.intensity
+                    euler["z"] *= req.intensity
+
+    return {
+        "label":      label,
+        "backend":    backend,
+        "duration":   duration,
+        "loop":       req.loop,
+        "keyframes":  keyframes,
+        "latency_ms": round((_time.monotonic() - _t0) * 1000, 1),
+    }
+
+
+@app.get("/api/motion/discover")
+async def discover_motion_servers_route():
+    """Scan the local network for waifu-motion servers broadcasting UDP beacons.
+
+    Blocks for up to 8 seconds, then returns everything found.
+    The UI calls this during the setup wizard and polls until a server appears.
+
+    Returns:
+        dict: {"servers": [{"ip", "port", "url", "version"}]}
+    """
+    from backend.motion.beacon import discover_motion_servers
+    servers = await run_in_threadpool(discover_motion_servers)
+    return {"servers": servers}
+
+
+class MotionConnectRequest(BaseModel):
+    """Request body for POST /api/motion/connect.
+
+    Attributes:
+        url: Full base URL of the motion server, e.g. ``"http://192.168.1.5:8081"``.
+    """
+
+    url: str
+
+
+@app.post("/api/motion/connect")
+async def connect_motion_server(req: MotionConnectRequest):
+    """Probe a motion server URL, save it to config if reachable, and return status.
+
+    Called by the setup wizard when the user clicks "Connect" (or auto-connect
+    fires after discovery).  Saves ``motion_remote_url`` to app.json on success
+    so the setting persists across restarts.
+
+    Returns:
+        dict: {"ok": bool, "url": str, "backend": str|None, "message": str}
+    """
+    from backend.motion.remote_client import connect_and_verify
+    result = await connect_and_verify(req.url.rstrip("/"))
+
+    if result["ok"]:
+        cfg = load_config() or {}
+        cfg["motion_remote_url"] = req.url.rstrip("/")
+        save_config(cfg)
+        logger.info("Motion remote server saved: %s (backend=%s)", req.url, result.get("backend"))
+
+    return result
+
+
+@app.delete("/api/motion/connect")
+async def disconnect_motion_server():
+    """Remove the saved remote motion server URL and revert to local/procedural.
+
+    Returns:
+        dict: {"ok": True, "message": str}
+    """
+    from backend.motion.remote_client import MOTION_STATS
+    cfg = load_config() or {}
+    cfg.pop("motion_remote_url", None)
+    save_config(cfg)
+    MOTION_STATS["remote_url"] = None
+    MOTION_STATS["connected"]  = False
+    return {"ok": True, "message": "Disconnected — using local/procedural motion."}
+
+
+@app.get("/api/motion/stats")
+async def get_motion_stats():
+    """Performance statistics for the Settings → AI Motion panel.
+
+    Combines:
+    - Local request latency (procedural generate_motion calls)
+    - Remote client stats (if a remote server is configured)
+    - Remote server's own /stats if reachable
+
+    Returns:
+        dict with latency, request counts, backend info, remote server uptime.
+    """
+    from backend.motion.remote_client import MOTION_STATS
+    cfg        = load_config() or {}
+    remote_url = cfg.get("motion_remote_url", "").strip()
+
+    # Attempt to fetch the remote server's live stats
+    remote_server_stats: dict | None = None
+    if remote_url:
+        try:
+            import httpx as _httpx
+            async with _httpx.AsyncClient(timeout=3.0) as client:
+                r = await client.get(f"{remote_url}/stats")
+                if r.status_code == 200:
+                    remote_server_stats = r.json()
+        except Exception:
+            pass
+
+    return {
+        "remote_url":          remote_url or None,
+        "remote_connected":    MOTION_STATS["connected"],
+        "remote_backend":      MOTION_STATS.get("backend_name"),
+        "remote_latency_ms":   MOTION_STATS.get("last_latency_ms"),
+        "remote_avg_latency_ms": MOTION_STATS.get("avg_latency_ms"),
+        "remote_requests_ok":  MOTION_STATS.get("requests_ok", 0),
+        "remote_requests_failed": MOTION_STATS.get("requests_failed", 0),
+        "remote_server_stats": remote_server_stats,
+        "local_backend":       "procedural",
+        "models_dir":          str(MOTION_MODELS_DIR),
+    }
+
 
 @app.get("/api/scan/images")
 def scan_images():
@@ -5691,12 +6932,17 @@ def _run_scheduler_tick(db_path: str) -> None:
     conn = sqlite3.connect(db_path)
     try:
         cur = conn.cursor()
+        # Feature #29 (Day Off Mode): characters with day_off = 1 are excluded
+        # entirely so the scheduler generates no proactive messages for them.
+        # Sending a single "farewell" message when day_off is first enabled is
+        # a future enhancement — the frontend should show a local toast instead.
         cur.execute("""
             SELECT cs.id, cs.char_id, cs.schedule_type, cs.time_of_day,
                    cs.hours_away, cs.last_triggered, c.name
             FROM character_schedules cs
             JOIN characters c ON c.id = cs.char_id
             WHERE cs.enabled = 1
+              AND COALESCE(c.day_off, 0) = 0
         """)
         schedules = cur.fetchall()
 
@@ -6809,6 +8055,598 @@ async def acknowledge_scheduler_message(req: Request):
     except Exception as _exc:
         logger.error("[Scheduler] Error acknowledging message %s: %s", message_id, _exc)
         raise HTTPException(status_code=500, detail="Failed to acknowledge message")
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Feature #11 — Global Conversation Search (FTS5 with LIKE fallback)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/search/messages")
+def search_messages(
+    q: str,
+    limit: int = 20,
+    char_id: Optional[int] = None,
+):
+    """Full-text search across all message history.
+
+    Uses the ``messages_fts`` FTS5 virtual table when available for ranked,
+    snippet-highlighted results.  Falls back to a ``LIKE`` scan when the
+    virtual table does not exist so the endpoint is always functional.
+
+    Args:
+        q: Search query string.  Must be non-empty.
+        limit: Maximum number of results to return (default 20).
+        char_id: Optional character ID to scope the search.
+
+    Returns:
+        A dict with:
+        - ``query``: The original search term.
+        - ``results``: List of match dicts, each containing message_id,
+          session_id, char_id, char_name, role, snippet, and ts.
+        - ``count``: Total number of results returned.
+
+    Raises:
+        HTTPException 422: If ``q`` is empty or whitespace-only.
+        HTTPException 500: If a database error occurs.
+
+    Example:
+        >>> GET /api/search/messages?q=hello&limit=5
+        {"query": "hello", "results": [...], "count": 2}
+    """
+    if not q or not q.strip():
+        raise HTTPException(status_code=422, detail="Query parameter 'q' must not be empty")
+
+    conn = db()
+    try:
+        # Detect whether the FTS5 virtual table exists
+        fts_row = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='messages_fts'"
+        ).fetchone()
+        use_fts = fts_row is not None
+
+        if use_fts:
+            # FTS5 path: ranked results with highlighted snippets
+            base_sql = """
+                SELECT m.id, m.session_id, m.role, m.content, m.ts,
+                       s.character_id, c.name AS char_name,
+                       snippet(messages_fts, 2, '<mark>', '</mark>', '\u2026', 32) AS snip
+                FROM messages_fts
+                JOIN messages m ON messages_fts.rowid = m.id
+                JOIN sessions s ON m.session_id = s.id
+                JOIN characters c ON s.character_id = c.id
+                WHERE messages_fts MATCH ?
+            """
+            params: list = [q]
+            if char_id is not None:
+                base_sql += " AND s.character_id = ?"
+                params.append(char_id)
+            base_sql += " ORDER BY rank LIMIT ?"
+            params.append(limit)
+        else:
+            # LIKE fallback: simple substring match, no ranking
+            base_sql = """
+                SELECT m.id, m.session_id, m.role, m.content, m.ts,
+                       s.character_id, c.name AS char_name,
+                       m.content AS snip
+                FROM messages m
+                JOIN sessions s ON m.session_id = s.id
+                JOIN characters c ON s.character_id = c.id
+                WHERE m.content LIKE ?
+            """
+            params = [f"%{q}%"]
+            if char_id is not None:
+                base_sql += " AND s.character_id = ?"
+                params.append(char_id)
+            base_sql += " ORDER BY m.id DESC LIMIT ?"
+            params.append(limit)
+
+        rows = conn.execute(base_sql, params).fetchall()
+        results = [
+            {
+                "message_id": row[0],
+                "session_id": row[1],
+                "role": row[2],
+                "snippet": row[7],
+                "ts": row[4],
+                "char_id": row[5],
+                "char_name": row[6],
+            }
+            for row in rows
+        ]
+        return {"query": q, "results": results, "count": len(results)}
+    except HTTPException:
+        raise
+    except Exception as _exc:
+        logger.error("[Search] Full-text search failed: %s", _exc)
+        raise HTTPException(status_code=500, detail="Search failed")
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Feature #20 — Privacy / Full Data Export
+# ---------------------------------------------------------------------------
+
+@app.get("/api/data/export")
+def export_all_data():
+    """Export all user data as a downloadable ZIP archive.
+
+    Collects characters, sessions, messages, config, vocabulary, and memories
+    into individual JSON files, bundles them into a timestamped ZIP, then
+    streams the archive back as an ``application/zip`` download.  A background
+    cleanup task removes the temp file after the response is sent.
+
+    The endpoint is intentionally synchronous (not ``async``) because SQLite
+    and file I/O are blocking; FastAPI will run it in a thread-pool.
+
+    Returns:
+        A ``FileResponse`` with ``Content-Disposition: attachment``,
+        ``media_type="application/zip"``, and a filename of the form
+        ``waifu-rt3d-export-YYYYMMDD-HHMMSS.zip``.
+
+    Raises:
+        HTTPException 500: If ZIP creation or any DB query fails.
+
+    Example:
+        >>> GET /api/data/export
+        # → HTTP 200, body is a ZIP binary
+    """
+    import tempfile as _tempfile
+    import zipfile as _zipfile
+    import os as _os
+    from datetime import datetime as _dt_exp
+    from fastapi.responses import FileResponse as _FileResponse
+
+    timestamp = _dt_exp.now().strftime("%Y%m%d-%H%M%S")
+    zip_filename = f"waifu-rt3d-export-{timestamp}.zip"
+
+    # Create a NamedTemporaryFile that persists until we explicitly delete it.
+    # delete=False is required because FileResponse needs to re-open the path
+    # after this function returns.
+    tmp = _tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
+    zip_path = tmp.name
+    tmp.close()
+
+    def _table_to_dicts(conn: sqlite3.Connection, table: str) -> list:
+        """Fetch all rows from *table* as a list of column-keyed dicts.
+
+        Args:
+            conn: Open SQLite connection.
+            table: Table name (caller is responsible for sanitising this).
+
+        Returns:
+            List of row dicts; empty list if the table has no rows.
+        """
+        # LIMIT 0 populates cursor.description without fetching rows
+        schema_cur = conn.execute(f"SELECT * FROM {table} LIMIT 0")  # noqa: S608
+        cols = [d[0] for d in schema_cur.description]
+        rows = conn.execute(f"SELECT * FROM {table}").fetchall()  # noqa: S608
+        return [dict(zip(cols, row)) for row in rows]
+
+    conn = db()
+    try:
+        with _zipfile.ZipFile(zip_path, "w", compression=_zipfile.ZIP_DEFLATED) as zf:
+
+            # --- characters.json ---
+            zf.writestr(
+                "characters.json",
+                json.dumps(_table_to_dicts(conn, "characters"), indent=2, default=str),
+            )
+
+            # --- sessions.json ---
+            zf.writestr(
+                "sessions.json",
+                json.dumps(_table_to_dicts(conn, "sessions"), indent=2, default=str),
+            )
+
+            # --- messages.json ---
+            zf.writestr(
+                "messages.json",
+                json.dumps(_table_to_dicts(conn, "messages"), indent=2, default=str),
+            )
+
+            # --- config.json ---
+            cfg_data = load_config()
+            zf.writestr("config.json", json.dumps(cfg_data, indent=2, default=str))
+
+            # --- vocabulary.json (via VocabManager if loaded) ---
+            try:
+                if vocab_manager and vocab_manager._loaded:
+                    vocab_data = vocab_manager.export_user_vocab()
+                    zf.writestr("vocabulary.json", json.dumps(vocab_data, indent=2, default=str))
+                else:
+                    zf.writestr("vocabulary.json", json.dumps([], indent=2))
+            except Exception as _ve:
+                logger.warning("[Export] Vocab export skipped: %s", _ve)
+                zf.writestr("vocabulary.json", json.dumps([]))
+
+            # --- memories.json (via vector_store if available) ---
+            try:
+                if vector_store is not None:
+                    mem_result = vector_store.list_memories(page=0, size=10000)
+                    memories_data = mem_result.get("memories", [])
+                    zf.writestr("memories.json", json.dumps(memories_data, indent=2, default=str))
+                else:
+                    zf.writestr("memories.json", json.dumps([]))
+            except Exception as _me:
+                logger.warning("[Export] Memory export skipped: %s", _me)
+                zf.writestr("memories.json", json.dumps([]))
+
+    except Exception as _exc:
+        logger.error("[Export] Data export failed: %s", _exc)
+        try:
+            _os.unlink(zip_path)
+        except OSError:
+            pass
+        raise HTTPException(status_code=500, detail="Data export failed")
+    finally:
+        conn.close()
+
+    def _cleanup_zip(path: str) -> None:
+        """Remove the temporary ZIP file after the response has been sent.
+
+        Args:
+            path: Absolute filesystem path to the ZIP file to delete.
+        """
+        try:
+            _os.unlink(path)
+        except OSError as _e:
+            logger.warning("[Export] Failed to clean up temp ZIP %s: %s", path, _e)
+
+    # BackgroundTasks must be returned via FileResponse's background parameter
+    from starlette.background import BackgroundTask as _BackgroundTask
+    return _FileResponse(
+        zip_path,
+        media_type="application/zip",
+        filename=zip_filename,
+        background=_BackgroundTask(_cleanup_zip, zip_path),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Feature #17 — Model Arena
+# ---------------------------------------------------------------------------
+
+@app.post("/api/arena/compare")
+async def arena_compare(req: Request):
+    """Run the same prompt through 2–3 LLM configurations and return side-by-side results.
+
+    Sends the prompt sequentially to each config (not parallel, because LM Studio
+    can only serve one model at a time).  Individual failures are captured per-config
+    and do not abort the remaining runs.
+
+    Args:
+        req: JSON body with the following shape::
+
+            {
+                "prompt": "What is the meaning of life?",
+                "configs": [
+                    {
+                        "label":       "Config A",
+                        "model":       "lmstudio/...",
+                        "temperature": 0.7,
+                        "max_tokens":  200
+                    },
+                    {
+                        "label":       "Config B",
+                        "model":       "lmstudio/...",
+                        "temperature": 1.2,
+                        "max_tokens":  200
+                    }
+                ],
+                "char_id": null
+            }
+
+    Returns:
+        JSON ``{"results": [...]}`` where each result is either::
+
+            {"label": "Config A", "text": "...", "elapsed_ms": 1234, "tokens": 45}
+
+        on success, or::
+
+            {"label": "Config A", "error": "Connection failed"}
+
+        on per-config failure.
+
+    Raises:
+        HTTPException 400: If prompt is empty or configs count is outside 2–3.
+
+    Example:
+        >>> # POST /api/arena/compare
+        >>> # Body: {"prompt": "Hello", "configs": [{"label": "A", ...}, {"label": "B", ...}]}
+        >>> # Returns: {"results": [{"label": "A", "text": "...", "elapsed_ms": 412, "tokens": 20}, ...]}
+    """
+    import time as _time
+
+    body = await req.json()
+    prompt: str = (body.get("prompt") or "").strip()
+    configs: list = body.get("configs") or []
+
+    if not prompt:
+        raise HTTPException(400, "prompt must not be empty")
+    if not (2 <= len(configs) <= 3):
+        raise HTTPException(400, "configs must contain 2 or 3 entries")
+
+    cfg = load_config() or {}
+    results = []
+
+    for arena_cfg in configs:
+        label = str(arena_cfg.get("label") or "Config").strip()
+        model = str(arena_cfg.get("model") or cfg.get("llm", {}).get("model", "")).strip()
+        temperature = float(arena_cfg.get("temperature") or cfg.get("temperature", 0.7))
+        max_tokens = int(arena_cfg.get("max_tokens") or 200)
+
+        # Clamp to reasonable bounds to prevent runaway requests.
+        temperature = max(0.0, min(2.0, temperature))
+        max_tokens = max(1, min(4096, max_tokens))
+
+        endpoint = _get_llm_endpoint(cfg)
+        api_key = cfg.get("llm", {}).get("api_key", "")
+
+        messages = [{"role": "user", "content": prompt}]
+
+        t0 = _time.perf_counter()
+        try:
+            from backend.llm.registry import get_client
+            adapter = get_client(cfg)
+            res = await run_in_threadpool(
+                adapter.chat,
+                messages,
+                model,
+                endpoint,
+                api_key,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+            elapsed_ms = int((_time.perf_counter() - t0) * 1000)
+
+            if res.get("ok"):
+                reply_text: str = res.get("reply", "")
+                # Token count: prefer usage data from the raw response, else word-count estimate.
+                raw = res.get("raw") or {}
+                usage = raw.get("usage") or {}
+                token_count = int(
+                    usage.get("completion_tokens")
+                    or usage.get("output_tokens")
+                    or max(1, len(reply_text.split()))
+                )
+                results.append({
+                    "label": label,
+                    "text": reply_text,
+                    "elapsed_ms": elapsed_ms,
+                    "tokens": token_count,
+                })
+            else:
+                error_msg = res.get("error") or "LLM adapter returned no result"
+                logger.warning("arena_compare config '%s' failed: %s", label, error_msg)
+                results.append({"label": label, "error": error_msg})
+
+        except Exception as exc:
+            elapsed_ms = int((_time.perf_counter() - t0) * 1000)
+            logger.warning("arena_compare config '%s' raised: %s", label, exc)
+            results.append({"label": label, "error": str(exc)})
+
+    return {"results": results}
+
+
+# ── Universe Builder (#23) ─────────────────────────────────────────────────────
+
+@app.get("/api/universes")
+async def list_universes():
+    """Return all universes with character counts.
+
+    Queries the ``universes`` table joined against ``characters`` to produce a
+    count of members per universe.  Results are sorted alphabetically by name.
+
+    Returns:
+        List of universe dicts, each containing:
+            - ``id`` (int): Universe primary key.
+            - ``name`` (str): Display name.
+            - ``lore`` (str): Lore document text.
+            - ``created_at`` (str): ISO datetime of creation.
+            - ``character_count`` (int): Number of characters assigned.
+
+    Example:
+        >>> GET /api/universes
+        [{"id": 1, "name": "Sakura Academy", "lore": "...", "character_count": 3}]
+    """
+    conn = db()
+    try:
+        rows = conn.execute("""
+            SELECT u.id, u.name, u.lore, u.created_at,
+                   COUNT(c.id) AS character_count
+            FROM universes u
+            LEFT JOIN characters c ON c.universe_id = u.id
+            GROUP BY u.id
+            ORDER BY u.name
+        """).fetchall()
+        return [
+            {
+                "id": r[0],
+                "name": r[1],
+                "lore": r[2] or "",
+                "created_at": r[3],
+                "character_count": r[4],
+            }
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
+@app.post("/api/universes")
+async def create_universe(req: Request):
+    """Create a new universe.
+
+    Args:
+        req: JSON body with:
+            - ``name`` (str, required): Universe display name. Must be non-empty.
+            - ``lore`` (str, optional): Lore document injected into member
+              characters' system prompts. Defaults to empty string.
+
+    Returns:
+        {"id": int, "name": str, "lore": str}
+
+    Raises:
+        HTTPException 400: If ``name`` is missing or blank.
+
+    Example:
+        >>> POST /api/universes {"name": "Sakura Academy", "lore": "..."}
+        {"id": 1, "name": "Sakura Academy", "lore": "..."}
+    """
+    body = await req.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "name required")
+    lore = (body.get("lore") or "").strip()
+    conn = db()
+    try:
+        cur = conn.execute(
+            "INSERT INTO universes (name, lore) VALUES (?, ?)", (name, lore)
+        )
+        conn.commit()
+        return {"id": cur.lastrowid, "name": name, "lore": lore}
+    finally:
+        conn.close()
+
+
+@app.put("/api/universes/{universe_id}")
+async def update_universe(universe_id: int, req: Request):
+    """Update a universe's name and/or lore.
+
+    Args:
+        universe_id: Primary key of the universe to update.
+        req: JSON body with:
+            - ``name`` (str): New display name. Stripped of whitespace.
+            - ``lore`` (str, optional): New lore document text.
+
+    Returns:
+        {"ok": True}
+
+    Raises:
+        HTTPException 404: If no universe with that ID exists.
+
+    Example:
+        >>> PUT /api/universes/1 {"name": "Renamed", "lore": "New lore text"}
+        {"ok": true}
+    """
+    body = await req.json()
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT id FROM universes WHERE id = ?", (universe_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Universe not found")
+        name = (body.get("name") or "").strip()
+        lore = body.get("lore", "")
+        conn.execute(
+            "UPDATE universes SET name=?, lore=? WHERE id=?",
+            (name, lore, universe_id),
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/universes/{universe_id}")
+async def delete_universe(universe_id: int):
+    """Delete a universe.
+
+    Characters that belong to this universe have their ``universe_id`` set to
+    NULL (orphaned), so they continue to function without lore injection.
+
+    Args:
+        universe_id: Primary key of the universe to delete.
+
+    Returns:
+        {"ok": True}
+
+    Example:
+        >>> DELETE /api/universes/1
+        {"ok": true}
+    """
+    conn = db()
+    try:
+        # Null-out FK before deleting the parent row (SQLite ALTER TABLE does not
+        # support ON DELETE SET NULL for columns added via ALTER TABLE).
+        conn.execute(
+            "UPDATE characters SET universe_id=NULL WHERE universe_id=?",
+            (universe_id,),
+        )
+        conn.execute("DELETE FROM universes WHERE id=?", (universe_id,))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.post("/api/universes/{universe_id}/characters/{char_id}")
+async def assign_character_to_universe(universe_id: int, char_id: int):
+    """Assign a character to a universe.
+
+    Overwrites any previous universe membership.  Both the universe and the
+    character must exist; no error is raised if the character was already in
+    this universe (idempotent).
+
+    Args:
+        universe_id: Primary key of the target universe.
+        char_id: Primary key of the character to assign.
+
+    Returns:
+        {"ok": True}
+
+    Raises:
+        HTTPException 404: If the universe does not exist.
+
+    Example:
+        >>> POST /api/universes/1/characters/3
+        {"ok": true}
+    """
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT id FROM universes WHERE id = ?", (universe_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Universe not found")
+        conn.execute(
+            "UPDATE characters SET universe_id=? WHERE id=?",
+            (universe_id, char_id),
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/universes/characters/{char_id}")
+async def remove_character_from_universe(char_id: int):
+    """Remove a character from their universe (set universe_id to NULL).
+
+    Safe to call even if the character is not currently in any universe.
+
+    Args:
+        char_id: Primary key of the character to remove.
+
+    Returns:
+        {"ok": True}
+
+    Example:
+        >>> DELETE /api/universes/characters/3
+        {"ok": true}
+    """
+    conn = db()
+    try:
+        conn.execute(
+            "UPDATE characters SET universe_id=NULL WHERE id=?", (char_id,)
+        )
+        conn.commit()
+        return {"ok": True}
     finally:
         conn.close()
 

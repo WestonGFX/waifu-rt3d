@@ -24,7 +24,9 @@ export function TabBar() {
     return () => window.removeEventListener('keydown', handleKey);
   }, [setActiveTab]);
 
-  if (inChatThread) return null;
+  // Note: inChatThread is a legacy field that is always true in the store.
+  // The MobileApp parent controls visibility — TabBar always renders here.
+  void inChatThread;
 
   return (
     <nav

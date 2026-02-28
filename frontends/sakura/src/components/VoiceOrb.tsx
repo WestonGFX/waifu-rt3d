@@ -126,8 +126,8 @@ export function VoiceOrb({ state, inputLevel, size = 64 }: VoiceOrbProps) {
           boxShadow: state === 'disconnected'
             ? 'none'
             : state === 'speaking'
-              ? `0 0 ${20 + inputLevel * 20}px color-mix(in srgb, var(--color-accent) 50%, transparent),
-                 0 0 ${40 + inputLevel * 30}px color-mix(in srgb, var(--color-accent) 25%, transparent)`
+              ? `0 0 25px color-mix(in srgb, var(--color-accent) 50%, transparent),
+                 0 0 50px color-mix(in srgb, var(--color-accent) 25%, transparent)`
               : state === 'processing'
                 ? `0 0 15px color-mix(in srgb, var(--color-accent) 40%, transparent),
                    0 0 30px color-mix(in srgb, var(--color-accent) 20%, transparent)`

@@ -93,7 +93,7 @@ function postGestureToViewer(
  *
  * On each button press:
  *   1. Calls `onGesture` so the parent can track the action.
- *   2. Sends a postMessage to the VRM viewer iframe.
+ *   2. Dispatches to viewerStore (routes to VRM iframe or Live2D canvas).
  *   3. POSTs to /api/viewer/gesture (fire-and-forget) for server-side logging.
  *
  * @param props - See GesturePickerProps.

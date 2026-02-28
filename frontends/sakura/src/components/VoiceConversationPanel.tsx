@@ -117,12 +117,13 @@ export function VoiceConversationPanel({
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcript, aiStreamText]);
 
-  // Auto-connect on mount
+  // Auto-connect on mount, disconnect on unmount (fire-once intentional)
   useEffect(() => {
     if (sessionId && charId) {
       connect();
     }
     return () => disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDisconnect = () => {

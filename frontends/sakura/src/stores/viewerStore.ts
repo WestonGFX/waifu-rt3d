@@ -90,12 +90,15 @@ interface ViewerState {
 /**
  * Post a structured message to the VRM iframe's contentWindow.
  * No-ops if the iframe isn't mounted or hasn't loaded yet.
+ *
+ * Uses the current page origin to restrict postMessage to same-origin
+ * iframes only (the VRM viewer is always served from the same host).
  */
 function postToIframe(
   iframe: HTMLIFrameElement | null,
   message: Record<string, unknown>,
 ): void {
-  iframe?.contentWindow?.postMessage(message, '*');
+  iframe?.contentWindow?.postMessage(message, window.location.origin);
 }
 
 // ─── Store ──────────────────────────────────────────────────────────────────────

@@ -129,13 +129,18 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
     const app = appRef.current;
     if (!model || !app) return;
 
-    const scaleX = (app.renderer.width * 0.85) / model.width;
-    const scaleY = (app.renderer.height * 0.85) / model.height;
+    // Use app.screen (CSS pixels) not app.renderer (device pixels) for
+    // correct scaling on retina/HiDPI displays with autoDensity enabled
+    const sw = app.screen.width;
+    const sh = app.screen.height;
+
+    const scaleX = (sw * 0.85) / model.width;
+    const scaleY = (sh * 0.85) / model.height;
     const scale = Math.min(scaleX, scaleY);
 
     model.scale.set(scale);
-    model.x = (app.renderer.width - model.width) / 2;
-    model.y = (app.renderer.height - model.height) / 2;
+    model.x = (sw - model.width) / 2;
+    model.y = (sh - model.height) / 2;
   }, []);
 
   // ── Core API methods ─────────────────────────────────────────────────────────

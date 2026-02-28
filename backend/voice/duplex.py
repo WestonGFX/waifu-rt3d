@@ -118,6 +118,7 @@ class VoiceDuplexSession:
         self._speaking_task: Optional[asyncio.Task] = None
         self._interrupted = False
         self._http_client: Optional["httpx.AsyncClient"] = None
+        self._base_url = cfg.get("voice.internal_url", cfg.get("internal_url", "http://127.0.0.1:8080"))
 
         # Configurable parameters (can be updated via control messages).
         # Config may use nested "voice" dict OR flat dot-notation keys.
@@ -162,7 +163,7 @@ class VoiceDuplexSession:
         except Exception as e:
             if "disconnect" not in str(e).lower():
                 logger.error(f"[Voice] Session error: {e}")
-                await self._send_json({"type": "error", "message": str(e)})
+                await self._send_json({"type": "error", "message": "Voice session error"})
         finally:
             self._cancel_speaking()
             if self._http_client:
@@ -349,7 +350,7 @@ class VoiceDuplexSession:
             logger.error(f"[Voice] ASR failed: {e}")
             await self._send_json({
                 "type": "error",
-                "message": f"Speech recognition failed: {e}",
+                "message": "Speech recognition failed",
             })
             return None
 
@@ -375,7 +376,7 @@ class VoiceDuplexSession:
         try:
             async with client.stream(
                 "POST",
-                "http://127.0.0.1:8080/api/chat/stream",
+                f"{self._base_url}/api/chat/stream",
                 json={
                     "text": user_text,
                     "session_id": self.session_id,
@@ -407,7 +408,7 @@ class VoiceDuplexSession:
             logger.error(f"[Voice] Stream response error: {e}")
             await self._send_json({
                 "type": "error",
-                "message": f"Response generation failed: {e}",
+                "message": "Response generation failed",
             })
 
     async def _process_sse_event(self, event_block: str) -> None:
@@ -489,7 +490,7 @@ class VoiceDuplexSession:
             return
 
         try:
-            resp = await client.get(f"http://127.0.0.1:8080{audio_path}")
+            resp = await client.get(f"{self._base_url}{audio_path}")
             if resp.status_code == 200:
                 await self.ws.send_bytes(resp.content)
         except Exception as e:

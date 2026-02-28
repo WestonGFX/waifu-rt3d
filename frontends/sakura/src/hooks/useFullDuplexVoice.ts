@@ -207,8 +207,8 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
     }
     streamRef.current = stream;
 
-    // Set up AudioContext + AnalyserNode for input level monitoring
-    const audioCtx = new AudioContext();
+    // Reuse existing AudioContext or create one for input level monitoring + playback
+    const audioCtx = audioCtxRef.current ?? new AudioContext();
     audioCtxRef.current = audioCtx;
     const source = audioCtx.createMediaStreamSource(stream);
     const analyser = audioCtx.createAnalyser();

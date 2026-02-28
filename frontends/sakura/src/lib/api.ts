@@ -24,6 +24,8 @@ export interface ModelCapabilities {
   supports_tools: boolean;
   /** Extended reasoning / chain-of-thought thinking mode. */
   supports_thinking: boolean;
+  /** Feature C2: Resolved tool protocol for this model. */
+  tool_protocol?: 'openai_functions' | 'xml_fallback' | 'none';
 }
 
 /** An LM Studio installed model entry (from /api/models/installed). */
@@ -370,6 +372,14 @@ export const api = {
    */
   getActiveModelCapabilities: () =>
     get<ModelCapabilities & { ok: boolean; active_model_id?: string }>('/api/models/active-capabilities'),
+
+  /** Feature C2: Set manual tool protocol override for a model. */
+  setModelToolProtocol: (modelId: string, protocol: 'openai_functions' | 'xml_fallback' | 'none') =>
+    post<{ ok: boolean; model_id: string; protocol: string }>(`/api/models/${encodeURIComponent(modelId)}/tool-protocol`, { protocol }),
+
+  /** Feature C2: Get the full model capability cache. */
+  getCapabilityCache: () =>
+    get<{ ok: boolean; entries: Array<{ model_id: string; tool_protocol: string; source: string; manual_override: boolean; cached_at: string }> }>('/api/models/capability-cache'),
 
   // LM Studio Model Manager
   getInstalledModels: () =>

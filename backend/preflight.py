@@ -1429,6 +1429,47 @@ def migrate_to_v25(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v26(con: sqlite3.Connection) -> bool:
+    """Apply schema v26 migration (Feature C2: Smart Tool Use Protocol Cache).
+
+    Creates the ``model_capability_cache`` table used by CapabilityDetector to
+    store the resolved tool protocol (openai_functions / xml_fallback / none)
+    per model ID so detection only runs once per model.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v26.
+    """
+    tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "model_capability_cache" in tables:
+        cur = con.cursor()
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (26)")
+        con.commit()
+        return False
+    try:
+        logger.info("Applying schema v26 migration (Feature C2: model capability cache)...")
+        con.execute("""
+            CREATE TABLE model_capability_cache (
+                model_id TEXT PRIMARY KEY,
+                tool_protocol TEXT NOT NULL DEFAULT 'xml_fallback',
+                reasoning_capable INTEGER NOT NULL DEFAULT 0,
+                source TEXT NOT NULL DEFAULT 'pattern',
+                manual_override INTEGER NOT NULL DEFAULT 0,
+                cached_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (26)")
+        con.commit()
+        logger.info("✅ Schema v26 migration complete (model_capability_cache table)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v26 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -1639,21 +1680,27 @@ def ensure_db():
             if migrate_to_v25(con):
                 version = 25
 
+        # Upgrade from v25 to v26 (Feature C2: Smart Tool Use Protocol Cache)
+        if version < 26:
+            logger.info("Upgrading database schema from v25 to v26...")
+            if migrate_to_v26(con):
+                version = 26
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 25:
-            raise RuntimeError(f"Database initialization failed: Expected v25, got v{final_version}")
+        if final_version < 26:
+            raise RuntimeError(f"Database initialization failed: Expected v26, got v{final_version}")
 
-        if final_version > 25:
-            logger.warning(f"Database is newer than application (v{final_version} > v25). Some features might be unused.")
+        if final_version > 26:
+            logger.warning(f"Database is newer than application (v{final_version} > v26). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v25 adds Lorebook/World Info)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v26 adds model capability cache)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

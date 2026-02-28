@@ -7836,8 +7836,11 @@ async def get_model_capabilities(model_id: str, context_length: int = None):
         raise HTTPException(400, "model_id is required")
     try:
         from backend.llm.model_enricher import enrich_model
+        from backend.llm.capability_detector import get_tool_protocol
         result = enrich_model(model_id, lm_context_length=context_length)
-        return {"ok": True, **result}
+        conn = db()
+        tool_protocol = get_tool_protocol(model_id, conn=conn)
+        return {"ok": True, **result, "tool_protocol": tool_protocol}
     except Exception as exc:
         logger.warning(f"Model capability enrichment failed for '{model_id}': {exc}")
         raise HTTPException(500, str(exc))
@@ -7886,6 +7889,51 @@ async def get_active_model_capabilities():
     except Exception as exc:
         logger.warning(f"Active capability detection failed: {exc}")
         return {"ok": False, "error": str(exc)}
+
+
+@app.post("/api/models/{model_id:path}/tool-protocol")
+async def set_model_tool_protocol(model_id: str, req: Request):
+    """Set a manual tool protocol override for a model.
+
+    Stores the override in ``model_capability_cache``. Manual overrides
+    survive automatic re-detection and take highest priority.
+
+    Args:
+        model_id: URL-encoded model identifier.
+        req: JSON body with ``protocol`` (one of: openai_functions, xml_fallback, none).
+
+    Returns:
+        {"ok": True, "model_id": str, "protocol": str}
+    """
+    body = await req.json()
+    protocol = body.get("protocol", "").strip()
+    if protocol not in ("openai_functions", "xml_fallback", "none"):
+        raise HTTPException(400, "protocol must be one of: openai_functions, xml_fallback, none")
+    from backend.llm.capability_detector import set_manual_override
+    conn = db()
+    set_manual_override(conn, model_id, protocol)  # type: ignore[arg-type]
+    logger.info(f"[C2] Manual tool protocol override: {model_id} → {protocol}")
+    return {"ok": True, "model_id": model_id, "protocol": protocol}
+
+
+@app.get("/api/models/capability-cache")
+def get_capability_cache():
+    """Return all entries in the model capability cache.
+
+    Returns:
+        {"ok": True, "entries": [{model_id, tool_protocol, source, manual_override, cached_at}, ...]}
+    """
+    conn = db()
+    rows = conn.execute(
+        "SELECT model_id, tool_protocol, source, manual_override, cached_at FROM model_capability_cache ORDER BY cached_at DESC"
+    ).fetchall()
+    return {
+        "ok": True,
+        "entries": [
+            {"model_id": r[0], "tool_protocol": r[1], "source": r[2], "manual_override": bool(r[3]), "cached_at": r[4]}
+            for r in rows
+        ],
+    }
 
 
 # ==================== VOCABULARY SYSTEM ====================

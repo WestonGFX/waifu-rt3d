@@ -2240,6 +2240,21 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
   const unloadedModels = lmModels.filter(m => m.state !== 'loaded');
   const { activeCharacter, replyLengthMode, setReplyLengthMode } = useAppStore();
 
+  /** C2: Manual tool protocol override for the current model (auto = no override). */
+  const [overrideProtocol, setOverrideProtocol] = useState<'auto' | 'openai_functions' | 'xml_fallback' | 'none'>('auto');
+
+  useEffect(() => {
+    if (!currentModel) return;
+    api.getCapabilityCache().then(result => {
+      const entry = result.entries?.find(e => e.model_id === currentModel);
+      if (entry?.manual_override) {
+        setOverrideProtocol(entry.tool_protocol as 'openai_functions' | 'xml_fallback' | 'none');
+      } else {
+        setOverrideProtocol('auto');
+      }
+    }).catch(() => {});
+  }, [currentModel]);
+
   // Ollama model list (fetched separately from LM Studio)
   const [ollamaModels, setOllamaModels] = useState<LMStudioModel[]>([]);
   const [ollamaLoading, setOllamaLoading] = useState(false);
@@ -2511,6 +2526,30 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
                 </button>
               ))}
             </div>
+          </SettingField>
+
+          <SettingField
+            label="Tool Call Protocol" advanced
+            description="How this model invokes tools. Override if auto-detection is wrong."
+            tooltip="openai_functions = native JSON schemas (Qwen2.5, Llama 3.1+). xml_fallback = XML injected as system prompt (older models). none = disable tools. Auto-detect uses pattern matching and caches results."
+          >
+            <select
+              value={overrideProtocol}
+              onChange={(e) => {
+                const v = e.target.value as 'auto' | 'openai_functions' | 'xml_fallback' | 'none';
+                setOverrideProtocol(v);
+                if (v !== 'auto' && currentModel) {
+                  api.setModelToolProtocol(currentModel, v).catch(() => {});
+                }
+              }}
+              className="text-sm px-2 py-1 rounded"
+              style={selectStyle}
+            >
+              <option value="auto">Auto-detect</option>
+              <option value="openai_functions">OpenAI Functions (native JSON)</option>
+              <option value="xml_fallback">XML Fallback (system prompt)</option>
+              <option value="none">None (disable tools)</option>
+            </select>
           </SettingField>
         </div>
       </section>

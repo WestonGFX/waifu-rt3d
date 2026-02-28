@@ -184,6 +184,15 @@ export function ModelPanel({ character }: ModelPanelProps) {
   const { iframeRef, loadCharacter, setCameraPreset, getAvailableBlendShapes, setBlendShape, setBlendShapes } = useViewer();
   /** Current emotion from chatStore — drives the emotion badge in the viewport overlay. */
   const currentEmotion = useChatStore(s => s.currentEmotion);
+  /** C2: Tool protocol detected for the active LLM model (openai_functions / xml_fallback / none). */
+  const [toolProtocol, setToolProtocol] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.getActiveModelCapabilities().then(caps => {
+      setToolProtocol(caps.tool_protocol ?? null);
+    }).catch(() => {});
+  }, [character?.id]);
+
   const [vrmModels, setVrmModels] = useState<Array<{ name: string; url: string }>>([]);
 
   // Expression editor state
@@ -544,6 +553,23 @@ export function ModelPanel({ character }: ModelPanelProps) {
                   }}
                 >
                   {currentEmotion.emotion} {Math.round(currentEmotion.intensity * 100)}%
+                </span>
+              )}
+              {/* C2: Tool protocol badge — shows detected tool-calling mode for the active LLM */}
+              {toolProtocol && toolProtocol !== 'none' && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded-full"
+                  style={{
+                    backgroundColor: toolProtocol === 'openai_functions'
+                      ? 'rgba(59,130,246,0.15)' : 'rgba(245,158,11,0.15)',
+                    color: toolProtocol === 'openai_functions' ? '#3b82f6' : '#f59e0b',
+                    fontWeight: 600,
+                  }}
+                  title={toolProtocol === 'openai_functions'
+                    ? 'Model uses OpenAI-format tool calling'
+                    : 'Model uses XML tool fallback'}
+                >
+                  Tools: {toolProtocol === 'openai_functions' ? 'OpenAI' : 'XML'}
                 </span>
               )}
             </div>

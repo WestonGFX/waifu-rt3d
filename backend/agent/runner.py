@@ -21,6 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from backend.agent.parser import ToolCallParsed, parse_native_tool_calls, parse_xml_tool_calls
 from backend.agent.prompt import render_tool_prompt
 from backend.agent.registry import ToolContext, ToolDef, ToolRegistry, ToolResult
+from backend.llm.capability_detector import get_tool_protocol
 
 logger = logging.getLogger(__name__)
 
@@ -92,11 +93,27 @@ class AgentRunner:
         Yields:
             Event dicts describing tokens, tool calls, and tool results.
         """
+        # ── C2: Smart tool protocol detection ─────────────────────────────
+        # Use CapabilityDetector to select the right protocol based on model ID.
+        # Falls back to legacy adapter flags when no DB connection is available.
+        model_id = cfg.get("model", "")
+        try:
+            from backend.server import db as _db
+            _conn = _db()
+            tool_protocol = get_tool_protocol(model_id, conn=_conn)
+        except Exception:
+            # Fallback to legacy boolean logic if DB not available
+            _native = hasattr(adapter, "supports_tools") and adapter.supports_tools()
+            _guaranteed = hasattr(adapter, "native_tools_guaranteed") and adapter.native_tools_guaranteed()
+            if _guaranteed:
+                tool_protocol = "openai_functions"
+            elif _native:
+                tool_protocol = "xml_fallback"  # native capable but needs XML safety net
+            else:
+                tool_protocol = "xml_fallback"
+
         native_mode = hasattr(adapter, "supports_tools") and adapter.supports_tools()
-        # When the adapter supports tools but can't guarantee the model uses
-        # them (e.g. local models via LM Studio), inject XML tool descriptions
-        # as a fallback alongside the native tools parameter.
-        native_guaranteed = hasattr(adapter, "native_tools_guaranteed") and adapter.native_tools_guaranteed()
+        native_guaranteed = (tool_protocol == "openai_functions")
         working_messages = copy.deepcopy(messages)
 
         # Build OpenAI-format tool schemas for native mode adapters

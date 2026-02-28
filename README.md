@@ -545,20 +545,28 @@ The SQLite database (schema v30) auto-migrates on startup. Key tables:
 ## Running Tests
 
 ```bash
-# Run all 98 tests
+# Run all 152 backend tests
 python -m pytest backend/tests/ -v
 
 # Quick run (stop on first failure)
 python -m pytest backend/tests/ -x --tb=short
 ```
 
-Tests cover: API endpoints, character CRUD, agentic tool execution, capability profiles, telemetry, memory search, routing, and chat pipeline.
+**232 total tests:** 152 backend (API, CRUD, agents, voice module, memory), 80 frontend (wizards, discovery, settings), 26 E2E (Playwright).
 
 ---
 
 ## Roadmap
 
-### Recently Completed (v8.1.0)
+### Recently Completed (v9.0.0)
+- **Full-Duplex Voice Conversation** — WebSocket duplex audio, Silero VAD, barge-in interrupt, VoiceOrb UI, echo gating
+- **Live2D Runtime** — pixi-live2d-display with viewerStore mediator, expression/gesture routing, lip sync, transparent PIXI canvas
+- **Desktop Pet (Electron)** — transparent always-on-top overlay, click-through hit testing, drag-to-move, speech bubble, system tray, global shortcut
+- **Opus Code Review** — 15 P0/P1 fixes across C1 + A1 (AudioContext, race conditions, barge-in, reconnection)
+- **54 voice module tests** — VAD, audio utils, duplex state machine
+- **26 Playwright E2E tests** — onboarding, settings, wizards, what's-new
+
+### Previously Completed (v8.1.0)
 - **Setup Wizards & Feature Discovery** — 7-step onboarding, 5 setup wizards, contextual feature tips, What's New modal
 - **Kokoro TTS + Voice Modulation** — Kokoro adapter with speed/emotion passthrough, TTSModelsPanel browser, voice preview, 11+ voices
 - **In-App Mini Games** — trivia, 20 questions, word association, riddles, tic-tac-toe, memory match
@@ -577,10 +585,9 @@ Tests cover: API endpoints, character CRUD, agentic tool execution, capability p
 - **18 built-in themes** — including Catppuccin, Monokai, Dracula, Tokyo Night, Darcula, Blurple, Pop Bubblegum/Lemonade
 
 ### Planned
-- **Full-Duplex Voice Conversation** — WebSocket audio, Silero VAD, faster-whisper STT, continuous voice loop
-- **Live2D Runtime Support** — pixi-live2d-display for Cubism 2/3/4 models
-- **Electron Desktop App** — transparent overlay, desktop pet, system tray, native OS integration
+- **Desktop Pet Phase 3** — right-click context menu, compact sidebar mode, edge docking, idle behaviors
 - **Emulator Gaming Integration** — PS1/PS2 emulation with AI companion co-op (EmulatorJS + PCSX2)
+- **AI Music Generation** — ACE-Step 1.5, HeartMuLa integration for character humming/singing
 - Docker Compose one-command setup
 - Twitch chat integration
 

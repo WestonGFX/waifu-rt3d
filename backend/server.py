@@ -983,46 +983,55 @@ def _clean_for_tts(text: str) -> str:
 
 
 def _apply_emotion_tts(tts_cfg: dict, emotion: str | None) -> None:
-    """Apply subtle rate/pitch adjustments to ``tts_cfg`` based on detected emotion (#78).
+    """Apply provider-aware rate/pitch/energy adjustments to ``tts_cfg`` based on emotion.
+
+    Delegates to the VoiceModulator (backend.tts.voice_modulator) which maps
+    emotions to provider-specific parameter overrides — Kokoro gets speed/pitch,
+    Edge-TTS gets rate%/pitchHz, ElevenLabs gets stability/similarity, etc.
 
     Modifies *tts_cfg* in-place only when the character has **not** already set
     explicit ``tts_rate`` / ``tts_pitch`` overrides via their character row.
-    Adjustments are intentionally subtle so they complement rather than override
-    the voice actor's natural delivery.
 
     Args:
         tts_cfg: TTS configuration dict (will be mutated if adjustments apply).
-        emotion:  Emotion string from ``_parse_emotion_gesture``, e.g. ``"happy"``.
-                  Pass ``None`` or ``"neutral"`` to leave ``tts_cfg`` unchanged.
+        emotion: Emotion string from ``_parse_emotion_gesture``, e.g. ``"happy"``.
+                 Pass ``None`` or ``"neutral"`` to leave ``tts_cfg`` unchanged.
 
     Example:
-        >>> cfg = {}
+        >>> cfg = {"provider": "kokoro"}
         >>> _apply_emotion_tts(cfg, "excited")
-        >>> cfg
-        {'tts_rate': '+12%', 'tts_pitch': '+2Hz'}
+        >>> cfg.get("speed")
+        1.13
     """
     if not emotion or emotion == "neutral":
         return
 
-    # Map emotion → (rate_delta_pct, pitch_delta_hz)
-    # Values are intentionally small — these accent the voice, not transform it.
-    _EMOTION_TTS_MAP: dict[str, tuple[int, int]] = {
-        "happy":       (+8,  +1),
-        "excited":     (+12, +2),
-        "sad":         (-12, -2),
-        "scared":      (-5,  -1),
-        "embarrassed": (-4,   0),
-        "shy":         (-4,   0),
-        "angry":       (+6,  +1),
-        "thinking":    (-4,   0),
-        "surprised":   (+5,  +1),
-    }
-    rate_pct, pitch_hz = _EMOTION_TTS_MAP.get(emotion, (0, 0))
+    # Don't override explicit character-level TTS rate/pitch settings
+    if "tts_rate" in tts_cfg or "tts_pitch" in tts_cfg:
+        return
 
-    if rate_pct != 0 and 'tts_rate' not in tts_cfg:
-        tts_cfg['tts_rate'] = f"+{rate_pct}%" if rate_pct >= 0 else f"{rate_pct}%"
-    if pitch_hz != 0 and 'tts_pitch' not in tts_cfg:
-        tts_cfg['tts_pitch'] = f"+{pitch_hz}Hz" if pitch_hz >= 0 else f"{pitch_hz}Hz"
+    try:
+        from backend.tts.voice_modulator import get_default_modulator
+
+        provider = tts_cfg.get("provider", "edge-tts")
+        base_speed = float(tts_cfg.get("speech_rate", tts_cfg.get("speed", 1.0)))
+        modulator = get_default_modulator(base_speed=base_speed)
+
+        overrides = modulator.get_params(emotion, intensity=0.7, provider=provider)
+
+        # Merge provider-specific overrides into tts_cfg.
+        # For Edge-TTS compat, map "rate" → "tts_rate" and "pitch" → "tts_pitch"
+        if "rate" in overrides:
+            tts_cfg["tts_rate"] = overrides.pop("rate")
+        if "pitch" in overrides and isinstance(overrides["pitch"], str):
+            tts_cfg["tts_pitch"] = overrides.pop("pitch")
+
+        # Merge remaining keys directly (speed, stability, etc.)
+        tts_cfg.update(overrides)
+
+    except Exception as e:
+        # Graceful fallback — emotion modulation is a nice-to-have, never block TTS
+        logger.debug(f"Voice modulation skipped: {e}")
 
 
 def _pick_tts_voice(char: dict, emotion: str | None = None) -> str | None:

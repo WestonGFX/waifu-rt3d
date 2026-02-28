@@ -74,4 +74,50 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppState: () => {
     return ipcRenderer.invoke('get-app-state');
   },
+
+  /**
+   * Show a native right-click context menu on the pet window.
+   * The main process builds and displays a native OS menu.
+   *
+   * @param {{ characterName: string, isMuted: boolean }} opts
+   */
+  showPetContextMenu: (opts) => {
+    ipcRenderer.send('show-pet-context-menu', opts);
+  },
+
+  /**
+   * Show a native OS notification (desktop notification center).
+   * Clicking the notification focuses the app and navigates to the character.
+   *
+   * @param {{ title: string, body: string, charId?: number }} opts
+   */
+  showNotification: (opts) => {
+    ipcRenderer.send('show-notification', opts);
+  },
+
+  /**
+   * Listen for navigation requests from the main process.
+   * Fired when the user clicks a notification or tray menu item.
+   *
+   * @param {(charId: number) => void} callback
+   * @returns {() => void} Cleanup function
+   */
+  onNavigateToCharacter: (callback) => {
+    const handler = (_event, charId) => callback(charId);
+    ipcRenderer.on('navigate-to-character', handler);
+    return () => ipcRenderer.removeListener('navigate-to-character', handler);
+  },
+
+  /**
+   * Listen for voice mode activation from the main process.
+   * Fired when "Voice Mode" is selected from the pet context menu.
+   *
+   * @param {(void) => void} callback
+   * @returns {() => void} Cleanup function
+   */
+  onStartVoiceMode: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('start-voice-mode', handler);
+    return () => ipcRenderer.removeListener('start-voice-mode', handler);
+  },
 });

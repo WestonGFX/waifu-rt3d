@@ -145,6 +145,82 @@ export function PetView() {
     setShowBubble((prev) => !prev);
   }, []);
 
+  // ── Right-click → native context menu ─────────────────────────────────────
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (lastTransparentRef.current) return; // Only on character, not transparent area
+    electronAPI?.showPetContextMenu({
+      characterName: activeCharacter?.name || 'Character',
+      isMuted: false, // TODO: read from store when mute state is lifted to React
+    });
+  }, [electronAPI, activeCharacter?.name]);
+
+  // ── Idle pet behaviors ─────────────────────────────────────────────────────
+  //
+  // Gives the pet a sense of life through randomized idle gestures.
+  // Timers fire at random intervals within a range so the pet doesn't
+  // feel robotic. Gestures are sent via postMessage to the VRM iframe
+  // or dispatched through the viewerStore for Live2D.
+
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    /**
+     * Send a gesture to the VRM viewer iframe.
+     * Falls back silently if the iframe isn't ready.
+     */
+    const sendGesture = (gesture: string) => {
+      const iframe = iframeRef.current;
+      if (iframe?.contentWindow) {
+        iframe.contentWindow.postMessage(
+          { type: 'playGesture', gesture },
+          '*'
+        );
+      }
+    };
+
+    /**
+     * Schedule a random gesture within a time range.
+     * After firing, reschedules itself for continuous idle behavior.
+     */
+    const scheduleIdleGesture = (
+      gesture: string,
+      minMs: number,
+      maxMs: number,
+    ) => {
+      const delay = minMs + Math.random() * (maxMs - minMs);
+      const timer = setTimeout(() => {
+        sendGesture(gesture);
+        scheduleIdleGesture(gesture, minMs, maxMs);
+      }, delay);
+      timers.push(timer);
+    };
+
+    // ── Behavior schedule ──
+    // Each behavior has a random interval range (min, max) in milliseconds.
+    // The randomization prevents the pet from feeling mechanical.
+
+    // Gentle nod every 30-90 seconds (subtle acknowledgment)
+    scheduleIdleGesture('nod', 30_000, 90_000);
+
+    // Head tilt every 60-180 seconds (curious look)
+    scheduleIdleGesture('tilt', 60_000, 180_000);
+
+    // Wave at the user every 3-8 minutes (friendly check-in)
+    scheduleIdleGesture('wave', 180_000, 480_000);
+
+    // Think pose every 2-5 minutes (contemplative)
+    scheduleIdleGesture('think', 120_000, 300_000);
+
+    // Shy pose every 5-12 minutes (variety)
+    scheduleIdleGesture('shy', 300_000, 720_000);
+
+    return () => {
+      timers.forEach(clearTimeout);
+    };
+  }, []);
+
   // ── Determine viewer mode ─────────────────────────────────────────────────
 
   const isLive2D = !!(activeCharacter as any)?.live2d_model;
@@ -167,6 +243,7 @@ export function PetView() {
       }}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
     >
       {/* ── Character Renderer ────────────────────────────────────────── */}
       {!isLive2D && viewerUrl && (

@@ -29,6 +29,18 @@ interface ElectronAPI {
 
   /** Get current app state from the main process. */
   getAppState: () => Promise<{ petMode: boolean; muted: boolean }>;
+
+  /** Show a native right-click context menu on the pet window. */
+  showPetContextMenu: (opts: { characterName: string; isMuted: boolean }) => void;
+
+  /** Show a native OS notification. */
+  showNotification: (opts: { title: string; body: string; charId?: number }) => void;
+
+  /** Listen for navigation-to-character requests. Returns cleanup function. */
+  onNavigateToCharacter: (callback: (charId: number) => void) => () => void;
+
+  /** Listen for voice mode activation. Returns cleanup function. */
+  onStartVoiceMode: (callback: () => void) => () => void;
 }
 
 declare global {

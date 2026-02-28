@@ -264,6 +264,106 @@ ipcMain.handle('get-app-state', () => {
   };
 });
 
+/**
+ * Show native right-click context menu on the pet window.
+ *
+ * The renderer sends character info + menu position. The main process
+ * builds a native OS menu (feels native on macOS/Windows) and shows it.
+ * Menu actions are sent back to the renderer or handled in main.
+ */
+ipcMain.on('show-pet-context-menu', (_event, { characterName, isMuted }) => {
+  if (!petWindow || petWindow.isDestroyed()) return;
+
+  const template = [
+    {
+      label: characterName || 'Character',
+      enabled: false,  // Header — shows character name, not clickable
+    },
+    { type: 'separator' },
+    {
+      label: 'Open Chat',
+      click: () => {
+        createMainWindow();
+      },
+    },
+    {
+      label: 'Voice Mode',
+      click: () => {
+        createMainWindow();
+        // Small delay to let the window load before sending navigation
+        setTimeout(() => {
+          if (mainWindow) mainWindow.webContents.send('start-voice-mode');
+        }, 500);
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Mute Voice',
+      type: 'checkbox',
+      checked: isMuted,
+      click: (item) => {
+        store.set('muted', item.checked);
+        if (mainWindow) mainWindow.webContents.send('mute-changed', item.checked);
+        if (petWindow) petWindow.webContents.send('mute-changed', item.checked);
+        updateTrayMenu();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Show Full App',
+      click: () => createMainWindow(),
+    },
+    {
+      label: 'Hide Pet',
+      click: () => {
+        if (petWindow && !petWindow.isDestroyed()) petWindow.hide();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => app.quit(),
+    },
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  menu.popup({ window: petWindow });
+});
+
+/**
+ * Show a native OS notification (for scheduled messages, greetings, etc.).
+ *
+ * The renderer detects pending notifications via /api/scheduler/pending
+ * and sends them here. Electron fires a real OS notification — clicking
+ * it focuses the app and navigates to the character.
+ */
+ipcMain.on('show-notification', (_event, { title, body, charId }) => {
+  const { Notification } = require('electron');
+  if (!Notification.isSupported()) return;
+
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  const notification = new Notification({
+    title: title || 'Waifu RT3D',
+    body: body || '',
+    icon: iconPath,
+    silent: false,
+  });
+
+  notification.on('click', () => {
+    // Focus or create the main window and navigate to the character
+    createMainWindow();
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+      if (charId) {
+        mainWindow.webContents.send('navigate-to-character', charId);
+      }
+    }
+  });
+
+  notification.show();
+});
+
 // ── System Tray ───────────────────────────────────────────────────────────────
 
 /**
@@ -294,21 +394,75 @@ function createTray() {
   });
 }
 
+/** Cached character list for the tray menu. */
+let cachedCharacters = [];
+
+/**
+ * Fetch the character list from the backend API.
+ * Cached to avoid blocking the tray menu build — refreshed async.
+ */
+async function refreshCharacterList() {
+  try {
+    const http = require('http');
+    const data = await new Promise((resolve, reject) => {
+      http.get(`${BASE_URL}/api/characters`, (res) => {
+        let body = '';
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+          try { resolve(JSON.parse(body)); } catch { resolve([]); }
+        });
+        res.on('error', reject);
+      }).on('error', reject);
+    });
+    if (Array.isArray(data)) {
+      cachedCharacters = data;
+    }
+  } catch {
+    // Backend not running — keep cached list
+  }
+}
+
 /**
  * Rebuild the tray context menu (called when state changes).
+ *
+ * Includes: Show App, Desktop Pet toggle, character switcher submenu,
+ * mute toggle, and quit. Character list is fetched async on first build
+ * and refreshed periodically.
  */
 function updateTrayMenu() {
   if (!tray) return;
 
   const isPetActive = !!petWindow;
   const isMuted = store.get('muted', false);
+  const activeCharId = store.get('activeCharId', null);
+
+  // Build character submenu from cached list
+  const charSubmenu = cachedCharacters.length > 0
+    ? cachedCharacters.slice(0, 10).map((char) => ({
+        label: char.name || `Character ${char.id}`,
+        type: 'radio',
+        checked: char.id === activeCharId,
+        click: () => {
+          store.set('activeCharId', char.id);
+          // Notify renderer to switch character
+          if (mainWindow) mainWindow.webContents.send('switch-character', char.id);
+          if (petWindow) petWindow.webContents.send('switch-character', char.id);
+          updateTrayMenu();
+        },
+      }))
+    : [{ label: 'No characters found', enabled: false }];
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Show App',
-      click: createMainWindow,
+      label: 'Waifu RT3D',
+      enabled: false,
     },
     { type: 'separator' },
+    {
+      label: 'Show App',
+      click: createMainWindow,
+      accelerator: 'CommandOrControl+Shift+F',
+    },
     {
       label: isPetActive ? 'Hide Desktop Pet' : 'Show Desktop Pet',
       click: togglePet,
@@ -316,7 +470,12 @@ function updateTrayMenu() {
     },
     { type: 'separator' },
     {
-      label: 'Mute Character',
+      label: 'Characters',
+      submenu: charSubmenu,
+    },
+    { type: 'separator' },
+    {
+      label: 'Mute Voice',
       type: 'checkbox',
       checked: isMuted,
       click: (item) => {
@@ -335,6 +494,9 @@ function updateTrayMenu() {
   ]);
 
   tray.setContextMenu(contextMenu);
+
+  // Refresh character list in background for next menu open
+  refreshCharacterList();
 }
 
 // ── App Lifecycle ─────────────────────────────────────────────────────────────

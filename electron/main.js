@@ -330,40 +330,6 @@ ipcMain.on('show-pet-context-menu', (_event, { characterName, isMuted }) => {
   menu.popup({ window: petWindow });
 });
 
-/**
- * Show a native OS notification (for scheduled messages, greetings, etc.).
- *
- * The renderer detects pending notifications via /api/scheduler/pending
- * and sends them here. Electron fires a real OS notification — clicking
- * it focuses the app and navigates to the character.
- */
-ipcMain.on('show-notification', (_event, { title, body, charId }) => {
-  const { Notification } = require('electron');
-  if (!Notification.isSupported()) return;
-
-  const iconPath = path.join(__dirname, 'assets', 'icon.png');
-  const notification = new Notification({
-    title: title || 'Waifu RT3D',
-    body: body || '',
-    icon: iconPath,
-    silent: false,
-  });
-
-  notification.on('click', () => {
-    // Focus or create the main window and navigate to the character
-    createMainWindow();
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
-      if (charId) {
-        mainWindow.webContents.send('navigate-to-character', charId);
-      }
-    }
-  });
-
-  notification.show();
-});
-
 // ── System Tray ───────────────────────────────────────────────────────────────
 
 /**

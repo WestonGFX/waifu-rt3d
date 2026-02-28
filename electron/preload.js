@@ -86,16 +86,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   /**
-   * Show a native OS notification (desktop notification center).
-   * Clicking the notification focuses the app and navigates to the character.
-   *
-   * @param {{ title: string, body: string, charId?: number }} opts
-   */
-  showNotification: (opts) => {
-    ipcRenderer.send('show-notification', opts);
-  },
-
-  /**
    * Listen for navigation requests from the main process.
    * Fired when the user clicks a notification or tray menu item.
    *

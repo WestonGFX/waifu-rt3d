@@ -158,18 +158,51 @@ export function PetView() {
 
   // ── Idle pet behaviors ─────────────────────────────────────────────────────
   //
-  // Gives the pet a sense of life through randomized idle gestures.
-  // Timers fire at random intervals within a range so the pet doesn't
-  // feel robotic. Gestures are sent via postMessage to the VRM iframe
-  // or dispatched through the viewerStore for Live2D.
+  // A single timer picks a random gesture from a weighted pool every 45-120s.
+  // More gestures = more variety without increasing overall frequency.
+  // Weights control relative probability (higher = more likely to be picked).
 
   useEffect(() => {
-    const timers: ReturnType<typeof setTimeout>[] = [];
+    let timer: ReturnType<typeof setTimeout>;
 
-    /**
-     * Send a gesture to the VRM viewer iframe.
-     * Falls back silently if the iframe isn't ready.
-     */
+    /** Weighted gesture pool — weight determines relative pick probability. */
+    const IDLE_GESTURES: { gesture: string; weight: number }[] = [
+      // Subtle head/body (most frequent — gentle, non-distracting)
+      { gesture: 'nod',         weight: 5 },
+      { gesture: 'tilt',        weight: 5 },
+      { gesture: 'shake',       weight: 3 },
+
+      // Posture shifts (moderate — natural restlessness)
+      { gesture: 'shrug',       weight: 3 },
+      { gesture: 'crossed_arms', weight: 3 },
+      { gesture: 'foot_tap',    weight: 3 },
+
+      // Expressive (less frequent — feels intentional)
+      { gesture: 'think',       weight: 2 },
+      { gesture: 'shy',         weight: 2 },
+      { gesture: 'bow',         weight: 1 },
+      { gesture: 'point',       weight: 1 },
+
+      // Big gestures (rare — special moments)
+      { gesture: 'wave',        weight: 1 },
+      { gesture: 'celebrate',   weight: 1 },
+      { gesture: 'dance',       weight: 1 },
+      { gesture: 'clap',        weight: 1 },
+    ];
+
+    const totalWeight = IDLE_GESTURES.reduce((sum, g) => sum + g.weight, 0);
+
+    /** Pick a random gesture weighted by probability. */
+    const pickGesture = (): string => {
+      let roll = Math.random() * totalWeight;
+      for (const { gesture, weight } of IDLE_GESTURES) {
+        roll -= weight;
+        if (roll <= 0) return gesture;
+      }
+      return 'nod';
+    };
+
+    /** Send a gesture to the VRM viewer iframe. */
     const sendGesture = (gesture: string) => {
       const iframe = iframeRef.current;
       if (iframe?.contentWindow) {
@@ -180,45 +213,22 @@ export function PetView() {
       }
     };
 
-    /**
-     * Schedule a random gesture within a time range.
-     * After firing, reschedules itself for continuous idle behavior.
-     */
-    const scheduleIdleGesture = (
-      gesture: string,
-      minMs: number,
-      maxMs: number,
-    ) => {
-      const delay = minMs + Math.random() * (maxMs - minMs);
-      const timer = setTimeout(() => {
-        sendGesture(gesture);
-        scheduleIdleGesture(gesture, minMs, maxMs);
+    /** Schedule the next idle gesture at a random interval (45s–120s). */
+    const scheduleNext = () => {
+      const delay = 45_000 + Math.random() * 75_000; // 45s to 120s
+      timer = setTimeout(() => {
+        sendGesture(pickGesture());
+        scheduleNext();
       }, delay);
-      timers.push(timer);
     };
 
-    // ── Behavior schedule ──
-    // Each behavior has a random interval range (min, max) in milliseconds.
-    // The randomization prevents the pet from feeling mechanical.
+    // Initial delay before first gesture (15-40s after load)
+    timer = setTimeout(() => {
+      sendGesture(pickGesture());
+      scheduleNext();
+    }, 15_000 + Math.random() * 25_000);
 
-    // Gentle nod every 30-90 seconds (subtle acknowledgment)
-    scheduleIdleGesture('nod', 30_000, 90_000);
-
-    // Head tilt every 60-180 seconds (curious look)
-    scheduleIdleGesture('tilt', 60_000, 180_000);
-
-    // Wave at the user every 3-8 minutes (friendly check-in)
-    scheduleIdleGesture('wave', 180_000, 480_000);
-
-    // Think pose every 2-5 minutes (contemplative)
-    scheduleIdleGesture('think', 120_000, 300_000);
-
-    // Shy pose every 5-12 minutes (variety)
-    scheduleIdleGesture('shy', 300_000, 720_000);
-
-    return () => {
-      timers.forEach(clearTimeout);
-    };
+    return () => clearTimeout(timer);
   }, []);
 
   // ── Determine viewer mode ─────────────────────────────────────────────────

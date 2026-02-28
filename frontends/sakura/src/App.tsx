@@ -83,38 +83,6 @@ function PetApp() {
     loadConfig().catch(console.error);
   }, []);
 
-  // ── Native notification polling (Electron only) ──────────────────────────
-  // Polls for scheduled messages and fires OS notifications via IPC.
-  useEffect(() => {
-    const api = window.electronAPI;
-    if (!api?.showNotification) return;
-
-    const seenIds = new Set<number>();
-
-    const poll = async () => {
-      try {
-        const res = await fetch('/api/scheduler/pending');
-        if (!res.ok) return;
-        const items = await res.json();
-        for (const item of items) {
-          if (seenIds.has(item.id)) continue;
-          seenIds.add(item.id);
-          api.showNotification({
-            title: item.character_name || 'Message',
-            body: (item.message || '').slice(0, 120),
-            charId: item.character_id,
-          });
-        }
-      } catch {
-        // Silently ignore — backend may not be running yet
-      }
-    };
-
-    poll();
-    const interval = setInterval(poll, 30_000);
-    return () => clearInterval(interval);
-  }, []);
-
   return <PetView />;
 }
 

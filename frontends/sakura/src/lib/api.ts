@@ -559,4 +559,36 @@ export const api = {
    */
   deleteUserFact: (charId: number, factId: number) =>
     del<{ ok: boolean; deleted: number }>(`/api/characters/${charId}/user-facts/${factId}`),
+
+  /**
+   * Import a SillyTavern CHARA v2 PNG character card.
+   *
+   * @param file - PNG file with embedded CHARA v2 tEXt chunk.
+   * @returns Created character id and name.
+   */
+  importCharaCard: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return fetch('/api/characters/import-card', { method: 'POST', body: fd })
+      .then(r => r.ok ? r.json() : r.json().then((e: { detail?: string }) => Promise.reject(new Error(e.detail ?? 'Import failed')))) as Promise<{ ok: boolean; id: number; name: string }>;
+  },
+
+  /**
+   * Download a character as a SillyTavern-compatible CHARA v2 PNG card.
+   * Triggers a browser download via a temporary anchor click.
+   *
+   * @param charId - Character to export.
+   * @param fileName - Suggested download filename.
+   */
+  exportCharaCard: async (charId: number, fileName?: string): Promise<void> => {
+    const res = await fetch(`/api/characters/${charId}/export-card`);
+    if (!res.ok) throw new Error('Export failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName ?? `character_${charId}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };

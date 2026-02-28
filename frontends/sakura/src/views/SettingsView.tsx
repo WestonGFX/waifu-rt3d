@@ -953,6 +953,14 @@ function CharacterTab() {
         >
           Export
         </button>
+        <button
+          onClick={() => api.exportCharaCard(activeCharacter.id, `${activeCharacter.name}.png`).catch(() => {})}
+          className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+          style={{ color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)', background: 'transparent' }}
+          title="Export as SillyTavern CHARA v2 card (PNG)"
+        >
+          Export Card
+        </button>
         <label
           className="px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer"
           style={{ color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)', background: 'transparent' }}

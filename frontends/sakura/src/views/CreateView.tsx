@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Upload, Check, Zap, Shuffle, Sparkles, Lock, Unlock, Loader2, X } from 'lucide-react';
+import { Upload, Check, Zap, Shuffle, Sparkles, Lock, Unlock, Loader2, X, FileImage } from 'lucide-react';
 import { WizardStep } from '../components/WizardStep';
 import { VoicePicker } from '../components/VoicePicker';
+import { CharacterCardImporter } from '../components/CharacterCardImporter';
 import { api } from '../lib/api';
 import { useAppStore } from '../stores/appStore';
 import type { Character } from '../lib/types';
@@ -216,6 +217,9 @@ export function CreateView() {
   const [importError, setImportError] = useState('');
   const [importSuccess, setImportSuccess] = useState(false);
 
+  // CHARA v2 card importer state (Feature A8)
+  const [showCardImporter, setShowCardImporter] = useState(false);
+
   /**
    * Handle importing a character from a JSON file.
    * Reads the selected file, parses the JSON, strips export metadata fields,
@@ -418,8 +422,9 @@ export function CreateView() {
           <WizardStep key="identity" direction={direction}>
             <div className="space-y-4">
 
-              {/* ─── Import from JSON file ─── */}
-              <div style={{ marginBottom: 16 }}>
+              {/* ─── Import buttons row ─── */}
+              <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {/* JSON import */}
                 <label
                   style={{
                     display: 'inline-flex',
@@ -442,13 +447,56 @@ export function CreateView() {
                     onChange={handleImport}
                   />
                 </label>
+
+                {/* CHARA v2 card import */}
+                <button
+                  type="button"
+                  onClick={() => setShowCardImporter(v => !v)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '7px 14px',
+                    borderRadius: 'var(--radius-button)',
+                    border: `1px solid ${showCardImporter ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    color: showCardImporter ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                    background: 'none',
+                  }}
+                >
+                  <FileImage size={14} />
+                  Import Card
+                </button>
+
                 {importError && (
-                  <p style={{ color: 'var(--color-danger)', fontSize: 11, marginTop: 4 }}>{importError}</p>
+                  <p style={{ color: 'var(--color-danger)', fontSize: 11, marginTop: 4, width: '100%' }}>{importError}</p>
                 )}
                 {importSuccess && (
-                  <p style={{ color: 'var(--color-success)', fontSize: 11, marginTop: 4 }}>Character imported!</p>
+                  <p style={{ color: 'var(--color-success)', fontSize: 11, marginTop: 4, width: '100%' }}>Character imported!</p>
                 )}
               </div>
+
+              {/* ─── CHARA v2 card importer drop zone ─── */}
+              {showCardImporter && (
+                <div style={{ marginBottom: 16 }}>
+                  <CharacterCardImporter
+                    onImported={async (charId, charName) => {
+                      setShowCardImporter(false);
+                      await loadCharacters();
+                      // Navigate to the newly imported character
+                      const { characters, selectCharacter } = useAppStore.getState();
+                      const imported = characters.find(c => c.id === charId);
+                      if (imported) {
+                        selectCharacter(imported);
+                        setSidebarSection('chats');
+                      } else {
+                        setSidebarSection('characters');
+                      }
+                    }}
+                  />
+                </div>
+              )}
 
               {/* ─── Quick-start from preset template ─── */}
               <div>

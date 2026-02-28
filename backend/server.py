@@ -4777,6 +4777,176 @@ async def import_character(req: Request):
         conn.close()
 
 
+@app.post("/api/characters/import-card")
+async def import_chara_card(file: UploadFile = File(...)):
+    """Import a SillyTavern CHARA v2 character card PNG.
+
+    Reads the embedded CHARA v2 JSON payload from the PNG's tEXt chunk (key
+    ``chara``) or EXIF UserComment fallback, maps the fields to the app's
+    character schema, saves the PNG as the character's avatar, and creates the
+    character row in the database.
+
+    Args:
+        file: Multipart PNG upload containing a CHARA v2 payload.
+
+    Returns:
+        dict: ``{"ok": True, "id": int, "name": str}``
+
+    Raises:
+        HTTPException 400: If the file is not a PNG or has no CHARA payload.
+        HTTPException 500: On database errors.
+
+    Example::
+
+        curl -X POST /api/characters/import-card \\
+             -F "file=@my_character.png"
+    """
+    from backend.characters.chara_card import CharaCardReader
+
+    if not file.filename:
+        raise HTTPException(400, "No file provided")
+    if not file.filename.lower().endswith(".png"):
+        raise HTTPException(400, "Character cards must be PNG files")
+
+    png_bytes = await file.read()
+    try:
+        reader = CharaCardReader()
+        card_data = reader.read_bytes(png_bytes)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(400, f"Failed to parse character card: {e}")
+
+    # Save PNG as the character's avatar
+    safe_name = "".join(c for c in (card_data["name"] or "imported") if c.isalpha() or c.isdigit() or c in "_-")
+    safe_name = safe_name[:40] or "imported"
+    import time as _time
+    avatar_filename = f"card_{safe_name}_{int(_time.time())}.png"
+    avatar_path = STORAGE / "avatars" / avatar_filename
+    try:
+        avatar_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(avatar_path, "wb") as fh:
+            fh.write(png_bytes)
+        avatar_url = f"/files/avatars/{avatar_filename}"
+    except Exception:
+        avatar_url = None
+
+    conn = db()
+    cur = conn.cursor()
+    try:
+        # Map CHARA v2 fields → characters table columns
+        # personality_traits stores the character description (background)
+        # greeting_text stores first_mes
+        fields: list[str] = ["name"]
+        values: list = [card_data["name"]]
+
+        if card_data.get("system_prompt"):
+            fields.append("system_prompt")
+            values.append(card_data["system_prompt"])
+        if card_data.get("background"):
+            # description + personality + scenario joined — store as personality_traits
+            fields.append("personality_traits")
+            values.append(card_data["background"])
+        if card_data.get("greeting_message"):
+            fields.append("greeting_text")
+            values.append(card_data["greeting_message"])
+        if avatar_url:
+            fields.append("avatar_url")
+            values.append(avatar_url)
+
+        placeholders = ",".join(["?"] * len(fields))
+        field_names = ",".join(fields)
+        cur.execute(f"INSERT INTO characters ({field_names}) VALUES ({placeholders})", values)
+        char_id = cur.lastrowid
+        conn.commit()
+        logger.info("[import-card] Created character %r (id=%s) from CHARA v2 card", card_data["name"], char_id)
+        return {"ok": True, "id": char_id, "name": card_data["name"]}
+    except Exception as e:
+        raise HTTPException(500, f"Import failed: {e}")
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{character_id}/export-card")
+async def export_chara_card(character_id: int):
+    """Export a character as a SillyTavern-compatible CHARA v2 PNG card.
+
+    Fetches the character row, loads the avatar PNG from disk (or uses a
+    placeholder), embeds a CHARA v2 JSON payload in the PNG's tEXt chunk, and
+    returns the file as a downloadable ``application/octet-stream`` response.
+
+    Args:
+        character_id: ID of the character to export.
+
+    Returns:
+        StreamingResponse: PNG file download named ``<name>.png``.
+
+    Raises:
+        HTTPException 404: If the character does not exist.
+        HTTPException 500: On serialization errors.
+
+    Example::
+
+        curl -O /api/characters/1/export-card
+    """
+    import io as _io
+    from backend.characters.chara_card import CharaCardWriter
+    from starlette.responses import StreamingResponse
+
+    conn = db()
+    cur = conn.cursor()
+    try:
+        row = cur.execute(
+            """SELECT name, system_prompt, personality_traits, greeting_text, avatar_url
+               FROM characters WHERE id = ?""",
+            (character_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        raise HTTPException(404, "Character not found")
+
+    name, system_prompt, background, greeting_message, avatar_url = row
+
+    # Load avatar bytes from disk if the URL maps to a local file
+    avatar_bytes: bytes | None = None
+    if avatar_url and avatar_url.startswith("/files/avatars/"):
+        filename = avatar_url.split("/files/avatars/")[-1]
+        local_path = STORAGE / "avatars" / filename
+        if local_path.exists():
+            try:
+                avatar_bytes = local_path.read_bytes()
+            except Exception:
+                pass
+
+    char_data = {
+        "name": name or "Character",
+        "background": background or "",
+        "system_prompt": system_prompt or "",
+        "greeting_message": greeting_message or "",
+        "backstory": "",
+        "creator_notes": "",
+        "tags": [],
+    }
+
+    try:
+        writer = CharaCardWriter()
+        png_bytes = writer.write_bytes(char_data, avatar_bytes)
+    except Exception as e:
+        raise HTTPException(500, f"Export failed: {e}")
+
+    safe_name = "".join(c for c in (name or "character") if c.isalpha() or c.isdigit() or c in "_- ")
+    safe_name = safe_name.strip() or "character"
+    filename = f"{safe_name}.png"
+
+    return StreamingResponse(
+        _io.BytesIO(png_bytes),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # ==================== CHARACTER KNOWLEDGE BASE ====================
 
 @app.post("/api/characters/{character_id}/docs")

@@ -392,6 +392,10 @@ async def _ensure_lms_model(requested_model: str) -> None:
 # Feature A6: Lorebook / World Info — keyword-triggered context injection
 from backend.lore.matcher import match_lore
 
+# Feature A2: In-App Mini Games — trivia + 20 questions engines
+from backend.games import trivia as trivia_engine
+from backend.games import twenty_questions as tq_engine
+
 # Vocabulary manager — loaded at startup, provides vocab context for LLM
 from backend.vocab.manager import VocabManager
 vocab_manager = VocabManager()
@@ -9738,6 +9742,248 @@ async def remove_character_from_universe(char_id: int):
         )
         conn.commit()
         return {"ok": True}
+    finally:
+        conn.close()
+
+
+# --- MINI GAMES (Feature A2) ---
+
+@app.post("/api/games/start")
+async def start_game(body: dict):
+    """Start a new mini-game session for the active character.
+
+    Creates a ``game_sessions`` row in the DB and initialises game state.
+    For trivia, questions are generated via LLM (with fallback).
+    For 20 questions, the LLM secretly picks a thing.
+
+    Args:
+        body: JSON object with:
+            ``game_type`` (str): "trivia" | "twenty_questions"
+            ``character_id`` (int): Character playing the game.
+            ``topic`` (str, optional): Topic/category hint.
+
+    Returns:
+        ``{"session_id": int, "state": dict}`` — the game session ID and
+        initial public state.  For trivia the first question is included.
+        For 20 questions, ``thing`` is masked as "???".
+
+    Example:
+        >>> POST /api/games/start
+        {"game_type": "trivia", "character_id": 1, "topic": "anime"}
+    """
+    game_type = body.get("game_type", "trivia")
+    character_id = body.get("character_id")
+    topic = body.get("topic", "general knowledge")
+
+    if not character_id:
+        return JSONResponse({"error": "character_id required"}, status_code=400)
+    if game_type not in ("trivia", "twenty_questions"):
+        return JSONResponse({"error": "unsupported game_type"}, status_code=400)
+
+    cfg = load_config() or {}
+    from backend.llm.registry import get_client
+    adapter = get_client(cfg)
+
+    # Build initial game state
+    if game_type == "trivia":
+        questions = trivia_engine.generate_questions(topic, adapter, cfg)
+        state = trivia_engine.new_state(topic, questions)
+        public = dict(state)
+        public["current_question"] = trivia_engine.current_question(state)
+    else:
+        thing, category = tq_engine.choose_thing(topic, adapter, cfg)
+        state = tq_engine.new_state(topic, thing, category)
+        public = tq_engine.public_state(state)
+
+    conn = db()
+    try:
+        cur = conn.execute(
+            "INSERT INTO game_sessions (character_id, game_type, game_state) VALUES (?, ?, ?)",
+            (character_id, game_type, json.dumps(state)),
+        )
+        conn.commit()
+        session_id = cur.lastrowid
+    finally:
+        conn.close()
+
+    return {"session_id": session_id, "state": public}
+
+
+@app.post("/api/games/{session_id}/move")
+async def game_move(session_id: int, body: dict):
+    """Submit a move in an active game session.
+
+    For **trivia**: ``{"choice": 0}`` — 0-based option index.
+    For **20 questions**: ``{"question": "Is it alive?"}`` for a yes/no
+    question, or ``{"guess": "Totoro"}`` for a final guess.
+
+    The response includes the updated public state plus an ``event`` key
+    describing what happened ("correct", "wrong", "answered", "won", "lost",
+    "guess_wrong").
+
+    Args:
+        session_id: ``game_sessions.id``
+        body: Move payload (see above).
+
+    Returns:
+        ``{"event": str, "state": dict, "reaction": str | None}``
+
+    Example:
+        >>> POST /api/games/3/move
+        {"choice": 2}
+    """
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT game_type, game_state, character_id FROM game_sessions WHERE id=?",
+            (session_id,),
+        ).fetchone()
+        if not row:
+            return JSONResponse({"error": "session not found"}, status_code=404)
+
+        game_type, state_json, character_id = row
+        state = json.loads(state_json)
+
+        if state.get("finished"):
+            return JSONResponse({"error": "game already finished"}, status_code=400)
+
+        cfg = load_config() or {}
+        from backend.llm.registry import get_client
+        adapter = get_client(cfg)
+        event = "unknown"
+        reaction = None
+
+        if game_type == "trivia":
+            choice = body.get("choice")
+            if choice is None:
+                return JSONResponse({"error": "choice required"}, status_code=400)
+            state = trivia_engine.answer_question(state, int(choice))
+            event = "correct" if state["last_correct"] else "wrong"
+            public = dict(state)
+            if not state["finished"]:
+                public["current_question"] = trivia_engine.current_question(state)
+
+        else:  # twenty_questions
+            if "guess" in body:
+                state = tq_engine.process_guess(state, body["guess"], adapter, cfg)
+                event = "won" if state["won"] else "guess_wrong"
+                reaction = state.get("reveal")
+            elif "question" in body:
+                answer = tq_engine.answer_question(state, body["question"], adapter, cfg)
+                event = "answered"
+                reaction = answer
+                if state.get("finished"):
+                    event = "lost"
+                    reaction = state.get("reveal", reaction)
+            else:
+                return JSONResponse({"error": "question or guess required"}, status_code=400)
+            public = tq_engine.public_state(state)
+
+        # Persist updated state
+        result_val = None
+        if state.get("finished"):
+            if game_type == "trivia":
+                result_val = "win" if state["score"] >= trivia_engine.ROUNDS // 2 else "loss"
+                _score = state["score"]
+                _max = trivia_engine.ROUNDS
+            else:
+                result_val = "win" if state.get("won") else "loss"
+                _score = 1 if state.get("won") else 0
+                _max = 1
+            conn.execute(
+                "UPDATE game_sessions SET game_state=?, result=?, score=?, max_score=? WHERE id=?",
+                (json.dumps(state), result_val, _score, _max, session_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE game_sessions SET game_state=? WHERE id=?",
+                (json.dumps(state), session_id),
+            )
+        conn.commit()
+
+        return {"event": event, "state": public, "reaction": reaction}
+    finally:
+        conn.close()
+
+
+@app.get("/api/games/history")
+async def game_history(character_id: int, limit: int = 20):
+    """Return recent game history for a character.
+
+    Args:
+        character_id: Character to fetch history for.
+        limit: Maximum number of records to return (default 20).
+
+    Returns:
+        ``{"games": [...]}`` — list of game session summaries sorted by
+        most recent first.
+
+    Example:
+        >>> GET /api/games/history?character_id=1
+        {"games": [{"id": 5, "game_type": "trivia", "result": "win", ...}]}
+    """
+    conn = db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, game_type, result, score, max_score,
+                   duration_seconds, played_at
+            FROM game_sessions
+            WHERE character_id = ?
+            ORDER BY played_at DESC
+            LIMIT ?
+            """,
+            (character_id, limit),
+        ).fetchall()
+        games = [
+            {
+                "id": r[0],
+                "game_type": r[1],
+                "result": r[2],
+                "score": r[3],
+                "max_score": r[4],
+                "duration_seconds": r[5],
+                "played_at": r[6],
+            }
+            for r in rows
+        ]
+        return {"games": games}
+    finally:
+        conn.close()
+
+
+@app.get("/api/games/{session_id}/state")
+async def get_game_state(session_id: int):
+    """Return the current public state of a game session.
+
+    The ``thing`` field is masked for 20 questions games while they are
+    still in progress.
+
+    Args:
+        session_id: ``game_sessions.id``
+
+    Returns:
+        ``{"game_type": str, "state": dict}``
+
+    Example:
+        >>> GET /api/games/3/state
+        {"game_type": "trivia", "state": {...}}
+    """
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT game_type, game_state FROM game_sessions WHERE id=?",
+            (session_id,),
+        ).fetchone()
+        if not row:
+            return JSONResponse({"error": "session not found"}, status_code=404)
+        game_type, state_json = row
+        state = json.loads(state_json)
+        if game_type == "twenty_questions" and not state.get("finished"):
+            state = tq_engine.public_state(state)
+        elif game_type == "trivia":
+            state["current_question"] = trivia_engine.current_question(state)
+        return {"game_type": game_type, "state": state}
     finally:
         conn.close()
 

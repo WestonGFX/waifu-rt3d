@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain, Settings,
-  ChevronLeft, Search, Wifi, WifiOff, Pencil, BookMarked, UserCircle
+  ChevronLeft, Search, Wifi, WifiOff, Pencil, BookMarked, UserCircle, Gamepad2
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
@@ -315,6 +315,16 @@ export function Sidebar() {
         >
           <UserCircle size={16} />
           {!sidebarCollapsed && <span className="text-[10px] font-medium">About Me</span>}
+        </button>
+        <button
+          onClick={() => openOverlay('games')}
+          className="sidebar-tool-btn flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors flex-1"
+          style={{ color: 'var(--color-text-tertiary)' }}
+          title="Mini Games"
+          aria-label="Mini Games"
+        >
+          <Gamepad2 size={16} />
+          {!sidebarCollapsed && <span className="text-[10px] font-medium">Games</span>}
         </button>
         <button
           onClick={() => openOverlay('settings')}

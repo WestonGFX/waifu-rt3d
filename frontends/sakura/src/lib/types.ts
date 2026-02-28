@@ -265,3 +265,67 @@ export interface VrmStats {
   /** VRM spec version: '0.x' or '1.x'. */
   vrmVersion: string;
 }
+
+// --- Feature A2: In-App Mini Games ---
+
+/** Supported mini-game types. */
+export type GameType = 'trivia' | 'twenty_questions';
+
+/** One trivia question as returned by the backend. */
+export interface TriviaQuestion {
+  q: string;
+  options: [string, string, string, string];
+  /** Always -1 from the server (answer is hidden). */
+  answer: -1;
+}
+
+/** One Q&A pair recorded during a 20 Questions game. */
+export interface TwentyQEntry {
+  q: string;
+  a: string;
+}
+
+/** Public game state (thing masked for 20Q in progress). */
+export interface GameState {
+  // Common
+  finished: boolean;
+  topic: string;
+  // Trivia-specific
+  questions?: TriviaQuestion[];
+  current?: number;
+  score?: number;
+  current_question?: TriviaQuestion | null;
+  last_correct?: boolean;
+  last_answer?: number;
+  // 20Q-specific
+  thing?: string;        // "???" while in progress
+  category?: string;
+  questions_list?: TwentyQEntry[];
+  remaining?: number;
+  won?: boolean | null;
+  reveal?: string | null;
+}
+
+/** A completed game session summary from GET /api/games/history. */
+export interface GameSession {
+  id: number;
+  game_type: GameType;
+  result: 'win' | 'loss' | null;
+  score: number | null;
+  max_score: number | null;
+  duration_seconds: number | null;
+  played_at: string;
+}
+
+/** Response from POST /api/games/start. */
+export interface GameStartResponse {
+  session_id: number;
+  state: GameState;
+}
+
+/** Response from POST /api/games/{id}/move. */
+export interface GameMoveResponse {
+  event: 'correct' | 'wrong' | 'answered' | 'won' | 'lost' | 'guess_wrong' | 'unknown';
+  state: GameState;
+  reaction: string | null;
+}

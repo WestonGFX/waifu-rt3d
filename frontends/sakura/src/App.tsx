@@ -20,6 +20,7 @@ import { CharacterRelationshipWeb } from './components/CharacterRelationshipWeb'
 import { UniversePanel } from './components/UniversePanel';
 import { LorePanel } from './components/LorePanel';
 import { UserKnowledgePanel } from './components/UserKnowledgePanel';
+import { GamePanel } from './components/GamePanel';
 import { CinematicOverlay } from './components/CinematicOverlay';
 import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
 import { SettingsDrawer } from './components/SettingsDrawer';
@@ -241,6 +242,25 @@ export function App() {
 
       {/* Overlay drawers — Feature C3 User Knowledge Graph */}
       {activeOverlay === 'userknowledge' && <UserKnowledgePanel />}
+
+      {/* Overlay drawers — Feature A2 Mini Games */}
+      {activeOverlay === 'games' && activeCharacter && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 300,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+          }}
+          onClick={closeOverlay}
+        >
+          <div
+            style={{ maxWidth: 480, width: '100%', margin: '0 16px' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <GamePanel characterId={activeCharacter.id} charName={activeCharacter.name} />
+          </div>
+        </div>
+      )}
 
       {/* Floating (non-overlay) elements — Phase 2 */}
       <SoundscapePlayer />

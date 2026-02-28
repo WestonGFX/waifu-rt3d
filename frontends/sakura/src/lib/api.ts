@@ -611,4 +611,33 @@ export const api = {
     a.click();
     URL.revokeObjectURL(url);
   },
+
+  // --- Feature A2: Mini Games ---
+
+  /**
+   * Start a new mini-game session.
+   *
+   * @param gameType - "trivia" | "twenty_questions"
+   * @param characterId - Character playing the game.
+   * @param topic - Optional topic/category hint.
+   */
+  startGame: (gameType: string, characterId: number, topic?: string) =>
+    post('/api/games/start', { game_type: gameType, character_id: characterId, topic: topic ?? 'general knowledge' }),
+
+  /**
+   * Submit a move in an active game session.
+   *
+   * For trivia: pass `{ choice: 0 }`.
+   * For 20Q: pass `{ question: "Is it alive?" }` or `{ guess: "Totoro" }`.
+   */
+  gameMove: (sessionId: number, move: Record<string, unknown>) =>
+    post(`/api/games/${sessionId}/move`, move),
+
+  /** Get current public state of a game session. */
+  getGameState: (sessionId: number) =>
+    get(`/api/games/${sessionId}/state`),
+
+  /** Get game history for a character. */
+  getGameHistory: (characterId: number, limit = 20) =>
+    get(`/api/games/history?character_id=${characterId}&limit=${limit}`),
 };

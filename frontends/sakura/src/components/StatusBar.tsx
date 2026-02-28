@@ -152,82 +152,74 @@ function RelationshipBar({ charId, messageCount }: { charId: number; messageCoun
   ];
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mt-0.5" style={{ flexWrap: 'wrap' }}>
-        {/* Tier badge */}
-        <span
-          title={`Affinity: ${Math.round(rel.affinity * 100)}%`}
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            padding: '1px 6px',
-            borderRadius: 99,
-            border: `1px solid ${tier.color}`,
-            color: tier.color,
-            lineHeight: 1.6,
-            letterSpacing: '0.02em',
-            flexShrink: 0,
-          }}
-        >
-          {tier.label}
-        </span>
-        {stats.map(({ key, emoji, label }) => (
-          <div key={key} className="flex items-center gap-1" title={`${label}: ${(rel[key] as number * 100).toFixed(0)}%`}>
-            <span style={{ fontSize: '10px', color: scoreColor(rel[key] as number), lineHeight: 1 }}>
-              {emoji}
-            </span>
+    <div className="flex items-center gap-2 mt-0.5" style={{ flexWrap: 'nowrap' }}>
+      {/* Tier badge */}
+      <span
+        title={`Affinity: ${Math.round(rel.affinity * 100)}%`}
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          padding: '1px 6px',
+          borderRadius: 99,
+          border: `1px solid ${tier.color}`,
+          color: tier.color,
+          lineHeight: 1.6,
+          letterSpacing: '0.02em',
+          flexShrink: 0,
+        }}
+      >
+        {tier.label}
+      </span>
+
+      {stats.map(({ key, emoji, label }) => (
+        <div key={key} className="flex items-center gap-1" title={`${label}: ${(rel[key] as number * 100).toFixed(0)}%`}>
+          <span style={{ fontSize: '10px', color: scoreColor(rel[key] as number), lineHeight: 1 }}>
+            {emoji}
+          </span>
+          <div style={{ width: 28, height: 4, borderRadius: 99, backgroundColor: 'var(--color-border)' }}>
             <div
-              style={{ width: 28, height: 4, borderRadius: 99, backgroundColor: 'var(--color-border)' }}
-            >
-              <div
-                style={{
-                  width: `${Math.round((rel[key] as number) * 100)}%`,
-                  height: '100%',
-                  borderRadius: 99,
-                  backgroundColor: scoreColor(rel[key] as number),
-                  transition: 'width 0.6s ease',
-                }}
-              />
-            </div>
+              style={{
+                width: `${Math.round((rel[key] as number) * 100)}%`,
+                height: '100%',
+                borderRadius: 99,
+                backgroundColor: scoreColor(rel[key] as number),
+                transition: 'width 0.6s ease',
+              }}
+            />
           </div>
-        ))}
-        <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>
-          {rel.interactions}×
-        </span>
-      </div>
-      {/* Affinity sparkline — rendered below the stat bars once we have ≥ 3 data points */}
+        </div>
+      ))}
+
+      <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)', flexShrink: 0 }}>
+        {rel.interactions}×
+      </span>
+
+      {/* Affinity sparkline — inline at the right end of the bar row, shown once ≥ 3 readings */}
       {affinityHistory.current.length >= 3 && (() => {
         const h = affinityHistory.current;
         const W = 48, H = 14;
         const minV = Math.min(...h);
         const maxV = Math.max(...h);
-        const range = maxV - minV || 0.01; // avoid div-by-zero when all values equal
+        const range = maxV - minV || 0.01;
         const pts = h.map((v, i) => {
           const x = (i / (h.length - 1)) * W;
           const y = H - ((v - minV) / range) * (H - 2) - 1;
           return `${x.toFixed(1)},${y.toFixed(1)}`;
         }).join(' ');
         const last = h[h.length - 1];
-        const lastX = W;
         const lastY = H - ((last - minV) / range) * (H - 2) - 1;
         return (
           <svg
-            width={W}
-            height={H}
-            viewBox={`0 0 ${W} ${H}`}
-            style={{ display: 'block', marginTop: 3, opacity: 0.75 }}
-            aria-label="Affinity trend"
-            role="img"
+            width={W} height={H} viewBox={`0 0 ${W} ${H}`}
+            style={{ flexShrink: 0, opacity: 0.75 }}
+            aria-label="Affinity trend" role="img"
           >
             <polyline
-              points={pts}
-              fill="none"
-              stroke="var(--color-accent)"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              points={pts} fill="none"
+              stroke="var(--color-accent)" strokeWidth="1.5"
+              strokeLinecap="round" strokeLinejoin="round"
             />
-            <circle cx={lastX} cy={lastY} r="2" fill="var(--color-accent)" />
+            <circle cx={W} cy={lastY} r="2" fill="var(--color-accent)" />
           </svg>
         );
       })()}

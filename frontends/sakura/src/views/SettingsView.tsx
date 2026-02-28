@@ -3112,6 +3112,48 @@ function VoiceTab({ save, cfg }: TabProps) {
           />
         </div>
       </section>
+
+      <section className="mb-6">
+        <SectionHeader title="Voice Conversation (Full-Duplex)" />
+        <div style={cardStyle} className="px-4">
+          <SettingField label="Auto-Interrupt" description="AI stops speaking when you start talking."
+            tooltip="Enables barge-in: when voice activity is detected during AI speech, the AI immediately stops. Disable if you want to listen without accidentally interrupting.">
+            <input
+              type="checkbox"
+              checked={cfg('voice.auto_interrupt', true) as boolean}
+              onChange={(e) => save('voice.auto_interrupt', e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+
+          <SliderField
+            label="Silence Timeout" description="How long to wait after you stop speaking before processing."
+            tooltip="Shorter = snappier responses but may cut off pauses. Longer = more forgiving for natural speech pauses. Range: 200ms–10,000ms."
+            value={Number(cfg('voice.silence_timeout_ms', 1500))}
+            min={200} max={5000} step={100}
+            onChange={(v) => save('voice.silence_timeout_ms', v)}
+            format={(v) => `${v}ms`}
+          />
+
+          <SliderField
+            label="VAD Threshold (Duplex)" description="Voice activity detection sensitivity for full-duplex mode."
+            tooltip="Lower = more sensitive (picks up quiet speech). Higher = less sensitive (ignores background noise). This is separate from the push-to-talk VAD above. Range: 0.001–0.5."
+            value={Number(cfg('voice.vad_threshold', 0.015))}
+            min={0.001} max={0.1} step={0.001}
+            onChange={(v) => save('voice.vad_threshold', v)}
+            format={(v) => v.toFixed(3)}
+          />
+
+          <SliderField
+            label="Echo Gate Threshold" description="VAD threshold during AI speech to prevent self-triggering." advanced
+            tooltip="Higher values prevent the AI's own voice from triggering barge-in through speakers. Only applies when auto-interrupt is enabled."
+            value={Number(cfg('voice.speaking_vad_threshold', 0.06))}
+            min={0.01} max={0.3} step={0.01}
+            onChange={(v) => save('voice.speaking_vad_threshold', v)}
+            format={(v) => v.toFixed(2)}
+          />
+        </div>
+      </section>
     </>
   );
 }

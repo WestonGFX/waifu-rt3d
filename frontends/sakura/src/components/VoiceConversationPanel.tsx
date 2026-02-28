@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, PhoneOff, Hand } from 'lucide-react';
 import { VoiceOrb } from './VoiceOrb';
 import { useFullDuplexVoice } from '../hooks/useFullDuplexVoice';
-import type { VoiceSessionState } from '../hooks/useFullDuplexVoice';
+import type { VoiceSessionState, VoiceDuplexConfig } from '../hooks/useFullDuplexVoice';
+import { useAppStore } from '../stores/appStore';
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,13 @@ export function VoiceConversationPanel({
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const idCounter = useRef(0);
 
+  // Read voice duplex config from app settings
+  const appConfig = useAppStore((s) => s.config);
+  const voiceConfig = useMemo<VoiceDuplexConfig>(() => ({
+    silenceTimeoutMs: Number(appConfig['voice.silence_timeout_ms'] ?? 1500),
+    vadThreshold: Number(appConfig['voice.vad_threshold'] ?? 0.015),
+  }), [appConfig]);
+
   const {
     state,
     isActive,
@@ -73,6 +81,7 @@ export function VoiceConversationPanel({
   } = useFullDuplexVoice({
     sessionId,
     charId,
+    voiceConfig,
     onTranscript: (text) => {
       const entry: TranscriptEntry = {
         id: ++idCounter.current,

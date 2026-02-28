@@ -119,14 +119,17 @@ class VoiceDuplexSession:
         self._interrupted = False
         self._http_client: Optional["httpx.AsyncClient"] = None
 
-        # Configurable parameters (can be updated via control messages)
-        voice_cfg = cfg.get("voice", {})
+        # Configurable parameters (can be updated via control messages).
+        # Config may use nested "voice" dict OR flat dot-notation keys.
+        voice_cfg = cfg.get("voice", {}) if isinstance(cfg.get("voice"), dict) else {}
         self.silence_timeout_ms = _clamp(
-            voice_cfg.get("silence_timeout_ms", DEFAULT_SILENCE_TIMEOUT_MS),
+            float(voice_cfg.get("silence_timeout_ms",
+                  cfg.get("voice.silence_timeout_ms", DEFAULT_SILENCE_TIMEOUT_MS))),
             200, 10000,
         )
         self.vad_threshold = _clamp(
-            voice_cfg.get("vad_threshold", DEFAULT_VAD_THRESHOLD),
+            float(voice_cfg.get("vad_threshold",
+                  cfg.get("voice.vad_threshold", DEFAULT_VAD_THRESHOLD))),
             0.001, 0.5,
         )
 

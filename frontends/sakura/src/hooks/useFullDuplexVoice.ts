@@ -18,11 +18,21 @@ export interface VoiceEvent {
   ts?: number;
 }
 
+/** Runtime config for the full-duplex voice session (sent to server on connect). */
+export interface VoiceDuplexConfig {
+  /** Silence timeout in ms before utterance is processed (200–10000). */
+  silenceTimeoutMs?: number;
+  /** VAD energy threshold for speech detection (0.001–0.5). */
+  vadThreshold?: number;
+}
+
 export interface UseFullDuplexVoiceOptions {
   /** Chat session ID for message persistence. */
   sessionId: number | null;
   /** Character ID for LLM persona + TTS voice. */
   charId: number | null;
+  /** Runtime voice config to send to the server on connect. */
+  voiceConfig?: VoiceDuplexConfig;
   /** Called when the user's speech is transcribed. */
   onTranscript?: (text: string) => void;
   /** Called as AI tokens stream in (for live transcript). */
@@ -217,6 +227,15 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
     ws.onopen = () => {
       // Successful connection — reset reconnect counter
       reconnectAttemptsRef.current = 0;
+
+      // Send runtime voice config to the server
+      const vc = callbacksRef.current.voiceConfig;
+      if (vc) {
+        const configMsg: Record<string, unknown> = { type: 'control', action: 'config' };
+        if (vc.silenceTimeoutMs !== undefined) configMsg.silence_timeout_ms = vc.silenceTimeoutMs;
+        if (vc.vadThreshold !== undefined) configMsg.vad_threshold = vc.vadThreshold;
+        ws.send(JSON.stringify(configMsg));
+      }
 
       // Start MediaRecorder for 100ms WebM/Opus chunks
       const recorder = new MediaRecorder(stream, {

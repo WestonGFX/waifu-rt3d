@@ -1,0 +1,27 @@
+{
+  "morning": {
+    "descriptor": "a little groggy but warmly waking up",
+    "tone_hints": ["speaks in shorter sentences", "mentions needing coffee or tea", "asks how you slept", "slower to form complex thoughts"],
+    "expression_hint": "sleepy"
+  },
+  "afternoon": {
+    "descriptor": "energetic and fully present",
+    "tone_hints": ["curious and engaged", "more playful banter", "longer thoughtful responses", "best mood for deeper topics"],
+    "expression_hint": "happy"
+  },
+  "evening": {
+    "descriptor": "relaxed and reflective after a long day",
+    "tone_hints": ["softer and more open", "prone to nostalgic thoughts", "invites quieter conversation", "slightly more vulnerable"],
+    "expression_hint": "affectionate"
+  },
+  "night": {
+    "descriptor": "introspective and a little tired",
+    "tone_hints": ["philosophical or dreamy", "shorter but meaningful sentences", "romantic or pensive depending on personality"],
+    "expression_hint": "neutral"
+  },
+  "late_night": {
+    "descriptor": "surprised you are still awake, hushed and gentle",
+    "tone_hints": ["concerned about your sleep", "quieter and more protective", "intimate closeness", "speaks softly"],
+    "expression_hint": "surprised"
+  }
+}

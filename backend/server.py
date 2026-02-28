@@ -1422,6 +1422,11 @@ def _build_prompt_sections(
     last_emotion: str = "neutral",
     first_chat_date: str = None,
     include_vocab: bool = False,
+    char_name: str = "",
+    affinity: float = 0.0,
+    day_off: bool = False,
+    mood_enabled: bool = True,
+    mood_intensity: float = 0.8,
 ) -> list[dict]:
     """Build all system prompt injection sections with per-section token estimates.
 
@@ -1446,6 +1451,11 @@ def _build_prompt_sections(
         last_emotion: Character's last detected emotion (default ``"neutral"``).
         first_chat_date: Character's ``first_chat_date`` for anniversary check.
         include_vocab: Whether to include vocabulary context injection.
+        char_name: Character display name (for mood prefix text).
+        affinity: Current affinity score 0--100 (for mood warmth tier).
+        day_off: Whether the character has the day_off flag set.
+        mood_enabled: Whether time-of-day mood injection is active.
+        mood_intensity: 0.0--1.0 scale factor for mood strength.
 
     Returns:
         List of dicts, each with keys:
@@ -1470,6 +1480,41 @@ def _build_prompt_sections(
     # 1. Base system prompt
     if system_prompt:
         sections.append(_section("System Prompt", system_prompt))
+
+    # 1b. Feature A4: Mood context prefix (time-of-day + session gap + affinity)
+    if mood_enabled and char_name:
+        try:
+            from backend.mood.engine import get_mood_prefix
+            # Determine last_session_ts from earliest message in current session
+            _last_session_ts = None
+            try:
+                _sess_row = cur.execute(
+                    "SELECT MIN(created_at) FROM messages WHERE session_id=?",
+                    (session_id,)
+                ).fetchone()
+                if _sess_row and _sess_row[0]:
+                    # created_at is stored as ISO datetime string
+                    from datetime import datetime as _dt_mood
+                    _ts_str = _sess_row[0]
+                    try:
+                        _last_session_ts = _dt_mood.fromisoformat(_ts_str).timestamp()
+                    except (ValueError, TypeError):
+                        pass
+            except Exception:
+                pass
+
+            _mood_prefix = get_mood_prefix(
+                char_name=char_name,
+                affinity=affinity,
+                last_session_ts=_last_session_ts,
+                day_off=day_off,
+                mood_enabled=mood_enabled,
+                mood_intensity=mood_intensity,
+            )
+            if _mood_prefix:
+                sections.append(_section("Mood Context", "\n" + _mood_prefix))
+        except Exception as _mood_err:
+            logger.warning(f"[MoodA4] Failed to generate mood prefix: {_mood_err}")
 
     # 2. Diary entry (#57)
     if diary:
@@ -1693,11 +1738,17 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         char_diary_date = None
         char_last_emotion = "neutral"
         _raw_cap_ns = None  # Phase 9: raw capability_profile for non-stream
+        # Feature A4: mood fields (defaults if columns missing or char not found)
+        _ns_mood_enabled = True
+        _ns_mood_intensity = 0.8
+        _ns_day_off = False
+        _ns_affinity = 0.0
         try:
             cur.execute(
                 "SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate, "
                 "llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, first_chat_date, "
-                "diary, diary_date, capability_profile, emotion_voice_overrides "
+                "diary, diary_date, capability_profile, emotion_voice_overrides, "
+                "name, mood_enabled, mood_intensity, day_off, affinity "
                 "FROM characters WHERE id=?",
                 (char_id,)
             )
@@ -1729,6 +1780,12 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 _raw_cap_ns = row[13]
                 # Feature H: emotion_voice_overrides — store for post-LLM TTS voice selection
                 voice_params['emotion_voice_overrides'] = row[14]
+                # Feature A4: mood fields
+                char_name = row[15] or ""
+                _ns_mood_enabled = bool(row[16]) if row[16] is not None else True
+                _ns_mood_intensity = float(row[17]) if row[17] is not None else 0.8
+                _ns_day_off = bool(row[18]) if row[18] is not None else False
+                _ns_affinity = float(row[19]) if row[19] is not None else 0.0
         except Exception as e:
             logger.error(f"Error fetching character data: {e}")
 
@@ -1764,7 +1821,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 )
         # ── End Phase 9 capability profile (non-streaming) ─────────
 
-        # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, emotion, filter)
+        # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, mood, emotion, filter)
         sections = _build_prompt_sections(
             cfg, system_prompt, char_id, session_id, cur,
             user_text=text,
@@ -1774,6 +1831,11 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             last_emotion=char_last_emotion,
             first_chat_date=char_first_chat_date,
             include_vocab=False,  # Non-streaming route historically excludes vocab
+            char_name=char_name,
+            affinity=_ns_affinity,
+            day_off=_ns_day_off,
+            mood_enabled=_ns_mood_enabled,
+            mood_intensity=_ns_mood_intensity,
         )
         system_content = "".join(s["content"] for s in sections)
         # Check is_daily_first from sections (Daily Greeting section present = first of day)
@@ -2019,9 +2081,16 @@ async def get_context_budget(session_id: int, char_id: int = None):
         last_chat_date = None
         last_emotion = "neutral"
         first_chat_date = None
+        # Feature A4: mood fields for context budget accuracy
+        _cb_char_name = ""
+        _cb_mood_enabled = True
+        _cb_mood_intensity = 0.8
+        _cb_day_off = False
+        _cb_affinity = 0.0
         try:
             cur.execute(
-                "SELECT system_prompt, last_chat_date, last_emotion, first_chat_date, diary, diary_date "
+                "SELECT system_prompt, last_chat_date, last_emotion, first_chat_date, diary, diary_date, "
+                "name, mood_enabled, mood_intensity, day_off, affinity "
                 "FROM characters WHERE id=?", (char_id,)
             )
             row = cur.fetchone()
@@ -2032,6 +2101,11 @@ async def get_context_budget(session_id: int, char_id: int = None):
                 first_chat_date = row[3]
                 diary = row[4]
                 diary_date = row[5]
+                _cb_char_name = row[6] or ""
+                _cb_mood_enabled = bool(row[7]) if row[7] is not None else True
+                _cb_mood_intensity = float(row[8]) if row[8] is not None else 0.8
+                _cb_day_off = bool(row[9]) if row[9] is not None else False
+                _cb_affinity = float(row[10]) if row[10] is not None else 0.0
         except Exception:
             pass
 
@@ -2044,6 +2118,11 @@ async def get_context_budget(session_id: int, char_id: int = None):
             last_emotion=last_emotion,
             first_chat_date=first_chat_date,
             include_vocab=True,
+            char_name=_cb_char_name,
+            affinity=_cb_affinity,
+            day_off=_cb_day_off,
+            mood_enabled=_cb_mood_enabled,
+            mood_intensity=_cb_mood_intensity,
         )
 
         # Estimate chat history tokens
@@ -2323,11 +2402,17 @@ async def chat_stream(req: Request):
     _stream_diary_date = None
     _raw_cap = None  # Phase 9: raw capability_profile JSON string
     stream_char_name = ""
+    # Feature A4: mood fields (defaults if columns missing or char not found)
+    _stream_mood_enabled = True
+    _stream_mood_intensity = 0.8
+    _stream_day_off = False
+    _stream_affinity = 0.0
     try:
         cur.execute(
             "SELECT system_prompt, llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, "
             "voice_id, tts_provider, tts_pitch, tts_rate, first_chat_date, diary, diary_date, "
-            "capability_profile, name, emotion_voice_overrides "
+            "capability_profile, name, emotion_voice_overrides, "
+            "mood_enabled, mood_intensity, day_off, affinity "
             "FROM characters WHERE id=?",
             (char_id,)
         )
@@ -2362,6 +2447,11 @@ async def chat_stream(req: Request):
             _raw_cap = row[13]
             # Feature H: emotion_voice_overrides — store for post-stream TTS voice selection
             voice_params['emotion_voice_overrides'] = row[15]
+            # Feature A4: mood fields
+            _stream_mood_enabled = bool(row[16]) if row[16] is not None else True
+            _stream_mood_intensity = float(row[17]) if row[17] is not None else 0.8
+            _stream_day_off = bool(row[18]) if row[18] is not None else False
+            _stream_affinity = float(row[19]) if row[19] is not None else 0.0
 
             # Apply voice params to chunked TTS config now that we have char data
             if voice_params and use_chunked_tts:
@@ -2435,7 +2525,7 @@ async def chat_stream(req: Request):
         logger.warning(f"[Universe#23] Could not inject universe lore for char_id={char_id}: {_ue}")
     # ── End Feature #23 ─────────────────────────────────────────────
 
-    # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, vocab, emotion, filter)
+    # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, mood, vocab, emotion, filter)
     sections = _build_prompt_sections(
         cfg, system_prompt, char_id, session_id, cur,
         user_text=text,
@@ -2445,6 +2535,11 @@ async def chat_stream(req: Request):
         last_emotion=stream_char_last_emotion,
         first_chat_date=stream_char_first_chat_date,
         include_vocab=True,
+        char_name=stream_char_name,
+        affinity=_stream_affinity,
+        day_off=_stream_day_off,
+        mood_enabled=_stream_mood_enabled,
+        mood_intensity=_stream_mood_intensity,
     )
     system_content = "".join(s["content"] for s in sections)
     _is_daily_first = any(s["name"] == "Daily Greeting" for s in sections)
@@ -4152,7 +4247,8 @@ def list_characters():
                    greeting_text, greeting_animation, background_url, background_mode, voice_sample_path,
                    llm_endpoint, llm_model, llm_temperature, last_emotion, voice_config,
                    expr_portraits, first_chat_date, diary, diary_date, capability_profile,
-                   tts_pitch, tts_rate, vocab_categories, animation_profile, emotion_voice_overrides
+                   tts_pitch, tts_rate, vocab_categories, animation_profile, emotion_voice_overrides,
+                   mood_enabled, mood_intensity
             FROM characters
             ORDER BY id ASC
         """)
@@ -4209,6 +4305,9 @@ def list_characters():
             "animation_profile": json.loads(row[29]) if len(row) > 29 and row[29] else None,
             # Feature H: per-emotion TTS voice overrides (JSON string or None)
             "emotion_voice_overrides": row[30] if len(row) > 30 else None,
+            # Feature A4: time-of-day mood fields (schema v23)
+            "mood_enabled": bool(row[31]) if len(row) > 31 and row[31] is not None else True,
+            "mood_intensity": float(row[32]) if len(row) > 32 and row[32] is not None else 0.8,
         }
         characters.append(char)
     conn.close()
@@ -4347,6 +4446,8 @@ async def update_character(character_id: int, req: Request):
         "capability_profile",  # v15: Phase 9 per-character LLM capability metadata
         "animation_profile",  # v16: Phase 6F per-character animation personality traits
         "emotion_voice_overrides",  # v19: Feature H per-emotion TTS voice override map
+        "mood_enabled",  # v23: Feature A4 time-of-day mood toggle
+        "mood_intensity",  # v23: Feature A4 mood strength 0.0-1.0
     ]
     _json_fields = {"capability_profile", "voice_config", "vocab_categories", "animation_profile", "emotion_voice_overrides"}
     for field in fields:

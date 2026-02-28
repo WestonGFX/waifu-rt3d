@@ -86,6 +86,22 @@ function ContextBudgetBar({
   );
 }
 
+/**
+ * Compute the current time-of-day slot from the browser's local clock.
+ * Mirrors the backend MoodEngine's `_get_time_slot()` so the badge
+ * matches what the LLM actually receives.
+ *
+ * @returns One of 'morning', 'afternoon', 'evening', 'night', or 'late night'.
+ */
+function getCurrentTimeSlot(): string {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 10) return 'morning';
+  if (h >= 10 && h < 17) return 'afternoon';
+  if (h >= 17 && h < 21) return 'evening';
+  if (h >= 21) return 'night';
+  return 'late night';
+}
+
 const IDLE_PHRASES = [
   'daydreaming...',
   'humming a song~',
@@ -374,6 +390,23 @@ export function StatusBar({
                 boxShadow: '0 0 6px var(--color-success)'
               }}
             />
+            {/* Feature A4: subtle time-of-day mood badge */}
+            <span
+              className="flex-shrink-0"
+              title="Current time-of-day mood slot"
+              style={{
+                fontSize: 9,
+                fontWeight: 500,
+                padding: '1px 5px',
+                borderRadius: 6,
+                color: 'var(--color-text-tertiary)',
+                backgroundColor: 'var(--color-border-subtle)',
+                letterSpacing: '0.03em',
+                lineHeight: 1.5,
+              }}
+            >
+              {getCurrentTimeSlot()}
+            </span>
           </div>
           <p className="text-xs truncate" style={{ color: 'var(--color-text-tertiary)' }}>
             {idlePhrase}

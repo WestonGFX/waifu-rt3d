@@ -26,6 +26,7 @@ Migration Strategy:
     - v19 → v20: Backstory generator, session tags, message pinning (Features 6/9/10)
     - v20 → v21: Message reactions table + day_off flag on characters (Features 22/29)
     - v21 → v22: Universe / Shared World Builder — universes table + universe_id FK on characters (#23)
+    - v22 → v23: Character Mood Engine — mood_enabled + mood_intensity columns (Feature A4)
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -1273,15 +1274,70 @@ def migrate_to_v22(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v23(con: sqlite3.Connection) -> bool:
+    """Apply schema v23 migration (Feature A4: Character Mood Engine).
+
+    Adds two columns to the ``characters`` table:
+        - ``mood_enabled`` (INTEGER, default 1) -- whether time-of-day mood
+          injection is active for this character.
+        - ``mood_intensity`` (REAL, default 0.8) -- 0.0--1.0 scale factor
+          controlling how strongly the mood prefix influences the system prompt.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if columns already existed
+        (idempotent).
+
+    Raises:
+        sqlite3.Error: If migration fails.
+
+    Example:
+        >>> if migrate_to_v23(con):
+        ...     print("Migrated to v23")
+    """
+    char_cols = {row[1] for row in con.execute("PRAGMA table_info(characters)")}
+
+    already_done = "mood_enabled" in char_cols and "mood_intensity" in char_cols
+    if already_done:
+        logger.info("Schema v23 logic: mood columns already exist. Ensuring version is 23.")
+        cur = con.cursor()
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (23)")
+        con.commit()
+        return False
+
+    try:
+        logger.info("Applying schema v23 migration (Feature A4: Character Mood Engine)...")
+        cur = con.cursor()
+
+        if "mood_enabled" not in char_cols:
+            cur.execute("ALTER TABLE characters ADD COLUMN mood_enabled INTEGER DEFAULT 1")
+            logger.info("  - Added characters.mood_enabled (Feature A4: mood toggle)")
+
+        if "mood_intensity" not in char_cols:
+            cur.execute("ALTER TABLE characters ADD COLUMN mood_intensity REAL DEFAULT 0.8")
+            logger.info("  - Added characters.mood_intensity (Feature A4: mood strength 0.0-1.0)")
+
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (23)")
+        con.commit()
+        logger.info("✅ Schema v23 migration complete (mood_enabled + mood_intensity columns)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v23 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
     Migration Paths:
-        - v0 (empty) → v4 → … → v22
-        - v3 → v4 → … → v22
-        - v11 → v12 → v13 → v22
-        - v21 → v22
-        - v22 → no-op (already current)
+        - v0 (empty) → v4 → … → v23
+        - v3 → v4 → … → v23
+        - v11 → v12 → v13 → v23
+        - v21 → v22 → v23
+        - v23 → no-op (already current)
 
     The function is idempotent - safe to run multiple times.
     Will log all migration steps and verify final state.
@@ -1460,21 +1516,29 @@ def ensure_db():
             if migrate_to_v22(con):
                 version = 22
 
+        # Upgrade from v22 to v23 (Feature A4: Character Mood Engine)
+        if version < 23:
+            logger.info("Upgrading database schema from v22 to v23...")
+            logger.info("  - Adding mood_enabled to characters (Feature A4: mood toggle)")
+            logger.info("  - Adding mood_intensity to characters (Feature A4: mood strength)")
+            if migrate_to_v23(con):
+                version = 23
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 22:
-            raise RuntimeError(f"Database initialization failed: Expected v22, got v{final_version}")
+        if final_version < 23:
+            raise RuntimeError(f"Database initialization failed: Expected v23, got v{final_version}")
 
-        if final_version > 22:
-            logger.warning(f"Database is newer than application (v{final_version} > v22). Some features might be unused.")
+        if final_version > 23:
+            logger.warning(f"Database is newer than application (v{final_version} > v23). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v22 adds Universe Builder)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v23 adds Character Mood Engine)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

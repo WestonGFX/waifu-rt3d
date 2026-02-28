@@ -50,6 +50,20 @@ export interface Character {
    * character has no universe assignment (schema v22).
    */
   universe_id?: number | null;
+  /**
+   * Feature A4: Whether time-of-day mood injection is active for this character.
+   * When true the MoodEngine prepends a tonal directive to the system prompt
+   * based on the current time slot (morning/afternoon/evening/night/late_night).
+   * Stored in the `mood_enabled` column on the characters table (schema v23).
+   */
+  mood_enabled?: boolean;
+  /**
+   * Feature A4: 0.0--1.0 scale factor controlling mood prefix strength.
+   * At 0 mood is effectively disabled; at 1.0 all modifiers (tone hints,
+   * affinity, session gap) are included. Stored in the `mood_intensity`
+   * column on the characters table (schema v23).
+   */
+  mood_intensity?: number;
   created_at?: string;
   updated_at?: string;
 }

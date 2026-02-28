@@ -303,6 +303,10 @@ function CharacterTab() {
   const [generatingBackstory, setGeneratingBackstory] = useState(false);
   /** Feature #29: Day Off mode — pauses proactive/scheduled messages. */
   const [dayOff, setDayOff] = useState(activeCharacter?.day_off ?? false);
+  /** Feature A4: Whether time-of-day mood injection is active. */
+  const [moodEnabled, setMoodEnabled] = useState(activeCharacter?.mood_enabled ?? true);
+  /** Feature A4: 0.0--1.0 scale factor for mood strength. */
+  const [moodIntensity, setMoodIntensity] = useState(activeCharacter?.mood_intensity ?? 0.8);
 
   /** Download the active character as a .json file (id stripped for portability). */
   const exportCharacter = () => {
@@ -382,6 +386,11 @@ function CharacterTab() {
       setEvoError(null);
       // Feature #6: sync backstory from character row
       setBackstory(activeCharacter.backstory || '');
+      // Feature #29: sync day_off
+      setDayOff(activeCharacter.day_off ?? false);
+      // Feature A4: sync mood fields
+      setMoodEnabled(activeCharacter.mood_enabled ?? true);
+      setMoodIntensity(activeCharacter.mood_intensity ?? 0.8);
     }
   }, [activeCharacter]);
 
@@ -864,6 +873,62 @@ function CharacterTab() {
               className="accent-[var(--color-accent)]"
             />
           </SettingField>
+        </div>
+      </section>
+
+      {/* Feature A4: Daily Mood Settings */}
+      <section className="mb-6">
+        <SectionHeader title="Daily Mood" />
+        <div style={cardStyle} className="px-4">
+          <SettingField
+            label="Time-of-Day Mood"
+            description="Subtly shift personality based on time of day (morning, afternoon, evening, night)."
+            tooltip="When enabled, the system prompt receives an invisible mood directive that makes the character feel groggy in the morning, energetic in the afternoon, reflective at night, etc. The user never sees this text."
+          >
+            <input
+              type="checkbox"
+              checked={moodEnabled}
+              onChange={async (e) => {
+                const enabled = e.target.checked;
+                setMoodEnabled(enabled);
+                if (activeCharacter) {
+                  try {
+                    await api.updateCharacter(activeCharacter.id, { mood_enabled: enabled ? 1 : 0 });
+                    setActiveCharacter({ ...activeCharacter, mood_enabled: enabled });
+                  } catch { setMoodEnabled(!enabled); }
+                }
+              }}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+          {moodEnabled && (
+            <SettingField
+              label="Mood Intensity"
+              description="How strongly time-of-day affects personality. Lower values produce subtler shifts."
+              tooltip="At 0% mood is disabled. Below 50% tone hints are skipped. Above 80% affinity-based warmth modifiers are included."
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="range" min={0} max={1} step={0.1}
+                  value={moodIntensity}
+                  onChange={async (e) => {
+                    const val = parseFloat(e.target.value);
+                    setMoodIntensity(val);
+                    if (activeCharacter) {
+                      try {
+                        await api.updateCharacter(activeCharacter.id, { mood_intensity: val });
+                        setActiveCharacter({ ...activeCharacter, mood_intensity: val });
+                      } catch { /* keep local value */ }
+                    }
+                  }}
+                  className="w-32"
+                />
+                <span className="text-xs w-12 text-right tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
+                  {Math.round(moodIntensity * 100)}%
+                </span>
+              </div>
+            </SettingField>
+          )}
         </div>
       </section>
 

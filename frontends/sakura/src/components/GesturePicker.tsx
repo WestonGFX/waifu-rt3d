@@ -8,6 +8,7 @@
 
 import { useCallback } from 'react';
 import { api } from '../lib/api';
+import { useViewerStore } from '../stores/viewerStore';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -79,22 +80,7 @@ function postGestureToViewer(
   expression: ExpressionName | null,
   intensity = 1.0,
 ): void {
-  const iframe = (
-    document.querySelector<HTMLIFrameElement>('iframe[title="VRM viewer"]') ??
-    document.querySelector<HTMLIFrameElement>('iframe[src*="viewer.html"]')
-  );
-
-  if (!iframe?.contentWindow) return;
-
-  iframe.contentWindow.postMessage(
-    {
-      type: 'trigger_gesture',
-      gesture,
-      expression,
-      intensity,
-    },
-    '*',
-  );
+  useViewerStore.getState().dispatchGesture(gesture, expression, intensity);
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────

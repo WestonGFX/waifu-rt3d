@@ -68,6 +68,8 @@ export interface Character {
   greeting_enabled?: boolean;
   /** Feature C4: 0.0–1.0 controls greeting length/depth (schema v24). */
   greeting_intensity?: number;
+  /** Feature A7: Path to uploaded voice sample for cloning-capable TTS providers. */
+  voice_sample_path?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -205,6 +207,30 @@ export interface VoiceEntry {
   installed?: boolean;
 }
 
+/** Hardware requirements for a TTS engine. */
+export interface TTSRequirements {
+  min_ram: number;
+  min_vram: number;
+  gpu_required: boolean;
+  accelerators: string[];
+  note: string;
+}
+
+/** Setup instructions for installing a TTS engine. */
+export interface TTSSetup {
+  docker?: string;
+  pip?: string;
+  docs_url?: string;
+}
+
+/** Feature flags for a TTS engine. */
+export interface TTSFeatures {
+  voice_cloning: boolean;
+  nonverbal_sounds: boolean;
+  streaming: boolean;
+  emotion_control: boolean;
+}
+
 export interface TTSModel {
   id: string;
   engine: string;
@@ -214,10 +240,15 @@ export interface TTSModel {
   description: string;
   size_mb: number;
   voice_id: string;
-  sample_url: string;
+  sample_url: string | null;
   tags: string[];
   installed: boolean;
   installed_at?: string;
+  quality_stars?: number;
+  speed_stars?: number;
+  requirements?: TTSRequirements;
+  setup?: TTSSetup;
+  features?: TTSFeatures;
 }
 
 export interface TTSModelsResponse {
@@ -398,4 +429,16 @@ export interface GameMoveResponse {
   event: string;
   state: GameState;
   reaction: string | null;
+}
+
+// ── Feature A1: Full-Duplex Voice Configuration ─────────────────────────────
+
+/** User-configurable parameters for the full-duplex voice conversation. */
+export interface VoiceConfig {
+  /** RMS energy threshold for voice activity detection (0.0–1.0). */
+  vad_threshold: number;
+  /** Silence duration before end-of-speech is declared (milliseconds). */
+  silence_timeout_ms: number;
+  /** Whether to automatically interrupt AI speech when user starts talking. */
+  auto_interrupt: boolean;
 }

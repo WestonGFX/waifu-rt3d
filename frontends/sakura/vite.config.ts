@@ -14,7 +14,11 @@ export default defineConfig({
       '/shared': 'http://127.0.0.1:8080',
       '/images': 'http://127.0.0.1:8080',
       '/live2d': 'http://127.0.0.1:8080',
-      '/assets': 'http://127.0.0.1:8080'
+      '/assets': 'http://127.0.0.1:8080',
+      '/ws': {
+        target: 'ws://127.0.0.1:8080',
+        ws: true
+      }
     }
   },
   build: {
@@ -24,6 +28,6 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
-    exclude: ['node_modules/**', 'dist/**']
+    exclude: ['node_modules/**', 'dist/**', 'e2e/**']
   }
 });

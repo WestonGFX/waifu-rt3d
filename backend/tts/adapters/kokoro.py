@@ -26,6 +26,7 @@ Popular voices:
 """
 import requests
 from pathlib import Path
+from typing import Any
 from .base import TTSAdapter
 
 
@@ -64,13 +65,25 @@ class KokoroAdapter(TTSAdapter):
         endpoint = (tts_cfg.get("endpoint") or "http://localhost:8880").rstrip("/")
         voice = tts_cfg.get("voice_id") or "af_sky"
 
+        # Resolve speed from tts_cfg — supports numeric speed, speech_rate, or
+        # Edge-TTS-style tts_rate strings like "+10%"
+        speed = float(tts_cfg.get("speed", tts_cfg.get("speech_rate", 1.0)))
+        tts_rate = tts_cfg.get("tts_rate")
+        if tts_rate and speed == 1.0:
+            import re as _re
+            m = _re.match(r'([+-]?\d+)%', str(tts_rate))
+            if m:
+                speed = 1.0 + int(m.group(1)) / 100.0
+        speed = round(max(0.5, min(2.0, speed)), 2)
+
         url = f"{endpoint}/v1/audio/speech"
         headers = {"Content-Type": "application/json"}
-        payload = {
+        payload: dict[str, Any] = {
             "model": "kokoro",
             "input": text,
             "voice": voice,
-            "response_format": "mp3"
+            "response_format": "mp3",
+            "speed": speed,
         }
 
         key = f"kokoro|{voice}|{text}"

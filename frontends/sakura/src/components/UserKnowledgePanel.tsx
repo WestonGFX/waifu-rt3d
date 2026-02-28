@@ -7,7 +7,7 @@
  * badge. Users can delete any fact or add their own.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { X, Plus, User, Heart, Clock, Smile, Tag, Trash2, Loader2 } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
@@ -15,7 +15,7 @@ import type { UserFact } from '../lib/types';
 
 type FactCategory = 'identity' | 'preferences' | 'history' | 'relationship' | 'general';
 
-const CATEGORY_META: Record<FactCategory, { label: string; icon: JSX.Element; color: string }> = {
+const CATEGORY_META: Record<FactCategory, { label: string; icon: ReactNode; color: string }> = {
   identity:     { label: 'Identity',     icon: <User size={12} />,   color: 'var(--color-accent)' },
   preferences:  { label: 'Preferences',  icon: <Heart size={12} />,  color: '#e9729f' },
   history:      { label: 'History',      icon: <Clock size={12} />,  color: '#f59e0b' },
@@ -26,7 +26,7 @@ const CATEGORY_META: Record<FactCategory, { label: string; icon: JSX.Element; co
 const CATEGORIES = Object.keys(CATEGORY_META) as FactCategory[];
 
 export function UserKnowledgePanel() {
-  const { activeCharacter, setOverlay } = useAppStore();
+  const { activeCharacter, closeOverlay } = useAppStore();
   const [facts, setFacts] = useState<UserFact[]>([]);
   const [loading, setLoading] = useState(true);
   const [addText, setAddText] = useState('');
@@ -93,7 +93,7 @@ export function UserKnowledgePanel() {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) setOverlay(null); }}
+      onClick={(e) => { if (e.target === e.currentTarget) closeOverlay(); }}
     >
       <div
         style={{
@@ -134,7 +134,7 @@ export function UserKnowledgePanel() {
             </p>
           </div>
           <button
-            onClick={() => setOverlay(null)}
+            onClick={() => closeOverlay()}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: 'var(--color-text-secondary)', padding: 4,

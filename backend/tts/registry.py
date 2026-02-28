@@ -8,6 +8,15 @@ from .adapters.edge_tts import EdgeTTSAdapter
 from .adapters.kokoro import KokoroAdapter
 from .adapters.chatterbox import ChatterboxAdapter
 from .adapters.gptsovits import GPTSoVITSAdapter
+from .adapters.kitten import KittenTTSAdapter
+from .adapters.melotts import MeloTTSAdapter
+from .adapters.bark import BarkAdapter
+from .adapters.f5tts import F5TTSAdapter
+from .adapters.metavoice import MetaVoiceAdapter
+from .adapters.styletts2 import StyleTTS2Adapter
+from .adapters.parler import ParlerTTSAdapter
+from .adapters.dia import DiaAdapter
+from .adapters.cosyvoice import CosyVoiceAdapter
 
 
 def get_tts(cfg):
@@ -38,6 +47,15 @@ def get_tts(cfg):
         if ptype == "kokoro": return KokoroAdapter(audio_dir)
         if ptype == "chatterbox": return ChatterboxAdapter(audio_dir)
         if ptype == "gptsovits": return GPTSoVITSAdapter(audio_dir)
+        if ptype == "kitten": return KittenTTSAdapter(audio_dir)
+        if ptype == "melotts": return MeloTTSAdapter(audio_dir)
+        if ptype == "bark": return BarkAdapter(audio_dir)
+        if ptype == "f5tts": return F5TTSAdapter(audio_dir)
+        if ptype == "metavoice": return MetaVoiceAdapter(audio_dir)
+        if ptype == "styletts2": return StyleTTS2Adapter(audio_dir)
+        if ptype == "parler": return ParlerTTSAdapter(audio_dir)
+        if ptype == "dia": return DiaAdapter(audio_dir)
+        if ptype == "cosyvoice": return CosyVoiceAdapter(audio_dir)
         if ptype == "generic_rest": return PinokioGenericAdapter(audio_dir)
 
         # Fallback to generic if we have an endpoint
@@ -54,4 +72,13 @@ def get_tts(cfg):
     if prov in ("kokoro", "local"): return KokoroAdapter(audio_dir)
     if prov == "chatterbox": return ChatterboxAdapter(audio_dir)
     if prov == "gptsovits": return GPTSoVITSAdapter(audio_dir)
+    if prov == "kitten": return KittenTTSAdapter(audio_dir)
+    if prov == "melotts": return MeloTTSAdapter(audio_dir)
+    if prov == "bark": return BarkAdapter(audio_dir)
+    if prov == "f5tts": return F5TTSAdapter(audio_dir)
+    if prov == "metavoice": return MetaVoiceAdapter(audio_dir)
+    if prov == "styletts2": return StyleTTS2Adapter(audio_dir)
+    if prov == "parler": return ParlerTTSAdapter(audio_dir)
+    if prov == "dia": return DiaAdapter(audio_dir)
+    if prov == "cosyvoice": return CosyVoiceAdapter(audio_dir)
     return EdgeTTSAdapter(audio_dir)  # Ultimate fallback

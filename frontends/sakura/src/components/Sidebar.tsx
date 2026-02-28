@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain, Settings,
-  ChevronLeft, Search, Wifi, WifiOff, Pencil, BookMarked, UserCircle, Gamepad2
+  ChevronLeft, Search, Wifi, WifiOff, Pencil, BookMarked, UserCircle, Gamepad2, HelpCircle
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
+import { useWizardStore } from '../stores/wizardStore';
 import { NotificationBadge } from './NotificationBadge';
 
 /**
@@ -337,8 +338,86 @@ export function Sidebar() {
           {!sidebarCollapsed && <span className="text-[10px] font-medium">Settings</span>}
         </button>
         <NotificationBadge onNavigateToChar={handleNavigateToChar} />
+        <HelpDropdown />
       </div>
     </aside>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Help Dropdown — "?" button with quick links
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Help dropdown button in the sidebar bottom toolbar.
+ * Opens upward with links to Setup Guides, Keyboard Shortcuts, and What's New.
+ */
+function HelpDropdown() {
+  const [open, setOpen] = useState(false);
+  const { openSettingsTab } = useAppStore();
+  const { openWizard } = useWizardStore();
+
+  const items = [
+    {
+      label: 'Setup Guides',
+      action: () => { openSettingsTab('general'); setOpen(false); },
+    },
+    {
+      label: 'Keyboard Shortcuts',
+      action: () => {
+        // Dispatch '?' shortcut event to toggle the help modal
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+        setOpen(false);
+      },
+    },
+    {
+      label: "What's New",
+      action: () => { openWizard('whats-new'); setOpen(false); },
+    },
+  ];
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="sidebar-tool-btn flex items-center justify-center p-2 rounded-lg transition-colors"
+        style={{ color: 'var(--color-text-tertiary)' }}
+        title="Help"
+        aria-label="Help"
+      >
+        <HelpCircle size={16} />
+      </button>
+
+      {open && (
+        <>
+          {/* Backdrop to close on click outside */}
+          <div className="fixed inset-0 z-[89]" onClick={() => setOpen(false)} />
+          {/* Dropdown (opens upward) */}
+          <div
+            className="absolute bottom-full left-0 mb-1.5 z-[90] min-w-[160px] py-1 rounded-lg"
+            style={{
+              backgroundColor: 'var(--color-surface)',
+              border: '1px solid var(--color-border-subtle)',
+              boxShadow: 'var(--shadow-elevated)',
+            }}
+          >
+            {items.map(item => (
+              <button
+                key={item.label}
+                onClick={item.action}
+                className="w-full text-left px-3 py-2 text-xs transition-colors"
+                style={{ color: 'var(--color-text-secondary)' }}
+                onMouseEnter={e => { (e.target as HTMLElement).style.backgroundColor = 'var(--color-accent-soft)'; }}
+                onMouseLeave={e => { (e.target as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

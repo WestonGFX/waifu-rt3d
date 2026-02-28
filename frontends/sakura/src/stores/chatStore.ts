@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { ChatMessage } from '../lib/types';
 import { api } from '../lib/api';
+import { useViewerStore } from './viewerStore';
 
 interface ChatState {
   messages: ChatMessage[];
@@ -86,8 +87,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   setCurrentEmotion: (emotion, intensity) => {
     set({ currentEmotion: emotion === 'neutral' ? null : { emotion, intensity } });
-    const frame = document.querySelector('iframe[src*="viewer"]') as HTMLIFrameElement | null;
-    frame?.contentWindow?.postMessage({ type: 'setExpression', emotion, intensity }, '*');
+    useViewerStore.getState().dispatchExpression(emotion, intensity);
   },
 
   setContext: (sessionId, charId) => set({ sessionId, charId, messages: [] }),

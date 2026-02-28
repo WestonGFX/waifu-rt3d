@@ -265,6 +265,17 @@ Additional TTS features:
 - **Character diary** — LLM-written session summaries that influence future behavior
 - **Anniversary tracking** — milestone detection based on first chat date
 
+### Setup Wizards & Feature Discovery
+
+Guided onboarding and progressive feature discovery built into the Sakura frontend:
+
+- **7-step onboarding wizard** — Welcome → Hardware Scan → LLM Setup → Character Creation → Voice Setup → Feature Tour → Done
+- **5 setup wizards** — LLM, Voice, Expression Portraits, Image Generation, Character Card Import — each a multi-step modal with validation
+- **Feature discovery tooltips** — contextual tips that appear based on usage patterns (message count, session count, idle time)
+- **What's New modal** — shows new features after version updates with direct links to relevant wizards
+- **Setup Guides in Settings** — card-based guide grid showing configuration status with pulsing dot indicators
+- **Responsive variants** — fullscreen wizard on desktop, bottom-sheet drawer on mobile
+
 ### Dual Frontend Architecture
 
 Two complete frontends sharing the same backend:
@@ -502,6 +513,7 @@ waifu-rt3d/
 | `POST` | `/api/games/{id}/move` | Submit a game move |
 | `GET` | `/api/games/history` | Game history with scores |
 | `POST` | `/api/tts` | Direct TTS synthesis |
+| `POST` | `/api/tts/preview` | Voice preview synthesis (wizard/settings) |
 | `POST` | `/api/asr/transcribe` | Faster-Whisper STT |
 | `GET` | `/api/tts/cache` | Audio cache stats |
 | `GET` | `/api/models/capabilities` | Model capability detection (tool protocol) |
@@ -546,7 +558,9 @@ Tests cover: API endpoints, character CRUD, agentic tool execution, capability p
 
 ## Roadmap
 
-### Recently Completed (v8.0.0)
+### Recently Completed (v8.1.0)
+- **Setup Wizards & Feature Discovery** — 7-step onboarding, 5 setup wizards, contextual feature tips, What's New modal
+- **Kokoro TTS + Voice Modulation** — Kokoro adapter with speed/emotion passthrough, TTSModelsPanel browser, voice preview, 11+ voices
 - **In-App Mini Games** — trivia, 20 questions, word association, riddles, tic-tac-toe, memory match
 - **Lorebook / World Info** — keyword-triggered context injection (SillyTavern-compatible concept)
 - **Tiered Episodic Memory** — sqlite-vec embeddings with three-tier decay system
@@ -561,9 +575,6 @@ Tests cover: API endpoints, character CRUD, agentic tool execution, capability p
 - **User Knowledge Graph** — structured user facts maintained by characters
 - **Contextual Opening Greetings** — characters greet based on context and mood
 - **18 built-in themes** — including Catppuccin, Monokai, Dracula, Tokyo Night, Darcula, Blurple, Pop Bubblegum/Lemonade
-
-### In Progress
-- **Kokoro TTS + Voice Modulation** — voice style cloning via KVoiceWalk, emotion → parameter mapping
 
 ### Planned
 - **Full-Duplex Voice Conversation** — WebSocket audio, Silero VAD, faster-whisper STT, continuous voice loop

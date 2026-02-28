@@ -85,7 +85,7 @@ def choose_thing(topic: str, adapter, cfg: dict) -> tuple[str, str]:
         category = str(data.get("category", "thing")).strip().lower()
         if category not in ("person", "place", "thing"):
             category = "thing"
-        if thing:
+        if thing and len(thing) >= 3:
             return thing, category
     except Exception as e:
         logger.warning("[20Q] LLM thing selection failed: %s", e)
@@ -286,11 +286,18 @@ def _fuzzy_match(guess: str, thing: str) -> bool:
     # Exact match
     if g == t:
         return True
-    # Substring (e.g. "fuji" matches "Mount Fuji")
-    if g in t or t in g:
-        return True
-    # Remove common articles / punctuation
+    # Remove common articles / punctuation before comparison
     for article in ("the ", "a ", "an "):
         g = g.removeprefix(article)
         t = t.removeprefix(article)
-    return g == t
+    if g == t:
+        return True
+    # Word-level subset match (e.g. "fuji" matches "mount fuji")
+    g_words = set(g.split())
+    t_words = set(t.split())
+    if g_words and t_words and (g_words.issubset(t_words) or t_words.issubset(g_words)):
+        # Only allow subset match if the shorter side has 2+ chars per word
+        shorter = g_words if len(g_words) <= len(t_words) else t_words
+        if all(len(w) >= 3 for w in shorter):
+            return True
+    return False

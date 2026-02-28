@@ -1,11 +1,18 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, Sliders, RotateCcw, Eye, EyeOff, Loader2, AlertTriangle, Box, RefreshCw, Sparkles, Wifi, WifiOff, X, Camera } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
-import { useViewer } from '../hooks/useViewer';
+import { useViewerStore } from '../stores/viewerStore';
 import { api } from '../lib/api';
 import type { Character } from '../lib/types';
+
+/**
+ * Lazy-load Live2DCanvas to avoid importing pixi-live2d-display eagerly.
+ * The pixi-live2d-display module throws at import time if the Cubism SDK
+ * WASM is not loaded, which would crash the entire app for VRM-only users.
+ */
+const Live2DCanvas = lazy(() => import('./Live2DCanvas').then(m => ({ default: m.Live2DCanvas })));
 
 interface ModelPanelProps {
   character: Character;
@@ -181,7 +188,8 @@ function ExpressionEditor({ shapes, values, onChange, onResetAll }: ExpressionEd
  */
 export function ModelPanel({ character }: ModelPanelProps) {
   const { modelPanelOpen, toggleModelPanel, setVrmStats, setViewportFps, cinematicMode } = useAppStore();
-  const { iframeRef, loadCharacter, setCameraPreset, getAvailableBlendShapes, setBlendShape, setBlendShapes } = useViewer();
+  const viewer = useViewerStore();
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   /** Current emotion from chatStore — drives the emotion badge in the viewport overlay. */
   const currentEmotion = useChatStore(s => s.currentEmotion);
   /** C2: Tool protocol detected for the active LLM model (openai_functions / xml_fallback / none). */
@@ -231,6 +239,12 @@ export function ModelPanel({ character }: ModelPanelProps) {
   /** Timeout ref so we can reset screenshotPending if the viewer never replies. */
   const screenshotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /** Callback ref for the VRM iframe — syncs to viewerStore on mount/unmount. */
+  const setIframeEl = useCallback((el: HTMLIFrameElement | null) => {
+    iframeRef.current = el;
+    useViewerStore.getState().setIframeRef(el);
+  }, []);
+
   // Fetch available VRM models + motion model status once
   useEffect(() => {
     api.scanVrm().then(models => {
@@ -240,6 +254,14 @@ export function ModelPanel({ character }: ModelPanelProps) {
   }, []);
 
   const vrmUrl = resolveVrmUrl(character, vrmModels);
+
+  /** Whether this character uses a Live2D model (takes priority over VRM). */
+  const isLive2D = Boolean(character.live2d_model);
+
+  // Sync viewer mode when the character's model type changes
+  useEffect(() => {
+    useViewerStore.getState().setMode(isLive2D ? 'live2d' : 'vrm');
+  }, [isLive2D]);
 
   // Listen for modelLoaded / modelFailed messages from the viewer iframe
   useEffect(() => {
@@ -257,8 +279,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
         // Auto-generate a neutral idle motion clip when the model first loads
         api.generateMotion({ emotion: 'neutral', duration: 4, loop: true })
           .then(data => {
-            const iframe = document.querySelector<HTMLIFrameElement>('iframe[src*="viewer"]');
-            iframe?.contentWindow?.postMessage({ type: 'applyKeyframes', ...data }, '*');
+            useViewerStore.getState().dispatchKeyframes(data);
             lastMotionEmotion.current = 'neutral';
           })
           .catch(() => {});
@@ -271,8 +292,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
         if (emo !== lastMotionEmotion.current) {
           api.generateMotion({ emotion: emo, duration: 3.5, loop: true })
             .then(data => {
-              const iframe = document.querySelector<HTMLIFrameElement>('iframe[src*="viewer"]');
-              iframe?.contentWindow?.postMessage({ type: 'applyKeyframes', ...data }, '*');
+              useViewerStore.getState().dispatchKeyframes(data);
               lastMotionEmotion.current = emo;
             })
             .catch(() => {});
@@ -307,14 +327,14 @@ export function ModelPanel({ character }: ModelPanelProps) {
       setVrmStats(null);
       // Allow 800ms for the iframe to initialise before sending the load command
       const timer = setTimeout(() => {
-        loadCharacter(vrmUrl);
-        setCameraPreset('bust');
+        useViewerStore.getState().dispatchLoadModel(vrmUrl);
+        useViewerStore.getState().dispatchCameraPreset('bust');
       }, 800);
       return () => clearTimeout(timer);
     } else if (!vrmUrl) {
       setVrmLoadState('idle');
     }
-  }, [modelPanelOpen, vrmUrl, loadCharacter, setCameraPreset]);
+  }, [modelPanelOpen, vrmUrl]);
 
   /**
    * Retry loading the VRM model after a failure.
@@ -325,8 +345,8 @@ export function ModelPanel({ character }: ModelPanelProps) {
     setVrmLoadState('loading');
     setVrmFailReason('');
     setTimeout(() => {
-      loadCharacter(vrmUrl);
-      setCameraPreset('bust');
+      useViewerStore.getState().dispatchLoadModel(vrmUrl);
+      useViewerStore.getState().dispatchCameraPreset('bust');
     }, 400);
   };
 
@@ -337,10 +357,8 @@ export function ModelPanel({ character }: ModelPanelProps) {
   const handleScreenshot = useCallback(() => {
     // Guard against double-click before the first state commit disables the button
     if (screenshotTimeoutRef.current) return;
-    const iframe = document.querySelector<HTMLIFrameElement>('iframe[src*="viewer"]');
-    if (!iframe?.contentWindow) return;
     setScreenshotPending(true);
-    iframe.contentWindow.postMessage({ type: 'captureScreenshot' }, '*');
+    useViewerStore.getState().dispatchScreenshot();
     // Safety net: if the viewer never replies (crash, reload, unhandled message),
     // reset pending state after 8 s so the button doesn't stay permanently disabled.
     screenshotTimeoutRef.current = setTimeout(() => {
@@ -352,21 +370,36 @@ export function ModelPanel({ character }: ModelPanelProps) {
   // Load blend shapes when expression editor opens
   const handleOpenExprEditor = useCallback(async () => {
     setShowExprEditor(true);
-    const shapes = await getAvailableBlendShapes();
+    // Request blend shapes from the viewer via postMessage; response comes
+    // via the window 'message' listener (blendShapeList event).
+    const shapes = await new Promise<string[]>((resolve) => {
+      const timeoutId = setTimeout(() => {
+        window.removeEventListener('message', handler);
+        resolve([]);
+      }, 2000);
+      function handler(event: MessageEvent) {
+        if (event.data?.type === 'blendShapeList') {
+          clearTimeout(timeoutId);
+          window.removeEventListener('message', handler);
+          resolve(event.data.shapes || []);
+        }
+      }
+      window.addEventListener('message', handler);
+      useViewerStore.getState().dispatchGetBlendShapes();
+    });
     setBlendShapes_(shapes);
-    // Initialize all values to 0
     setBlendValues(Object.fromEntries(shapes.map(s => [s, 0])));
-  }, [getAvailableBlendShapes]);
+  }, []);
 
   function handleBlendChange(name: string, value: number) {
     setBlendValues(prev => ({ ...prev, [name]: value }));
-    setBlendShape(name, value);
+    viewer.dispatchBlendShape(name, value);
   }
 
   function handleResetAll() {
     const zeros = Object.fromEntries(blendShapes.map(s => [s, 0]));
     setBlendValues(zeros);
-    setBlendShapes(zeros);
+    viewer.dispatchBlendShapes(zeros);
   }
 
   /**
@@ -446,14 +479,35 @@ export function ModelPanel({ character }: ModelPanelProps) {
             flexDirection: 'column',
           }}
         >
-          {/* 3D Viewer iframe — takes remaining space above expression editor */}
+          {/* Viewer area — Live2D canvas or VRM iframe depending on model type */}
           <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
-            <iframe
-              ref={iframeRef}
-              src="/shared/viewer/viewer.html?v=6"
-              className="w-full h-full border-0"
-              title="3D Viewer"
-            />
+            {isLive2D ? (
+              <Suspense fallback={
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+                  <Loader2 size={24} className="animate-spin" style={{ color: 'var(--color-accent)' }} />
+                </div>
+              }>
+                <Live2DCanvas
+                  modelUrl={character.live2d_model!}
+                  onLoadStateChange={(state, reason) => {
+                    if (state === 'loaded') setVrmLoadState('loaded');
+                    else if (state === 'failed') {
+                      setVrmLoadState('failed');
+                      setVrmFailReason(reason || 'Live2D model failed to load');
+                    } else {
+                      setVrmLoadState('loading');
+                    }
+                  }}
+                />
+              </Suspense>
+            ) : (
+              <iframe
+                ref={setIframeEl}
+                src="/shared/viewer/viewer.html?v=6"
+                className="w-full h-full border-0"
+                title="3D Viewer"
+              />
+            )}
 
             {/* ── Status overlays (cover iframe until model resolves) ── */}
             {!vrmUrl && (
@@ -590,7 +644,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
                 {(['fullbody', 'bust', 'face'] as const).map(preset => (
                   <button
                     key={preset}
-                    onClick={() => setCameraPreset(preset)}
+                    onClick={() => viewer.dispatchCameraPreset(preset)}
                     className="px-2 py-1.5 text-xs capitalize"
                     style={{
                       backgroundColor: 'var(--color-surface)',

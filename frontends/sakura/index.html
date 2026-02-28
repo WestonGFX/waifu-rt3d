@@ -17,6 +17,8 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Cubism Core WASM — must load before pixi-live2d-display initializes -->
+    <script src="/live2dcubismcore.min.js"></script>
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {

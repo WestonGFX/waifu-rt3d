@@ -25,7 +25,16 @@ import { CinematicOverlay } from './components/CinematicOverlay';
 import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { ShortcutHelpModal } from './components/ShortcutHelpModal';
-import { OnboardingWizard } from './components/OnboardingWizard';
+import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
+import { FeatureTipQueue } from './components/discovery/FeatureTipQueue';
+import { VoiceSetupWizard } from './components/wizards/VoiceSetupWizard';
+import { LLMSetupWizard } from './components/wizards/LLMSetupWizard';
+import { ImageGenSetupWizard } from './components/wizards/ImageGenSetupWizard';
+import { ExpressionSetupWizard } from './components/wizards/ExpressionSetupWizard';
+import { CardImportWizard } from './components/wizards/CardImportWizard';
+import { WhatsNewModal } from './components/WhatsNewModal';
+import { useFeatureDiscovery } from './hooks/useFeatureDiscovery';
+import { useWizardStore } from './stores/wizardStore';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ChatThread } from './views/ChatThread';
 import { CreateView } from './views/CreateView';
@@ -59,8 +68,36 @@ export function App() {
     cinematicMode, toggleCinematicMode,
   } = useAppStore();
 
-  // Show onboarding wizard on first run (gated on configLoaded to avoid flash)
-  const showOnboarding = configLoaded && !config.onboarded;
+  // Wizard store integration — hydrate from config and manage wizard lifecycle
+  const { activeWizard, openWizard, hydrate: hydrateWizard, incrementSessionCount } = useWizardStore();
+
+  useEffect(() => {
+    if (configLoaded) {
+      hydrateWizard(config as Record<string, unknown>);
+      if (!config.onboarded) {
+        openWizard('onboarding');
+      } else {
+        // Check server version for "What's New" — only for returning users
+        fetch('/api/health')
+          .then(r => r.json())
+          .then(data => {
+            const serverVersion = data.version as string | undefined;
+            const { lastSeenVersion, activeWizard: current } = useWizardStore.getState();
+            if (serverVersion && serverVersion !== lastSeenVersion && !current) {
+              openWizard('whats-new');
+            }
+          })
+          .catch(() => {}); // Non-critical — fail silently
+      }
+      incrementSessionCount();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configLoaded]);
+
+  // Feature discovery — triggers contextual tips based on user activity
+  useFeatureDiscovery();
+
+  const showOnboarding = activeWizard === 'onboarding';
   const { theme } = useTheme();
   const [showHelp, setShowHelp] = useState(false);
 
@@ -286,7 +323,18 @@ export function App() {
       <ShortcutHelpModal open={showHelp} shortcuts={shortcuts} onClose={() => setShowHelp(false)} />
 
       {/* First-run onboarding wizard — shown once, then config.onboarded = true */}
-      {showOnboarding && <OnboardingWizard onComplete={() => {}} />}
+      {showOnboarding && <OnboardingWizard />}
+
+      {/* Quick setup wizards — modal overlays triggered from Settings or discovery */}
+      {activeWizard === 'voice-setup' && <VoiceSetupWizard />}
+      {activeWizard === 'llm-setup' && <LLMSetupWizard />}
+      {activeWizard === 'image-gen-setup' && <ImageGenSetupWizard />}
+      {activeWizard === 'expression-setup' && <ExpressionSetupWizard />}
+      {activeWizard === 'card-import' && <CardImportWizard />}
+      {activeWizard === 'whats-new' && <WhatsNewModal />}
+
+      {/* Feature discovery tip cards — bottom-right floating */}
+      <FeatureTipQueue />
 
       {/* PWA install prompt — only visible when browser fires beforeinstallprompt */}
       {showInstallBtn && (

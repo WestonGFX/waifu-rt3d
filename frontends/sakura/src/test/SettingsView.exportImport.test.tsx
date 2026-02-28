@@ -17,6 +17,7 @@ vi.mock('framer-motion', () => ({
 vi.mock('../lib/api', () => ({
   api: {
     scanVrm: vi.fn().mockResolvedValue([]),
+    scanLive2d: vi.fn().mockResolvedValue([]),
     scanImages: vi.fn().mockResolvedValue([]),
     getVoices: vi.fn().mockResolvedValue([]),
     getDefaultVoice: vi.fn().mockResolvedValue({ voice_id: '', provider: '', name: '' }),
@@ -37,6 +38,9 @@ vi.mock('../lib/api', () => ({
     getStats: vi.fn().mockResolvedValue({}),
     getVocabStats: vi.fn().mockResolvedValue({ total: 0, base_count: 0, user_count: 0, category_count: 0 }),
     uploadAvatar: vi.fn().mockResolvedValue({ url: '/api/avatars/test.jpg' }),
+    getExprPortraits: vi.fn().mockResolvedValue({ expr_portraits: {} }),
+    getUserFacts: vi.fn().mockResolvedValue({ facts: [] }),
+    getMemoryStats: vi.fn().mockResolvedValue({ total: 0 }),
   },
 }));
 
@@ -96,11 +100,11 @@ describe('SettingsView — character export / import', () => {
     render(<SettingsView />);
 
     // Navigate to Character tab
-    fireEvent.click(screen.getByText(/character/i, { selector: 'button,span,[role="tab"]' }));
+    fireEvent.click(screen.getByText('Character', { selector: '.settings-tab-pill' }));
 
-    // Click the Export button
-    await waitFor(() => expect(screen.getByText(/export/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByText(/export/i));
+    // Click the Export button (exact match — not "Export Card")
+    await waitFor(() => expect(screen.getByText('Export')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Export'));
 
     // Verify the blob was created and anchor was clicked
     expect(createObjectURL).toHaveBeenCalled();
@@ -142,7 +146,7 @@ describe('SettingsView — character export / import', () => {
     render(<SettingsView />);
 
     // Navigate to Character tab
-    fireEvent.click(screen.getByText(/character/i, { selector: 'button,span,[role="tab"]' }));
+    fireEvent.click(screen.getByText('Character', { selector: '.settings-tab-pill' }));
 
     // Find the hidden file input
     // Target the JSON import input specifically (not the avatar image input)
@@ -182,7 +186,7 @@ describe('SettingsView — character export / import', () => {
     vi.stubGlobal('FileReader', FakeFileReader);
 
     render(<SettingsView />);
-    fireEvent.click(screen.getByText(/character/i, { selector: 'button,span,[role="tab"]' }));
+    fireEvent.click(screen.getByText('Character', { selector: '.settings-tab-pill' }));
 
     // Target the JSON import input specifically (not the avatar image input)
     await waitFor(() => {

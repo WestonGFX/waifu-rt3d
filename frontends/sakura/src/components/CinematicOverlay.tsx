@@ -14,14 +14,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
-import type { Message } from '../lib/types';
+import type { ChatMessage } from '../lib/types';
 
 /** Max messages to display in the VN dialogue feed. */
 const MAX_VISIBLE = 4;
 
 export function CinematicOverlay() {
   const { toggleCinematicMode, activeCharacter } = useAppStore();
-  const { messages, loading, setDraft, sendMessage, draft } = useChatStore();
+  const { messages, loading, sendMessage } = useChatStore();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [inputValue, setInputValue] = useState('');
 
@@ -44,10 +44,9 @@ export function CinematicOverlay() {
 
   const handleSend = useCallback(() => {
     if (!inputValue.trim() || loading) return;
-    setDraft(inputValue.trim());
-    sendMessage();
+    sendMessage(inputValue.trim());
     setInputValue('');
-  }, [inputValue, loading, setDraft, sendMessage]);
+  }, [inputValue, loading, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -177,7 +176,7 @@ function CinematicBubble({
   charName,
   faded,
 }: {
-  message: Message;
+  message: ChatMessage;
   charName: string;
   faded: boolean;
 }) {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv } from 'lucide-react';
+import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone } from 'lucide-react';
 import { VNTextBox } from '../components/VNTextBox';
 import { VNPortrait } from '../components/VNPortrait';
 import { useAppStore } from '../stores/appStore';
@@ -18,6 +18,7 @@ import { ModelPanel } from '../components/ModelPanel';
 import { SessionDrawer } from '../components/SessionDrawer';
 import { GesturePicker } from '../components/GesturePicker';
 import type { GestureName, ExpressionName } from '../components/GesturePicker';
+import { VoiceConversationPanel } from '../components/VoiceConversationPanel';
 import { GreetingCard } from '../components/GreetingCard';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -161,6 +162,9 @@ export function ChatThread() {
 
   // ── Feature D: Gesture picker state ────────────────────────────────────
   const [gesturePickerOpen, setGesturePickerOpen] = useState(false);
+
+  // ── Feature A1: Full-duplex voice conversation mode ─────────────────────
+  const [fullDuplexVoice, setFullDuplexVoice] = useState(false);
 
   // ── Feature B3: VN reader — index of the message currently shown ────────
   // Starts at last message; advances to next on each "advance" action.
@@ -1112,7 +1116,7 @@ export function ChatThread() {
                 </button>
               )}
 
-              {/* Voice-First Mode toggle */}
+              {/* Voice-First Mode toggle (push-to-talk auto-send) */}
               <button
                 onClick={toggleVoiceMode}
                 title={voiceActive ? 'Exit voice mode (Ctrl+Shift+V)' : 'Enter voice mode (Ctrl+Shift+V)'}
@@ -1127,6 +1131,22 @@ export function ChatThread() {
                 }}
               >
                 <Radio size={16} />
+              </button>
+
+              {/* Feature A1: Full-duplex voice conversation toggle */}
+              <button
+                onClick={() => setFullDuplexVoice(v => !v)}
+                title={fullDuplexVoice ? 'Exit voice conversation' : 'Start voice conversation (full-duplex)'}
+                aria-label={fullDuplexVoice ? 'Exit voice conversation' : 'Start voice conversation'}
+                aria-pressed={fullDuplexVoice}
+                className="p-2 rounded-lg transition-all duration-150 flex-shrink-0"
+                style={{
+                  backgroundColor: fullDuplexVoice ? 'var(--color-accent)' : 'transparent',
+                  color: fullDuplexVoice ? 'var(--color-accent-text)' : 'var(--color-text-tertiary)',
+                  boxShadow: fullDuplexVoice ? '0 0 10px var(--color-accent-soft)' : 'none',
+                }}
+              >
+                <Phone size={16} />
               </button>
 
               {/* Send / Cancel */}
@@ -1164,6 +1184,28 @@ export function ChatThread() {
           </div>
         </div>
       </div>
+
+      {/* ── Feature A1: Full-duplex voice conversation overlay ──────── */}
+      {fullDuplexVoice && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 50,
+            backgroundColor: 'var(--color-background)',
+          }}
+        >
+          <VoiceConversationPanel
+            sessionId={sessionId}
+            charId={activeCharacter.id}
+            onClose={() => setFullDuplexVoice(false)}
+            onUserMessage={(text) => {
+              // Inject user speech as a chat message for persistence
+              sendMessage(text, true, incognito);
+            }}
+          />
+        </div>
+      )}
 
       {/* ── Model panel ─────────────────────────────────────────────────── */}
       <ModelPanel character={activeCharacter} />

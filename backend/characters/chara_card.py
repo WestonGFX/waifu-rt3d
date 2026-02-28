@@ -31,6 +31,9 @@ from typing import Any
 
 from PIL import Image, PngImagePlugin
 
+# Guard against decompression bombs — 50 million pixels (~7000x7000) is generous for an avatar
+Image.MAX_IMAGE_PIXELS = 50_000_000
+
 logger = logging.getLogger(__name__)
 
 
@@ -102,7 +105,8 @@ class CharaCardReader:
         raw_b64 = img.info.get("chara", "")
         if raw_b64:
             try:
-                return json.loads(base64.b64decode(raw_b64 + "==").decode("utf-8", errors="replace"))
+                padded = raw_b64 + "=" * (-len(raw_b64) % 4)
+                return json.loads(base64.b64decode(padded).decode("utf-8", errors="replace"))
             except Exception as e:
                 logger.debug("Failed to decode tEXt 'chara' chunk: %s", e)
 

@@ -2,15 +2,17 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Brain, Volume2, Palette, Shield, Image, Settings, Package, User, Monitor,
   Eye, Wrench, Lightbulb, Cpu, RefreshCw, CheckCircle, HelpCircle, ExternalLink, Wand2,
-  ChevronDown
+  ChevronDown, Upload
 } from 'lucide-react';
 import type { ModelCapabilities } from '../lib/api';
 import type { LayoutMode, ReplyLengthMode } from '../stores/appStore';
 import { useAppStore } from '../stores/appStore';
+import { useWizardStore } from '../stores/wizardStore';
 import { useTheme } from '../hooks/useTheme';
 import type { ThemeMode } from '../hooks/useTheme';
 import { SettingField } from '../components/SettingField';
 import { VoicePicker } from '../components/VoicePicker';
+import { VoiceSampleUploader } from '../components/VoiceSampleUploader';
 import { TTSModelsPanel } from '../components/TTSModelsPanel';
 import { ModelManagerPanel } from '../components/ModelManagerPanel';
 import { api } from '../lib/api';
@@ -96,9 +98,30 @@ export function SettingsView() {
     settingsInitTab,
   } = useAppStore();
   const { theme, setTheme } = useTheme();
+  const { hasDiscovered, discoverFeature } = useWizardStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [savedFlash, setSavedFlash] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Settings tab pulsing dots — show on first settings visit for key tabs
+  const showPulse = !hasDiscovered('settings_tour');
+  const [visitedTabs, setVisitedTabs] = useState<Set<SettingsTab>>(new Set(['general']));
+  const highlightTabs: SettingsTab[] = ['voice', 'aiart', 'brain'];
+
+  // Mark settings_tour as discovered after user has visited 2+ highlighted tabs
+  useEffect(() => {
+    if (showPulse) {
+      const visitedHighlighted = highlightTabs.filter(t => visitedTabs.has(t));
+      if (visitedHighlighted.length >= 2) {
+        discoverFeature('settings_tour');
+      }
+    }
+  }, [visitedTabs, showPulse]);
+
+  const handleTabClick = (tabId: SettingsTab) => {
+    setActiveTab(tabId);
+    setVisitedTabs(prev => new Set([...prev, tabId]));
+  };
 
   // Jump to tab requested by openSettingsTab() and clear the request
   useEffect(() => {
@@ -162,12 +185,14 @@ export function SettingsView() {
       >
         {TABS.map(tab => {
           const active = activeTab === tab.id;
+          const shouldPulse = showPulse && highlightTabs.includes(tab.id) && !visitedTabs.has(tab.id) && !active;
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabClick(tab.id)}
               data-active={active}
-              className="settings-tab-pill flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all duration-200"
+              data-highlight={shouldPulse || undefined}
+              className="settings-tab-pill relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all duration-200"
               style={{
                 background: active ? 'var(--color-accent-gradient)' : 'transparent',
                 color: active ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
@@ -176,6 +201,12 @@ export function SettingsView() {
             >
               {tab.icon}
               {tab.label}
+              {shouldPulse && (
+                <span
+                  className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full animate-pulse"
+                  style={{ backgroundColor: 'var(--color-accent)' }}
+                />
+              )}
             </button>
           );
         })}
@@ -343,29 +374,39 @@ function CharacterTab() {
     e.target.value = ''; // reset so same file can be re-imported
   };
   const [localData, setLocalData] = useState({
+    id: 0,
     avatar_url: '',
     model_vrm: '',
+    live2d_model: '',
     background_url: '',
     background_mode: 'transparent',
     voice_id: '',
     tts_provider: 'edge-tts',
     /** Feature H: per-emotion TTS voice overrides. Raw JSON string for editing. */
     emotion_voice_overrides: '',
+    voice_sample_path: '',
   });
+  /** Available Live2D models from backend scan. */
+  const [live2dModels, setLive2dModels] = useState<Array<{ name: string; url: string }>>([]);
+  /** Whether a Live2D zip upload is in progress. */
+  const [live2dUploading, setLive2dUploading] = useState(false);
   /** Validation error message for the emotion_voice_overrides JSON field. */
   const [evoError, setEvoError] = useState<string | null>(null);
 
   // Load file lists + sync from active character
   useEffect(() => {
     api.scanVrm().then(models => setVrmModels(models.map(m => ({ name: m.name, url: m.url })))).catch(() => {});
+    api.scanLive2d().then(models => setLive2dModels(models.map(m => ({ name: m.name, url: m.url })))).catch(() => {});
     api.scanImages().then(setImages).catch(() => {});
   }, []);
 
   useEffect(() => {
     if (activeCharacter) {
       setLocalData({
+        id: activeCharacter.id,
         avatar_url: activeCharacter.avatar_url || '',
         model_vrm: activeCharacter.vrm_model_url || activeCharacter.model_vrm || '',
+        live2d_model: activeCharacter.live2d_model || '',
         background_url: activeCharacter.background_url || '',
         background_mode: activeCharacter.background_mode || 'transparent',
         voice_id: activeCharacter.voice_id || '',
@@ -383,6 +424,7 @@ function CharacterTab() {
               }
             })()
           : '',
+        voice_sample_path: activeCharacter.voice_sample_path || '',
       });
       setEvoError(null);
       // Feature #6: sync backstory from character row
@@ -422,6 +464,7 @@ function CharacterTab() {
       const payload: Record<string, unknown> = {
         avatar_url: localData.avatar_url,
         vrm_model_url: localData.model_vrm,
+        live2d_model: localData.live2d_model || null,
         background_url: localData.background_url,
         background_mode: localData.background_mode,
         voice_id: localData.voice_id,
@@ -571,10 +614,10 @@ function CharacterTab() {
           )}
 
           {/* Feature A5: Expression portrait generator */}
-          {editChar?.id && (
+          {activeCharacter?.id && (
             <ExpressionPortraitGrid
-              charId={editChar.id}
-              charName={editChar.name || 'Character'}
+              charId={activeCharacter.id}
+              charName={activeCharacter.name || 'Character'}
             />
           )}
 
@@ -590,6 +633,80 @@ function CharacterTab() {
                 <option key={m.url} value={m.url}>{m.name}</option>
               ))}
             </select>
+          </SettingField>
+
+          <SettingField label="Live2D Model" description="Cubism model for 2D avatar rendering."
+            tooltip="Place Live2D model folders in backend/storage/live2d/ or upload a .zip below.">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <select
+                value={localData.live2d_model}
+                onChange={(e) => {
+                  setLocalData(d => ({ ...d, live2d_model: e.target.value }));
+                  // When selecting a Live2D model, clear the VRM assignment (they're mutually exclusive)
+                  if (e.target.value) setLocalData(d => ({ ...d, model_vrm: '' }));
+                }}
+                className="text-sm px-2 py-1 rounded w-48" style={selectStyle}
+              >
+                <option value="">None</option>
+                {live2dModels.map(m => (
+                  <option key={m.url} value={m.url}>{m.name}</option>
+                ))}
+              </select>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <label
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    padding: '3px 10px', fontSize: '0.7rem',
+                    backgroundColor: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-button)',
+                    cursor: live2dUploading ? 'not-allowed' : 'pointer',
+                    color: 'var(--color-text-secondary)',
+                    opacity: live2dUploading ? 0.5 : 1,
+                  }}
+                >
+                  {live2dUploading ? 'Uploading...' : 'Upload .zip'}
+                  <input
+                    type="file"
+                    accept=".zip"
+                    style={{ display: 'none' }}
+                    disabled={live2dUploading}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setLive2dUploading(true);
+                      try {
+                        const result = await api.uploadLive2d(file);
+                        if (result.ok) {
+                          // Refresh the model list and select the new model
+                          const models = await api.scanLive2d();
+                          setLive2dModels(models.map(m => ({ name: m.name, url: m.url })));
+                          setLocalData(d => ({ ...d, live2d_model: result.url, model_vrm: '' }));
+                        }
+                      } catch (err) {
+                        console.error('Live2D upload failed:', err);
+                      } finally {
+                        setLive2dUploading(false);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                </label>
+                {localData.live2d_model && (
+                  <button
+                    onClick={() => setLocalData(d => ({ ...d, live2d_model: '' }))}
+                    style={{
+                      padding: '3px 8px', fontSize: '0.68rem',
+                      background: 'none', border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-button)',
+                      color: 'var(--color-text-muted)', cursor: 'pointer',
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
           </SettingField>
 
           {/* VRM stats — shown when a model is loaded in the viewer */}
@@ -707,11 +824,31 @@ function CharacterTab() {
               onChange={(e) => setLocalData(d => ({ ...d, tts_provider: e.target.value }))}
               className="text-sm px-2 py-1 rounded" style={selectStyle}
             >
-              <option value="edge-tts">Edge-TTS (Cloud)</option>
-              <option value="kokoro">Kokoro (Local)</option>
-              <option value="piper">Piper (Local)</option>
-              <option value="chatterbox">Chatterbox (Local)</option>
-              <option value="elevenlabs">ElevenLabs (Cloud)</option>
+              <optgroup label="Cloud">
+                <option value="edge-tts">Edge-TTS (Free)</option>
+                <option value="elevenlabs">ElevenLabs (Paid)</option>
+                <option value="fish_audio">Fish Audio</option>
+              </optgroup>
+              <optgroup label="CPU">
+                <option value="kokoro">Kokoro</option>
+                <option value="piper_local">Piper</option>
+                <option value="kitten">KittenTTS</option>
+                <option value="melotts">MeloTTS</option>
+              </optgroup>
+              <optgroup label="GPU">
+                <option value="bark">Bark</option>
+                <option value="styletts2">StyleTTS 2</option>
+                <option value="parler">Parler-TTS</option>
+                <option value="f5tts">F5-TTS</option>
+                <option value="cosyvoice">CosyVoice 3</option>
+              </optgroup>
+              <optgroup label="Voice Cloning">
+                <option value="chatterbox">Chatterbox</option>
+                <option value="gptsovits">GPT-SoVITS</option>
+                <option value="xtts_server">XTTS v2</option>
+                <option value="metavoice">MetaVoice-1B</option>
+                <option value="dia">Dia</option>
+              </optgroup>
             </select>
           </SettingField>
 
@@ -722,6 +859,20 @@ function CharacterTab() {
               onChange={(voiceId, provider) => setLocalData(d => ({ ...d, voice_id: voiceId, tts_provider: provider }))}
             />
           </SettingField>
+
+          {/* Voice sample upload — only for cloning-capable providers */}
+          {['chatterbox', 'gptsovits', 'xtts_server', 'f5tts', 'metavoice', 'dia', 'cosyvoice'].includes(localData.tts_provider) && (
+            <SettingField
+              label="Voice Sample"
+              description="Upload a 5–30s audio clip for voice cloning. The engine will mimic this voice."
+            >
+              <VoiceSampleUploader
+                charId={localData.id}
+                currentSampleUrl={localData.voice_sample_path || null}
+                onChanged={(newPath) => setLocalData(d => ({ ...d, voice_sample_path: newPath || '' }))}
+              />
+            </SettingField>
+          )}
 
           {/* Feature H: Per-emotion voice overrides */}
           <SettingField
@@ -902,7 +1053,7 @@ function CharacterTab() {
                 setMoodEnabled(enabled);
                 if (activeCharacter) {
                   try {
-                    await api.updateCharacter(activeCharacter.id, { mood_enabled: enabled ? 1 : 0 });
+                    await api.updateCharacter(activeCharacter.id, { mood_enabled: enabled });
                     setActiveCharacter({ ...activeCharacter, mood_enabled: enabled });
                   } catch { setMoodEnabled(!enabled); }
                 }
@@ -1587,6 +1738,76 @@ function normalizeCapture(e: React.KeyboardEvent): string {
   return parts.join('+');
 }
 
+/* ─── Setup Guides Section ─────────────────────────────────────────────
+   Grid of guide cards linking to re-triggerable setup wizards.
+   Shown in the General tab. Each card shows completion status.
+   ─────────────────────────────────────────────────────────────────────── */
+
+function SetupGuidesSection() {
+  const { config, saveConfig } = useAppStore();
+  const openWizard = useWizardStore(s => s.openWizard);
+
+  const guides = [
+    { id: 'voice-setup' as const, label: 'Set up Voice', icon: <Volume2 size={15} />, completedKey: 'voice_setup_completed' },
+    { id: 'image-gen-setup' as const, label: 'Set up Image Gen', icon: <Image size={15} />, completedKey: 'image_gen_setup_completed' },
+    { id: 'llm-setup' as const, label: 'Configure LLM', icon: <Brain size={15} />, completedKey: null },
+    { id: 'card-import' as const, label: 'Import Character', icon: <Upload size={15} />, completedKey: null },
+    { id: 'expression-setup' as const, label: 'Expression Portraits', icon: <Palette size={15} />, completedKey: null },
+  ];
+
+  const handleRerunOnboarding = async () => {
+    await saveConfig({ onboarded: false } as Record<string, unknown>).catch(() => {});
+    openWizard('onboarding');
+  };
+
+  return (
+    <section className="mb-6">
+      <SectionHeader title="Setup Guides" />
+      <div className="flex flex-col gap-1.5">
+        {guides.map(g => {
+          const completed = g.completedKey ? Boolean((config as Record<string, unknown>)[g.completedKey]) : false;
+          return (
+            <button
+              key={g.id}
+              onClick={() => openWizard(g.id)}
+              className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all"
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border-subtle)',
+              }}
+            >
+              <span style={{ color: 'var(--color-accent)' }}>{g.icon}</span>
+              <span className="text-xs font-medium flex-1" style={{ color: 'var(--color-text-primary)' }}>
+                {g.label}
+              </span>
+              {completed ? (
+                <CheckCircle size={14} style={{ color: 'var(--color-success)' }} />
+              ) : (
+                <ChevronDown size={14} style={{ color: 'var(--color-text-tertiary)', transform: 'rotate(-90deg)' }} />
+              )}
+            </button>
+          );
+        })}
+        {/* Re-run onboarding */}
+        <button
+          onClick={handleRerunOnboarding}
+          className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all"
+          style={{
+            backgroundColor: 'var(--color-surface)',
+            border: '1px solid var(--color-border-subtle)',
+          }}
+        >
+          <span style={{ color: 'var(--color-accent)' }}><RefreshCw size={15} /></span>
+          <span className="text-xs font-medium flex-1" style={{ color: 'var(--color-text-primary)' }}>
+            Re-run Onboarding
+          </span>
+          <ChevronDown size={14} style={{ color: 'var(--color-text-tertiary)', transform: 'rotate(-90deg)' }} />
+        </button>
+      </div>
+    </section>
+  );
+}
+
 /**
  * Settings section that lets users rebind all global keyboard shortcuts.
  * Reads and writes to appStore's customKeyBindings map, which is persisted
@@ -2071,6 +2292,27 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
           </SettingField>
         </div>
       </section>
+
+      {/* Feature Discovery */}
+      <section className="mb-6">
+        <SectionHeader title="Feature Discovery" />
+        <div style={cardStyle} className="px-4">
+          <SettingField
+            label="Hide tooltips"
+            description="Suppress all contextual feature tips permanently."
+          >
+            <input
+              type="checkbox"
+              checked={Boolean(cfg('tooltips_hidden', false))}
+              onChange={(e) => save('tooltips_hidden', e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+        </div>
+      </section>
+
+      {/* Setup Guides */}
+      <SetupGuidesSection />
 
       {/* Keyboard Shortcuts editor (#24) */}
       <ShortcutEditorSection />
@@ -2686,28 +2928,52 @@ function VoiceTab({ save, cfg }: TabProps) {
         <SectionHeader title="Text-to-Speech" />
         <div style={cardStyle} className="px-4">
           <SettingField label="TTS Provider" description="Which speech engine to use."
-            tooltip="edge-tts: Microsoft cloud voices (free, online). kokoro: local neural TTS (requires server). piper: local lightweight TTS.">
+            tooltip="CPU engines run locally with no GPU. GPU engines need a graphics card. Cloud engines require internet but no local hardware.">
             <select
               value={String(cfg('tts.provider', 'edge-tts'))}
               onChange={(e) => save('tts.provider', e.target.value)}
               className="text-sm px-2 py-1 rounded" style={selectStyle}
             >
-              <option value="edge-tts">Edge-TTS (Cloud)</option>
-              <option value="kokoro">Kokoro (Local)</option>
-              <option value="piper">Piper (Local)</option>
-              <option value="chatterbox">Chatterbox (Local)</option>
-              <option value="elevenlabs">ElevenLabs (Cloud)</option>
+              <optgroup label="Cloud (no local install)">
+                <option value="edge-tts">Edge-TTS (Free)</option>
+                <option value="elevenlabs">ElevenLabs (Paid)</option>
+                <option value="fish_audio">Fish Audio (Cloud)</option>
+              </optgroup>
+              <optgroup label="CPU (no GPU needed)">
+                <option value="kokoro">Kokoro (82M params)</option>
+                <option value="piper_local">Piper (ONNX)</option>
+                <option value="kitten">KittenTTS (15-80M)</option>
+                <option value="melotts">MeloTTS (100M)</option>
+              </optgroup>
+              <optgroup label="GPU (local, high quality)">
+                <option value="bark">Bark (1B, 2-12GB VRAM)</option>
+                <option value="styletts2">StyleTTS 2 (300M, 2GB VRAM)</option>
+                <option value="parler">Parler-TTS (880M, 4GB VRAM)</option>
+                <option value="f5tts">F5-TTS (330M, 4GB VRAM)</option>
+                <option value="cosyvoice">CosyVoice 3 (0.5B, 8GB VRAM)</option>
+              </optgroup>
+              <optgroup label="Voice Cloning (GPU)">
+                <option value="chatterbox">Chatterbox (Turbo, cloning)</option>
+                <option value="gptsovits">GPT-SoVITS (cloning)</option>
+                <option value="xtts_server">XTTS v2 (cloning)</option>
+                <option value="metavoice">MetaVoice-1B (cloning)</option>
+                <option value="dia">Dia (1.6B, dialogue, cloning)</option>
+              </optgroup>
+              <optgroup label="Other">
+                <option value="generic_rest">Generic REST Endpoint</option>
+              </optgroup>
             </select>
           </SettingField>
 
-          <SettingField label="Voice ID" description="Default voice identifier for the selected provider."
-            tooltip="e.g. en-US-AvaNeural for Edge-TTS, af_sky for Kokoro. See TTS Models tab for browsable voices.">
-            <input
-              type="text"
+          <SettingField label="Voice" description="Select a voice for the active TTS engine."
+            tooltip="Browses available voices grouped by engine. Install more voices in the TTS Models tab.">
+            <VoicePicker
               value={String(cfg('tts.voice_id', cfg('voice_id', '')))}
-              onChange={(e) => save('tts.voice_id', e.target.value)}
-              placeholder="en-US-AvaNeural"
-              className="text-sm px-2 py-1 w-48 rounded" style={selectStyle}
+              provider={String(cfg('tts.provider', 'edge-tts'))}
+              onChange={(voiceId, provider) => {
+                save('tts.voice_id', voiceId);
+                save('tts.provider', provider);
+              }}
             />
           </SettingField>
 

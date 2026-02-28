@@ -229,6 +229,18 @@ export const api = {
   deleteTTSModel: (modelId: string) => del<{ ok: boolean }>(`/api/tts/models/${encodeURIComponent(modelId)}`),
   refreshTTSCatalog: () => post<{ ok: boolean; count: number }>('/api/tts/models/refresh-catalog', {}),
 
+  /** Upload a voice sample WAV for voice cloning providers (Chatterbox, XTTS, Dia, CosyVoice, etc). */
+  uploadVoiceSample: async (charId: number, file: File): Promise<{ ok: boolean; path: string }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const resp = await fetch(`/api/characters/${charId}/voice-sample`, { method: 'POST', body: form });
+    if (!resp.ok) throw new Error(`Upload failed: ${resp.status}`);
+    return resp.json();
+  },
+
+  /** Delete a character's voice sample. */
+  deleteVoiceSample: (charId: number) => del<{ ok: boolean }>(`/api/characters/${charId}/voice-sample`),
+
   // AI Motion generation
   getMotionModelStatus: () =>
     get<{ procedural: boolean; motion_diffuse: boolean; active_backend: string; model_dir: string }>('/api/motion/model-status'),
@@ -284,6 +296,24 @@ export const api = {
 
   // Files
   scanVrm: () => get<{ models: Array<{ name: string; file: string; url: string; size: number }> }>('/api/scan/vrm').then(d => d.models),
+
+  /** Scan for available Live2D models (.model3.json files). */
+  scanLive2d: () =>
+    get<{ models: Array<{ name: string; file: string; url: string; rel_path: string }> }>('/api/scan/live2d').then(d => d.models),
+
+  /**
+   * Upload a zipped Live2D model (extracts server-side).
+   *
+   * @param file - The .zip file containing the Live2D model folder.
+   * @returns Upload result with model name and URL on success.
+   */
+  uploadLive2d: async (file: File): Promise<{ ok: boolean; name: string; url: string }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const resp = await fetch('/api/upload/live2d', { method: 'POST', body: form });
+    if (!resp.ok) throw new Error(`Upload failed: ${resp.status}`);
+    return resp.json();
+  },
   scanImages: () => get<{ images: Array<string | { file: string; url: string; name: string }> }>('/api/scan/images').then(d =>
     (d.images || []).map(img => typeof img === 'string' ? img : img.file)
   ),

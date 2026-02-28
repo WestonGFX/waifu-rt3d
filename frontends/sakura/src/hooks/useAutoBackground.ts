@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { api } from '../lib/api';
+import { useViewerStore } from '../stores/viewerStore';
 
 /**
  * Emotion groups — transitions between different groups trigger a new background.
@@ -48,15 +49,7 @@ const DEBOUNCE_MS = 5_000;
  * @param url - Absolute or root-relative URL of the image to display.
  */
 function setViewerBackground(url: string): void {
-  const iframe =
-    document.querySelector<HTMLIFrameElement>('iframe[title="VRM viewer"]') ??
-    document.querySelector<HTMLIFrameElement>('iframe[src*="viewer.html"]');
-  if (iframe?.contentWindow) {
-    iframe.contentWindow.postMessage(
-      { type: 'updateBackground', mode: 'image', value: url },
-      '*',
-    );
-  }
+  useViewerStore.getState().dispatchBackground('image', url);
 }
 
 /**

@@ -1,0 +1,370 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useViewerStore } from '../stores/viewerStore';
+
+// ── Types ───────────────────────────────────────────────────────────────────────
+
+/** Voice session states matching the server's SessionState enum. */
+export type VoiceSessionState = 'disconnected' | 'idle' | 'listening' | 'processing' | 'speaking';
+
+/** Events received from the /ws/voice WebSocket. */
+export interface VoiceEvent {
+  type: 'state' | 'transcript' | 'ai_token' | 'ai_text' | 'emotion' | 'interrupted' | 'error' | 'pong' | 'config_ack';
+  state?: string;
+  text?: string;
+  role?: string;
+  emotion?: string;
+  intensity?: number;
+  message?: string;
+  ts?: number;
+}
+
+export interface UseFullDuplexVoiceOptions {
+  /** Chat session ID for message persistence. */
+  sessionId: number | null;
+  /** Character ID for LLM persona + TTS voice. */
+  charId: number | null;
+  /** Called when the user's speech is transcribed. */
+  onTranscript?: (text: string) => void;
+  /** Called as AI tokens stream in (for live transcript). */
+  onAIToken?: (token: string) => void;
+  /** Called when the AI's full response is ready. */
+  onAIResponse?: (text: string, emotion?: string) => void;
+  /** Called on any error event. */
+  onError?: (message: string) => void;
+}
+
+export interface UseFullDuplexVoiceReturn {
+  /** Current state of the voice session. */
+  state: VoiceSessionState;
+  /** Whether the WebSocket is connected and mic is streaming. */
+  isActive: boolean;
+  /** Connect to the voice WebSocket and start streaming mic audio. */
+  connect: () => Promise<void>;
+  /** Disconnect from the voice WebSocket and stop mic capture. */
+  disconnect: () => void;
+  /** Toggle between connected and disconnected. */
+  toggle: () => Promise<void>;
+  /** Send an interrupt (barge-in) to stop AI speech. */
+  interrupt: () => void;
+  /** Current audio input level (0-1), for VoiceOrb visualization. */
+  inputLevel: number;
+}
+
+// ── Constants ───────────────────────────────────────────────────────────────────
+
+/** MediaRecorder timeslice — how often data is emitted (ms). */
+const TIMESLICE_MS = 100;
+
+/** Audio input level update interval for the VoiceOrb visualization. */
+const LEVEL_UPDATE_MS = 50;
+
+// ── Hook ────────────────────────────────────────────────────────────────────────
+
+/**
+ * React hook for full-duplex voice conversation via WebSocket.
+ *
+ * Manages the entire lifecycle: WebSocket connection, mic capture via
+ * MediaRecorder, binary audio streaming to the server, and handling
+ * of JSON control events and binary TTS audio from the server.
+ *
+ * Audio from the server is played through the Web Audio API, and the
+ * viewerStore is notified for lip sync on VRM/Live2D models.
+ *
+ * @param options - Session IDs, character ID, and event callbacks.
+ * @returns Connection state, control methods, and input level.
+ *
+ * @example
+ * const { state, connect, disconnect, interrupt, inputLevel } = useFullDuplexVoice({
+ *   sessionId: 1,
+ *   charId: 1,
+ *   onTranscript: (text) => console.log('User said:', text),
+ *   onAIResponse: (text) => console.log('AI replied:', text),
+ * });
+ */
+export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullDuplexVoiceReturn {
+  const { sessionId, charId, onTranscript, onAIToken, onAIResponse, onError } = options;
+
+  const [state, setState] = useState<VoiceSessionState>('disconnected');
+  const [inputLevel, setInputLevel] = useState(0);
+
+  const wsRef = useRef<WebSocket | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const levelIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Refs for stable callback access in WebSocket handlers
+  const callbacksRef = useRef(options);
+  callbacksRef.current = options;
+
+  // ── Audio playback queue ──────────────────────────────────────────────────
+
+  const playbackQueueRef = useRef<ArrayBuffer[]>([]);
+  const isPlayingRef = useRef(false);
+
+  /**
+   * Play audio from an ArrayBuffer (TTS chunk from the server).
+   * Queues multiple chunks and plays sequentially.
+   */
+  const playAudio = useCallback(async (audioBuffer: ArrayBuffer) => {
+    playbackQueueRef.current.push(audioBuffer);
+    if (isPlayingRef.current) return;
+
+    isPlayingRef.current = true;
+
+    while (playbackQueueRef.current.length > 0) {
+      const buf = playbackQueueRef.current.shift()!;
+      try {
+        if (!audioCtxRef.current) {
+          audioCtxRef.current = new AudioContext();
+        }
+        const ctx = audioCtxRef.current;
+        const decoded = await ctx.decodeAudioData(buf.slice(0)); // slice for ownership
+        const source = ctx.createBufferSource();
+        source.buffer = decoded;
+        source.connect(ctx.destination);
+
+        await new Promise<void>((resolve) => {
+          source.onended = () => resolve();
+          source.start(0);
+        });
+      } catch (e) {
+        console.warn('[Voice] Audio playback error:', e);
+      }
+    }
+
+    isPlayingRef.current = false;
+  }, []);
+
+  // ── Input level monitoring ────────────────────────────────────────────────
+
+  const startLevelMonitor = useCallback(() => {
+    if (!analyserRef.current) return;
+    const analyser = analyserRef.current;
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    levelIntervalRef.current = setInterval(() => {
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+      const avg = sum / dataArray.length;
+      setInputLevel(Math.min(avg / 128, 1.0));
+    }, LEVEL_UPDATE_MS);
+  }, []);
+
+  const stopLevelMonitor = useCallback(() => {
+    if (levelIntervalRef.current) {
+      clearInterval(levelIntervalRef.current);
+      levelIntervalRef.current = null;
+    }
+    setInputLevel(0);
+  }, []);
+
+  // ── Connect ───────────────────────────────────────────────────────────────
+
+  const connect = useCallback(async () => {
+    if (wsRef.current || sessionId == null || !charId) return;
+
+    // Request microphone access
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 16000,
+        },
+      });
+    } catch (e) {
+      callbacksRef.current.onError?.('Microphone access denied');
+      return;
+    }
+    streamRef.current = stream;
+
+    // Set up AudioContext + AnalyserNode for input level monitoring
+    const audioCtx = new AudioContext();
+    audioCtxRef.current = audioCtx;
+    const source = audioCtx.createMediaStreamSource(stream);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    analyserRef.current = analyser;
+    startLevelMonitor();
+
+    // Connect WebSocket
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${location.host}/ws/voice?session_id=${sessionId}&char_id=${charId}`;
+    const ws = new WebSocket(wsUrl);
+    ws.binaryType = 'arraybuffer';
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      // Start MediaRecorder for 100ms WebM/Opus chunks
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus',
+      });
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+          e.data.arrayBuffer().then((buf) => {
+            ws.send(buf);
+          });
+        }
+      };
+
+      recorder.start(TIMESLICE_MS);
+      recorderRef.current = recorder;
+    };
+
+    ws.onmessage = (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        // Binary frame: TTS audio chunk
+        playAudio(event.data);
+        return;
+      }
+
+      // Text frame: JSON control event
+      try {
+        const msg = JSON.parse(event.data) as VoiceEvent;
+        handleEvent(msg);
+      } catch {
+        // Non-JSON text frame — ignore
+      }
+    };
+
+    ws.onerror = () => {
+      callbacksRef.current.onError?.('Voice WebSocket connection error');
+    };
+
+    ws.onclose = () => {
+      cleanup();
+      setState('disconnected');
+    };
+  }, [sessionId, charId, startLevelMonitor, playAudio]);
+
+  // ── Event handler ─────────────────────────────────────────────────────────
+
+  const handleEvent = useCallback((msg: VoiceEvent) => {
+    switch (msg.type) {
+      case 'state':
+        if (msg.state) {
+          setState(msg.state as VoiceSessionState);
+        }
+        break;
+
+      case 'transcript':
+        if (msg.text) {
+          callbacksRef.current.onTranscript?.(msg.text);
+        }
+        break;
+
+      case 'ai_token':
+        if (msg.text) {
+          callbacksRef.current.onAIToken?.(msg.text);
+        }
+        break;
+
+      case 'ai_text':
+        if (msg.text) {
+          callbacksRef.current.onAIResponse?.(msg.text, msg.emotion ?? undefined);
+        }
+        // Drive expression on the 3D viewer
+        if (msg.emotion) {
+          useViewerStore.getState().dispatchExpression(msg.emotion, msg.intensity ?? 1.0);
+        }
+        break;
+
+      case 'emotion':
+        if (msg.emotion) {
+          useViewerStore.getState().dispatchExpression(msg.emotion, msg.intensity ?? 1.0);
+        }
+        break;
+
+      case 'interrupted':
+        // Clear playback queue on barge-in
+        playbackQueueRef.current = [];
+        break;
+
+      case 'error':
+        callbacksRef.current.onError?.(msg.message || 'Unknown error');
+        break;
+    }
+  }, []);
+
+  // ── Disconnect ────────────────────────────────────────────────────────────
+
+  const cleanup = useCallback(() => {
+    // Stop MediaRecorder
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      recorderRef.current.stop();
+    }
+    recorderRef.current = null;
+
+    // Stop mic stream
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+
+    // Close WebSocket
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    // Stop level monitor
+    stopLevelMonitor();
+
+    // Close audio context
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+    analyserRef.current = null;
+
+    // Clear playback queue
+    playbackQueueRef.current = [];
+    isPlayingRef.current = false;
+  }, [stopLevelMonitor]);
+
+  const disconnect = useCallback(() => {
+    cleanup();
+    setState('disconnected');
+  }, [cleanup]);
+
+  const toggle = useCallback(async () => {
+    if (wsRef.current) {
+      disconnect();
+    } else {
+      await connect();
+    }
+  }, [connect, disconnect]);
+
+  // ── Interrupt (barge-in) ──────────────────────────────────────────────────
+
+  const interrupt = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'control', action: 'interrupt' }));
+    }
+    // Immediately clear local playback queue
+    playbackQueueRef.current = [];
+  }, []);
+
+  // ── Cleanup on unmount ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
+  }, [cleanup]);
+
+  return {
+    state,
+    isActive: state !== 'disconnected',
+    connect,
+    disconnect,
+    toggle,
+    interrupt,
+    inputLevel,
+  };
+}

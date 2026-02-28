@@ -4,6 +4,60 @@ All notable changes to this project are documented here. Phases are listed in re
 
 ---
 
+## [v8.1.0] - Feb 28, 2026 — Wizard System + Code Quality Sprint
+
+### Setup Wizards & Feature Discovery
+
+New guided onboarding and progressive feature discovery system in Sakura frontend:
+
+- **OnboardingWizard**: 7-step first-run wizard (Welcome → Hardware Scan → LLM Setup → Character Create → Voice Setup → Feature Tour → Done)
+- **WizardShell**: reusable multi-step wizard container with animated step transitions, progress bar, skip/back/next, keyboard nav (ESC to close)
+- **5 setup wizards**: LLMSetupWizard, VoiceSetupWizard, ExpressionSetupWizard, ImageGenSetupWizard, CardImportWizard — each a multi-step modal with validation
+- **FeatureDiscovery hooks**: `useFeatureDiscovery` triggers contextual tips based on message count, session count, and idle time
+- **FeatureTipQueue**: toast-style queue for discovery tooltips with snooze/dismiss
+- **WhatsNewModal**: shows new features after version updates with direct links to setup wizards
+- **Setup Guides**: card grid in Settings showing configuration completion status with pulsing dot indicators
+- **wizardStore**: Zustand store for wizard state, feature discovery flags, and snooze/dismiss persistence
+- **Responsive**: fullscreen variant on desktop, bottom-sheet drawer on mobile
+
+New files: `wizard/WizardShell.tsx`, `wizard/WizardProgress.tsx`, `wizard/WizardStepCard.tsx`, `wizards/*.tsx` (5 wizards), `onboarding/*.tsx` (6 step components + shell), `discovery/FeatureSpotlight.tsx`, `discovery/FeatureTipQueue.tsx`, `hooks/useFeatureDiscovery.ts`, `stores/wizardStore.ts`, `components/WhatsNewModal.tsx`
+
+### Kokoro TTS Completion (A7)
+
+- **TTSModelsPanel**: fixed live preview bug (was reading `data.filename` instead of `data.url` from `/api/tts` endpoint)
+- **TTSModelsPanel**: fixed active voice indicator (was returning empty string for `activeTtsVoiceId` in new config shape)
+- **Kokoro adapter**: added speed parameter passthrough — reads `speed`, `speech_rate`, and Edge-TTS-style `tts_rate` strings (e.g. `"+10%"`)
+- **Voice catalog**: 11+ Kokoro voices with correct metadata (CPU-only, streaming, no cloning)
+- **End-to-end verified**: adapter → registry → server endpoints → VoicePicker → TTSModelsPanel
+
+### TypeScript Error Fixes (14 → 0)
+
+- `CinematicOverlay.tsx`: `Message` → `ChatMessage`, removed unused `draft`, fixed `sendMessage()` to require text arg
+- `VNTextBox.tsx`: `Message` → `ChatMessage` type
+- `TTSModelsPanel.tsx`: removed unused `Star` import
+- `UserKnowledgePanel.tsx`: `JSX.Element` → `ReactNode`, `setOverlay` → `closeOverlay`
+- `CreateView.tsx`: removed unused `charName` param
+- `SettingsView.tsx`: `editChar` → `activeCharacter`, added `id`/`voice_sample_path` to state, fixed `mood_enabled` boolean type
+- `types.ts`: added `voice_sample_path` to Character interface
+
+### Test Coverage
+
+- **55 new tests** across 4 test files:
+  - `wizardStore.test.ts` (23 tests) — store logic, hydration, persistence
+  - `WizardShell.test.tsx` (16 tests) — navigation, variants, keyboard, data passing
+  - `useFeatureDiscovery.test.ts` (10 tests) — trigger logic, gating, snooze
+  - `WhatsNewModal.test.tsx` (6 tests) — rendering, dismiss, wizard links
+- **Fixed 3 pre-existing test failures** in `SettingsView.exportImport.test.tsx` (missing mocks, ambiguous selectors)
+
+### Critical Code Review Fixes
+
+- **FactExtractor** (`backend/knowledge/extractor.py`): fixed broken config key path — `cfg.get("model")` → `cfg.get("llm", {}).get("model")` (feature C3 was completely non-functional)
+- **Tiered Memory** (`backend/memory/tiered_memory.py`): fixed SQL injection in `run_decay` — f-string `datetime('now', '-{weeks} weeks')` → parameterized `datetime('now', ?)`
+- **Twenty Questions** (`backend/games/twenty_questions.py`): min thing length (3 chars), replaced substring fuzzy match with word-level subset matching to prevent false positives
+- **Character Card** (`backend/characters/chara_card.py`): added `Image.MAX_IMAGE_PIXELS = 50_000_000` decompression bomb guard, fixed base64 padding formula
+
+---
+
 ## [v7.0.0] - Feb 27, 2026 — 32-Feature Sprint + UX Design Pass
 
 ### 32-Feature Sprint — Phases 1–3 (Feb 27, 2026)

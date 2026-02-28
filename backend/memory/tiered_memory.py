@@ -474,18 +474,19 @@ class TieredMemoryManager:
         """
         if self.decay_mode == "off":
             return 0
-        cutoff = f"datetime('now', '-{weeks_threshold} weeks')"
+        # Use parameterized datetime modifier to avoid SQL injection
+        cutoff_modifier = f"-{int(weeks_threshold)} weeks"
         con = self._conn()
         try:
             if self.decay_mode == "prune":
                 cur = con.execute(
-                    f"""
+                    """
                     DELETE FROM memories
                     WHERE tier = 2
-                      AND created_at < {cutoff}
+                      AND created_at < datetime('now', ?)
                       AND salience < ?
                     """,
-                    (self.salience_threshold,),
+                    (cutoff_modifier, self.salience_threshold),
                 )
                 # Also remove from vec table
                 # (CASCADE not available on virtual tables — delete orphans)
@@ -497,14 +498,14 @@ class TieredMemoryManager:
                 )
             else:  # keep
                 cur = con.execute(
-                    f"""
+                    """
                     UPDATE memories
                     SET tier = 3, promoted_at = datetime('now')
                     WHERE tier = 2
-                      AND created_at < {cutoff}
+                      AND created_at < datetime('now', ?)
                       AND salience < ?
                     """,
-                    (self.salience_threshold,),
+                    (cutoff_modifier, self.salience_threshold),
                 )
             count = cur.rowcount
             con.commit()

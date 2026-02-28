@@ -3237,6 +3237,58 @@ async def api_tts(req: Request):
         raise HTTPException(500, f"TTS Error: {e}")
 
 
+@app.post("/api/tts/preview")
+async def tts_preview(req: Request):
+    """Synthesize a short preview clip for voice browsing in wizards.
+
+    Accepts a small text sample, voice_id, and provider, returns an audio URL.
+    Reuses the existing TTS pipeline but is designed for quick preview playback
+    during onboarding and setup wizard voice selection steps.
+
+    Args:
+        req: JSON body with {text, voice_id, provider}
+
+    Returns:
+        dict: {"ok": True, "audio_url": "/files/audio/..."} on success
+
+    Raises:
+        HTTPException: 400 if text is missing, 500 on TTS failure
+
+    Example:
+        >>> POST /api/tts/preview
+        >>> {"text": "Hello!", "voice_id": "en-US-AriaNeural", "provider": "edge"}
+        {"ok": true, "audio_url": "/files/audio/preview_abc123.mp3"}
+    """
+    body = await req.json()
+    text = body.get("text", "Hello! Nice to meet you.").strip()[:200]
+    if not text:
+        raise HTTPException(400, "text required")
+    voice_id = body.get("voice_id", "")
+    provider = body.get("provider", "")
+
+    cfg = load_config()
+    cfg_tts = cfg.get("tts", {}).copy()
+    if provider:
+        cfg_tts["provider"] = provider
+        if "tts" not in cfg:
+            cfg["tts"] = {}
+        cfg["tts"]["provider"] = provider
+    if voice_id:
+        cfg_tts["voice_id"] = voice_id
+
+    try:
+        from backend.tts.registry import get_tts
+        tts = get_tts(cfg)
+        res = tts.speak_cached(_clean_for_tts(text), cfg_tts)
+        if not res.get("ok"):
+            raise HTTPException(400, res.get("error", "TTS preview failed"))
+        return {"ok": True, "audio_url": f"/files/audio/{res['filename']}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"TTS preview error: {e}")
+
+
 @app.get("/api/tts/cache")
 def get_tts_cache_stats():
     """Return TTS audio cache statistics for the cache management UI (#76).
@@ -8730,6 +8782,64 @@ async def overlay_ws(websocket: WebSocket) -> None:
     finally:
         _overlay_connections.discard(websocket)
         logger.info(f"[Overlay] WebSocket disconnected ({len(_overlay_connections)} remaining)")
+
+
+# ---------------------------------------------------------------------------
+# Feature A1 — Full-Duplex Voice Conversation WebSocket
+# ---------------------------------------------------------------------------
+
+@app.websocket("/ws/voice")
+async def voice_duplex_ws(websocket: WebSocket) -> None:
+    """WebSocket endpoint for full-duplex voice conversation.
+
+    Enables real-time bidirectional voice chat: the client streams
+    microphone audio (binary WebM/Opus chunks) and receives TTS audio
+    (binary) plus JSON control events back.
+
+    Query parameters:
+        session_id (int): Chat session for message persistence.
+        char_id (int): Character persona for LLM + TTS voice.
+
+    Protocol:
+        Client → server:
+            - Binary: WebM/Opus audio chunks (~100ms each)
+            - JSON: ``{"type": "control", "action": "interrupt"|"config"|"ping"}``
+
+        Server → client:
+            - Binary: TTS audio file bytes (MP3/WAV)
+            - JSON events:
+                - ``{"type": "state", "state": "idle"|"listening"|"processing"|"speaking"}``
+                - ``{"type": "transcript", "text": "...", "role": "user"}``
+                - ``{"type": "ai_token", "text": "..."}``
+                - ``{"type": "ai_text", "text": "...", "emotion": "..."}``
+                - ``{"type": "interrupted"}``
+                - ``{"type": "emotion", "emotion": "...", "intensity": 0.8}``
+                - ``{"type": "error", "message": "..."}``
+
+    Example frontend connection:
+        ``new WebSocket("ws://localhost:8080/ws/voice?session_id=1&char_id=1")``
+    """
+    await websocket.accept()
+
+    # Parse query parameters
+    params = websocket.query_params
+    session_id = int(params.get("session_id", "1"))
+    char_id = int(params.get("char_id", "1"))
+
+    cfg = load_config() or {}
+
+    logger.info(f"[Voice] WebSocket connected (session={session_id}, char={char_id})")
+
+    try:
+        from backend.voice.duplex import VoiceDuplexSession
+        session = VoiceDuplexSession(websocket, session_id, char_id, cfg)
+        await session.run()
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error(f"[Voice] WebSocket error: {e}")
+    finally:
+        logger.info(f"[Voice] WebSocket disconnected (session={session_id})")
 
 
 # ---------------------------------------------------------------------------

@@ -79,11 +79,12 @@ def extract_facts(
         ]
 
         # Quick single-turn call — we collect the full response
+        llm_cfg = cfg.get("llm", {})
         stream = adapter.chat_stream(
             messages,
-            cfg.get("model", ""),
-            cfg.get("endpoint", ""),
-            cfg.get("api_key", ""),
+            llm_cfg.get("model", ""),
+            llm_cfg.get("endpoint", ""),
+            llm_cfg.get("api_key", ""),
             max_tokens=300,
             temperature=0.1,
         )

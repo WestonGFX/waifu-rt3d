@@ -10,14 +10,14 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import type { Message } from '../lib/types';
+import type { ChatMessage } from '../lib/types';
 
 const CHARS_PER_FRAME = 2;   // characters revealed per animation frame
 const MS_PER_FRAME    = 20;  // target ~50fps
 
 interface Props {
   /** The latest message to display. */
-  message: Message | undefined;
+  message: ChatMessage | undefined;
   /** Character name label (shown in the name tag). */
   charName: string;
   /** Called when the user is ready to advance (click or Space/Enter). */

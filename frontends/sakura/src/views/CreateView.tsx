@@ -481,7 +481,7 @@ export function CreateView() {
               {showCardImporter && (
                 <div style={{ marginBottom: 16 }}>
                   <CharacterCardImporter
-                    onImported={async (charId, charName) => {
+                    onImported={async (charId) => {
                       setShowCardImporter(false);
                       await loadCharacters();
                       // Navigate to the newly imported character

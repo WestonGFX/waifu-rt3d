@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
+
 import type { ReplyLengthMode } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
 import { useProactive } from '../hooks/useProactive';
@@ -104,7 +105,7 @@ function generateChips(text: string, charName: string): string[] {
  * - Search, export, session history drawer
  */
 export function ChatThread() {
-  const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode } = useAppStore();
+  const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips } = useAppStore();
   const { messages, draft, loading, setDraft, sendMessage, abortMessage, setContext, loadHistory, sessionId } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -114,8 +115,10 @@ export function ChatThread() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [incognito, setIncognito] = useState(false);
   const [quickChips, setQuickChips] = useState<string[]>([]);
+  // Chips are hidden until a short delay after AI response (less jarring than immediate pop-in)
+  const [chipsVisible, setChipsVisible] = useState(false);
+  const chipsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Context budget bar: usage % 0–100, null while loading ──────────────
   const [contextUsagePct, setContextUsagePct] = useState<number | null>(null);
@@ -251,18 +254,32 @@ export function ChatThread() {
 
   // ── Feature C: Generate quick-reply chips whenever the AI finishes ───────
   useEffect(() => {
+    // Clear any pending chip-reveal timer on each effect run
+    if (chipsTimerRef.current) { clearTimeout(chipsTimerRef.current); chipsTimerRef.current = null; }
+
     if (!loading) {
       const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
-      if (lastAssistant?.text && activeCharacter) {
-        setQuickChips(generateChips(lastAssistant.text, activeCharacter.name));
+      if (lastAssistant?.text && activeCharacter && showQuickChips) {
+        const chips = generateChips(lastAssistant.text, activeCharacter.name);
+        setQuickChips(chips);
+        setChipsVisible(false);
+        // Delay reveal by 1.5 s so they don't pop in immediately after the AI finishes
+        chipsTimerRef.current = setTimeout(() => {
+          setChipsVisible(true);
+          chipsTimerRef.current = null;
+        }, 1500);
+      } else {
+        setQuickChips([]);
+        setChipsVisible(false);
       }
     } else {
-      setQuickChips([]); // clear while streaming or after character switch
+      setQuickChips([]);
+      setChipsVisible(false);
     }
   // messages and activeCharacter.id are intentionally included so chips
   // regenerate correctly after a character switch mid-session.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, activeCharacter?.id]);
+  }, [loading, activeCharacter?.id, showQuickChips]);
 
   // ── Feature A: Voice-First Mode ─────────────────────────────────────────
   /**
@@ -592,51 +609,90 @@ export function ChatThread() {
           )}
 
           {/* Empty-state greeting — shown when chat is empty and not still loading */}
-          {!loading && visibleMessages.length === 0 && !searchQuery && activeCharacter.greeting_message && (
+          {!loading && visibleMessages.length === 0 && !searchQuery && (
             <div
-              className="flex flex-col items-center justify-center py-16 px-4 text-center dialogue-bubble"
-              style={{ animationDelay: '0.1s' }}
+              className="flex flex-col items-center justify-center py-16 px-4 text-center"
+              style={{ minHeight: '60vh' }}
             >
+              {/* Avatar */}
               {activeCharacter.avatar_url ? (
                 <img
                   src={activeCharacter.avatar_url}
                   alt=""
-                  className="w-16 h-16 rounded-full object-cover mb-4"
-                  style={{ boxShadow: '0 4px 20px var(--color-accent-soft)' }}
+                  className="w-20 h-20 rounded-full object-cover mb-5"
+                  style={{ boxShadow: '0 4px 24px var(--color-accent-soft)', border: '2px solid var(--color-accent-soft)' }}
                 />
               ) : (
                 <div
-                  className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
+                  className="w-20 h-20 rounded-full flex items-center justify-center mb-5"
                   style={{
                     background: 'var(--color-accent-gradient)',
-                    boxShadow: '0 4px 20px var(--color-accent-soft)',
-                    fontSize: '1.6rem',
+                    boxShadow: '0 4px 24px var(--color-accent-soft)',
+                    fontSize: '2rem',
                     color: 'var(--color-accent-text)',
                   }}
                 >
                   {activeCharacter.name?.[0] ?? '?'}
                 </div>
               )}
-              <h2
-                className="char-name-display mb-3"
-                style={{ color: 'var(--color-accent)', fontSize: '1.3rem' }}
-              >
+
+              <h2 className="char-name-display mb-2" style={{ color: 'var(--color-accent)', fontSize: '1.4rem' }}>
                 {activeCharacter.name}
               </h2>
-              <p
-                className="text-sm leading-relaxed max-w-sm"
-                style={{
-                  color: 'var(--color-text-secondary)',
-                  fontStyle: 'italic',
-                  backgroundColor: 'var(--color-surface)',
-                  border: '1px solid var(--color-border-subtle)',
-                  borderRadius: 'var(--radius-card)',
-                  padding: '12px 16px',
-                  boxShadow: 'var(--shadow-card)',
-                }}
-              >
-                "{activeCharacter.greeting_message}"
+
+              {/* "No messages yet" label */}
+              <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginBottom: 16, opacity: 0.7 }}>
+                No messages yet — say hello!
               </p>
+
+              {/* Greeting card */}
+              {activeCharacter.greeting_message && (
+                <p
+                  className="text-sm leading-relaxed max-w-sm mb-6"
+                  style={{
+                    color: 'var(--color-text-secondary)',
+                    fontStyle: 'italic',
+                    backgroundColor: 'var(--color-surface)',
+                    border: '1px solid var(--color-border-subtle)',
+                    borderRadius: 'var(--radius-card)',
+                    padding: '14px 18px',
+                    boxShadow: 'var(--shadow-card)',
+                    opacity: 0.9,
+                  }}
+                >
+                  "{activeCharacter.greeting_message}"
+                </p>
+              )}
+
+              {/* Starter prompt buttons — centered, appear after 1 s */}
+              {showQuickChips && (
+                <div
+                  className="flex flex-wrap gap-2 justify-center max-w-sm"
+                  style={{ opacity: 0.75 }}
+                  role="group"
+                  aria-label="Suggested conversation starters"
+                >
+                  {[
+                    `Tell me about yourself`,
+                    `How are you feeling today?`,
+                    `What do you want to talk about?`,
+                  ].map((prompt, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { idleFired.current = false; sendMessage(prompt, true, incognito, effectiveMaxTokens); }}
+                      className="px-4 py-2 rounded-full text-xs transition-all duration-150"
+                      style={{
+                        backgroundColor: 'var(--color-surface)',
+                        border: '1px solid var(--color-border)',
+                        color: 'var(--color-text-secondary)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -672,8 +728,8 @@ export function ChatThread() {
         >
           <div className="max-w-3xl mx-auto">
             {/* Quick-reply chips — appear after AI response, hidden while typing or loading */}
-            {quickChips.length > 0 && !draft && !loading && (
-              <div className="flex gap-2 mb-2 flex-wrap" role="group" aria-label="Quick reply suggestions">
+            {quickChips.length > 0 && chipsVisible && !draft && !loading && (
+              <div className="flex gap-2 mb-2 flex-wrap justify-center" role="group" aria-label="Quick reply suggestions">
                 {quickChips.map((chip, i) => (
                   <button
                     key={i}
@@ -789,21 +845,6 @@ export function ChatThread() {
                 <Drama size={16} />
               </button>
 
-              {/* Incognito toggle */}
-              <button
-                onClick={() => setIncognito(v => !v)}
-                title={incognito ? 'Incognito: messages not saved. Click to disable.' : 'Enable incognito mode'}
-                aria-label={incognito ? 'Disable incognito mode' : 'Enable incognito mode'}
-                aria-pressed={incognito}
-                className="p-2 rounded-lg transition-all duration-200 flex-shrink-0 text-base leading-none"
-                style={{
-                  opacity: incognito ? 1 : 0.35,
-                  backgroundColor: incognito ? 'var(--color-accent-soft)' : 'transparent',
-                }}
-              >
-                <EyeOff size={16} />
-              </button>
-
               {/* Reply length badge — cycles through brief/normal/detailed/auto on click */}
               <button
                 onClick={cycleReplyLengthMode}
@@ -832,7 +873,7 @@ export function ChatThread() {
               <textarea
                 ref={textareaRef}
                 value={draft}
-                onChange={(e) => { setDraft(e.target.value); if (quickChips.length) setQuickChips([]); }}
+                onChange={(e) => { setDraft(e.target.value); if (quickChips.length) { setQuickChips([]); setChipsVisible(false); } }}
                 onKeyDown={handleKeyDown}
                 placeholder={
                   dictating ? 'Dictating — speak now…' :

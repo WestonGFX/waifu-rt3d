@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-type ThemeMode = 'sakura' | 'crystal' | 'dark-sakura' | 'dark-crystal';
+export type ThemeMode =
+  | 'sakura' | 'crystal' | 'dark-sakura' | 'dark-crystal'
+  | 'matcha' | 'lavender' | 'peach' | 'midnight';
 
 interface ThemeStore {
   theme: ThemeMode;
@@ -9,8 +11,8 @@ interface ThemeStore {
   toggle: () => void;
 }
 
-/** Cycle order for the toggle shortcut. */
-const CYCLE: ThemeMode[] = ['sakura', 'crystal', 'dark-sakura', 'dark-crystal'];
+/** Cycle order for the toggle shortcut (light themes first, then dark). */
+const CYCLE: ThemeMode[] = ['sakura', 'crystal', 'matcha', 'lavender', 'peach', 'dark-sakura', 'dark-crystal', 'midnight'];
 
 export const useTheme = create<ThemeStore>()(
   persist(

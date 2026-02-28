@@ -2830,7 +2830,12 @@
                         // Blend shapes: VRM 1.0 uses _expressionMap; VRM 0.x uses _blendShapeGroups
                         const em = vrm.expressionManager || vrm.blendShapeProxy;
                         let blendShapeCount = 0;
-                        if (em?._expressionMap) blendShapeCount = em._expressionMap.size;
+                        if (em?._expressionMap) {
+                            const exprMap = em._expressionMap;
+                            blendShapeCount = exprMap instanceof Map
+                                ? exprMap.size
+                                : Object.keys(exprMap).length;
+                        }
                         else if (em?._blendShapeGroups) blendShapeCount = em._blendShapeGroups.length;
                         // Bone count from humanoid spec
                         const boneCount = vrm.humanoid?.humanBones

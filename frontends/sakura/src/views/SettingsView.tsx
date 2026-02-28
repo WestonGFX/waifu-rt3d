@@ -8,6 +8,7 @@ import type { ModelCapabilities } from '../lib/api';
 import type { LayoutMode, ReplyLengthMode } from '../stores/appStore';
 import { useAppStore } from '../stores/appStore';
 import { useTheme } from '../hooks/useTheme';
+import type { ThemeMode } from '../hooks/useTheme';
 import { SettingField } from '../components/SettingField';
 import { VoicePicker } from '../components/VoicePicker';
 import { TTSModelsPanel } from '../components/TTSModelsPanel';
@@ -980,7 +981,7 @@ interface ThemePreset {
   id: string;
   label: string;
   /** data-theme value to apply, or null to leave the current one untouched */
-  dataTheme: 'sakura' | 'crystal' | 'dark-sakura' | 'dark-crystal' | null;
+  dataTheme: ThemeMode | null;
   /** Accent swatch color for the visual card preview */
   swatchAccent: string;
   /** Background swatch color for the visual card preview */
@@ -1122,7 +1123,7 @@ function loadSavedCustomTheme(): CustomThemeColors | null {
 function ThemeCustomizationSection({
   setTheme,
 }: {
-  setTheme: (t: 'sakura' | 'crystal' | 'dark-sakura' | 'dark-crystal') => void;
+  setTheme: (t: ThemeMode) => void;
 }) {
   const { customTheme, setCustomThemeVar, resetCustomTheme } = useAppStore();
 
@@ -1562,32 +1563,39 @@ function ShortcutEditorSection() {
 interface GeneralTabProps {
   config: Record<string, unknown>; save: (k: string, v: unknown) => void;
   cfg: (k: string, fb?: unknown) => unknown;
-  theme: string; setTheme: (t: 'sakura' | 'crystal' | 'dark-sakura' | 'dark-crystal') => void;
+  theme: string; setTheme: (t: ThemeMode) => void;
   advancedMode: boolean; toggleAdvancedMode: () => void;
   layoutMode: LayoutMode; setLayoutMode: (m: LayoutMode) => void;
 }
 
 function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMode, layoutMode, setLayoutMode }: GeneralTabProps) {
+  const { incognito, setIncognito, showQuickChips, setShowQuickChips, settingsMode, setSettingsMode } = useAppStore();
   return (
     <>
       {/* Theme */}
       <section className="mb-6">
         <SectionHeader title="Theme" />
         <div style={cardStyle} className="px-4">
-          <SettingField label="Color Theme" description="4 premium themes — warm sakura or cool crystal, each in light and dark."
+          <SettingField label="Color Theme" description="8 themes — light, pastel, and dark variants."
             tooltip="Changes all colors, shadows, and accents across the entire UI.">
             <select
               value={theme}
-              onChange={(e) => setTheme(e.target.value as 'sakura' | 'crystal' | 'dark-sakura' | 'dark-crystal')}
+              onChange={(e) => setTheme(e.target.value as ThemeMode)}
               className="text-sm px-2 py-1 rounded" style={selectStyle}
             >
               <optgroup label="Light">
-                <option value="sakura">Sakura</option>
-                <option value="crystal">Crystal</option>
+                <option value="sakura">Sakura — warm rose</option>
+                <option value="crystal">Crystal — cool blue</option>
+              </optgroup>
+              <optgroup label="Light Pastel">
+                <option value="matcha">Matcha — sage green</option>
+                <option value="lavender">Lavender — soft violet</option>
+                <option value="peach">Peach — warm coral</option>
               </optgroup>
               <optgroup label="Dark">
                 <option value="dark-sakura">Dark Sakura</option>
                 <option value="dark-crystal">Dark Crystal</option>
+                <option value="midnight">Midnight — navy &amp; gold</option>
               </optgroup>
             </select>
           </SettingField>
@@ -1843,6 +1851,58 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
                       <Monitor size={10} /> Normal
                     </span>
                   ) : mode === 'compact' ? 'Compact' : 'Mobile'}
+                </button>
+              ))}
+            </div>
+          </SettingField>
+        </div>
+      </section>
+
+      {/* Chat Behaviour */}
+      <section className="mb-6">
+        <SectionHeader title="Chat Behaviour" />
+        <div style={cardStyle} className="px-4">
+          <SettingField
+            label="Incognito Mode"
+            description="When on, messages are not saved to the database. Toggle in Settings instead of the chat toolbar."
+          >
+            <input
+              type="checkbox"
+              checked={incognito}
+              onChange={e => setIncognito(e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+          <SettingField
+            label="Quick-Reply Chips"
+            description="Show suggested reply chips after each AI response."
+          >
+            <input
+              type="checkbox"
+              checked={showQuickChips}
+              onChange={e => setShowQuickChips(e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+          <SettingField
+            label="Settings Panel"
+            description="Sidebar: Settings opens as a left panel — the 3D model stays visible on the right. Drawer: full-width overlay (default)."
+          >
+            <div
+              className="flex gap-0.5 p-0.5 rounded-lg"
+              style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border)' }}
+            >
+              {(['drawer', 'sidebar'] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setSettingsMode(mode)}
+                  className="px-3 py-1 rounded-md text-xs font-medium transition-all capitalize"
+                  style={{
+                    backgroundColor: settingsMode === mode ? 'var(--color-accent)' : 'transparent',
+                    color: settingsMode === mode ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
+                  }}
+                >
+                  {mode}
                 </button>
               ))}
             </div>

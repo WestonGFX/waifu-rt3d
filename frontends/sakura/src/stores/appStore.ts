@@ -139,6 +139,18 @@ interface AppState {
   viewportFps: number | null;
   setViewportFps: (fps: number | null) => void;
 
+  // Incognito mode — messages are not saved to DB
+  incognito: boolean;
+  setIncognito: (v: boolean) => void;
+
+  // Settings panel layout: 'drawer' slides over content, 'sidebar' stays left (3D model stays visible)
+  settingsMode: 'drawer' | 'sidebar';
+  setSettingsMode: (m: 'drawer' | 'sidebar') => void;
+
+  // Quick-reply chips display preference
+  showQuickChips: boolean;
+  setShowQuickChips: (v: boolean) => void;
+
   // Legacy compat (kept for components that still reference these)
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -276,6 +288,18 @@ export const useAppStore = create<AppState>()(
       viewportFps: null,
       setViewportFps: (fps) => set({ viewportFps: fps }),
 
+      // Incognito mode
+      incognito: false,
+      setIncognito: (v) => set({ incognito: v }),
+
+      // Settings panel layout
+      settingsMode: 'drawer',
+      setSettingsMode: (m) => set({ settingsMode: m }),
+
+      // Quick-reply chips
+      showQuickChips: true,
+      setShowQuickChips: (v) => set({ showQuickChips: v }),
+
       // Legacy compat — maps to new layout for components still using old API
       activeTab: 'chats',
       setActiveTab: (tab) => {
@@ -298,6 +322,9 @@ export const useAppStore = create<AppState>()(
         customKeyBindings: s.customKeyBindings,
         replyLengthMode: s.replyLengthMode,
         customTheme: s.customTheme,
+        incognito: s.incognito,
+        settingsMode: s.settingsMode,
+        showQuickChips: s.showQuickChips,
       }),
       // Migrate old compactMode: true → layoutMode: 'compact'
       merge: (persisted: unknown, current) => {

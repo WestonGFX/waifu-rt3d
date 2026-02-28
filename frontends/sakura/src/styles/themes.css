@@ -99,6 +99,134 @@
   color-scheme: dark;
 }
 
+/* ─── Matcha (Light) — sage green & warm cream ────────────────────── */
+[data-theme="matcha"] {
+  --color-background: #F5F7F2;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #FAFCF8;
+  --color-border: #D9E4D2;
+  --color-border-subtle: rgba(106, 153, 85, 0.08);
+  --color-text-primary: #1E2B1A;
+  --color-text-secondary: #7A9070;
+  --color-text-tertiary: #AABFA0;
+  --color-accent: #6A9955;
+  --color-accent-hover: #527A42;
+  --color-accent-soft: rgba(106, 153, 85, 0.10);
+  --color-accent-text: #FFFFFF;
+  --color-accent-gradient: linear-gradient(135deg, #6A9955 0%, #527A42 100%);
+  --color-success: #5EC99A;
+  --color-warning: #D4A855;
+  --color-danger: #C85A5A;
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(106,153,85,0.06);
+  --shadow-elevated: 0 8px 32px rgba(106,153,85,0.10), 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-glow: 0 0 24px rgba(106,153,85,0.15);
+  --blur-surface: blur(20px) saturate(1.2);
+  --radius-card: 14px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.020;
+  --bg-ambience: rgba(106, 153, 85, 0.04);
+  color-scheme: light;
+}
+
+/* ─── Lavender (Light Pastel) — soft violet & pale lilac ──────────── */
+[data-theme="lavender"] {
+  --color-background: #F7F5FC;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #FDFCFF;
+  --color-border: #E4DEEE;
+  --color-border-subtle: rgba(147, 112, 219, 0.08);
+  --color-text-primary: #231A35;
+  --color-text-secondary: #8A7DA0;
+  --color-text-tertiary: #BEB4CE;
+  --color-accent: #9370DB;
+  --color-accent-hover: #7A5AC4;
+  --color-accent-soft: rgba(147, 112, 219, 0.10);
+  --color-accent-text: #FFFFFF;
+  --color-accent-gradient: linear-gradient(135deg, #9370DB 0%, #7A5AC4 100%);
+  --color-success: #5EC99A;
+  --color-warning: #E8B86D;
+  --color-danger: #E0607A;
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(147,112,219,0.06);
+  --shadow-elevated: 0 8px 32px rgba(147,112,219,0.10), 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-glow: 0 0 24px rgba(147,112,219,0.15);
+  --blur-surface: blur(20px) saturate(1.2);
+  --radius-card: 16px;
+  --radius-button: 12px;
+  --radius-input: 10px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.020;
+  --bg-ambience: rgba(147, 112, 219, 0.04);
+  color-scheme: light;
+}
+
+/* ─── Peach (Light Pastel) — warm coral & cream ───────────────────── */
+[data-theme="peach"] {
+  --color-background: #FDF8F4;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #FFFCFA;
+  --color-border: #F0DECE;
+  --color-border-subtle: rgba(230, 120, 80, 0.08);
+  --color-text-primary: #2D1D14;
+  --color-text-secondary: #9C8070;
+  --color-text-tertiary: #CCBCB0;
+  --color-accent: #E67850;
+  --color-accent-hover: #CC5E36;
+  --color-accent-soft: rgba(230, 120, 80, 0.10);
+  --color-accent-text: #FFFFFF;
+  --color-accent-gradient: linear-gradient(135deg, #E67850 0%, #CC5E36 100%);
+  --color-success: #5EC99A;
+  --color-warning: #F0B842;
+  --color-danger: #E04060;
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(230,120,80,0.06);
+  --shadow-elevated: 0 8px 32px rgba(230,120,80,0.10), 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-glow: 0 0 24px rgba(230,120,80,0.15);
+  --blur-surface: blur(20px) saturate(1.2);
+  --radius-card: 16px;
+  --radius-button: 12px;
+  --radius-input: 10px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.020;
+  --bg-ambience: rgba(230, 120, 80, 0.04);
+  color-scheme: light;
+}
+
+/* ─── Midnight (Dark) — deep navy & amber gold ────────────────────── */
+[data-theme="midnight"] {
+  --color-background: #0F1117;
+  --color-surface: #171C26;
+  --color-surface-raised: #1E2434;
+  --color-border: #2C3348;
+  --color-border-subtle: rgba(255, 185, 80, 0.08);
+  --color-text-primary: #EEF0F7;
+  --color-text-secondary: #8892A6;
+  --color-text-tertiary: #55617A;
+  --color-accent: #FFB950;
+  --color-accent-hover: #FFA830;
+  --color-accent-soft: rgba(255, 185, 80, 0.12);
+  --color-accent-text: #0F1117;
+  --color-accent-gradient: linear-gradient(135deg, #FFB950 0%, #FF9420 100%);
+  --color-success: #5EC99A;
+  --color-warning: #FFB950;
+  --color-danger: #FF6B6B;
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.30), 0 0 1px rgba(255,185,80,0.08);
+  --shadow-elevated: 0 8px 32px rgba(0,0,0,0.50), 0 0 1px rgba(255,185,80,0.06);
+  --shadow-glow: 0 0 32px rgba(255,185,80,0.12);
+  --blur-surface: blur(24px) saturate(1.4);
+  --radius-card: 14px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.030;
+  --bg-ambience: rgba(255, 185, 80, 0.05);
+  color-scheme: dark;
+}
+
 /* ─── Dark Crystal — cool slate with blue accents ─────────────────── */
 [data-theme="dark-crystal"] {
   --color-background: #141619;

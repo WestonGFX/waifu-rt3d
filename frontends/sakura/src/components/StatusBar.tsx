@@ -153,14 +153,14 @@ function RelationshipBar({ charId, messageCount }: { charId: number; messageCoun
 
   return (
     <div>
-      <div className="flex items-center gap-2.5 mt-0.5">
+      <div className="flex items-center gap-2 mt-0.5" style={{ flexWrap: 'wrap' }}>
         {/* Tier badge */}
         <span
           title={`Affinity: ${Math.round(rel.affinity * 100)}%`}
           style={{
-            fontSize: 8,
-            fontWeight: 600,
-            padding: '1px 5px',
+            fontSize: 10,
+            fontWeight: 700,
+            padding: '1px 6px',
             borderRadius: 99,
             border: `1px solid ${tier.color}`,
             color: tier.color,
@@ -173,11 +173,11 @@ function RelationshipBar({ charId, messageCount }: { charId: number; messageCoun
         </span>
         {stats.map(({ key, emoji, label }) => (
           <div key={key} className="flex items-center gap-1" title={`${label}: ${(rel[key] as number * 100).toFixed(0)}%`}>
-            <span style={{ fontSize: '8px', color: scoreColor(rel[key] as number), lineHeight: 1 }}>
+            <span style={{ fontSize: '10px', color: scoreColor(rel[key] as number), lineHeight: 1 }}>
               {emoji}
             </span>
             <div
-              style={{ width: 22, height: 2.5, borderRadius: 99, backgroundColor: 'var(--color-border)' }}
+              style={{ width: 28, height: 4, borderRadius: 99, backgroundColor: 'var(--color-border)' }}
             >
               <div
                 style={{
@@ -191,7 +191,7 @@ function RelationshipBar({ charId, messageCount }: { charId: number; messageCoun
             </div>
           </div>
         ))}
-        <span className="text-[9px]" style={{ color: 'var(--color-text-tertiary)' }}>
+        <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>
           {rel.interactions}×
         </span>
       </div>
@@ -342,8 +342,8 @@ export function StatusBar({
         paddingTop: 'env(safe-area-inset-top, 6px)',
       }}
     >
-      {/* Main row */}
-      <div className="flex items-center gap-3 px-5 h-14">
+      {/* Main row — min-h-14 so content can expand for relationship bars */}
+      <div className="flex items-center gap-3 px-5 min-h-14 py-2">
         {/* Character avatar */}
         {(() => {
           const url = resolveCharAvatarUrl(character.name, character.avatar_url);

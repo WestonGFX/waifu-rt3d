@@ -490,31 +490,94 @@ export function ModelPanel({ character }: ModelPanelProps) {
               </div>
             )}
 
-            {/* ── FPS overlay — top-right corner of the 3D viewport (always visible) ── */}
-            {viewportFpsLocal !== null && (
+            {/* ── FPS + motion backend overlay — top-right corner ── */}
+            <div
+              style={{
+                position: 'absolute', top: 8, right: 8, zIndex: 10,
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4,
+                pointerEvents: 'none',
+              }}
+            >
+              {viewportFpsLocal !== null && (
+                <div
+                  style={{
+                    fontSize: 10, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.05em',
+                    padding: '2px 6px', borderRadius: 4,
+                    backgroundColor: 'rgba(0,0,0,0.45)',
+                    color: viewportFpsLocal >= 50 ? '#4caf50' : viewportFpsLocal >= 25 ? '#ff9800' : '#f44336',
+                  }}
+                  title={`3D viewport: ${viewportFpsLocal} FPS`}
+                >
+                  {viewportFpsLocal} FPS
+                </div>
+              )}
+              {/* Motion backend status badge — click to open GPU server wizard */}
+              {vrmLoadState === 'loaded' && motionBackend && (
+                <button
+                  onClick={() => setShowWizard(v => !v)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '3px',
+                    padding: '1px 6px', borderRadius: 4,
+                    backgroundColor: 'rgba(0,0,0,0.40)',
+                    fontSize: '0.6rem', fontWeight: 600, letterSpacing: '0.04em',
+                    cursor: 'pointer', border: 'none',
+                    color: remoteUrl ? '#66c97e' : 'rgba(255,255,255,0.5)',
+                    pointerEvents: 'auto',
+                  }}
+                  title={remoteUrl ? `GPU remote: ${remoteUrl} — click to disconnect` : 'Click to connect a GPU motion server'}
+                >
+                  {remoteUrl ? <Wifi size={9} /> : <Sparkles size={9} />}
+                  {remoteUrl ? 'GPU' : motionBackend === 'motion_diffuse' ? 'AI' : 'Proc'}
+                </button>
+              )}
+            </div>
+
+            {/* ── LEFT side: camera preset column (shown when model loaded + controls visible) ── */}
+            {vrmUrl && vrmLoadState === 'loaded' && controlsVisible && (
               <div
                 style={{
-                  position: 'absolute',
-                  top: 8,
-                  right: 8,
-                  zIndex: 10,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  fontFamily: 'monospace',
-                  letterSpacing: '0.05em',
-                  padding: '2px 6px',
-                  borderRadius: 4,
-                  backgroundColor: 'rgba(0,0,0,0.45)',
-                  color: viewportFpsLocal >= 50 ? '#4caf50' : viewportFpsLocal >= 25 ? '#ff9800' : '#f44336',
-                  pointerEvents: 'none',
+                  position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+                  display: 'flex', flexDirection: 'column', gap: 5, zIndex: 10,
+                  opacity: 0.85,
                 }}
-                title={`3D viewport: ${viewportFpsLocal} FPS`}
               >
-                {viewportFpsLocal} FPS
+                {(['fullbody', 'bust', 'face'] as const).map(preset => (
+                  <button
+                    key={preset}
+                    onClick={() => setCameraPreset(preset)}
+                    className="px-2 py-1.5 text-xs capitalize"
+                    style={{
+                      backgroundColor: 'var(--color-surface)',
+                      borderRadius: 'var(--radius-button)',
+                      boxShadow: 'var(--shadow-card)',
+                      color: 'var(--color-text-secondary)',
+                      border: '1px solid var(--color-border)',
+                      minWidth: 44,
+                    }}
+                    title={`${preset.charAt(0).toUpperCase() + preset.slice(1)} camera view`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+                <button
+                  onClick={() => showExprEditor ? setShowExprEditor(false) : handleOpenExprEditor()}
+                  className="flex items-center gap-1 px-2 py-1.5 text-xs"
+                  style={{
+                    backgroundColor: showExprEditor ? 'var(--color-accent)' : 'var(--color-surface)',
+                    borderRadius: 'var(--radius-button)',
+                    boxShadow: 'var(--shadow-card)',
+                    color: showExprEditor ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
+                    border: '1px solid var(--color-border)',
+                    minWidth: 44, justifyContent: 'center',
+                  }}
+                  title="Expression editor"
+                >
+                  <Sliders size={12} />
+                </button>
               </div>
             )}
 
-            {/* ── Bottom-left: "Close panel" (always) + camera/expr controls (toggleable) ── */}
+            {/* ── Bottom-left: close button + right: screenshot + hide toggle ── */}
             <div
               className="absolute bottom-0 left-0 right-0 flex items-end justify-between px-3 pb-3"
               style={{ transition: 'opacity 0.2s', opacity: 0.85 }}
@@ -532,76 +595,11 @@ export function ModelPanel({ character }: ModelPanelProps) {
                 }}
                 title="Collapse the 3D panel"
               >
-                <ChevronLeft size={14} /> Close panel
+                <ChevronLeft size={14} /> Close
               </button>
 
-              {/* Right: camera + expr buttons (only when model loaded) + hide-controls toggle */}
+              {/* Right: screenshot + hide-controls toggle */}
               <div className="flex items-center gap-2">
-                {vrmUrl && vrmLoadState === 'loaded' && controlsVisible && (
-                  <>
-                    {(['fullbody', 'bust', 'face'] as const).map(preset => (
-                      <button
-                        key={preset}
-                        onClick={() => setCameraPreset(preset)}
-                        className="px-2.5 py-1.5 text-xs capitalize"
-                        style={{
-                          backgroundColor: 'var(--color-surface)',
-                          borderRadius: 'var(--radius-button)',
-                          boxShadow: 'var(--shadow-card)',
-                          color: 'var(--color-text-secondary)',
-                          border: '1px solid var(--color-border)',
-                        }}
-                        title={`${preset.charAt(0).toUpperCase() + preset.slice(1)} camera view`}
-                      >
-                        {preset}
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => showExprEditor ? setShowExprEditor(false) : handleOpenExprEditor()}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs"
-                      style={{
-                        backgroundColor: showExprEditor ? 'var(--color-accent)' : 'var(--color-surface)',
-                        borderRadius: 'var(--radius-button)',
-                        boxShadow: 'var(--shadow-card)',
-                        color: showExprEditor ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
-                        border: '1px solid var(--color-border)',
-                      }}
-                    >
-                      <Sliders size={14} /> Expr
-                    </button>
-                  </>
-                )}
-
-                {/* AI Motion backend badge + GPU server button */}
-                {vrmLoadState === 'loaded' && motionBackend && (
-                  <button
-                    onClick={() => remoteUrl ? handleDisconnect() : setShowWizard(v => !v)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '3px',
-                      padding: '3px 8px', borderRadius: 'var(--radius-button)',
-                      background: remoteUrl
-                        ? 'color-mix(in srgb, var(--color-success, #39c96e) 15%, transparent)'
-                        : motionBackend === 'motion_diffuse'
-                          ? 'color-mix(in srgb, var(--color-accent) 18%, transparent)'
-                          : 'var(--color-surface)',
-                      border: `1px solid ${remoteUrl ? 'var(--color-success, #39c96e)' : 'var(--color-border)'}`,
-                      fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer',
-                      color: remoteUrl ? 'var(--color-success, #39c96e)'
-                           : motionBackend === 'motion_diffuse' ? 'var(--color-accent)'
-                           : 'var(--color-text-tertiary)',
-                      letterSpacing: '0.04em',
-                    }}
-                    title={remoteUrl
-                      ? `Connected to ${remoteUrl} — click to disconnect`
-                      : 'Click to find a Windows GPU motion server on your network'}
-                  >
-                    {remoteUrl ? <Wifi size={10} /> : <Sparkles size={10} />}
-                    {remoteUrl ? 'GPU Remote'
-                     : motionBackend === 'motion_diffuse' ? 'AI Motion'
-                     : 'Proc. Motion'}
-                  </button>
-                )}
-
                 {/* Screenshot — only when model is fully loaded */}
                 {vrmLoadState === 'loaded' && (
                   <button
@@ -624,7 +622,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
                   </button>
                 )}
 
-                {/* Toggle: show/hide the control buttons without closing the panel */}
+                {/* Toggle: show/hide the side controls */}
                 <button
                   onClick={() => setControlsVisible(v => !v)}
                   className="flex items-center gap-1 px-2.5 py-1.5 text-xs"

@@ -1583,6 +1583,23 @@ def _build_prompt_sections(
     except Exception:
         pass
 
+    # 1d. Games catalogue — let characters know what they can play with the user
+    _games_text = (
+        "\n\n[MINI-GAMES YOU CAN PLAY WITH THE USER]\n"
+        "You can invite the user to play these games together via the Games panel:\n"
+        "- Trivia Quiz: 10 multiple-choice questions on any topic you choose\n"
+        "- 20 Questions: You think of something secret; the user asks yes/no questions to guess it\n"
+        "- Hangman: You pick a secret word from a category; the user guesses letters\n"
+        "- Word Association: You and the user build a word-chain together\n"
+        "- Riddles: You pose a riddle with up to 3 hints; user guesses the answer\n"
+        "- Tic-Tac-Toe: Classic 3×3 grid, you play as O (easy or hard mode)\n"
+        "- Memory Match: Flip emoji cards to find matching pairs (various themes)\n"
+        "- Chess: Full chess game, you play as Black\n"
+        "If the user wants to play, tell them to click the 🎮 Games button in the sidebar.\n"
+        "You can reference past games and scores naturally in conversation."
+    )
+    sections.append(_section("Available Games", _games_text))
+
     # 2. Diary entry (#57)
     if diary:
         label = f"[YOUR DIARY — {diary_date}]" if diary_date else "[YOUR DIARY]"

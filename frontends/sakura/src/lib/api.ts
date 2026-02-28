@@ -1,4 +1,4 @@
-import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse, VocabEntry, Universe, LoreEntry } from './types';
+import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse, VocabEntry, Universe, LoreEntry, UserFact } from './types';
 
 // ─── LM Studio Model Manager types ───────────────────────────────────────────
 
@@ -527,4 +527,36 @@ export const api = {
    */
   deleteLoreEntry: (id: number) =>
     del<{ ok: boolean; deleted: number }>(`/api/lore/${id}`),
+
+  // ── Feature C3: User Knowledge Graph ──────────────────────────────────────
+
+  /**
+   * Fetch all user facts the character has learned about the human user.
+   *
+   * @param charId - Character primary key.
+   * @returns Array of UserFact records sorted by confidence desc.
+   */
+  getUserFacts: (charId: number) =>
+    get<{ ok: boolean; facts: UserFact[] }>(`/api/characters/${charId}/user-facts`),
+
+  /**
+   * Manually add a user fact for a character.
+   *
+   * @param charId    - Character primary key.
+   * @param category  - Fact category ('identity' | 'preferences' | 'history' | 'relationship' | 'general').
+   * @param fact_text - The fact text.
+   * @returns Newly created UserFact.
+   */
+  createUserFact: (charId: number, category: string, fact_text: string) =>
+    post<{ ok: boolean; fact: UserFact }>(`/api/characters/${charId}/user-facts`, { category, fact_text }),
+
+  /**
+   * Delete a user fact.
+   *
+   * @param charId - Character primary key (scope guard).
+   * @param factId - User fact primary key.
+   * @returns {"ok": true, "deleted": factId}
+   */
+  deleteUserFact: (charId: number, factId: number) =>
+    del<{ ok: boolean; deleted: number }>(`/api/characters/${charId}/user-facts/${factId}`),
 };

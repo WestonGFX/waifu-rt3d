@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain, Settings,
-  ChevronLeft, Search, Wifi, WifiOff, Pencil, BookMarked
+  ChevronLeft, Search, Wifi, WifiOff, Pencil, BookMarked, UserCircle
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
@@ -305,6 +305,16 @@ export function Sidebar() {
         >
           <BookMarked size={16} />
           {!sidebarCollapsed && <span className="text-[10px] font-medium">Lore</span>}
+        </button>
+        <button
+          onClick={() => openOverlay('userknowledge')}
+          className="sidebar-tool-btn flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors flex-1"
+          style={{ color: 'var(--color-text-tertiary)' }}
+          title="About Me — what the character knows about you"
+          aria-label="About Me"
+        >
+          <UserCircle size={16} />
+          {!sidebarCollapsed && <span className="text-[10px] font-medium">About Me</span>}
         </button>
         <button
           onClick={() => openOverlay('settings')}

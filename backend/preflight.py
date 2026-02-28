@@ -1470,15 +1470,63 @@ def migrate_to_v26(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v27(con: sqlite3.Connection) -> bool:
+    """Apply schema v27 migration (Feature C3: Companion User Knowledge Graph).
+
+    Creates the ``user_facts`` table which stores structured facts the character
+    has learned about the user — their name, preferences, life events, and
+    running jokes.  Facts are either auto-extracted by the LLM (source='auto')
+    or manually added by the user (source='manual').
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v27.
+
+    Example:
+        >>> if migrate_to_v27(con):
+        ...     print("user_facts table created")
+    """
+    tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "user_facts" in tables:
+        cur = con.cursor()
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (27)")
+        con.commit()
+        return False
+    try:
+        logger.info("Applying schema v27 migration (Feature C3: user knowledge graph)...")
+        con.execute("""
+            CREATE TABLE user_facts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                category TEXT NOT NULL DEFAULT 'general',
+                fact_text TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'auto',
+                confidence REAL NOT NULL DEFAULT 0.8,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        con.execute("CREATE INDEX IF NOT EXISTS idx_user_facts_char ON user_facts(character_id)")
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (27)")
+        con.commit()
+        logger.info("✅ Schema v27 migration complete (user_facts table)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v27 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
     Migration Paths:
-        - v0 (empty) → v4 → ... → v25
-        - v3 → v4 → ... → v25
-        - v11 → v12 → v13 → v25
-        - v21 → v22 → v23 → v24 → v25
-        - v25 → no-op (already current)
+        - v0 (empty) → v4 → ... → v26
+        - v3 → v4 → ... → v26
+        - v11 → v12 → v13 → v26
+        - v21 → v22 → v23 → v24 → v25 → v26
+        - v26 → no-op (already current)
 
     The function is idempotent - safe to run multiple times.
     Will log all migration steps and verify final state.
@@ -1686,21 +1734,28 @@ def ensure_db():
             if migrate_to_v26(con):
                 version = 26
 
+        # Upgrade from v26 to v27 (Feature C3: User Knowledge Graph)
+        if version < 27:
+            logger.info("Upgrading database schema from v26 to v27...")
+            logger.info("  - Creating user_facts table (Feature C3: user knowledge graph)")
+            if migrate_to_v27(con):
+                version = 27
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 26:
-            raise RuntimeError(f"Database initialization failed: Expected v26, got v{final_version}")
+        if final_version < 27:
+            raise RuntimeError(f"Database initialization failed: Expected v27, got v{final_version}")
 
-        if final_version > 26:
-            logger.warning(f"Database is newer than application (v{final_version} > v26). Some features might be unused.")
+        if final_version > 27:
+            logger.warning(f"Database is newer than application (v{final_version} > v27). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v26 adds model capability cache)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v27 adds user knowledge graph)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

@@ -19,6 +19,7 @@ import { SessionReplayModal } from './components/SessionReplayModal';
 import { CharacterRelationshipWeb } from './components/CharacterRelationshipWeb';
 import { UniversePanel } from './components/UniversePanel';
 import { LorePanel } from './components/LorePanel';
+import { UserKnowledgePanel } from './components/UserKnowledgePanel';
 import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { ShortcutHelpModal } from './components/ShortcutHelpModal';
@@ -233,6 +234,9 @@ export function App() {
 
       {/* Overlay drawers — Feature A6 Lorebook / World Info */}
       <LorePanel />
+
+      {/* Overlay drawers — Feature C3 User Knowledge Graph */}
+      {activeOverlay === 'userknowledge' && <UserKnowledgePanel />}
 
       {/* Floating (non-overlay) elements — Phase 2 */}
       <SoundscapePlayer />

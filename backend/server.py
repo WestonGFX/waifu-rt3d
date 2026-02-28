@@ -1519,6 +1519,23 @@ def _build_prompt_sections(
         except Exception as _mood_err:
             logger.warning(f"[MoodA4] Failed to generate mood prefix: {_mood_err}")
 
+    # 1c. Feature C3: User knowledge graph — inject top user facts
+    try:
+        _fact_rows = cur.execute(
+            """SELECT category, fact_text FROM user_facts
+               WHERE character_id = ?
+               ORDER BY confidence DESC, created_at DESC
+               LIMIT 10""",
+            (char_id,),
+        ).fetchall()
+        if _fact_rows:
+            _facts_text = "\n\n[WHAT YOU KNOW ABOUT THE USER]\n"
+            for _cat, _txt in _fact_rows:
+                _facts_text += f"- [{_cat}] {_txt}\n"
+            sections.append(_section("User Facts", _facts_text))
+    except Exception:
+        pass
+
     # 2. Diary entry (#57)
     if diary:
         label = f"[YOUR DIARY — {diary_date}]" if diary_date else "[YOUR DIARY]"
@@ -2863,6 +2880,30 @@ async def chat_stream(req: Request):
                     })
                 except Exception as _wh_err:
                     logger.warning(f"Webhook fire failed (non-critical): {_wh_err}")
+
+                # Feature C3: async fact extraction (fire-and-forget, never blocks chat)
+                try:
+                    async def _extract_user_facts_bg(
+                        _text: str, _cid: int, _adapter, _cfg: dict
+                    ) -> None:
+                        """Extract user facts from the exchange in the background."""
+                        try:
+                            from backend.knowledge.extractor import extract_facts as _ef
+                            _conn2 = db()
+                            try:
+                                n = _ef(_text, _cid, _conn2, _adapter, _cfg)
+                                if n:
+                                    logger.debug("[KG-C3] Extracted %d new user facts for char_id=%d", n, _cid)
+                            finally:
+                                _conn2.close()
+                        except Exception as _fe:
+                            logger.debug("[KG-C3] Fact extraction skipped: %s", _fe)
+
+                    asyncio.create_task(
+                        _extract_user_facts_bg(text, char_id, adapter, cfg)
+                    )
+                except Exception:
+                    pass
 
             except Exception as e:
                 logger.error(f"Agentic stream error: {e}", exc_info=True)
@@ -6699,6 +6740,134 @@ def delete_lore_entry(entry_id: int):
         conn.close()
 
     return {"ok": True, "deleted": entry_id}
+
+
+@app.get("/api/characters/{char_id}/user-facts")
+def get_user_facts(char_id: int):
+    """List all user facts for a character.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        {"ok": True, "facts": [{id, category, fact_text, source, confidence, created_at}, ...]}
+
+    Example:
+        >>> GET /api/characters/1/user-facts
+        {"ok": true, "facts": [{"id": 1, "category": "identity", "fact_text": "name is Alex", ...}]}
+    """
+    conn = db()
+    try:
+        rows = conn.execute(
+            """SELECT id, category, fact_text, source, confidence, created_at
+               FROM user_facts WHERE character_id = ?
+               ORDER BY confidence DESC, created_at DESC""",
+            (char_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return {
+        "ok": True,
+        "facts": [
+            {
+                "id": r[0],
+                "category": r[1],
+                "fact_text": r[2],
+                "source": r[3],
+                "confidence": r[4],
+                "created_at": r[5],
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.post("/api/characters/{char_id}/user-facts")
+async def create_user_fact(char_id: int, req: Request):
+    """Manually add a user fact for a character.
+
+    Args:
+        char_id: Character ID.
+        req: JSON body with keys:
+            - category (str): One of identity/preferences/history/relationship/general.
+            - fact_text (str): The fact to store.
+            - confidence (float, optional): 0.0–1.0, defaults to 1.0 for manual entries.
+
+    Returns:
+        {"ok": True, "fact": {id, category, fact_text, source, confidence, created_at}}
+
+    Example:
+        >>> POST /api/characters/1/user-facts
+        >>> Body: {"category": "identity", "fact_text": "User's name is Alex"}
+        {"ok": true, "fact": {"id": 5, ...}}
+    """
+    body = await req.json()
+    category = str(body.get("category", "general")).lower()
+    valid_cats = {"identity", "preferences", "history", "relationship", "general"}
+    if category not in valid_cats:
+        category = "general"
+    fact_text = str(body.get("fact_text", "")).strip()
+    if not fact_text:
+        raise HTTPException(400, "fact_text is required")
+    confidence = float(body.get("confidence", 1.0))
+
+    conn = db()
+    try:
+        cur = conn.execute(
+            "INSERT INTO user_facts (character_id, category, fact_text, source, confidence) VALUES (?, ?, ?, 'manual', ?)",
+            (char_id, category, fact_text, confidence),
+        )
+        conn.commit()
+        fact_id = cur.lastrowid
+        created_at = conn.execute(
+            "SELECT created_at FROM user_facts WHERE id = ?", (fact_id,)
+        ).fetchone()[0]
+    finally:
+        conn.close()
+
+    logger.info("[KG-C3] Manual fact id=%s added for char_id=%s", fact_id, char_id)
+    return {
+        "ok": True,
+        "fact": {
+            "id": fact_id,
+            "category": category,
+            "fact_text": fact_text,
+            "source": "manual",
+            "confidence": confidence,
+            "created_at": created_at,
+        },
+    }
+
+
+@app.delete("/api/characters/{char_id}/user-facts/{fact_id}")
+def delete_user_fact(char_id: int, fact_id: int):
+    """Delete a user fact.
+
+    Args:
+        char_id: Character ID (used for access scoping).
+        fact_id: User fact ID.
+
+    Returns:
+        {"ok": True, "deleted": fact_id}
+
+    Raises:
+        HTTPException 404: If the fact does not exist for this character.
+    """
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT id FROM user_facts WHERE id = ? AND character_id = ?",
+            (fact_id, char_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "User fact not found")
+        conn.execute("DELETE FROM user_facts WHERE id = ?", (fact_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"ok": True, "deleted": fact_id}
 
 
 @app.get("/api/sessions/{session_id}/emotions")

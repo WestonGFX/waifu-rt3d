@@ -96,6 +96,22 @@ export interface Universe {
  * Attached to a character and injected into the LLM context when
  * trigger keywords appear in recent conversation messages.
  */
+/** Feature C3: A user fact learned or entered about the human user. */
+export interface UserFact {
+  id: number;
+  /** FK to the owning character (each char has its own user profile). */
+  character_id: number;
+  /** identity | preferences | history | relationship | general */
+  category: 'identity' | 'preferences' | 'history' | 'relationship' | 'general';
+  /** The fact as a short plain-text string. */
+  fact_text: string;
+  /** 'auto' = AI-extracted, 'manual' = user-entered */
+  source: 'auto' | 'manual';
+  /** 0.0–1.0 confidence; manual entries default to 1.0 */
+  confidence: number;
+  created_at: string;
+}
+
 export interface LoreEntry {
   /** Primary key. */
   id: number;

@@ -18,6 +18,7 @@ import { CharacterPortfolioCard } from './components/CharacterPortfolioCard';
 import { SessionReplayModal } from './components/SessionReplayModal';
 import { CharacterRelationshipWeb } from './components/CharacterRelationshipWeb';
 import { UniversePanel } from './components/UniversePanel';
+import { LorePanel } from './components/LorePanel';
 import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { ShortcutHelpModal } from './components/ShortcutHelpModal';
@@ -229,6 +230,9 @@ export function App() {
 
       {/* Overlay drawers — Feature #23 Universe Builder */}
       <UniversePanel />
+
+      {/* Overlay drawers — Feature A6 Lorebook / World Info */}
+      <LorePanel />
 
       {/* Floating (non-overlay) elements — Phase 2 */}
       <SoundscapePlayer />

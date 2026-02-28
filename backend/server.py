@@ -389,6 +389,9 @@ async def _ensure_lms_model(requested_model: str) -> None:
             _active_lms_model = requested_model
 
 
+# Feature A6: Lorebook / World Info — keyword-triggered context injection
+from backend.lore.matcher import match_lore
+
 # Vocabulary manager — loaded at startup, provides vocab context for LLM
 from backend.vocab.manager import VocabManager
 vocab_manager = VocabManager()
@@ -1611,6 +1614,83 @@ def _build_prompt_sections(
     return sections
 
 
+def _inject_lore_entries(
+    messages: list[dict],
+    conn: sqlite3.Connection,
+    char_id: int,
+    hist: list[dict],
+) -> None:
+    """Inject matching lorebook entries into the messages list in-place.
+
+    Scans the last 6 messages from ``hist`` for keyword matches against the
+    character's lore entries, then groups matches by injection position and
+    inserts ``[World Info]`` blocks at the appropriate locations in
+    ``messages``.
+
+    Injection positions:
+        - ``before_system_prompt``: system message inserted at index 0
+        - ``after_system_prompt``: system message inserted at index 1
+        - ``before_last_message``: system message inserted before the last message
+        - ``after_last_2_messages``: system message inserted before the last 2 messages
+
+    Args:
+        messages: The LLM messages list (system + history), modified in-place.
+        conn: Active SQLite connection for lore entry lookup.
+        char_id: Character whose lore entries to search.
+        hist: Chat history messages (used to extract recent text for matching).
+    """
+    # Build recent text from last 6 messages of history
+    recent_msgs = hist[-6:] if len(hist) > 6 else hist
+    recent_text = " ".join(m.get("content", "") for m in recent_msgs)
+    if not recent_text.strip():
+        return
+
+    try:
+        matched = match_lore(conn, char_id, recent_text)
+    except Exception as _lore_err:
+        logger.warning(f"[LoreA6] match_lore failed for char_id={char_id}: {_lore_err}")
+        return
+
+    if not matched:
+        return
+
+    # Group by injection_position
+    groups: dict[str, list] = {}
+    for entry in matched:
+        groups.setdefault(entry.injection_position, []).append(entry)
+
+    for position, entries in groups.items():
+        # Build the lore block
+        lines = ["[World Info]"]
+        for e in entries:
+            lines.append(f"=== {e.title} ===")
+            lines.append(e.content)
+            lines.append("")
+        lines.append("[/World Info]")
+        block = "\n".join(lines)
+
+        lore_msg = {"role": "system", "content": block}
+
+        if position == "before_system_prompt":
+            messages.insert(0, lore_msg)
+        elif position == "after_system_prompt":
+            # Insert after the first system message (index 1)
+            messages.insert(min(1, len(messages)), lore_msg)
+        elif position == "before_last_message":
+            # Insert just before the last message
+            idx = max(0, len(messages) - 1)
+            messages.insert(idx, lore_msg)
+        elif position == "after_last_2_messages":
+            # Insert before the last 2 messages
+            idx = max(0, len(messages) - 2)
+            messages.insert(idx, lore_msg)
+        else:
+            # Default: after system prompt
+            messages.insert(min(1, len(messages)), lore_msg)
+
+    logger.debug(f"[LoreA6] Injected {len(matched)} lore entries for char_id={char_id}")
+
+
 def _context_budget_summary(
     sections: list[dict],
     hist: list[dict],
@@ -1877,6 +1957,9 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             _maybe_auto_compress(session_id, total_active, max_history)
 
         messages = [{"role": "system", "content": system_content}] + hist
+
+        # ── Feature A6: Lorebook / World Info injection (non-streaming) ──
+        _inject_lore_entries(messages, con, char_id, hist)
 
         try:
             from backend.llm.registry import get_client
@@ -2594,6 +2677,9 @@ async def chat_stream(req: Request):
         _maybe_auto_compress(session_id, total_active, max_history)
 
     llm_messages = [{"role": "system", "content": system_content}] + hist
+
+    # ── Feature A6: Lorebook / World Info injection (streaming) ──
+    _inject_lore_entries(llm_messages, con, char_id, hist)
 
     from backend.llm.registry import get_client
     from backend.llm.router import get_router
@@ -6386,6 +6472,233 @@ async def set_day_off(char_id: int, req: Request):
 
     logger.info("[DayOff] char_id=%s day_off=%s", char_id, enabled)
     return {"ok": True, "char_id": char_id, "day_off": enabled}
+
+
+# ── Feature A6 — Lorebook / World Info CRUD ───────────────────────────────────
+
+@app.get("/api/characters/{char_id}/lore")
+def list_lore_entries(char_id: int):
+    """List all lore entries for a character.
+
+    Returns every lore entry (enabled and disabled) belonging to the character,
+    ordered by priority descending then by id ascending.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        {"ok": True, "entries": [LoreEntry, ...]}
+
+    Example:
+        >>> GET /api/characters/3/lore
+        {"ok": true, "entries": [{...}, ...]}
+    """
+    conn = db()
+    try:
+        rows = conn.execute(
+            "SELECT id, character_id, title, content, keywords, "
+            "injection_position, priority, enabled, created_at "
+            "FROM lore_entries WHERE character_id = ? "
+            "ORDER BY priority DESC, id ASC",
+            (char_id,)
+        ).fetchall()
+        entries = []
+        for r in rows:
+            try:
+                kws = json.loads(r[4]) if r[4] else []
+            except (json.JSONDecodeError, TypeError):
+                kws = []
+            entries.append({
+                "id": r[0],
+                "character_id": r[1],
+                "title": r[2],
+                "content": r[3],
+                "keywords": kws,
+                "injection_position": r[5],
+                "priority": r[6],
+                "enabled": bool(r[7]),
+                "created_at": r[8],
+            })
+        return {"ok": True, "entries": entries}
+    finally:
+        conn.close()
+
+
+@app.post("/api/characters/{char_id}/lore")
+async def create_lore_entry(char_id: int, req: Request):
+    """Create a new lore entry for a character.
+
+    Args:
+        char_id: Character ID to attach the entry to.
+        req: JSON body with fields:
+            - title (str): Entry title.
+            - content (str): Lore text to inject.
+            - keywords (list[str]): Trigger keywords.
+            - injection_position (str): Where to inject (default ``after_system_prompt``).
+            - priority (int): Ordering priority (default 0).
+            - enabled (bool): Whether the entry is active (default True).
+
+    Returns:
+        {"ok": True, "entry": {id, character_id, title, ...}}
+
+    Raises:
+        HTTPException 400: If body is missing required fields.
+
+    Example:
+        >>> POST /api/characters/3/lore
+        >>> Body: {"title": "Magic System", "content": "...", "keywords": ["magic", "spell"]}
+        {"ok": true, "entry": {"id": 1, ...}}
+    """
+    body = await req.json()
+    title = body.get("title", "")
+    content = body.get("content", "")
+    keywords = body.get("keywords", [])
+    injection_position = body.get("injection_position", "after_system_prompt")
+    priority = int(body.get("priority", 0))
+    enabled = 1 if body.get("enabled", True) else 0
+
+    if not isinstance(keywords, list):
+        keywords = []
+    keywords_json = json.dumps(keywords)
+
+    valid_positions = {
+        "before_system_prompt", "after_system_prompt",
+        "before_last_message", "after_last_2_messages",
+    }
+    if injection_position not in valid_positions:
+        injection_position = "after_system_prompt"
+
+    conn = db()
+    try:
+        cur = conn.execute(
+            "INSERT INTO lore_entries (character_id, title, content, keywords, "
+            "injection_position, priority, enabled) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (char_id, title, content, keywords_json, injection_position, priority, enabled),
+        )
+        conn.commit()
+        entry_id = cur.lastrowid
+    finally:
+        conn.close()
+
+    logger.info("[LoreA6] Created lore entry id=%s for char_id=%s title=%r", entry_id, char_id, title)
+    return {
+        "ok": True,
+        "entry": {
+            "id": entry_id,
+            "character_id": char_id,
+            "title": title,
+            "content": content,
+            "keywords": keywords,
+            "injection_position": injection_position,
+            "priority": priority,
+            "enabled": bool(enabled),
+        },
+    }
+
+
+@app.put("/api/lore/{entry_id}")
+async def update_lore_entry(entry_id: int, req: Request):
+    """Update an existing lore entry.
+
+    All fields in the body are optional; only provided fields are updated.
+
+    Args:
+        entry_id: Lore entry ID.
+        req: JSON body with any subset of lore entry fields.
+
+    Returns:
+        {"ok": True, "entry_id": int}
+
+    Raises:
+        HTTPException 404: If the entry does not exist.
+
+    Example:
+        >>> PUT /api/lore/5
+        >>> Body: {"title": "Updated Title", "enabled": false}
+        {"ok": true, "entry_id": 5}
+    """
+    body = await req.json()
+
+    conn = db()
+    try:
+        row = conn.execute("SELECT id FROM lore_entries WHERE id = ?", (entry_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Lore entry not found")
+
+        updates: list[str] = []
+        params: list = []
+
+        if "title" in body:
+            updates.append("title = ?")
+            params.append(body["title"])
+        if "content" in body:
+            updates.append("content = ?")
+            params.append(body["content"])
+        if "keywords" in body:
+            kws = body["keywords"]
+            if not isinstance(kws, list):
+                kws = []
+            updates.append("keywords = ?")
+            params.append(json.dumps(kws))
+        if "injection_position" in body:
+            valid_positions = {
+                "before_system_prompt", "after_system_prompt",
+                "before_last_message", "after_last_2_messages",
+            }
+            pos = body["injection_position"]
+            if pos not in valid_positions:
+                pos = "after_system_prompt"
+            updates.append("injection_position = ?")
+            params.append(pos)
+        if "priority" in body:
+            updates.append("priority = ?")
+            params.append(int(body["priority"]))
+        if "enabled" in body:
+            updates.append("enabled = ?")
+            params.append(1 if body["enabled"] else 0)
+
+        if updates:
+            params.append(entry_id)
+            conn.execute(
+                f"UPDATE lore_entries SET {', '.join(updates)} WHERE id = ?",
+                params,
+            )
+            conn.commit()
+    finally:
+        conn.close()
+
+    return {"ok": True, "entry_id": entry_id}
+
+
+@app.delete("/api/lore/{entry_id}")
+def delete_lore_entry(entry_id: int):
+    """Delete a lore entry.
+
+    Args:
+        entry_id: Lore entry ID.
+
+    Returns:
+        {"ok": True, "deleted": int}
+
+    Raises:
+        HTTPException 404: If the entry does not exist.
+
+    Example:
+        >>> DELETE /api/lore/5
+        {"ok": true, "deleted": 5}
+    """
+    conn = db()
+    try:
+        row = conn.execute("SELECT id FROM lore_entries WHERE id = ?", (entry_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Lore entry not found")
+
+        conn.execute("DELETE FROM lore_entries WHERE id = ?", (entry_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"ok": True, "deleted": entry_id}
 
 
 @app.get("/api/sessions/{session_id}/emotions")

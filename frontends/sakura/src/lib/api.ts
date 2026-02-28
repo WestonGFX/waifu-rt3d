@@ -1,4 +1,4 @@
-import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse, VocabEntry, Universe } from './types';
+import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse, VocabEntry, Universe, LoreEntry } from './types';
 
 // ─── LM Studio Model Manager types ───────────────────────────────────────────
 
@@ -466,4 +466,44 @@ export const api = {
    */
   removeCharacterFromUniverse: (charId: number) =>
     del<{ ok: boolean }>(`/api/universes/characters/${charId}`),
+
+  // ── Feature A6: Lorebook / World Info ──────────────────────────────
+
+  /**
+   * List all lore entries for a character.
+   *
+   * @param charId - Character primary key.
+   * @returns Array of LoreEntry objects ordered by priority DESC.
+   */
+  getLoreEntries: (charId: number) =>
+    get<{ ok: boolean; entries: LoreEntry[] }>(`/api/characters/${charId}/lore`),
+
+  /**
+   * Create a new lore entry for a character.
+   *
+   * @param charId - Character primary key.
+   * @param data   - Partial LoreEntry fields (title, content, keywords, etc.).
+   * @returns The newly created entry.
+   */
+  createLoreEntry: (charId: number, data: Partial<LoreEntry>) =>
+    post<{ ok: boolean; entry: LoreEntry }>(`/api/characters/${charId}/lore`, data),
+
+  /**
+   * Update an existing lore entry.
+   *
+   * @param id   - Lore entry primary key.
+   * @param data - Partial LoreEntry fields to update.
+   * @returns {"ok": true, "entry_id": number}
+   */
+  updateLoreEntry: (id: number, data: Partial<LoreEntry>) =>
+    put<{ ok: boolean; entry_id: number }>(`/api/lore/${id}`, data),
+
+  /**
+   * Delete a lore entry.
+   *
+   * @param id - Lore entry primary key.
+   * @returns {"ok": true, "deleted": number}
+   */
+  deleteLoreEntry: (id: number) =>
+    del<{ ok: boolean; deleted: number }>(`/api/lore/${id}`),
 };

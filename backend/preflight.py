@@ -1375,15 +1375,69 @@ def migrate_to_v24(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v25(con: sqlite3.Connection) -> bool:
+    """Apply schema v25 migration (Feature A6: Lorebook / World Info Injection).
+
+    Creates the ``lore_entries`` table for keyword-triggered context injection.
+    Each entry belongs to a character and contains trigger keywords (JSON array),
+    content text, an injection position, and a priority for ordering.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v25.
+
+    Example:
+        >>> if migrate_to_v25(con):
+        ...     print("Migrated to v25")
+    """
+    tables = {row[0] for row in con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )}
+    already_done = "lore_entries" in tables
+    if already_done:
+        cur = con.cursor()
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (25)")
+        con.commit()
+        return False
+
+    try:
+        logger.info("Applying schema v25 migration (Feature A6: Lorebook / World Info)...")
+        cur = con.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS lore_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                title TEXT NOT NULL DEFAULT '',
+                content TEXT NOT NULL DEFAULT '',
+                keywords TEXT NOT NULL DEFAULT '[]',
+                injection_position TEXT NOT NULL DEFAULT 'after_system_prompt',
+                priority INTEGER NOT NULL DEFAULT 0,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        logger.info("  - Created lore_entries table (Feature A6)")
+        cur.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (25)")
+        con.commit()
+        logger.info("Schema v25 migration complete (lore_entries table)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v25 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
     Migration Paths:
-        - v0 (empty) → v4 → … → v24
-        - v3 → v4 → … → v23
-        - v11 → v12 → v13 → v23
-        - v21 → v22 → v23
-        - v23 → no-op (already current)
+        - v0 (empty) → v4 → ... → v25
+        - v3 → v4 → ... → v25
+        - v11 → v12 → v13 → v25
+        - v21 → v22 → v23 → v24 → v25
+        - v25 → no-op (already current)
 
     The function is idempotent - safe to run multiple times.
     Will log all migration steps and verify final state.
@@ -1578,21 +1632,28 @@ def ensure_db():
             if migrate_to_v24(con):
                 version = 24
 
+        # Upgrade from v24 to v25 (Feature A6: Lorebook / World Info Injection)
+        if version < 25:
+            logger.info("Upgrading database schema from v24 to v25...")
+            logger.info("  - Creating lore_entries table (Feature A6: Lorebook)")
+            if migrate_to_v25(con):
+                version = 25
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 24:
-            raise RuntimeError(f"Database initialization failed: Expected v24, got v{final_version}")
+        if final_version < 25:
+            raise RuntimeError(f"Database initialization failed: Expected v25, got v{final_version}")
 
-        if final_version > 24:
-            logger.warning(f"Database is newer than application (v{final_version} > v24). Some features might be unused.")
+        if final_version > 25:
+            logger.warning(f"Database is newer than application (v{final_version} > v25). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v23 adds Character Mood Engine)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v25 adds Lorebook/World Info)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

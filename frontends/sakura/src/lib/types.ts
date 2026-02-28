@@ -91,6 +91,32 @@ export interface Universe {
   character_count: number;
 }
 
+/**
+ * Feature A6: A single lore/world-info entry.
+ * Attached to a character and injected into the LLM context when
+ * trigger keywords appear in recent conversation messages.
+ */
+export interface LoreEntry {
+  /** Primary key. */
+  id: number;
+  /** FK to the owning character. */
+  character_id: number;
+  /** Short descriptive title for the entry. */
+  title: string;
+  /** The lore text injected into the LLM context. */
+  content: string;
+  /** JSON array of trigger keywords. */
+  keywords: string[];
+  /** Where in the message list to inject this entry. */
+  injection_position: 'before_system_prompt' | 'after_system_prompt' | 'before_last_message' | 'after_last_2_messages';
+  /** Higher priority entries are injected first. */
+  priority: number;
+  /** Whether this entry is active. */
+  enabled: boolean;
+  /** ISO datetime string of when the entry was created. */
+  created_at?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: MessageRole;

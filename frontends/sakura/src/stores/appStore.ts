@@ -24,7 +24,7 @@ type Overlay =
   | 'summary' | 'schedule' | 'compression'
   | 'search' | 'scenarios' | 'moodboard' | 'arena'
   | 'portfolio' | 'replay' | 'relweb'
-  | 'universes'
+  | 'universes' | 'lore'
   | null;
 
 /**

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain, Settings,
-  ChevronLeft, Search, Wifi, WifiOff, Pencil
+  ChevronLeft, Search, Wifi, WifiOff, Pencil, BookMarked
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
@@ -295,6 +295,16 @@ export function Sidebar() {
         >
           <Brain size={16} />
           {!sidebarCollapsed && <span className="text-[10px] font-medium">Memory</span>}
+        </button>
+        <button
+          onClick={() => openOverlay('lore')}
+          className="sidebar-tool-btn flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors flex-1"
+          style={{ color: 'var(--color-text-tertiary)' }}
+          title="Lorebook"
+          aria-label="Lorebook"
+        >
+          <BookMarked size={16} />
+          {!sidebarCollapsed && <span className="text-[10px] font-medium">Lore</span>}
         </button>
         <button
           onClick={() => openOverlay('settings')}

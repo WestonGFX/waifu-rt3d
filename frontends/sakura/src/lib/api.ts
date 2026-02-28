@@ -293,6 +293,17 @@ export const api = {
   generatePortrait: (body: { prompt: string; character_id?: number; width?: number; height?: number; steps?: number }) =>
     post<{ ok: boolean; url?: string; filename?: string; error?: string }>('/api/image-gen/portrait', body),
 
+  /** Feature A5: Generate full expression portrait set for a character (batch). */
+  generateExpressions: (charId: number, basePrompt?: string) =>
+    post<{ ok: boolean; portraits?: Record<string, string>; errors?: string[] }>(
+      `/api/image-gen/expressions/${charId}`,
+      basePrompt ? { base_prompt: basePrompt } : {}
+    ),
+
+  /** Feature A5: Get character's current expression portrait map. */
+  getExprPortraits: (charId: number) =>
+    get<{ ok: boolean; expr_portraits: Record<string, string> | null }>(`/api/characters/${charId}/expr-portraits`),
+
   // Stats (LLM status, uptime, etc.)
   getStats: () => get<Record<string, unknown>>('/api/stats'),
 

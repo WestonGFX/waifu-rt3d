@@ -8430,6 +8430,30 @@ async def generate_expression_pack(char_id: int, req: Request):
     }
 
 
+@app.get("/api/characters/{char_id}/expr-portraits")
+def get_expr_portraits(char_id: int):
+    """Return the current expression portrait URL map for a character.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        {"ok": True, "expr_portraits": {emotion: url, ...}} or {"ok": True, "expr_portraits": null}
+    """
+    import json as _json
+    conn = db()
+    row = conn.execute("SELECT expr_portraits FROM characters WHERE id = ?", (char_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "Character not found")
+    portraits = None
+    if row[0]:
+        try:
+            portraits = _json.loads(row[0])
+        except Exception:
+            portraits = None
+    return {"ok": True, "expr_portraits": portraits}
+
+
 @app.post("/api/video-gen/background")
 async def generate_video_background(req: Request):
     """Start an asynchronous video background generation job.

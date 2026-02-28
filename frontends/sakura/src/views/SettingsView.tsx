@@ -14,6 +14,7 @@ import { VoicePicker } from '../components/VoicePicker';
 import { TTSModelsPanel } from '../components/TTSModelsPanel';
 import { ModelManagerPanel } from '../components/ModelManagerPanel';
 import { api } from '../lib/api';
+import { ExpressionPortraitGrid } from '../components/ExpressionPortraitGrid';
 
 /* ─── Helper: deep-get nested config key like "llm.model" ──────────── */
 function cfgGet(config: Record<string, unknown>, key: string, fallback: unknown = ''): unknown {
@@ -567,6 +568,14 @@ function CharacterTab() {
                 className="w-20 h-20 rounded-full object-cover"
                 style={{ border: '2px solid var(--color-accent)' }} />
             </div>
+          )}
+
+          {/* Feature A5: Expression portrait generator */}
+          {editChar?.id && (
+            <ExpressionPortraitGrid
+              charId={editChar.id}
+              charName={editChar.name || 'Character'}
+            />
           )}
 
           <SettingField label="VRM Model" description="3D model file for the viewport."

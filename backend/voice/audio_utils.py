@@ -49,6 +49,52 @@ def webm_to_pcm(webm_bytes: bytes, sample_rate: int = TARGET_SAMPLE_RATE) -> byt
         >>> pcm = webm_to_pcm(webm_data)
         >>> len(pcm)  # ~32000 bytes per second of audio at 16kHz
     """
+    return _run_ffmpeg_pcm(webm_bytes, sample_rate)
+
+
+def webm_to_pcm_batch(chunks: list[bytes], sample_rate: int = TARGET_SAMPLE_RATE) -> bytes:
+    """
+    Convert multiple accumulated WebM/Opus chunks to PCM in a single ffmpeg call.
+
+    Instead of spawning one ffmpeg process per 100ms chunk, this concatenates
+    the raw WebM bytes and runs a single conversion. This reduces process
+    overhead from ~10 spawns/sec/user to 1 spawn per utterance.
+
+    Args:
+        chunks: List of WebM container byte chunks from the browser.
+        sample_rate: Target sample rate (default 16000 for ASR).
+
+    Returns:
+        Raw PCM bytes (s16le, mono, at target sample rate).
+
+    Raises:
+        RuntimeError: If ffmpeg is not found or conversion fails.
+
+    Example:
+        >>> pcm = webm_to_pcm_batch([chunk1, chunk2, chunk3])
+        >>> len(pcm) > 0
+        True
+    """
+    if not chunks:
+        return b""
+    combined = b"".join(chunks)
+    return _run_ffmpeg_pcm(combined, sample_rate)
+
+
+def _run_ffmpeg_pcm(input_bytes: bytes, sample_rate: int) -> bytes:
+    """
+    Internal helper: pipe bytes through ffmpeg → s16le PCM.
+
+    Args:
+        input_bytes: Audio container bytes (WebM/Opus, WAV, etc.).
+        sample_rate: Target sample rate.
+
+    Returns:
+        Raw PCM bytes.
+
+    Raises:
+        RuntimeError: If ffmpeg is not found or conversion fails.
+    """
     try:
         result = subprocess.run(
             [
@@ -60,7 +106,7 @@ def webm_to_pcm(webm_bytes: bytes, sample_rate: int = TARGET_SAMPLE_RATE) -> byt
                 "-ac", "1",           # Mono
                 "pipe:1",             # Write to stdout
             ],
-            input=webm_bytes,
+            input=input_bytes,
             capture_output=True,
             timeout=10,
         )

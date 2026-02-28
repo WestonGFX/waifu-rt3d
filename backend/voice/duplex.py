@@ -27,12 +27,16 @@ import json
 import logging
 import time
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from starlette.websockets import WebSocket
 
+if TYPE_CHECKING:
+    import httpx
+
 from backend.voice.audio_utils import (
     webm_to_pcm,
+    webm_to_pcm_batch,
     pcm_to_wav,
     compute_rms_energy,
 )
@@ -56,6 +60,11 @@ MAX_UTTERANCE_SECONDS = 30
 
 MIN_UTTERANCE_BYTES = 3200
 """Minimum PCM bytes (~100ms at 16kHz mono) to bother sending to ASR."""
+
+
+def _clamp(value: float, lo: float, hi: float) -> float:
+    """Clamp a numeric value to [lo, hi]."""
+    return max(lo, min(hi, value))
 
 
 class SessionState(str, Enum):
@@ -104,14 +113,22 @@ class VoiceDuplexSession:
 
         self.state = SessionState.IDLE
         self._audio_buffer = bytearray()
+        self._webm_chunks: list[bytes] = []
         self._last_voice_time = 0.0
         self._speaking_task: Optional[asyncio.Task] = None
         self._interrupted = False
+        self._http_client: Optional["httpx.AsyncClient"] = None
 
         # Configurable parameters (can be updated via control messages)
         voice_cfg = cfg.get("voice", {})
-        self.silence_timeout_ms = voice_cfg.get("silence_timeout_ms", DEFAULT_SILENCE_TIMEOUT_MS)
-        self.vad_threshold = voice_cfg.get("vad_threshold", DEFAULT_VAD_THRESHOLD)
+        self.silence_timeout_ms = _clamp(
+            voice_cfg.get("silence_timeout_ms", DEFAULT_SILENCE_TIMEOUT_MS),
+            200, 10000,
+        )
+        self.vad_threshold = _clamp(
+            voice_cfg.get("vad_threshold", DEFAULT_VAD_THRESHOLD),
+            0.001, 0.5,
+        )
 
     async def run(self) -> None:
         """
@@ -120,8 +137,12 @@ class VoiceDuplexSession:
         Dispatches binary frames to audio processing and text frames
         to control message handling.
         """
+        import httpx
+
         await self._set_state(SessionState.IDLE)
         logger.info(f"[Voice] Session started (session={self.session_id}, char={self.char_id})")
+
+        self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(10, read=120))
 
         try:
             while True:
@@ -141,6 +162,9 @@ class VoiceDuplexSession:
                 await self._send_json({"type": "error", "message": str(e)})
         finally:
             self._cancel_speaking()
+            if self._http_client:
+                await self._http_client.aclose()
+                self._http_client = None
             logger.info(f"[Voice] Session ended (session={self.session_id})")
 
     # ── Audio handling ───────────────────────────────────────────────────────────
@@ -149,14 +173,15 @@ class VoiceDuplexSession:
         """
         Process an incoming audio chunk from the client.
 
-        Converts WebM/Opus to PCM, runs energy-based VAD, and manages
-        the listening/silence-detection state machine.
+        Buffers raw WebM chunks and converts a small sample to PCM for
+        energy-based VAD. Full conversion happens in batch at utterance
+        end (_process_utterance) to avoid per-chunk ffmpeg spawns.
 
         Args:
             webm_chunk: Raw WebM/Opus bytes from the browser's MediaRecorder.
         """
         try:
-            pcm = await asyncio.get_event_loop().run_in_executor(
+            pcm = await asyncio.get_running_loop().run_in_executor(
                 None, webm_to_pcm, webm_chunk
             )
         except RuntimeError as e:
@@ -180,22 +205,27 @@ class VoiceDuplexSession:
             # Voice detected
             self._last_voice_time = now
 
-            if self.state == SessionState.SPEAKING:
-                # Barge-in: user is speaking while AI is talking
+            # Barge-in: user is speaking while AI is talking or processing
+            if self.state in (SessionState.SPEAKING, SessionState.PROCESSING):
                 await self._handle_interrupt()
 
-            if self.state in (SessionState.IDLE, SessionState.SPEAKING):
+            if self.state in (SessionState.IDLE, SessionState.SPEAKING, SessionState.PROCESSING):
                 await self._set_state(SessionState.LISTENING)
                 self._audio_buffer.clear()
+                self._webm_chunks.clear()
 
             # Accumulate audio (with safety cap)
             max_bytes = MAX_UTTERANCE_SECONDS * 16000 * 2  # 16kHz, 16-bit
             if len(self._audio_buffer) < max_bytes:
                 self._audio_buffer.extend(pcm)
+                self._webm_chunks.append(webm_chunk)
 
         elif self.state == SessionState.LISTENING:
             # Still in listening state but below threshold — check silence duration
-            self._audio_buffer.extend(pcm)  # Include trailing silence for ASR context
+            max_bytes = MAX_UTTERANCE_SECONDS * 16000 * 2
+            if len(self._audio_buffer) < max_bytes:
+                self._audio_buffer.extend(pcm)
+                self._webm_chunks.append(webm_chunk)
 
             silence_ms = (now - self._last_voice_time) * 1000
             if silence_ms >= self.silence_timeout_ms:
@@ -225,9 +255,9 @@ class VoiceDuplexSession:
             await self._handle_interrupt()
         elif action == "config":
             if "silence_timeout_ms" in msg:
-                self.silence_timeout_ms = int(msg["silence_timeout_ms"])
+                self.silence_timeout_ms = _clamp(int(msg["silence_timeout_ms"]), 200, 10000)
             if "vad_threshold" in msg:
-                self.vad_threshold = float(msg["vad_threshold"])
+                self.vad_threshold = _clamp(float(msg["vad_threshold"]), 0.001, 0.5)
             await self._send_json({"type": "config_ack"})
         elif action == "ping":
             await self._send_json({"type": "pong", "ts": time.time()})
@@ -304,7 +334,7 @@ class VoiceDuplexSession:
 
             # ASR adapters expect WAV bytes
             wav_bytes = pcm_to_wav(pcm_bytes)
-            result = await asyncio.get_event_loop().run_in_executor(
+            result = await asyncio.get_running_loop().run_in_executor(
                 None, adapter.transcribe, wav_bytes
             )
 
@@ -332,40 +362,41 @@ class VoiceDuplexSession:
         Args:
             user_text: Transcribed user speech to send as a chat message.
         """
-        import httpx
-
         await self._set_state(SessionState.SPEAKING)
-        full_reply = ""
+
+        client = self._http_client
+        if not client:
+            await self._send_json({"type": "error", "message": "HTTP client not initialized"})
+            return
 
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(10, read=120)) as client:
-                async with client.stream(
-                    "POST",
-                    "http://127.0.0.1:8080/api/chat/stream",
-                    json={
-                        "text": user_text,
-                        "session_id": self.session_id,
-                        "character_id": self.char_id,
-                        "speak": True,
-                    },
-                    headers={"Accept": "text/event-stream"},
-                ) as resp:
-                    if resp.status_code != 200:
-                        await self._send_json({
-                            "type": "error",
-                            "message": f"Chat stream failed: HTTP {resp.status_code}",
-                        })
+            async with client.stream(
+                "POST",
+                "http://127.0.0.1:8080/api/chat/stream",
+                json={
+                    "text": user_text,
+                    "session_id": self.session_id,
+                    "character_id": self.char_id,
+                    "speak": True,
+                },
+                headers={"Accept": "text/event-stream"},
+            ) as resp:
+                if resp.status_code != 200:
+                    await self._send_json({
+                        "type": "error",
+                        "message": f"Chat stream failed: HTTP {resp.status_code}",
+                    })
+                    return
+
+                buffer = ""
+                async for chunk in resp.aiter_text():
+                    if self._interrupted:
                         return
 
-                    buffer = ""
-                    async for chunk in resp.aiter_text():
-                        if self._interrupted:
-                            return
-
-                        buffer += chunk
-                        while "\n\n" in buffer:
-                            event_block, buffer = buffer.split("\n\n", 1)
-                            await self._process_sse_event(event_block)
+                    buffer += chunk
+                    while "\n\n" in buffer:
+                        event_block, buffer = buffer.split("\n\n", 1)
+                        await self._process_sse_event(event_block)
 
         except asyncio.CancelledError:
             raise
@@ -450,13 +481,14 @@ class VoiceDuplexSession:
         Args:
             audio_path: Server-relative URL (e.g. "/files/audio/abc.mp3").
         """
-        import httpx
+        client = self._http_client
+        if not client:
+            return
 
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"http://127.0.0.1:8080{audio_path}")
-                if resp.status_code == 200:
-                    await self.ws.send_bytes(resp.content)
+            resp = await client.get(f"http://127.0.0.1:8080{audio_path}")
+            if resp.status_code == 200:
+                await self.ws.send_bytes(resp.content)
         except Exception as e:
             logger.warning(f"[Voice] Failed to fetch audio {audio_path}: {e}")
 
@@ -501,12 +533,16 @@ class VoiceDuplexSession:
         """
         Send a JSON control message to the client.
 
-        Silently handles send failures (client may have disconnected).
+        Silently handles expected disconnection errors. Logs warnings
+        for unexpected exceptions to avoid masking real bugs.
 
         Args:
             data: Dict to serialize as JSON.
         """
         try:
             await self.ws.send_json(data)
-        except Exception:
+        except (RuntimeError, ConnectionError, OSError):
+            # Expected when client has disconnected
             pass
+        except Exception as e:
+            logger.warning(f"[Voice] Unexpected send error: {type(e).__name__}: {e}")

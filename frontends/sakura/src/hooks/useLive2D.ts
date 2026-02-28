@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import * as PIXI from 'pixi.js';
 import { Live2DModel } from 'pixi-live2d-display';
 import { useViewerStore } from '../stores/viewerStore';
@@ -79,7 +79,7 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const lipSyncRAFRef = useRef<number | null>(null);
-  const isLoadedRef = useRef(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   // ── Initialize PIXI application ──────────────────────────────────────────────
 
@@ -108,7 +108,7 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
       }
       app.destroy(true, { children: true, texture: true, baseTexture: true });
       appRef.current = null;
-      isLoadedRef.current = false;
+      setIsLoaded(false);
     };
   }, [container]);
 
@@ -149,23 +149,30 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
       app.stage.removeChild(modelRef.current);
       modelRef.current.destroy();
       modelRef.current = null;
-      isLoadedRef.current = false;
+      setIsLoaded(false);
     }
 
     try {
       console.log(`[Live2D] Loading: ${modelUrl}`);
       const model = await Live2DModel.from(modelUrl);
 
+      // Guard against race condition: if the PIXI app was destroyed
+      // while the async load was in flight, clean up and bail out
+      if (!appRef.current || appRef.current !== app) {
+        model.destroy();
+        return false;
+      }
+
       modelRef.current = model;
       app.stage.addChild(model);
       fitModelToScreen();
-      isLoadedRef.current = true;
+      setIsLoaded(true);
 
       console.log('[Live2D] Model loaded successfully');
       return true;
     } catch (e) {
       console.error('[Live2D] Load failed:', e);
-      isLoadedRef.current = false;
+      setIsLoaded(false);
       return false;
     }
   }, [fitModelToScreen]);
@@ -235,6 +242,12 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
       }
 
       const ctx = audioCtxRef.current;
+
+      // Resume suspended AudioContext (browser autoplay policy)
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+
       const analyser = analyserRef.current!;
 
       const response = await fetch(audioUrl);
@@ -322,6 +335,6 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
     playGesture,
     playAudio,
     stopAudio,
-    isLoaded: isLoadedRef.current,
+    isLoaded,
   };
 }

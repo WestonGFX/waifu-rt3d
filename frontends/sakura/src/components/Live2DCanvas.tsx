@@ -2,6 +2,37 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useLive2D } from '../hooks/useLive2D';
 
+// ── Cubism Core lazy loader ──────────────────────────────────────────────────
+
+let cubismCorePromise: Promise<void> | null = null;
+
+/**
+ * Dynamically load the Cubism Core WASM script on first use.
+ *
+ * Caches the promise so multiple callers share a single load. The script
+ * must be available at /live2dcubismcore.min.js (served by the backend's
+ * static mount or vite proxy).
+ */
+function loadCubismCore(): Promise<void> {
+  if (cubismCorePromise) return cubismCorePromise;
+
+  // Already loaded (e.g. via script tag in dev)
+  if ((window as any).Live2DCubismCore) {
+    cubismCorePromise = Promise.resolve();
+    return cubismCorePromise;
+  }
+
+  cubismCorePromise = new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = '/live2dcubismcore.min.js';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Cubism Core WASM'));
+    document.head.appendChild(script);
+  });
+
+  return cubismCorePromise;
+}
+
 // ── Types ───────────────────────────────────────────────────────────────────────
 
 interface Live2DCanvasProps {
@@ -71,9 +102,10 @@ export function Live2DCanvas({ modelUrl, onLoadStateChange }: Live2DCanvasProps)
   // ── Load model when URL or dimensions change ───────────────────────────────
 
   const hasLoaded = useRef<string | null>(null);
+  const hasValidDimensions = dimensions.width > 0 && dimensions.height > 0;
 
   useEffect(() => {
-    if (!modelUrl || dimensions.width <= 0 || dimensions.height <= 0) return;
+    if (!modelUrl || !hasValidDimensions) return;
     // Skip if we already loaded this exact model
     if (hasLoaded.current === modelUrl) return;
 
@@ -81,18 +113,26 @@ export function Live2DCanvas({ modelUrl, onLoadStateChange }: Live2DCanvasProps)
     setFailReason('');
     onLoadStateChange?.('loading');
 
-    loadModel(modelUrl).then((ok) => {
-      if (ok) {
-        hasLoaded.current = modelUrl;
-        setLoadState('loaded');
-        onLoadStateChange?.('loaded');
-      } else {
+    // Ensure Cubism Core WASM is loaded before attempting model parse
+    loadCubismCore()
+      .then(() => loadModel(modelUrl))
+      .then((ok) => {
+        if (ok) {
+          hasLoaded.current = modelUrl;
+          setLoadState('loaded');
+          onLoadStateChange?.('loaded');
+        } else {
+          setLoadState('failed');
+          setFailReason('Model file could not be parsed');
+          onLoadStateChange?.('failed', 'Model file could not be parsed');
+        }
+      })
+      .catch((err) => {
         setLoadState('failed');
-        setFailReason('Model file could not be parsed');
-        onLoadStateChange?.('failed', 'Model file could not be parsed');
-      }
-    });
-  }, [modelUrl, dimensions.width > 0 && dimensions.height > 0]);
+        setFailReason(err.message || 'Cubism Core failed to load');
+        onLoadStateChange?.('failed', err.message);
+      });
+  }, [modelUrl, hasValidDimensions, loadModel, onLoadStateChange]);
 
   // ── Retry ───────────────────────────────────────────────────────────────────
 
@@ -102,17 +142,24 @@ export function Live2DCanvas({ modelUrl, onLoadStateChange }: Live2DCanvasProps)
     setFailReason('');
     onLoadStateChange?.('loading');
 
-    loadModel(modelUrl).then((ok) => {
-      if (ok) {
-        hasLoaded.current = modelUrl;
-        setLoadState('loaded');
-        onLoadStateChange?.('loaded');
-      } else {
+    loadCubismCore()
+      .then(() => loadModel(modelUrl))
+      .then((ok) => {
+        if (ok) {
+          hasLoaded.current = modelUrl;
+          setLoadState('loaded');
+          onLoadStateChange?.('loaded');
+        } else {
+          setLoadState('failed');
+          setFailReason('Retry failed — check console for details');
+          onLoadStateChange?.('failed', 'Retry failed');
+        }
+      })
+      .catch((err) => {
         setLoadState('failed');
-        setFailReason('Retry failed — check console for details');
-        onLoadStateChange?.('failed', 'Retry failed');
-      }
-    });
+        setFailReason(err.message || 'Cubism Core failed to load');
+        onLoadStateChange?.('failed', err.message);
+      });
   }, [modelUrl, loadModel, onLoadStateChange]);
 
   // ── Render ──────────────────────────────────────────────────────────────────

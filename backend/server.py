@@ -8821,10 +8821,18 @@ async def voice_duplex_ws(websocket: WebSocket) -> None:
     """
     await websocket.accept()
 
-    # Parse query parameters
+    # Parse and validate query parameters
     params = websocket.query_params
-    session_id = int(params.get("session_id", "1"))
-    char_id = int(params.get("char_id", "1"))
+    try:
+        session_id = int(params.get("session_id", "1"))
+        char_id = int(params.get("char_id", "1"))
+    except (ValueError, TypeError):
+        await websocket.send_json({
+            "type": "error",
+            "message": "Invalid query parameters: session_id and char_id must be integers",
+        })
+        await websocket.close(code=1008, reason="Invalid query parameters")
+        return
 
     cfg = load_config() or {}
 

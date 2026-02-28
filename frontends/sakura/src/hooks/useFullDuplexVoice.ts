@@ -93,6 +93,8 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const levelIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refs for stable callback access in WebSocket handlers
   const callbacksRef = useRef(options);
@@ -102,6 +104,7 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
 
   const playbackQueueRef = useRef<ArrayBuffer[]>([]);
   const isPlayingRef = useRef(false);
+  const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   /**
    * Play audio from an ArrayBuffer (TTS chunk from the server).
@@ -120,17 +123,28 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
           audioCtxRef.current = new AudioContext();
         }
         const ctx = audioCtxRef.current;
+
+        // Resume suspended AudioContext (browser autoplay policy)
+        if (ctx.state === 'suspended') {
+          await ctx.resume();
+        }
+
         const decoded = await ctx.decodeAudioData(buf.slice(0)); // slice for ownership
         const source = ctx.createBufferSource();
         source.buffer = decoded;
         source.connect(ctx.destination);
+        activeSourceRef.current = source;
 
         await new Promise<void>((resolve) => {
-          source.onended = () => resolve();
+          source.onended = () => {
+            activeSourceRef.current = null;
+            resolve();
+          };
           source.start(0);
         });
       } catch (e) {
         console.warn('[Voice] Audio playback error:', e);
+        activeSourceRef.current = null;
       }
     }
 
@@ -201,6 +215,9 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
     wsRef.current = ws;
 
     ws.onopen = () => {
+      // Successful connection — reset reconnect counter
+      reconnectAttemptsRef.current = 0;
+
       // Start MediaRecorder for 100ms WebM/Opus chunks
       const recorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus',
@@ -238,9 +255,27 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
       callbacksRef.current.onError?.('Voice WebSocket connection error');
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       cleanup();
-      setState('disconnected');
+
+      // Attempt reconnection on abnormal closure (not manual disconnect)
+      // Code 1000 = normal close, 1005 = no status (browser-initiated)
+      const isAbnormal = event.code !== 1000;
+      const maxAttempts = 5;
+
+      if (isAbnormal && reconnectAttemptsRef.current < maxAttempts) {
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000);
+        reconnectAttemptsRef.current++;
+        console.log(`[Voice] Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${maxAttempts})`);
+        setState('disconnected');
+        reconnectTimerRef.current = setTimeout(() => {
+          reconnectTimerRef.current = null;
+          connect();
+        }, delay);
+      } else {
+        reconnectAttemptsRef.current = 0;
+        setState('disconnected');
+      }
     };
   }, [sessionId, charId, startLevelMonitor, playAudio]);
 
@@ -283,7 +318,11 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
         break;
 
       case 'interrupted':
-        // Clear playback queue on barge-in
+        // Stop currently-playing source and clear playback queue on barge-in
+        if (activeSourceRef.current) {
+          try { activeSourceRef.current.stop(); } catch { /* already stopped */ }
+          activeSourceRef.current = null;
+        }
         playbackQueueRef.current = [];
         break;
 
@@ -296,6 +335,12 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
   // ── Disconnect ────────────────────────────────────────────────────────────
 
   const cleanup = useCallback(() => {
+    // Cancel any pending reconnect
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+
     // Stop MediaRecorder
     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
       recorderRef.current.stop();
@@ -315,6 +360,12 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
     // Stop level monitor
     stopLevelMonitor();
 
+    // Stop active audio source
+    if (activeSourceRef.current) {
+      try { activeSourceRef.current.stop(); } catch { /* already stopped */ }
+      activeSourceRef.current = null;
+    }
+
     // Close audio context
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => {});
@@ -328,6 +379,8 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
   }, [stopLevelMonitor]);
 
   const disconnect = useCallback(() => {
+    // Reset reconnect counter to prevent auto-reconnection on manual disconnect
+    reconnectAttemptsRef.current = 0;
     cleanup();
     setState('disconnected');
   }, [cleanup]);
@@ -346,7 +399,11 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'control', action: 'interrupt' }));
     }
-    // Immediately clear local playback queue
+    // Stop active audio source and clear playback queue
+    if (activeSourceRef.current) {
+      try { activeSourceRef.current.stop(); } catch { /* already stopped */ }
+      activeSourceRef.current = null;
+    }
     playbackQueueRef.current = [];
   }, []);
 

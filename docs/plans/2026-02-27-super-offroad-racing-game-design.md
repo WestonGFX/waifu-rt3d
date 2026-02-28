@@ -353,29 +353,36 @@ Hit effect:   Moderate explosion (14 particles, radial); shorter screen shake (1
 Falloff anim: Empty rack folds flat onto truck rear
 ```
 
-##### Firewall
+##### Dust Storm
 ```
-Type:         Deployed barrier — places a wall of flame spanning the track width
-Ammo:         2 walls
-Damage:       35 HP per truck that drives through the wall; "on fire" lingering
-              burn adds 8 HP/s for 2s after passing through
-Width:        Spans full track surface width at the point of deployment (placed
-              perpendicular to the truck's current heading)
-Duration:     Wall persists for 5 seconds, then burns down
-Visual:       Barrels of fuel are strapped to truck rear; when fired, they are launched
-              forward 60px and ignite in sequence, creating a fire line across the track
-Fire effect:  Three canisters arc forward (short ballistic throw), slam down in
-              a triangle pattern, then WHOMP into a connected wall of fire:
-              60+ fire particles/frame, orange base fading to dark smoke tops,
-              interconnected with animating flame tongues (sine-wave height oscillation)
-              Wall casts animated orange glow on the ground (ctx.shadowBlur = 20)
-Hit effect:   Any truck passing through: full fire particle burst (engulfs truck sprite
-              in flame for 0.5s), damage applied, lingering smoke trail for 2s after
-Falloff anim: Wall burns lower and lower (flame height linearly decreases over final
-              1.5s), leaves a charred black band of scorch marks on the track surface
-Notes:        Can be placed around corners to create chokepoints — extremely powerful
-              on tight tracks. Your own truck can pass through it safely (friendly fire off).
-              The AI at Tier 3 uses this specifically on chicanes and crossovers.
+Type:         Deployed expanding cloud — drifts across the track over time
+Ammo:         2 canisters
+Damage:       0 HP — dual disruption: grip loss + vision impairment
+              Grip inside cloud: 0.2 (heavy sand drag, near-uncontrollable slide)
+              Vision inside cloud: other trucks rendered at 25% opacity; track
+              markings invisible; HUD blurs (CSS filter: blur(2px) on canvas)
+Duration:     8 seconds total; cloud expands for first 3s (radius 0 → 90px),
+              drifts for 5s in a randomised "wind" direction (±30° off track axis,
+              speed 15px/s), then disperses (radius 90 → 0 over 1.5s)
+Visual:       Industrial sand blaster canister bolted to truck roof; fires a
+              high-pressure burst of sand forward and upward when triggered
+Fire effect:  Canister vents with a crack; large dust plume launches 40px ahead
+              of truck and immediately begins expanding — 80+ tan/brown/ochre
+              semi-transparent particles per frame (radius 8–25px each, slow drift,
+              very low decay: 0.003–0.006 so particles live 150–300 frames)
+              Cloud has a swirling motion: each particle has a slight angular velocity
+              around the cloud centre, creating a rotating dust devil texture
+              At cloud edge: particles fade (alpha proportional to distance from centre)
+              Ground underneath tints a sandy brown (ctx.fillStyle rgba overlay, 15% opacity)
+Hit effect:   Trucks entering cloud: immediate grip drop; dust particles stream off
+              their wheels; headlights (small white circles on truck sprite) visible
+              but dimmed through the haze
+Falloff anim: Canister cracks, hisses, then crumbles off roof mount
+Notes:        The drift direction is set on deployment and stays consistent for
+              that cloud's lifetime — players who watch the cloud can navigate around it.
+              Your own truck is NOT immune — drive through your own storm at your peril.
+              Tier 3 AI deploys this on wide straights where it has run-off room
+              but pursuing trucks have nowhere to dodge.
 ```
 
 ---
@@ -480,7 +487,7 @@ Damage Reference (Tier 2 — Uncommon):
   Rocket (direct):          65 HP + 30 HP splash
   Flamethrower (1s):        ~25 HP effective
   Proximity Mine:           50 HP
-  Firewall (pass-through):  35 HP + 16 HP burn (2s after)
+  Dust Storm (inside):       0 HP (grip 0.2 + vision 25%, 8s duration)
 
 Damage Reference (Tier 3 — Rare):
   Plasma Ray (1s):          ~200–400 HP (melts trucks)

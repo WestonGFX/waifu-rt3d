@@ -4,6 +4,99 @@ All notable changes to this project are documented here. Phases are listed in re
 
 ---
 
+## [v9.0.0] - Feb 28, 2026 — Live2D, Voice Duplex, Desktop Pet, 18 Themes
+
+### Desktop Pet — Electron App Shell (Phases 1–2)
+
+Standalone Electron wrapper for the Sakura frontend with transparent desktop pet overlay:
+
+- **Electron main process** (`electron/main.js`): full app window + transparent always-on-top pet overlay + system tray with context menu
+- **Pet overlay**: frameless transparent window with pixel-level WebGL click-through hit testing — transparent pixels pass clicks to apps below, opaque character pixels capture interaction
+- **Drag-to-move**: drag on the character body to reposition the pet window via IPC `movePetWindow(dx, dy)`
+- **PetSpeechBubble**: floating glassmorphism speech bubble shows latest AI response with action buttons (Chat, Voice, Play, Dismiss)
+- **PetView**: minimal transparent overlay that renders either VRM (iframe) or Live2D (PIXI canvas) with CSS drop-shadow for visibility on light backgrounds
+- **System tray**: context menu with Show App, Desktop Pet toggle, Mute checkbox, Quit
+- **Global shortcut**: `Ctrl+Shift+P` toggles pet window visibility
+- **Window persistence**: `electron-store` saves window geometry across sessions
+- **Single instance lock**: prevents duplicate Electron processes
+- **Preload script**: `contextBridge.exposeInMainWorld` for secure IPC (setClickThrough, movePetWindow, openMainWindow, setMuted)
+- **App.tsx routing**: split into `App()` router → `PetApp` (minimal) / `MainApp` (full) to avoid Rules of Hooks violations
+- **viewer.html**: added `noChatOverlay=1` param to suppress built-in chat overlay in pet mode
+
+New files: `electron/main.js`, `electron/preload.js`, `electron/package.json`, `electron/assets/`, `PetView.tsx`, `PetSpeechBubble.tsx`, `lib/electron.ts`, `types/electron.d.ts`
+
+### C1 — Live2D Runtime (Sakura Frontend)
+
+Full Live2D model rendering in the Sakura frontend, coexisting with VRM:
+
+- **viewerStore** (`stores/viewerStore.ts`): Zustand mediator store that routes expression/gesture/audio dispatches to either VRM (iframe postMessage) or Live2D (PIXI) based on active model type
+- **useLive2D hook** (`hooks/useLive2D.ts`): complete lifecycle management — PIXI.Application with transparent background, pixi-live2d-display model loading, expression/gesture routing, volume-based lip sync via AudioContext + AnalyserNode
+- **Live2DCanvas** (`components/Live2DCanvas.tsx`): React wrapper with ResizeObserver, loading/error overlays, Cubism Core WASM lazy loader, retry mechanism
+- **Live2DModelPicker** in SettingsView: scan models via `GET /api/scan/live2d`, dropdown select, zip upload via `POST /api/upload/live2d`, clear button
+- **ModelPanel conditional render**: `character.live2d_model` set → Live2DCanvas, otherwise VRM iframe
+- **Refactored 6 iframe querySelector calls** across chatStore, ModelPanel, GesturePicker, useAutoBackground → all route through viewerStore
+- Dependencies: `pixi.js@^7`, `pixi-live2d-display@^0.4`
+
+### A1 — Full-Duplex Voice Conversation
+
+Bidirectional WebSocket voice pipeline with barge-in support:
+
+- **Backend** (`backend/voice/`): new package with `VoiceDuplexSession` state machine (idle→listening→processing→speaking), Silero VAD v5 wrapper, WebM/Opus→PCM audio conversion via ffmpeg, sentence-chunked TTS generation
+- **WebSocket endpoint** (`/ws/voice`): client sends binary audio chunks + JSON control messages, server sends TTS audio chunks + transcription/token/state events
+- **Frontend hook** (`useFullDuplexVoice.ts`): WebSocket connection management, MediaRecorder audio capture, Web Audio API playback, interrupt support with exponential backoff reconnection
+- **VoiceOrb** (`components/VoiceOrb.tsx`): animated state indicator — idle (gentle pulse), listening (input-reactive rings), processing (morphing), speaking (output-reactive). Framer Motion
+- **VoiceConversationPanel** (`components/VoiceConversationPanel.tsx`): full voice mode UI with waveform visualization, state indicator, transcript area, mic level, connect/disconnect
+- **Barge-in**: user speech during AI response interrupts playback — clears audio queue, stops active AudioBufferSourceNode, transitions to LISTENING state
+- **Echo gating**: high VAD threshold during AI speech + browser `echoCancellation: true`
+
+### A7 — Kokoro TTS + Voice Modulation (Complete)
+
+- **VoiceModulator** (`backend/tts/voice_modulator.py`): 16-emotion parameter mapping (rate, pitch, volume adjustments) for all TTS providers
+- **Pipeline integration**: voice_modulator wired into server.py TTS endpoint — emotion detected from AI response drives modulation parameters
+- **Voice Conversation settings UI**: VAD sensitivity slider, auto-interrupt toggle, silence timeout, echo cancellation in Settings > Voice tab
+- **Runtime config**: WebSocket voice sessions read config from `/api/config` — adjustable without restart
+
+### P0/P1 Code Review Fixes (15 issues)
+
+Opus-level review of C1 + A1 with 15 critical fixes:
+
+- **AudioContext autoplay policy** (useLive2D.ts): added `ctx.resume()` for browser autoplay compliance
+- **useEffect boolean dependency** (Live2DCanvas.tsx): replaced derived boolean in deps array with proper `hasValidDimensions` const
+- **ffmpeg batch conversion** (duplex.py + audio_utils.py): accumulated WebM chunks in buffer, single ffmpeg call per utterance instead of per-100ms-chunk
+- **Barge-in PROCESSING state** (duplex.py): added PROCESSING to interrupt and transition checks — audio no longer silently dropped during processing
+- **Active AudioBufferSourceNode stop** (useFullDuplexVoice.ts): added `activeSourceRef` to stop currently-playing audio on interrupt
+- **Race condition on model switch** (useLive2D.ts): post-await guard checks `appRef.current` before accessing destroyed PIXI app
+- **asyncio.get_event_loop() → get_running_loop()** (duplex.py): 2 occurrences of deprecated API
+- **Unbounded silence buffer** (duplex.py): MAX_UTTERANCE_SECONDS safety cap, config value clamping
+- **WebSocket reconnection** (useFullDuplexVoice.ts): exponential backoff (max 5 attempts, 1s–10s delay)
+- **Query param crash** (server.py): try/except around `int()` conversions, error JSON + close code 1008
+- **Session-scoped httpx client** (duplex.py): reuses single client instead of creating per audio fetch
+- **_send_json exception scope** (duplex.py): catches only expected disconnect exceptions, logs unexpected ones
+- **Lazy Cubism Core** (Live2DCanvas.tsx): removed `<script>` from index.html, dynamic loader on demand
+- **Dead code cleanup**: deleted unused `useViewer.ts`
+
+### P2/P3 Cleanup + Voice Tests
+
+- **54 voice module tests** across 3 test files:
+  - `test_vad.py`: Silero VAD wrapper, silence detection, speech probability thresholds
+  - `test_audio_utils.py`: PCM conversion, WAV wrapping, RMS energy calculation
+  - `test_duplex.py`: state machine transitions, barge-in, buffer management, sentence chunking
+- **P2/P3 fixes**: viewerStore wildcard origin note, retina scaling docs, stale comment cleanup
+
+### 18 Built-in Themes
+
+- 9 dark: Sakura Dark, Crystal Dark, Hacker Green, Monokai, Darcula, Dracula, Tokyo Night, Catppuccin Macchiato, Blurple
+- 9 light: Sakura, Crystal, Pop Bubblegum, Pop Lemonade, Catppuccin Latte, plus 4 system variants
+- All themes include film grain overlay, CSS custom properties, and font integration
+
+### E2E Test Suite (Playwright)
+
+- **26 Playwright tests** across 4 spec files: onboarding, settings, wizard modals, what's-new
+- `playwright.config.ts` with Chromium-only, baseURL `http://localhost:5175`
+- Shared test helpers in `e2e/helpers.ts`
+
+---
+
 ## [v8.1.0] - Feb 28, 2026 — Wizard System + Code Quality Sprint
 
 ### Setup Wizards & Feature Discovery

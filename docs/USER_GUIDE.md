@@ -51,7 +51,7 @@ python backend/server.py
 
 Open **http://localhost:8080** in your browser.
 
-> **First run:** The app creates `backend/config/app.json` with defaults and initializes the SQLite database. Point your LLM settings at a running LM Studio instance and you're ready to chat.
+> **First run:** The app creates `backend/config/app.json` with defaults and initializes the SQLite database. The **Onboarding Wizard** will guide you through initial setup — hardware scan, LLM configuration, character creation, voice setup, and a feature tour. You can skip steps and return to them later via **Settings > Setup Guides**.
 
 ---
 
@@ -199,6 +199,25 @@ The creator has 4 tabs:
 
 Drop `.vrm` files into `backend/storage/avatars/`. They appear in the character creator's model dropdown.
 
+### Adding Live2D Models
+
+Live2D Cubism models (`.model3.json` + textures) are an alternative to VRM for 2D anime-style characters.
+
+1. Place your Live2D model folder in `backend/storage/live2d/` (e.g., `backend/storage/live2d/ariu/ariu.model3.json`)
+2. Or use the **Upload** button in Settings > Character > Live2D Model to upload a `.zip` archive
+3. Click **Scan** to detect available models
+4. Select a model from the dropdown — this sets `live2d_model` on the character and switches the viewer from VRM (iframe) to Live2D (PIXI canvas)
+
+Live2D and VRM are mutually exclusive per character. Selecting a Live2D model clears the VRM assignment, and vice versa.
+
+**Supported features:**
+- Expression routing (emotion → Live2D expression names)
+- Gesture/motion playback (idle, tap_body, flick_head groups)
+- Volume-based lip sync via AudioContext + AnalyserNode
+- Transparent PIXI background (for OBS and desktop pet)
+
+> **Note:** Live2D requires the Cubism Core WASM library, which is loaded lazily on first use. Cubism 4 (model3.json) is supported; legacy Cubism 2 models may show console warnings but still render.
+
 ---
 
 ## 6. Agentic Characters
@@ -275,7 +294,55 @@ Height: 1080
 
 ---
 
-## 9. Sakura Frontend
+## 9. Voice Conversation (Full-Duplex)
+
+Voice Conversation mode enables real-time spoken dialogue with your character — you speak, the AI responds with speech, and you can interrupt at any time.
+
+### Starting a Voice Conversation
+
+1. Open a chat with any character
+2. Click the **microphone icon** in the chat composer bar to enter voice mode
+3. The **VoiceOrb** appears — an animated indicator showing the current state:
+   - **Idle** (gentle pulse): waiting for you to speak
+   - **Listening** (reactive rings): detecting your voice
+   - **Processing** (morphing): AI is thinking
+   - **Speaking** (output-reactive): AI is responding with audio
+
+### How It Works
+
+Voice mode uses a WebSocket connection (`/ws/voice`) for bidirectional audio:
+
+1. **Your speech** → captured via MediaRecorder → sent as binary audio chunks to the server
+2. **Server pipeline**: VAD (voice activity detection) → silence detection → Faster-Whisper ASR → LLM → sentence-chunked TTS
+3. **AI speech** → TTS audio chunks streamed back to you via WebSocket → Web Audio API playback
+
+### Barge-In (Interrupting the AI)
+
+If the AI is speaking and you start talking, **barge-in** activates:
+- The AI's audio stops immediately (current AudioBufferSourceNode is halted)
+- The server transitions to LISTENING state
+- Your new speech is transcribed and processed
+
+### Voice Settings
+
+Configure in **Settings > Voice > Voice Conversation**:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **VAD Sensitivity** | 0.015 | Voice activity detection threshold (lower = more sensitive) |
+| **Silence Timeout** | 1500ms | How long to wait after you stop speaking before processing |
+| **Auto-Interrupt** | On | Whether your speech automatically interrupts AI responses |
+| **Echo Cancellation** | On | Browser-native echo cancellation on microphone input |
+
+### Requirements
+
+- A working STT provider (Faster-Whisper recommended for offline use)
+- A working TTS provider (any of the 9 supported engines)
+- Microphone access (browser will prompt for permission)
+
+---
+
+## 10. Sakura Frontend
 
 Sakura is a chat-first consumer UI built with React 19, designed as an alternative to the Neon cyberpunk dashboard. It emphasizes conversation over configuration.
 
@@ -287,10 +354,25 @@ Sakura is a chat-first consumer UI built with React 19, designed as an alternati
 
 ### Theme Modes
 
-Sakura has two visual themes, switchable in Settings:
+Sakura ships with **18 built-in themes** (9 light, 9 dark), switchable in Settings:
 
-- **Sakura** (default) — Warm rose-pink palette (#FFF5F7 background, #E8788A accent). Soft cherry blossom aesthetic.
-- **Crystal** — Cool ice-blue palette (#F8FAFB background, #6B8AED accent). Clean and minimal.
+**Light themes:**
+- **Sakura** (default) — Warm rose-pink palette, cherry blossom aesthetic
+- **Crystal** — Cool ice-blue, clean and minimal
+- **Pop Bubblegum** — Vibrant pink/magenta
+- **Pop Lemonade** — Bright yellow/citrus
+- **Catppuccin Latte** — Pastel warm, community favorite
+
+**Dark themes:**
+- **Sakura Dark** / **Crystal Dark** — Dark variants of the defaults
+- **Hacker Green** — Terminal-style green-on-black
+- **Monokai** — Classic Monokai editor colors
+- **Darcula** / **Dracula** — JetBrains and Dracula theme ports
+- **Tokyo Night** — Soft blue/purple dark theme
+- **Catppuccin Macchiato** — Pastel dark variant
+- **Blurple** — Discord-inspired purple
+
+All themes include a subtle film grain overlay, consistent CSS custom properties, and font integration (Nunito + Fraunces).
 
 ### Navigation
 
@@ -331,7 +413,7 @@ Sakura's settings use progressive disclosure:
 
 ---
 
-## 10. Keyboard Shortcuts
+## 11. Keyboard Shortcuts
 
 Open the keyboard shortcut editor from **Settings > Shortcuts**.
 
@@ -363,7 +445,7 @@ These shortcuts fire regardless of focus and are not remappable in the current r
 
 ---
 
-## 11. Settings Reference
+## 12. Settings Reference
 
 Settings are stored in `backend/config/app.json` and editable via the Settings panel in both Neon and Sakura frontends.
 
@@ -389,7 +471,7 @@ For the complete reference of all 75+ configuration keys with types, defaults, v
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 ### Backend won't start
 
@@ -426,14 +508,14 @@ For the complete reference of all 75+ configuration keys with types, defaults, v
 
 ### Database issues
 
-- The database auto-migrates on startup (currently schema v21)
+- The database auto-migrates on startup (currently schema v30)
 - For corruption, delete `backend/storage/app.db` and restart (loses data)
 - You can also run `./setup.sh --repair` to re-run migrations and verify config
 - SQLite WAL mode is enabled for concurrent read/write
 
 ---
 
-## 13. Sakura Mobile PWA
+## 14. Sakura Mobile PWA
 
 The Sakura frontend ships as a Progressive Web App (PWA) — installable to your home screen on iPhone, iPad, and Android, with a native-app feel.
 
@@ -461,7 +543,7 @@ When accessed from a mobile device, the app switches to **MobileApp** layout:
 
 ---
 
-## 14. Remote GPU Motion Server
+## 15. Remote GPU Motion Server
 
 The 3D viewer supports offloading animation generation to a Windows PC with an NVIDIA GPU on your local network, enabling higher-quality physics-based motion.
 
@@ -491,14 +573,67 @@ Click the green **"GPU Remote"** badge and confirm to disconnect. The app falls 
 
 ---
 
-## 15. Running Tests
+## 16. Desktop Pet (Electron)
+
+The Desktop Pet wraps the Sakura frontend in an Electron shell, adding a transparent always-on-top character overlay that floats on your desktop.
+
+### Requirements
+
+- **Node.js 18+**
+- A running backend (`python backend/server.py` or `./run.sh`)
+
+### Running the Electron App
 
 ```bash
-# Run all 98 tests
+cd electron
+npm install          # First time only
+npm start            # Normal mode
+npm start -- --dev   # With DevTools open
+```
+
+The app opens two windows:
+1. **Full App Window** — standard maximized window loading `http://localhost:8080`
+2. **Desktop Pet Window** — transparent frameless overlay showing only the character
+
+### Desktop Pet Features
+
+- **Transparent overlay**: only the character is visible — transparent areas pass clicks to apps below
+- **Click-through hit testing**: WebGL pixel reads determine if the cursor is over the character or empty space
+- **Drag-to-move**: click and drag on the character body to reposition the pet
+- **Speech bubble**: click the character to see the latest AI message with action buttons
+- **System tray**: right-click the tray icon for quick access to Show App, Toggle Pet, Mute, Quit
+- **Global shortcut**: `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS) toggles pet visibility
+- **Window memory**: position and size are saved across sessions via `electron-store`
+- **Single instance**: only one Electron process runs at a time
+
+### VRM + Live2D Support
+
+The pet window supports both model types:
+- **VRM**: rendered via iframe loading `viewer.html` with `?pet=1&noChatOverlay=1`
+- **Live2D**: rendered via PIXI.Application with transparent background (`backgroundAlpha: 0`)
+
+The active model type is determined by the character's `live2d_model` field.
+
+---
+
+## 17. Running Tests
+
+```bash
+# Backend tests (152 tests)
 python -m pytest backend/tests/ -v
 
 # Quick run (stop on first failure)
 python -m pytest backend/tests/ -x --tb=short
+
+# Frontend unit tests (80 tests)
+cd frontends/sakura && npx vitest run
+
+# E2E browser tests (26 tests, requires running dev server)
+cd frontends/sakura && npx playwright test
 ```
 
-Tests cover: API endpoints, character CRUD, agentic tool execution, capability profiles, telemetry, memory search, routing, and chat pipeline.
+**Backend tests (152):** API endpoints, character CRUD, agentic tool execution, capability profiles, telemetry, memory search, routing, chat pipeline, voice module (VAD, audio utils, duplex state machine).
+
+**Frontend tests (80):** wizard store, wizard shell, feature discovery, what's-new modal, settings, onboarding.
+
+**E2E tests (26):** onboarding wizard flow, settings navigation, setup wizard modals, version update modal.

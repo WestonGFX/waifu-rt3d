@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v22)
+- Database schema migrations (v3 → v4 → … → v35)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -1668,6 +1668,482 @@ def migrate_to_v30(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v31(con: sqlite3.Connection) -> bool:
+    """Apply schema v31 migration (Phase 15: Enhanced Emotion Portraits).
+
+    Adds the ``emotion_portraits_mode`` column to the ``characters`` table.
+    This integer column controls how per-message emotion portraits are
+    displayed:
+        0 = off (static avatar everywhere)
+        1 = chat bubbles only (per-message emotion portraits)
+        2 = chat bubbles + sidebar indicator
+
+    Also creates the ``expr_portraits/`` directory structure for per-character
+    portrait files (moving away from flat files in ``images/``).
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v31.
+
+    Example:
+        >>> if migrate_to_v31(con):
+        ...     print("emotion_portraits_mode column added")
+    """
+    # Check if column already exists
+    cols = {row[1] for row in con.execute("PRAGMA table_info(characters)")}
+    if "emotion_portraits_mode" in cols:
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (31)")
+        con.commit()
+        return False
+    try:
+        logger.info("Applying schema v31 migration (Phase 15: emotion portraits mode)...")
+        con.execute("ALTER TABLE characters ADD COLUMN emotion_portraits_mode INTEGER NOT NULL DEFAULT 0")
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (31)")
+        con.commit()
+
+        # Create per-character portrait directory
+        portraits_dir = Path(__file__).resolve().parent / "storage" / "images" / "expr_portraits"
+        portraits_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info("✅ Schema v31 migration complete (emotion_portraits_mode column)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v31 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v32(con: sqlite3.Connection) -> bool:
+    """Apply schema v32 migration (Phase 16: Character Bible v1.2 Restoration).
+
+    Renames 4 built-in characters to match the Character Bible v1.2 naming
+    and upgrades their system prompts from 1-2 sentences to full multi-paragraph
+    Bible-level prompts.  Also inserts 2 new characters (Shiori, Mika).
+
+    Character changes:
+        - ``Fox (Rin)`` → ``Rin (Akane)`` (tsundere, Bible prompt)
+        - ``Kuudere (Nyx)`` → ``Ayane (Yuki)`` (kuudere, human — no android)
+        - ``Onee-san (Seraph)`` → ``Hana (Momoka)`` (deredere, replaces Seraph)
+        - ``Goth (Viper)`` → ``Sable (Kuroha)`` (sadodere, Bible prompt)
+        - NEW: ``Shiori (Nana)`` (dandere)
+        - NEW: ``Mika (Mikazuki)`` (hiyakasudere)
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v32.
+
+    Example:
+        >>> if migrate_to_v32(con):
+        ...     print("Character roster upgraded to Bible v1.2")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 32:
+        return False
+
+    try:
+        logger.info("Applying schema v32 migration (Phase 16: Character Bible v1.2 Restoration)...")
+
+        # Import the Bible-level prompts from init_personas
+        import sys
+        sys.path.insert(0, str(ROOT / "tools"))
+        from init_personas import (
+            RIN_SYSTEM_PROMPT, AYANE_SYSTEM_PROMPT, HANA_SYSTEM_PROMPT,
+            SABLE_SYSTEM_PROMPT, SHIORI_SYSTEM_PROMPT, MIKA_SYSTEM_PROMPT,
+        )
+
+        # --- Rename + upgrade existing characters ---
+        renames = [
+            ("Fox (Rin)", "Rin (Akane)", RIN_SYSTEM_PROMPT, "rin_v1", 1.1, 1.2),
+            ("Kuudere (Nyx)", "Ayane (Yuki)", AYANE_SYSTEM_PROMPT, "ayane_v1", 0.9, 1.0),
+            ("Onee-san (Seraph)", "Hana (Momoka)", HANA_SYSTEM_PROMPT, "hana_v1", 1.0, 1.0),
+            ("Goth (Viper)", "Sable (Kuroha)", SABLE_SYSTEM_PROMPT, "sable_v1", 0.85, 0.95),
+        ]
+        for old_name, new_name, prompt, voice_id, pitch, rate in renames:
+            con.execute(
+                """UPDATE characters
+                   SET name = ?, system_prompt = ?, voice_id = ?,
+                       tts_pitch = ?, tts_rate = ?
+                   WHERE name = ?""",
+                (new_name, prompt, voice_id, pitch, rate, old_name),
+            )
+            if con.execute("SELECT changes()").fetchone()[0] > 0:
+                logger.info(f"  Renamed '{old_name}' → '{new_name}'")
+            else:
+                logger.info(f"  '{old_name}' not found (already renamed or deleted)")
+
+        # --- Insert new characters (skip if name already exists) ---
+        new_chars = [
+            ("Shiori (Nana)", SHIORI_SYSTEM_PROMPT, "/files/avatars/Kitsune.vrm",
+             "shiori_v1", 0.95, 0.85),
+            ("Mika (Mikazuki)", MIKA_SYSTEM_PROMPT, "/files/avatars/Kitsune.vrm",
+             "mika_v1", 1.2, 1.15),
+        ]
+        for name, prompt, avatar, voice_id, pitch, rate in new_chars:
+            existing = con.execute(
+                "SELECT id FROM characters WHERE name = ?", (name,)
+            ).fetchone()
+            if existing:
+                logger.info(f"  '{name}' already exists (id={existing[0]}), skipping insert")
+            else:
+                con.execute(
+                    """INSERT INTO characters
+                       (name, system_prompt, avatar_url, voice_id, tts_pitch, tts_rate)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (name, prompt, avatar, voice_id, pitch, rate),
+                )
+                logger.info(f"  Inserted new character '{name}'")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (32)")
+        con.commit()
+        logger.info("✅ Schema v32 migration complete (Character Bible v1.2 restoration)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v32 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v33(con: sqlite3.Connection) -> bool:
+    """Add GLB/Unity model columns to characters table.
+
+    Adds:
+        - glb_model_url (TEXT): URL/path to a GLB/GLTF 3D model
+        - unity_scene_url (TEXT): URL/path to a Unity WebGL scene
+
+    These support the 3D Pipeline Expansion (GLB support + Unity WebGL).
+
+    Args:
+        con: Active SQLite connection
+
+    Returns:
+        True if migration was applied, False if already at v33
+
+    Example:
+        >>> if migrate_to_v33(con):
+        ...     logger.info("GLB + Unity columns added")
+    """
+    cols = {row[1] for row in con.execute("PRAGMA table_info(characters)")}
+    if "glb_model_url" in cols and "unity_scene_url" in cols:
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (33)")
+        con.commit()
+        return False
+    try:
+        logger.info("Applying schema v33 migration (3D Pipeline: GLB + Unity columns)...")
+        if "glb_model_url" not in cols:
+            con.execute("ALTER TABLE characters ADD COLUMN glb_model_url TEXT")
+        if "unity_scene_url" not in cols:
+            con.execute("ALTER TABLE characters ADD COLUMN unity_scene_url TEXT")
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (33)")
+        con.commit()
+        logger.info("✅ Schema v33 migration complete (glb_model_url + unity_scene_url)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v33 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v34(con: sqlite3.Connection) -> bool:
+    """Add entrance/exit animation style columns to characters table.
+
+    Adds:
+        - entrance_style (TEXT DEFAULT 'walk'): Animation style for character entrance
+          Options: walk, run, jump, fade, teleport
+        - exit_style (TEXT DEFAULT 'fade'): Animation style for character exit
+          Options: walk, fade, teleport
+
+    These support multi-style entrance/exit animations in the 3D viewer.
+
+    Args:
+        con: Active SQLite connection
+
+    Returns:
+        True if migration was applied, False if already at v34
+
+    Example:
+        >>> if migrate_to_v34(con):
+        ...     logger.info("Entrance/exit style columns added")
+    """
+    cols = {row[1] for row in con.execute("PRAGMA table_info(characters)")}
+    if "entrance_style" in cols and "exit_style" in cols:
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (34)")
+        con.commit()
+        return False
+    try:
+        logger.info("Applying schema v34 migration (entrance_style + exit_style)...")
+        if "entrance_style" not in cols:
+            con.execute("ALTER TABLE characters ADD COLUMN entrance_style TEXT DEFAULT 'walk'")
+        if "exit_style" not in cols:
+            con.execute("ALTER TABLE characters ADD COLUMN exit_style TEXT DEFAULT 'fade'")
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (34)")
+        con.commit()
+        logger.info("✅ Schema v34 migration complete (entrance_style + exit_style)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v34 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v35(con: sqlite3.Connection) -> bool:
+    """Add rolling summary chain and message importance scoring (v35).
+
+    Creates:
+        - session_summaries table: Rolling summary chain per session, allowing
+          incremental compression instead of monolithic summarization.
+        - importance_score column on messages: 0.0–1.0 float used by the
+          context assembler to recall high-importance archived messages.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v35.
+
+    Example:
+        >>> if migrate_to_v35(con):
+        ...     logger.info("Rolling summaries + importance scoring ready")
+    """
+    # Check if session_summaries table already exists
+    tables = {row[0] for row in con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )}
+    cols = {row[1] for row in con.execute("PRAGMA table_info(messages)")}
+
+    if "session_summaries" in tables and "importance_score" in cols:
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (35)")
+        con.commit()
+        return False
+
+    try:
+        logger.info("Applying schema v35 migration (session_summaries + importance_score)...")
+
+        if "session_summaries" not in tables:
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS session_summaries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    summary_text TEXT NOT NULL,
+                    msg_range_start INTEGER NOT NULL,
+                    msg_range_end INTEGER NOT NULL,
+                    msg_count INTEGER NOT NULL,
+                    token_count INTEGER,
+                    created_at INTEGER NOT NULL,
+                    FOREIGN KEY (session_id) REFERENCES sessions(id)
+                )
+            """)
+
+        if "importance_score" not in cols:
+            con.execute(
+                "ALTER TABLE messages ADD COLUMN importance_score REAL DEFAULT 0.5"
+            )
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (35)")
+        con.commit()
+        logger.info("✅ Schema v35 migration complete (session_summaries + importance_score)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v35 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v36(con: sqlite3.Connection) -> bool:
+    """Add character bible integration columns (v36).
+
+    Adds three columns to ``characters``:
+        - ``bible_path`` (TEXT): Relative path to the character's markdown bible file.
+        - ``bible_sections`` (TEXT): JSON list of section numbers to inject (e.g. ``[2,3,4]``).
+        - ``bible_enabled`` (INTEGER): Toggle for bible injection (0 = off, 1 = on).
+
+    Also auto-populates ``bible_path`` for all existing characters by matching
+    character names to files in ``docs/characters/``.
+
+    Returns:
+        True if migration was applied, False if already at v36.
+
+    Example:
+        >>> if migrate_to_v36(con):
+        ...     logger.info("Character bible integration ready")
+    """
+    cols = {r[1] for r in con.execute("PRAGMA table_info(characters)").fetchall()}
+    if "bible_path" in cols and "bible_sections" in cols and "bible_enabled" in cols:
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (36)")
+        con.commit()
+        return False
+
+    try:
+        logger.info("Applying schema v36 migration (character bible integration)...")
+
+        for col, typedef in [
+            ("bible_path", "TEXT DEFAULT NULL"),
+            ("bible_sections", "TEXT DEFAULT NULL"),
+            ("bible_enabled", "INTEGER DEFAULT 0"),
+        ]:
+            if col not in cols:
+                con.execute(f"ALTER TABLE characters ADD COLUMN {col} {typedef}")
+                logger.info(f"  + characters.{col}")
+
+        # Auto-populate bible_path for existing characters by name matching
+        import os
+        _docs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "characters")
+        if os.path.isdir(_docs_dir):
+            _name_to_file = {}
+            for f in os.listdir(_docs_dir):
+                if f.startswith("character_") and f.endswith(".md") and f != "character_bible_master.md":
+                    _name_to_file[f] = f"docs/characters/{f}"
+
+            rows = con.execute("SELECT id, name FROM characters").fetchall()
+            for char_id, char_name in rows:
+                # Try matching: "Rin (Akane)" → "character_rin_akane.md"
+                # Also try: "Tsundere (Raine)" → "character_tsundere_raine.md"
+                # Also try: "Genki (Kitsune)" → "character_genki_kitsune.md"
+                _base = char_name.lower().replace(" ", "_").replace("(", "").replace(")", "")
+                _candidate = f"character_{_base}.md"
+                if _candidate in _name_to_file:
+                    con.execute(
+                        "UPDATE characters SET bible_path=?, bible_enabled=1 WHERE id=?",
+                        (_name_to_file[_candidate], char_id)
+                    )
+                    logger.info(f"  → Linked {char_name} → {_name_to_file[_candidate]}")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (36)")
+        con.commit()
+        logger.info("✅ Schema v36 migration complete (character bible integration)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v36 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v37(con: sqlite3.Connection) -> bool:
+    """Add game companion session and reaction tracking tables (v37).
+
+    Creates two tables for the game spectator/coach feature:
+
+    ``game_companion_sessions``:
+        Tracks individual spectator sessions (game tag, mode, duration,
+        reaction count, memorable moments, outcome).
+
+    ``game_companion_reactions``:
+        Individual character reactions within a session (text, emotion,
+        urgency, frame hash, action taken).
+
+    Returns:
+        True if migration was applied, False if already at v37.
+
+    Example:
+        >>> if migrate_to_v37(con):
+        ...     logger.info("Game companion tables ready")
+    """
+    tables = {r[0] for r in con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()}
+
+    if "game_companion_sessions" in tables and "game_companion_reactions" in tables:
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (37)")
+        con.commit()
+        return False
+
+    try:
+        logger.info("Applying schema v37 migration (game companion tables)...")
+
+        if "game_companion_sessions" not in tables:
+            con.execute("""
+                CREATE TABLE game_companion_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    game_tag TEXT NOT NULL,
+                    mode TEXT NOT NULL DEFAULT 'watch',
+                    started_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    ended_at TEXT,
+                    duration_seconds INTEGER,
+                    reaction_count INTEGER NOT NULL DEFAULT 0,
+                    memorable_moments TEXT,
+                    outcome TEXT,
+                    notes TEXT
+                )
+            """)
+            logger.info("  + game_companion_sessions table")
+
+        if "game_companion_reactions" not in tables:
+            con.execute("""
+                CREATE TABLE game_companion_reactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL REFERENCES game_companion_sessions(id) ON DELETE CASCADE,
+                    timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+                    reaction_text TEXT NOT NULL,
+                    emotion TEXT NOT NULL DEFAULT 'neutral',
+                    urgency REAL NOT NULL DEFAULT 0.5,
+                    frame_hash TEXT,
+                    action_taken TEXT
+                )
+            """)
+            logger.info("  + game_companion_reactions table")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (37)")
+        con.commit()
+        logger.info("✅ Schema v37 migration complete (game companion tables)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v37 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v38(con: sqlite3.Connection) -> bool:
+    """Rename character 'Nyx (Ayane)' to 'Ayane (Yuki)' and update voice_id (v38).
+
+    The Character Bible v1.2 uses the name "Ayane (Yuki)" for the kuudere
+    archetype.  The old "Nyx" name is being reclaimed for a new Chuunibyou
+    character (Nyx Dae), so this migration corrects the display name and
+    voice_id in the database to match the canonical bible naming.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v38+.
+
+    Example:
+        >>> if migrate_to_v38(con):
+        ...     logger.info("Nyx (Ayane) renamed to Ayane (Yuki)")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 38:
+        return False
+
+    try:
+        logger.info("Applying schema v38 migration (rename Nyx→Ayane)...")
+
+        # Rename character display name
+        con.execute(
+            "UPDATE characters SET name = 'Ayane (Yuki)' WHERE name = 'Nyx (Ayane)'"
+        )
+        logger.info("  ~ Nyx (Ayane) → Ayane (Yuki)")
+
+        # Update voice_id to match new name
+        con.execute(
+            "UPDATE characters SET voice_id = 'ayane_v1' "
+            "WHERE name = 'Ayane (Yuki)' AND voice_id = 'nyx_v1'"
+        )
+        logger.info("  ~ voice_id nyx_v1 → ayane_v1")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (38)")
+        con.commit()
+        logger.info("✅ Schema v38 migration complete (rename Nyx→Ayane)")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Schema v38 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -1912,21 +2388,79 @@ def ensure_db():
             if migrate_to_v30(con):
                 version = 30
 
+        # Upgrade from v30 to v31 (Phase 15: Enhanced Emotion Portraits)
+        if version < 31:
+            logger.info("Upgrading database schema from v30 to v31...")
+            logger.info("  - Adding emotion_portraits_mode to characters (Phase 15)")
+            if migrate_to_v31(con):
+                version = 31
+
+        # Upgrade from v31 to v32 (Phase 16: Character Bible v1.2 Restoration)
+        if version < 32:
+            logger.info("Upgrading database schema from v31 to v32...")
+            logger.info("  - Renaming 4 characters to Bible v1.2 names + upgrading prompts")
+            logger.info("  - Inserting 2 new characters (Shiori, Mika)")
+            if migrate_to_v32(con):
+                version = 32
+
+        # Upgrade from v32 to v33 (3D Pipeline: GLB + Unity columns)
+        if version < 33:
+            logger.info("Upgrading database schema from v32 to v33...")
+            logger.info("  - Adding glb_model_url + unity_scene_url to characters")
+            if migrate_to_v33(con):
+                version = 33
+
+        # Upgrade from v33 to v34 (Entrance/Exit animation styles)
+        if version < 34:
+            logger.info("Upgrading database schema from v33 to v34...")
+            logger.info("  - Adding entrance_style + exit_style to characters")
+            if migrate_to_v34(con):
+                version = 34
+
+        # Upgrade from v34 to v35 (Rolling summaries + importance scoring)
+        if version < 35:
+            logger.info("Upgrading database schema from v34 to v35...")
+            logger.info("  - Creating session_summaries table (rolling summary chain)")
+            logger.info("  - Adding importance_score to messages (context-aware pruning)")
+            if migrate_to_v35(con):
+                version = 35
+
+        # Upgrade from v35 to v36 (Character bible integration)
+        if version < 36:
+            logger.info("Upgrading database schema from v35 to v36...")
+            logger.info("  - Adding bible_path, bible_sections, bible_enabled to characters")
+            if migrate_to_v36(con):
+                version = 36
+
+        # Upgrade from v36 to v37 (Game companion tables)
+        if version < 37:
+            logger.info("Upgrading database schema from v36 to v37...")
+            logger.info("  - Creating game_companion_sessions + game_companion_reactions tables")
+            if migrate_to_v37(con):
+                version = 37
+
+        # Upgrade from v37 to v38 (Rename Nyx→Ayane)
+        if version < 38:
+            logger.info("Upgrading database schema from v37 to v38...")
+            logger.info("  - Renaming Nyx (Ayane) → Ayane (Yuki), updating voice_id")
+            if migrate_to_v38(con):
+                version = 38
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 30:
-            raise RuntimeError(f"Database initialization failed: Expected v30, got v{final_version}")
+        if final_version < 38:
+            raise RuntimeError(f"Database initialization failed: Expected v38, got v{final_version}")
 
-        if final_version > 30:
-            logger.warning(f"Database is newer than application (v{final_version} > v30). Some features might be unused.")
+        if final_version > 38:
+            logger.warning(f"Database is newer than application (v{final_version} > v38). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v30 adds tiered memory)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v38 renames Nyx→Ayane)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

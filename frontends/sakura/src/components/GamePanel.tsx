@@ -12,7 +12,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Gamepad2, Trophy, Clock, RefreshCw, Dices, HelpCircle,
-  Type, Link, Lightbulb, Grid3x3, Layers, Crown,
+  Type, Link, Lightbulb, Grid3x3, Layers, Crown, Monitor,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { TriviaGame } from './TriviaGame';
@@ -23,6 +23,7 @@ import { RiddlesGame } from './RiddlesGame';
 import { TicTacToeGame } from './TicTacToeGame';
 import { MemoryMatchGame } from './MemoryMatchGame';
 import { ChessGame } from './ChessGame';
+import { SpectatorPanel } from './SpectatorPanel';
 import type { GameSession, GameStartResponse, GameType, GameBestScore } from '../lib/types';
 
 interface Props {
@@ -39,7 +40,7 @@ interface ActiveGame {
   theme?: string;
 }
 
-type GameTab = 'text' | 'board';
+type GameTab = 'text' | 'board' | 'spectator';
 
 // ── Game catalogue ──────────────────────────────────────────────────────────
 
@@ -245,7 +246,19 @@ export function GamePanel({ characterId, charName }: Props) {
         >
           Board &amp; 2D Games
         </button>
+        <button
+          className={`game-tab-btn ${tab === 'spectator' ? 'game-tab-btn--active' : ''}`}
+          onClick={() => setTab('spectator')}
+        >
+          <Monitor size={13} style={{ marginRight: '4px', verticalAlign: '-2px' }} />
+          Game Companion
+        </button>
       </div>
+
+      {/* Spectator tab — Game Companion */}
+      {tab === 'spectator' && (
+        <SpectatorPanel characterId={characterId} charName={charName} />
+      )}
 
       {/* Topic input (for applicable games) */}
       {tab === 'text' && (
@@ -291,8 +304,8 @@ export function GamePanel({ characterId, charName }: Props) {
         </div>
       )}
 
-      {/* Game cards */}
-      <div className="game-card-grid">
+      {/* Game cards — hidden when spectator tab is active */}
+      {tab !== 'spectator' && <div className="game-card-grid">
         {visibleGames.map(cfg => {
           const bs = bestScores[cfg.type];
           return (
@@ -316,10 +329,10 @@ export function GamePanel({ characterId, charName }: Props) {
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {/* Recent games */}
-      {history.length > 0 && (
+      {tab !== 'spectator' && history.length > 0 && (
         <div className="game-history">
           <p className="game-history-title">Recent games</p>
           {history.slice(0, 6).map(g => (

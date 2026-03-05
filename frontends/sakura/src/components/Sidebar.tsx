@@ -1,11 +1,12 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain, Settings,
-  ChevronLeft, Search, Wifi, WifiOff, Pencil, BookMarked, UserCircle, Gamepad2, HelpCircle
+  ChevronLeft, Search, Wifi, WifiOff, Pencil, BookMarked, UserCircle, Gamepad2, HelpCircle, Download
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
 import { useWizardStore } from '../stores/wizardStore';
+import { useChatStore } from '../stores/chatStore';
 import { NotificationBadge } from './NotificationBadge';
 
 /**
@@ -328,6 +329,16 @@ export function Sidebar() {
           {!sidebarCollapsed && <span className="text-[10px] font-medium">Games</span>}
         </button>
         <button
+          onClick={() => openOverlay('modelbrowser')}
+          className="sidebar-tool-btn flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors flex-1"
+          style={{ color: 'var(--color-text-tertiary)' }}
+          title="Browse & Download 3D Models"
+          aria-label="Model Browser"
+        >
+          <Download size={16} />
+          {!sidebarCollapsed && <span className="text-[10px] font-medium">Models</span>}
+        </button>
+        <button
           onClick={() => openOverlay('settings')}
           className="sidebar-tool-btn flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors flex-1"
           style={{ color: 'var(--color-text-tertiary)' }}
@@ -444,8 +455,21 @@ function resolveAvatarUrl(name?: string, avatarUrl?: string): string | null {
   return null;
 }
 
+/** Emotion emoji lookup for sidebar indicator (Phase 15). */
+const SIDEBAR_EMOTION_EMOJI: Record<string, string> = {
+  happy: '😊', sad: '🥺', angry: '😤', surprised: '😮', fearful: '😨',
+  disgusted: '🤢', embarrassed: '😳', shy: '🫣', proud: '😎',
+  confident: '😏', jealous: '😑', grateful: '🙏', confused: '😕',
+  curious: '🧐', thoughtful: '🤔', nostalgic: '😌', awe: '🤩',
+  love: '❤️', flirty: '😉', longing: '😔', excited: '✨',
+  tired: '😴', relieved: '😌', smug: '😏', mischievous: '😈',
+};
+
+/** How long the sidebar emotion indicator stays visible (ms). */
+const EMOTION_INDICATOR_TIMEOUT = 10_000;
+
 interface SidebarCharItemProps {
-  character: { id: number; name?: string; avatar_url?: string; greeting_message?: string };
+  character: { id: number; name?: string; avatar_url?: string; greeting_message?: string; emotion_portraits_mode?: number };
   active: boolean;
   onClick: () => void;
 }
@@ -453,6 +477,8 @@ interface SidebarCharItemProps {
 /**
  * Compact character row in the sidebar chat list.
  * Shows avatar circle (with onError fallback to initial), name, and active highlight.
+ * Phase 15: When emotion_portraits_mode >= 2, shows a temporary emotion emoji
+ * badge over the avatar for EMOTION_INDICATOR_TIMEOUT ms after each emotion change.
  */
 function SidebarCharItem({ character, active, onClick }: SidebarCharItemProps) {
   const avatarUrl = resolveAvatarUrl(character.name, character.avatar_url);
@@ -461,6 +487,26 @@ function SidebarCharItem({ character, active, onClick }: SidebarCharItemProps) {
 
   const showImage = avatarUrl !== null && !imgFailed;
   const initial = character.name?.[0] ?? '?';
+
+  // Phase 15: sidebar emotion indicator
+  const portraitsMode = character.emotion_portraits_mode ?? 0;
+  const latestEntry = useChatStore(s => s.latestEmotionByChar[character.id]);
+  const [showEmotion, setShowEmotion] = useState(false);
+
+  useEffect(() => {
+    if (portraitsMode < 2 || !latestEntry || latestEntry.emotion === 'neutral') {
+      setShowEmotion(false);
+      return;
+    }
+    // Show if the emotion was set recently
+    const age = Date.now() - latestEntry.timestamp;
+    if (age > EMOTION_INDICATOR_TIMEOUT) { setShowEmotion(false); return; }
+    setShowEmotion(true);
+    const timer = setTimeout(() => setShowEmotion(false), EMOTION_INDICATOR_TIMEOUT - age);
+    return () => clearTimeout(timer);
+  }, [portraitsMode, latestEntry?.emotion, latestEntry?.timestamp]);
+
+  const emotionEmoji = latestEntry ? SIDEBAR_EMOTION_EMOJI[latestEntry.emotion] : undefined;
 
   return (
     <button
@@ -471,16 +517,37 @@ function SidebarCharItem({ character, active, onClick }: SidebarCharItemProps) {
         border: active ? '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)' : '1px solid transparent',
       }}
     >
-      {showImage ? (
-        <img
-          src={avatarUrl!}
-          alt={character.name || ''}
-          onError={handleImgError}
-          className="w-9 h-9 rounded-full object-cover flex-shrink-0"
-        />
-      ) : (
-        <AvatarInitial initial={initial} size={9} />
-      )}
+      <div className="relative flex-shrink-0">
+        {showImage ? (
+          <img
+            src={avatarUrl!}
+            alt={character.name || ''}
+            onError={handleImgError}
+            className="w-9 h-9 rounded-full object-cover"
+          />
+        ) : (
+          <AvatarInitial initial={initial} size={9} />
+        )}
+        {/* Phase 15: Emotion badge */}
+        {showEmotion && emotionEmoji && (
+          <span
+            style={{
+              position: 'absolute',
+              bottom: -2,
+              right: -2,
+              fontSize: '0.7rem',
+              lineHeight: 1,
+              background: 'var(--color-background)',
+              borderRadius: '50%',
+              padding: '1px',
+              transition: 'opacity 0.3s ease',
+            }}
+            title={latestEntry?.emotion}
+          >
+            {emotionEmoji}
+          </span>
+        )}
+      </div>
       <div className="min-w-0 flex-1">
         <p
           className="char-name-display truncate"

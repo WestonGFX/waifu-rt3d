@@ -6,6 +6,9 @@ import { useChatStore } from '../stores/chatStore';
 import { useViewerStore } from '../stores/viewerStore';
 import { api } from '../lib/api';
 import type { Character } from '../lib/types';
+import { SpringBonePanel } from './SpringBonePanel';
+import { EffectsPanel } from './EffectsPanel';
+import { AnimationBrowser } from './AnimationBrowser';
 
 /**
  * Lazy-load Live2DCanvas to avoid importing pixi-live2d-display eagerly.
@@ -19,20 +22,27 @@ interface ModelPanelProps {
 }
 
 /**
- * Resolve the VRM model URL for a character.
- * Priority: explicit model_vrm > vrm_model_url > auto-detect by name.
+ * Resolve the 3D model URL for a character.
+ *
+ * Priority chain:
+ *   1. Explicit model_vrm field
+ *   2. Explicit vrm_model_url field
+ *   3. Explicit glb_model_url field
+ *   4. Auto-detect by name against all available 3D models (VRM + GLB)
+ *
  * Auto-detection matches character name (or parenthetical alias) against
- * available VRM filenames from the scan endpoint.
+ * available filenames from the scan endpoint.
  */
-function resolveVrmUrl(
+function resolveModelUrl(
   character: Character,
   availableModels: Array<{ name: string; url: string }>
 ): string | null {
-  // Explicit assignment
+  // Explicit assignment (VRM takes priority, then GLB)
   if (character.model_vrm) return character.model_vrm;
   if (character.vrm_model_url) return character.vrm_model_url;
+  if (character.glb_model_url) return character.glb_model_url;
 
-  // Auto-detect by name: check parenthetical alias first, e.g. "Fox (Rin)" → "Rin"
+  // Auto-detect by name: check parenthetical alias first, e.g. "Rin (Akane)" → "Akane"
   const parenMatch = character.name?.match(/\(([^)]+)\)/);
   const names = [
     parenMatch?.[1]?.trim(),
@@ -47,6 +57,9 @@ function resolveVrmUrl(
   }
   return null;
 }
+
+/** Backward-compat alias. */
+const resolveVrmUrl = resolveModelUrl;
 
 /* ═══════════════════════════════════════════════════════════════════════
    Expression Editor Overlay
@@ -187,7 +200,7 @@ function ExpressionEditor({ shapes, values, onChange, onResetAll }: ExpressionEd
  * Auto-resolves VRM model by character name if not explicitly set.
  */
 export function ModelPanel({ character }: ModelPanelProps) {
-  const { modelPanelOpen, toggleModelPanel, setVrmStats, setViewportFps, cinematicMode } = useAppStore();
+  const { modelPanelOpen, toggleModelPanel, setVrmStats, setViewportFps, cinematicMode, openOverlay } = useAppStore();
   const viewer = useViewerStore();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   /** Current emotion from chatStore — drives the emotion badge in the viewport overlay. */
@@ -234,6 +247,10 @@ export function ModelPanel({ character }: ModelPanelProps) {
   /** Live 3D viewport FPS — posted by viewer.html every second. Used for the in-panel overlay. */
   const [viewportFpsLocal, setViewportFpsLocal] = useState<number | null>(null);
 
+  /** GLB morph targets — populated when a GLB model is loaded. */
+  const [glbMorphTargets, setGlbMorphTargets] = useState<Array<{ meshName: string; targetName: string; index: number; value: number }>>([]);
+  const [glbMorphValues, setGlbMorphValues] = useState<Record<string, number>>({});
+
   /** Whether a screenshot capture is in-flight (postMessage sent, awaiting reply). */
   const [screenshotPending, setScreenshotPending] = useState(false);
   /** Timeout ref so we can reset screenshotPending if the viewer never replies. */
@@ -245,23 +262,31 @@ export function ModelPanel({ character }: ModelPanelProps) {
     useViewerStore.getState().setIframeRef(el);
   }, []);
 
-  // Fetch available VRM models + motion model status once
+  // Fetch available 3D models (VRM + GLB) + motion model status once
   useEffect(() => {
-    api.scanVrm().then(models => {
+    api.scan3dModels().then(models => {
       setVrmModels(models.map(m => ({ name: m.name, url: m.url })));
-    }).catch(() => {});
+    }).catch(() => {
+      // Fallback to VRM-only scan for older backends
+      api.scanVrm().then(models => {
+        setVrmModels(models.map(m => ({ name: m.name, url: m.url })));
+      }).catch(() => {});
+    });
     api.getMotionModelStatus().then(s => setMotionBackend(s.active_backend)).catch(() => {});
   }, []);
 
-  const vrmUrl = resolveVrmUrl(character, vrmModels);
+  const vrmUrl = resolveModelUrl(character, vrmModels);
 
   /** Whether this character uses a Live2D model (takes priority over VRM). */
   const isLive2D = Boolean(character.live2d_model);
+  /** Whether this character uses a Unity WebGL scene (highest priority). */
+  const isUnity = character.model_type === 'unity' || Boolean(character.unity_scene_url);
 
   // Sync viewer mode when the character's model type changes
   useEffect(() => {
-    useViewerStore.getState().setMode(isLive2D ? 'live2d' : 'vrm');
-  }, [isLive2D]);
+    const mode = isUnity ? 'unity' : isLive2D ? 'live2d' : 'vrm';
+    useViewerStore.getState().setMode(mode);
+  }, [isLive2D, isUnity]);
 
   // Listen for modelLoaded / modelFailed messages from the viewer iframe
   useEffect(() => {
@@ -276,6 +301,13 @@ export function ModelPanel({ character }: ModelPanelProps) {
         setVrmLoadState('loaded');
         // Write geometry stats to app store so SettingsView can display them
         if (e.data.stats) setVrmStats(e.data.stats);
+        // B.1: Auto-request morph targets for GLB models
+        if (e.data.stats?.vrmVersion === 'glb') {
+          setTimeout(() => useViewerStore.getState().dispatchGetGlbMorphTargets(), 200);
+        } else {
+          setGlbMorphTargets([]);
+          setGlbMorphValues({});
+        }
         // Auto-generate a neutral idle motion clip when the model first loads
         api.generateMotion({ emotion: 'neutral', duration: 4, loop: true })
           .then(data => {
@@ -297,6 +329,15 @@ export function ModelPanel({ character }: ModelPanelProps) {
             })
             .catch(() => {});
         }
+      } else if (e.data?.type === 'glbMorphTargetList') {
+        // B.1: Populate GLB morph target sliders
+        const targets = e.data.targets || [];
+        setGlbMorphTargets(targets);
+        const vals: Record<string, number> = {};
+        for (const t of targets) {
+          vals[`${t.meshName}:${t.index}`] = t.value;
+        }
+        setGlbMorphValues(vals);
       } else if (e.data?.type === 'fpsUpdate') {
         const fps = e.data.fps as number;
         setViewportFpsLocal(fps);  // drives the in-panel FPS overlay
@@ -327,6 +368,10 @@ export function ModelPanel({ character }: ModelPanelProps) {
       setVrmStats(null);
       // Allow 800ms for the iframe to initialise before sending the load command
       const timer = setTimeout(() => {
+        // Queue greeting gesture before model load (entrance animator will play it after slide-in)
+        if (character.greeting_animation) {
+          useViewerStore.getState().dispatchQueueGreetingGesture(character.greeting_animation);
+        }
         useViewerStore.getState().dispatchLoadModel(vrmUrl);
         useViewerStore.getState().dispatchCameraPreset('bust');
       }, 800);
@@ -479,27 +524,45 @@ export function ModelPanel({ character }: ModelPanelProps) {
             flexDirection: 'column',
           }}
         >
-          {/* Viewer area — Live2D canvas or VRM iframe depending on model type */}
+          {/* Viewer area — Unity iframe, Live2D canvas, or VRM/GLB iframe */}
           <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
-            {isLive2D ? (
-              <Suspense fallback={
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
-                  <Loader2 size={24} className="animate-spin" style={{ color: 'var(--color-accent)' }} />
-                </div>
-              }>
-                <Live2DCanvas
-                  modelUrl={character.live2d_model!}
-                  onLoadStateChange={(state, reason) => {
-                    if (state === 'loaded') setVrmLoadState('loaded');
-                    else if (state === 'failed') {
-                      setVrmLoadState('failed');
-                      setVrmFailReason(reason || 'Live2D model failed to load');
-                    } else {
-                      setVrmLoadState('loading');
-                    }
-                  }}
-                />
-              </Suspense>
+            {isUnity ? (
+              <iframe
+                ref={(el) => {
+                  if (el) useViewerStore.getState().setUnityIframeRef(el);
+                }}
+                src={character.unity_scene_url || '/unity/Build/index.html'}
+                className="w-full h-full border-0"
+                title="Unity 3D Viewer"
+                allow="autoplay"
+              />
+            ) : isLive2D ? (
+              <motion.div
+                key={character.live2d_model}
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                transition={{ duration: 1.2, ease: [0.33, 1, 0.68, 1] }}
+                style={{ width: '100%', height: '100%' }}
+              >
+                <Suspense fallback={
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+                    <Loader2 size={24} className="animate-spin" style={{ color: 'var(--color-accent)' }} />
+                  </div>
+                }>
+                  <Live2DCanvas
+                    modelUrl={character.live2d_model!}
+                    onLoadStateChange={(state, reason) => {
+                      if (state === 'loaded') setVrmLoadState('loaded');
+                      else if (state === 'failed') {
+                        setVrmLoadState('failed');
+                        setVrmFailReason(reason || 'Live2D model failed to load');
+                      } else {
+                        setVrmLoadState('loading');
+                      }
+                    }}
+                  />
+                </Suspense>
+              </motion.div>
             ) : (
               <iframe
                 ref={setIframeEl}
@@ -682,21 +745,37 @@ export function ModelPanel({ character }: ModelPanelProps) {
               className="absolute bottom-0 left-0 right-0 flex items-end justify-between px-3 pb-3"
               style={{ transition: 'opacity 0.2s', opacity: 0.85 }}
             >
-              {/* Left: close-panel button */}
-              <button
-                onClick={toggleModelPanel}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs"
-                style={{
-                  backgroundColor: 'var(--color-surface)',
-                  borderRadius: 'var(--radius-button)',
-                  boxShadow: 'var(--shadow-card)',
-                  color: 'var(--color-text-secondary)',
-                  border: '1px solid var(--color-border)',
-                }}
-                title="Collapse the 3D panel"
-              >
-                <ChevronLeft size={14} /> Close
-              </button>
+              {/* Left: close-panel button + browse models */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={toggleModelPanel}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs"
+                  style={{
+                    backgroundColor: 'var(--color-surface)',
+                    borderRadius: 'var(--radius-button)',
+                    boxShadow: 'var(--shadow-card)',
+                    color: 'var(--color-text-secondary)',
+                    border: '1px solid var(--color-border)',
+                  }}
+                  title="Collapse the 3D panel"
+                >
+                  <ChevronLeft size={14} /> Close
+                </button>
+                <button
+                  onClick={() => openOverlay('modelbrowser')}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs"
+                  style={{
+                    backgroundColor: 'var(--color-surface)',
+                    borderRadius: 'var(--radius-button)',
+                    boxShadow: 'var(--shadow-card)',
+                    color: 'var(--color-accent)',
+                    border: '1px solid var(--color-border)',
+                  }}
+                  title="Browse & download 3D models"
+                >
+                  <Box size={13} /> Models
+                </button>
+              </div>
 
               {/* Right: screenshot + hide-controls toggle */}
               <div className="flex items-center gap-2">
@@ -741,6 +820,76 @@ export function ModelPanel({ character }: ModelPanelProps) {
               </div>
             </div>
           </div>
+
+          {/* Spring Bone Physics Panel — shown when VRM model loaded */}
+          {!isLive2D && vrmLoadState === 'loaded' && (
+            <SpringBonePanel isOpen={modelPanelOpen} />
+          )}
+
+          {/* Phase 5: Visual Effects Panel — bloom, color grading, particles, screenshot */}
+          {!isLive2D && vrmLoadState === 'loaded' && (
+            <EffectsPanel isOpen={modelPanelOpen} />
+          )}
+
+          {/* Animation Library — clip-based animation browser */}
+          {!isLive2D && vrmLoadState === 'loaded' && (
+            <AnimationBrowser isOpen={modelPanelOpen} />
+          )}
+
+          {/* B.1: GLB Morph Target Sliders — shown only when a GLB has morph targets */}
+          {glbMorphTargets.length > 0 && vrmLoadState === 'loaded' && (
+            <div style={{ borderTop: '1px solid var(--color-border)', padding: '8px 12px' }}>
+              <button
+                onClick={() => {
+                  const el = document.getElementById('morph-target-panel');
+                  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', width: '100%',
+                  background: 'none', border: 'none', color: 'var(--color-text-primary)',
+                  cursor: 'pointer', padding: 0, fontSize: '13px', fontWeight: 500,
+                }}
+              >
+                <Sliders size={14} />
+                <span>Morph Targets</span>
+                <span style={{ color: 'var(--color-text-tertiary)', fontSize: '11px', marginLeft: 'auto' }}>
+                  {glbMorphTargets.length} targets
+                </span>
+              </button>
+              <div id="morph-target-panel" style={{ display: 'none', marginTop: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+                {glbMorphTargets.map((target) => {
+                  const key = `${target.meshName}:${target.index}`;
+                  return (
+                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                      <label
+                        style={{
+                          flex: '0 0 100px', fontSize: '10px', color: 'var(--color-text-secondary)',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          fontFamily: 'monospace',
+                        }}
+                        title={`${target.meshName} / ${target.targetName}`}
+                      >
+                        {target.targetName}
+                      </label>
+                      <input
+                        type="range" min="0" max="1" step="0.01"
+                        value={glbMorphValues[key] ?? 0}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setGlbMorphValues(prev => ({ ...prev, [key]: val }));
+                          useViewerStore.getState().dispatchSetGlbMorphTarget(target.meshName, target.index, val);
+                        }}
+                        style={{ flex: 1, height: '3px' }}
+                      />
+                      <span style={{ minWidth: '28px', fontSize: '10px', textAlign: 'right', color: 'var(--color-text-tertiary)', fontFamily: 'monospace' }}>
+                        {(glbMorphValues[key] ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Remote GPU Wizard — slide up from bottom */}
           <AnimatePresence>

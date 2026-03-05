@@ -48,6 +48,11 @@ const MOTION_MAP: Record<string, string> = {
   think: 'idle',
   laugh: 'tap_body',
   jump: 'tap_body',
+  celebrate: 'tap_body',
+  crossed_arms: 'idle',
+  foot_tap: 'idle',
+  yawn: 'idle',
+  stretch: 'tap_body',
 };
 
 // ── Hook ────────────────────────────────────────────────────────────────────────
@@ -79,6 +84,7 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const lipSyncRAFRef = useRef<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // ── Initialize PIXI application ──────────────────────────────────────────────
@@ -224,6 +230,11 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
   }, []);
 
   const stopAudio = useCallback(() => {
+    // Abort any in-flight audio fetch
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
     if (sourceRef.current) {
       try { sourceRef.current.stop(); } catch { /* already stopped */ }
       sourceRef.current = null;
@@ -238,6 +249,10 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
   const playAudio = useCallback(async (audioUrl: string) => {
     if (!modelRef.current) return;
     stopAudio();
+
+    // Create AbortController for this fetch so cleanup can cancel it
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       if (!audioCtxRef.current) {
@@ -255,7 +270,7 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
 
       const analyser = analyserRef.current!;
 
-      const response = await fetch(audioUrl);
+      const response = await fetch(audioUrl, { signal: controller.signal });
       const buffer = await response.arrayBuffer();
       const audioBuffer = await ctx.decodeAudioData(buffer);
 
@@ -291,6 +306,8 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
       };
       updateLipSync();
     } catch (e) {
+      // Ignore AbortError — expected on cleanup/unmount
+      if (e instanceof DOMException && e.name === 'AbortError') return;
       console.error('[Live2D] Audio playback error:', e);
     }
   }, [stopAudio, setMouthOpen]);

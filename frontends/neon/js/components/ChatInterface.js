@@ -663,7 +663,7 @@ export class ChatInterface {
         if (primaryUrl && !primaryUrl.includes('default') && !primaryUrl.endsWith('.vrm')) {
             return primaryUrl;
         }
-        // Extract parenthetical name e.g. "Fox (Rin)" → "rin"
+        // Extract parenthetical name e.g. "Rin (Akane)" → "akane"
         const parenMatch = char.name.match(/\((\w+)\)/);
         const cleanName = parenMatch ? parenMatch[1].toLowerCase() : char.name.toLowerCase().split(' ')[0];
         return `/images/${cleanName}_pixel_portrait.png`;

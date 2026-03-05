@@ -58,6 +58,8 @@ export interface UseFullDuplexVoiceReturn {
   interrupt: () => void;
   /** Current audio input level (0-1), for VoiceOrb visualization. */
   inputLevel: number;
+  /** Current audio output level (0-1), for VoiceOrb speaking glow. */
+  outputLevel: number;
 }
 
 // ── Constants ───────────────────────────────────────────────────────────────────
@@ -96,12 +98,15 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
 
   const [state, setState] = useState<VoiceSessionState>('disconnected');
   const [inputLevel, setInputLevel] = useState(0);
+  const [outputLevel, setOutputLevel] = useState(0);
 
   const wsRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const playbackAnalyserRef = useRef<AnalyserNode | null>(null);
+  const outputLevelRAFRef = useRef<number | null>(null);
   const levelIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -115,6 +120,33 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
   const playbackQueueRef = useRef<ArrayBuffer[]>([]);
   const isPlayingRef = useRef(false);
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
+
+  /**
+   * Start a RAF loop that measures playback audio level via the playback analyser.
+   * Updates outputLevel state for VoiceOrb speaking glow.
+   */
+  const startOutputLevelMonitor = useCallback(() => {
+    const analyser = playbackAnalyserRef.current;
+    if (!analyser) return;
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    const update = () => {
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+      const avg = sum / dataArray.length;
+      setOutputLevel(Math.min(avg / 128, 1.0));
+      outputLevelRAFRef.current = requestAnimationFrame(update);
+    };
+    update();
+  }, []);
+
+  const stopOutputLevelMonitor = useCallback(() => {
+    if (outputLevelRAFRef.current) {
+      cancelAnimationFrame(outputLevelRAFRef.current);
+      outputLevelRAFRef.current = null;
+    }
+    setOutputLevel(0);
+  }, []);
 
   /**
    * Play audio from an ArrayBuffer (TTS chunk from the server).
@@ -139,11 +171,20 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
           await ctx.resume();
         }
 
+        // Create playback analyser for output level measurement
+        if (!playbackAnalyserRef.current) {
+          playbackAnalyserRef.current = ctx.createAnalyser();
+          playbackAnalyserRef.current.fftSize = 256;
+          playbackAnalyserRef.current.connect(ctx.destination);
+        }
+
         const decoded = await ctx.decodeAudioData(buf.slice(0)); // slice for ownership
         const source = ctx.createBufferSource();
         source.buffer = decoded;
-        source.connect(ctx.destination);
+        source.connect(playbackAnalyserRef.current);
         activeSourceRef.current = source;
+
+        startOutputLevelMonitor();
 
         await new Promise<void>((resolve) => {
           source.onended = () => {
@@ -158,8 +199,9 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
       }
     }
 
+    stopOutputLevelMonitor();
     isPlayingRef.current = false;
-  }, []);
+  }, [startOutputLevelMonitor, stopOutputLevelMonitor]);
 
   // ── Input level monitoring ────────────────────────────────────────────────
 
@@ -385,12 +427,20 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
       activeSourceRef.current = null;
     }
 
+    // Stop output level monitor
+    if (outputLevelRAFRef.current) {
+      cancelAnimationFrame(outputLevelRAFRef.current);
+      outputLevelRAFRef.current = null;
+    }
+    setOutputLevel(0);
+
     // Close audio context
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => {});
       audioCtxRef.current = null;
     }
     analyserRef.current = null;
+    playbackAnalyserRef.current = null;
 
     // Clear playback queue
     playbackQueueRef.current = [];
@@ -442,5 +492,6 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
     toggle,
     interrupt,
     inputLevel,
+    outputLevel,
   };
 }

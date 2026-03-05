@@ -130,4 +130,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('start-voice-mode', handler);
     return () => ipcRenderer.removeListener('start-voice-mode', handler);
   },
+
+  /**
+   * Get current Discord RPC state from the main process.
+   * Returns whether RPC is enabled, whether it's actively connected to Discord,
+   * and the stored Application ID.
+   *
+   * @returns {Promise<{ enabled: boolean, connected: boolean, appId: string }>}
+   */
+  getDiscordState: () => ipcRenderer.invoke('get-discord-state'),
+
+  /**
+   * Save a Discord Application ID to persistent electron-store.
+   * Separate from enabling — allows pre-configuring the ID before toggling RPC.
+   *
+   * @param {string} appId - Discord Application ID (18-digit numeric string)
+   * @returns {Promise<{ ok: boolean }>}
+   */
+  setDiscordAppId: (appId) => ipcRenderer.invoke('set-discord-app-id', appId),
+
+  /**
+   * Enable or disable Discord Rich Presence.
+   * When enabling, reads the stored App ID and attempts to connect to Discord.
+   * Fails gracefully if Discord isn't running or the ID is invalid.
+   *
+   * @param {boolean} enabled
+   * @returns {Promise<{ connected: boolean, error?: string }>}
+   */
+  setDiscordRpcEnabled: (enabled) => ipcRenderer.invoke('set-discord-rpc-enabled', enabled),
 });

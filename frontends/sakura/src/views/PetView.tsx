@@ -375,6 +375,90 @@ export function PetView() {
     return () => clearTimeout(timer);
   }, [currentEmotion]);
 
+  // ── Proximity wave + long-idle doze behaviors ─────────────────────────────
+  //
+  // wave_at_cursor: fires when the OS mouse enters a 150px proximity halo
+  //   around the pet window edge. Cooldown: 30 seconds between waves.
+  // doze: fires when the user has been away for 20+ minutes.
+  //   wake_up: fires when activity resumes after a doze state.
+
+  useEffect(() => {
+    if (!electronAPI) return;
+
+    // Refs so we can reference latest values inside closures without deps churn
+    const waveCooldownRef = { current: 0 };      // timestamp of last wave
+    const dozeActiveRef   = { current: false };   // whether character is currently dozing
+    const inactiveTimerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
+
+    /** Send a named gesture to the viewer iframe. */
+    const sendPetGesture = (gesture: string) => {
+      const iframe = iframeRef.current;
+      if (iframe?.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'playGesture', gesture }, '*');
+      }
+    };
+
+    // ── Screen-bounds proximity check ────────────────────────────────────────
+    // We don't have direct access to the window's screen position from the
+    // renderer, but we can approximate: the pet window fills the entire
+    // renderer viewport, so if the mouse is within 150px of any window edge
+    // it's "near" the pet.
+    const PROXIMITY_PX = 150;
+    const WAVE_COOLDOWN_MS = 30_000;
+
+    const handleMouseProximity = (e: MouseEvent) => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const nearEdge = (
+        e.clientX < PROXIMITY_PX || e.clientX > w - PROXIMITY_PX ||
+        e.clientY < PROXIMITY_PX || e.clientY > h - PROXIMITY_PX
+      );
+
+      if (nearEdge) {
+        const now = Date.now();
+        if (now - waveCooldownRef.current >= WAVE_COOLDOWN_MS) {
+          waveCooldownRef.current = now;
+          sendPetGesture('wave_at_cursor');
+        }
+      }
+    };
+
+    // ── Long-idle doze detection ─────────────────────────────────────────────
+    const DOZE_THRESHOLD_MS = 20 * 60 * 1_000; // 20 minutes
+
+    /** Schedule the doze check — fires once after 20min of inactivity. */
+    const scheduleDoze = () => {
+      if (inactiveTimerRef.current) clearTimeout(inactiveTimerRef.current);
+      inactiveTimerRef.current = setTimeout(() => {
+        dozeActiveRef.current = true;
+        sendPetGesture('doze');
+      }, DOZE_THRESHOLD_MS);
+    };
+
+    /** Cancel doze timer and wake up if currently dozing. */
+    const handleActivity = () => {
+      if (dozeActiveRef.current) {
+        dozeActiveRef.current = false;
+        sendPetGesture('wake_up');
+      }
+      scheduleDoze(); // Reset the countdown on any activity
+    };
+
+    scheduleDoze(); // Start initial countdown
+    window.addEventListener('mousemove', handleMouseProximity);
+    window.addEventListener('mousemove', handleActivity);
+    window.addEventListener('click', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+
+    return () => {
+      if (inactiveTimerRef.current) clearTimeout(inactiveTimerRef.current);
+      window.removeEventListener('mousemove', handleMouseProximity);
+      window.removeEventListener('mousemove', handleActivity);
+      window.removeEventListener('click', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+    };
+  }, [electronAPI, iframeRef]);
+
   // ── Determine viewer mode ─────────────────────────────────────────────────
 
   const isLive2D = !!(activeCharacter as any)?.live2d_model;

@@ -1,16 +1,36 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Volume2, Pin } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
 import { api } from '../lib/api';
 
-/** Maps detected emotion tags to emoji for display in the message header. */
+/**
+ * Canonical 26-emotion emoji map (Phase 15).
+ * Covers all 6 categories: Core, Social, Cognitive, Romantic, Energy, Playful.
+ */
 const EMOTION_EMOJI: Record<string, string> = {
-  happy: '😊', excited: '✨', sad: '🥺', angry: '😤',
-  nervous: '😰', surprised: '😮', embarrassed: '😳', shy: '🫣',
-  flirty: '💕', teasing: '😏', cool: '😎', thoughtful: '🤔',
-  neutral: '', love: '❤️', playful: '🎉', serious: '😐',
+  // Core (Ekman+)
+  happy: '😊', sad: '🥺', angry: '😤', surprised: '😮',
+  fearful: '😨', disgusted: '🤢', neutral: '',
+  // Social
+  embarrassed: '😳', shy: '🫣', proud: '😎', confident: '😏',
+  jealous: '😑', grateful: '🙏',
+  // Cognitive
+  confused: '😕', curious: '🧐', thoughtful: '🤔', nostalgic: '😌', awe: '🤩',
+  // Romantic
+  love: '❤️', flirty: '😉', longing: '😔',
+  // Energy
+  excited: '✨', tired: '😴', relieved: '😌',
+  // Playful
+  smug: '😏', mischievous: '😈',
 };
+
+/**
+ * Cache of available expression portraits per character.
+ * Populated lazily on first render of an assistant message for a character
+ * with `emotion_portraits_mode >= 1`. Keyed by character ID.
+ */
+const portraitCache: Record<number, Record<string, string>> = {};
 
 /** Image extensions the browser can render in an img tag. */
 const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i;
@@ -34,6 +54,29 @@ function resolveAvatarUrl(name?: string, avatarUrl?: string): string | null {
     : (name?.split(/\s/)[0] || '').toLowerCase();
   if (cleanName) return `/files/images/${cleanName}_pixel_portrait.png`;
   return null;
+}
+
+/**
+ * Resolve an emotion-specific portrait URL for a character.
+ *
+ * Checks the portrait cache (populated from the Phase 15 expression portraits API)
+ * for an image matching the message's emotion. Falls back to the standard avatar
+ * if no emotion portrait exists or if the feature is disabled.
+ *
+ * @param charId - Character database ID (used as cache key).
+ * @param emotion - The detected emotion for this message.
+ * @param fallbackUrl - Static avatar URL to use when no portrait matches.
+ * @returns The portrait URL or the fallback.
+ */
+function resolveEmotionAvatarUrl(
+  charId: number | undefined,
+  emotion: string | undefined,
+  fallbackUrl: string | null,
+): string | null {
+  if (!charId || !emotion || emotion === 'neutral') return fallbackUrl;
+  const cache = portraitCache[charId];
+  if (!cache) return fallbackUrl;
+  return cache[emotion] ?? fallbackUrl;
 }
 
 interface DialogueBubbleProps {
@@ -122,6 +165,19 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
   const [pinned, setPinned] = useState(message.pinned ?? false);
   const [hovered, setHovered] = useState(false);
 
+  // Phase 15: Lazily load expression portraits for this character
+  const charId = character?.id;
+  const portraitsMode = character?.emotion_portraits_mode ?? 0;
+  const fetchedRef = useRef(false);
+  useEffect(() => {
+    if (!charId || portraitsMode < 1 || fetchedRef.current) return;
+    if (portraitCache[charId]) { fetchedRef.current = true; return; }
+    fetchedRef.current = true;
+    api.listExpressionPortraits(charId).then(res => {
+      if (res.ok && res.portraits) portraitCache[charId] = res.portraits;
+    }).catch(() => { /* silent — fall back to static avatar */ });
+  }, [charId, portraitsMode]);
+
   /**
    * Feature #10: Toggle the pinned state of this message.
    * Calls PUT /api/messages/{serverMessageId}/pin optimistically — the local
@@ -142,6 +198,24 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
       setPinned(!next); // revert
     }
   };
+
+  // Auto-compact system messages: render as centered inline divider
+  if (message.role === 'system' && message.text.startsWith('\u27F3')) {
+    return (
+      <div style={{
+        textAlign: 'center',
+        padding: '6px 16px',
+        margin: '8px 0',
+        fontSize: '0.7rem',
+        color: 'var(--color-text-muted)',
+        borderTop: '1px dashed var(--color-border)',
+        borderBottom: '1px dashed var(--color-border)',
+        opacity: 0.7,
+      }}>
+        {message.text}
+      </div>
+    );
+  }
 
   if (message.role === 'user') {
     return (
@@ -225,10 +299,25 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
             <Pin size={10} />
           </button>
         )}
+        {/* Phase 15: Resolve per-message emotion avatar (or static fallback) */}
         <div className="flex items-center gap-2 mb-2">
-          {resolveAvatarUrl(character?.name, character?.avatar_url) ? (
-            <img src={resolveAvatarUrl(character?.name, character?.avatar_url)!} alt="" className="w-8 h-8 rounded-full object-cover" />
-          ) : (
+          {(() => {
+            const staticUrl = resolveAvatarUrl(character?.name, character?.avatar_url);
+            const src = portraitsMode >= 1
+              ? resolveEmotionAvatarUrl(charId, message.emotion, staticUrl)
+              : staticUrl;
+            if (src) {
+              return (
+                <img
+                  src={src}
+                  alt={message.emotion || ''}
+                  className="w-8 h-8 rounded-full object-cover"
+                  style={{ transition: 'opacity 0.3s ease' }}
+                />
+              );
+            }
+            return null;
+          })() ?? (
             <div
               className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
               style={{

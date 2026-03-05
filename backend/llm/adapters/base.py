@@ -35,6 +35,54 @@ class LLMAdapter:
         """
         return False
 
+    def supports_vision(self) -> bool:
+        """Whether this adapter supports vision (image) inputs.
+
+        Returns:
+            False by default. Override in subclasses that can handle
+            image content blocks alongside text messages.
+        """
+        return False
+
+    def image_chat(
+        self,
+        messages: list,
+        images: list[dict],
+        model: str,
+        endpoint: str,
+        api_key: str,
+        **kw,
+    ) -> dict:
+        """Chat completion with image inputs for VLM models.
+
+        Accepts base64-encoded images that are injected into the last user
+        message as provider-specific content blocks.  Adapters that don't
+        support vision strip the images and fall back to text-only ``chat()``.
+
+        Args:
+            messages: OpenAI-style list of ``{"role": str, "content": str}`` dicts.
+            images: List of image dicts, each containing:
+                - ``"data"``: base64-encoded JPEG/PNG string
+                - ``"media_type"``: MIME type (e.g. ``"image/jpeg"``)
+            model: Model identifier string.
+            endpoint: API base URL.
+            api_key: API key string.
+            **kw: Passed through to ``chat()``.
+
+        Returns:
+            Same shape as ``chat()``: ``{"ok": bool, "reply": str, ...}``
+
+        Example:
+            >>> adapter = SomeVisionAdapter()
+            >>> result = adapter.image_chat(
+            ...     messages=[{"role": "user", "content": "What's in this image?"}],
+            ...     images=[{"data": "base64...", "media_type": "image/jpeg"}],
+            ...     model="llava-v1.6", endpoint="http://localhost:1234", api_key="",
+            ... )
+        """
+        # Default: strip images and fall back to text-only chat
+        return self.chat(messages, model, endpoint, api_key, **kw)
+
     def chat_stream(self, messages, model, endpoint, api_key, **kw):
         """Streaming variant of chat(). Yields token delta strings as they arrive.
 

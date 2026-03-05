@@ -283,13 +283,15 @@ export class CharacterGrid {
     getSlug(name) {
         const n = name.toLowerCase();
 
-        if (n.includes('fox') || n.includes('rin')) return 'fox';
+        if (n.includes('rin') || n.includes('akane')) return 'fox';
         if (n.includes('robot') || n.includes('mech')) return 'robot';
-        if (n.includes('anime') || n.includes('hacker') || n.includes('raine')) return 'anime';
-        if (n.includes('nyx') || n.includes('kuudere')) return 'robot';
+        if (n.includes('raine') || n.includes('tsundere')) return 'anime';
+        if (n.includes('nyx') || n.includes('ayane') || n.includes('kuudere')) return 'robot';
         if (n.includes('kitsune') || n.includes('genki')) return 'fox';
-        if (n.includes('seraph') || n.includes('onee')) return 'anime';
-        if (n.includes('viper') || n.includes('goth')) return 'anime';
+        if (n.includes('hana') || n.includes('momoka')) return 'anime';
+        if (n.includes('sable') || n.includes('kuroha')) return 'anime';
+        if (n.includes('shiori') || n.includes('nana')) return 'anime';
+        if (n.includes('mika') || n.includes('mikazuki')) return 'anime';
 
         return 'anime';
     }

@@ -78,6 +78,7 @@ export function VoiceConversationPanel({
     toggle,
     interrupt,
     inputLevel,
+    outputLevel,
   } = useFullDuplexVoice({
     sessionId,
     charId,
@@ -171,7 +172,7 @@ export function VoiceConversationPanel({
               textAlign: 'center',
             }}
           >
-            <VoiceOrb state={state} inputLevel={inputLevel} size={80} />
+            <VoiceOrb state={state} inputLevel={inputLevel} outputLevel={outputLevel} size={80} />
             <div style={{ marginTop: 24 }}>
               {state === 'idle'
                 ? 'Listening for your voice...'
@@ -244,7 +245,7 @@ export function VoiceConversationPanel({
       >
         {/* State indicator (small orb when transcript has entries) */}
         {transcript.length > 0 && (
-          <VoiceOrb state={state} inputLevel={inputLevel} size={36} />
+          <VoiceOrb state={state} inputLevel={inputLevel} outputLevel={outputLevel} size={36} />
         )}
 
         {/* Interrupt button — visible during speaking/processing */}

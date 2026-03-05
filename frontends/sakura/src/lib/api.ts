@@ -1,4 +1,4 @@
-import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse, VocabEntry, Universe, LoreEntry, UserFact } from './types';
+import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse, VocabEntry, Universe, LoreEntry, UserFact, BrowseableModel, AvatarDownloadStatus, LinkDevice, LinkRoutingDecision, ExtendedHardwareInfo } from './types';
 
 // ─── LM Studio Model Manager types ───────────────────────────────────────────
 
@@ -297,6 +297,15 @@ export const api = {
   // Files
   scanVrm: () => get<{ models: Array<{ name: string; file: string; url: string; size: number }> }>('/api/scan/vrm').then(d => d.models),
 
+  /**
+   * Scan for all 3D models (VRM, GLB, GLTF) in avatars storage.
+   * Returns a unified list with type metadata.
+   */
+  scan3dModels: () =>
+    get<{ models: Array<{ name: string; file: string; url: string; size: number; type: string }> }>(
+      '/api/scan/models3d'
+    ).then(d => d.models),
+
   /** Scan for available Live2D models (.model3.json files). */
   scanLive2d: () =>
     get<{ models: Array<{ name: string; file: string; url: string; rel_path: string }> }>('/api/scan/live2d').then(d => d.models),
@@ -335,6 +344,25 @@ export const api = {
   /** Feature A5: Get character's current expression portrait map. */
   getExprPortraits: (charId: number) =>
     get<{ ok: boolean; expr_portraits: Record<string, string> | null }>(`/api/characters/${charId}/expr-portraits`),
+
+  /** Phase 15: List all available expression portraits with display mode. */
+  listExpressionPortraits: (charId: number) =>
+    get<{ ok: boolean; portraits: Record<string, string>; mode: number }>(`/api/characters/${charId}/expression-portraits`),
+
+  /** Phase 15: Upload a single expression portrait for one emotion. */
+  uploadExpressionPortrait: (charId: number, emotion: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return fetch(`/api/characters/${charId}/expression-portrait/${emotion}`, {
+      method: 'POST',
+      body: fd,
+    }).then(r => r.json()) as Promise<{ ok: boolean; url: string }>;
+  },
+
+  /** Phase 15: Delete a single expression portrait. */
+  deleteExpressionPortrait: (charId: number, emotion: string) =>
+    fetch(`/api/characters/${charId}/expression-portrait/${emotion}`, { method: 'DELETE' })
+      .then(r => r.json()) as Promise<{ ok: boolean }>,
 
   // Stats (LLM status, uptime, etc.)
   getStats: () => get<Record<string, unknown>>('/api/stats'),
@@ -687,4 +715,88 @@ export const api = {
   /** Get personal best scores per game type for a character. */
   getGameBestScores: (characterId: number) =>
     get(`/api/games/best-scores?character_id=${characterId}`),
+
+  // ── Section A: Avatar Browser ───────────────────────────────────────────────
+
+  /** Browse avatars from a specific source (cc0, sketchfab, local). */
+  browseAvatars: (source = 'cc0', query = '', page = 1) => {
+    const params = new URLSearchParams({ source, q: query, page: String(page) });
+    return get<{ models: BrowseableModel[]; source: string; total: number }>(`/api/avatars/browse?${params}`);
+  },
+
+  /** Cross-source merged search across all avatar sources. */
+  searchAvatars: (query: string) =>
+    get<{ models: BrowseableModel[]; total: number }>(`/api/avatars/search?q=${encodeURIComponent(query)}`),
+
+  /** Start downloading an avatar model from a URL. */
+  downloadAvatar: (url: string, filename: string, source = 'cc0') =>
+    post<{ ok: boolean; filename: string; error: string | null }>('/api/avatars/download', { url, filename, source }),
+
+  /** Poll current avatar download progress. */
+  getAvatarDownloadStatus: () =>
+    get<AvatarDownloadStatus>('/api/avatars/download-status'),
+
+  /** Delete a local avatar file. */
+  deleteAvatar: (filename: string) =>
+    del<{ ok: boolean; error: string | null }>(`/api/avatars/${encodeURIComponent(filename)}`),
+
+  /** Rename a local avatar file. */
+  renameAvatar: (filename: string, newName: string) =>
+    put<{ ok: boolean; error: string | null }>(`/api/avatars/${encodeURIComponent(filename)}/rename`, { new_name: newName }),
+
+  // ── Part 5: LM Studio Link Device Discovery ────────────────────────────────
+
+  /**
+   * Fetch all discovered Link devices with their status.
+   *
+   * @returns Device list with online/offline status, loaded models, and latency.
+   */
+  getLinkDevices: () =>
+    get<{ ok: boolean; devices: LinkDevice[]; device_count: number; online_count: number }>('/api/link/devices'),
+
+  /**
+   * Force a health check on all known Link devices.
+   *
+   * @returns Refreshed device list after pinging endpoints.
+   */
+  refreshLinkDevices: () =>
+    post<{ ok: boolean; devices: LinkDevice[] }>('/api/link/health', {}),
+
+  /**
+   * Preview the routing decision for a given capability.
+   *
+   * @param capability - Task type (chat, vision, summarization, tts).
+   * @param model - Optional preferred model identifier.
+   * @returns Routing decision with device, endpoint, and reason.
+   */
+  getLinkRoute: (capability: string, model?: string) => {
+    const params = new URLSearchParams({ capability });
+    if (model) params.set('model', model);
+    return get<{ ok: boolean; decision: LinkRoutingDecision }>(`/api/link/route?${params}`);
+  },
+
+  /**
+   * Extended hardware detection with model tier matching.
+   *
+   * @returns Hardware details plus recommended model tier from model_recommendations.json.
+   */
+  getExtendedHardwareInfo: () =>
+    get<{ ok: boolean } & ExtendedHardwareInfo>('/api/hardware-info'),
+
+  /**
+   * Trigger rolling compression on a session.
+   *
+   * @param sessionId - Session to compress.
+   * @param keepRecent - Number of recent messages to keep verbatim (default 6).
+   * @returns Compression result with summary and archive count.
+   */
+  compressSession: (sessionId: number, keepRecent = 6) =>
+    post<{
+      ok: boolean;
+      summary?: string;
+      archived?: number;
+      kept?: number;
+      batch_range?: [number, number];
+      error?: string;
+    }>(`/api/sessions/${sessionId}/compress`, { keep_recent: keepRecent }),
 };

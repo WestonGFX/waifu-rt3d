@@ -70,6 +70,36 @@ export interface Character {
   greeting_intensity?: number;
   /** Feature A7: Path to uploaded voice sample for cloning-capable TTS providers. */
   voice_sample_path?: string;
+  /**
+   * Phase 15: Emotion portrait display mode.
+   * 0 = off (static avatar everywhere), 1 = chat bubbles only,
+   * 2 = chat bubbles + sidebar emotion indicator.
+   * Stored in `emotion_portraits_mode` column (schema v31).
+   */
+  emotion_portraits_mode?: number;
+  /** 3D Pipeline: URL/path to a GLB/GLTF 3D model (schema v33). */
+  glb_model_url?: string;
+  /** 3D Pipeline: URL/path to a Unity WebGL scene (schema v33). */
+  unity_scene_url?: string;
+  /** Optional greeting animation gesture played after walk-on entrance. */
+  greeting_animation?: string;
+  /** B.3: Entrance animation style (walk | run | jump | fade | teleport). Schema v34. */
+  entrance_style?: string;
+  /** B.3: Exit animation style (walk | fade | teleport). Schema v34. */
+  exit_style?: string;
+  /**
+   * v36: Relative path to the character's markdown bible file.
+   * When `bible_enabled` is true, selected sections are injected into the
+   * system prompt for deeper persona context.
+   */
+  bible_path?: string | null;
+  /** v36: Toggle for bible section injection into the system prompt. */
+  bible_enabled?: boolean;
+  /**
+   * v36: JSON list of section numbers to inject from the bible (e.g. `[2,3,4]`).
+   * When null, all sections except 0 (card recap) and 10 (prompt pack) are used.
+   */
+  bible_sections?: number[] | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -281,7 +311,7 @@ export interface DownloadProgress {
   error?: string;
 }
 
-/** VRM model geometry statistics computed by the 3D viewer at load time. */
+/** 3D model geometry statistics computed by the viewer at load time. */
 export interface VrmStats {
   /** Total triangle count across all meshes. */
   triangles: number;
@@ -289,12 +319,14 @@ export interface VrmStats {
   vertices: number;
   /** Number of mesh objects. */
   meshes: number;
-  /** Number of expression / blend shape targets. */
+  /** Number of expression / blend shape targets (VRM) or morph targets (GLB). */
   blendShapes: number;
-  /** Number of humanoid bones. */
+  /** Number of humanoid bones (VRM) or skeleton bones (GLB). */
   bones: number;
-  /** VRM spec version: '0.x' or '1.x'. */
+  /** Model format: '0.x', '1.x' (VRM versions), or 'glb'. */
   vrmVersion: string;
+  /** Embedded animation clip names (GLB only). */
+  animations?: string[];
 }
 
 // --- Feature A2: In-App Mini Games ---
@@ -431,6 +463,80 @@ export interface GameMoveResponse {
   reaction: string | null;
 }
 
+// ── Section A: Browseable Avatar Models ──────────────────────────────────────
+
+/** A browseable 3D model from the CC0 catalog, Sketchfab, or local storage. */
+export interface BrowseableModel {
+  id: string;
+  name: string;
+  description: string;
+  thumbnail_url: string;
+  download_url: string;
+  format: 'vrm' | 'glb' | 'gltf';
+  license: string;
+  file_size_mb: number;
+  tags: string[];
+  author: string;
+  source: 'cc0' | 'sketchfab' | 'vroid' | 'local';
+}
+
+/** Current state of an avatar download (polled from backend). */
+export interface AvatarDownloadStatus {
+  active: boolean;
+  filename?: string;
+  progress_pct?: number;
+  speed_mb_s?: number;
+  error?: string;
+}
+
+// ── Part 5: LM Studio Link Device Discovery ──────────────────────────────────
+
+/** A Link-connected device discovered via LM Studio Link mesh. */
+export interface LinkDevice {
+  device_id: string;
+  display_name: string;
+  endpoint: string;
+  online: boolean;
+  models_loaded: string[];
+  latency_ms: number;
+  is_local: boolean;
+}
+
+/** Routing decision preview from GET /api/link/route. */
+export interface LinkRoutingDecision {
+  device_id: string | null;
+  display_name: string | null;
+  endpoint: string;
+  model: string;
+  reason: string;
+}
+
+/** Extended hardware info from GET /api/hardware-info. */
+export interface ExtendedHardwareInfo {
+  hardware: {
+    gpu?: string;
+    vram_gb?: number;
+    ram_gb?: number;
+    backend?: string;
+    arch?: string;
+    os?: string;
+  };
+  recommended_tier?: {
+    id: string;
+    label: string;
+    backend?: string;
+    models: Array<{
+      id: string;
+      name?: string;
+      quant?: string;
+      vram_gb?: number;
+      capabilities?: string[];
+      speed_estimate?: string;
+      quality_tier?: string;
+    }>;
+  } | null;
+}
+
 // ── Feature A1: Full-Duplex Voice Configuration ─────────────────────────────
 
 /** User-configurable parameters for the full-duplex voice conversation. */
@@ -442,3 +548,40 @@ export interface VoiceConfig {
   /** Whether to automatically interrupt AI speech when user starts talking. */
   auto_interrupt: boolean;
 }
+
+// ── Game Spectator types ──────────────────────────────────────────────────
+
+/** Frequency presets for spectator reaction rate. */
+export type SpectatorFrequency = 'quiet' | 'normal' | 'hyped';
+
+/** Spectator mode — user plays or AI plays. */
+export type SpectatorMode = 'watch' | 'play';
+
+/** A single spectator reaction from the character. */
+export interface SpectatorReaction {
+  /** Character's in-character reaction text. */
+  text: string;
+  /** Detected emotion tag. */
+  emotion: string;
+  /** Importance score (0.0–1.0). */
+  urgency: number;
+  /** Timestamp when the reaction was received. */
+  timestamp: number;
+}
+
+/** Configuration for a spectator session. */
+export interface SpectatorConfig {
+  /** Character ID. */
+  charId: number;
+  /** User-provided game name (e.g. "PokeRogue"). */
+  gameTag: string;
+  /** Watch mode (user plays) or play mode (AI plays). */
+  mode: SpectatorMode;
+  /** Reaction frequency preset. */
+  frequency: SpectatorFrequency;
+  /** User's display name for personalized reactions. */
+  userName: string;
+}
+
+/** State of the spectator hook. */
+export type SpectatorState = 'idle' | 'connecting' | 'capturing' | 'error';

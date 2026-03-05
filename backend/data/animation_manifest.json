@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "id": "sillytavern-vrm-assets",
+      "name": "SillyTavern VRM Assets Pack",
+      "license": "MIT",
+      "source": "https://github.com/SillyTavern/SillyTavern-VRM-Assets",
+      "clips": [
+        {
+          "id": "st-idle-breathe",
+          "file": "sillytavern-vrm-assets/breathe.vrma",
+          "name": "Breathing Idle",
+          "category": "idle",
+          "emotions": ["neutral", "calm"],
+          "duration": 4.0,
+          "loop": true
+        },
+        {
+          "id": "st-idle-sway",
+          "file": "sillytavern-vrm-assets/sway.vrma",
+          "name": "Swaying Idle",
+          "category": "idle",
+          "emotions": ["neutral", "happy"],
+          "duration": 5.0,
+          "loop": true
+        },
+        {
+          "id": "st-wave",
+          "file": "sillytavern-vrm-assets/wave.vrma",
+          "name": "Wave Greeting",
+          "category": "reaction",
+          "emotions": ["happy", "excited"],
+          "duration": 2.5,
+          "loop": false
+        },
+        {
+          "id": "st-nod",
+          "file": "sillytavern-vrm-assets/nod.vrma",
+          "name": "Nodding",
+          "category": "reaction",
+          "emotions": ["neutral", "happy", "calm"],
+          "duration": 1.5,
+          "loop": false
+        },
+        {
+          "id": "st-shake-head",
+          "file": "sillytavern-vrm-assets/shake_head.vrma",
+          "name": "Head Shake",
+          "category": "reaction",
+          "emotions": ["sad", "angry", "neutral"],
+          "duration": 1.5,
+          "loop": false
+        },
+        {
+          "id": "st-happy-bounce",
+          "file": "sillytavern-vrm-assets/happy_bounce.vrma",
+          "name": "Happy Bounce",
+          "category": "emotion",
+          "emotions": ["happy", "excited"],
+          "duration": 2.0,
+          "loop": false
+        },
+        {
+          "id": "st-sad-slump",
+          "file": "sillytavern-vrm-assets/sad_slump.vrma",
+          "name": "Sad Slump",
+          "category": "emotion",
+          "emotions": ["sad"],
+          "duration": 3.0,
+          "loop": false
+        },
+        {
+          "id": "st-think",
+          "file": "sillytavern-vrm-assets/think.vrma",
+          "name": "Thinking Pose",
+          "category": "reaction",
+          "emotions": ["neutral", "curious"],
+          "duration": 3.0,
+          "loop": true
+        },
+        {
+          "id": "st-laugh",
+          "file": "sillytavern-vrm-assets/laugh.vrma",
+          "name": "Laughing",
+          "category": "emotion",
+          "emotions": ["happy", "excited", "amused"],
+          "duration": 2.0,
+          "loop": false
+        },
+        {
+          "id": "st-shy",
+          "file": "sillytavern-vrm-assets/shy.vrma",
+          "name": "Shy Fidget",
+          "category": "emotion",
+          "emotions": ["embarrassed", "shy"],
+          "duration": 2.5,
+          "loop": false
+        }
+      ]
+    },
+    {
+      "id": "cmu-mocap",
+      "name": "CMU Motion Capture (curated)",
+      "license": "Free/Academic",
+      "source": "https://sites.google.com/a/cgspeed.com/cgspeed/motion-capture",
+      "clips": [
+        {
+          "id": "cmu-conversation-1",
+          "file": "cmu-mocap/13_01.glb",
+          "name": "Conversation Gesture 1",
+          "category": "reaction",
+          "emotions": ["neutral"],
+          "duration": 3.0,
+          "loop": false
+        },
+        {
+          "id": "cmu-conversation-2",
+          "file": "cmu-mocap/13_05.glb",
+          "name": "Animated Talking",
+          "category": "reaction",
+          "emotions": ["happy", "excited"],
+          "duration": 4.0,
+          "loop": false
+        },
+        {
+          "id": "cmu-joy-1",
+          "file": "cmu-mocap/18_01.glb",
+          "name": "Joyful Motion",
+          "category": "emotion",
+          "emotions": ["happy", "excited"],
+          "duration": 3.5,
+          "loop": false
+        }
+      ]
+    },
+    {
+      "id": "100style",
+      "name": "100STYLE Emotional Locomotion",
+      "license": "CC BY 4.0",
+      "source": "https://www.ianmason.com/100style",
+      "clips": [
+        {
+          "id": "100s-happy-walk",
+          "file": "100style/happy_walk.glb",
+          "name": "Happy Walk",
+          "category": "idle",
+          "emotions": ["happy"],
+          "duration": 3.0,
+          "loop": true
+        },
+        {
+          "id": "100s-sad-walk",
+          "file": "100style/sad_walk.glb",
+          "name": "Sad Walk",
+          "category": "idle",
+          "emotions": ["sad"],
+          "duration": 3.0,
+          "loop": true
+        },
+        {
+          "id": "100s-angry-stride",
+          "file": "100style/angry_stride.glb",
+          "name": "Angry Stride",
+          "category": "emotion",
+          "emotions": ["angry"],
+          "duration": 2.5,
+          "loop": false
+        }
+      ]
+    }
+  ]
+}

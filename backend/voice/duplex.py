@@ -162,7 +162,7 @@ class VoiceDuplexSession:
 
         except Exception as e:
             if "disconnect" not in str(e).lower():
-                logger.error(f"[Voice] Session error: {e}")
+                logger.error(f"[Voice] Session error: {e}", exc_info=True)
                 await self._send_json({"type": "error", "message": "Voice session error"})
         finally:
             self._cancel_speaking()

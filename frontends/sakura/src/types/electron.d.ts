@@ -44,6 +44,27 @@ interface ElectronAPI {
 
   /** Listen for voice mode activation. Returns cleanup function. */
   onStartVoiceMode: (callback: () => void) => () => void;
+
+  // ── Discord Rich Presence ─────────────────────────────────────────────────
+
+  /**
+   * Get current Discord RPC state.
+   * Reads persistent store (enabled flag + App ID) and live connection status.
+   */
+  getDiscordState: () => Promise<{ enabled: boolean; connected: boolean; appId: string }>;
+
+  /**
+   * Save a Discord Application ID to persistent store.
+   * Does not start RPC — call setDiscordRpcEnabled(true) after saving.
+   */
+  setDiscordAppId: (appId: string) => Promise<{ ok: boolean }>;
+
+  /**
+   * Enable or disable Discord Rich Presence.
+   * When enabling, reads the stored App ID and attempts to connect.
+   * Returns `error: 'no_app_id'` if no App ID has been saved yet.
+   */
+  setDiscordRpcEnabled: (enabled: boolean) => Promise<{ connected: boolean; error?: string }>;
 }
 
 declare global {

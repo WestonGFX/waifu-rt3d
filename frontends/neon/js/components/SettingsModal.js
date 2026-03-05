@@ -81,12 +81,12 @@ const SETTINGS_SCHEMA = {
                 tooltip: "🔍 Shows reasoning process in <think> tags. Useful for debugging."
             },
             {
-                id: "llm.qwen3_thinking_mode",
-                name: "Qwen3 Thinking Mode",
+                id: "llm.thinking_mode",
+                name: "Thinking Mode",
                 type: "toggle",
                 default: false,
-                desc: "Enable chain-of-thought reasoning for Qwen3 models.",
-                tooltip: "🧠 When ON: Qwen3 uses deep reasoning (slower, smarter). When OFF: fast direct responses. Only applies when a Qwen3 model is loaded. Recommended models by VRAM: Qwen3-4B (~3GB), Qwen3-8B (~7GB), Qwen3-14B (~10GB), Qwen3-30B-A3B (~19GB MoE)."
+                desc: "Enable chain-of-thought reasoning for supported models.",
+                tooltip: "🧠 When ON: models with thinking support (Qwen3, DeepSeek-R1/R2, QwQ, Cogito, Sky-T1) use deep reasoning (slower, smarter). When OFF: fast direct responses."
             },
             {
                 id: "message_input_mode",
@@ -860,8 +860,8 @@ export class SettingsModal {
         }
 
         // Dot-notation fields: stored nested in config but referenced by literal dotted keys in tempConfig.
-        // llm.qwen3_thinking_mode → tempConfig["llm.qwen3_thinking_mode"]
-        this.tempConfig["llm.qwen3_thinking_mode"] = this.tempConfig.llm?.qwen3_thinking_mode ?? false;
+        // llm.thinking_mode → tempConfig["llm.thinking_mode"]
+        this.tempConfig["llm.thinking_mode"] = this.tempConfig.llm?.thinking_mode ?? false;
         // tts.exaggeration → tempConfig["tts.exaggeration"]
         this.tempConfig["tts.exaggeration"] = this.tempConfig.tts?.exaggeration ?? 0.8;
         // tts.fast_chunking → tempConfig["tts.fast_chunking"]
@@ -2199,11 +2199,11 @@ export class SettingsModal {
             }
 
             // Dot-notation fields: write flat staging keys back to nested config paths.
-            // tempConfig["llm.qwen3_thinking_mode"] → config.llm.qwen3_thinking_mode
-            if (this.tempConfig["llm.qwen3_thinking_mode"] !== undefined) {
+            // tempConfig["llm.thinking_mode"] → config.llm.thinking_mode
+            if (this.tempConfig["llm.thinking_mode"] !== undefined) {
                 if (!this.tempConfig.llm) this.tempConfig.llm = {};
-                this.tempConfig.llm.qwen3_thinking_mode = this.tempConfig["llm.qwen3_thinking_mode"];
-                delete this.tempConfig["llm.qwen3_thinking_mode"];
+                this.tempConfig.llm.thinking_mode = this.tempConfig["llm.thinking_mode"];
+                delete this.tempConfig["llm.thinking_mode"];
             }
             // tempConfig["tts.exaggeration"] → config.tts.exaggeration
             if (this.tempConfig["tts.exaggeration"] !== undefined) {

@@ -61,6 +61,10 @@ class ClaudeAPIAdapter(LLMAdapter):
         """Claude always respects the tools parameter — no XML fallback needed."""
         return True
 
+    def supports_vision(self) -> bool:
+        """Claude supports vision via image content blocks."""
+        return True
+
     # ------------------------------------------------------------------ #
     # Internal helpers
     # ------------------------------------------------------------------ #
@@ -180,6 +184,72 @@ class ClaudeAPIAdapter(LLMAdapter):
     # ------------------------------------------------------------------ #
     # Public interface
     # ------------------------------------------------------------------ #
+
+    def image_chat(
+        self,
+        messages: list,
+        images: list[dict],
+        model: str,
+        endpoint: str,
+        api_key: str,
+        **kw,
+    ) -> dict:
+        """Claude chat completion with vision (image content blocks).
+
+        Injects base64 images into the last user message as Anthropic-format
+        image content blocks alongside the text.
+
+        Args:
+            messages: OpenAI-style message list.
+            images: List of ``{"data": "base64...", "media_type": "image/jpeg"}`` dicts.
+            model: Claude model name (must support vision, e.g. ``claude-sonnet-4-6``).
+            endpoint: Unused (Anthropic endpoint is fixed).
+            api_key: Anthropic API key.
+            **kw: Passed through to ``chat()``.
+
+        Returns:
+            Same shape as ``chat()``.
+
+        Example:
+            >>> adapter = ClaudeAPIAdapter()
+            >>> result = adapter.image_chat(
+            ...     messages=[{"role": "user", "content": "Describe this game screen"}],
+            ...     images=[{"data": "/9j/4AAQ...", "media_type": "image/jpeg"}],
+            ...     model="claude-sonnet-4-6", endpoint="", api_key="sk-ant-...",
+            ... )
+        """
+        if not images:
+            return self.chat(messages, model, endpoint, api_key, **kw)
+
+        # Clone messages and inject images into the last user message
+        enriched = []
+        last_user_idx = -1
+        for i, m in enumerate(messages):
+            if m.get("role") == "user":
+                last_user_idx = i
+
+        for i, m in enumerate(messages):
+            if i == last_user_idx:
+                # Build multi-content block: images first, then text
+                content_blocks = []
+                for img in images:
+                    content_blocks.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": img.get("media_type", "image/jpeg"),
+                            "data": img["data"],
+                        },
+                    })
+                content_blocks.append({
+                    "type": "text",
+                    "text": m.get("content", ""),
+                })
+                enriched.append({"role": "user", "content": content_blocks})
+            else:
+                enriched.append(m)
+
+        return self.chat(enriched, model, endpoint, api_key, **kw)
 
     def chat(
         self,

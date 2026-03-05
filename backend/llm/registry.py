@@ -54,3 +54,36 @@ def get_client(cfg):
         return ClaudeAPIAdapter()
 
     return OpenAICompatAdapter()
+
+
+def get_vision_client(cfg: dict):
+    """Return an LLM adapter suitable for vision (image) tasks.
+
+    Routing priority:
+    1. Primary LLM adapter if it supports vision.
+    2. OpenAI-compat adapter as fallback (user may have a vision model
+       loaded on LM Studio without explicit config).
+
+    Args:
+        cfg: Full application config dict.
+
+    Returns:
+        Tuple of ``(adapter, model, endpoint, api_key)`` ready for
+        ``adapter.image_chat()``.
+
+    Example:
+        >>> adapter, model, endpoint, api_key = get_vision_client(cfg)
+        >>> result = adapter.image_chat(msgs, imgs, model, endpoint, api_key)
+    """
+    primary = get_client(cfg)
+    llm_cfg = cfg.get("llm", {})
+    model = llm_cfg.get("model", "")
+    endpoint = llm_cfg.get("endpoint", "http://localhost:1234")
+    api_key = llm_cfg.get("api_key", "")
+
+    if primary.supports_vision():
+        return primary, model, endpoint, api_key
+
+    # Last resort — OpenAI compat is optimistically vision-capable
+    fallback = OpenAICompatAdapter()
+    return fallback, model, endpoint, api_key

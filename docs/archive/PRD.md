@@ -29,12 +29,14 @@ The system supports multiple distinct personalities. The primary flagship charac
 
 ### 2.2 Roster
 
-1. **Fox (Rin)** [Default] - Tsundere/Racer.
+1. **Rin (Akane)** [Default] - Tsundere/Racer.
 2. **Raine** - Classic Tsundere.
-3. **Nyx** - Kuudere/Android.
+3. **Nyx (Ayane)** - Kuudere/Systems Engineer.
 4. **Kitsune** - Genki/Fox-girl.
-5. **Seraph** - Onee-san/Motherly.
-6. **Viper** - Goth/Chunibyou.
+5. **Hana (Momoka)** - Deredere/Joy-Spreader.
+6. **Sable (Kuroha)** - Sadodere/Fixer.
+7. **Shiori (Nana)** - Dandere/Writer.
+8. **Mika (Mikazuki)** - Hiyakasudere/Summer Spirit.
 
 ---
 

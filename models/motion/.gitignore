@@ -1,5 +1,0 @@
-# Model weights — never commit these to git.
-# Each subfolder here corresponds to one AI backend.
-# Users download models through the app's Settings > AI Motion panel.
-*
-!.gitignore

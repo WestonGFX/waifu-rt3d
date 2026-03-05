@@ -17,6 +17,8 @@ import { TTSModelsPanel } from '../components/TTSModelsPanel';
 import { ModelManagerPanel } from '../components/ModelManagerPanel';
 import { api } from '../lib/api';
 import { ExpressionPortraitGrid } from '../components/ExpressionPortraitGrid';
+import { LinkStatusPanel } from '../components/LinkStatusPanel';
+import { useToastStore } from '../components/ToastQueue';
 
 /* ─── Helper: deep-get nested config key like "llm.model" ──────────── */
 function cfgGet(config: Record<string, unknown>, key: string, fallback: unknown = ''): unknown {
@@ -291,16 +293,17 @@ function SectionHeader({ title }: { title: string }) {
 
 /** Slider with live numeric readout. */
 function SliderField({
-  label, description, tooltip, advanced,
+  label, description, tooltip, advanced, tier,
   value, min, max, step, onChange, format
 }: {
   label: string; description?: string; tooltip?: string; advanced?: boolean;
+  tier?: 0 | 1 | 2;
   value: number; min: number; max: number; step: number;
   onChange: (v: number) => void; format?: (v: number) => string;
 }) {
   const display = format ? format(value) : value.toString();
   return (
-    <SettingField label={label} description={description} tooltip={tooltip} advanced={advanced}>
+    <SettingField label={label} description={description} tooltip={tooltip} advanced={advanced} tier={tier}>
       <div className="flex items-center gap-2">
         <input
           type="range" min={min} max={max} step={step}
@@ -339,6 +342,10 @@ function CharacterTab() {
   const [moodEnabled, setMoodEnabled] = useState(activeCharacter?.mood_enabled ?? true);
   /** Feature A4: 0.0--1.0 scale factor for mood strength. */
   const [moodIntensity, setMoodIntensity] = useState(activeCharacter?.mood_intensity ?? 0.8);
+  /** Phase 15: Emotion portrait display mode (0=off, 1=chat, 2=chat+sidebar). */
+  const [emotionPortraitsMode, setEmotionPortraitsMode] = useState(activeCharacter?.emotion_portraits_mode ?? 0);
+  /** v36: Character bible deep persona injection toggle. */
+  const [bibleEnabled, setBibleEnabled] = useState(activeCharacter?.bible_enabled ?? false);
 
   /** Download the active character as a .json file (id stripped for portability). */
   const exportCharacter = () => {
@@ -434,6 +441,10 @@ function CharacterTab() {
       // Feature A4: sync mood fields
       setMoodEnabled(activeCharacter.mood_enabled ?? true);
       setMoodIntensity(activeCharacter.mood_intensity ?? 0.8);
+      // Phase 15: sync emotion portraits mode
+      setEmotionPortraitsMode(activeCharacter.emotion_portraits_mode ?? 0);
+      // v36: sync bible toggle
+      setBibleEnabled(activeCharacter.bible_enabled ?? false);
     }
   }, [activeCharacter]);
 
@@ -620,6 +631,37 @@ function CharacterTab() {
               charName={activeCharacter.name || 'Character'}
             />
           )}
+
+          {/* Phase 15: Emotion portraits display mode toggle */}
+          <SettingField
+            label="Emotion Portraits"
+            description="Show per-message emotion avatars in chat bubbles."
+            tooltip="Off: static avatar. Chat Only: each message shows the emotion-specific portrait. Chat + Sidebar: also shows a temporary emotion indicator on the sidebar avatar."
+          >
+            <select
+              value={emotionPortraitsMode}
+              onChange={async (e) => {
+                const mode = parseInt(e.target.value, 10);
+                setEmotionPortraitsMode(mode);
+                if (activeCharacter) {
+                  try {
+                    await api.updateCharacter(activeCharacter.id, { emotion_portraits_mode: mode });
+                    setActiveCharacter({ ...activeCharacter, emotion_portraits_mode: mode });
+                  } catch { setEmotionPortraitsMode(emotionPortraitsMode); }
+                }
+              }}
+              className="text-sm px-2 py-1 rounded w-48"
+              style={{
+                backgroundColor: 'var(--color-background)',
+                color: 'var(--color-text-primary)',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              <option value={0}>Off</option>
+              <option value={1}>Chat Bubbles Only</option>
+              <option value={2}>Chat + Sidebar</option>
+            </select>
+          </SettingField>
 
           <SettingField label="VRM Model" description="3D model file for the viewport."
             tooltip="Place .vrm files in backend/storage/avatars/ to see them here.">
@@ -1091,6 +1133,39 @@ function CharacterTab() {
           )}
         </div>
       </section>
+
+      {/* Deep Persona (Bible) section — v36 */}
+      {activeCharacter?.bible_path && (
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Deep Persona</h3>
+          <SettingField
+            label="Character Bible Injection"
+            description="When enabled, injects detailed personality, backstory, and voice style from the character bible into every conversation."
+            tooltip="Adds ~3K-8K tokens of deep character context from the markdown bible file. Produces more authentic, consistent responses at the cost of context window budget."
+          >
+            <input
+              type="checkbox"
+              checked={bibleEnabled}
+              onChange={async (e) => {
+                const enabled = e.target.checked;
+                setBibleEnabled(enabled);
+                if (activeCharacter) {
+                  try {
+                    await api.updateCharacter(activeCharacter.id, { bible_enabled: enabled });
+                    setActiveCharacter({ ...activeCharacter, bible_enabled: enabled });
+                  } catch { setBibleEnabled(!enabled); }
+                }
+              }}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+          {bibleEnabled && (
+            <div className="text-xs px-3 py-2 rounded-lg" style={{ background: 'var(--color-surface)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}>
+              Bible: <code className="text-[var(--color-accent)]">{activeCharacter.bible_path}</code>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Save + Delete buttons */}
       <div className="flex items-center justify-between gap-3">
@@ -1943,6 +2018,108 @@ function ShortcutEditorSection() {
   );
 }
 
+/* ─── DiscordRpcSettings ────────────────────────────────────────────────────
+   Electron-only component rendered in the Desktop Pet section of GeneralTab.
+   Allows the user to configure their Discord Application ID and enable RPC.
+   Communicates with main.js via IPC (get-discord-state / set-discord-app-id /
+   set-discord-rpc-enabled).
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Discord Rich Presence configuration panel.
+ * Only rendered when the app is running inside Electron.
+ */
+function DiscordRpcSettings() {
+  const [appId, setAppId] = useState('');
+  const [enabled, setEnabled] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Populate from persistent electron-store on mount
+  useEffect(() => {
+    window.electronAPI?.getDiscordState().then((state) => {
+      setAppId(state.appId);
+      setEnabled(state.enabled);
+      setConnected(state.connected);
+    }).catch(() => {});
+  }, []);
+
+  /** Persist App ID when user tabs out of the input field. */
+  const handleAppIdBlur = useCallback(async () => {
+    if (!appId.trim()) return;
+    await window.electronAPI?.setDiscordAppId(appId.trim());
+  }, [appId]);
+
+  /** Toggle RPC on/off. Saves App ID first, then enables/disables. */
+  const handleToggle = useCallback(async (checked: boolean) => {
+    if (checked && !appId.trim()) {
+      setError('Enter a Discord Application ID first.');
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    await window.electronAPI?.setDiscordAppId(appId.trim());
+    const result = await window.electronAPI?.setDiscordRpcEnabled(checked);
+    setEnabled(checked);
+    setConnected(result?.connected ?? false);
+    if (result?.error === 'no_app_id') setError('Enter a Discord Application ID first.');
+    setLoading(false);
+  }, [appId]);
+
+  // Status badge state derived from enabled + connected flags
+  const badge = connected
+    ? { label: 'Connected', color: '#22c55e' }
+    : enabled
+      ? { label: 'Discord not running', color: '#f59e0b' }
+      : { label: 'Disconnected', color: 'var(--color-text-secondary)' };
+
+  return (
+    <div style={cardStyle} className="px-4">
+      <SettingField
+        label="Discord Application ID"
+        description="Create an app at discord.com/developers/applications, then paste its numeric ID here."
+        tooltip="The 18-digit numeric ID from your Discord Developer Portal app page. Required for Rich Presence."
+      >
+        <input
+          type="text"
+          value={appId}
+          onChange={(e) => setAppId(e.target.value)}
+          onBlur={handleAppIdBlur}
+          placeholder="123456789012345678"
+          className="text-sm px-2 py-1 rounded w-48"
+          style={selectStyle}
+        />
+      </SettingField>
+
+      <SettingField
+        label="Enable Discord Rich Presence"
+        description={
+          <span>
+            Shows your active character in Discord.{' '}
+            <span style={{ color: badge.color }}>● {badge.label}</span>
+          </span>
+        }
+        tooltip="Displays 'Chatting with Kitsune' in your Discord profile when active. Discord must be running and logged in."
+      >
+        <input
+          type="checkbox"
+          checked={enabled}
+          disabled={loading}
+          onChange={(e) => handleToggle(e.target.checked)}
+          className="accent-[var(--color-accent)]"
+        />
+      </SettingField>
+
+      {error && (
+        <p className="text-xs pb-3 pl-1" style={{ color: 'var(--color-error, #ef4444)' }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 interface GeneralTabProps {
   config: Record<string, unknown>; save: (k: string, v: unknown) => void;
   cfg: (k: string, fb?: unknown) => unknown;
@@ -1952,7 +2129,7 @@ interface GeneralTabProps {
 }
 
 function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMode, layoutMode, setLayoutMode }: GeneralTabProps) {
-  const { incognito, setIncognito, showQuickChips, setShowQuickChips, settingsMode, setSettingsMode } = useAppStore();
+  const { incognito, setIncognito, showQuickChips, setShowQuickChips, settingsMode, setSettingsMode, settingsTier, setSettingsTier } = useAppStore();
   return (
     <>
       {/* Theme */}
@@ -2203,6 +2380,21 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
             />
           </SettingField>
 
+          {/* Developer mode — visible only when Advanced is ON */}
+          <SettingField
+            label="Developer Mode"
+            description="Unlock dev console, prompt inspector, raw config editor, and power-user tools."
+            tier={1}
+            tooltip="Enables deep debugging tools: LLM request logger, token profiler, prompt assembly viewer, WebSocket monitor, and raw config editing."
+          >
+            <input
+              type="checkbox"
+              checked={settingsTier >= 2}
+              onChange={(e) => setSettingsTier(e.target.checked ? 2 : 1)}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+
           {/* Layout mode — mutually exclusive segmented control */}
           <SettingField
             label="Layout"
@@ -2311,6 +2503,14 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
         </div>
       </section>
 
+      {/* Desktop Pet — only visible when running in Electron */}
+      {window.electronAPI?.isElectron && (
+        <section className="mb-6">
+          <SectionHeader title="Desktop Pet" />
+          <DiscordRpcSettings />
+        </section>
+      )}
+
       {/* Setup Guides */}
       <SetupGuidesSection />
 
@@ -2345,11 +2545,14 @@ function ModelCapabilityCard({
   lmContextLength,
   activeCharacterId,
   onApply,
+  onAutoDetect,
 }: {
   modelId: string;
   lmContextLength?: number;
   activeCharacterId?: number | null;
   onApply: (caps: ModelCapabilities) => void;
+  /** Fires once when capabilities are first detected (for auto-applying config). */
+  onAutoDetect?: (caps: ModelCapabilities) => void;
 }) {
   const [caps, setCaps] = useState<ModelCapabilities | null>(null);
   const [loading, setLoading] = useState(false);
@@ -2364,14 +2567,18 @@ function ModelCapabilityCard({
     setApplied(false);
     try {
       const result = await api.getModelCapabilities(id, ctx);
-      if (result.ok) setCaps(result);
-      else setError('Detection failed');
+      if (result.ok) {
+        setCaps(result);
+        onAutoDetect?.(result);
+      } else {
+        setError('Detection failed');
+      }
     } catch {
       setError('Could not reach backend');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onAutoDetect]);
 
   // Debounce re-fetch when model ID or context changes
   useEffect(() => {
@@ -2647,8 +2854,9 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
 
   return (
     <>
+      {/* ── Section 1: Connection ── */}
       <section className="mb-6">
-        <SectionHeader title="Language Model" />
+        <SectionHeader title="Connection" />
         <div style={cardStyle} className="px-4">
           {/* Provider preset quick-pick */}
           <SettingField label="Backend" description="Choose your local AI runtime."
@@ -2740,8 +2948,20 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
               </button>
             </div>
           </SettingField>
-
         </div>
+      </section>
+
+      {/* ── Section 1.5: Link Devices (collapsible) ── */}
+      <LinkStatusPanel
+        linkEnabled={cfg('llm.link.enabled', false) as boolean}
+        autoRoute={cfg('llm.link.auto_route', true) as boolean}
+        onToggleLink={(v) => save('llm.link.enabled', v)}
+        onToggleAutoRoute={(v) => save('llm.link.auto_route', v)}
+      />
+
+      {/* ── Section 2: Model Intelligence ── */}
+      <section className="mb-6">
+        <SectionHeader title="Model Intelligence" />
 
         {/* Capability badge strip — shown whenever a model is selected */}
         {currentModel && (
@@ -2750,11 +2970,73 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
             lmContextLength={loadedModelCtx}
             activeCharacterId={activeCharacter?.id ?? null}
             onApply={applyCapabilitiesToCharacter}
+            onAutoDetect={(caps) => {
+              const changes: string[] = [];
+              if (caps.supports_thinking) { save('llm.thinking_mode', true); changes.push('Reasoning'); }
+              if (caps.supports_tools) { save('llm.tool_use_enabled', true); changes.push('Tools'); }
+              if (caps.supports_vision) { save('llm.vision_enabled', true); changes.push('Vision'); }
+              if (caps.context_window) { save('context_limit', caps.context_window); }
+              if (changes.length > 0) {
+                const arch = caps.architecture ?? caps.model_id?.split('/').pop() ?? 'Model';
+                useToastStore.getState().addToast({
+                  message: `${arch}: ${changes.join(', ')} enabled`,
+                  icon: '🧠',
+                  type: 'success',
+                  onClick: () => {
+                    useAppStore.getState().openSettingsTab?.('brain');
+                  },
+                });
+              }
+            }}
           />
         )}
 
         <div style={cardStyle} className="px-4">
-          {/* Context Window */}
+          {/* Thinking / Reasoning toggle */}
+          <SettingField label="Thinking / Reasoning" description="Enable extended reasoning for supported models." tier={1}
+            tooltip="Auto-detected for Qwen3, DeepSeek-R1/R2, QwQ, and other reasoning-capable models. When enabled, the model spends more time thinking before responding (slower but smarter).">
+            <input
+              type="checkbox"
+              checked={cfg('llm.thinking_mode', false) as boolean}
+              onChange={(e) => save('llm.thinking_mode', e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+
+          {/* Show Thinking Tags toggle (moved from old flat list) */}
+          <SettingField label="Show Thinking Tags" description="Show the AI's chain-of-thought reasoning in chat." tier={1}
+            tooltip="Shows reasoning in <think> tags. Useful for debugging.">
+            <input
+              type="checkbox"
+              checked={cfg('thinking_visible', true) as boolean}
+              onChange={(e) => save('thinking_visible', e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+
+          {/* Tool Use / Function Calling toggle */}
+          <SettingField label="Tool Use / Function Calling" description="Allow the AI to use tools when available." tier={1}
+            tooltip="When enabled and model supports it, the AI can execute tools (web search, code, etc). Disable to force text-only responses.">
+            <input
+              type="checkbox"
+              checked={cfg('llm.tool_use_enabled', true) as boolean}
+              onChange={(e) => save('llm.tool_use_enabled', e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+
+          {/* Vision / Image Input toggle */}
+          <SettingField label="Vision / Image Input" description="Allow sending images to the AI." tier={1}
+            tooltip="When enabled and model supports vision, you can attach images to messages. Disable to hide the image upload button.">
+            <input
+              type="checkbox"
+              checked={cfg('llm.vision_enabled', true) as boolean}
+              onChange={(e) => save('llm.vision_enabled', e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+
+          {/* Context Window Override */}
           <SettingField label="Context Window" description="Max tokens for memory. Match your model's context length."
             tooltip="Set to your model's max context. Use Auto-Detect to query LM Studio.">
             <div className="flex items-center gap-2">
@@ -2776,65 +3058,38 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
             </div>
           </SettingField>
 
-          <SliderField
-            label="Chat History Limit" description="Max messages sent per request. 0 = unlimited."
-            tooltip="0 = send all history (recommended for large context). Set a limit if hitting token limits."
-            value={Number(cfg('llm.history_limit', cfg('history_limit', 0)))}
-            min={0} max={500} step={10}
-            onChange={(v) => save('llm.history_limit', v)}
-            format={(v) => v === 0 ? '∞' : String(v)}
-          />
-
-          <SliderField
-            label="Temperature" description="Higher = more creative, lower = more logical."
-            tooltip="0.7 recommended for chat. Lower (0.3) for factual, higher (1.2) for creative."
-            value={Number(cfg('temperature', 0.7))}
-            min={0.1} max={2.0} step={0.1}
-            onChange={(v) => save('temperature', v)}
-            format={(v) => v.toFixed(1)}
-          />
-
-          <SliderField
-            label="Repetition Penalty" description="Prevent looping phrases." advanced
-            tooltip="1.1 is usually perfect. Higher values may make responses feel forced."
-            value={Number(cfg('repeat_penalty', 1.1))}
-            min={1.0} max={2.0} step={0.05}
-            onChange={(v) => save('repeat_penalty', v)}
-            format={(v) => v.toFixed(2)}
-          />
-
-          <SettingField label="Show Thinking" description="Show the AI's chain-of-thought reasoning." advanced
-            tooltip="Shows reasoning in <think> tags. Useful for debugging.">
-            <input
-              type="checkbox"
-              checked={cfg('thinking_visible', true) as boolean}
-              onChange={(e) => save('thinking_visible', e.target.checked)}
-              className="accent-[var(--color-accent)]"
-            />
-          </SettingField>
-
-          <SettingField label="Qwen3 Thinking Mode" description="Enable deep reasoning for Qwen3 models." advanced
-            tooltip="When ON: Qwen3 uses deep reasoning (slower, smarter). Only applies when a Qwen3 model is loaded.">
-            <input
-              type="checkbox"
-              checked={cfg('llm.qwen3_thinking_mode', false) as boolean}
-              onChange={(e) => save('llm.qwen3_thinking_mode', e.target.checked)}
-              className="accent-[var(--color-accent)]"
-            />
-          </SettingField>
-
-          <SettingField label="System Prompt Override" description="Override the default system prompt for all characters." advanced
-            tooltip="Overrides character personality. Leave empty to use default persona.">
-            <textarea
-              value={String(cfg('system_prompt', ''))}
-              onChange={(e) => save('system_prompt', e.target.value)}
-              placeholder="Leave empty to use character's default..."
-              rows={3}
-              className="text-sm px-2 py-1 w-full rounded resize-y"
+          {/* Tool Protocol Override (dev-only) */}
+          <SettingField
+            label="Tool Call Protocol" tier={2}
+            description="How this model invokes tools. Override if auto-detection is wrong."
+            tooltip="openai_functions = native JSON schemas (Qwen2.5, Llama 3.1+). xml_fallback = XML injected as system prompt (older models). none = disable tools. Auto-detect uses pattern matching and caches results."
+          >
+            <select
+              value={overrideProtocol}
+              onChange={(e) => {
+                const v = e.target.value as 'auto' | 'openai_functions' | 'xml_fallback' | 'none';
+                setOverrideProtocol(v);
+                if (v !== 'auto' && currentModel) {
+                  api.setModelToolProtocol(currentModel, v).catch(() => {});
+                }
+              }}
+              className="text-sm px-2 py-1 rounded"
               style={selectStyle}
-            />
+            >
+              <option value="auto">Auto-detect</option>
+              <option value="openai_functions">OpenAI Functions (native JSON)</option>
+              <option value="xml_fallback">XML Fallback (system prompt)</option>
+              <option value="none">None (disable tools)</option>
+            </select>
           </SettingField>
+        </div>
+      </section>
 
+      {/* ── Section 3: Inference Parameters ── */}
+      <section className="mb-6">
+        <SectionHeader title="Inference Parameters" />
+        <div style={cardStyle} className="px-4">
+          {/* Reply Length — always visible */}
           <SettingField
             label="Reply Length"
             description="How many tokens the AI targets per response. Auto adjusts based on your typing speed."
@@ -2858,28 +3113,83 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
             </div>
           </SettingField>
 
-          <SettingField
-            label="Tool Call Protocol" advanced
-            description="How this model invokes tools. Override if auto-detection is wrong."
-            tooltip="openai_functions = native JSON schemas (Qwen2.5, Llama 3.1+). xml_fallback = XML injected as system prompt (older models). none = disable tools. Auto-detect uses pattern matching and caches results."
-          >
-            <select
-              value={overrideProtocol}
-              onChange={(e) => {
-                const v = e.target.value as 'auto' | 'openai_functions' | 'xml_fallback' | 'none';
-                setOverrideProtocol(v);
-                if (v !== 'auto' && currentModel) {
-                  api.setModelToolProtocol(currentModel, v).catch(() => {});
-                }
-              }}
-              className="text-sm px-2 py-1 rounded"
+          <SliderField
+            label="Temperature" description="Higher = more creative, lower = more logical." tier={1}
+            tooltip="0.7 recommended for chat. Lower (0.3) for factual, higher (1.2) for creative."
+            value={Number(cfg('temperature', 0.7))}
+            min={0.1} max={2.0} step={0.1}
+            onChange={(v) => save('temperature', v)}
+            format={(v) => v.toFixed(1)}
+          />
+
+          <SliderField
+            label="Repetition Penalty" description="Prevent looping phrases." tier={1}
+            tooltip="1.1 is usually perfect. Higher values may make responses feel forced."
+            value={Number(cfg('repeat_penalty', 1.1))}
+            min={1.0} max={2.0} step={0.05}
+            onChange={(v) => save('repeat_penalty', v)}
+            format={(v) => v.toFixed(2)}
+          />
+
+          <SettingField label="System Prompt Override" description="Override the default system prompt for all characters." tier={1}
+            tooltip="Overrides character personality. Leave empty to use default persona.">
+            <textarea
+              value={String(cfg('system_prompt', ''))}
+              onChange={(e) => save('system_prompt', e.target.value)}
+              placeholder="Leave empty to use character's default..."
+              rows={3}
+              className="text-sm px-2 py-1 w-full rounded resize-y"
               style={selectStyle}
-            >
-              <option value="auto">Auto-detect</option>
-              <option value="openai_functions">OpenAI Functions (native JSON)</option>
-              <option value="xml_fallback">XML Fallback (system prompt)</option>
-              <option value="none">None (disable tools)</option>
-            </select>
+            />
+          </SettingField>
+        </div>
+      </section>
+
+      {/* ── Section 4: Context & Memory ── */}
+      <section className="mb-6">
+        <SectionHeader title="Context & Memory" />
+        <div style={cardStyle} className="px-4">
+          <SliderField
+            label="Chat History Limit" description="Max messages sent per request. 0 = unlimited." tier={1}
+            tooltip="0 = send all history (recommended for large context). Set a limit if hitting token limits."
+            value={Number(cfg('llm.history_limit', cfg('history_limit', 0)))}
+            min={0} max={500} step={10}
+            onChange={(v) => save('llm.history_limit', v)}
+            format={(v) => v === 0 ? '∞' : String(v)}
+          />
+
+          {/* Auto-Compact Threshold */}
+          <SettingField label="Auto-Compact Threshold" description="Compress history when context reaches this % full." tier={1}
+            tooltip="When the context budget exceeds this percentage, the app automatically summarizes older messages to free space. Lower values compact sooner (preserves more budget), higher values keep more raw history.">
+            <div className="flex items-center gap-2">
+              <input type="range" min={50} max={95} step={5}
+                value={cfg('auto_compact_threshold', 85) as number}
+                onChange={(e) => save('auto_compact_threshold', parseInt(e.target.value))}
+                className="flex-1" style={{ accentColor: 'var(--color-accent)' }} />
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)', minWidth: 32, textAlign: 'right' }}>
+                {cfg('auto_compact_threshold', 85)}%
+              </span>
+            </div>
+          </SettingField>
+
+          {/* Compact Batch Size */}
+          <SettingField label="Compact Batch Size" description="Messages per compression batch." tier={2}
+            tooltip="How many messages to summarize in each compression step. Smaller batches = more granular summaries but more LLM calls.">
+            <input type="number" min={5} max={50} step={5}
+              value={cfg('compact_batch_size', 20) as number}
+              onChange={(e) => save('compact_batch_size', parseInt(e.target.value) || 20)}
+              className="w-16 text-sm text-center rounded"
+              style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border)', color: 'var(--color-text)', padding: '4px 8px' }} />
+          </SettingField>
+
+          {/* Keep Recent Messages */}
+          <SettingField label="Keep Recent Messages" description="Messages to keep verbatim during compaction." tier={2}
+            tooltip="During auto-compaction, this many of the most recent messages are preserved verbatim (not summarized). More = better immediate context, less = more room for summary history.">
+            <input type="number" min={2} max={20} step={1}
+              value={cfg('keep_recent_messages', 6) as number}
+              onChange={(e) => save('keep_recent_messages', parseInt(e.target.value) || 6)}
+              className="w-16 text-sm text-center rounded"
+              style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border)', color: 'var(--color-text)', padding: '4px 8px' }} />
           </SettingField>
         </div>
       </section>

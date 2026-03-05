@@ -8,6 +8,8 @@ interface VoiceOrbProps {
   state: VoiceSessionState;
   /** Mic input level (0-1) — scales the listening rings. */
   inputLevel: number;
+  /** TTS output level (0-1) — scales the speaking glow. Defaults to 0.5 if not provided. */
+  outputLevel?: number;
   /** Size of the orb in pixels. */
   size?: number;
 }
@@ -32,11 +34,14 @@ interface VoiceOrbProps {
  * @example
  * <VoiceOrb state="listening" inputLevel={0.6} size={64} />
  */
-export function VoiceOrb({ state, inputLevel, size = 64 }: VoiceOrbProps) {
+export function VoiceOrb({ state, inputLevel, outputLevel = 0.5, size = 64 }: VoiceOrbProps) {
   const radius = size / 2;
 
   // Ring scale based on input level (for listening state)
   const ringScale = 1 + inputLevel * 0.4;
+
+  // Speaking glow intensity based on output audio level
+  const speakingGlow = 10 + outputLevel * 40;
 
   return (
     <div
@@ -99,7 +104,7 @@ export function VoiceOrb({ state, inputLevel, size = 64 }: VoiceOrbProps) {
                 : state === 'processing'
                   ? { scale: [1, 1.1, 1], rotate: [0, 180, 360], opacity: 0.9 }
                   : state === 'speaking'
-                    ? { scale: [1, 1.12, 1], opacity: 1 }
+                    ? { scale: [1, 1 + outputLevel * 0.15, 1], opacity: 1 }
                     : { scale: 1, opacity: 0.5 }
         }
         transition={
@@ -126,8 +131,8 @@ export function VoiceOrb({ state, inputLevel, size = 64 }: VoiceOrbProps) {
           boxShadow: state === 'disconnected'
             ? 'none'
             : state === 'speaking'
-              ? `0 0 25px color-mix(in srgb, var(--color-accent) 50%, transparent),
-                 0 0 50px color-mix(in srgb, var(--color-accent) 25%, transparent)`
+              ? `0 0 ${speakingGlow}px color-mix(in srgb, var(--color-accent) ${Math.round(30 + outputLevel * 30)}%, transparent),
+                 0 0 ${speakingGlow * 2}px color-mix(in srgb, var(--color-accent) ${Math.round(15 + outputLevel * 15)}%, transparent)`
               : state === 'processing'
                 ? `0 0 15px color-mix(in srgb, var(--color-accent) 40%, transparent),
                    0 0 30px color-mix(in srgb, var(--color-accent) 20%, transparent)`

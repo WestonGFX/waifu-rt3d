@@ -23,7 +23,7 @@ Settings that control the language model backend and text generation behavior.
 | `llm.api_key` | string | `"lm-studio"` | Any string | API key for the LLM endpoint. Use `"lm-studio"` for local LM Studio. | app.json only |
 | `llm.model` | string | `""` | Any model ID | Model identifier as reported by the endpoint. The UI "Active LLM" dropdown writes to this. | Both |
 | `llm.history_limit` | number | `30` | `0` - `500` | Max messages sent to the LLM per request. `0` = unlimited (send all history). Auto-compression fires at 90% of this limit. | Both |
-| `llm.qwen3_thinking_mode` | boolean | `false` | `true`, `false` | Enable chain-of-thought reasoning for Qwen3 models. Slower but smarter responses. Only applies when a Qwen3 model is loaded. | Both |
+| `llm.thinking_mode` | boolean | `false` | `true`, `false` | Enable chain-of-thought reasoning for supported models (Qwen3, DeepSeek-R1/R2, QwQ, Cogito, Sky-T1). Slower but smarter responses. | Both |
 | `context_limit` | number | `131072` | `2048` - `131072` | Max token budget for the context window. Should match your model's max context length. | Both |
 | `temperature` | number | `0.7` | `0.1` - `2.0` | Controls creativity/randomness. Lower = more deterministic, higher = more creative. `0.7` recommended for chat. | Both |
 | `repeat_penalty` | number | `1.1` | `1.0` - `2.0` | Penalizes repeated tokens. Sent as `repetition_penalty` to LM Studio/llama.cpp. `1.1` is usually ideal. | Both |
@@ -137,7 +137,7 @@ Global character-related settings. Per-character overrides (LLM endpoint, model,
 
 | Key | Type | Default | Valid Values | Description | Where Settable |
 |-----|------|---------|--------------|-------------|----------------|
-| `active_character_id` | string | `"1"` | `"<id>: <name>"` format | The currently selected character. Format is `"1: Fox (Rin)"` where the number before `:` is the database ID. | Both |
+| `active_character_id` | string | `"1"` | `"<id>: <name>"` format | The currently selected character. Format is `"1: Rin (Akane)"` where the number before `:` is the database ID. | Both |
 | `avatar_url` | string | `""` | File path (e.g., `"/files/images/portrait.png"`) | 2D avatar / profile picture used in chat bubbles and character roster. | Both |
 | `model_vrm` | string | `""` | File path (e.g., `"/files/avatars/Model.vrm"`) | Path to the VRM 3D model file for the active character. | Both |
 | `live2d_model` | string | `""` | File path (e.g., `"/live2d/ariu/ariu.model3.json"`) | Path to the Live2D model file. Only used when `visual_mode` is `"2D (Live2D)"`. | Both |

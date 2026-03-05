@@ -59,6 +59,65 @@ class GeminiAdapter(LLMAdapter):
         True
     """
 
+    def supports_vision(self) -> bool:
+        """Gemini models support vision via both compat and native routes."""
+        return True
+
+    def image_chat(
+        self,
+        messages: list,
+        images: list[dict],
+        model: str,
+        endpoint: str,
+        api_key: str,
+        **kw,
+    ) -> dict:
+        """Gemini chat with vision via the OpenAI-compat image_url format.
+
+        Uses the same ``image_url`` content block format as
+        ``OpenAICompatAdapter`` since Google's compat endpoint supports it.
+
+        Args:
+            messages: OpenAI-style message list.
+            images: List of ``{"data": "base64...", "media_type": "image/jpeg"}`` dicts.
+            model: Gemini model name.
+            endpoint: API base URL.
+            api_key: Google AI API key.
+            **kw: Passed through to ``chat()``.
+
+        Returns:
+            Same shape as ``chat()``.
+        """
+        if not images:
+            return self.chat(messages, model, endpoint, api_key, **kw)
+
+        enriched = []
+        last_user_idx = -1
+        for i, m in enumerate(messages):
+            if m.get("role") == "user":
+                last_user_idx = i
+
+        for i, m in enumerate(messages):
+            if i == last_user_idx:
+                content_parts = []
+                for img in images:
+                    media_type = img.get("media_type", "image/jpeg")
+                    content_parts.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{media_type};base64,{img['data']}",
+                        },
+                    })
+                content_parts.append({
+                    "type": "text",
+                    "text": m.get("content", ""),
+                })
+                enriched.append({"role": "user", "content": content_parts})
+            else:
+                enriched.append(m)
+
+        return self.chat(enriched, model, endpoint, api_key, **kw)
+
     # ------------------------------------------------------------------ #
     # Internal helpers
     # ------------------------------------------------------------------ #

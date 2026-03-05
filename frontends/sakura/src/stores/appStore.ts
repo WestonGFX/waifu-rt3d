@@ -25,6 +25,7 @@ type Overlay =
   | 'search' | 'scenarios' | 'moodboard' | 'arena'
   | 'portfolio' | 'replay' | 'relweb'
   | 'universes' | 'lore' | 'userknowledge' | 'games'
+  | 'modelbrowser'
   | null;
 
 /**
@@ -100,8 +101,13 @@ interface AppState {
   vnMode: boolean;
   toggleVnMode: () => void;
 
-  // Display mode
+  // Display mode — settings tier: 0=normal, 1=advanced, 2=developer
+  settingsTier: 0 | 1 | 2;
+  setSettingsTier: (tier: 0 | 1 | 2) => void;
+  /** Computed: true when settingsTier >= 2. */
+  devMode: boolean;
   advancedMode: boolean;
+  /** @deprecated Use setSettingsTier. Kept for backward compatibility. */
   toggleAdvancedMode: () => void;
   layoutMode: LayoutMode;
   setLayoutMode: (mode: LayoutMode) => void;
@@ -244,9 +250,20 @@ export const useAppStore = create<AppState>()(
       vnMode: false,
       toggleVnMode: () => set((s) => ({ vnMode: !s.vnMode })),
 
-      // Display mode
+      // Display mode — settings tier: 0=normal, 1=advanced, 2=developer
+      settingsTier: 0,
+      setSettingsTier: (tier) => set({
+        settingsTier: tier,
+        advancedMode: tier >= 1,
+        devMode: tier >= 2,
+      }),
       advancedMode: false,
-      toggleAdvancedMode: () => set((s) => ({ advancedMode: !s.advancedMode })),
+      devMode: false,
+      // Legacy shim: toggle between tier 0 and 1
+      toggleAdvancedMode: () => {
+        const current = get().settingsTier;
+        get().setSettingsTier(current >= 1 ? 0 : 1);
+      },
       layoutMode: 'normal',
       setLayoutMode: (mode) => set({
         layoutMode: mode,
@@ -331,7 +348,7 @@ export const useAppStore = create<AppState>()(
       name: 'sakura-app',
       partialize: (s) => ({
         chatLayout: s.chatLayout,
-        advancedMode: s.advancedMode,
+        settingsTier: s.settingsTier,
         layoutMode: s.layoutMode,
         sidebarCollapsed: s.sidebarCollapsed,
         sidebarSection: s.sidebarSection,
@@ -350,6 +367,12 @@ export const useAppStore = create<AppState>()(
           merged.layoutMode = 'compact';
           merged.compactMode = true;
           merged.mobileMode = false;
+        }
+        // Migrate old advancedMode boolean to settingsTier
+        if (p.settingsTier == null && (p as Record<string, unknown>).advancedMode) {
+          merged.settingsTier = 1;
+          merged.advancedMode = true;
+          merged.devMode = false;
         }
         return merged;
       },

@@ -6,17 +6,28 @@ interface SettingFieldProps {
   label: string;
   description?: React.ReactNode;
   tooltip?: string;
+  /** Minimum settings tier required to show this field: 0=normal, 1=advanced, 2=dev. */
+  tier?: 0 | 1 | 2;
+  /** @deprecated Use `tier={1}` instead. Kept for backward compatibility. */
   advanced?: boolean;
   children: React.ReactNode;
 }
 
-/** Reusable settings row with label, description, tooltip, and control slot. */
-export function SettingField({ label, description, tooltip, advanced, children }: SettingFieldProps) {
-  const { advancedMode, layoutMode } = useAppStore();
+/**
+ * Reusable settings row with label, description, tooltip, and control slot.
+ *
+ * Visibility is gated by the user's `settingsTier` level. Fields with a
+ * `tier` higher than the current tier are hidden. The legacy `advanced`
+ * prop maps to `tier={1}` for backward compatibility.
+ */
+export function SettingField({ label, description, tooltip, tier: tierProp, advanced, children }: SettingFieldProps) {
+  const { settingsTier, layoutMode } = useAppStore();
   const compactMode = layoutMode !== 'normal';
   const [showTooltip, setShowTooltip] = useState(false);
 
-  if (advanced && !advancedMode) return null;
+  // Resolve tier: explicit tier prop > legacy advanced boolean > 0 (always show)
+  const requiredTier = tierProp ?? (advanced ? 1 : 0);
+  if (settingsTier < requiredTier) return null;
 
   return (
     <div className="py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>

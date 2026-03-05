@@ -1,7 +1,13 @@
+import { lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
-import { SettingsView } from '../views/SettingsView';
+
+// SettingsView is 4 000+ lines and imports many heavy sub-panels (VoicePicker,
+// TTSModelsPanel, ModelManagerPanel, LinkStatusPanel, etc.).  Lazy-loading it
+// means the JS is never parsed until the user first opens Settings, which is
+// the single largest deferred-parse win available in this codebase.
+const SettingsView = lazy(() => import('../views/SettingsView').then(m => ({ default: m.SettingsView })));
 
 /**
  * Settings panel — supports two layout modes:
@@ -60,9 +66,23 @@ export function SettingsDrawer() {
                 <X size={16} />
               </button>
             </div>
-            {/* Settings content */}
+            {/* Settings content — Suspense fallback shown only on first open
+                while the SettingsView chunk downloads (~one-time, <200 ms). */}
             <div className="flex-1 overflow-y-auto">
-              <SettingsView />
+              <Suspense fallback={
+                <div style={{
+                  display: 'flex',
+                  minHeight: '100%',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--color-text-secondary)',
+                  fontSize: 13,
+                }}>
+                  Loading settings…
+                </div>
+              }>
+                <SettingsView />
+              </Suspense>
             </div>
           </motion.div>
         </>

@@ -13,6 +13,8 @@ interface ChatState {
   abortController: AbortController | null;
   /** Current emotion detected from the most recent assistant reply, or null when neutral. */
   currentEmotion: { emotion: string; intensity: number } | null;
+  /** Phase 15: Latest emotion per character (charId → { emotion, timestamp }). */
+  latestEmotionByChar: Record<number, { emotion: string; timestamp: number }>;
   setDraft: (text: string) => void;
   setContext: (sessionId: number, charId: number) => void;
   sendMessage: (text: string, speak?: boolean, incognito?: boolean, maxTokens?: number) => Promise<void>;
@@ -82,11 +84,19 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   charId: null,
   abortController: null,
   currentEmotion: null,
+  latestEmotionByChar: {},
 
   setDraft: (text) => set({ draft: text }),
 
   setCurrentEmotion: (emotion, intensity) => {
-    set({ currentEmotion: emotion === 'neutral' ? null : { emotion, intensity } });
+    const charId = get().charId;
+    set(state => ({
+      currentEmotion: emotion === 'neutral' ? null : { emotion, intensity },
+      // Phase 15: track per-character latest emotion for sidebar indicator
+      latestEmotionByChar: charId
+        ? { ...state.latestEmotionByChar, [charId]: { emotion, timestamp: Date.now() } }
+        : state.latestEmotionByChar,
+    }));
     useViewerStore.getState().dispatchExpression(emotion, intensity);
   },
 
@@ -270,6 +280,56 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const current = get().messages.find(m => m.id === assistantId);
       if (current?.status === 'streaming') {
         patchAssistant({ status: 'sent' });
+      }
+
+      // Auto-compact: check context usage after each reply (fire-and-forget)
+      const _sessionId = get().sessionId;
+      if (_sessionId) {
+        fetch(`/api/context-budget/${_sessionId}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(budgetData => {
+            if (!budgetData) return;
+            const threshold = 85;
+            if (budgetData.usage_pct > threshold) {
+              // Inject compaction system message
+              const compactMsgId = `compact-${Date.now()}`;
+              set((s) => ({
+                messages: [...s.messages, {
+                  id: compactMsgId,
+                  role: 'system' as const,
+                  text: '\u27F3 Auto-compacting conversation...',
+                  createdAt: Date.now(),
+                  status: 'sent' as const,
+                }],
+              }));
+
+              // Fire compression
+              fetch(`/api/sessions/${_sessionId}/compress`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keep_recent: 6 }),
+              })
+                .then(r => r.ok ? r.json() : null)
+                .then(result => {
+                  if (result?.ok) {
+                    set((s) => ({
+                      messages: s.messages.map((m) =>
+                        m.id === compactMsgId
+                          ? { ...m, text: `\u27F3 Auto-compacted \u2014 ${result.archived} messages summarized` }
+                          : m
+                      ),
+                    }));
+                  } else {
+                    // Remove the system message on failure
+                    set((s) => ({ messages: s.messages.filter((m) => m.id !== compactMsgId) }));
+                  }
+                })
+                .catch(() => {
+                  set((s) => ({ messages: s.messages.filter((m) => m.id !== compactMsgId) }));
+                });
+            }
+          })
+          .catch(() => {});
       }
 
       // Auto-title the session after the first exchange (fire-and-forget)

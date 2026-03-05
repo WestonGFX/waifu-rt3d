@@ -350,6 +350,60 @@ ipcMain.handle('get-app-state', () => {
 });
 
 /**
+ * Get current Discord RPC state.
+ * Returns the stored enabled flag, live connection status, and saved App ID.
+ *
+ * @returns {{ enabled: boolean, connected: boolean, appId: string }}
+ */
+ipcMain.handle('get-discord-state', () => ({
+  enabled: store.get('discordRPC', false),
+  connected: discord.isDiscordConnected(),
+  appId: store.get('discordAppId', ''),
+}));
+
+/**
+ * Save a Discord Application ID to persistent store.
+ * Does not start/stop RPC — caller must toggle via set-discord-rpc-enabled.
+ *
+ * @param {string} appId - Discord Application ID (18-digit numeric string)
+ * @returns {{ ok: boolean }}
+ */
+ipcMain.handle('set-discord-app-id', (_e, appId) => {
+  store.set('discordAppId', appId);
+  return { ok: true };
+});
+
+/**
+ * Enable or disable Discord Rich Presence.
+ * When enabling: reads App ID from store, connects to Discord, updates tray.
+ * When disabling: destroys the RPC client, updates tray.
+ *
+ * @param {boolean} enabled
+ * @returns {{ connected: boolean, error?: string }}
+ */
+ipcMain.handle('set-discord-rpc-enabled', async (_e, enabled) => {
+  if (enabled) {
+    const appId = store.get('discordAppId', '');
+    if (!appId) return { connected: false, error: 'no_app_id' };
+    const connected = await discord.initDiscordRPC(appId);
+    store.set('discordRPC', connected);
+    if (connected) {
+      discord.updatePresence({
+        characterName: cachedCharacters?.find((c) => c.id === store.get('activeCharId'))?.name || 'Character',
+        activity: 'idle',
+      });
+    }
+    updateTrayMenu();
+    return { connected };
+  } else {
+    discord.destroyDiscordRPC();
+    store.set('discordRPC', false);
+    updateTrayMenu();
+    return { connected: false };
+  }
+});
+
+/**
  * Show native right-click context menu on the pet window.
  *
  * The renderer sends character info + menu position. The main process

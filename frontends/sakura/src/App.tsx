@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MemoryPanel } from './components/MemoryPanel';
 import { VocabPanel } from './components/VocabPanel';
@@ -21,25 +21,36 @@ import { UniversePanel } from './components/UniversePanel';
 import { LorePanel } from './components/LorePanel';
 import { UserKnowledgePanel } from './components/UserKnowledgePanel';
 import { GamePanel } from './components/GamePanel';
+import { ModelBrowser } from './components/ModelBrowser';
 import { CinematicOverlay } from './components/CinematicOverlay';
 import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { ShortcutHelpModal } from './components/ShortcutHelpModal';
-import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { FeatureTipQueue } from './components/discovery/FeatureTipQueue';
-import { VoiceSetupWizard } from './components/wizards/VoiceSetupWizard';
-import { LLMSetupWizard } from './components/wizards/LLMSetupWizard';
-import { ImageGenSetupWizard } from './components/wizards/ImageGenSetupWizard';
-import { ExpressionSetupWizard } from './components/wizards/ExpressionSetupWizard';
-import { CardImportWizard } from './components/wizards/CardImportWizard';
-import { WhatsNewModal } from './components/WhatsNewModal';
+
+// Lazy-load all wizards and the dev console — they are conditionally rendered
+// and most users never see them in a given session. Deferring them cuts the
+// critical parse path without affecting runtime behaviour because React.lazy()
+// only triggers the dynamic import when the component is first rendered.
+const OnboardingWizard     = lazy(() => import('./components/onboarding/OnboardingWizard').then(m => ({ default: m.OnboardingWizard })));
+const VoiceSetupWizard     = lazy(() => import('./components/wizards/VoiceSetupWizard').then(m => ({ default: m.VoiceSetupWizard })));
+const LLMSetupWizard       = lazy(() => import('./components/wizards/LLMSetupWizard').then(m => ({ default: m.LLMSetupWizard })));
+const ImageGenSetupWizard  = lazy(() => import('./components/wizards/ImageGenSetupWizard').then(m => ({ default: m.ImageGenSetupWizard })));
+const ExpressionSetupWizard = lazy(() => import('./components/wizards/ExpressionSetupWizard').then(m => ({ default: m.ExpressionSetupWizard })));
+const CardImportWizard     = lazy(() => import('./components/wizards/CardImportWizard').then(m => ({ default: m.CardImportWizard })));
+const WhatsNewModal        = lazy(() => import('./components/WhatsNewModal').then(m => ({ default: m.WhatsNewModal })));
+const DevConsole           = lazy(() => import('./components/DevConsole').then(m => ({ default: m.DevConsole })));
+import { ToastQueue } from './components/ToastQueue';
 import { useFeatureDiscovery } from './hooks/useFeatureDiscovery';
 import { useWizardStore } from './stores/wizardStore';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ChatThread } from './views/ChatThread';
 import { CreateView } from './views/CreateView';
-import { PetView } from './views/PetView';
 import { isPetMode } from './lib/electron';
+
+// Lazy-load PetView to avoid pulling pixi-live2d-display (and its Cubism 2
+// runtime check) into the main bundle — it's only needed in Electron pet mode.
+const PetView = lazy(() => import('./views/PetView').then(m => ({ default: m.PetView })));
 import { useAppStore } from './stores/appStore';
 import { useChatStore } from './stores/chatStore';
 import { useTheme } from './hooks/useTheme';
@@ -83,7 +94,11 @@ function PetApp() {
     loadConfig().catch(console.error);
   }, []);
 
-  return <PetView />;
+  return (
+    <Suspense fallback={<div style={{ width: '100vw', height: '100vh' }} />}>
+      <PetView />
+    </Suspense>
+  );
 }
 
 /** Full application with sidebar, chat, settings, overlays, etc. */
@@ -94,6 +109,7 @@ function MainApp() {
     setSidebarSection, config, configLoaded,
     customKeyBindings, customTheme,
     cinematicMode, toggleCinematicMode,
+    devMode,
   } = useAppStore();
 
   // Wizard store integration — hydrate from config and manage wizard lifecycle
@@ -305,6 +321,9 @@ function MainApp() {
       {/* Overlay drawers — Feature A6 Lorebook / World Info */}
       <LorePanel />
 
+      {/* Overlay drawers — Section A: Model Browser */}
+      <ModelBrowser />
+
       {/* Overlay drawers — Feature C3 User Knowledge Graph */}
       {activeOverlay === 'userknowledge' && <UserKnowledgePanel />}
 
@@ -350,16 +369,22 @@ function MainApp() {
 
       <ShortcutHelpModal open={showHelp} shortcuts={shortcuts} onClose={() => setShowHelp(false)} />
 
-      {/* First-run onboarding wizard — shown once, then config.onboarded = true */}
-      {showOnboarding && <OnboardingWizard />}
+      {/* First-run onboarding wizard and quick-setup wizards — lazily loaded so their
+          JS chunks only download when a user actually triggers them. fallback={null}
+          is intentional: the triggering UI (Settings button, discovery tip) remains
+          visible while the wizard chunk loads (~100 ms on fast connections). */}
+      <Suspense fallback={null}>
+        {showOnboarding && <OnboardingWizard />}
+        {activeWizard === 'voice-setup' && <VoiceSetupWizard />}
+        {activeWizard === 'llm-setup' && <LLMSetupWizard />}
+        {activeWizard === 'image-gen-setup' && <ImageGenSetupWizard />}
+        {activeWizard === 'expression-setup' && <ExpressionSetupWizard />}
+        {activeWizard === 'card-import' && <CardImportWizard />}
+        {activeWizard === 'whats-new' && <WhatsNewModal />}
+      </Suspense>
 
-      {/* Quick setup wizards — modal overlays triggered from Settings or discovery */}
-      {activeWizard === 'voice-setup' && <VoiceSetupWizard />}
-      {activeWizard === 'llm-setup' && <LLMSetupWizard />}
-      {activeWizard === 'image-gen-setup' && <ImageGenSetupWizard />}
-      {activeWizard === 'expression-setup' && <ExpressionSetupWizard />}
-      {activeWizard === 'card-import' && <CardImportWizard />}
-      {activeWizard === 'whats-new' && <WhatsNewModal />}
+      {/* Toast notifications — top-right floating */}
+      <ToastQueue />
 
       {/* Feature discovery tip cards — bottom-right floating */}
       <FeatureTipQueue />
@@ -384,6 +409,13 @@ function MainApp() {
         >
           ⬇ Install App
         </button>
+      )}
+
+      {/* DevConsole — lazily loaded; only rendered when devMode is on */}
+      {devMode && (
+        <Suspense fallback={null}>
+          <DevConsole />
+        </Suspense>
       )}
     </div>
   );

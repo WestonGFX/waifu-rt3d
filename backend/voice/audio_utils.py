@@ -11,10 +11,7 @@ when used in async contexts.
 import io
 import struct
 import subprocess
-import tempfile
 import logging
-from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -196,25 +193,3 @@ def compute_rms_energy(pcm_bytes: bytes) -> float:
 
     # Normalize: max int16 is 32767
     return min(rms / 32767.0, 1.0)
-
-
-def save_temp_wav(pcm_bytes: bytes, sample_rate: int = TARGET_SAMPLE_RATE) -> str:
-    """
-    Write PCM data to a temporary WAV file and return its path.
-
-    The caller is responsible for deleting the file after use.
-    This is useful for ASR adapters that expect a file path rather
-    than raw bytes.
-
-    Args:
-        pcm_bytes: Raw 16-bit PCM data.
-        sample_rate: Sample rate of the PCM data.
-
-    Returns:
-        Absolute path to the temporary WAV file.
-    """
-    wav_bytes = pcm_to_wav(pcm_bytes, sample_rate)
-    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-    tmp.write(wav_bytes)
-    tmp.close()
-    return tmp.name

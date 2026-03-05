@@ -29,7 +29,7 @@ function isImageUrl(url?: string): boolean {
  */
 function resolveAvatarUrl(character: Character): string | null {
   if (isImageUrl(character.avatar_url)) return character.avatar_url!;
-  // Extract clean name: "Fox (Rin)" → "rin", "Tsundere (Raine)" → "raine"
+  // Extract clean name: "Rin (Akane)" → "akane", "Tsundere (Raine)" → "raine"
   const parenMatch = character.name?.match(/\(([^)]+)\)/);
   const cleanName = parenMatch
     ? parenMatch[1].trim().toLowerCase()

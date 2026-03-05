@@ -62,14 +62,14 @@ const EXPRESSIONS: ExpressionEntry[] = [
   { id: 'sad',       emoji: '🥺', label: 'Sad' },
 ];
 
-// ── VRM viewer postMessage helper ──────────────────────────────────────────────
+// ── Viewer dispatch helper ────────────────────────────────────────────────────
 
 /**
- * Find the embedded VRM viewer iframe and post a gesture/expression event to it.
+ * Dispatch a gesture/expression command through the viewerStore mediator.
  *
- * The viewer iframe is identified by its `title` attribute or by its `src`
- * pointing to the shared viewer HTML. Falls back gracefully when the viewer
- * is not present (e.g. when the model panel is collapsed).
+ * Routes to the active viewer backend (VRM iframe via postMessage, or
+ * Live2D canvas via PIXI) based on `viewerStore.mode`. Falls back
+ * gracefully when no viewer is loaded.
  *
  * @param gesture - The gesture action name, or null.
  * @param expression - The expression name, or null.

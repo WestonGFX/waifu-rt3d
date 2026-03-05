@@ -1,20 +1,25 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { TabBar } from './components/TabBar';
 import { ChatsView } from './views/ChatsView';
 import { DiscoverView } from './views/DiscoverView';
 import { CreateView } from './views/CreateView';
 import { ChatThread } from './views/ChatThread';
-import { SettingsView } from './views/SettingsView';
 import { MemoryPanel } from './components/MemoryPanel';
 import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
-import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { FeatureTipQueue } from './components/discovery/FeatureTipQueue';
-import { VoiceSetupWizard } from './components/wizards/VoiceSetupWizard';
-import { LLMSetupWizard } from './components/wizards/LLMSetupWizard';
-import { ImageGenSetupWizard } from './components/wizards/ImageGenSetupWizard';
-import { ExpressionSetupWizard } from './components/wizards/ExpressionSetupWizard';
-import { CardImportWizard } from './components/wizards/CardImportWizard';
-import { WhatsNewModal } from './components/WhatsNewModal';
+
+// Lazy-load SettingsView and all wizards — these are conditionally rendered
+// and most mobile sessions never open them. Both App.tsx and MobileApp.tsx
+// must use lazy() for the same module; otherwise Rollup's static-import
+// analysis forces the module into the eager chunk regardless.
+const SettingsView         = lazy(() => import('./views/SettingsView').then(m => ({ default: m.SettingsView })));
+const OnboardingWizard     = lazy(() => import('./components/onboarding/OnboardingWizard').then(m => ({ default: m.OnboardingWizard })));
+const VoiceSetupWizard     = lazy(() => import('./components/wizards/VoiceSetupWizard').then(m => ({ default: m.VoiceSetupWizard })));
+const LLMSetupWizard       = lazy(() => import('./components/wizards/LLMSetupWizard').then(m => ({ default: m.LLMSetupWizard })));
+const ImageGenSetupWizard  = lazy(() => import('./components/wizards/ImageGenSetupWizard').then(m => ({ default: m.ImageGenSetupWizard })));
+const ExpressionSetupWizard = lazy(() => import('./components/wizards/ExpressionSetupWizard').then(m => ({ default: m.ExpressionSetupWizard })));
+const CardImportWizard     = lazy(() => import('./components/wizards/CardImportWizard').then(m => ({ default: m.CardImportWizard })));
+const WhatsNewModal        = lazy(() => import('./components/WhatsNewModal').then(m => ({ default: m.WhatsNewModal })));
 import { useFeatureDiscovery } from './hooks/useFeatureDiscovery';
 import { useWizardStore } from './stores/wizardStore';
 import { useAppStore } from './stores/appStore';
@@ -185,7 +190,19 @@ export function MobileApp() {
       case 'chats':    return <ChatsView />;
       case 'discover': return <DiscoverView />;
       case 'create':   return <CreateView />;
-      case 'settings': return <SettingsView />;
+      case 'settings': return (
+        <Suspense fallback={
+          <div style={{
+            display: 'flex', height: '100%',
+            alignItems: 'center', justifyContent: 'center',
+            color: 'var(--color-text-secondary)', fontSize: 13,
+          }}>
+            Loading settings…
+          </div>
+        }>
+          <SettingsView />
+        </Suspense>
+      );
       default:         return <ChatsView />;
     }
   })();
@@ -217,16 +234,16 @@ export function MobileApp() {
         onClose={clearCelebration}
       />
 
-      {/* First-run onboarding wizard */}
-      {showOnboarding && <OnboardingWizard />}
-
-      {/* Quick setup wizards */}
-      {activeWizard === 'voice-setup' && <VoiceSetupWizard />}
-      {activeWizard === 'llm-setup' && <LLMSetupWizard />}
-      {activeWizard === 'image-gen-setup' && <ImageGenSetupWizard />}
-      {activeWizard === 'expression-setup' && <ExpressionSetupWizard />}
-      {activeWizard === 'card-import' && <CardImportWizard />}
-      {activeWizard === 'whats-new' && <WhatsNewModal />}
+      {/* Onboarding + quick-setup wizards — lazily loaded */}
+      <Suspense fallback={null}>
+        {showOnboarding && <OnboardingWizard />}
+        {activeWizard === 'voice-setup' && <VoiceSetupWizard />}
+        {activeWizard === 'llm-setup' && <LLMSetupWizard />}
+        {activeWizard === 'image-gen-setup' && <ImageGenSetupWizard />}
+        {activeWizard === 'expression-setup' && <ExpressionSetupWizard />}
+        {activeWizard === 'card-import' && <CardImportWizard />}
+        {activeWizard === 'whats-new' && <WhatsNewModal />}
+      </Suspense>
 
       {/* Feature discovery tip cards */}
       <FeatureTipQueue />

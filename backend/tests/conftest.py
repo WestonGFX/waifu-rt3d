@@ -107,7 +107,13 @@ def _create_schema(db_path: Path) -> None:
                 diary TEXT,
                 diary_date TEXT,
                 capability_profile TEXT,
-                animation_profile TEXT
+                animation_profile TEXT,
+                emotion_voice_overrides TEXT,
+                mood_enabled INTEGER DEFAULT 1,
+                mood_intensity REAL DEFAULT 0.8,
+                day_off INTEGER DEFAULT 0,
+                affinity REAL DEFAULT 0.0,
+                emotion_portraits_mode INTEGER DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS character_relationships (

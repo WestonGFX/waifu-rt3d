@@ -43,22 +43,49 @@ logger = logging.getLogger(__name__)
 #   pause_before  — ms of silence to add before speaking (for dramatic effect)
 
 _PROFILES: dict[str, dict[str, float]] = {
+    # --- Core (Ekman+) ---
     "neutral":      {"speed_delta":  0.00, "pitch_delta":  0.0, "energy_delta":  0.0, "pause_before":  0},
     "happy":        {"speed_delta":  0.10, "pitch_delta":  2.0, "energy_delta":  0.2, "pause_before":  0},
-    "excited":      {"speed_delta":  0.18, "pitch_delta":  3.5, "energy_delta":  0.3, "pause_before":  0},
-    "playful":      {"speed_delta":  0.08, "pitch_delta":  2.5, "energy_delta":  0.2, "pause_before":  0},
-    "affectionate": {"speed_delta": -0.05, "pitch_delta":  0.5, "energy_delta":  0.1, "pause_before": 80},
     "sad":          {"speed_delta": -0.12, "pitch_delta": -2.0, "energy_delta": -0.2, "pause_before": 120},
     "angry":        {"speed_delta":  0.12, "pitch_delta": -1.0, "energy_delta":  0.3, "pause_before":  0},
     "surprised":    {"speed_delta":  0.05, "pitch_delta":  3.0, "energy_delta":  0.2, "pause_before": 40},
-    "confused":     {"speed_delta": -0.06, "pitch_delta":  1.0, "energy_delta": -0.1, "pause_before": 60},
-    "embarrassed":  {"speed_delta": -0.08, "pitch_delta":  1.5, "energy_delta": -0.15,"pause_before": 100},
     "fearful":      {"speed_delta":  0.15, "pitch_delta":  2.0, "energy_delta": -0.1, "pause_before": 40},
     "disgusted":    {"speed_delta": -0.05, "pitch_delta": -1.5, "energy_delta":  0.1, "pause_before":  0},
-    "calm":         {"speed_delta": -0.08, "pitch_delta": -0.5, "energy_delta": -0.1, "pause_before": 80},
-    "loving":       {"speed_delta": -0.06, "pitch_delta":  1.0, "energy_delta":  0.1, "pause_before": 60},
+    # --- Social ---
+    "embarrassed":  {"speed_delta": -0.08, "pitch_delta":  1.5, "energy_delta": -0.15,"pause_before": 100},
+    "shy":          {"speed_delta": -0.10, "pitch_delta":  1.0, "energy_delta": -0.2, "pause_before": 80},
+    "proud":        {"speed_delta":  0.05, "pitch_delta": -0.5, "energy_delta":  0.15,"pause_before":  0},
+    "confident":    {"speed_delta":  0.06, "pitch_delta": -0.3, "energy_delta":  0.15,"pause_before":  0},
+    "jealous":      {"speed_delta":  0.04, "pitch_delta": -0.5, "energy_delta":  0.1, "pause_before": 40},
+    "grateful":     {"speed_delta": -0.04, "pitch_delta":  1.0, "energy_delta":  0.1, "pause_before": 60},
+    # --- Cognitive ---
+    "confused":     {"speed_delta": -0.06, "pitch_delta":  1.0, "energy_delta": -0.1, "pause_before": 60},
+    "curious":      {"speed_delta":  0.04, "pitch_delta":  1.5, "energy_delta":  0.1, "pause_before": 30},
+    "thoughtful":   {"speed_delta": -0.08, "pitch_delta": -0.5, "energy_delta": -0.1, "pause_before": 100},
+    "nostalgic":    {"speed_delta": -0.10, "pitch_delta": -1.0, "energy_delta": -0.1, "pause_before": 120},
+    "awe":          {"speed_delta": -0.04, "pitch_delta":  2.5, "energy_delta":  0.15,"pause_before": 60},
+    # --- Romantic ---
+    "love":         {"speed_delta": -0.06, "pitch_delta":  1.0, "energy_delta":  0.1, "pause_before": 60},
+    "flirty":       {"speed_delta":  0.04, "pitch_delta":  2.0, "energy_delta":  0.15,"pause_before": 30},
+    "longing":      {"speed_delta": -0.10, "pitch_delta": -0.5, "energy_delta": -0.1, "pause_before": 140},
+    # --- Energy ---
+    "excited":      {"speed_delta":  0.18, "pitch_delta":  3.5, "energy_delta":  0.3, "pause_before":  0},
+    "tired":        {"speed_delta": -0.14, "pitch_delta": -1.5, "energy_delta": -0.25,"pause_before": 100},
+    "relieved":     {"speed_delta": -0.06, "pitch_delta":  0.5, "energy_delta": -0.05,"pause_before": 80},
+    # --- Playful ---
     "smug":         {"speed_delta":  0.04, "pitch_delta": -0.5, "energy_delta":  0.05,"pause_before":  0},
-    "nervous":      {"speed_delta":  0.10, "pitch_delta":  1.5, "energy_delta": -0.1, "pause_before": 30},
+    "mischievous":  {"speed_delta":  0.08, "pitch_delta":  2.5, "energy_delta":  0.2, "pause_before":  0},
+}
+
+# Legacy aliases — old profile names that map to canonical emotions.
+# These are checked at lookup time so existing code using the old names
+# still gets a valid profile without any code changes elsewhere.
+_PROFILE_ALIASES: dict[str, str] = {
+    "playful":      "mischievous",
+    "affectionate": "love",
+    "loving":       "love",
+    "calm":         "neutral",
+    "nervous":      "fearful",
 }
 
 # Fallback for unknown emotions
@@ -109,7 +136,9 @@ class VoiceModulator:
             >>> mod.get_params("excited", 0.9, "edge-tts")
             {'rate': '+14%', 'pitch': '+3Hz'}
         """
-        profile = _PROFILES.get(emotion.lower(), _NEUTRAL)
+        key = emotion.lower()
+        key = _PROFILE_ALIASES.get(key, key)
+        profile = _PROFILES.get(key, _NEUTRAL)
         scale = intensity * self.intensity_scale
 
         # Compute scaled deltas

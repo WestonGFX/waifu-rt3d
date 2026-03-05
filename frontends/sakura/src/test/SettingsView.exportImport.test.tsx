@@ -39,6 +39,7 @@ vi.mock('../lib/api', () => ({
     getVocabStats: vi.fn().mockResolvedValue({ total: 0, base_count: 0, user_count: 0, category_count: 0 }),
     uploadAvatar: vi.fn().mockResolvedValue({ url: '/api/avatars/test.jpg' }),
     getExprPortraits: vi.fn().mockResolvedValue({ expr_portraits: {} }),
+    listExpressionPortraits: vi.fn().mockResolvedValue({ ok: true, portraits: {}, mode: 0 }),
     getUserFacts: vi.fn().mockResolvedValue({ facts: [] }),
     getMemoryStats: vi.fn().mockResolvedValue({ total: 0 }),
   },

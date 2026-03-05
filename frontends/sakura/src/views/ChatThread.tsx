@@ -20,6 +20,7 @@ import { GesturePicker } from '../components/GesturePicker';
 import type { GestureName, ExpressionName } from '../components/GesturePicker';
 import { VoiceConversationPanel } from '../components/VoiceConversationPanel';
 import { GreetingCard } from '../components/GreetingCard';
+import { ContextBudgetPill } from '../components/ContextBudgetPill';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -123,29 +124,6 @@ export function ChatThread() {
   // Chips are hidden until a short delay after AI response (less jarring than immediate pop-in)
   const [chipsVisible, setChipsVisible] = useState(false);
   const chipsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ── Context budget bar: usage % 0–100, null while loading ──────────────
-  const [contextUsagePct, setContextUsagePct] = useState<number | null>(null);
-  const [contextTotalTokens, setContextTotalTokens] = useState<number | null>(null);
-  const [contextLimitTokens, setContextLimitTokens] = useState<number | null>(null);
-  useEffect(() => {
-    if (!sessionId || !activeCharacter?.id) return;
-    let cancelled = false;
-    const fetch = async () => {
-      try {
-        const res = await api.getContextBudget(sessionId, activeCharacter.id);
-        if (!cancelled) {
-          setContextUsagePct(res.usage_pct);
-          setContextTotalTokens(res.total_tokens);
-          setContextLimitTokens(res.context_limit);
-        }
-      } catch { /* non-critical */ }
-    };
-    fetch();
-    // Refresh after every assistant reply (poll by watching message count)
-    const iv = setInterval(fetch, 15000);
-    return () => { cancelled = true; clearInterval(iv); };
-  }, [sessionId, activeCharacter?.id, messages.length]);
 
   // ── Task 2: Diary state ─────────────────────────────────────────────────
   const [diaryText, setDiaryText] = useState<string | null>(null);
@@ -578,32 +556,6 @@ export function ChatThread() {
           />
         )}
 
-        {/* Context budget bar — thin strip showing context window usage */}
-        {contextUsagePct !== null && contextUsagePct > 0 && (
-          <div
-            title={`Context window: ${contextTotalTokens?.toLocaleString() ?? '?'} / ${contextLimitTokens?.toLocaleString() ?? '?'} tokens (${contextUsagePct}%)`}
-            style={{
-              width: '100%',
-              height: 3,
-              backgroundColor: 'var(--color-border-subtle)',
-              flexShrink: 0,
-              cursor: 'default',
-            }}
-          >
-            <div
-              style={{
-                height: '100%',
-                width: `${Math.min(contextUsagePct, 100)}%`,
-                backgroundColor:
-                  contextUsagePct < 50 ? 'var(--color-success, #39c96e)'
-                  : contextUsagePct < 80 ? '#e8a22a'
-                  : '#f44',
-                transition: 'width 0.6s ease, background-color 0.6s ease',
-              }}
-            />
-          </div>
-        )}
-
         {/* Diary snippet — "last time, character wrote..." */}
         {showDiary && (
           <div
@@ -648,7 +600,16 @@ export function ChatThread() {
         )}
 
         {/* ── Message list ──────────────────────────────────────────────── */}
-        <div ref={scrollRef} className="chat-area flex-1 overflow-y-auto p-4 max-w-3xl mx-auto w-full">
+        <div className="flex-1 min-h-0" style={{ position: 'relative' }}>
+          {/* Context budget pill — top-right of chat message area */}
+          <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 50 }}>
+            <ContextBudgetPill
+              sessionId={sessionId}
+              messageCount={messages.length}
+              autoCompactThreshold={85}
+            />
+          </div>
+        <div ref={scrollRef} className="chat-area h-full overflow-y-auto p-4 max-w-3xl mx-auto w-full">
           {searchQuery && (
             <p className="text-center text-xs mb-3" style={{ color: 'var(--color-text-tertiary)' }}>
               {visibleMessages.length === 0 ? 'No messages match' : `${visibleMessages.length} message${visibleMessages.length === 1 ? '' : 's'} found`}
@@ -762,6 +723,7 @@ export function ChatThread() {
           {/* Typing indicator — shown while AI is generating */}
           {loading && <TypingIndicator name={activeCharacter.name} />}
         </div>
+        </div>{/* end message list wrapper */}
 
         {/* ── Feature B3: VN Reader overlay ────────────────────────────── */}
         {vnMode && (

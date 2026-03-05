@@ -11,13 +11,15 @@ MAPPINGS = {
     "rin_bedroom": "rin_bedroom.png",
     "ayane_bedroom": "ayane_bedroom.png",
     "kitsune_bedroom": "kitsune_bedroom.png",
-    "seraph_bedroom": "seraph_bedroom.png",
+    "hana_bedroom": "hana_bedroom.png",
     "sable_data_room": "sable_data_room.png",
     "shiori_library": "shiori_library.png",
     "rin_street_race": "rin_street_race.png",
     "ayane_server_core": "ayane_server_core.png",
     "kitsune_live_concert": "kitsune_live_concert.png",
-    "seraph_sky_garden": "seraph_sky_garden.png"
+    "hana_garden": "hana_garden.png",
+    "mika_bedroom": "mika_bedroom.png",
+    "mika_beach": "mika_beach.png"
 }
 
 print(f"Restoring images from {SOURCE_DIR} to {DEST_DIR}...")

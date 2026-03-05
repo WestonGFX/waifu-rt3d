@@ -406,6 +406,9 @@ async def _ensure_lms_model(requested_model: str) -> None:
             _active_lms_model = requested_model
 
 
+# Emotion normalization — canonical 26-emotion set with alias map
+from backend.emotion.normalize import normalize_emotion
+
 # Feature A6: Lorebook / World Info — keyword-triggered context injection
 from backend.lore.matcher import match_lore
 
@@ -682,6 +685,17 @@ app.mount("/viewer", StaticFiles(directory=str(FRONTEND / "viewer")), name="view
 app.mount("/lib", StaticFiles(directory=str(FRONTEND / "lib")), name="lib")
 app.mount("/live2d", StaticFiles(directory=str(STORAGE / "live2d")), name="live2d")
 app.mount("/images", StaticFiles(directory=str(STORAGE / "images")), name="images") # Mounted for portraits
+
+# Animation clips — serves GLB/VRMA files for clip-based animation library
+_anim_dir = STORAGE / "animations"
+_anim_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/animations", StaticFiles(directory=str(_anim_dir)), name="animations")
+
+# Unity WebGL build — serves compiled WebAssembly + assets for high-fidelity rendering
+_unity_build_dir = Path(ROOT_DIR) / "unity" / "waifurt3d-avatar" / "Builds" / "WebGL"
+if _unity_build_dir.exists():
+    app.mount("/unity", StaticFiles(directory=str(_unity_build_dir), html=True), name="unity")
+
 if (FRONTEND_V2_DIST / "assets").exists():
     app.mount("/v2/assets", StaticFiles(directory=str(FRONTEND_V2_DIST / "assets")), name="v2-assets")
 
@@ -867,6 +881,37 @@ def _estimate_model_tier(model_name: str) -> str:
     return "xl"
 
 
+def _build_thinking_extra_body(model_name: str, enabled: bool) -> dict | None:
+    """Build architecture-specific extra_body for thinking/reasoning mode.
+
+    Different model families require different payload formats to enable
+    their native reasoning capabilities.
+
+    Args:
+        model_name: The LLM model identifier string.
+        enabled: Whether thinking mode is enabled in config.
+
+    Returns:
+        Dict to merge into the request payload, or None if thinking
+        is disabled or model doesn't support a known thinking format.
+    """
+    if not enabled:
+        return None
+    name = model_name.lower()
+    # Qwen3 / Qwen3.5: uses chat_template_kwargs
+    if "qwen3" in name or "qwen-3" in name:
+        return {"chat_template_kwargs": {"enable_thinking": True}}
+    # DeepSeek-R1/R2: uses enable_thinking flag
+    if "deepseek-r1" in name or "deepseek-r2" in name:
+        return {"enable_thinking": True}
+    # QwQ, Cogito, Sky-T1: generic thinking flag
+    if any(p in name for p in ("qwq", "cogito", "sky-t1", "thinker")):
+        return {"enable_thinking": True}
+    # Unknown model architecture — don't inject thinking params that may
+    # cause API errors on models that don't support them.
+    return None
+
+
 def _parse_emotion_gesture(text: str) -> tuple:
     """Extract [emotion:X] and [gesture:X] tags from an LLM reply.
 
@@ -893,7 +938,8 @@ def _parse_emotion_gesture(text: str) -> tuple:
     """
     emotion_match = re.search(r'\[emotion:(\w+)\]', text)
     gesture_match = re.search(r'\[gesture:(\w+)\]', text)
-    emotion = emotion_match.group(1) if emotion_match else "neutral"
+    raw_emotion = emotion_match.group(1) if emotion_match else "neutral"
+    emotion = normalize_emotion(raw_emotion)
     gesture = gesture_match.group(1) if gesture_match else None
     clean = re.sub(r'\[emotion:\w+\]', '', text)
     clean = re.sub(r'\[gesture:\w+\]', '', clean).strip()
@@ -945,10 +991,10 @@ def _maybe_auto_compress(session_id: int, total_active: int, max_history: int) -
             logger.warning(f"Auto-compression failed for session {session_id}: {e}")
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         loop.create_task(_do_compress())
     except RuntimeError:
-        pass  # No event loop — skip (shouldn't happen in FastAPI)
+        pass  # No running event loop — skip (shouldn't happen in FastAPI)
 
 
 def _clean_for_tts(text: str) -> str:
@@ -1446,6 +1492,69 @@ def _update_relationship(con, char_id: int, emotion: str):
         logger.warning(f"Relationship update failed for char {char_id}: {e}")
 
 
+def _load_bible_sections(
+    bible_path: str,
+    section_nums: list[int] | None = None,
+) -> str:
+    """Load and extract selected sections from a character bible markdown file.
+
+    Parses the bible into sections by ``## N)`` headings and returns either
+    all sections or only those matching ``section_nums``.  Skips section 0
+    (card recap — UI metadata) and section 10 (prompt pack — already in
+    system prompt) by default unless explicitly requested.
+
+    Args:
+        bible_path: Relative path from project root to the ``.md`` file
+            (e.g. ``"docs/characters/character_tsundere_raine.md"``).
+        section_nums: List of section numbers to include (e.g. ``[2, 3, 4]``).
+            If ``None``, includes all sections except 0 and 10.
+
+    Returns:
+        Concatenated section text, or empty string if file not found.
+
+    Example:
+        >>> text = _load_bible_sections("docs/characters/character_rin_akane.md", [2, 3])
+        >>> "Personality Architecture" in text
+        True
+    """
+    import re
+    _full_path = os.path.join(ROOT_DIR, bible_path)
+    if not os.path.isfile(_full_path):
+        return ""
+
+    try:
+        with open(_full_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except OSError:
+        return ""
+
+    # Parse into sections: split on "## N)" headings
+    _pattern = re.compile(r"^## (\d+)\)", re.MULTILINE)
+    _splits = list(_pattern.finditer(content))
+    if not _splits:
+        return content  # No section headers — return raw content
+
+    _parsed: dict[int, str] = {}
+    for i, match in enumerate(_splits):
+        sec_num = int(match.group(1))
+        start = match.start()
+        end = _splits[i + 1].start() if i + 1 < len(_splits) else len(content)
+        _parsed[sec_num] = content[start:end].strip()
+
+    # Default exclusions: section 0 (UI card recap) and 10 (prompt pack, already in system_prompt)
+    _default_skip = {0, 10}
+
+    if section_nums is not None:
+        selected = [_parsed[n] for n in section_nums if n in _parsed]
+    else:
+        selected = [text for num, text in sorted(_parsed.items()) if num not in _default_skip]
+
+    if not selected:
+        return ""
+
+    return "\n\n[CHARACTER BIBLE — DEEP PERSONA CONTEXT]\n" + "\n\n".join(selected)
+
+
 def _build_prompt_sections(
     cfg: dict,
     system_prompt: str,
@@ -1511,7 +1620,8 @@ def _build_prompt_sections(
 
     def _section(name: str, content: str) -> dict:
         """Create a section dict with automatic token/char estimation."""
-        return {"name": name, "content": content, "tokens": len(content) // 4, "chars": len(content)}
+        from backend.llm.token_counter import count_tokens as _ct
+        return {"name": name, "content": content, "tokens": _ct(content), "chars": len(content)}
 
     sections = []
 
@@ -1535,6 +1645,22 @@ def _build_prompt_sections(
     # 1. Base system prompt
     if system_prompt:
         sections.append(_section("System Prompt", system_prompt))
+
+    # 1-bible. Character Bible injection — load selected sections from markdown
+    try:
+        _bible_row = cur.execute(
+            "SELECT bible_path, bible_sections, bible_enabled FROM characters WHERE id=?",
+            (char_id,),
+        ).fetchone()
+        if _bible_row and _bible_row[2] and _bible_row[0]:
+            _bible_text = _load_bible_sections(
+                _bible_row[0],
+                json.loads(_bible_row[1]) if _bible_row[1] else None,
+            )
+            if _bible_text:
+                sections.append(_section("Character Bible", "\n" + _bible_text))
+    except Exception as _bible_err:
+        logger.warning(f"[Bible] Failed to load character bible: {_bible_err}")
 
     # 1a. Feature B4: Author's Note — "after_system" position
     if _author_note_text and _author_note_position == "after_system":
@@ -1684,10 +1810,16 @@ def _build_prompt_sections(
     emotion_instruction = (
         "\n\nVISUAL SYSTEM INSTRUCTIONS:\n"
         "You have a 3D avatar. Express your artificial emotions using tags at the start of your response.\n"
-        "Format: [emotion:happy] or [emotion:sad] or [emotion:surprised] or [emotion:angry] or [emotion:neutral]\n"
+        "Format: [emotion:NAME] where NAME is one of:\n"
+        "  Core: happy, sad, angry, surprised, fearful, disgusted, neutral\n"
+        "  Social: embarrassed, shy, proud, confident, jealous, grateful\n"
+        "  Cognitive: confused, curious, thoughtful, nostalgic, awe\n"
+        "  Romantic: love, flirty, longing\n"
+        "  Energy: excited, tired, relieved\n"
+        "  Playful: smug, mischievous\n"
         "You can also use gestures: [gesture:nod] or [gesture:wave] or [gesture:shake] or [gesture:shrug]\n"
         "Example: [emotion:happy] [gesture:wave] Hello! It's great to see you!\n"
-        "Do not output these tags if you are being neutral."
+        "Pick the most fitting emotion for your response. Omit the tag if neutral."
     )
     sections.append(_section("Emotion Instructions", emotion_instruction))
 
@@ -1806,8 +1938,9 @@ def _context_budget_summary(
         Dict with keys: ``sections``, ``total_tokens``, ``context_limit``,
         ``usage_pct``, ``history_messages``, ``remaining_tokens``.
     """
+    from backend.llm.token_counter import count_messages_tokens, is_tiktoken_available
+    hist_tokens = count_messages_tokens(hist)
     hist_chars = sum(len(m.get("content", "")) for m in hist)
-    hist_tokens = hist_chars // 4
     hist_section = {"name": f"Chat History ({len(hist)} msgs)", "tokens": hist_tokens, "chars": hist_chars}
 
     all_sections = [{"name": s["name"], "tokens": s["tokens"], "chars": s["chars"]} for s in sections]
@@ -1824,6 +1957,7 @@ def _context_budget_summary(
         "usage_pct": usage_pct,
         "history_messages": len(hist),
         "remaining_tokens": max(0, context_limit - total_tokens),
+        "token_counter": "tiktoken" if is_tiktoken_available() else "heuristic",
     }
 
 
@@ -1895,10 +2029,25 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
 
     try:
         cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)", (session_id, f"Session {session_id}"))
-        cur.execute(
-            "INSERT INTO messages(session_id, role, text, char_id) VALUES (?,?,?,?)",
-            (session_id, "user", text, char_id)
-        )
+
+        # Score user message importance for context-aware pruning
+        from backend.llm.importance_scorer import score_message as _score_msg
+        _is_first_msg = cur.execute(
+            "SELECT COUNT(*) FROM messages WHERE session_id = ? AND is_active = 1", (session_id,)
+        ).fetchone()[0] == 0
+        _user_imp = _score_msg(text, "user", is_first=_is_first_msg, has_question="?" in text)
+
+        try:
+            cur.execute(
+                "INSERT INTO messages(session_id, role, text, char_id, importance_score) VALUES (?,?,?,?,?)",
+                (session_id, "user", text, char_id, _user_imp)
+            )
+        except sqlite3.OperationalError:
+            # Pre-v35 schema without importance_score column
+            cur.execute(
+                "INSERT INTO messages(session_id, role, text, char_id) VALUES (?,?,?,?)",
+                (session_id, "user", text, char_id)
+            )
         user_message_id = cur.lastrowid
         con.commit()
 
@@ -2022,29 +2171,25 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         if vector_store:
             memories = vector_store.query_memory(text, char_id=char_id)
 
-        # Phase 9: Capability-aware context budget (non-streaming)
-        _context_budget_ns = cap_ns.get("context_budget")
-        if _context_budget_ns and int(_context_budget_ns) > 0:
-            _usable = int(_context_budget_ns) - 1000
-            max_history = max(4, _usable // 100)
-        else:
-            max_history = cfg.get("llm", {}).get("history_limit",
-                          cfg.get("history_limit", 0))
+        # ── Context assembly: token-budget-aware message selection ──────
+        # Replaces manual history fetching with the smart assembler that
+        # includes rolling summaries and high-importance recalled messages.
+        from backend.llm.context_assembler import assemble_context as _assemble_ctx_ns
+        _ctx_budget_ns = int(cap_ns.get("context_budget", 0))
+        max_history = cfg.get("llm", {}).get("history_limit",
+                      cfg.get("history_limit", 0)) or 30
+        assembled_ns = _assemble_ctx_ns(
+            session_id=session_id, char_id=char_id, user_text=text,
+            sections=sections, cfg=cfg, cur=cur,
+            context_budget=_ctx_budget_ns,
+            max_history=max_history,
+            skip_user_append=True,  # user msg already inserted into DB above
+        )
+        messages = assembled_ns.messages
+        # Derive hist for lorebook keyword scanning (non-system messages)
+        hist = [m for m in messages if m["role"] != "system"]
 
-        if max_history > 0:
-            cur.execute(
-                "SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
-                (session_id, max_history)
-            )
-        else:
-            cur.execute(
-                "SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC",
-                (session_id,)
-            )
-        hist = [{"role": r, "content": t} for (r, t) in cur.fetchall()][::-1]
-
-        # Auto-compress: when active message count nears history_limit, fire
-        # background compression so the next request benefits from shorter context.
+        # Auto-compress when history nears the limit (background, non-blocking)
         if max_history > 0:
             total_active = cur.execute(
                 "SELECT COUNT(*) FROM messages WHERE session_id=? AND is_active=1",
@@ -2052,22 +2197,18 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             ).fetchone()[0]
             _maybe_auto_compress(session_id, total_active, max_history)
 
-        messages = [{"role": "system", "content": system_content}] + hist
-
         # ── Feature A6: Lorebook / World Info injection (non-streaming) ──
         _inject_lore_entries(messages, con, char_id, hist)
 
         try:
             from backend.llm.registry import get_client
             adapter = get_client(cfg)
-            # Build Qwen3 thinking-mode override when enabled and model is Qwen3
+            # Build thinking-mode extra_body for supported architectures
             llm_model_name = cfg["llm"].get("model", "")
-            qwen3_thinking = cfg.get("llm", {}).get("qwen3_thinking_mode", False)
+            thinking_enabled = cfg.get("llm", {}).get("thinking_mode", False)
             if cap_ns.get("supports_thinking") is False:
-                qwen3_thinking = False
-            extra_body = None
-            if "qwen3" in llm_model_name.lower():
-                extra_body = {"chat_template_kwargs": {"enable_thinking": bool(qwen3_thinking)}}
+                thinking_enabled = False
+            extra_body = _build_thinking_extra_body(llm_model_name, thinking_enabled)
             res = await run_in_threadpool(
                 adapter.chat,
                 messages,
@@ -2093,10 +2234,18 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         emotion, gesture, clean_reply = _parse_emotion_gesture(raw_reply)
         intensity = 1.0
 
-        cur.execute(
-            "INSERT INTO messages(session_id, role, text, emotion, char_id) VALUES (?,?,?,?,?)",
-            (session_id, "assistant", clean_reply, emotion, char_id)
-        )
+        # Score assistant message importance
+        _asst_imp = _score_msg(clean_reply, "assistant", emotion_intensity=intensity)
+        try:
+            cur.execute(
+                "INSERT INTO messages(session_id, role, text, emotion, char_id, importance_score) VALUES (?,?,?,?,?,?)",
+                (session_id, "assistant", clean_reply, emotion, char_id, _asst_imp)
+            )
+        except sqlite3.OperationalError:
+            cur.execute(
+                "INSERT INTO messages(session_id, role, text, emotion, char_id) VALUES (?,?,?,?,?)",
+                (session_id, "assistant", clean_reply, emotion, char_id)
+            )
         assistant_message_id = cur.lastrowid
         con.commit()
 
@@ -2211,7 +2360,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             "assistant_message_id": assistant_message_id,
             "memory_hits": memory_hits,
             "is_daily_first": is_daily_first,
-            "context_budget": _context_budget_summary(sections, hist, cfg),
+            "context_budget": assembled_ns.budget_summary,
             "capability_warning": _cap_warning_ns,
         }
     finally:
@@ -2316,8 +2465,9 @@ async def get_context_budget(session_id: int, char_id: int = None):
                 "SELECT role, text FROM messages WHERE session_id=? AND is_active=1 "
                 "ORDER BY id DESC", (session_id,)
             ).fetchall()
+        from backend.llm.token_counter import count_tokens as _ct_budget, is_tiktoken_available as _tik_avail
         hist_chars = sum(len(t or "") for _, t in rows)
-        hist_tokens = hist_chars // 4
+        hist_tokens = sum(_ct_budget(t or "") + 4 for _, t in rows)  # +4 msg framing
 
         # Build response
         all_sections = [{"name": s["name"], "tokens": s["tokens"], "chars": s["chars"]} for s in sections]
@@ -2335,6 +2485,149 @@ async def get_context_budget(session_id: int, char_id: int = None):
             "total_tokens": total_tokens,
             "remaining_tokens": max(0, context_limit - total_tokens),
             "usage_pct": usage_pct,
+            "token_counter": "tiktoken" if _tik_avail() else "heuristic",
+        }
+    finally:
+        con.close()
+
+
+@app.get("/api/dev/prompt-inspect/{session_id}")
+async def dev_prompt_inspect(session_id: int, char_id: int = None):
+    """Return the fully assembled prompt sections for debugging.
+
+    Dev-mode endpoint that reconstructs the exact prompt sections
+    that would be sent to the LLM, with per-section token counts
+    and full content previews.  Designed for the PromptInspector
+    panel in the developer console.
+
+    Args:
+        session_id: Active session ID.
+        char_id: Character ID (optional, uses session's char if omitted).
+
+    Returns:
+        Dict with ``sections`` list (each containing name, content, tokens,
+        chars), ``history`` summary, ``summaries`` list, and
+        ``token_counter`` method indicator.
+
+    Example:
+        >>> GET /api/dev/prompt-inspect/1?char_id=2
+        {"ok": true, "sections": [...], "history": {...}, ...}
+    """
+    cfg = load_config() or {}
+    con = db()
+    cur = con.cursor()
+
+    try:
+        # Resolve char_id from session if not provided
+        if not char_id:
+            row = cur.execute(
+                "SELECT char_id FROM messages WHERE session_id=? AND char_id IS NOT NULL "
+                "ORDER BY id DESC LIMIT 1", (session_id,)
+            ).fetchone()
+            if not row:
+                # Fallback: check sessions table
+                row = cur.execute(
+                    "SELECT char_id FROM sessions WHERE id=?", (session_id,)
+                ).fetchone()
+            if not row:
+                return {"ok": False, "error": "Session not found or has no messages"}
+            char_id = row[0]
+
+        # Fetch character data (mirrors get_context_budget logic)
+        system_prompt = "You are a friendly anime companion."
+        diary = None
+        diary_date = None
+        last_chat_date = None
+        last_emotion = "neutral"
+        first_chat_date = None
+        _pi_char_name = ""
+        _pi_mood_enabled = True
+        _pi_mood_intensity = 0.8
+        _pi_day_off = False
+        _pi_affinity = 0.0
+        try:
+            cur.execute(
+                "SELECT system_prompt, last_chat_date, last_emotion, first_chat_date, "
+                "diary, diary_date, name, mood_enabled, mood_intensity, day_off, affinity "
+                "FROM characters WHERE id=?", (char_id,)
+            )
+            row = cur.fetchone()
+            if row:
+                system_prompt = row[0] or system_prompt
+                last_chat_date = row[1]
+                last_emotion = row[2] or "neutral"
+                first_chat_date = row[3]
+                diary = row[4]
+                diary_date = row[5]
+                _pi_char_name = row[6] or ""
+                _pi_mood_enabled = bool(row[7]) if row[7] is not None else True
+                _pi_mood_intensity = float(row[8]) if row[8] is not None else 0.8
+                _pi_day_off = bool(row[9]) if row[9] is not None else False
+                _pi_affinity = float(row[10]) if row[10] is not None else 0.0
+        except Exception:
+            pass
+
+        # Build prompt sections (no user_text — this is a snapshot inspection)
+        sections = _build_prompt_sections(
+            cfg, system_prompt, char_id, session_id, cur,
+            diary=diary,
+            diary_date=diary_date,
+            last_chat_date=last_chat_date,
+            last_emotion=last_emotion,
+            first_chat_date=first_chat_date,
+            include_vocab=True,
+            char_name=_pi_char_name,
+            affinity=_pi_affinity,
+            day_off=_pi_day_off,
+            mood_enabled=_pi_mood_enabled,
+            mood_intensity=_pi_mood_intensity,
+        )
+
+        # Chat history info
+        from backend.llm.token_counter import (
+            count_messages_tokens as _cmt_pi,
+            is_tiktoken_available as _tik_pi,
+        )
+
+        hist_rows = cur.execute(
+            "SELECT role, text FROM messages WHERE session_id=? AND is_active=1 "
+            "ORDER BY id ASC", (session_id,)
+        ).fetchall()
+        hist_messages = [{"role": r, "content": t} for r, t in hist_rows]
+        hist_tokens = _cmt_pi(hist_messages)
+
+        # Rolling summaries (if any exist)
+        summaries: list[dict] = []
+        try:
+            summary_rows = cur.execute(
+                "SELECT summary_text, msg_range_start, msg_range_end, token_count "
+                "FROM session_summaries WHERE session_id=? ORDER BY msg_range_start ASC",
+                (session_id,)
+            ).fetchall()
+            summaries = [
+                {"text": r[0], "range": f"{r[1]}-{r[2]}", "tokens": r[3]}
+                for r in summary_rows
+            ]
+        except Exception:
+            pass  # Table may not exist on older schemas
+
+        return {
+            "ok": True,
+            "sections": [
+                {
+                    "name": s["name"],
+                    "content": s["content"],
+                    "tokens": s["tokens"],
+                    "chars": s["chars"],
+                }
+                for s in sections
+            ],
+            "history": {
+                "message_count": len(hist_rows),
+                "tokens": hist_tokens,
+            },
+            "summaries": summaries,
+            "token_counter": "tiktoken" if _tik_pi() else "heuristic",
         }
     finally:
         con.close()
@@ -2394,20 +2687,6 @@ async def chat_multi(req: Request):
             system_prompt = row[0] if row else "You are a friendly anime companion."
             char_name = row[1] if row else f"Character {char_id}"
 
-            # Build history — 0 = unlimited, matches the streaming endpoint behaviour
-            max_history = cfg.get("llm", {}).get("history_limit", cfg.get("history_limit", 0))
-            if max_history > 0:
-                rows = cur.execute(
-                    "SELECT role, text FROM messages WHERE session_id=? AND is_active=1 ORDER BY id DESC LIMIT ?",
-                    (session_id, max_history)
-                ).fetchall()
-            else:
-                rows = cur.execute(
-                    "SELECT role, text FROM messages WHERE session_id=? AND is_active=1 ORDER BY id DESC",
-                    (session_id,)
-                ).fetchall()
-            hist = [{"role": r[0], "content": r[1]} for r in reversed(rows)]
-
             # Memory context
             memory_context = ""
             if vector_store:
@@ -2418,7 +2697,22 @@ async def chat_multi(req: Request):
                     )
 
             filter_inj = _get_content_filter_injection(cfg.get("content_filter_level", 1))
-            llm_messages = [{"role": "system", "content": system_prompt + memory_context + filter_inj}] + hist
+
+            # ── Context assembly: token-budget-aware message selection ──
+            from backend.llm.context_assembler import assemble_context as _assemble_ctx_m
+            from backend.llm.token_counter import count_tokens as _ct_multi
+            _sys_multi = system_prompt + memory_context + filter_inj
+            _sections_multi = [{"name": "System Prompt", "content": _sys_multi,
+                                "tokens": _ct_multi(_sys_multi), "chars": len(_sys_multi)}]
+            max_history = cfg.get("llm", {}).get("history_limit",
+                          cfg.get("history_limit", 0)) or 30
+            assembled_m = _assemble_ctx_m(
+                session_id=session_id, char_id=char_id, user_text=text,
+                sections=_sections_multi, cfg=cfg, cur=cur,
+                max_history=max_history,
+                skip_user_append=True,  # user msg already inserted above
+            )
+            llm_messages = assembled_m.messages
 
             # Call LLM
             endpoint = _get_llm_endpoint(cfg)
@@ -2561,8 +2855,21 @@ async def chat_stream(req: Request):
     if not incognito:
         cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)",
                     (session_id, f"Session {session_id}"))
-        cur.execute("INSERT INTO messages(session_id, role, text, char_id) VALUES (?,?,?,?)",
-                    (session_id, "user", text, char_id))
+
+        # Score user message importance for context-aware pruning
+        from backend.llm.importance_scorer import score_message as _score_msg_s
+        _is_first_s = cur.execute(
+            "SELECT COUNT(*) FROM messages WHERE session_id = ? AND is_active = 1", (session_id,)
+        ).fetchone()[0] == 0
+        _user_imp_s = _score_msg_s(text, "user", is_first=_is_first_s, has_question="?" in text)
+
+        try:
+            cur.execute(
+                "INSERT INTO messages(session_id, role, text, char_id, importance_score) VALUES (?,?,?,?,?)",
+                (session_id, "user", text, char_id, _user_imp_s))
+        except sqlite3.OperationalError:
+            cur.execute("INSERT INTO messages(session_id, role, text, char_id) VALUES (?,?,?,?)",
+                        (session_id, "user", text, char_id))
         user_message_id = cur.lastrowid
         con.commit()
     else:
@@ -2746,23 +3053,21 @@ async def chat_stream(req: Request):
         except (ValueError, TypeError):
             pass
 
-    # Phase 9: Capability-aware context budget — if character has a context_budget,
-    # derive max_history from token estimate instead of using raw message count.
-    _context_budget = cap.get("context_budget")
-    if _context_budget and int(_context_budget) > 0:
-        # Estimate: average message ~100 tokens, reserve 1000 for system+response
-        _usable_tokens = int(_context_budget) - 1000
-        max_history = max(4, _usable_tokens // 100)
-    else:
-        max_history = cfg.get("llm", {}).get("history_limit", cfg.get("history_limit", 0))
-
-    if max_history > 0:
-        cur.execute("SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
-                    (session_id, max_history))
-    else:
-        cur.execute("SELECT role,text FROM messages WHERE session_id=? ORDER BY id DESC",
-                    (session_id,))
-    hist = [{"role": r, "content": t} for (r, t) in cur.fetchall()][::-1]
+    # ── Context assembly: token-budget-aware message selection ──────
+    from backend.llm.context_assembler import assemble_context as _assemble_ctx_s
+    _ctx_budget_s = int(cap.get("context_budget", 0))
+    max_history = cfg.get("llm", {}).get("history_limit",
+                  cfg.get("history_limit", 0)) or 30
+    assembled_s = _assemble_ctx_s(
+        session_id=session_id, char_id=char_id, user_text=text,
+        sections=sections, cfg=cfg, cur=cur,
+        context_budget=_ctx_budget_s,
+        max_history=max_history,
+        skip_user_append=True,  # user msg already inserted into DB above
+    )
+    llm_messages = assembled_s.messages
+    # Derive hist for lorebook keyword scanning (non-system messages)
+    hist = [m for m in llm_messages if m["role"] != "system"]
 
     # Auto-compress when history nears the limit (background, non-blocking)
     if max_history > 0:
@@ -2771,8 +3076,6 @@ async def chat_stream(req: Request):
             (session_id,)
         ).fetchone()[0]
         _maybe_auto_compress(session_id, total_active, max_history)
-
-    llm_messages = [{"role": "system", "content": system_content}] + hist
 
     # ── Feature A6: Lorebook / World Info injection (streaming) ──
     _inject_lore_entries(llm_messages, con, char_id, hist)
@@ -2785,18 +3088,15 @@ async def chat_stream(req: Request):
     router = get_router(cfg)
     routed_model = router.route(text) if router else cfg["llm"]["model"]
 
-    # Build Qwen3 thinking-mode override when enabled and model is Qwen3
+    # Build thinking-mode extra_body for supported architectures
     # Phase 9: Gate thinking mode on character capability flag too
-    qwen3_thinking = cfg.get("llm", {}).get("qwen3_thinking_mode", False)
+    thinking_enabled = cfg.get("llm", {}).get("thinking_mode", False)
     if cap.get("supports_thinking") is False:
-        qwen3_thinking = False  # Character explicitly disables thinking mode
-    stream_extra_body = None
-    if "qwen3" in routed_model.lower():
-        stream_extra_body = {"chat_template_kwargs": {"enable_thinking": bool(qwen3_thinking)}}
+        thinking_enabled = False  # Character explicitly disables thinking mode
+    stream_extra_body = _build_thinking_extra_body(routed_model, thinking_enabled)
 
-    # Count input tokens (rough estimate: ~4 chars per token for English text)
-    input_char_count = sum(len(m.get("content", "")) for m in llm_messages)
-    est_input_tokens = input_char_count // 4
+    # Input token count from assembler (accurate tiktoken or chars//4 fallback)
+    est_input_tokens = assembled_s.token_count
 
     # ── Phase 10: Agentic tool-use path ──────────────────────────────
     _use_agent = bool(cap.get("supports_tools"))
@@ -2864,13 +3164,23 @@ async def chat_stream(req: Request):
                 emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
 
                 if not incognito:
-                    cur.execute(
-                        "INSERT INTO messages(session_id, role, text, emotion, char_id, "
-                        "token_count, input_token_count, generation_time_ms, tokens_per_second) "
-                        "VALUES (?,?,?,?,?,?,?,?,?)",
-                        (session_id, "assistant", clean_reply, emotion, char_id,
-                         token_count, est_input_tokens, generation_time_ms, tokens_per_second)
-                    )
+                    _asst_imp_s = _score_msg_s(clean_reply, "assistant", emotion_intensity=1.0)
+                    try:
+                        cur.execute(
+                            "INSERT INTO messages(session_id, role, text, emotion, char_id, "
+                            "token_count, input_token_count, generation_time_ms, tokens_per_second, importance_score) "
+                            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                            (session_id, "assistant", clean_reply, emotion, char_id,
+                             token_count, est_input_tokens, generation_time_ms, tokens_per_second, _asst_imp_s)
+                        )
+                    except sqlite3.OperationalError:
+                        cur.execute(
+                            "INSERT INTO messages(session_id, role, text, emotion, char_id, "
+                            "token_count, input_token_count, generation_time_ms, tokens_per_second) "
+                            "VALUES (?,?,?,?,?,?,?,?,?)",
+                            (session_id, "assistant", clean_reply, emotion, char_id,
+                             token_count, est_input_tokens, generation_time_ms, tokens_per_second)
+                        )
                     assistant_message_id = cur.lastrowid
                     con.commit()
 
@@ -2941,7 +3251,7 @@ async def chat_stream(req: Request):
                     "tts_chunked": False,
                     "audio": tts_url,
                     "is_daily_first": _is_daily_first,
-                    "context_budget": _context_budget_summary(sections, hist, cfg),
+                    "context_budget": assembled_s.budget_summary,
                     "capability_warning": _capability_warning,
                 }
                 # Emit dedicated emotion event so chatStore can handle it independently
@@ -3116,13 +3426,23 @@ async def chat_stream(req: Request):
                     tokens_per_second = round(token_count / elapsed, 1) if elapsed > 0 else None
 
                 if not incognito:
-                    cur.execute(
-                        "INSERT INTO messages(session_id, role, text, emotion, char_id, "
-                        "token_count, input_token_count, generation_time_ms, tokens_per_second) "
-                        "VALUES (?,?,?,?,?,?,?,?,?)",
-                        (session_id, "assistant", clean_reply, emotion, char_id,
-                         token_count, est_input_tokens, generation_time_ms, tokens_per_second)
-                    )
+                    _asst_imp_s2 = _score_msg_s(clean_reply, "assistant", emotion_intensity=1.0)
+                    try:
+                        cur.execute(
+                            "INSERT INTO messages(session_id, role, text, emotion, char_id, "
+                            "token_count, input_token_count, generation_time_ms, tokens_per_second, importance_score) "
+                            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                            (session_id, "assistant", clean_reply, emotion, char_id,
+                             token_count, est_input_tokens, generation_time_ms, tokens_per_second, _asst_imp_s2)
+                        )
+                    except sqlite3.OperationalError:
+                        cur.execute(
+                            "INSERT INTO messages(session_id, role, text, emotion, char_id, "
+                            "token_count, input_token_count, generation_time_ms, tokens_per_second) "
+                            "VALUES (?,?,?,?,?,?,?,?,?)",
+                            (session_id, "assistant", clean_reply, emotion, char_id,
+                             token_count, est_input_tokens, generation_time_ms, tokens_per_second)
+                        )
                     assistant_message_id = cur.lastrowid
                     con.commit()
 
@@ -3180,7 +3500,7 @@ async def chat_stream(req: Request):
                     # Daily-first flag: true when no chat was sent today yet (#54)
                     "is_daily_first": _is_daily_first,
                     # Token budget for the context window dashboard widget
-                    "context_budget": _context_budget_summary(sections, hist, cfg),
+                    "context_budget": assembled_s.budget_summary,
                     # Phase 9: capability mismatch warning (if character needs a bigger model)
                     "capability_warning": _capability_warning,
                 }
@@ -4084,20 +4404,27 @@ async def summarize_session(session_id: int, req: Request = None):
 
 @app.post("/api/sessions/{session_id}/compress")
 async def compress_session(session_id: int, req: Request = None):
-    """Compress session history: summarize all messages, archive them, and inject
-    the summary as a synthetic system message so context stays short.
+    """Compress session history using rolling summarization.
 
-    This directly reduces the LLM context window cost on subsequent messages
-    by replacing N messages with a single compact summary block.
+    Instead of summarizing ALL messages monolithically, this approach
+    summarizes the next unsummarized batch of ~20 messages and stores
+    the summary in the ``session_summaries`` table. The context assembler
+    then reads these summaries to reconstruct context efficiently.
+
+    This produces a chain of summaries::
+
+        [Summary 1: turns 1-20] [Summary 2: turns 21-40] [Recent: turns 41-50]
 
     Args:
         session_id: Session to compress.
 
     Request body (optional JSON):
         keep_recent: int — number of most recent messages to keep verbatim (default 6).
+        batch_size: int — number of messages per compression batch (default 20).
 
     Returns:
-        {"ok": True, "summary": str, "archived": int, "kept": int}
+        {"ok": True, "summary": str, "archived": int, "kept": int,
+         "batch_range": [start_id, end_id]}
     """
     body = {}
     if req:
@@ -4107,87 +4434,130 @@ async def compress_session(session_id: int, req: Request = None):
             pass
 
     keep_recent: int = int(body.get("keep_recent", 6))
+    batch_size: int = int(body.get("batch_size", 20))
 
     conn = db()
-
-    # Count total active messages
-    total = conn.execute(
-        "SELECT COUNT(*) FROM messages WHERE session_id = ? AND is_active = 1",
-        (session_id,)
-    ).fetchone()[0]
-
-    if total <= keep_recent:
-        return {"ok": False, "error": f"Only {total} messages — nothing to compress (keep_recent={keep_recent})"}
-
-    # Get IDs of the most recent messages to keep verbatim
-    keep_ids = [
-        r[0] for r in conn.execute(
-            "SELECT id FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id DESC LIMIT ?",
-            (session_id, keep_recent)
-        ).fetchall()
-    ]
-
-    # Get ALL active messages for summarization (before archiving)
-    all_rows = conn.execute(
-        "SELECT role, text FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id ASC",
-        (session_id,)
-    ).fetchall()
-
-    messages_text = "\n".join(
-        f"{'User' if r[0] == 'user' else 'AI'}: {r[1]}" for r in all_rows
-    )
-
-    summarize_prompt = (
-        "You are a conversation summarizer. Provide a concise summary of the following conversation. "
-        "Include key topics discussed, decisions made, emotional tone, and any important details. "
-        "Keep it under 300 words.\n\n"
-        f"CONVERSATION:\n{messages_text}\n\n"
-        "SUMMARY:"
-    )
-
-    cfg = load_config()
     try:
-        from backend.llm.registry import get_client
-        adapter = get_client(cfg)
-        res = await run_in_threadpool(
-            adapter.chat,
-            [{"role": "user", "content": summarize_prompt}],
-            cfg["llm"]["model"],
-            cfg["llm"]["endpoint"],
-            cfg["llm"]["api_key"],
-            temperature=0.3,
-            max_tokens=600,
+        # Count total active messages
+        total = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE session_id = ? AND is_active = 1",
+            (session_id,)
+        ).fetchone()[0]
+
+        if total <= keep_recent:
+            return {"ok": False, "error": f"Only {total} messages — nothing to compress (keep_recent={keep_recent})"}
+
+        # Find where the last compression stopped
+        last_end = 0
+        try:
+            row = conn.execute(
+                "SELECT MAX(msg_range_end) FROM session_summaries WHERE session_id = ?",
+                (session_id,)
+            ).fetchone()
+            if row and row[0]:
+                last_end = row[0]
+        except sqlite3.OperationalError:
+            pass  # Table doesn't exist yet (pre-v35)
+
+        # Get IDs of the most recent messages to keep verbatim
+        keep_ids = [
+            r[0] for r in conn.execute(
+                "SELECT id FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id DESC LIMIT ?",
+                (session_id, keep_recent)
+            ).fetchall()
+        ]
+        keep_set = set(keep_ids)
+
+        # Select next batch of unsummarized messages after last_end
+        batch_rows = conn.execute(
+            "SELECT id, role, text FROM messages WHERE session_id = ? AND is_active = 1 AND id > ? "
+            "ORDER BY id ASC LIMIT ?",
+            (session_id, last_end, batch_size + keep_recent)  # fetch extra so we can exclude keep_ids
+        ).fetchall()
+
+        # Exclude messages we're keeping verbatim
+        compressible = [(mid, role, text) for mid, role, text in batch_rows if mid not in keep_set]
+
+        if len(compressible) < 4:
+            return {"ok": False, "error": f"Only {len(compressible)} compressible messages — need at least 4"}
+
+        # Limit to batch_size
+        batch = compressible[:batch_size]
+
+        messages_text = "\n".join(
+            f"{'User' if role == 'user' else 'AI'}: {text}" for _, role, text in batch
         )
-    except Exception as e:
-        logger.error(f"Compression summarization failed: {e}")
-        raise HTTPException(500, f"Summarization failed: {e}")
 
-    if not res.get("ok"):
-        raise HTTPException(500, res.get("error", "LLM error"))
+        summarize_prompt = (
+            "You are a conversation summarizer. Provide a concise summary of the following conversation segment. "
+            "Include key topics discussed, decisions made, emotional tone, and any important details. "
+            "Keep it under 300 words.\n\n"
+            f"CONVERSATION SEGMENT:\n{messages_text}\n\n"
+            "SUMMARY:"
+        )
 
-    summary = res["reply"].strip()
+        cfg = load_config()
+        try:
+            from backend.llm.registry import get_client
+            adapter = get_client(cfg)
+            res = await run_in_threadpool(
+                adapter.chat,
+                [{"role": "user", "content": summarize_prompt}],
+                cfg["llm"]["model"],
+                cfg["llm"]["endpoint"],
+                cfg["llm"]["api_key"],
+                temperature=0.3,
+                max_tokens=600,
+            )
+        except Exception as e:
+            logger.error(f"Compression summarization failed: {e}")
+            raise HTTPException(500, f"Summarization failed: {e}")
 
-    # Archive all messages except the ones we're keeping verbatim.
-    # Soft-delete (is_active = 0) preserves history for inspection.
-    keep_id_placeholders = ",".join("?" * len(keep_ids))
-    archived_count = conn.execute(
-        f"UPDATE messages SET is_active = 0 WHERE session_id = ? AND is_active = 1 AND id NOT IN ({keep_id_placeholders})",
-        [session_id] + keep_ids
-    ).rowcount
+        if not res.get("ok"):
+            raise HTTPException(500, res.get("error", "LLM error"))
 
-    # Insert a synthetic system message at the front of active history so the
-    # LLM receives the summary as context on the next request.
-    now = int(__import__("time").time())
-    conn.execute(
-        "INSERT INTO messages (session_id, role, text, ts) VALUES (?, ?, ?, ?)",
-        (session_id, "system", f"[CONVERSATION SUMMARY — messages archived]\n{summary}", now - 1)
-    )
+        summary = res["reply"].strip()
 
-    # Store summary on the session row as well for the /summary GET endpoint
-    conn.execute("UPDATE sessions SET summary = ? WHERE id = ?", (summary, session_id))
-    conn.commit()
+        # Archive the batch messages (soft-delete: is_active = 0)
+        batch_ids = [mid for mid, _, _ in batch]
+        placeholders = ",".join("?" * len(batch_ids))
+        archived_count = conn.execute(
+            f"UPDATE messages SET is_active = 0 WHERE id IN ({placeholders})",
+            batch_ids
+        ).rowcount
 
-    return {"ok": True, "summary": summary, "archived": archived_count, "kept": keep_recent}
+        # Store rolling summary in session_summaries table
+        from backend.llm.token_counter import count_tokens
+        now = int(time.time())
+        range_start = batch_ids[0]
+        range_end = batch_ids[-1]
+        try:
+            conn.execute(
+                "INSERT INTO session_summaries "
+                "(session_id, summary_text, msg_range_start, msg_range_end, msg_count, token_count, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (session_id, summary, range_start, range_end, len(batch), count_tokens(summary), now)
+            )
+        except sqlite3.OperationalError:
+            # Fallback: inject as synthetic system message if session_summaries table doesn't exist
+            conn.execute(
+                "INSERT INTO messages (session_id, role, text, ts) VALUES (?, ?, ?, ?)",
+                (session_id, "system", f"[CONVERSATION SUMMARY — messages {range_start}-{range_end} archived]\n{summary}", now - 1)
+            )
+
+        # Update session summary for the /summary GET endpoint
+        conn.execute("UPDATE sessions SET summary = ? WHERE id = ?", (summary, session_id))
+        conn.commit()
+
+        return {
+            "ok": True,
+            "summary": summary,
+            "archived": archived_count,
+            "kept": keep_recent,
+            "batch_range": [range_start, range_end],
+        }
+    finally:
+        conn.close()
 
 
 @app.get("/api/sessions/{session_id}/summary")
@@ -4560,7 +4930,8 @@ def list_characters():
                    llm_endpoint, llm_model, llm_temperature, last_emotion, voice_config,
                    expr_portraits, first_chat_date, diary, diary_date, capability_profile,
                    tts_pitch, tts_rate, vocab_categories, animation_profile, emotion_voice_overrides,
-                   mood_enabled, mood_intensity
+                   mood_enabled, mood_intensity, emotion_portraits_mode,
+                   bible_path, bible_enabled, bible_sections
             FROM characters
             ORDER BY id ASC
         """)
@@ -4620,6 +4991,12 @@ def list_characters():
             # Feature A4: time-of-day mood fields (schema v23)
             "mood_enabled": bool(row[31]) if len(row) > 31 and row[31] is not None else True,
             "mood_intensity": float(row[32]) if len(row) > 32 and row[32] is not None else 0.8,
+            # Phase 15: emotion portrait display mode (0=off, 1=chat, 2=chat+sidebar)
+            "emotion_portraits_mode": int(row[33]) if len(row) > 33 and row[33] is not None else 0,
+            # v36: Character bible integration
+            "bible_path": row[34] if len(row) > 34 else None,
+            "bible_enabled": bool(row[35]) if len(row) > 35 and row[35] is not None else False,
+            "bible_sections": json.loads(row[36]) if len(row) > 36 and row[36] else None,
         }
         characters.append(char)
     conn.close()
@@ -4760,8 +5137,12 @@ async def update_character(character_id: int, req: Request):
         "emotion_voice_overrides",  # v19: Feature H per-emotion TTS voice override map
         "mood_enabled",  # v23: Feature A4 time-of-day mood toggle
         "mood_intensity",  # v23: Feature A4 mood strength 0.0-1.0
+        "emotion_portraits_mode",  # v31: Phase 15 emotion portrait display mode (0/1/2)
+        "bible_path",  # v36: character bible markdown file path
+        "bible_enabled",  # v36: toggle bible injection into system prompt
+        "bible_sections",  # v36: JSON list of section numbers to inject
     ]
-    _json_fields = {"capability_profile", "voice_config", "vocab_categories", "animation_profile", "emotion_voice_overrides"}
+    _json_fields = {"capability_profile", "voice_config", "vocab_categories", "animation_profile", "emotion_voice_overrides", "bible_sections"}
     for field in fields:
         if field in body:
             updates.append(f"{field}=?")
@@ -5432,19 +5813,42 @@ async def import_templates(req: Request):
 
 @app.post("/api/upload/avatar")
 async def upload_avatar_endpoint(file: UploadFile = File(...)):
-    """Upload a VRM avatar file."""
-    if not file.filename.endswith(".vrm"):
-        raise HTTPException(400, "File must be .vrm")
-    
-    # Sanitize filename
+    """Upload a 3D avatar file (VRM, GLB, or GLTF).
+
+    Accepts .vrm, .glb, and .gltf model files. Sanitizes the filename
+    and stores it in backend/storage/avatars/.
+
+    Args:
+        file: 3D model file upload (multipart/form-data)
+
+    Returns:
+        {"ok": True, "url": "/files/avatars/...", "path": "...", "type": "vrm"|"glb"}
+
+    Raises:
+        HTTPException(400): If file extension is not .vrm, .glb, or .gltf
+        HTTPException(500): If file write fails
+    """
+    allowed_exts = (".vrm", ".glb", ".gltf")
+    filename_lower = (file.filename or "").lower()
+    if not any(filename_lower.endswith(ext) for ext in allowed_exts):
+        raise HTTPException(400, f"File must be one of: {', '.join(allowed_exts)}")
+
+    # Sanitize filename (keep alphanumeric, dots, underscores, hyphens)
     safe_name = "".join([c for c in file.filename if c.isalpha() or c.isdigit() or c in "._-"])
     file_path = STORAGE / "avatars" / safe_name
-    
+    ext = os.path.splitext(safe_name)[1].lower()
+    model_type = "vrm" if ext == ".vrm" else "glb"
+
     try:
         content = await file.read()
         with open(file_path, "wb") as f:
             f.write(content)
-        return {"ok": True, "url": f"/files/avatars/{safe_name}", "path": str(file_path)}
+        return {
+            "ok": True,
+            "url": f"/files/avatars/{safe_name}",
+            "path": str(file_path),
+            "type": model_type,
+        }
     except Exception as e:
         logger.error(f"Avatar Upload Failed: {e}")
         raise HTTPException(500, "Upload failed")
@@ -7365,7 +7769,7 @@ def scan_vrm_models():
     base = STORAGE / "avatars"
     models = []
     if not base.exists(): return {"models": []}
-    
+
     for path in base.glob("*.vrm"):
         models.append({
             "name": path.stem,
@@ -7374,6 +7778,278 @@ def scan_vrm_models():
             "size": path.stat().st_size
         })
     return {"models": models}
+
+
+@app.get("/api/scan/models3d")
+def scan_3d_models():
+    """List all 3D model files (VRM, GLB, GLTF) in avatars storage.
+
+    Scans backend/storage/avatars/ for supported extensions and returns
+    a unified list with type metadata.
+
+    Returns:
+        {"models": [{"name", "file", "url", "size", "type"}]}
+
+    Example:
+        >>> resp = client.get("/api/scan/models3d")
+        >>> resp.json()["models"][0]["type"]
+        'vrm'
+    """
+    base = STORAGE / "avatars"
+    models = []
+    if not base.exists():
+        return {"models": []}
+
+    extensions = {"*.vrm", "*.glb", "*.gltf"}
+    for ext_glob in extensions:
+        for path in base.glob(ext_glob):
+            ext = path.suffix.lower().lstrip(".")
+            model_type = "vrm" if ext == "vrm" else "glb"
+            models.append({
+                "name": path.stem,
+                "file": path.name,
+                "url": f"/files/avatars/{path.name}",
+                "size": path.stat().st_size,
+                "type": model_type,
+            })
+
+    # Sort by name for stable ordering
+    models.sort(key=lambda m: m["name"].lower())
+    return {"models": models}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Avatar Browser  (Section A: Model Downloader & Browser)
+# ═══════════════════════════════════════════════════════════════════════════
+
+from backend.models.avatar_browser import AvatarBrowser
+
+_avatar_browser = AvatarBrowser()
+
+
+@app.get("/api/avatars/browse")
+async def browse_avatars(source: str = "cc0", q: str = "", page: int = 1):
+    """Browse available 3D avatar models from curated or external sources.
+
+    Args:
+        source: Data source — 'cc0' (default), 'sketchfab', or 'local'.
+        q: Optional search query string.
+        page: Page number for paginated results (Sketchfab).
+
+    Returns:
+        {"models": [...], "source": str, "total": int}
+
+    Example:
+        >>> resp = client.get("/api/avatars/browse?source=cc0&q=anime")
+        >>> resp.json()["models"][0]["name"]
+        'VRoid Sample Girl A'
+    """
+    if source == "cc0":
+        models = _avatar_browser.search_cc0(q) if q else _avatar_browser.get_cc0_catalog()
+    elif source == "sketchfab":
+        models = await _avatar_browser.search_sketchfab(q or "anime character", page)
+    elif source == "local":
+        models = _avatar_browser.list_local_models()
+    else:
+        models = _avatar_browser.get_cc0_catalog()
+
+    return {"models": models, "source": source, "total": len(models)}
+
+
+@app.get("/api/avatars/search")
+async def search_avatars(q: str = ""):
+    """Cross-source merged search across CC0 catalog and Sketchfab.
+
+    Args:
+        q: Search query string.
+
+    Returns:
+        {"models": [...], "total": int}
+
+    Example:
+        >>> resp = client.get("/api/avatars/search?q=anime girl")
+        >>> len(resp.json()["models"]) > 0
+        True
+    """
+    cc0_results = _avatar_browser.search_cc0(q) if q else _avatar_browser.get_cc0_catalog()
+    # Tag CC0 results with source
+    for m in cc0_results:
+        m.setdefault("source", "cc0")
+
+    sf_results = await _avatar_browser.search_sketchfab(q, 1) if q else []
+
+    merged = cc0_results + sf_results
+    return {"models": merged, "total": len(merged)}
+
+
+@app.post("/api/avatars/download")
+async def download_avatar(body: dict):
+    """Start a background download of a 3D avatar model.
+
+    Args:
+        body: JSON with keys:
+            - url (str): Direct download URL
+            - filename (str): Target filename (e.g., "model.vrm")
+            - source (str): Source identifier ("cc0", "sketchfab")
+
+    Returns:
+        {"ok": bool, "filename": str, "error": str | None}
+
+    Example:
+        >>> resp = client.post("/api/avatars/download", json={
+        ...     "url": "https://example.com/model.vrm",
+        ...     "filename": "my_model.vrm"
+        ... })
+    """
+    url = body.get("url", "")
+    filename = body.get("filename", "")
+    source = body.get("source", "cc0")
+
+    if not url or not filename:
+        return {"ok": False, "error": "Missing 'url' or 'filename'"}
+
+    # Sanitize filename
+    filename = filename.replace("/", "_").replace("\\", "_").replace("..", "")
+    if not filename.lower().endswith((".vrm", ".glb", ".gltf")):
+        filename += ".glb"
+
+    result = await _avatar_browser.download_model(url, filename, source)
+    return result
+
+
+@app.get("/api/avatars/download-status")
+def get_download_status():
+    """Poll the current avatar download progress.
+
+    Returns:
+        {"active": bool, "filename": str, "progress_pct": float,
+         "speed_mb_s": float, "error": str | None}
+
+    Example:
+        >>> resp = client.get("/api/avatars/download-status")
+        >>> resp.json()["active"]
+        False
+    """
+    return _avatar_browser.get_download_progress()
+
+
+@app.delete("/api/avatars/{filename}")
+def delete_avatar(filename: str):
+    """Delete a local avatar model file.
+
+    Args:
+        filename: Name of the file in backend/storage/avatars/.
+
+    Returns:
+        {"ok": bool, "error": str | None}
+
+    Example:
+        >>> resp = client.delete("/api/avatars/test_model.vrm")
+        >>> resp.json()["ok"]
+        True
+    """
+    return _avatar_browser.delete_model(filename)
+
+
+@app.put("/api/avatars/{filename}/rename")
+def rename_avatar(filename: str, body: dict):
+    """Rename a local avatar model file.
+
+    Args:
+        filename: Current filename.
+        body: JSON with key ``new_name`` (str).
+
+    Returns:
+        {"ok": bool, "error": str | None}
+
+    Example:
+        >>> resp = client.put("/api/avatars/old.vrm/rename",
+        ...                   json={"new_name": "new.vrm"})
+    """
+    new_name = body.get("new_name", "")
+    if not new_name:
+        return {"ok": False, "error": "Missing 'new_name'"}
+    return _avatar_browser.rename_model(filename, new_name)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Animation Library — Clip-based animation manifest + file serving
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/animations")
+def get_animation_manifest():
+    """Return the animation manifest with disk availability status.
+
+    Reads ``backend/data/animation_manifest.json`` and checks which clip
+    files actually exist on disk. Each clip gets an ``available`` boolean
+    and a ``url`` pointing to the static mount.
+
+    Returns:
+        Full manifest with per-clip availability and URLs.
+
+    Example:
+        >>> resp = client.get("/api/animations")
+        >>> resp.json()["packs"][0]["clips"][0]["available"]
+        True
+    """
+    manifest_path = Path(ROOT_DIR) / "backend" / "data" / "animation_manifest.json"
+    if not manifest_path.exists():
+        return {"version": 1, "packs": []}
+
+    manifest = json.loads(manifest_path.read_text())
+    anim_dir = STORAGE / "animations"
+
+    for pack in manifest.get("packs", []):
+        for clip in pack.get("clips", []):
+            clip_file = clip.get("file", "")
+            clip_path = anim_dir / clip_file
+            clip["available"] = clip_path.exists()
+            clip["url"] = f"/animations/{clip_file}" if clip["available"] else None
+
+    return manifest
+
+
+@app.get("/api/animations/status")
+def get_animation_status():
+    """Quick summary of available animation clips.
+
+    Returns:
+        {"total_clips": int, "available_clips": int, "packs": int,
+         "packs_with_files": int}
+
+    Example:
+        >>> resp = client.get("/api/animations/status")
+        >>> resp.json()["total_clips"]
+        16
+    """
+    manifest_path = Path(ROOT_DIR) / "backend" / "data" / "animation_manifest.json"
+    if not manifest_path.exists():
+        return {"total_clips": 0, "available_clips": 0, "packs": 0, "packs_with_files": 0}
+
+    manifest = json.loads(manifest_path.read_text())
+    anim_dir = STORAGE / "animations"
+
+    total = 0
+    available = 0
+    packs_with = 0
+
+    for pack in manifest.get("packs", []):
+        pack_has = False
+        for clip in pack.get("clips", []):
+            total += 1
+            if (anim_dir / clip.get("file", "")).exists():
+                available += 1
+                pack_has = True
+        if pack_has:
+            packs_with += 1
+
+    return {
+        "total_clips": total,
+        "available_clips": available,
+        "packs": len(manifest.get("packs", [])),
+        "packs_with_files": packs_with,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -7889,6 +8565,137 @@ def get_hardware_info():
         logger.error(f"Hardware info error: {e}")
 
     return info
+
+
+# ==================== LINK DEVICE MANAGEMENT ====================
+
+
+@app.get("/api/link/devices")
+async def get_link_devices():
+    """Return all discovered LM Studio Link devices with their status.
+
+    Triggers a refresh if the cache is stale (>30 seconds old), then
+    returns each device's online status, loaded models, and latency.
+
+    Returns:
+        {"ok": True, "devices": [...], "local_device": str}
+
+    Example:
+        >>> GET /api/link/devices
+        {"ok": true, "devices": [{"device_id": "local", "display_name": "Chris-MacBook-14.local", ...}]}
+    """
+    from backend.llm.link_manager import LinkManager
+
+    cfg = load_config() or {}
+    mgr = LinkManager.instance()
+    mgr.configure(cfg)
+    devices = await mgr.refresh()
+
+    return {
+        "ok": True,
+        "devices": mgr.get_device_summary(),
+        "device_count": len(devices),
+        "online_count": sum(1 for d in devices if d.online),
+    }
+
+
+@app.post("/api/link/health")
+async def link_health_check():
+    """Force a health check on all known Link devices.
+
+    Pings each device's ``/v1/models`` endpoint and updates latency,
+    online status, and loaded model list.
+
+    Returns:
+        {"ok": True, "devices": [...]}
+    """
+    from backend.llm.link_manager import LinkManager
+
+    cfg = load_config() or {}
+    mgr = LinkManager.instance()
+    mgr.configure(cfg)
+    devices = await mgr.refresh()
+
+    return {
+        "ok": True,
+        "devices": mgr.get_device_summary(),
+    }
+
+
+@app.get("/api/link/route")
+async def get_link_route(capability: str = "chat", model: str = ""):
+    """Preview the routing decision for a given capability.
+
+    Shows which device would be selected for a chat/vision/summarization
+    request without actually making the LLM call.
+
+    Args:
+        capability: Task type ("chat", "vision", "summarization", "tts").
+        model: Optional preferred model identifier.
+
+    Returns:
+        {"ok": True, "decision": {"device_id", "endpoint", "model", "reason"}}
+    """
+    from backend.llm.link_manager import LinkManager
+
+    cfg = load_config() or {}
+    mgr = LinkManager.instance()
+    mgr.configure(cfg)
+
+    decision = await mgr.route(
+        capability,
+        preferred_model=model,
+        fallback_endpoint=cfg.get("llm", {}).get("endpoint", "http://localhost:1234/v1"),
+        fallback_model=cfg.get("llm", {}).get("model", ""),
+    )
+
+    return {
+        "ok": True,
+        "decision": {
+            "device_id": decision.device.device_id if decision.device else None,
+            "display_name": decision.device.display_name if decision.device else None,
+            "endpoint": decision.endpoint,
+            "model": decision.model,
+            "reason": decision.reason,
+        },
+    }
+
+
+@app.get("/api/hardware-info")
+async def get_hardware_info_extended():
+    """Extended hardware detection with model tier matching.
+
+    Returns hardware details plus recommended model tier from
+    ``model_recommendations.json``.
+
+    Returns:
+        {"ok": True, "hardware": {...}, "recommended_tier": {...}}
+
+    Example:
+        >>> GET /api/hardware-info
+        {"ok": true, "hardware": {"gpu": "Apple M2 Pro", ...}, "recommended_tier": {"id": "unified-32gb", ...}}
+    """
+    from backend.llm.link_manager import get_hardware_info as _get_hw, match_hardware_tier
+
+    hw = await _get_hw()
+
+    # Load recommendations manifest
+    recs_path = Path(__file__).parent / "data" / "model_recommendations.json"
+    recs = {}
+    if recs_path.exists():
+        try:
+            recs = json.loads(recs_path.read_text())
+        except Exception:
+            pass
+
+    tier = match_hardware_tier(hw, recs) if recs else None
+
+    return {
+        "ok": True,
+        "hardware": hw,
+        "recommended_tier": tier,
+    }
+
 
 # ==================== MODEL MANAGEMENT ====================
 
@@ -8860,6 +9667,269 @@ async def voice_duplex_ws(websocket: WebSocket) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Part 9.2 — Game Spectator WebSocket
+# ---------------------------------------------------------------------------
+
+# Active spectator sessions keyed by WebSocket id
+_spectator_sessions: dict[int, dict] = {}
+
+
+@app.websocket("/ws/spectator")
+async def spectator_ws(websocket: WebSocket) -> None:
+    """WebSocket endpoint for game spectator mode.
+
+    Receives binary JPEG game frames from the client, analyzes them via VLM,
+    and returns character reactions as JSON events.  Also forwards reactions
+    to any connected overlay WebSockets.
+
+    Query parameters:
+        char_id (int): Character ID for persona context.
+
+    Protocol:
+        Client → server:
+            - JSON config: ``{"type": "config", "char_id": int, "game_tag": str,
+              "mode": "watch"|"play", "frequency": "quiet"|"normal"|"hyped",
+              "user_name": str}``
+            - Binary: JPEG game frame screenshots (720p, quality 60%)
+            - JSON control: ``{"type": "ping"}``
+
+        Server → client:
+            - ``{"type": "reaction", "text": str, "emotion": str,
+              "urgency": float}``
+            - ``{"type": "quiet"}`` — nothing interesting, no reaction
+            - ``{"type": "config_ack", "status": "ok"}``
+            - ``{"type": "error", "message": str}``
+            - ``{"type": "pong"}``
+
+    Example frontend connection:
+        ``new WebSocket("ws://localhost:8080/ws/spectator?char_id=1")``
+    """
+    await websocket.accept()
+
+    params = websocket.query_params
+    try:
+        char_id = int(params.get("char_id", "1"))
+    except (ValueError, TypeError):
+        await websocket.send_json({"type": "error", "message": "Invalid char_id"})
+        await websocket.close(code=1008, reason="Invalid query parameters")
+        return
+
+    cfg = load_config() or {}
+    logger.info(f"[Spectator] WebSocket connected (char={char_id})")
+
+    # Lazy imports to avoid circular deps at module level
+    from backend.spectator.analyzer import FrameAnalyzer
+    from backend.spectator.throttle import ReactionThrottle
+
+    analyzer = FrameAnalyzer(cfg, char_id=char_id)
+    throttle = ReactionThrottle(preset="normal")
+    user_name = "the user"
+
+    try:
+        while True:
+            data = await websocket.receive()
+
+            # Binary data = JPEG game frame
+            if "bytes" in data and data["bytes"]:
+                import base64
+                frame_b64 = base64.b64encode(data["bytes"]).decode("ascii")
+
+                # Check throttle before expensive VLM call
+                if not throttle.should_react(urgency=0.5):
+                    continue
+
+                # Run VLM analysis (blocking — runs in thread pool)
+                import asyncio
+                reaction = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: analyzer.analyze_frame(frame_b64, user_name=user_name),
+                )
+
+                if reaction.quiet:
+                    await websocket.send_json({"type": "quiet"})
+                    continue
+
+                # Check throttle again with actual urgency
+                if not throttle.should_react(urgency=reaction.urgency):
+                    continue
+
+                throttle.record_reaction()
+
+                reaction_msg = {
+                    "type": "reaction",
+                    "text": reaction.text,
+                    "emotion": reaction.emotion,
+                    "urgency": reaction.urgency,
+                }
+                await websocket.send_json(reaction_msg)
+
+                # Forward to overlay connections
+                await _broadcast_overlay({
+                    "type": "spectator_reaction",
+                    "text": reaction.text,
+                    "emotion": reaction.emotion,
+                })
+
+            # Text data = JSON control messages
+            elif "text" in data and data["text"]:
+                import json as _json
+                try:
+                    msg = _json.loads(data["text"])
+                except (ValueError, _json.JSONDecodeError):
+                    continue
+
+                msg_type = msg.get("type", "")
+
+                if msg_type == "config":
+                    game_tag = msg.get("game_tag", "unknown game")
+                    mode = msg.get("mode", "watch")
+                    frequency = msg.get("frequency", "normal")
+                    user_name = msg.get("user_name", "the user")
+                    char_id = msg.get("char_id", char_id)
+
+                    analyzer = FrameAnalyzer(
+                        cfg, char_id=char_id, game_tag=game_tag, mode=mode,
+                    )
+                    try:
+                        throttle.set_preset(frequency)
+                    except ValueError:
+                        throttle.set_preset("normal")
+                    throttle.reset()
+
+                    await websocket.send_json({"type": "config_ack", "status": "ok"})
+                    logger.info(
+                        f"[Spectator] Configured: game={game_tag}, mode={mode}, "
+                        f"freq={frequency}, char={char_id}"
+                    )
+
+                elif msg_type == "ping":
+                    await websocket.send_json({"type": "pong"})
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error(f"[Spectator] WebSocket error: {e}")
+    finally:
+        logger.info(f"[Spectator] WebSocket disconnected (char={char_id})")
+
+
+# ---------------------------------------------------------------------------
+# Part 9.4 — AI Plays Mode REST Endpoints
+# ---------------------------------------------------------------------------
+
+# Global play session tracker (one at a time)
+_active_play_session = None
+
+
+@app.post("/api/spectator/play/start")
+async def spectator_play_start(req: Request):
+    """Start an AI-plays-mode session via Playwright.
+
+    Launches a visible Chromium browser, navigates to the given URL,
+    and begins the VLM decision loop.
+
+    Args:
+        req: JSON body with:
+            - ``game_url`` (str): URL to navigate to.
+            - ``char_id`` (int): Character ID for persona context.
+
+    Returns:
+        JSON: ``{"ok": true, "message": "Play session started"}``
+
+    Example:
+        >>> POST /api/spectator/play/start
+        >>> {"game_url": "https://pokerogue.net", "char_id": 1}
+    """
+    global _active_play_session
+
+    if _active_play_session and _active_play_session.is_running:
+        return {"ok": False, "error": "A play session is already running. Stop it first."}
+
+    body = await req.json()
+    game_url = body.get("game_url", "")
+    char_id = body.get("char_id", 1)
+
+    if not game_url:
+        return {"ok": False, "error": "game_url is required"}
+
+    cfg = load_config() or {}
+
+    from backend.spectator.input_controller import PlaySession
+    _active_play_session = PlaySession(
+        game_url=game_url,
+        char_id=char_id,
+        cfg=cfg,
+    )
+
+    try:
+        await _active_play_session.start()
+        return {"ok": True, "message": "Play session started"}
+    except ImportError as e:
+        _active_play_session = None
+        return {"ok": False, "error": str(e)}
+    except Exception as e:
+        _active_play_session = None
+        logger.error(f"[Spectator] Play start failed: {e}")
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/spectator/play/stop")
+async def spectator_play_stop():
+    """Stop the active AI-plays-mode session.
+
+    Returns:
+        JSON: ``{"ok": true, "message": "Play session stopped"}``
+    """
+    global _active_play_session
+
+    if not _active_play_session or not _active_play_session.is_running:
+        return {"ok": False, "error": "No active play session"}
+
+    await _active_play_session.stop()
+    _active_play_session = None
+    return {"ok": True, "message": "Play session stopped"}
+
+
+@app.get("/api/spectator/sessions/{character_id}")
+def spectator_session_history(character_id: int, limit: int = 20):
+    """Get game companion session history for a character.
+
+    Args:
+        character_id: Character ID.
+        limit: Max sessions to return (default 20).
+
+    Returns:
+        JSON: ``{"sessions": [...]}"``
+
+    Example:
+        >>> GET /api/spectator/sessions/1?limit=10
+    """
+    import sqlite3
+    con = sqlite3.connect("backend/storage/app.db")
+    con.row_factory = sqlite3.Row
+    try:
+        from backend.spectator.memory import get_session_history
+        sessions = get_session_history(con, character_id, limit=limit)
+        return {"sessions": sessions}
+    except Exception as e:
+        return {"sessions": [], "error": str(e)}
+    finally:
+        con.close()
+
+
+@app.get("/api/spectator/play/status")
+async def spectator_play_status():
+    """Check if an AI-plays session is currently active.
+
+    Returns:
+        JSON: ``{"running": bool, "game_url": str | null}``
+    """
+    if _active_play_session and _active_play_session.is_running:
+        return {"running": True, "game_url": _active_play_session.game_url}
+    return {"running": False, "game_url": None}
+
+
+# ---------------------------------------------------------------------------
 # Phase 8A — AI Image & Video Generation endpoints
 # ---------------------------------------------------------------------------
 
@@ -9090,10 +10160,8 @@ async def generate_expression_pack(char_id: int, req: Request):
         if first_sent:
             base_prompt = f"{char_name}, {first_sent}, anime style, portrait"
 
-    emotions = body.get("emotions", [
-        "happy", "sad", "surprised", "thinking",
-        "embarrassed", "excited", "angry", "shy",
-    ])
+    from backend.emotion.normalize import EMOTION_LIST
+    emotions = body.get("emotions", EMOTION_LIST)
 
     cfg = load_config()
     from backend.image_gen.registry import get_image_gen
@@ -9113,16 +10181,40 @@ async def generate_expression_pack(char_id: int, req: Request):
         "model": image_cfg.get("model", ""),
     }
 
-    # Emotion-to-prompt suffix mapping — guides the model toward the right expression
+    # Emotion-to-prompt suffix mapping — 26 canonical emotions (Phase 15)
     emotion_suffixes = {
-        "happy": "smiling warmly, happy expression, bright eyes",
-        "sad": "teary eyes, sad expression, downcast look",
-        "surprised": "mouth open, surprised expression, wide eyes",
-        "thinking": "hand on chin, thoughtful expression, looking upward",
-        "embarrassed": "blushing cheeks, embarrassed expression, looking away",
-        "excited": "energetic pose, excited expression, big smile",
-        "angry": "frowning, annoyed expression, crossed arms",
-        "shy": "fidgeting, shy expression, small smile",
+        # Core (Ekman+)
+        "happy":       "smiling warmly, bright eyes, genuine joy",
+        "sad":         "tearful eyes, downcast expression, melancholy",
+        "angry":       "furrowed brows, intense glare, clenched jaw",
+        "surprised":   "wide eyes, raised eyebrows, open mouth",
+        "fearful":     "wide terrified eyes, trembling, backing away",
+        "disgusted":   "wrinkled nose, turned away, revolted expression",
+        "neutral":     "calm expression, relaxed face, serene",
+        # Social
+        "embarrassed": "blushing cheeks, looking away, fidgeting",
+        "shy":         "hiding partially, blushing, avoiding eye contact",
+        "proud":       "chin up, confident smirk, puffed chest",
+        "confident":   "direct gaze, slight smile, assured posture",
+        "jealous":     "narrowed eyes, tight lips, side glance",
+        "grateful":    "warm smile, hands together, appreciative eyes",
+        # Cognitive
+        "confused":    "tilted head, furrowed brow, question mark",
+        "curious":     "wide interested eyes, leaning forward, eyebrow raised",
+        "thoughtful":  "hand on chin, contemplative gaze, distant look",
+        "nostalgic":   "gentle sad smile, distant gaze, soft expression",
+        "awe":         "mouth slightly open, wide sparkling eyes, amazed",
+        # Romantic
+        "love":        "heart eyes, blushing, adoring expression",
+        "flirty":      "winking, playful smile, coy expression",
+        "longing":     "gazing into distance, yearning expression, reaching out",
+        # Energy
+        "excited":     "jumping, fist pump, sparkly eyes, huge grin",
+        "tired":       "droopy eyes, yawning, slumped posture",
+        "relieved":    "exhaling, relaxed shoulders, peaceful smile",
+        # Playful
+        "smug":        "half-lidded eyes, knowing smirk, superiority",
+        "mischievous": "sly grin, scheming eyes, playful trouble",
     }
 
     portraits = {}
@@ -9180,6 +10272,208 @@ def get_expr_portraits(char_id: int):
         except Exception:
             portraits = None
     return {"ok": True, "expr_portraits": portraits}
+
+
+# ---------------------------------------------------------------------------
+# Phase 15: Per-Character Expression Portrait File API
+# ---------------------------------------------------------------------------
+# These routes serve/upload/delete individual per-character portrait images
+# from the expr_portraits/{char_id}/ directory (distinct from the legacy A5
+# flat-file approach that stored everything in the JSON column).
+# ---------------------------------------------------------------------------
+
+@app.get("/api/characters/{char_id}/expression-portrait/{emotion}")
+async def get_expression_portrait(char_id: int, emotion: str):
+    """Serve a single expression portrait image for a character.
+
+    Looks up the portrait file at ``storage/images/expr_portraits/{char_id}/{emotion}.png``.
+    Falls back to legacy flat-file path ``storage/images/{charname}_expr_{emotion}.png``
+    for backwards compatibility with A5-generated portraits.
+
+    Args:
+        char_id: Character database ID.
+        emotion: Canonical emotion name (e.g. "happy", "sad").
+
+    Returns:
+        FileResponse with the PNG image, or 404 if not found.
+
+    Example:
+        >>> GET /api/characters/1/expression-portrait/happy
+        # → 200 with PNG image
+    """
+    emotion_normalized = normalize_emotion(emotion)
+    storage = os.path.join(os.path.dirname(os.path.abspath(__file__)), "storage", "images")
+
+    # Primary path: per-character directory
+    primary = os.path.join(storage, "expr_portraits", str(char_id), f"{emotion_normalized}.png")
+    if os.path.isfile(primary):
+        return FileResponse(primary, media_type="image/png")
+
+    # Fallback: legacy A5 flat-file pattern ({charname}_expr_{emotion}.png)
+    con = db()
+    row = con.execute("SELECT name FROM characters WHERE id = ?", (char_id,)).fetchone()
+    con.close()
+    if row:
+        clean_name = row[0].split("(")[-1].rstrip(")").strip().lower() if "(" in row[0] else row[0].split()[0].lower()
+        legacy = os.path.join(storage, f"{clean_name}_expr_{emotion_normalized}.png")
+        if os.path.isfile(legacy):
+            return FileResponse(legacy, media_type="image/png")
+
+    raise HTTPException(404, f"No portrait for emotion '{emotion_normalized}'")
+
+
+@app.post("/api/characters/{char_id}/expression-portrait/{emotion}")
+async def upload_expression_portrait(char_id: int, emotion: str, file: UploadFile = File(...)):
+    """Upload a single expression portrait for a specific emotion.
+
+    Saves the image to ``storage/images/expr_portraits/{char_id}/{emotion}.png``
+    and updates the ``characters.expr_portraits`` JSON column.
+
+    Args:
+        char_id: Character database ID.
+        emotion: Canonical emotion name.
+        file: Uploaded image file (PNG/JPG/WebP).
+
+    Returns:
+        JSON with the portrait URL.
+
+    Example:
+        >>> POST /api/characters/1/expression-portrait/happy
+        >>> # with file upload
+        {"ok": true, "url": "/files/images/expr_portraits/1/happy.png"}
+    """
+    emotion_normalized = normalize_emotion(emotion)
+    storage = os.path.join(os.path.dirname(os.path.abspath(__file__)), "storage", "images")
+    char_dir = os.path.join(storage, "expr_portraits", str(char_id))
+    os.makedirs(char_dir, exist_ok=True)
+
+    dest = os.path.join(char_dir, f"{emotion_normalized}.png")
+    contents = await file.read()
+    with open(dest, "wb") as f:
+        f.write(contents)
+
+    # Update the JSON column too
+    url = f"/files/images/expr_portraits/{char_id}/{emotion_normalized}.png"
+    con = db()
+    row = con.execute("SELECT expr_portraits FROM characters WHERE id = ?", (char_id,)).fetchone()
+    if not row:
+        con.close()
+        raise HTTPException(404, "Character not found")
+
+    portraits = {}
+    if row[0]:
+        try:
+            portraits = json.loads(row[0])
+        except Exception:
+            portraits = {}
+    portraits[emotion_normalized] = url
+    con.execute(
+        "UPDATE characters SET expr_portraits = ? WHERE id = ?",
+        (json.dumps(portraits), char_id),
+    )
+    con.commit()
+    con.close()
+
+    return {"ok": True, "url": url}
+
+
+@app.delete("/api/characters/{char_id}/expression-portrait/{emotion}")
+async def delete_expression_portrait(char_id: int, emotion: str):
+    """Delete a single expression portrait for a specific emotion.
+
+    Removes the file from disk and updates the ``characters.expr_portraits``
+    JSON column.
+
+    Args:
+        char_id: Character database ID.
+        emotion: Canonical emotion name.
+
+    Returns:
+        JSON confirmation.
+
+    Example:
+        >>> DELETE /api/characters/1/expression-portrait/happy
+        {"ok": true}
+    """
+    emotion_normalized = normalize_emotion(emotion)
+    storage = os.path.join(os.path.dirname(os.path.abspath(__file__)), "storage", "images")
+    primary = os.path.join(storage, "expr_portraits", str(char_id), f"{emotion_normalized}.png")
+
+    if os.path.isfile(primary):
+        os.remove(primary)
+
+    # Update JSON column
+    con = db()
+    row = con.execute("SELECT expr_portraits FROM characters WHERE id = ?", (char_id,)).fetchone()
+    if row and row[0]:
+        try:
+            portraits = json.loads(row[0])
+            portraits.pop(emotion_normalized, None)
+            con.execute(
+                "UPDATE characters SET expr_portraits = ? WHERE id = ?",
+                (json.dumps(portraits), char_id),
+            )
+            con.commit()
+        except Exception:
+            pass
+    con.close()
+
+    return {"ok": True}
+
+
+@app.get("/api/characters/{char_id}/expression-portraits")
+def list_expression_portraits(char_id: int):
+    """List all available expression portraits for a character.
+
+    Returns a dict of emotion → URL for every portrait file found on disk
+    in the per-character directory. Also merges in any legacy entries from
+    the ``expr_portraits`` JSON column.
+
+    Args:
+        char_id: Character database ID.
+
+    Returns:
+        JSON: ``{"ok": True, "portraits": {emotion: url, ...}, "mode": 0|1|2}``
+
+    Example:
+        >>> GET /api/characters/1/expression-portraits
+        {"ok": true, "portraits": {"happy": "/files/...", "sad": "/files/..."}, "mode": 1}
+    """
+    storage = os.path.join(os.path.dirname(os.path.abspath(__file__)), "storage", "images")
+    char_dir = os.path.join(storage, "expr_portraits", str(char_id))
+
+    portraits: dict[str, str] = {}
+
+    # Scan per-character directory
+    if os.path.isdir(char_dir):
+        for fname in os.listdir(char_dir):
+            if fname.endswith(".png"):
+                emotion = fname[:-4]  # strip .png
+                portraits[emotion] = f"/files/images/expr_portraits/{char_id}/{fname}"
+
+    # Merge legacy JSON column entries (lower priority — disk files win)
+    con = db()
+    row = con.execute(
+        "SELECT expr_portraits, emotion_portraits_mode FROM characters WHERE id = ?",
+        (char_id,),
+    ).fetchone()
+    con.close()
+
+    if not row:
+        raise HTTPException(404, "Character not found")
+
+    mode = row[1] if row[1] is not None else 0
+
+    if row[0]:
+        try:
+            legacy = json.loads(row[0])
+            for emotion, url in legacy.items():
+                if emotion not in portraits:
+                    portraits[emotion] = url
+        except Exception:
+            pass
+
+    return {"ok": True, "portraits": portraits, "mode": mode}
 
 
 @app.post("/api/video-gen/background")

@@ -5,32 +5,71 @@ import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
 
 /* ═══════════════════════════════════════════════════════════════════════
-   Types
+   Canonical 26-Emotion Set (Phase 15)
    ═══════════════════════════════════════════════════════════════════════ */
 
-/** The six canonical emotion slots available for expression portrait assignment. */
-type Emotion = 'happy' | 'sad' | 'love' | 'angry' | 'shock' | 'neutral';
-
-/** Map of emotion name to portrait image URL (or empty string when unset). */
-type PortraitMap = Record<Emotion, string>;
-
-/* ═══════════════════════════════════════════════════════════════════════
-   Constants
-   ═══════════════════════════════════════════════════════════════════════ */
-
-/** Display metadata for each emotion slot. */
-const EMOTION_SLOTS: { emotion: Emotion; label: string; emoji: string }[] = [
-  { emotion: 'happy',   label: 'Happy',   emoji: '😊' },
-  { emotion: 'sad',     label: 'Sad',     emoji: '😢' },
-  { emotion: 'love',    label: 'Love',    emoji: '💕' },
-  { emotion: 'angry',   label: 'Angry',   emoji: '😤' },
-  { emotion: 'shock',   label: 'Shock',   emoji: '😱' },
-  { emotion: 'neutral', label: 'Neutral', emoji: '😐' },
+/** Display metadata for each emotion slot, grouped by category. */
+const EMOTION_CATEGORIES: { category: string; slots: { emotion: string; label: string; emoji: string }[] }[] = [
+  {
+    category: 'Core',
+    slots: [
+      { emotion: 'happy',    label: 'Happy',     emoji: '😊' },
+      { emotion: 'sad',      label: 'Sad',       emoji: '😢' },
+      { emotion: 'angry',    label: 'Angry',     emoji: '😤' },
+      { emotion: 'surprised',label: 'Surprised',  emoji: '😲' },
+      { emotion: 'fearful',  label: 'Fearful',   emoji: '😨' },
+      { emotion: 'disgusted',label: 'Disgusted',  emoji: '🤢' },
+      { emotion: 'neutral',  label: 'Neutral',   emoji: '😐' },
+    ],
+  },
+  {
+    category: 'Social',
+    slots: [
+      { emotion: 'embarrassed', label: 'Embarrassed', emoji: '😳' },
+      { emotion: 'shy',         label: 'Shy',         emoji: '🥺' },
+      { emotion: 'proud',       label: 'Proud',       emoji: '😎' },
+      { emotion: 'confident',   label: 'Confident',   emoji: '😏' },
+      { emotion: 'jealous',     label: 'Jealous',     emoji: '😑' },
+      { emotion: 'grateful',    label: 'Grateful',    emoji: '🙏' },
+    ],
+  },
+  {
+    category: 'Cognitive',
+    slots: [
+      { emotion: 'confused',    label: 'Confused',    emoji: '😕' },
+      { emotion: 'curious',     label: 'Curious',     emoji: '🧐' },
+      { emotion: 'thoughtful',  label: 'Thoughtful',  emoji: '🤔' },
+      { emotion: 'nostalgic',   label: 'Nostalgic',   emoji: '😌' },
+      { emotion: 'awe',         label: 'Awe',         emoji: '🤩' },
+    ],
+  },
+  {
+    category: 'Romantic',
+    slots: [
+      { emotion: 'love',    label: 'Love',    emoji: '💕' },
+      { emotion: 'flirty',  label: 'Flirty',  emoji: '😉' },
+      { emotion: 'longing', label: 'Longing', emoji: '😔' },
+    ],
+  },
+  {
+    category: 'Energy',
+    slots: [
+      { emotion: 'excited',  label: 'Excited',  emoji: '🔥' },
+      { emotion: 'tired',    label: 'Tired',    emoji: '😴' },
+      { emotion: 'relieved', label: 'Relieved', emoji: '😌' },
+    ],
+  },
+  {
+    category: 'Playful',
+    slots: [
+      { emotion: 'smug',        label: 'Smug',        emoji: '😏' },
+      { emotion: 'mischievous', label: 'Mischievous', emoji: '😈' },
+    ],
+  },
 ];
 
-const EMPTY_MAP: PortraitMap = {
-  happy: '', sad: '', love: '', angry: '', shock: '', neutral: '',
-};
+/** Map of emotion name to portrait image URL. */
+type PortraitMap = Record<string, string>;
 
 /* ═══════════════════════════════════════════════════════════════════════
    Helpers
@@ -38,23 +77,18 @@ const EMPTY_MAP: PortraitMap = {
 
 /**
  * Parse the `expr_portraits` JSON string stored on a character.
- * Returns an empty map on parse failure so the UI is always in a valid state.
+ * Returns a map on parse failure so the UI is always in a valid state.
  *
  * @param raw - Raw JSON string from `character.expr_portraits`, or null/undefined.
- * @returns Fully-populated PortraitMap (missing keys default to empty string).
+ * @returns PortraitMap with whatever emotions were stored.
  */
 function parsePortraits(raw: string | null | undefined): PortraitMap {
-  const base: PortraitMap = { ...EMPTY_MAP };
-  if (!raw) return base;
+  if (!raw) return {};
   try {
-    const parsed = JSON.parse(raw) as Partial<PortraitMap>;
-    for (const key of Object.keys(base) as Emotion[]) {
-      if (typeof parsed[key] === 'string') base[key] = parsed[key]!;
-    }
+    return JSON.parse(raw) as PortraitMap;
   } catch {
-    // Malformed JSON — silently fall back to empty map.
+    return {};
   }
-  return base;
 }
 
 /**
@@ -77,19 +111,9 @@ function fileToDataUrl(file: File): Promise<string> {
    ═══════════════════════════════════════════════════════════════════════ */
 
 /**
- * A single emotion portrait cell in the 2×3 grid.
- *
- * Shows:
- * - A 50×50 thumbnail when a URL is assigned
- * - An emoji placeholder when no portrait is set
- * - Upload and Clear action buttons
- *
- * @param emotion  - Emotion slot identifier.
- * @param label    - Human-readable label for the emotion.
- * @param emoji    - Emoji fallback displayed when no portrait URL is set.
- * @param url      - Current portrait URL (empty string = unset).
- * @param onUpload - Called with the File selected by the user.
- * @param onClear  - Called when the user removes this portrait.
+ * A single emotion portrait cell.
+ * Shows a thumbnail when assigned, emoji placeholder when empty,
+ * and upload/clear action buttons.
  */
 function PortraitCell({
   emotion,
@@ -99,12 +123,12 @@ function PortraitCell({
   onUpload,
   onClear,
 }: {
-  emotion: Emotion;
+  emotion: string;
   label: string;
   emoji: string;
   url: string;
-  onUpload: (emotion: Emotion, file: File) => void;
-  onClear: (emotion: Emotion) => void;
+  onUpload: (emotion: string, file: File) => void;
+  onClear: (emotion: string) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -120,8 +144,8 @@ function PortraitCell({
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '8px',
-        padding: '12px',
+        gap: '6px',
+        padding: '10px 8px',
         borderRadius: '10px',
         backgroundColor: 'var(--color-surface)',
         border: '1px solid var(--color-border-subtle)',
@@ -130,8 +154,8 @@ function PortraitCell({
       {/* Thumbnail or placeholder */}
       <div
         style={{
-          width: '50px',
-          height: '50px',
+          width: '44px',
+          height: '44px',
           borderRadius: '8px',
           overflow: 'hidden',
           border: url
@@ -148,39 +172,36 @@ function PortraitCell({
           <img
             src={url}
             alt={`${label} expression portrait`}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
         ) : (
-          <span style={{ fontSize: '1.6rem', lineHeight: 1, userSelect: 'none' }}>{emoji}</span>
+          <span style={{ fontSize: '1.4rem', lineHeight: 1, userSelect: 'none' }}>{emoji}</span>
         )}
       </div>
 
       {/* Emotion label */}
       <span
         style={{
-          fontSize: '0.65rem',
+          fontSize: '0.6rem',
           fontWeight: 600,
-          letterSpacing: '0.05em',
+          letterSpacing: '0.04em',
           textTransform: 'uppercase',
           color: 'var(--color-text-secondary)',
+          textAlign: 'center',
         }}
       >
         {label}
       </span>
 
       {/* Action buttons */}
-      <div style={{ display: 'flex', gap: '4px' }}>
+      <div style={{ display: 'flex', gap: '3px' }}>
         <button
           onClick={() => fileInputRef.current?.click()}
           title={`Upload ${label} portrait`}
           aria-label={`Upload ${label} expression portrait`}
           style={{
-            padding: '3px 7px',
-            fontSize: '0.62rem',
+            padding: '2px 5px',
+            fontSize: '0.58rem',
             borderRadius: '4px',
             border: '1px solid var(--color-border)',
             background: 'transparent',
@@ -188,11 +209,10 @@ function PortraitCell({
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '3px',
+            gap: '2px',
           }}
         >
-          <Upload size={10} />
-          Upload
+          <Upload size={9} />
         </button>
 
         {url && (
@@ -201,8 +221,8 @@ function PortraitCell({
             title={`Remove ${label} portrait`}
             aria-label={`Remove ${label} expression portrait`}
             style={{
-              padding: '3px 5px',
-              fontSize: '0.62rem',
+              padding: '2px 4px',
+              fontSize: '0.58rem',
               borderRadius: '4px',
               border: '1px solid var(--color-border)',
               background: 'transparent',
@@ -212,7 +232,7 @@ function PortraitCell({
               alignItems: 'center',
             }}
           >
-            <Trash2 size={10} />
+            <Trash2 size={9} />
           </button>
         )}
       </div>
@@ -235,34 +255,25 @@ function PortraitCell({
    ═══════════════════════════════════════════════════════════════════════ */
 
 /**
- * Right slide-out drawer for assigning expression portraits to the 6 emotion
- * slots on a character.
+ * Right slide-out drawer for assigning expression portraits to the 26
+ * canonical emotion slots on a character (Phase 15 expansion from 6).
  *
- * State model:
- * - `portraitMap` is kept locally and persisted to the backend via
- *   `api.updateCharacter` when the user clicks Save.
- * - Local uploads are converted to base64 data URLs (suitable for small
- *   thumbnails; a production implementation would upload to a file server).
- * - "Generate All" fires `POST /api/image-gen/expressions`. If that endpoint
- *   is not present the button is disabled with a tooltip.
+ * Emotions are organized by category (Core, Social, Cognitive, Romantic,
+ * Energy, Playful) with collapsible sections and a 3-column grid.
  *
- * Reads `character.expr_portraits` (JSON string) from `activeCharacter` on
- * mount, parses it, and falls back to an empty map on error.
+ * Supports batch file upload: drag-and-drop multiple files named
+ * `{emotion}.png` to auto-assign them to the correct slots.
  */
 export function MoodBoardEditor() {
   const { activeOverlay, closeOverlay, activeCharacter, setActiveCharacter } = useAppStore();
   const open = activeOverlay === 'moodboard';
 
-  const [portraitMap, setPortraitMap] = useState<PortraitMap>({ ...EMPTY_MAP });
+  const [portraitMap, setPortraitMap] = useState<PortraitMap>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
-  /**
-   * Whether the image-gen expressions endpoint exists.
-   * We optimistically assume it does and flip to false on first 404/405.
-   */
   const [genEndpointAvailable, setGenEndpointAvailable] = useState<boolean | null>(null);
 
   // Parse stored portraits whenever the panel opens or the active character changes.
@@ -275,64 +286,89 @@ export function MoodBoardEditor() {
     setGenerateError(null);
   }, [open, activeCharacter?.id]);
 
-  // Probe whether the generate endpoint exists (lazy, first time panel opens).
+  // Probe whether the generate endpoint exists.
   useEffect(() => {
     if (!open || genEndpointAvailable !== null) return;
     fetch('/api/image-gen/expressions', { method: 'HEAD' })
-      .then(res => {
-        // 405 Method Not Allowed = endpoint exists but HEAD not supported.
-        // 404 = endpoint missing.
-        setGenEndpointAvailable(res.status !== 404);
-      })
+      .then(res => setGenEndpointAvailable(res.status !== 404))
       .catch(() => setGenEndpointAvailable(false));
   }, [open, genEndpointAvailable]);
 
   /**
    * Handle a local file upload for a specific emotion slot.
-   * Converts the File to a base64 data URL and stores it in the local map.
-   *
-   * @param emotion - The emotion slot being updated.
-   * @param file    - The image file chosen by the user.
+   * Also uploads to the per-character portrait directory via the Phase 15 API.
    */
-  const handleUpload = async (emotion: Emotion, file: File) => {
+  const handleUpload = async (emotion: string, file: File) => {
     try {
+      // Show immediate preview
       const dataUrl = await fileToDataUrl(file);
       setPortraitMap(prev => ({ ...prev, [emotion]: dataUrl }));
       setSaveOk(false);
+
+      // Upload to server if character exists
+      if (activeCharacter) {
+        api.uploadExpressionPortrait(activeCharacter.id, emotion, file)
+          .then(res => {
+            if (res.ok && res.url) {
+              setPortraitMap(prev => ({ ...prev, [emotion]: res.url }));
+            }
+          })
+          .catch(err => console.error('[MoodBoardEditor] Upload failed:', err));
+      }
     } catch (err) {
       console.error('[MoodBoardEditor] Failed to read file:', err);
     }
   };
 
   /**
-   * Remove the portrait URL for the given emotion slot.
-   *
-   * @param emotion - The emotion slot to clear.
+   * Remove the portrait for the given emotion slot.
    */
-  const handleClear = (emotion: Emotion) => {
-    setPortraitMap(prev => ({ ...prev, [emotion]: '' }));
+  const handleClear = (emotion: string) => {
+    setPortraitMap(prev => {
+      const next = { ...prev };
+      delete next[emotion];
+      return next;
+    });
     setSaveOk(false);
+
+    // Delete from server
+    if (activeCharacter) {
+      api.deleteExpressionPortrait(activeCharacter.id, emotion).catch(() => {});
+    }
   };
 
   /**
-   * Persist the current portraitMap to the backend by calling updateCharacter.
-   * Updates the local activeCharacter reference in appStore on success so
-   * the panel reflects the new value if reopened without a full reload.
+   * Handle batch file drop — files named `{emotion}.png` are auto-assigned.
+   */
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    const allEmotions = EMOTION_CATEGORIES.flatMap(c => c.slots.map(s => s.emotion));
+    const files = Array.from(e.dataTransfer.files);
+
+    for (const file of files) {
+      const baseName = file.name.replace(/\.[^.]+$/, '').toLowerCase();
+      // Match {emotion}.png or {CharName}_{emotion}.png
+      const emotion = allEmotions.find(em =>
+        baseName === em || baseName.endsWith(`_${em}`)
+      );
+      if (emotion) {
+        await handleUpload(emotion, file);
+      }
+    }
+  };
+
+  /**
+   * Persist the current portraitMap to the backend.
    */
   const handleSave = async () => {
     if (!activeCharacter) return;
-
     setSaving(true);
     setSaveError(null);
     setSaveOk(false);
-
     try {
       const updated = await api.updateCharacter(activeCharacter.id, {
-        // Store as JSON string in the expr_portraits column.
         ...({ expr_portraits: JSON.stringify(portraitMap) } as object),
       } as Parameters<typeof api.updateCharacter>[1]);
-
-      // Reflect saved state in appStore so other components see it.
       setActiveCharacter(updated);
       setSaveOk(true);
     } catch (err) {
@@ -343,38 +379,16 @@ export function MoodBoardEditor() {
   };
 
   /**
-   * Trigger AI generation of all six expression portraits via the backend.
-   * Fires `POST /api/image-gen/expressions` with character metadata.
-   * On success, merges returned URLs into the local portrait map.
+   * Trigger AI generation of all expression portraits via the backend.
    */
   const handleGenerateAll = async () => {
     if (!activeCharacter || !genEndpointAvailable) return;
-
     setGenerating(true);
     setGenerateError(null);
-
     try {
-      const res = await fetch('/api/image-gen/expressions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          character_id: activeCharacter.id,
-          character_name: activeCharacter.name,
-          system_prompt: activeCharacter.system_prompt,
-        }),
-      });
-
-      if (!res.ok) {
-        if (res.status === 404 || res.status === 405) {
-          setGenEndpointAvailable(false);
-          return;
-        }
-        throw new Error(`Server returned ${res.status}`);
-      }
-
-      const data = await res.json() as { ok: boolean; portraits?: Partial<PortraitMap> };
-      if (data.ok && data.portraits) {
-        setPortraitMap(prev => ({ ...prev, ...data.portraits }));
+      const res = await api.generateExpressions(activeCharacter.id);
+      if (res.ok && res.portraits) {
+        setPortraitMap(prev => ({ ...prev, ...res.portraits }));
         setSaveOk(false);
       }
     } catch (err) {
@@ -385,6 +399,7 @@ export function MoodBoardEditor() {
   };
 
   const isGenerateDisabled = !genEndpointAvailable || generating || !activeCharacter;
+  const assignedCount = Object.values(portraitMap).filter(Boolean).length;
 
   return (
     <AnimatePresence>
@@ -415,9 +430,11 @@ export function MoodBoardEditor() {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+            onDragOver={e => e.preventDefault()}
+            onDrop={handleDrop}
             style={{
               position: 'fixed', top: 0, right: 0, bottom: 0,
-              width: 'min(480px, 94vw)',
+              width: 'min(520px, 94vw)',
               backgroundColor: 'var(--color-background)',
               borderLeft: '1px solid var(--color-border)',
               boxShadow: '-8px 0 32px rgba(0,0,0,0.3)',
@@ -449,6 +466,9 @@ export function MoodBoardEditor() {
               >
                 EXPRESSION PORTRAITS
               </span>
+              <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>
+                {assignedCount}/26
+              </span>
               {activeCharacter && (
                 <span style={{ fontSize: '0.72rem', color: 'var(--color-text-secondary)', marginLeft: 2 }}>
                   {activeCharacter.name}
@@ -479,13 +499,12 @@ export function MoodBoardEditor() {
               style={{
                 flex: 1,
                 overflowY: 'auto',
-                padding: '20px',
+                padding: '16px 20px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '20px',
+                gap: '16px',
               }}
             >
-              {/* No character selected */}
               {!activeCharacter && (
                 <div
                   style={{
@@ -503,25 +522,24 @@ export function MoodBoardEditor() {
 
               {activeCharacter && (
                 <>
-                  {/* Generate All button */}
-                  <div>
+                  {/* Generate All + batch hint */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                     <button
                       onClick={handleGenerateAll}
                       disabled={isGenerateDisabled}
                       title={
                         genEndpointAvailable === false
-                          ? 'Image gen endpoint coming soon'
+                          ? 'Image gen endpoint not available'
                           : generating
-                          ? 'Generating…'
-                          : 'AI-generate all 6 expression portraits'
+                          ? 'Generating...'
+                          : 'AI-generate all expression portraits'
                       }
-                      aria-label="Generate all expression portraits with AI"
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
-                        padding: '8px 14px',
-                        fontSize: '0.78rem',
+                        padding: '7px 12px',
+                        fontSize: '0.75rem',
                         fontWeight: 600,
                         borderRadius: '7px',
                         border: '1px solid var(--color-accent)',
@@ -536,48 +554,64 @@ export function MoodBoardEditor() {
                         borderColor: isGenerateDisabled
                           ? 'var(--color-border)'
                           : 'var(--color-accent)',
-                        transition: 'opacity 0.15s',
                       }}
                     >
-                      <Wand2 size={14} />
-                      {generating ? 'Generating…' : 'Generate All'}
+                      <Wand2 size={13} />
+                      {generating ? 'Generating...' : 'Generate All'}
                     </button>
 
-                    {genEndpointAvailable === false && (
-                      <p style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', marginTop: '5px', margin: '5px 0 0' }}>
-                        Image gen endpoint coming soon
-                      </p>
-                    )}
-                    {generateError && (
-                      <p style={{ fontSize: '0.7rem', color: 'var(--color-danger, #f44)', marginTop: '5px', margin: '5px 0 0' }}>
-                        {generateError}
-                      </p>
-                    )}
+                    <span style={{ fontSize: '0.62rem', color: 'var(--color-text-tertiary)' }}>
+                      Drop files named happy.png, sad.png, etc.
+                    </span>
                   </div>
 
-                  {/* 2-column emotion grid */}
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: '10px',
-                    }}
-                  >
-                    {EMOTION_SLOTS.map(({ emotion, label, emoji }) => (
-                      <PortraitCell
-                        key={emotion}
-                        emotion={emotion}
-                        label={label}
-                        emoji={emoji}
-                        url={portraitMap[emotion]}
-                        onUpload={handleUpload}
-                        onClear={handleClear}
-                      />
-                    ))}
-                  </div>
+                  {generateError && (
+                    <p style={{ fontSize: '0.7rem', color: 'var(--color-danger, #f44)', margin: 0 }}>
+                      {generateError}
+                    </p>
+                  )}
+
+                  {/* Category sections with 3-column grids */}
+                  {EMOTION_CATEGORIES.map(({ category, slots }) => (
+                    <div key={category}>
+                      <div
+                        style={{
+                          fontSize: '0.65rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.08em',
+                          textTransform: 'uppercase',
+                          color: 'var(--color-text-tertiary)',
+                          marginBottom: '8px',
+                          paddingBottom: '4px',
+                          borderBottom: '1px solid var(--color-border-subtle)',
+                        }}
+                      >
+                        {category}
+                      </div>
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(3, 1fr)',
+                          gap: '8px',
+                        }}
+                      >
+                        {slots.map(({ emotion, label, emoji }) => (
+                          <PortraitCell
+                            key={emotion}
+                            emotion={emotion}
+                            label={label}
+                            emoji={emoji}
+                            url={portraitMap[emotion] || ''}
+                            onUpload={handleUpload}
+                            onClear={handleClear}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
 
                   {/* Save section */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
                     <button
                       onClick={handleSave}
                       disabled={saving}
@@ -593,10 +627,9 @@ export function MoodBoardEditor() {
                         letterSpacing: '0.04em',
                         cursor: saving ? 'not-allowed' : 'pointer',
                         opacity: saving ? 0.6 : 1,
-                        transition: 'opacity 0.15s',
                       }}
                     >
-                      {saving ? 'Saving…' : 'Save Portraits'}
+                      {saving ? 'Saving...' : 'Save Portraits'}
                     </button>
 
                     {saveOk && (

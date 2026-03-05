@@ -23,7 +23,31 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: 'dist'
+    outDir: 'dist',
+    rollupOptions: {
+      output: {
+        /**
+         * Split large vendor libraries into parallel-loadable chunks.
+         * Vite automatically injects <link rel="modulepreload"> for all chunks,
+         * so the browser can download them concurrently with the main bundle.
+         *
+         * Rationale per chunk:
+         * - vendor-framer: framer-motion is ~250 KB parsed and used by 37 components.
+         *   Isolating it lets the browser load it in parallel, cutting the critical path.
+         * - vendor-react: React + ReactDOM are stable between releases — isolating them
+         *   gives long-lived cache hits even when app code changes frequently.
+         * - vendor-state: Zustand is imported everywhere; isolating improves hash stability.
+         * - vendor-icons: lucide-react icon tree-shaking varies per build; isolating
+         *   prevents icon changes from busting the react or framer caches.
+         */
+        manualChunks(id: string) {
+          if (id.includes('framer-motion')) return 'vendor-framer';
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) return 'vendor-react';
+          if (id.includes('node_modules/zustand')) return 'vendor-state';
+          if (id.includes('node_modules/lucide-react')) return 'vendor-icons';
+        },
+      },
+    },
   },
   test: {
     globals: true,

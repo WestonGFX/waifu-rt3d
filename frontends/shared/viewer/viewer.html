@@ -92,8 +92,17 @@
         import * as THREE from 'three';
         import { GLTFLoader } from '/shared/lib/GLTFLoader.js';
         import { VRMLoaderPlugin, VRMUtils } from '/shared/lib/three-vrm.module.min.js';
+        // Phase 5: Post-processing pipeline addons
+        import { EffectComposer } from '/shared/lib/postprocessing/EffectComposer.js';
+        import { RenderPass } from '/shared/lib/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from '/shared/lib/postprocessing/UnrealBloomPass.js';
+        import { ShaderPass } from '/shared/lib/postprocessing/ShaderPass.js';
 
         let currentVrm = null;
+        let currentGlb = null;        // Currently loaded GLB scene (null when VRM or empty)
+        let currentGlbMixer = null;   // THREE.AnimationMixer for GLB embedded animations
+        let currentGlbClips = [];     // Embedded AnimationClip[] from GLB
+        let _currentGlbAction = null; // Currently playing GLB AnimationAction (for crossfade)
         let clock = new THREE.Clock();
         let lipSync = null;
         let blinkController = null;
@@ -369,6 +378,55 @@
          *   - L4 (Gesture) suppresses L1 and L3 on affected bones during playback
          *   - L5 (LookAt) is always additive
          */
+        /* ═══════════════════════════════════════════════════════════════════
+           Animation State Machine — Phase 6.5
+           Formalizes which layers are active in each state and how transitions
+           work. Replaces ad-hoc suppression logic in AnimationDirector.update().
+
+           States:
+           ┌──────────┬────────────────────────────────────────────────────────┐
+           │ State    │ Active layers                                         │
+           ├──────────┼────────────────────────────────────────────────────────┤
+           │ idle     │ basePose, idle, emotion, lookAt                       │
+           │ talk     │ basePose, emotion, talk, lookAt                       │
+           │ gesture  │ basePose, emotion, gesture, lookAt                    │
+           │ clip     │ clip, lookAt                                          │
+           │ mocap    │ lookAt only (mocap overrides via lookAt layer)        │
+           └──────────┴────────────────────────────────────────────────────────┘
+
+           lookAt always runs. clip always updates its mixer (even when
+           not the active state) so fadeouts complete naturally.
+           ═══════════════════════════════════════════════════════════════════ */
+
+        /**
+         * Per-state layer activation table. Each key is a state name;
+         * its value is the set of layer names that should be enabled.
+         * Layers not listed are disabled. 'lookAt' and 'clip' have
+         * special handling (see AnimationDirector.update).
+         */
+        const STATE_LAYER_TABLE = {
+            idle:    new Set(['basePose', 'idle', 'emotion']),
+            talk:    new Set(['basePose', 'emotion', 'talk']),
+            gesture: new Set(['basePose', 'emotion', 'gesture']),
+            clip:    new Set([]),  // clip mixer runs separately
+            mocap:   new Set([]),  // mocap drives via lookAt overrides
+        };
+
+        /** Crossfade duration (seconds) between states. */
+        const STATE_TRANSITIONS = {
+            'idle→talk':     0.2,
+            'idle→gesture':  0.15,
+            'idle→clip':     0.3,
+            'idle→mocap':    0.2,
+            'talk→idle':     0.3,
+            'talk→gesture':  0.15,
+            'gesture→idle':  0.25,
+            'gesture→talk':  0.2,
+            'clip→idle':     0.3,
+            'clip→talk':     0.3,
+            'mocap→idle':    0.3,
+        };
+
         class AnimationDirector {
             /**
              * @param {Object} vrm - The loaded VRM model
@@ -377,6 +435,37 @@
                 this.vrm = vrm;
                 this.layers = [];
                 this.personality = { ...DEFAULT_PERSONALITY };
+                /** Current animation state name. */
+                this._state = 'idle';
+                /** Transition fade progress (0 = start, 1 = done). */
+                this._transitionProgress = 1.0;
+                /** Transition duration in seconds. */
+                this._transitionDuration = 0;
+            }
+
+            /** @returns {string} Current state name */
+            get state() { return this._state; }
+
+            /**
+             * Transition to a new animation state with crossfade.
+             * If already in the requested state, this is a no-op.
+             *
+             * @param {string} newState - Target state ('idle'|'talk'|'gesture'|'clip'|'mocap')
+             * @param {number} [fadeDuration] - Override crossfade duration (seconds)
+             */
+            transitionTo(newState, fadeDuration) {
+                if (newState === this._state) return;
+                if (!STATE_LAYER_TABLE[newState]) {
+                    console.warn(`[AnimationDirector] Unknown state: "${newState}"`);
+                    return;
+                }
+
+                const key = `${this._state}→${newState}`;
+                this._transitionDuration = fadeDuration ?? STATE_TRANSITIONS[key] ?? 0.25;
+                this._transitionProgress = 0;
+                this._state = newState;
+
+                console.log(`[AnimationDirector] State → ${newState} (fade ${this._transitionDuration.toFixed(2)}s)`);
             }
 
             /**
@@ -409,54 +498,66 @@
             }
 
             /**
-             * Per-frame update — runs all layers in order with suppression logic.
-             * Suppression hierarchy:
-             *   Clip (L6) playing → suppress L0–L4 (full body override)
-             *   Gesture (L4) playing → suppress L1, L3
-             *   Talk (L3) active → suppress L1
-             * LookAt (L5) and Clip (L6) always run.
+             * Per-frame update — uses state machine to determine active layers.
+             *
+             * The state machine controls which layers are enabled/disabled.
+             * It also auto-detects state transitions from layer activity:
+             *   - ClipLayer.isPlaying → auto-enter 'clip' state
+             *   - GestureLayer.isPlaying → auto-enter 'gesture' state
+             *   - TalkLayer.active → auto-enter 'talk' state
+             *   - Otherwise → 'idle' state
+             *
+             * LookAt (L5) always runs regardless of state.
+             * Clip mixer always ticks so fadeouts complete even when not in 'clip' state.
+             *
              * @param {number} dt - Delta time in seconds
              */
             update(dt) {
                 const clip = this.getLayer('clip');
                 const gesture = this.getLayer('gesture');
                 const talk = this.getLayer('talk');
-                const idle = this.getLayer('idle');
-                const basePose = this.getLayer('basePose');
-                const emotion = this.getLayer('emotion');
 
-                // Suppression: Clip playing → suppress all procedural layers
-                // The AnimationMixer writes directly to bones, so procedural
-                // layers would fight it on every frame.
-                if (clip && clip.isPlaying) {
-                    if (basePose) basePose.enabled = false;
-                    if (idle) idle.enabled = false;
-                    if (emotion) emotion.enabled = false;
-                    if (talk) talk.enabled = false;
-                    if (gesture) gesture.enabled = false;
-                } else {
-                    // Suppression: Talk active → suppress Idle
-                    if (idle) {
-                        idle.enabled = !(talk && talk.active);
-                    }
+                // ── Auto-detect state from layer activity ──
+                // Priority: clip > gesture > talk > idle
+                if (clip && clip.isPlaying && this._state !== 'clip') {
+                    this.transitionTo('clip');
+                } else if (!clip?.isPlaying && this._state === 'clip') {
+                    this.transitionTo('idle');
+                } else if (gesture && gesture.isPlaying && this._state === 'idle') {
+                    this.transitionTo('gesture');
+                } else if (!gesture?.isPlaying && this._state === 'gesture') {
+                    this.transitionTo('idle');
+                } else if (talk && talk.active && this._state === 'idle') {
+                    this.transitionTo('talk');
+                } else if (!talk?.active && this._state === 'talk') {
+                    this.transitionTo('idle');
+                }
 
-                    // Suppression: Gesture playing → suppress Idle and Talk
-                    if (gesture && gesture.isPlaying) {
-                        if (idle) idle.enabled = false;
-                        if (talk) talk.enabled = false;
+                // ── Advance transition ──
+                if (this._transitionProgress < 1.0 && this._transitionDuration > 0) {
+                    this._transitionProgress = Math.min(1.0,
+                        this._transitionProgress + dt / this._transitionDuration);
+                }
+
+                // ── Apply layer activation from state table ──
+                const activeLayers = STATE_LAYER_TABLE[this._state] || STATE_LAYER_TABLE.idle;
+                for (const layer of this.layers) {
+                    if (layer.name === 'lookAt') {
+                        // LookAt always runs
+                        layer.enabled = true;
+                    } else if (layer.name === 'clip') {
+                        // Clip mixer always ticks (for fadeouts), but only
+                        // drives bones when in 'clip' state
+                        layer.enabled = true;
+                    } else {
+                        layer.enabled = activeLayers.has(layer.name);
                     }
                 }
 
+                // ── Update all enabled layers ──
                 for (const layer of this.layers) {
                     if (layer.enabled) layer.update(dt);
                 }
-
-                // Re-enable for next frame evaluation
-                if (basePose) basePose.enabled = true;
-                if (idle) idle.enabled = true;
-                if (emotion) emotion.enabled = true;
-                if (talk) talk.enabled = true;
-                if (gesture) gesture.enabled = true;
             }
         }
 
@@ -823,8 +924,9 @@
 
                 this._fidgetTimer -= dt;
                 if (this._fidgetTimer <= 0) {
+                    const inPetMode = new URLSearchParams(location.search).get('pet') === '1';
                     const eligible = IdleBehaviorLayer.FIDGETS.filter(
-                        f => !f.requires || f.requires(p)
+                        f => (!f.requires || f.requires(p)) && (!f.petModeOnly || inPetMode)
                     );
                     if (eligible.length > 0) {
                         const pick = eligible[Math.floor(Math.random() * eligible.length)];
@@ -1264,6 +1366,216 @@
                             if (head) head.rotation.y = Math.sin(t * Math.PI * 5) * 0.12 * amp;
                         }
                     },
+                    // ── Phase 6: Expanded Gesture Library (15 new gestures) ──
+                    facepalm: {
+                        duration: 1.5,
+                        apply(t, amp, B) {
+                            const ra = B('rightUpperArm'), head = B('head');
+                            const v = Math.sin(t * Math.PI / 1.5) * amp;
+                            if (ra) { ra.rotation.z = 1.3 - 0.7 * v; ra.rotation.x = 0.4 * v; }
+                            if (head) head.rotation.x = 0.2 * v;
+                        }
+                    },
+                    stretch: {
+                        duration: 2.5,
+                        apply(t, amp, B) {
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm'), spine = B('spine');
+                            const v = Math.sin(t * Math.PI / 2.5) * amp;
+                            if (la) la.rotation.z = -1.3 - 0.6 * v;
+                            if (ra) ra.rotation.z = 1.3 + 0.6 * v;
+                            if (spine) spine.rotation.x = -0.1 * v;
+                        }
+                    },
+                    wink: {
+                        duration: 0.6,
+                        apply(t, amp, B) {
+                            // Wink is expression-based (handled via expressionController)
+                            // but we add a slight head tilt for physicality
+                            const head = B('head');
+                            if (head) head.rotation.z = Math.sin(t * Math.PI) * 0.06 * amp;
+                        }
+                    },
+                    yawn: {
+                        duration: 2.0,
+                        apply(t, amp, B) {
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm'), head = B('head'), spine = B('spine');
+                            const v = Math.sin(t * Math.PI / 2) * amp;
+                            if (la) la.rotation.z = -1.3 - 0.5 * v;
+                            if (ra) ra.rotation.z = 1.3 + 0.5 * v;
+                            if (head) head.rotation.x = -0.1 * v;
+                            if (spine) spine.rotation.x = -0.05 * v;
+                        }
+                    },
+                    // ── Pet-mode exclusive fidgets ──────────────────────────────────────
+                    // These are NOT auto-scheduled by IdleBehaviorLayer. They are triggered
+                    // externally from PetView.tsx via postMessage({ type: 'playGesture', gesture: '...' }).
+                    // petModeOnly: true — excluded from the random auto-scheduler's eligible pool.
+                    doze: {
+                        duration: 4.0,
+                        petModeOnly: true,
+                        apply(t, amp, B) {
+                            // Gradual head droop with slow hold — simulates the character dozing.
+                            // Head tips forward over the first 60% then holds slightly drooped.
+                            const head = B('head'), spine = B('spine'), neck = B('neck');
+                            const droop = Math.min(1.0, t / 0.6);  // ramp in over first 60%
+                            const breathe = Math.sin(t * Math.PI * 1.5) * 0.015;  // slow breathing
+                            if (head) { head.rotation.x = droop * 0.35 * amp; head.rotation.z = droop * 0.05 * amp; }
+                            if (neck) neck.rotation.x = droop * 0.18 * amp;
+                            if (spine) spine.rotation.x = droop * 0.08 * amp + breathe;
+                        }
+                    },
+                    wake_up: {
+                        duration: 1.2,
+                        petModeOnly: true,
+                        apply(t, amp, B) {
+                            // Quick startle — head snaps up, then settles back to neutral.
+                            // Sharp surprised recoil in first 30%, gradual settle in remaining 70%.
+                            const head = B('head'), spine = B('spine'), neck = B('neck');
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
+                            const snapT = t < 0.3 ? t / 0.3 : 1.0 - (t - 0.3) / 0.7;
+                            const recoil = Math.sin(snapT * Math.PI) * amp;
+                            if (head) { head.rotation.x = -recoil * 0.25; head.rotation.y = recoil * 0.04; }
+                            if (neck) neck.rotation.x = -recoil * 0.12;
+                            if (spine) spine.rotation.x = -recoil * 0.06;
+                            // Arms raise slightly from the startle before settling
+                            if (la) la.rotation.z = -1.3 - recoil * 0.2;
+                            if (ra) ra.rotation.z = 1.3 + recoil * 0.2;
+                        }
+                    },
+                    wave_at_cursor: {
+                        duration: 2.5,
+                        petModeOnly: true,
+                        apply(t, amp, B) {
+                            // Friendly wave toward the user's cursor.
+                            // Right arm raises (first 25%), then waves 2.5 cycles, then lowers.
+                            const ra = B('rightUpperArm'), rLower = B('rightLowerArm'), head = B('head');
+                            const raiseT = Math.min(1.0, t / 0.25);              // arm-up ramp
+                            const wave = Math.sin(t * Math.PI * 5) * 0.22;       // wave oscillation
+                            const lowerT = t > 0.75 ? (t - 0.75) / 0.25 : 0;   // arm-down ramp
+                            const armUp = (raiseT - lowerT) * amp;
+                            if (ra) {
+                                ra.rotation.z = (1.3 - 0.95 * armUp);
+                                ra.rotation.x = armUp * 0.3 + wave * armUp;
+                            }
+                            if (rLower) rLower.rotation.x = armUp * 0.4;
+                            // Slight head turn toward the wave (friendly acknowledgment)
+                            if (head) head.rotation.z = -armUp * 0.06;
+                        }
+                    },
+                    scratch: {
+                        duration: 1.2,
+                        apply(t, amp, B) {
+                            const ra = B('rightUpperArm'), head = B('head');
+                            const v = Math.sin(t * Math.PI / 1.2) * amp;
+                            if (ra) {
+                                ra.rotation.z = 1.3 - 0.6 * v;
+                                ra.rotation.x = Math.sin(t * Math.PI * 4) * 0.1 * amp;
+                            }
+                            if (head) head.rotation.z = 0.08 * v;
+                        }
+                    },
+                    peek: {
+                        duration: 1.0,
+                        apply(t, amp, B) {
+                            const head = B('head'), spine = B('spine');
+                            const v = Math.sin(t * Math.PI) * amp;
+                            if (spine) spine.rotation.x = 0.15 * v;
+                            if (head) { head.rotation.x = 0.1 * v; head.rotation.z = 0.05 * v; }
+                        }
+                    },
+                    hug_self: {
+                        duration: 1.5,
+                        apply(t, amp, B) {
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm'), spine = B('spine');
+                            const v = Math.sin(t * Math.PI / 1.5) * amp;
+                            if (la) { la.rotation.z = -1.3 + 0.6 * v; la.rotation.x = 0.4 * v; }
+                            if (ra) { ra.rotation.z = 1.3 - 0.6 * v; ra.rotation.x = 0.4 * v; }
+                            if (spine) spine.rotation.x = 0.05 * v;
+                        }
+                    },
+                    finger_wag: {
+                        duration: 1.0,
+                        apply(t, amp, B) {
+                            const ra = B('rightUpperArm');
+                            if (ra) {
+                                ra.rotation.z = 1.3 - 0.7 * amp;
+                                ra.rotation.y = Math.sin(t * Math.PI * 4) * 0.15 * amp;
+                            }
+                        }
+                    },
+                    peace_sign: {
+                        duration: 1.2,
+                        apply(t, amp, B) {
+                            const ra = B('rightUpperArm'), head = B('head');
+                            const v = Math.sin(t * Math.PI / 1.2) * amp;
+                            if (ra) { ra.rotation.z = 1.3 - 0.8 * v; ra.rotation.x = -0.1 * v; }
+                            if (head) head.rotation.z = -0.08 * v;
+                        }
+                    },
+                    thumbs_up: {
+                        duration: 1.0,
+                        apply(t, amp, B) {
+                            const ra = B('rightUpperArm');
+                            const v = Math.sin(t * Math.PI) * amp;
+                            if (ra) { ra.rotation.z = 1.3 - 0.7 * v; ra.rotation.x = -0.15 * v; }
+                        }
+                    },
+                    blow_kiss: {
+                        duration: 1.5,
+                        apply(t, amp, B) {
+                            const ra = B('rightUpperArm'), head = B('head');
+                            const v = Math.sin(t * Math.PI / 1.5) * amp;
+                            if (ra) {
+                                ra.rotation.z = 1.3 - 0.6 * v;
+                                ra.rotation.x = 0.3 * v;
+                            }
+                            // Blow phase: arm extends outward in second half
+                            if (t > 0.5 && ra) ra.rotation.z -= 0.3 * (t - 0.5) * 2 * amp;
+                            if (head) head.rotation.z = -0.05 * v;
+                        }
+                    },
+                    head_bang: {
+                        duration: 2.0,
+                        apply(t, amp, B) {
+                            const head = B('head'), spine = B('spine');
+                            const v = Math.sin(t * Math.PI * 4) * amp;
+                            if (head) head.rotation.x = 0.2 * v;
+                            if (spine) spine.rotation.x = 0.05 * v;
+                        }
+                    },
+                    curtsy: {
+                        duration: 2.0,
+                        apply(t, amp, B) {
+                            const spine = B('spine'), head = B('head');
+                            const ll = B('leftUpperLeg'), rl = B('rightUpperLeg');
+                            const v = Math.sin(t * Math.PI / 2) * amp;
+                            if (spine) spine.rotation.x = 0.2 * v;
+                            if (head) head.rotation.x = 0.1 * v;
+                            if (ll) ll.rotation.x = -0.15 * v;
+                            if (rl) rl.rotation.x = -0.15 * v;
+                        }
+                    },
+                    jumping_jack: {
+                        duration: 2.5,
+                        apply(t, amp, B) {
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm'), hips = B('hips');
+                            const cycle = Math.sin(t * Math.PI * 3) * amp;
+                            if (la) la.rotation.z = -1.3 - 0.7 * Math.abs(cycle);
+                            if (ra) ra.rotation.z = 1.3 + 0.7 * Math.abs(cycle);
+                            if (hips) hips.position.y = Math.abs(cycle) * 0.02;
+                        }
+                    },
+                    tai_chi: {
+                        duration: 3.0,
+                        apply(t, amp, B) {
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm'), spine = B('spine');
+                            const slow = Math.sin(t * Math.PI * 0.8) * amp;
+                            const offset = Math.sin(t * Math.PI * 0.8 + 1.5) * amp;
+                            if (la) { la.rotation.z = -1.3 + 0.4 * slow; la.rotation.x = 0.3 * offset; }
+                            if (ra) { ra.rotation.z = 1.3 - 0.4 * offset; ra.rotation.x = 0.3 * slow; }
+                            if (spine) spine.rotation.y = slow * 0.08;
+                        }
+                    },
                 };
             }
         }
@@ -1281,6 +1593,71 @@
          * The mixer writes directly to the VRM scene's bones. While a clip is playing,
          * the AnimationDirector suppresses lower layers to prevent fighting.
          */
+        /**
+         * Bone name mapping: Mixamo convention → VRM Humanoid bone name.
+         * Used by ClipLayer.retargetClip() to remap animation tracks so
+         * Mixamo-exported GLB animations play correctly on VRM models.
+         */
+        const MIXAMO_BONE_MAP = {
+            'mixamorig:Hips':             'hips',
+            'mixamorig:Spine':            'spine',
+            'mixamorig:Spine1':           'chest',
+            'mixamorig:Spine2':           'upperChest',
+            'mixamorig:Neck':             'neck',
+            'mixamorig:Head':             'head',
+            'mixamorig:LeftShoulder':     'leftShoulder',
+            'mixamorig:LeftArm':          'leftUpperArm',
+            'mixamorig:LeftForeArm':      'leftLowerArm',
+            'mixamorig:LeftHand':         'leftHand',
+            'mixamorig:RightShoulder':    'rightShoulder',
+            'mixamorig:RightArm':         'rightUpperArm',
+            'mixamorig:RightForeArm':     'rightLowerArm',
+            'mixamorig:RightHand':        'rightHand',
+            'mixamorig:LeftUpLeg':        'leftUpperLeg',
+            'mixamorig:LeftLeg':          'leftLowerLeg',
+            'mixamorig:LeftFoot':         'leftFoot',
+            'mixamorig:LeftToeBase':      'leftToes',
+            'mixamorig:RightUpLeg':       'rightUpperLeg',
+            'mixamorig:RightLeg':         'rightLowerLeg',
+            'mixamorig:RightFoot':        'rightFoot',
+            'mixamorig:RightToeBase':     'rightToes',
+            'mixamorig:LeftEye':          'leftEye',
+            'mixamorig:RightEye':         'rightEye',
+        };
+
+        /**
+         * CMU Motion Capture bone name → VRM humanoid bone name mapping.
+         * Used by ClipLayer.retargetClip() when loading BVH files converted
+         * from the Carnegie Mellon University MoCap database.
+         */
+        const BVH_BONE_MAP = {
+            'Hips':             'hips',
+            'LHipJoint':        'leftUpperLeg',
+            'LeftUpLeg':        'leftUpperLeg',
+            'LeftLeg':          'leftLowerLeg',
+            'LeftFoot':         'leftFoot',
+            'LeftToeBase':      'leftToes',
+            'RHipJoint':        'rightUpperLeg',
+            'RightUpLeg':       'rightUpperLeg',
+            'RightLeg':         'rightLowerLeg',
+            'RightFoot':        'rightFoot',
+            'RightToeBase':     'rightToes',
+            'LowerBack':        'spine',
+            'Spine':            'chest',
+            'Spine1':           'upperChest',
+            'Neck':             'neck',
+            'Neck1':            'neck',
+            'Head':             'head',
+            'LeftShoulder':     'leftShoulder',
+            'LeftArm':          'leftUpperArm',
+            'LeftForeArm':      'leftLowerArm',
+            'LeftHand':         'leftHand',
+            'RightShoulder':    'rightShoulder',
+            'RightArm':         'rightUpperArm',
+            'RightForeArm':     'rightLowerArm',
+            'RightHand':        'rightHand',
+        };
+
         class ClipLayer extends AnimationLayer {
             /**
              * @param {Object} vrm - The loaded VRM model
@@ -1295,6 +1672,76 @@
                 this.isPlaying = false;
                 this._fadeOutDuration = 0.3;
                 this._loader = null;    // lazy-init GLTFLoader
+                this._nodeNameCache = null; // VRM bone name → scene node name
+            }
+
+            /**
+             * Build a lookup cache from VRM humanoid bone names to actual
+             * scene node names. Called lazily on first retarget.
+             * @returns {Object} Map of VRM bone name → node.name in scene graph
+             * @private
+             */
+            _buildNodeNameCache() {
+                if (this._nodeNameCache) return this._nodeNameCache;
+                this._nodeNameCache = {};
+                const humanoid = this.vrm?.humanoid;
+                if (!humanoid) return this._nodeNameCache;
+
+                // VRM 1.0: getNormalizedBoneNode(boneName) returns the Three.js Object3D
+                // Merge VRM bone names from both Mixamo and BVH maps
+                const vrmBoneNames = [...new Set([...Object.values(MIXAMO_BONE_MAP), ...Object.values(BVH_BONE_MAP)])];
+                for (const vrmName of vrmBoneNames) {
+                    try {
+                        const node = humanoid.getNormalizedBoneNode(vrmName);
+                        if (node) {
+                            this._nodeNameCache[vrmName] = node.name;
+                        }
+                    } catch (_) {
+                        // Bone not present in this model — skip
+                    }
+                }
+                console.log(`[ClipLayer] Node name cache built: ${Object.keys(this._nodeNameCache).length} bones mapped`);
+                return this._nodeNameCache;
+            }
+
+            /**
+             * Retarget an AnimationClip from Mixamo bone names to VRM humanoid bones.
+             *
+             * Walks every track in the clip, checks if the track's bone name matches
+             * a Mixamo convention name, and remaps it to the corresponding VRM scene
+             * node name. Tracks that don't match Mixamo names are left unchanged.
+             *
+             * @param {THREE.AnimationClip} clip - The clip to retarget (mutated in-place)
+             * @returns {THREE.AnimationClip} The same clip, retargeted
+             */
+            retargetClip(clip) {
+                const nodeNames = this._buildNodeNameCache();
+                if (Object.keys(nodeNames).length === 0) return clip;
+
+                let remapped = 0;
+                for (const track of clip.tracks) {
+                    // Track names are "boneName.property" (e.g., "mixamorig:Hips.quaternion")
+                    const dotIdx = track.name.indexOf('.');
+                    if (dotIdx === -1) continue;
+
+                    const boneName = track.name.substring(0, dotIdx);
+                    const property = track.name.substring(dotIdx); // includes the dot
+
+                    // Try Mixamo map first, then CMU/BVH map
+                    const vrmBoneName = MIXAMO_BONE_MAP[boneName] || BVH_BONE_MAP[boneName];
+                    if (!vrmBoneName) continue; // not a known bone — leave as-is
+
+                    const nodeName = nodeNames[vrmBoneName];
+                    if (!nodeName) continue; // VRM model doesn't have this bone
+
+                    track.name = nodeName + property;
+                    remapped++;
+                }
+
+                if (remapped > 0) {
+                    console.log(`[ClipLayer] Retargeted ${remapped}/${clip.tracks.length} tracks (Mixamo/BVH → VRM)`);
+                }
+                return clip;
             }
 
             /**
@@ -1302,12 +1749,21 @@
              *
              * @param {string} url - URL of the .glb/.gltf animation file
              * @param {string} name - Friendly name to reference this clip
+             * @param {Object} [opts] - Load options
+             * @param {boolean} [opts.retarget=false] - Auto-retarget Mixamo bone names to VRM
              * @returns {Promise<{name: string, duration: number, tracks: number}>}
              *
              * @example
-             *   await clipLayer.loadClip('/animations/wave.glb', 'wave');
+             *   await clipLayer.loadClip('/animations/wave.glb', 'wave', { retarget: true });
              */
-            async loadClip(url, name) {
+            async loadClip(url, name, opts = {}) {
+                const { retarget = false } = opts;
+
+                // Detect BVH files → use BVHLoader instead of GLTFLoader
+                if (url.toLowerCase().endsWith('.bvh')) {
+                    return this._loadBVH(url, name, retarget);
+                }
+
                 if (!this._loader) {
                     // GLTFLoader is already imported at the top of the file
                     this._loader = new GLTFLoader();
@@ -1323,6 +1779,13 @@
                         if (animations.length === 0) {
                             reject(new Error(`No animations found in ${url}`));
                             return;
+                        }
+
+                        // Retarget Mixamo/BVH bone names → VRM humanoid bones if requested
+                        if (retarget) {
+                            for (const anim of animations) {
+                                this.retargetClip(anim);
+                            }
                         }
 
                         // Store all clips; the first one gets the requested name
@@ -1348,6 +1811,117 @@
                         reject(err);
                     });
                 });
+            }
+
+            /**
+             * Load a BVH file by fetching it as text and parsing inline.
+             *
+             * Uses a lightweight BVH parser that extracts rotation channels and
+             * converts Euler angles to quaternion tracks. Position channels are
+             * extracted for the root bone only.
+             *
+             * @param {string} url - URL of the .bvh file
+             * @param {string} name - Friendly name for the clip
+             * @param {boolean} retarget - Whether to retarget bone names
+             * @returns {Promise<{name: string, duration: number, tracks: number}>}
+             * @private
+             */
+            async _loadBVH(url, name, retarget) {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`Failed to fetch BVH: ${response.status}`);
+                const text = await response.text();
+
+                const lines = text.split(/[\r\n]+/g);
+                const bones = [];
+                let idx = 0;
+                const boneStack = [];
+
+                // Parse hierarchy
+                while (idx < lines.length && !lines[idx].trim().startsWith('ROOT')) idx++;
+
+                function parseJoints() {
+                    while (idx < lines.length) {
+                        const line = lines[idx].trim();
+                        idx++;
+                        if (!line) continue;
+                        const tokens = line.split(/\s+/);
+
+                        if (tokens[0] === 'ROOT' || tokens[0] === 'JOINT' || tokens[0] === 'End') {
+                            const isEnd = tokens[0] === 'End';
+                            const boneName = isEnd
+                                ? (boneStack.length > 0 ? boneStack[boneStack.length - 1].name + '_End' : 'End')
+                                : tokens[1];
+                            const bone = { name: boneName, channels: [], parent: boneStack[boneStack.length - 1] || null };
+                            bones.push(bone);
+                            boneStack.push(bone);
+                        } else if (tokens[0] === 'CHANNELS') {
+                            const current = boneStack[boneStack.length - 1];
+                            const count = parseInt(tokens[1]);
+                            for (let c = 0; c < count; c++) current.channels.push(tokens[c + 2]);
+                        } else if (tokens[0] === '}') {
+                            boneStack.pop();
+                            if (boneStack.length === 0) return;
+                        }
+                    }
+                }
+                parseJoints();
+
+                // Parse MOTION
+                let frameCount = 0, frameTime = 1/30;
+                while (idx < lines.length) {
+                    const line = lines[idx].trim(); idx++;
+                    if (line.startsWith('Frames:')) frameCount = parseInt(line.split(':')[1]);
+                    else if (line.startsWith('Frame Time:')) { frameTime = parseFloat(line.split(':')[1]); break; }
+                }
+                const motionData = [];
+                while (idx < lines.length) {
+                    const line = lines[idx].trim(); idx++;
+                    if (line) motionData.push(line.split(/\s+/).map(parseFloat));
+                }
+
+                // Build quaternion tracks
+                const tracks = [];
+                const euler = new THREE.Euler();
+                const quat = new THREE.Quaternion();
+
+                for (const bone of bones) {
+                    if (bone.channels.length === 0) continue;
+                    let offset = 0;
+                    for (const b of bones) { if (b === bone) break; offset += b.channels.length; }
+
+                    const times = new Float32Array(motionData.length);
+                    const rotations = [];
+                    const hasRot = bone.channels.some(c => c.includes('rotation'));
+
+                    for (let f = 0; f < motionData.length; f++) {
+                        times[f] = f * frameTime;
+                        if (!hasRot) continue;
+                        let rx = 0, ry = 0, rz = 0;
+                        for (let c = 0; c < bone.channels.length; c++) {
+                            const ch = bone.channels[c], val = motionData[f][offset + c];
+                            if (ch === 'Xrotation') rx = val * Math.PI / 180;
+                            else if (ch === 'Yrotation') ry = val * Math.PI / 180;
+                            else if (ch === 'Zrotation') rz = val * Math.PI / 180;
+                        }
+                        const rotOrder = bone.channels.filter(c => c.includes('rotation')).map(c => c[0]).join('') || 'ZYX';
+                        euler.set(rx, ry, rz, rotOrder);
+                        quat.setFromEuler(euler);
+                        rotations.push(quat.x, quat.y, quat.z, quat.w);
+                    }
+
+                    if (rotations.length > 0) {
+                        tracks.push(new THREE.QuaternionKeyframeTrack(
+                            bone.name + '.quaternion', times, new Float32Array(rotations)
+                        ));
+                    }
+                }
+
+                const clip = new THREE.AnimationClip(name, -1, tracks);
+                if (retarget) this.retargetClip(clip);
+                this.clipLibrary[name] = clip;
+
+                console.log(`[ClipLayer] Loaded BVH "${name}" (${clip.duration.toFixed(1)}s, ${clip.tracks.length} tracks)`);
+                return { name, duration: clip.duration, tracks: clip.tracks.length };
             }
 
             /**
@@ -1451,8 +2025,12 @@
         /**
          * L5: LookAt — always additive (+=) on eyes + head.
          * Absorbs MouseTrackingController + IdleHeadMovement into one layer.
-         * When mouse is active: track cursor. When idle: gentle gaze wander.
+         * When mouse is active: track cursor (head + eye gaze). When idle: gentle gaze wander.
          * This layer ALWAYS runs (never suppressed).
+         *
+         * Phase 6 enhancement: drives VRM lookAt target for eye gaze tracking
+         * in addition to head bone rotation. The VRM lookAt system handles eye
+         * blend shapes or eye bone rotation depending on the model's setup.
          */
         class LookAtLayer extends AnimationLayer {
             constructor(vrm, canvas) {
@@ -1461,6 +2039,8 @@
                 this._mouseY = 0;
                 this._mouseActive = false;
                 this._mouseTimeout = null;
+                /** Phase 6: Whether eye gaze IK is enabled (driven by postMessage). */
+                this._eyeGazeEnabled = true;
 
                 if (canvas) {
                     canvas.addEventListener('mousemove', (e) => {
@@ -1490,10 +2070,21 @@
                 // LookAt is L5 (highest priority, last layer) — uses assignment (=)
                 // not additive (+=), because these are absolute offsets from neutral
                 // that should be the final head pose each frame.
+                //
+                // Phase 6: Also drives VRM eye lookAt target for eye gaze tracking.
+                // The VRM lookAt system (vrm.lookAt) internally handles eye bone
+                // rotation or eye blend shapes depending on the model's lookAtType.
                 if (this._mouseActive) {
                     if (head) {
                         head.rotation.y = this._mouseX * 0.15;
                         head.rotation.x = this._mouseY * -0.08;
+                    }
+                    // Phase 6: Eye gaze IK — set VRM lookAt target from mouse position
+                    if (this._eyeGazeEnabled && this.vrm.lookAt) {
+                        // Map mouse (-1..1) to world-space gaze target ~1m in front of character
+                        const gazeX = this._mouseX * 0.8;   // horizontal gaze range
+                        const gazeY = -this._mouseY * 0.5 + 1.3; // vertical (head height)
+                        this.vrm.lookAt.target = { position: { x: gazeX, y: gazeY, z: 2.0 } };
                     }
                 } else {
                     // Gaze wander: pick a new imaginary "point of interest" every 2–5s.
@@ -2076,7 +2667,9 @@
                     nod: 0.6, tilt: 0.5, wave: 1.0, shrug: 0.8,
                     bow: 1.2, clap: 0.8, think: 1.5, point: 0.7,
                     celebrate: 1.2, shy: 1.0, dance: 2.0,
-                    foot_tap: 1.8, crossed_arms: 2.0, shake: 0.8
+                    foot_tap: 1.8, crossed_arms: 2.0, shake: 0.8,
+                    // Pet-mode idle animations (externally triggered from PetView.tsx)
+                    doze: 4.0, wake_up: 1.2, wave_at_cursor: 2.5,
                 };
                 this.gestureDuration = durations[gesture] || 0.6;
             }
@@ -2260,6 +2853,50 @@
                         if (head) head.rotation.y = shakeBeat * 0.15;
                         break;
                     }
+
+                    // ── Pet-mode exclusive gestures ─────────────────────────────────
+                    // Triggered externally from PetView.tsx via postMessage playGesture.
+
+                    case 'doze': {
+                        // Gradual head droop — character dozing off during long idle sessions.
+                        // Slow ramp-in over first 60%, then holds with gentle breathing motion.
+                        const dozeHead = getBone('head'), dozeNeck = getBone('neck'), dozeSpine = getBone('spine');
+                        const droop = Math.min(1.0, t / 0.6);
+                        const breathe = Math.sin(t * Math.PI * 1.5) * 0.015;
+                        if (dozeHead) { dozeHead.rotation.x = droop * 0.35; dozeHead.rotation.z = droop * 0.05; }
+                        if (dozeNeck) dozeNeck.rotation.x = droop * 0.18;
+                        if (dozeSpine) dozeSpine.rotation.x = droop * 0.08 + breathe;
+                        break;
+                    }
+
+                    case 'wake_up': {
+                        // Quick startle from doze — head snaps back up, arms raise, then settle.
+                        // Sharp recoil in first 30%, gradual settle in remaining 70%.
+                        const wakeHead = getBone('head'), wakeNeck = getBone('neck'), wakeSpine = getBone('spine');
+                        const wakeLa = getBone('leftUpperArm'), wakeRa = getBone('rightUpperArm');
+                        const snapT = t < 0.3 ? t / 0.3 : 1.0 - (t - 0.3) / 0.7;
+                        const recoil = Math.sin(snapT * Math.PI);
+                        if (wakeHead) { wakeHead.rotation.x = -recoil * 0.25; wakeHead.rotation.y = recoil * 0.04; }
+                        if (wakeNeck) wakeNeck.rotation.x = -recoil * 0.12;
+                        if (wakeSpine) wakeSpine.rotation.x = -recoil * 0.06;
+                        if (wakeLa) wakeLa.rotation.z = -1.3 - recoil * 0.2;
+                        if (wakeRa) wakeRa.rotation.z = 1.3 + recoil * 0.2;
+                        break;
+                    }
+
+                    case 'wave_at_cursor': {
+                        // Friendly wave toward the cursor when it approaches the pet window.
+                        // Arm raises (first 25%), waves 2.5 cycles, then lowers (last 25%).
+                        const waveRa = getBone('rightUpperArm'), waveRLower = getBone('rightLowerArm'), waveHead = getBone('head');
+                        const raiseT = Math.min(1.0, t / 0.25);
+                        const wave = Math.sin(t * Math.PI * 5) * 0.22;
+                        const lowerT = t > 0.75 ? (t - 0.75) / 0.25 : 0;
+                        const armUp = raiseT - lowerT;
+                        if (waveRa) { waveRa.rotation.z = 1.3 - 0.95 * armUp; waveRa.rotation.x = armUp * 0.3 + wave * armUp; }
+                        if (waveRLower) waveRLower.rotation.x = armUp * 0.4;
+                        if (waveHead) waveHead.rotation.z = -armUp * 0.06;
+                        break;
+                    }
                 }
             }
 
@@ -2369,6 +3006,148 @@
             console.log(`[Viewer] Auto-gesture: ${emotion} → ${gesture}`);
         }
 
+        // ─────────────────────────────────────────────────────────────
+        // AnimationRegistry — clip-based animation lookup tables
+        // ─────────────────────────────────────────────────────────────
+
+        /**
+         * Registry that maps emotions and categories to pre-recorded animation clips.
+         * Loaded from the animation manifest (/api/animations), it enables clip-based
+         * animation as the primary source — falling back to procedural gestures when
+         * no matching clips are available.
+         */
+        class AnimationRegistry {
+            constructor() {
+                /** @type {Map<string, Object>} clip_id → clip metadata */
+                this.clips = new Map();
+                /** @type {Map<string, string[]>} emotion → [clip_id, ...] */
+                this.emotionIndex = new Map();
+                /** @type {Map<string, string[]>} category → [clip_id, ...] */
+                this.categoryIndex = new Map();
+                /** @type {boolean} Whether any clips are loaded */
+                this.loaded = false;
+            }
+
+            /**
+             * Load clips from a manifest response (from /api/animations).
+             * @param {Object} manifest - The manifest JSON with packs and clips
+             */
+            loadManifest(manifest) {
+                this.clips.clear();
+                this.emotionIndex.clear();
+                this.categoryIndex.clear();
+
+                for (const pack of (manifest.packs || [])) {
+                    for (const clip of (pack.clips || [])) {
+                        if (!clip.available) continue;  // Skip clips not on disk
+
+                        const meta = { ...clip, packId: pack.id, packName: pack.name };
+                        this.clips.set(clip.id, meta);
+
+                        // Index by emotion
+                        for (const emo of (clip.emotions || [])) {
+                            if (!this.emotionIndex.has(emo)) this.emotionIndex.set(emo, []);
+                            this.emotionIndex.get(emo).push(clip.id);
+                        }
+
+                        // Index by category
+                        const cat = clip.category || 'custom';
+                        if (!this.categoryIndex.has(cat)) this.categoryIndex.set(cat, []);
+                        this.categoryIndex.get(cat).push(clip.id);
+                    }
+                }
+
+                this.loaded = this.clips.size > 0;
+                console.log(`[AnimationRegistry] Loaded ${this.clips.size} clips (${this.emotionIndex.size} emotions, ${this.categoryIndex.size} categories)`);
+            }
+
+            /**
+             * Get clip metadata matching an emotion.
+             * @param {string} emotion - Emotion name
+             * @returns {Object[]} Array of clip metadata, randomly shuffled
+             */
+            getClipsForEmotion(emotion) {
+                const ids = this.emotionIndex.get(emotion) || [];
+                const clips = ids.map(id => this.clips.get(id)).filter(Boolean);
+                // Fisher-Yates shuffle
+                for (let i = clips.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [clips[i], clips[j]] = [clips[j], clips[i]];
+                }
+                return clips;
+            }
+
+            /**
+             * Get all clips in a category.
+             * @param {string} category - Category name (idle, emotion, reaction, fidget, custom)
+             * @returns {Object[]} Array of clip metadata
+             */
+            getClipsByCategory(category) {
+                const ids = this.categoryIndex.get(category) || [];
+                return ids.map(id => this.clips.get(id)).filter(Boolean);
+            }
+
+            /**
+             * Pick a random idle variant.
+             * @returns {Object|null} Random idle clip metadata, or null if none available
+             */
+            pickIdleVariant() {
+                const idles = this.getClipsByCategory('idle');
+                return idles.length > 0 ? idles[Math.floor(Math.random() * idles.length)] : null;
+            }
+        }
+
+        /** Global animation registry instance */
+        const animationRegistry = new AnimationRegistry();
+
+        /**
+         * Trigger animation from clip library OR fall back to procedural gesture.
+         *
+         * Priority:
+         *   1. Check AnimationRegistry for clips matching current emotion (40% chance)
+         *   2. If no clips found, fall back to procedural GestureLayer (20% chance)
+         *
+         * @param {string|null} emotion - Incoming emotion from setEmotion/setExpression
+         */
+        function _triggerAutoAnimation(emotion) {
+            if (!emotion || !animationDirector) return;
+            if (emotion === lastAutoGestureEmotion) return;  // dedup
+
+            const cl = animationDirector.getLayer('clip');
+            const gl = animationDirector.getLayer('gesture');
+
+            // Don't interrupt running animations
+            if (cl?.isPlaying || gl?.isPlaying) return;
+
+            // 1. Try clip-based animation (40% chance when clips available)
+            if (animationRegistry.loaded && cl) {
+                const candidates = animationRegistry.getClipsForEmotion(emotion);
+                if (candidates.length > 0 && Math.random() <= 0.4) {
+                    const clip = candidates[0];
+                    lastAutoGestureEmotion = emotion;
+
+                    // Lazy-load the clip if not already in the library
+                    if (cl.clipLibrary[clip.id]) {
+                        cl.playClip(clip.id, { loop: clip.loop || false, fadeIn: 0.4 });
+                        console.log(`[Viewer] Auto-animation (clip): ${emotion} → ${clip.name}`);
+                    } else {
+                        // Async load + play
+                        cl.loadClip(clip.url, clip.id, { retarget: true }).then(() => {
+                            cl.playClip(clip.id, { loop: clip.loop || false, fadeIn: 0.4 });
+                            console.log(`[Viewer] Auto-animation (lazy-loaded clip): ${emotion} → ${clip.name}`);
+                        }).catch(err => {
+                            console.warn(`[Viewer] Clip load failed for ${clip.id}, falling back to gesture:`, err);
+                            _triggerAutoGesture(emotion);
+                        });
+                    }
+                    return;
+                }
+            }
+
+            // 2. Fall back to procedural gesture (20% chance — original behavior)
+            _triggerAutoGesture(emotion);
+        }
+
         // ══════════════════════════════════════════════════════════
         // Main Init
         // ══════════════════════════════════════════════════════════
@@ -2474,6 +3253,302 @@
                 console.log('[Viewer] Lighting updated');
             }
 
+            // ══════════════════════════════════════════════════════════
+            // Phase 5: Post-Processing Pipeline (EffectComposer)
+            // ══════════════════════════════════════════════════════════
+
+            /**
+             * EffectComposer-based post-processing pipeline.
+             * When _effectsEnabled is false, the renderer renders directly to screen
+             * (zero overhead). When true, the composer chain applies active passes.
+             *
+             * Available effects:
+             * - Bloom (UnrealBloomPass): eye highlights, magical glow
+             * - Color grading (custom ShaderPass): tone adjustment via uniforms
+             *
+             * All effects are configurable via the `setEffects` postMessage command.
+             */
+            let _effectsEnabled = false;
+            const _effectsConfig = {
+                bloom: { enabled: false, strength: 0.3, radius: 0.4, threshold: 0.85 },
+                colorGrade: { enabled: false, brightness: 0, contrast: 0, saturation: 0 },
+            };
+
+            // Build EffectComposer
+            const composer = new EffectComposer(renderer);
+            const renderPass = new RenderPass(scene, camera);
+            composer.addPass(renderPass);
+
+            // Bloom pass (UnrealBloomPass)
+            const bloomPass = new UnrealBloomPass(
+                new THREE.Vector2(window.innerWidth, window.innerHeight),
+                _effectsConfig.bloom.strength,
+                _effectsConfig.bloom.radius,
+                _effectsConfig.bloom.threshold
+            );
+            bloomPass.enabled = false;
+            composer.addPass(bloomPass);
+
+            // Color grading pass — simple brightness/contrast/saturation shader
+            const colorGradeShader = {
+                uniforms: {
+                    tDiffuse: { value: null },
+                    brightness: { value: 0.0 },
+                    contrast: { value: 0.0 },
+                    saturation: { value: 0.0 },
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D tDiffuse;
+                    uniform float brightness;
+                    uniform float contrast;
+                    uniform float saturation;
+                    varying vec2 vUv;
+
+                    void main() {
+                        vec4 tex = texture2D(tDiffuse, vUv);
+                        // Brightness
+                        vec3 color = tex.rgb + vec3(brightness);
+                        // Contrast
+                        color = (color - 0.5) * (1.0 + contrast) + 0.5;
+                        // Saturation
+                        float gray = dot(color, vec3(0.299, 0.587, 0.114));
+                        color = mix(vec3(gray), color, 1.0 + saturation);
+                        gl_FragColor = vec4(clamp(color, 0.0, 1.0), tex.a);
+                    }
+                `,
+            };
+            const colorGradePass = new ShaderPass(colorGradeShader);
+            colorGradePass.enabled = false;
+            composer.addPass(colorGradePass);
+
+            /**
+             * Update post-processing pipeline from configuration.
+             * Called by the setEffects postMessage handler.
+             *
+             * @param {Object} config - Partial effects config to merge
+             */
+            function updateEffects(config) {
+                if (config.bloom !== undefined) {
+                    Object.assign(_effectsConfig.bloom, config.bloom);
+                    bloomPass.enabled = _effectsConfig.bloom.enabled;
+                    bloomPass.strength = _effectsConfig.bloom.strength;
+                    bloomPass.radius = _effectsConfig.bloom.radius;
+                    bloomPass.threshold = _effectsConfig.bloom.threshold;
+                }
+                if (config.colorGrade !== undefined) {
+                    Object.assign(_effectsConfig.colorGrade, config.colorGrade);
+                    colorGradePass.enabled = _effectsConfig.colorGrade.enabled;
+                    colorGradePass.uniforms.brightness.value = _effectsConfig.colorGrade.brightness;
+                    colorGradePass.uniforms.contrast.value = _effectsConfig.colorGrade.contrast;
+                    colorGradePass.uniforms.saturation.value = _effectsConfig.colorGrade.saturation;
+                }
+                // Enable composer only if at least one pass is active
+                _effectsEnabled = bloomPass.enabled || colorGradePass.enabled;
+                console.log('[Viewer] Effects updated:', _effectsConfig, 'composer:', _effectsEnabled);
+            }
+
+            // Handle window resize for composer
+            const _origOnResize = window.onresize;
+            window.addEventListener('resize', () => {
+                composer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // ══════════════════════════════════════════════════════════
+            // Phase 5: Particle System
+            // ══════════════════════════════════════════════════════════
+
+            /**
+             * GPU-instanced particle system for ambient and emotion-reactive effects.
+             *
+             * Uses THREE.InstancedMesh for efficient rendering of up to 500 particles.
+             * Each particle has position, velocity, lifetime, opacity, and color.
+             *
+             * Particle types:
+             * - Ambient: sakura petals, dust motes, snow (continuous, long lifetime)
+             * - Emotion-reactive: hearts, sparkles, anger marks (burst, short lifetime)
+             */
+            const PARTICLE_BUDGET = 500;
+            const _particles = [];
+            let _ambientType = null;   // 'sakura' | 'dust' | 'snow' | null
+            let _emotionParticlesEnabled = true;
+
+            // Shared particle mesh (small quads)
+            const particleGeom = new THREE.PlaneGeometry(0.04, 0.04);
+            const particleMat = new THREE.MeshBasicMaterial({
+                color: 0xffb7c5,
+                transparent: true,
+                opacity: 0.8,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+            });
+            const particleGroup = new THREE.Group();
+            particleGroup.name = 'particleSystem';
+            scene.add(particleGroup);
+
+            /**
+             * Spawn a burst of particles at a position.
+             *
+             * @param {Object} opts - Particle options
+             * @param {string} opts.type - 'heart' | 'sparkle' | 'anger' | 'sakura' | 'dust' | 'snow'
+             * @param {number} [opts.count=5] - Number of particles to spawn
+             * @param {THREE.Vector3} [opts.origin] - Spawn position (defaults to model center)
+             * @param {number} [opts.color] - Override color (hex)
+             */
+            function spawnParticles(opts = {}) {
+                const type = opts.type || 'sparkle';
+                const count = Math.min(opts.count || 5, PARTICLE_BUDGET - _particles.length);
+                if (count <= 0) return;
+
+                const origin = opts.origin || new THREE.Vector3(0, 1.3, 0.3);
+
+                // Color and shape by type
+                const typeConfigs = {
+                    heart:   { color: 0xff4488, scale: 0.06, lifetime: 2.0, speed: 0.3, gravity: -0.05 },
+                    sparkle: { color: 0xffd700, scale: 0.03, lifetime: 1.5, speed: 0.5, gravity: 0.0 },
+                    anger:   { color: 0xff2222, scale: 0.05, lifetime: 1.0, speed: 0.8, gravity: 0.0 },
+                    sakura:  { color: 0xffb7c5, scale: 0.04, lifetime: 5.0, speed: 0.15, gravity: -0.15 },
+                    dust:    { color: 0xdddddd, scale: 0.015, lifetime: 6.0, speed: 0.05, gravity: 0.0 },
+                    snow:    { color: 0xffffff, scale: 0.025, lifetime: 6.0, speed: 0.08, gravity: -0.1 },
+                };
+                const cfg = typeConfigs[type] || typeConfigs.sparkle;
+                const color = opts.color ?? cfg.color;
+
+                for (let i = 0; i < count; i++) {
+                    const mesh = new THREE.Mesh(particleGeom, particleMat.clone());
+                    mesh.material.color.set(color);
+                    mesh.material.opacity = 0.9;
+
+                    // Random offset from origin
+                    mesh.position.set(
+                        origin.x + (Math.random() - 0.5) * 0.6,
+                        origin.y + (Math.random() - 0.5) * 0.4,
+                        origin.z + (Math.random() - 0.5) * 0.3
+                    );
+
+                    const scale = cfg.scale * (0.7 + Math.random() * 0.6);
+                    mesh.scale.setScalar(scale);
+
+                    // Random velocity
+                    const vx = (Math.random() - 0.5) * cfg.speed;
+                    const vy = (Math.random() - 0.3) * cfg.speed;
+                    const vz = (Math.random() - 0.5) * cfg.speed * 0.5;
+
+                    particleGroup.add(mesh);
+                    _particles.push({
+                        mesh,
+                        velocity: new THREE.Vector3(vx, vy, vz),
+                        lifetime: cfg.lifetime,
+                        maxLifetime: cfg.lifetime,
+                        gravity: cfg.gravity,
+                        rotSpeed: (Math.random() - 0.5) * 3,
+                    });
+                }
+            }
+
+            /**
+             * Update all active particles. Called once per frame from animate().
+             * Removes particles whose lifetime has expired.
+             *
+             * @param {number} dt - Delta time in seconds
+             */
+            function updateParticles(dt) {
+                for (let i = _particles.length - 1; i >= 0; i--) {
+                    const p = _particles[i];
+                    p.lifetime -= dt;
+
+                    if (p.lifetime <= 0) {
+                        particleGroup.remove(p.mesh);
+                        p.mesh.material.dispose();
+                        _particles.splice(i, 1);
+                        continue;
+                    }
+
+                    // Apply wind force to particles
+                    if (_windForce.strength > 0) {
+                        p.velocity.x += _windForce.x * _windForce.strength * dt * 0.3;
+                        p.velocity.z += _windForce.z * _windForce.strength * dt * 0.3;
+                    }
+
+                    // Apply gravity and velocity
+                    p.velocity.y += p.gravity * dt;
+                    p.mesh.position.addScaledVector(p.velocity, dt);
+
+                    // Rotation
+                    p.mesh.rotation.z += p.rotSpeed * dt;
+
+                    // Fade out in last 30% of lifetime
+                    const lifeFrac = p.lifetime / p.maxLifetime;
+                    p.mesh.material.opacity = lifeFrac < 0.3
+                        ? lifeFrac / 0.3 * 0.9
+                        : 0.9;
+                }
+
+                // Ambient spawning: continuously add particles if type is set
+                if (_ambientType && _particles.length < PARTICLE_BUDGET * 0.8) {
+                    // Spawn 1-2 particles per second
+                    if (Math.random() < dt * 2) {
+                        spawnParticles({
+                            type: _ambientType,
+                            count: 1,
+                            origin: new THREE.Vector3(
+                                (Math.random() - 0.5) * 2,
+                                2.0 + Math.random() * 0.5,
+                                (Math.random() - 0.5) * 1,
+                            ),
+                        });
+                    }
+                }
+            }
+
+            /** Clear all active particles from the scene. */
+            function clearAllParticles() {
+                for (const p of _particles) {
+                    particleGroup.remove(p.mesh);
+                    p.mesh.material.dispose();
+                }
+                _particles.length = 0;
+            }
+
+            /**
+             * Auto-trigger emotion-reactive particles.
+             * Called internally when setExpression fires for an emotion that maps
+             * to a particle type.
+             *
+             * @param {string} emotion - The emotion name (happy, love, angry, etc.)
+             */
+            function triggerEmotionParticles(emotion) {
+                if (!_emotionParticlesEnabled) return;
+                const map = {
+                    happy: { type: 'sparkle', count: 5 },
+                    excited: { type: 'sparkle', count: 8 },
+                    love: { type: 'heart', count: 5 },
+                    flirty: { type: 'heart', count: 3 },
+                    angry: { type: 'anger', count: 3 },
+                    proud: { type: 'sparkle', count: 4 },
+                    awe: { type: 'sparkle', count: 6 },
+                };
+                const cfg = map[emotion];
+                if (cfg) spawnParticles(cfg);
+            }
+
+            /**
+             * Set the ambient particle type. Pass null to disable.
+             *
+             * @param {string|null} type - 'sakura' | 'dust' | 'snow' | null
+             */
+            function setAmbientParticles(type) {
+                _ambientType = type;
+                if (!type) clearAllParticles();
+                console.log('[Viewer] Ambient particles:', type);
+            }
+
             /**
              * Set the scene background.
              * @param {string} mode - 'color', 'image', 'video', 'gradient', or 'transparent'
@@ -2515,11 +3590,77 @@
 
             /**
              * Capture the current viewport as a PNG data URL.
+             *
+             * Phase 5 enhanced screenshot options:
+             * - supersampled: Render at 2x resolution for higher quality
+             * - transparent: Remove scene background for PNG alpha transparency
+             *
+             * @param {Object} [opts] - Screenshot options
+             * @param {boolean} [opts.supersampled=false] - Render at 2x resolution
+             * @param {boolean} [opts.transparent=false] - Capture with transparent background
              * @returns {string} Base64 PNG data URL
              */
-            function captureScreenshot() {
+            function captureScreenshot(opts = {}) {
+                const savedBg = scene.background;
+                const savedAlpha = renderer.getClearAlpha();
+                const w = renderer.domElement.width;
+                const h = renderer.domElement.height;
+
+                // Transparent mode: remove background and set clear alpha to 0
+                if (opts.transparent) {
+                    scene.background = null;
+                    renderer.setClearAlpha(0);
+                }
+
+                if (opts.supersampled) {
+                    // Render at 2x resolution to a temporary render target
+                    const rt = new THREE.WebGLRenderTarget(w * 2, h * 2, {
+                        format: THREE.RGBAFormat,
+                        type: THREE.UnsignedByteType,
+                    });
+                    renderer.setRenderTarget(rt);
+                    renderer.render(scene, camera);
+                    renderer.setRenderTarget(null);
+
+                    // Read pixels from the render target
+                    const pixels = new Uint8Array(w * 2 * h * 2 * 4);
+                    renderer.readRenderTargetPixels(rt, 0, 0, w * 2, h * 2, pixels);
+
+                    // Draw to an offscreen canvas
+                    const offCanvas = document.createElement('canvas');
+                    offCanvas.width = w * 2;
+                    offCanvas.height = h * 2;
+                    const ctx = offCanvas.getContext('2d');
+                    const imgData = ctx.createImageData(w * 2, h * 2);
+                    // Flip vertically (WebGL origin is bottom-left)
+                    for (let y = 0; y < h * 2; y++) {
+                        const srcRow = (h * 2 - 1 - y) * w * 2 * 4;
+                        const dstRow = y * w * 2 * 4;
+                        for (let x = 0; x < w * 2 * 4; x++) {
+                            imgData.data[dstRow + x] = pixels[srcRow + x];
+                        }
+                    }
+                    ctx.putImageData(imgData, 0, 0);
+                    rt.dispose();
+
+                    // Restore state
+                    if (opts.transparent) {
+                        scene.background = savedBg;
+                        renderer.setClearAlpha(savedAlpha);
+                    }
+                    return offCanvas.toDataURL('image/png');
+                }
+
+                // Standard resolution capture
                 renderer.render(scene, camera);
-                return renderer.domElement.toDataURL('image/png');
+                const dataUrl = renderer.domElement.toDataURL('image/png');
+
+                // Restore state
+                if (opts.transparent) {
+                    scene.background = savedBg;
+                    renderer.setClearAlpha(savedAlpha);
+                }
+                return dataUrl;
             }
 
             /**
@@ -2572,6 +3713,43 @@
 
                 controls.update();
 
+                // Tick entrance animation (multi-style) for any model type
+                if (entranceAnimator?.active) {
+                    entranceAnimator.update(delta);
+                }
+                // Tick exit animation if active
+                if (exitAnimator?.active) {
+                    exitAnimator.update(delta);
+                }
+
+                // Apply wind to spring bone gravity (VRM only)
+                if (currentVrm && _windForce.strength > 0) {
+                    _windTime += delta;
+                    const sbm = currentVrm.springBoneManager;
+                    if (sbm?.joints) {
+                        for (const joint of sbm.joints) {
+                            // Save original gravity on first wind application
+                            if (!_originalGravity.has(joint)) {
+                                _originalGravity.set(joint, {
+                                    x: joint.settings.gravityDir.x,
+                                    y: joint.settings.gravityDir.y,
+                                    z: joint.settings.gravityDir.z,
+                                    power: joint.settings.gravityPower,
+                                });
+                            }
+                            const orig = _originalGravity.get(joint);
+                            // Perlin-ish noise: sum of sines at different frequencies
+                            const noise = Math.sin(_windTime * 2.3) * 0.4
+                                        + Math.sin(_windTime * 5.7 + 1.3) * 0.3
+                                        + Math.sin(_windTime * 0.8 + 2.7) * 0.3;
+                            const s = _windForce.strength * (0.7 + noise * 0.3);
+                            joint.settings.gravityDir.x = orig.x + _windForce.x * s;
+                            joint.settings.gravityDir.y = orig.y + _windForce.y * s;
+                            joint.settings.gravityDir.z = orig.z + _windForce.z * s;
+                        }
+                    }
+                }
+
                 if (currentVrm) {
                     currentVrm.update(delta);
 
@@ -2590,6 +3768,9 @@
 
                     if (blinkController) blinkController.update(delta);
                     if (expressionController) expressionController.update(delta);
+                } else if (currentGlbMixer) {
+                    // GLB mode: tick the AnimationMixer for embedded clip playback
+                    currentGlbMixer.update(delta);
                 }
 
                 // Disco mode (#25): cycle hue of three RGB point lights at different speeds
@@ -2600,7 +3781,15 @@
                     discoLights[2].color.setHSL((_discoTime * 0.5 + 0.67) % 1, 1, 0.5);
                 }
 
-                renderer.render(scene, camera);
+                // Phase 5: Update particle system
+                updateParticles(delta);
+
+                // Phase 5: Render via EffectComposer or direct renderer
+                if (_effectsEnabled) {
+                    composer.render(delta);
+                } else {
+                    renderer.render(scene, camera);
+                }
 
                 // FPS counter: count frames, update display once per second.
                 // Posts to parent window for the right panel, and updates the
@@ -2622,10 +3811,10 @@
             }
             animate();
 
-            // Load VRM from URL parameter if provided (direct link mode)
+            // Load model from URL parameter if provided (direct link mode)
             const urlParam = new URLSearchParams(location.search).get('url');
             if (urlParam) {
-                loadVRM(urlParam, scene, camera);
+                loadModel(urlParam, scene, camera);
             }
 
             // ── Pet Mode ─────────────────────────────────────────────────
@@ -2725,130 +3914,561 @@
              * @param {THREE.Scene} scene - Three.js scene
              * @param {THREE.PerspectiveCamera} camera - Camera to frame the model
              */
-            function loadVRM(modelUrl, scene, camera) {
+            // ── Walk-On Entrance Animation ─────────────────────
+            // Slides the model in from off-screen with ease-out
+            // cubic easing, walk bob, and optional spine lean.
+
+            /** @type {{ enabled: boolean, direction: 'left'|'right', duration: number, style: string, emotion: string }} */
+            let entranceConfig = { enabled: true, direction: 'right', duration: 1.2, style: 'walk', emotion: 'neutral' };
+            /** @type {EntranceAnimator|null} */
+            let entranceAnimator = null;
+            /** Queued gesture to play after entrance completes. */
+
+            // ── Spring Bone Wind & Debug State ───────────────
+            /** Wind force vector applied to spring bone gravity. */
+            let _windForce = { x: 0, y: 0, z: 0, strength: 0 };
+            /** Original gravity values per joint (saved when wind is first applied). */
+            let _originalGravity = new Map();
+            /** Elapsed time for wind noise variation. */
+            let _windTime = 0;
+            /** Whether collider debug wireframes are shown. */
+            let _colliderDebugActive = false;
+            /** Collider debug mesh references for cleanup. */
+            let _colliderDebugMeshes = [];
+            let _pendingGreetingGesture = null;
+
+            // ── Easing Functions ──────────────────────────────────
+            const _easings = {
+                cubicOut:    (t) => 1 - Math.pow(1 - t, 3),
+                quinticOut:  (t) => 1 - Math.pow(1 - t, 5),
+                bounceOut:   (t) => {
+                    if (t < 1/2.75) return 7.5625 * t * t;
+                    if (t < 2/2.75) { t -= 1.5/2.75; return 7.5625 * t * t + 0.75; }
+                    if (t < 2.5/2.75) { t -= 2.25/2.75; return 7.5625 * t * t + 0.9375; }
+                    t -= 2.625/2.75; return 7.5625 * t * t + 0.984375;
+                },
+                elasticOut:  (t) => t === 0 || t === 1 ? t : Math.pow(2, -10 * t) * Math.sin((t - 0.075) * (2 * Math.PI) / 0.3) + 1,
+                linear:      (t) => t,
+                easeInOut:   (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2,
+            };
+
+            /**
+             * Multi-style entrance animator for 3D models.
+             *
+             * Supported styles:
+             *   - walk: Cubic ease-out slide + walk bob + spine lean (original)
+             *   - run:  Faster slide + higher bob freq + forward lean
+             *   - jump: Parabolic Y arc + bounce on landing
+             *   - fade: Opacity 0→1, no positional movement
+             *   - teleport: Flash + scale 0→1.1→1.0 (elastic)
+             *
+             * Emotion modulation:
+             *   - happy: +30% bob amplitude
+             *   - sad:   -20% speed (longer duration)
+             *   - shy:   ease-in-out hesitation curve
+             */
+            class EntranceAnimator {
+                /**
+                 * @param {THREE.Object3D} modelScene - The model's scene root
+                 * @param {object} vrm - VRM instance (or null for GLB)
+                 * @param {object} opts - Animation options
+                 * @param {'left'|'right'} opts.direction - Entrance direction
+                 * @param {number} opts.duration - Animation duration in seconds
+                 * @param {string} opts.style - Entrance style (walk|run|jump|fade|teleport)
+                 * @param {string} [opts.emotion] - Emotion for modulation
+                 * @param {Function} [opts.onComplete] - Called when entrance finishes
+                 */
+                constructor(modelScene, vrm, opts = {}) {
+                    this.scene = modelScene;
+                    this.vrm = vrm;
+                    this.direction = opts.direction || 'right';
+                    this.style = opts.style || 'walk';
+                    this.emotion = opts.emotion || 'neutral';
+                    this.onComplete = opts.onComplete || null;
+                    this.active = true;
+                    this.elapsed = 0;
+
+                    // Emotion modulation
+                    let durationMult = 1.0;
+                    this.bobMult = 1.0;
+                    if (this.emotion === 'happy') this.bobMult = 1.3;
+                    if (this.emotion === 'sad') durationMult = 1.2;
+
+                    // Style-specific defaults
+                    const styleDurations = { walk: 1.2, run: 0.7, jump: 1.0, fade: 0.8, teleport: 0.3 };
+                    this.duration = (opts.duration || styleDurations[this.style] || 1.2) * durationMult;
+
+                    this.targetX = modelScene.position.x;
+                    this.targetY = modelScene.position.y || 0;
+
+                    // Positional styles start off-screen
+                    if (this.style === 'walk' || this.style === 'run' || this.style === 'jump') {
+                        this.startX = this.direction === 'right' ? 2.5 : -2.5;
+                        modelScene.position.x = this.startX;
+                    } else {
+                        this.startX = this.targetX;
+                    }
+
+                    // Fade style: set initial opacity
+                    if (this.style === 'fade') {
+                        modelScene.traverse((child) => {
+                            if (child.isMesh && child.material) {
+                                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                                mats.forEach(m => { m.transparent = true; m.opacity = 0; });
+                            }
+                        });
+                    }
+
+                    // Teleport style: start at scale 0
+                    if (this.style === 'teleport') {
+                        modelScene.scale.setScalar(0.01);
+                    }
+
+                    // Cache spine bone for lean effect (VRM only)
+                    this.spineBone = null;
+                    if (vrm?.humanoid) {
+                        this.spineBone = vrm.humanoid.getNormalizedBoneNode?.('spine')
+                            || vrm.humanoid.getBoneNode?.('spine')
+                            || null;
+                    }
+                }
+
+                update(delta) {
+                    if (!this.active) return;
+                    this.elapsed += delta;
+                    const t = Math.min(this.elapsed / this.duration, 1.0);
+
+                    switch (this.style) {
+                        case 'walk': {
+                            const easeFunc = this.emotion === 'shy' ? _easings.easeInOut : _easings.cubicOut;
+                            const eased = easeFunc(t);
+                            this.scene.position.x = this.startX + (this.targetX - this.startX) * eased;
+                            const bobAmp = 0.015 * this.bobMult * (1 - eased);
+                            this.scene.position.y = this.targetY + Math.sin(this.elapsed * 8 * Math.PI * 2) * bobAmp;
+                            if (this.spineBone) {
+                                const lean = 0.08 * (1 - eased) * (this.direction === 'right' ? -1 : 1);
+                                this.spineBone.rotation.z = lean;
+                            }
+                            break;
+                        }
+                        case 'run': {
+                            const eased = _easings.quinticOut(t);
+                            this.scene.position.x = this.startX + (this.targetX - this.startX) * eased;
+                            const bobAmp = 0.022 * this.bobMult * (1 - eased);
+                            this.scene.position.y = this.targetY + Math.sin(this.elapsed * 14 * Math.PI * 2) * bobAmp;
+                            if (this.spineBone) {
+                                const lean = 0.14 * (1 - eased) * (this.direction === 'right' ? -1 : 1);
+                                this.spineBone.rotation.z = lean;
+                            }
+                            break;
+                        }
+                        case 'jump': {
+                            const eased = _easings.bounceOut(t);
+                            this.scene.position.x = this.startX + (this.targetX - this.startX) * Math.min(t * 1.5, 1);
+                            // Parabolic arc: peak at t=0.4
+                            const arcHeight = 0.5 * this.bobMult;
+                            const arcT = Math.min(t / 0.4, 1);
+                            const arc = arcT < 1 ? arcHeight * Math.sin(arcT * Math.PI) : 0;
+                            this.scene.position.y = this.targetY + arc * (1 - eased * 0.3);
+                            break;
+                        }
+                        case 'fade': {
+                            const eased = _easings.linear(t);
+                            this.scene.traverse((child) => {
+                                if (child.isMesh && child.material) {
+                                    const mats = Array.isArray(child.material) ? child.material : [child.material];
+                                    mats.forEach(m => { m.opacity = eased; });
+                                }
+                            });
+                            break;
+                        }
+                        case 'teleport': {
+                            const eased = _easings.elasticOut(t);
+                            // Scale 0 → 1.1 → 1.0 via elastic easing
+                            this.scene.scale.setScalar(Math.max(0.01, eased));
+                            break;
+                        }
+                    }
+
+                    if (t >= 1.0) {
+                        this.active = false;
+                        this.scene.position.x = this.targetX;
+                        this.scene.position.y = this.targetY;
+                        this.scene.scale.setScalar(1);
+                        if (this.spineBone) this.spineBone.rotation.z = 0;
+                        // Restore full opacity for fade style
+                        if (this.style === 'fade') {
+                            this.scene.traverse((child) => {
+                                if (child.isMesh && child.material) {
+                                    const mats = Array.isArray(child.material) ? child.material : [child.material];
+                                    mats.forEach(m => { m.opacity = 1; m.transparent = false; });
+                                }
+                            });
+                        }
+                        if (this.onComplete) this.onComplete();
+                    }
+                }
+            }
+
+            /**
+             * Exit animator — reverse of entrance, supports walk/fade/teleport styles.
+             * Posts 'exitComplete' to parent when finished.
+             */
+            class ExitAnimator {
+                /**
+                 * @param {THREE.Object3D} modelScene - The model's scene root
+                 * @param {object} opts - Animation options
+                 * @param {'left'|'right'} opts.direction - Exit direction
+                 * @param {string} opts.style - Exit style (walk|fade|teleport)
+                 * @param {number} [opts.duration] - Override duration
+                 * @param {Function} [opts.onComplete] - Called when exit finishes
+                 */
+                constructor(modelScene, opts = {}) {
+                    this.scene = modelScene;
+                    this.style = opts.style || 'fade';
+                    this.direction = opts.direction || 'right';
+                    this.onComplete = opts.onComplete || null;
+                    this.active = true;
+                    this.elapsed = 0;
+
+                    const styleDurations = { walk: 1.0, fade: 0.6, teleport: 0.25 };
+                    this.duration = opts.duration || styleDurations[this.style] || 0.6;
+                    this.startX = modelScene.position.x;
+                    this.targetX = this.direction === 'right' ? 2.5 : -2.5;
+                }
+
+                update(delta) {
+                    if (!this.active) return;
+                    this.elapsed += delta;
+                    const t = Math.min(this.elapsed / this.duration, 1.0);
+
+                    switch (this.style) {
+                        case 'walk': {
+                            const eased = _easings.cubicOut(t);
+                            this.scene.position.x = this.startX + (this.targetX - this.startX) * eased;
+                            break;
+                        }
+                        case 'fade': {
+                            this.scene.traverse((child) => {
+                                if (child.isMesh && child.material) {
+                                    const mats = Array.isArray(child.material) ? child.material : [child.material];
+                                    mats.forEach(m => { m.transparent = true; m.opacity = 1 - t; });
+                                }
+                            });
+                            break;
+                        }
+                        case 'teleport': {
+                            const eased = 1 - _easings.elasticOut(1 - t);
+                            this.scene.scale.setScalar(Math.max(0.01, 1 - eased));
+                            break;
+                        }
+                    }
+
+                    if (t >= 1.0) {
+                        this.active = false;
+                        window.parent.postMessage({ type: 'exitComplete' }, '*');
+                        if (this.onComplete) this.onComplete();
+                    }
+                }
+            }
+            let exitAnimator = null;
+
+            /**
+             * Loads a 3D model (VRM or GLB/GLTF) into the scene.
+             *
+             * Dual-path loading:
+             *   - VRM path: Full humanoid init (expressions, spring bones, AnimationDirector)
+             *   - GLB fallback: Raw scene add, bounding-box framing, AnimationMixer for clips
+             *
+             * @param {string} modelUrl - URL to the .vrm, .glb, or .gltf file
+             * @param {THREE.Scene} scene - Three.js scene
+             * @param {THREE.PerspectiveCamera} camera - Camera to frame the model
+             */
+            function loadModel(modelUrl, scene, camera) {
                 const loader = new GLTFLoader();
                 loader.register((parser) => new VRMLoaderPlugin(parser));
 
-                console.log('[Viewer] Loading VRM:', modelUrl);
+                const ext = modelUrl.split('?')[0].split('.').pop()?.toLowerCase() || '';
+                const isGlbUrl = (ext === 'glb' || ext === 'gltf');
+                console.log(`[Viewer] Loading model (${isGlbUrl ? 'GLB/GLTF' : 'VRM'}):`, modelUrl);
+
                 loader.load(
                     modelUrl,
                     (gltf) => {
-                        // Remove previous model
+                        // ── Cleanup previous model (VRM or GLB) ──────────
                         if (currentVrm && currentVrm.scene) {
                             scene.remove(currentVrm.scene);
                             VRMUtils.deepDispose(currentVrm.scene);
+                            currentVrm = null;
                         }
+                        if (currentGlb) {
+                            scene.remove(currentGlb);
+                            currentGlb.traverse((child) => {
+                                if (child.isMesh) {
+                                    child.geometry?.dispose();
+                                    if (Array.isArray(child.material)) {
+                                        child.material.forEach(m => m.dispose());
+                                    } else {
+                                        child.material?.dispose();
+                                    }
+                                }
+                            });
+                            currentGlb = null;
+                        }
+                        if (currentGlbMixer) {
+                            currentGlbMixer.stopAllAction();
+                            currentGlbMixer = null;
+                            currentGlbClips = [];
+                            _currentGlbAction = null;
+                        }
+                        // Clear VRM-specific controllers
+                        lipSync = null;
+                        blinkController = null;
+                        expressionController = null;
+                        animationDirector = null;
+                        window._vrm = null;
 
                         const vrm = gltf.userData.vrm;
-                        if (!vrm) {
-                            console.error('[Viewer] No VRM data in GLTF');
-                            window.parent.postMessage({ type: 'modelFailed', reason: 'no VRM data' }, '*');
+
+                        // ════════════════════════════════════════════
+                        // PATH A: VRM Model (has humanoid + expressions)
+                        // ════════════════════════════════════════════
+                        if (vrm) {
+                            // VRMUtils.rotateVRM0 is only for VRM 0.x assets (sets scene.rotation.y = π).
+                            // VRM 1.x models already face -Z (glTF convention), which is toward our
+                            // camera at +Z — so rotateVRM0 would flip them backwards. Skip it for 1.x.
+                            const vrmMetaVersion = vrm.meta?.metaVersion ?? '0';
+                            if (vrmMetaVersion === '0') {
+                                VRMUtils.rotateVRM0(vrm);
+                            }
+                            // combineMorphs merges duplicate morph targets across meshes in VRM 0.x.
+                            // Only available in newer three-vrm builds; skip gracefully if absent.
+                            if (typeof VRMUtils.combineMorphs === 'function') {
+                                VRMUtils.combineMorphs(vrm);
+                            }
+
+                            scene.add(vrm.scene);
+                            currentVrm = vrm;
+                            window._vrm = vrm;
+
+                            applyNaturalPose(vrm);
+
+                            // Initialize controllers
+                            lipSync = new AudioLipSync(vrm);
+                            blinkController = new BlinkController(vrm);
+                            expressionController = new ExpressionController(vrm);
+
+                            // Legacy controllers disabled — replaced by AnimationDirector layers
+                            headMovement = null;
+                            gestureController = null;
+                            proceduralAnimator = null;
+                            mouseTracker = null;
+
+                            // Initialize layered animation system (Phase 6F)
+                            const canvas = document.getElementById('c');
+                            animationDirector = new AnimationDirector(vrm);
+                            animationDirector.addLayer(new BasePoseLayer(vrm));
+                            animationDirector.addLayer(new IdleBehaviorLayer(vrm));
+                            animationDirector.addLayer(new EmotionLayer(vrm));
+                            animationDirector.addLayer(new TalkLayer(vrm));
+                            animationDirector.addLayer(new GestureLayer(vrm));
+                            animationDirector.addLayer(new LookAtLayer(vrm, canvas));
+                            animationDirector.addLayer(new ClipLayer(vrm, scene));
+
+                            // Auto-frame camera based on model's actual height
+                            const headBone = vrm.humanoid.getRawBoneNode('head');
+                            const footBone = vrm.humanoid.getRawBoneNode('leftFoot') || vrm.humanoid.getRawBoneNode('rightFoot');
+                            let modelTop = 1.5, modelBottom = 0;
+                            if (headBone) {
+                                const hp = new THREE.Vector3();
+                                headBone.getWorldPosition(hp);
+                                modelTop = hp.y + 0.15;
+                            }
+                            if (footBone) {
+                                const fp = new THREE.Vector3();
+                                footBone.getWorldPosition(fp);
+                                modelBottom = fp.y;
+                            }
+                            const modelHeight = modelTop - modelBottom;
+                            const targetY = modelBottom + modelHeight * 0.55;
+                            const camZ = Math.max(modelHeight * 1.0, 0.8);
+                            controls.reset(
+                                new THREE.Vector3(0, targetY + 0.05, camZ),
+                                new THREE.Vector3(0, targetY, 0)
+                            );
+
+                            const headY = headBone
+                                ? (() => { const hp = new THREE.Vector3(); headBone.getWorldPosition(hp); return hp.y; })()
+                                : targetY + modelHeight * 0.35;
+                            _vrmFrameData = { targetY, camZ, modelHeight, headY };
+
+                            console.log('[Viewer] VRM loaded successfully');
+
+                            // Collect geometry statistics
+                            let triCount = 0, vertCount = 0, meshCount = 0;
+                            vrm.scene.traverse((child) => {
+                                if (child.isMesh && child.geometry) {
+                                    meshCount++;
+                                    const geo = child.geometry;
+                                    vertCount += geo.attributes.position?.count || 0;
+                                    triCount += geo.index
+                                        ? geo.index.count / 3
+                                        : (geo.attributes.position?.count || 0) / 3;
+                                }
+                            });
+                            const em = vrm.expressionManager || vrm.blendShapeProxy;
+                            let blendShapeCount = 0;
+                            if (em?._expressionMap) {
+                                const exprMap = em._expressionMap;
+                                blendShapeCount = exprMap instanceof Map
+                                    ? exprMap.size
+                                    : Object.keys(exprMap).length;
+                            }
+                            else if (em?._blendShapeGroups) blendShapeCount = em._blendShapeGroups.length;
+                            const boneCount = vrm.humanoid?.humanBones
+                                ? Object.keys(vrm.humanoid.humanBones).length : 0;
+                            const vrmVersion = vrm.meta?.metaVersion
+                                ? String(vrm.meta.metaVersion)
+                                : (vrm.expressionManager ? '1.x' : '0.x');
+
+                            window.parent.postMessage({
+                                type: 'modelLoaded',
+                                stats: {
+                                    triangles: Math.round(triCount),
+                                    vertices: vertCount,
+                                    meshes: meshCount,
+                                    blendShapes: blendShapeCount,
+                                    bones: boneCount,
+                                    vrmVersion,
+                                }
+                            }, '*');
+
+                            // Auto-load animation manifest so clips are available
+                            // immediately when emotions start firing
+                            fetch('/api/animations')
+                                .then(r => r.ok ? r.json() : null)
+                                .then(manifest => {
+                                    if (manifest && manifest.packs) {
+                                        animationRegistry.loadManifest(manifest);
+                                        window.parent.postMessage({
+                                            type: 'animationManifestLoaded',
+                                            clipCount: animationRegistry.clips.size,
+                                            emotions: [...animationRegistry.emotionIndex.keys()],
+                                            categories: [...animationRegistry.categoryIndex.keys()],
+                                        }, '*');
+                                    }
+                                })
+                                .catch(err => console.warn('[Viewer] Animation manifest load failed:', err));
+
+                            // Start entrance animation (style-aware)
+                            if (entranceConfig.enabled) {
+                                entranceAnimator = new EntranceAnimator(vrm.scene, vrm, {
+                                    direction: entranceConfig.direction,
+                                    duration: entranceConfig.duration,
+                                    style: entranceConfig.style,
+                                    emotion: entranceConfig.emotion,
+                                    onComplete: () => {
+                                        // Play queued greeting gesture after entrance
+                                        if (_pendingGreetingGesture && animationDirector) {
+                                            const gl = animationDirector.getLayer('gesture');
+                                            if (gl) gl.playGesture(_pendingGreetingGesture);
+                                            _pendingGreetingGesture = null;
+                                        }
+                                        window.parent.postMessage({ type: 'entranceComplete' }, '*');
+                                    },
+                                });
+                            }
                             return;
                         }
 
-                        // VRMUtils.rotateVRM0 is only for VRM 0.x assets (sets scene.rotation.y = π).
-                        // VRM 1.x models already face -Z (glTF convention), which is toward our
-                        // camera at +Z — so rotateVRM0 would flip them backwards. Skip it for 1.x.
-                        const vrmMetaVersion = vrm.meta?.metaVersion ?? '0';
-                        if (vrmMetaVersion === '0') {
-                            VRMUtils.rotateVRM0(vrm);
-                        }
-                        // combineMorphs merges duplicate morph targets across meshes in VRM 0.x.
-                        // Only available in newer three-vrm builds; skip gracefully if absent.
-                        if (typeof VRMUtils.combineMorphs === 'function') {
-                            VRMUtils.combineMorphs(vrm);
+                        // ════════════════════════════════════════════
+                        // PATH B: GLB/GLTF Fallback (generic 3D model)
+                        // ════════════════════════════════════════════
+                        if (!gltf.scene) {
+                            console.error('[Viewer] No scene data in GLTF');
+                            window.parent.postMessage({ type: 'modelFailed', reason: 'no scene data' }, '*');
+                            return;
                         }
 
-                        scene.add(vrm.scene);
-                        currentVrm = vrm;
+                        console.log('[Viewer] Loading as GLB/GLTF (no VRM data)');
+                        const glbScene = gltf.scene;
 
-                        // Expose VRM to parent for diagnostics
-                        window._vrm = vrm;
-
-                        // Apply natural idle pose (relax arms from T-pose)
-                        applyNaturalPose(vrm);
-
-                        // Initialize controllers
-                        lipSync = new AudioLipSync(vrm);
-                        blinkController = new BlinkController(vrm);
-                        expressionController = new ExpressionController(vrm);
-
-                        // Legacy controllers disabled — replaced by AnimationDirector layers
-                        headMovement = null;
-                        gestureController = null;
-                        proceduralAnimator = null;
-                        mouseTracker = null;
-
-                        // Initialize layered animation system (Phase 6F)
-                        const canvas = document.getElementById('c');
-                        animationDirector = new AnimationDirector(vrm);
-                        animationDirector.addLayer(new BasePoseLayer(vrm));
-                        animationDirector.addLayer(new IdleBehaviorLayer(vrm));
-                        animationDirector.addLayer(new EmotionLayer(vrm));
-                        animationDirector.addLayer(new TalkLayer(vrm));
-                        animationDirector.addLayer(new GestureLayer(vrm));
-                        animationDirector.addLayer(new LookAtLayer(vrm, canvas));
-                        animationDirector.addLayer(new ClipLayer(vrm, scene));
-
-                        // Auto-frame camera based on model's actual height
-                        const headBone = vrm.humanoid.getRawBoneNode('head');
-                        const footBone = vrm.humanoid.getRawBoneNode('leftFoot') || vrm.humanoid.getRawBoneNode('rightFoot');
-                        let modelTop = 1.5, modelBottom = 0;
-                        if (headBone) {
-                            const hp = new THREE.Vector3();
-                            headBone.getWorldPosition(hp);
-                            modelTop = hp.y + 0.15; // Above head for hair
+                        // Force Y-up orientation — some game rips export Z-up
+                        // Detect by checking if bounding box is wider than tall
+                        glbScene.updateMatrixWorld(true);
+                        const testBox = new THREE.Box3().setFromObject(glbScene);
+                        const testSize = testBox.getSize(new THREE.Vector3());
+                        if (testSize.z > testSize.y * 2.0) {
+                            // Model appears to be Z-up (lying on its back) — rotate to Y-up
+                            glbScene.rotation.x = -Math.PI / 2;
+                            glbScene.updateMatrixWorld(true);
+                            console.log('[Viewer] GLB: Applied Z-up → Y-up rotation');
                         }
-                        if (footBone) {
-                            const fp = new THREE.Vector3();
-                            footBone.getWorldPosition(fp);
-                            modelBottom = fp.y;
-                        }
-                        const modelHeight = modelTop - modelBottom;
-                        const targetY = modelBottom + modelHeight * 0.55; // Chest/neck area
-                        const camZ = Math.max(modelHeight * 1.0, 0.8);   // Distance scales with height
+
+                        scene.add(glbScene);
+                        currentGlb = glbScene;
+
+                        // Auto-frame camera using bounding box
+                        const bbox = new THREE.Box3().setFromObject(glbScene);
+                        const bboxSize = bbox.getSize(new THREE.Vector3());
+                        const bboxCenter = bbox.getCenter(new THREE.Vector3());
+                        const modelHeight = bboxSize.y;
+
+                        // Clamp camera distance to prevent extreme zoom on outlier geometry
+                        const maxDim = Math.max(bboxSize.x, bboxSize.y, bboxSize.z);
+                        const camDist = Math.min(Math.max(maxDim * 1.2, 0.8), 10.0);
+                        const targetY = bboxCenter.y;
                         controls.reset(
-                            new THREE.Vector3(0, targetY + 0.05, camZ),
-                            new THREE.Vector3(0, targetY, 0)
+                            new THREE.Vector3(bboxCenter.x, targetY + 0.05, bboxCenter.z + camDist),
+                            new THREE.Vector3(bboxCenter.x, targetY, bboxCenter.z)
                         );
 
-                        // Store frame data for camera presets (#27)
-                        const headY = headBone
-                            ? (() => { const hp = new THREE.Vector3(); headBone.getWorldPosition(hp); return hp.y; })()
-                            : targetY + modelHeight * 0.35;
-                        _vrmFrameData = { targetY, camZ, modelHeight, headY };
+                        // Store frame data for camera presets (reuse _vrmFrameData)
+                        const headY = bbox.max.y - modelHeight * 0.1;
+                        _vrmFrameData = { targetY, camZ: camDist, modelHeight, headY };
 
-                        console.log('[Viewer] VRM loaded successfully');
+                        // Set up AnimationMixer for embedded animations
+                        if (gltf.animations && gltf.animations.length > 0) {
+                            currentGlbMixer = new THREE.AnimationMixer(glbScene);
+                            currentGlbClips = gltf.animations;
+                            // Auto-play the first animation (usually idle)
+                            const action = currentGlbMixer.clipAction(gltf.animations[0]);
+                            action.play();
+                            _currentGlbAction = action;
+                            console.log(`[Viewer] GLB: Playing ${gltf.animations.length} embedded animation(s):`,
+                                gltf.animations.map(a => a.name || '(unnamed)'));
+                        }
 
-                        // Traverse scene to collect geometry statistics
+                        // Count morph targets across meshes
+                        let morphTargetCount = 0;
                         let triCount = 0, vertCount = 0, meshCount = 0;
-                        vrm.scene.traverse((child) => {
-                            if (child.isMesh && child.geometry) {
+                        glbScene.traverse((child) => {
+                            if (child.isMesh) {
                                 meshCount++;
-                                const geo = child.geometry;
-                                vertCount += geo.attributes.position?.count || 0;
-                                triCount += geo.index
-                                    ? geo.index.count / 3
-                                    : (geo.attributes.position?.count || 0) / 3;
+                                if (child.geometry) {
+                                    const geo = child.geometry;
+                                    vertCount += geo.attributes.position?.count || 0;
+                                    triCount += geo.index
+                                        ? geo.index.count / 3
+                                        : (geo.attributes.position?.count || 0) / 3;
+                                }
+                                if (child.morphTargetInfluences) {
+                                    morphTargetCount += child.morphTargetInfluences.length;
+                                }
                             }
                         });
-                        // Blend shapes: VRM 1.0 uses _expressionMap; VRM 0.x uses _blendShapeGroups
-                        const em = vrm.expressionManager || vrm.blendShapeProxy;
-                        let blendShapeCount = 0;
-                        if (em?._expressionMap) {
-                            const exprMap = em._expressionMap;
-                            blendShapeCount = exprMap instanceof Map
-                                ? exprMap.size
-                                : Object.keys(exprMap).length;
-                        }
-                        else if (em?._blendShapeGroups) blendShapeCount = em._blendShapeGroups.length;
-                        // Bone count from humanoid spec
-                        const boneCount = vrm.humanoid?.humanBones
-                            ? Object.keys(vrm.humanoid.humanBones).length : 0;
-                        // VRM version from meta
-                        const vrmVersion = vrm.meta?.metaVersion
-                            ? String(vrm.meta.metaVersion)
-                            : (vrm.expressionManager ? '1.x' : '0.x');
+
+                        // Count bones from skeleton (if present)
+                        let boneCount = 0;
+                        glbScene.traverse((child) => {
+                            if (child.isSkinnedMesh && child.skeleton) {
+                                boneCount = Math.max(boneCount, child.skeleton.bones.length);
+                            }
+                        });
+
+                        console.log(`[Viewer] GLB loaded: ${meshCount} meshes, ${Math.round(triCount)} tris, ` +
+                            `${morphTargetCount} morph targets, ${boneCount} bones, ` +
+                            `${gltf.animations?.length || 0} animations`);
 
                         window.parent.postMessage({
                             type: 'modelLoaded',
@@ -2856,21 +4476,39 @@
                                 triangles: Math.round(triCount),
                                 vertices: vertCount,
                                 meshes: meshCount,
-                                blendShapes: blendShapeCount,
+                                blendShapes: morphTargetCount,
                                 bones: boneCount,
-                                vrmVersion,
+                                vrmVersion: 'glb',
+                                animations: (gltf.animations || []).map(a => a.name || '(unnamed)'),
                             }
                         }, '*');
+
+                        // Start entrance animation for GLB (style-aware)
+                        if (entranceConfig.enabled) {
+                            entranceAnimator = new EntranceAnimator(glbScene, null, {
+                                direction: entranceConfig.direction,
+                                duration: entranceConfig.duration,
+                                style: entranceConfig.style,
+                                emotion: entranceConfig.emotion,
+                                onComplete: () => {
+                                    _pendingGreetingGesture = null; // GLB has no gesture layer
+                                    window.parent.postMessage({ type: 'entranceComplete' }, '*');
+                                },
+                            });
+                        }
                     },
                     (progress) => {
                         // Optional: report loading progress
                     },
                     (error) => {
-                        console.error('[Viewer] VRM load error:', error);
+                        console.error('[Viewer] Model load error:', error);
                         window.parent.postMessage({ type: 'modelFailed', reason: String(error) }, '*');
                     }
                 );
             }
+
+            // Backward-compat alias
+            const loadVRM = loadModel;
 
             // ── PostMessage API ─────────────────────────────────
 
@@ -2881,7 +4519,40 @@
                 // Commands that work without a VRM loaded
                 if (type === 'loadCharacter') {
                     const p = payload || {};
-                    if (p.modelUrl) loadVRM(p.modelUrl, scene, camera);
+                    if (p.modelUrl) loadModel(p.modelUrl, scene, camera);
+                    return;
+                }
+                if (type === 'setEntranceConfig') {
+                    // Configure entrance animation.
+                    // payload: { enabled?, direction?, duration?, style?, emotion? }
+                    if (payload) {
+                        if (typeof payload.enabled === 'boolean') entranceConfig.enabled = payload.enabled;
+                        if (payload.direction === 'left' || payload.direction === 'right') entranceConfig.direction = payload.direction;
+                        if (typeof payload.duration === 'number' && payload.duration > 0) entranceConfig.duration = payload.duration;
+                        if (payload.style) entranceConfig.style = payload.style;
+                        if (payload.emotion) entranceConfig.emotion = payload.emotion;
+                    }
+                    return;
+                }
+                if (type === 'exitAnimation') {
+                    // Trigger an exit animation on the current model.
+                    // payload: { style?: string, direction?: string, duration?: number }
+                    const modelScene = currentVrm?.scene || currentGlb;
+                    if (!modelScene) return;
+                    exitAnimator = new ExitAnimator(modelScene, {
+                        style: payload?.style || 'fade',
+                        direction: payload?.direction || entranceConfig.direction,
+                        duration: payload?.duration,
+                        onComplete: () => {
+                            exitAnimator = null;
+                        },
+                    });
+                    return;
+                }
+                if (type === 'queueGreetingGesture') {
+                    // Queue a gesture to play after the entrance animation completes.
+                    // payload: { gesture: string }
+                    _pendingGreetingGesture = payload?.gesture || null;
                     return;
                 }
                 if (type === 'updateBackground') {
@@ -2904,8 +4575,91 @@
                     return;
                 }
                 if (type === 'captureScreenshot') {
-                    const dataUrl = captureScreenshot();
+                    const dataUrl = captureScreenshot(payload || {});
                     window.parent.postMessage({ type: 'screenshotReady', dataUrl }, '*');
+                    return;
+                }
+
+                // ── Phase 5: Post-Processing & Particle Handlers ──────────
+                if (type === 'setEffects') {
+                    updateEffects(payload || {});
+                    return;
+                }
+                if (type === 'getEffects') {
+                    window.parent.postMessage({
+                        type: 'effectsConfig',
+                        config: _effectsConfig,
+                        enabled: _effectsEnabled,
+                    }, '*');
+                    return;
+                }
+                if (type === 'spawnParticles') {
+                    spawnParticles(payload || {});
+                    return;
+                }
+                if (type === 'clearParticles') {
+                    clearAllParticles();
+                    return;
+                }
+                if (type === 'setAmbientParticles') {
+                    setAmbientParticles(payload?.type ?? null);
+                    return;
+                }
+                if (type === 'setEmotionParticles') {
+                    _emotionParticlesEnabled = payload?.enabled !== false;
+                    return;
+                }
+
+                // ── Phase 6: IK & Animation Handlers ──────────────────────
+                if (type === 'setEyeGaze') {
+                    if (animationDirector) {
+                        const lookAt = animationDirector.getLayer('lookAt');
+                        if (lookAt) lookAt._eyeGazeEnabled = payload?.enabled !== false;
+                    }
+                    return;
+                }
+                // ── Webcam Motion Capture (Phase 6.1 — stub) ──────────────
+                // Mocap requires @mediapipe/face_mesh + kalidokit at runtime.
+                // These handlers manage the mocap lifecycle. The actual webcam
+                // processing pipeline is loaded on-demand when startMocap is
+                // called (lazy-loaded to avoid shipping 4MB WASM upfront).
+                if (type === 'startMocap') {
+                    if (!window._mocapActive) {
+                        window._mocapActive = false;
+                        // Check if MediaPipe is available
+                        if (typeof FaceMesh === 'undefined') {
+                            console.warn('[Mocap] @mediapipe/face_mesh not loaded. Add script to enable webcam tracking.');
+                            window.parent.postMessage({
+                                type: 'mocapStatus',
+                                active: false,
+                                error: 'MediaPipe Face Mesh not available. Install @mediapipe/face_mesh to enable webcam tracking.',
+                            }, '*');
+                            return;
+                        }
+                    }
+                    // Future: init webcam + FaceMesh + Kalidokit pipeline here
+                    // For now, report status so the UI can show the correct state
+                    window.parent.postMessage({
+                        type: 'mocapStatus',
+                        active: window._mocapActive || false,
+                        error: 'Webcam face tracking requires additional dependencies. Coming in a future update.',
+                    }, '*');
+                    return;
+                }
+                if (type === 'stopMocap') {
+                    window._mocapActive = false;
+                    // Future: release MediaStream, stop FaceMesh processing loop
+                    if (animationDirector && animationDirector.state === 'mocap') {
+                        animationDirector.transitionTo('idle');
+                    }
+                    window.parent.postMessage({ type: 'mocapStatus', active: false }, '*');
+                    return;
+                }
+                if (type === 'getMocapStatus') {
+                    window.parent.postMessage({
+                        type: 'mocapStatus',
+                        active: window._mocapActive || false,
+                    }, '*');
                     return;
                 }
                 if (type === 'setCameraPosition') {
@@ -2956,20 +4710,123 @@
                     return;
                 }
                 if (type === 'setVrmTransform') {
-                    // Character scale/position editor (#86): adjust VRM scale and position.
-                    // Offsets are from the model's natural ground position (y=0).
-                    if (currentVrm?.scene) {
+                    // Character scale/position editor (#86): adjust model scale and position.
+                    // Works for both VRM and GLB models.
+                    const modelScene = currentVrm?.scene || currentGlb;
+                    if (modelScene) {
                         const s = payload?.scale   ?? 1.0;
                         const x = payload?.offsetX ?? 0.0;
                         const y = payload?.offsetY ?? 0.0;
-                        currentVrm.scene.scale.setScalar(s);
-                        currentVrm.scene.position.x = x;
-                        currentVrm.scene.position.y = y;
+                        modelScene.scale.setScalar(s);
+                        modelScene.position.x = x;
+                        modelScene.position.y = y;
                     }
                     return;
                 }
+                // ── GLB-specific commands ─────────────────────────
+                if (type === 'playGlbAnimation') {
+                    // Play a specific embedded animation clip by name or index.
+                    // Uses crossFadeTo for smooth transitions between animations.
+                    // payload: { name?: string, index?: number, loop?: boolean, fadeIn?: number }
+                    if (!currentGlbMixer || currentGlbClips.length === 0) return;
+                    let clip = null;
+                    if (payload?.name) {
+                        clip = currentGlbClips.find(c => c.name === payload.name);
+                    } else if (typeof payload?.index === 'number') {
+                        clip = currentGlbClips[payload.index];
+                    }
+                    if (clip) {
+                        const fadeDuration = payload?.fadeIn ?? 0.3;
+                        const newAction = currentGlbMixer.clipAction(clip);
+                        newAction.loop = payload?.loop === false ? THREE.LoopOnce : THREE.LoopRepeat;
+                        if (payload?.loop === false) newAction.clampWhenFinished = true;
+                        newAction.reset();
+                        if (_currentGlbAction && _currentGlbAction !== newAction && fadeDuration > 0) {
+                            _currentGlbAction.crossFadeTo(newAction, fadeDuration, true);
+                            newAction.play();
+                        } else {
+                            currentGlbMixer.stopAllAction();
+                            newAction.play();
+                        }
+                        _currentGlbAction = newAction;
+                    }
+                    return;
+                }
+                if (type === 'stopGlbAnimation') {
+                    // Fade out and stop the current GLB animation.
+                    // payload: { fadeOut?: number }
+                    if (!currentGlbMixer || !_currentGlbAction) return;
+                    const fadeOut = payload?.fadeOut ?? 0.3;
+                    _currentGlbAction.fadeOut(fadeOut);
+                    setTimeout(() => {
+                        if (_currentGlbAction) {
+                            _currentGlbAction.stop();
+                            _currentGlbAction = null;
+                        }
+                    }, fadeOut * 1000 + 50);
+                    return;
+                }
+                if (type === 'getGlbMorphTargets') {
+                    // Enumerate all morph targets across GLB meshes.
+                    // Returns: { type: 'glbMorphTargetList', targets: [{ meshName, targetName, index, value }] }
+                    const targets = [];
+                    if (currentGlb) {
+                        currentGlb.traverse((child) => {
+                            if (child.isMesh && child.morphTargetDictionary && child.morphTargetInfluences) {
+                                for (const [targetName, idx] of Object.entries(child.morphTargetDictionary)) {
+                                    targets.push({
+                                        meshName: child.name || '(unnamed)',
+                                        targetName,
+                                        index: idx,
+                                        value: child.morphTargetInfluences[idx] || 0,
+                                    });
+                                }
+                            }
+                        });
+                    }
+                    window.parent.postMessage({ type: 'glbMorphTargetList', targets }, '*');
+                    return;
+                }
+                if (type === 'setGlbMorphTarget') {
+                    // Set a morph target value on a GLB mesh.
+                    // payload: { meshName?: string, targetIndex: number, value: number }
+                    // If meshName is omitted, applies to the first mesh that has the targetIndex.
+                    if (!currentGlb) return;
+                    const targetIndex = payload?.targetIndex;
+                    const value = Math.max(0, Math.min(1, payload?.value ?? 0));
+                    const meshName = payload?.meshName;
+                    currentGlb.traverse((child) => {
+                        if (!child.isMesh || !child.morphTargetInfluences) return;
+                        if (meshName && child.name !== meshName) return;
+                        if (typeof targetIndex === 'number' && targetIndex < child.morphTargetInfluences.length) {
+                            child.morphTargetInfluences[targetIndex] = value;
+                        }
+                    });
+                    return;
+                }
+                if (type === 'listGlbAnimations') {
+                    // Return embedded animation clip names for GLB models.
+                    window.parent.postMessage({
+                        type: 'glbAnimationList',
+                        clips: currentGlbClips.map((c, i) => ({
+                            name: c.name || `clip_${i}`,
+                            index: i,
+                            duration: c.duration,
+                        })),
+                    }, '*');
+                    return;
+                }
+                if (type === 'getModelInfo') {
+                    // Report what kind of model is loaded.
+                    window.parent.postMessage({
+                        type: 'modelInfo',
+                        modelType: currentVrm ? 'vrm' : (currentGlb ? 'glb' : 'none'),
+                        hasAnimations: currentGlbClips.length > 0 || !!animationDirector,
+                    }, '*');
+                    return;
+                }
 
-                // Commands that require a loaded VRM
+                // Commands that require a loaded VRM (GLB commands handled above)
                 if (!currentVrm) return;
 
                 if (type === 'nod') {
@@ -2996,7 +4853,9 @@
                         const emotionLayer = animationDirector.getLayer('emotion');
                         if (emotionLayer) emotionLayer.setEmotion(e.data.emotion, e.data.intensity || 0.7);
                     }
-                    _triggerAutoGesture(e.data.emotion);
+                    _triggerAutoAnimation(e.data.emotion);
+                    // Phase 5: emotion-reactive particles
+                    triggerEmotionParticles(e.data.emotion);
                     // B2: auto-reset to neutral after 8s so the expression doesn't freeze permanently
                     if (window._b2ResetTimer) clearTimeout(window._b2ResetTimer);
                     if (e.data.emotion && e.data.emotion !== 'neutral') {
@@ -3015,7 +4874,7 @@
                         const emotionLayer = animationDirector.getLayer('emotion');
                         if (emotionLayer) emotionLayer.setEmotion(emo, inten);
                     }
-                    _triggerAutoGesture(emo);
+                    _triggerAutoAnimation(emo);
                 }
                 else if (type === 'playGesture') {
                     const gesture = payload?.gesture || e.data.gesture;
@@ -3033,12 +4892,13 @@
                 // ── Clip Animation API (AnimationMixer) ──────────────
                 else if (type === 'loadAnimation') {
                     // Load a .glb/.gltf animation clip into the library.
-                    // payload: { url: string, name: string }
+                    // payload: { url: string, name: string, retarget?: boolean }
+                    // When retarget=true, Mixamo bone names are remapped to VRM humanoid bones.
                     // Responds with: { type: 'animationLoaded', name, duration, tracks } or error
                     if (animationDirector && payload?.url && payload?.name) {
                         const cl = animationDirector.getLayer('clip');
                         if (cl) {
-                            cl.loadClip(payload.url, payload.name)
+                            cl.loadClip(payload.url, payload.name, { retarget: !!payload.retarget })
                                 .then(info => {
                                     window.parent.postMessage({ type: 'animationLoaded', ...info }, '*');
                                 })
@@ -3068,6 +4928,58 @@
                         const cl = animationDirector.getLayer('clip');
                         const clips = cl ? cl.listClips() : [];
                         window.parent.postMessage({ type: 'animationList', clips }, '*');
+                    }
+                }
+                else if (type === 'loadAnimationManifest') {
+                    // Load clip metadata from animation manifest into the registry.
+                    // payload: { manifest: Object } (from /api/animations response)
+                    // Responds with: { type: 'animationManifestLoaded', clipCount, emotions }
+                    if (payload?.manifest) {
+                        animationRegistry.loadManifest(payload.manifest);
+                        window.parent.postMessage({
+                            type: 'animationManifestLoaded',
+                            clipCount: animationRegistry.clips.size,
+                            emotions: [...animationRegistry.emotionIndex.keys()],
+                            categories: [...animationRegistry.categoryIndex.keys()],
+                        }, '*');
+                    }
+                }
+                else if (type === 'browseAnimations') {
+                    // Return all registry clips grouped by category.
+                    // Responds with: { type: 'animationBrowse', categories: { idle: [...], ... } }
+                    const categories = {};
+                    for (const [cat, ids] of animationRegistry.categoryIndex) {
+                        categories[cat] = ids.map(id => animationRegistry.clips.get(id)).filter(Boolean);
+                    }
+                    window.parent.postMessage({
+                        type: 'animationBrowse',
+                        categories,
+                        totalClips: animationRegistry.clips.size,
+                    }, '*');
+                }
+                // ── Animation State Machine (Phase 6.5) ──────────────
+                else if (type === 'setAnimationState') {
+                    // Force a specific animation state.
+                    // payload: { state: 'idle'|'talk'|'gesture'|'clip'|'mocap', fadeDuration?: number }
+                    if (animationDirector && payload?.state) {
+                        animationDirector.transitionTo(payload.state, payload.fadeDuration);
+                    }
+                }
+                else if (type === 'getAnimationState') {
+                    // Query current animation state.
+                    // Responds with: { type: 'animationState', state, layers: [...] }
+                    if (animationDirector) {
+                        const layerInfo = animationDirector.layers.map(l => ({
+                            name: l.name,
+                            enabled: l.enabled,
+                            isPlaying: l.isPlaying ?? false,
+                            active: l.active ?? false,
+                        }));
+                        window.parent.postMessage({
+                            type: 'animationState',
+                            state: animationDirector.state,
+                            layers: layerInfo,
+                        }, '*');
                     }
                 }
                 // ── AI-generated motion: apply JSON keyframe data as a runtime clip ──
@@ -3138,6 +5050,105 @@
                             setBlendShape(name, value);
                         });
                     }
+                }
+                // ── Spring Bone Physics API ──────────────────────
+                else if (type === 'getSpringBoneInfo') {
+                    // Return spring bone joint and collider group data.
+                    const sbm = currentVrm?.springBoneManager;
+                    if (!sbm) {
+                        window.parent.postMessage({ type: 'springBoneInfo', joints: [], colliderGroups: [] }, '*');
+                        return;
+                    }
+                    const joints = (sbm.joints || []).map((j, i) => ({
+                        index: i,
+                        boneName: j.bone?.name || `joint_${i}`,
+                        stiffness: j.settings.stiffness,
+                        drag: j.settings.dragForce,
+                        gravityPower: j.settings.gravityPower,
+                        gravityDir: { x: j.settings.gravityDir.x, y: j.settings.gravityDir.y, z: j.settings.gravityDir.z },
+                        hitRadius: j.settings.hitRadius,
+                    }));
+                    const colliderGroups = (sbm.colliderGroups || []).map((cg, i) => ({
+                        index: i,
+                        name: cg.name || `group_${i}`,
+                        colliders: (cg.colliders || []).map(c => ({
+                            type: c.shape?.constructor?.name || 'unknown',
+                            radius: c.shape?.radius || 0,
+                            offset: c.shape?.offset ? { x: c.shape.offset.x, y: c.shape.offset.y, z: c.shape.offset.z } : null,
+                        })),
+                    }));
+                    window.parent.postMessage({ type: 'springBoneInfo', joints, colliderGroups }, '*');
+                }
+                else if (type === 'setSpringBoneParams') {
+                    // Set stiffness/drag/gravityPower on a specific joint.
+                    // payload: { jointIndex: number, stiffness?: number, drag?: number, gravityPower?: number }
+                    const sbm = currentVrm?.springBoneManager;
+                    if (!sbm?.joints) return;
+                    const joint = sbm.joints[payload?.jointIndex];
+                    if (!joint) return;
+                    if (typeof payload.stiffness === 'number') joint.settings.stiffness = payload.stiffness;
+                    if (typeof payload.drag === 'number') joint.settings.dragForce = payload.drag;
+                    if (typeof payload.gravityPower === 'number') joint.settings.gravityPower = payload.gravityPower;
+                }
+                else if (type === 'setWind') {
+                    // Set wind force vector for spring bone simulation.
+                    // payload: { x, y, z, strength } — direction is normalized, strength scales it.
+                    const p = payload || {};
+                    _windForce.x = p.x ?? 0;
+                    _windForce.y = p.y ?? 0;
+                    _windForce.z = p.z ?? 0;
+                    _windForce.strength = p.strength ?? 0;
+                    // If wind was turned off, restore original gravity values
+                    if (_windForce.strength === 0 && _originalGravity.size > 0) {
+                        for (const [joint, orig] of _originalGravity) {
+                            joint.settings.gravityDir.x = orig.x;
+                            joint.settings.gravityDir.y = orig.y;
+                            joint.settings.gravityDir.z = orig.z;
+                            joint.settings.gravityPower = orig.power;
+                        }
+                        _originalGravity.clear();
+                    }
+                }
+                else if (type === 'toggleColliderDebug') {
+                    // Toggle wireframe visualization of spring bone colliders.
+                    _colliderDebugActive = !_colliderDebugActive;
+                    if (_colliderDebugActive) {
+                        // Create debug spheres for each collider
+                        const sbm = currentVrm?.springBoneManager;
+                        if (sbm?.colliderGroups) {
+                            for (const cg of sbm.colliderGroups) {
+                                for (const collider of (cg.colliders || [])) {
+                                    const radius = collider.shape?.radius || 0.05;
+                                    const geo = new THREE.SphereGeometry(radius, 12, 8);
+                                    const mat = new THREE.MeshBasicMaterial({
+                                        color: 0x00ff88, wireframe: true, transparent: true, opacity: 0.5,
+                                    });
+                                    const mesh = new THREE.Mesh(geo, mat);
+                                    // Parent to the collider's bone so it follows animation
+                                    if (collider.bone) {
+                                        collider.bone.add(mesh);
+                                        if (collider.shape?.offset) {
+                                            mesh.position.copy(collider.shape.offset);
+                                        }
+                                    } else {
+                                        scene.add(mesh);
+                                    }
+                                    _colliderDebugMeshes.push({ mesh, parent: collider.bone || scene });
+                                }
+                            }
+                        }
+                        console.log(`[Viewer] Collider debug ON: ${_colliderDebugMeshes.length} colliders`);
+                    } else {
+                        // Remove debug meshes
+                        for (const { mesh, parent } of _colliderDebugMeshes) {
+                            parent.remove(mesh);
+                            mesh.geometry.dispose();
+                            mesh.material.dispose();
+                        }
+                        _colliderDebugMeshes = [];
+                        console.log('[Viewer] Collider debug OFF');
+                    }
+                    window.parent.postMessage({ type: 'colliderDebugState', active: _colliderDebugActive }, '*');
                 }
                 else if (type === 'showFpsOverlay') {
                     // Toggle the in-viewport FPS counter overlay.

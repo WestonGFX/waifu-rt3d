@@ -1,89 +1,23 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Eye, MessageSquare, Search, Download, X, BarChart2, Globe } from 'lucide-react';
 import type { Character } from '../lib/types';
 import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
+import { RELEASE_NOTES } from '../data/changelog';
+
+/** Current app version, sourced from the latest changelog entry. */
+const APP_VERSION = RELEASE_NOTES[0]?.version ?? '0.0.0';
+
+/** Number of rapid clicks required to unlock Developer Mode. */
+const DEV_MODE_CLICK_THRESHOLD = 5;
+/** Time window (ms) in which all clicks must occur. Resets after this. */
+const DEV_MODE_CLICK_TIMEOUT = 3000;
 
 const IMG_EXTS = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i;
 function resolveCharAvatarUrl(name?: string, avatarUrl?: string): string | null {
   if (avatarUrl && IMG_EXTS.test(new URL(avatarUrl, window.location.origin).pathname)) return avatarUrl;
   const clean = (name?.match(/\(([^)]+)\)/)?.[1] ?? name?.split(/\s/)[0] ?? '').toLowerCase().trim();
   return clean ? `/files/images/${clean}_pixel_portrait.png` : null;
-}
-
-// ── Context budget bar ────────────────────────────────────────────────────────
-
-interface ContextBudget {
-  used: number;
-  max: number;
-  percent: number;
-}
-
-/**
- * Resolves the traffic-light color for the context budget bar.
- *
- * @param pct - Usage percentage 0–100.
- * @returns CSS color string.
- */
-function budgetColor(pct: number): string {
-  if (pct > 80) return 'var(--color-error, #f44)';
-  if (pct > 50) return '#f59e0b'; // amber
-  return 'var(--color-success)';
-}
-
-/**
- * Thin 3 px bar that visualises how full the context window is.
- * Fetches `/api/context-budget/{sessionId}` on mount and whenever
- * `sessionId` or `messageCount` changes.
- *
- * @param sessionId   - Active chat session ID. Bar is hidden when null.
- * @param messageCount - Increments after each reply, triggering a re-fetch.
- */
-function ContextBudgetBar({
-  sessionId,
-  messageCount,
-}: {
-  sessionId: number | null | undefined;
-  messageCount: number;
-}) {
-  const [budget, setBudget] = useState<ContextBudget | null>(null);
-
-  useEffect(() => {
-    if (sessionId == null) return;
-    fetch(`/api/context-budget/${sessionId}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (!data) return;
-        // Endpoint returns total_tokens / context_limit / usage_pct
-        const used = data.total_tokens ?? 0;
-        const max  = data.context_limit ?? 0;
-        const pct  = data.usage_pct != null
-          ? Math.round(data.usage_pct)
-          : (max > 0 ? Math.round((used / max) * 100) : 0);
-        setBudget({ used, max, percent: pct });
-      })
-      .catch(() => {});
-  // messageCount is intentionally included so we re-fetch after each reply.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, messageCount]);
-
-  if (!budget || budget.max === 0) return null;
-
-  return (
-    <div
-      style={{ width: '100%', height: 3, backgroundColor: 'var(--color-border)', overflow: 'hidden' }}
-      title={`Context: ${budget.percent}% full — ${budget.used}/${budget.max} tokens`}
-    >
-      <div
-        style={{
-          width: `${Math.min(budget.percent, 100)}%`,
-          height: '100%',
-          backgroundColor: budgetColor(budget.percent),
-          transition: 'width 0.6s ease, background-color 0.4s ease',
-        }}
-      />
-    </div>
-  );
 }
 
 /**
@@ -245,8 +179,8 @@ function RelationshipBar({ charId, messageCount }: { charId: number; messageCoun
 
 /**
  * Chat header with character name, online indicator, idle status, relationship
- * bars, context budget bar, and toolbar buttons (sessions, search, export,
- * analytics, 3D viewer toggle).
+ * bars, and toolbar buttons (sessions, search, export, analytics, 3D viewer
+ * toggle).
  *
  * Cycles through ambient idle phrases every 10 seconds to give the character
  * a sense of life even when no messages are being exchanged.
@@ -316,7 +250,7 @@ export function StatusBar({
   messageCount?: number;
   sessionId?: number | null;
 }) {
-  const { toggleModelPanel, modelPanelOpen, openOverlay } = useAppStore();
+  const { toggleModelPanel, modelPanelOpen, openOverlay, settingsTier, setSettingsTier } = useAppStore();
   const [idlePhrase, setIdlePhrase] = useState(IDLE_PHRASES[0]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -326,6 +260,32 @@ export function StatusBar({
   const [exportOpen, setExportOpen] = useState(false);
   const exportBtnRef = useRef<HTMLButtonElement>(null);
   const exportDropRef = useRef<HTMLDivElement>(null);
+
+  // ── Version click easter egg — 5 taps in 3 s → Developer Mode ──────────
+  const versionClickCount = useRef(0);
+  const versionClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * Handles clicks on the version number string.
+   * After 5 clicks within {@link DEV_MODE_CLICK_TIMEOUT} ms, promotes
+   * settingsTier to 2 (Developer Mode). Resets the counter when the
+   * timeout elapses without reaching the threshold.
+   */
+  const handleVersionClick = useCallback(() => {
+    versionClickCount.current += 1;
+
+    // Clear any existing timeout and start a fresh window
+    if (versionClickTimer.current) clearTimeout(versionClickTimer.current);
+    versionClickTimer.current = setTimeout(() => {
+      versionClickCount.current = 0;
+    }, DEV_MODE_CLICK_TIMEOUT);
+
+    if (versionClickCount.current >= DEV_MODE_CLICK_THRESHOLD && settingsTier < 2) {
+      setSettingsTier(2);
+      versionClickCount.current = 0;
+      if (versionClickTimer.current) clearTimeout(versionClickTimer.current);
+    }
+  }, [settingsTier, setSettingsTier]);
 
   // Close dropdown on outside click.
   useEffect(() => {
@@ -562,10 +522,23 @@ export function StatusBar({
           <Eye size={16} />
           <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.05em', color: 'var(--color-accent)', lineHeight: 1 }}>3D</span>
         </button>
-      </div>
 
-      {/* Feature 2: Context budget bar — 3 px traffic-light strip */}
-      <ContextBudgetBar sessionId={sessionId} messageCount={messageCount} />
+        {/* Version label — 5 rapid clicks unlock Developer Mode */}
+        <span
+          onClick={handleVersionClick}
+          title={settingsTier >= 2 ? 'Developer Mode active' : undefined}
+          style={{
+            fontSize: 10,
+            color: 'var(--color-text-tertiary)',
+            cursor: 'default',
+            userSelect: 'none',
+            flexShrink: 0,
+            letterSpacing: '0.02em',
+          }}
+        >
+          v{APP_VERSION}
+        </span>
+      </div>
 
       {/* Search bar — slides down when open */}
       {searchOpen && (

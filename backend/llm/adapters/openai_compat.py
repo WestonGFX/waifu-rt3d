@@ -35,6 +35,79 @@ class OpenAICompatAdapter(LLMAdapter):
         """OpenAI-compatible APIs generally support function calling."""
         return True
 
+    def supports_vision(self) -> bool:
+        """OpenAI-compat endpoints support vision if the loaded model does.
+
+        Returns True optimistically — the server will return an error if the
+        model doesn't support images, which callers handle gracefully.
+        """
+        return True
+
+    def image_chat(
+        self,
+        messages: list,
+        images: list[dict],
+        model: str,
+        endpoint: str,
+        api_key: str,
+        **kw,
+    ) -> dict:
+        """OpenAI-compatible chat with vision (image_url content blocks).
+
+        Injects base64 images into the last user message as OpenAI-format
+        ``image_url`` content items.  Works with LM Studio + LLaVA, Ollama
+        with vision models, OpenAI GPT-4o, etc.
+
+        Args:
+            messages: OpenAI-style message list.
+            images: List of ``{"data": "base64...", "media_type": "image/jpeg"}`` dicts.
+            model: Model identifier string.
+            endpoint: Base URL of the OpenAI-compatible API.
+            api_key: API key (or None for local servers).
+            **kw: Passed through to ``chat()``.
+
+        Returns:
+            Same shape as ``chat()``.
+
+        Example:
+            >>> adapter = OpenAICompatAdapter()
+            >>> result = adapter.image_chat(
+            ...     messages=[{"role": "user", "content": "What game is this?"}],
+            ...     images=[{"data": "/9j/4AAQ...", "media_type": "image/jpeg"}],
+            ...     model="llava-v1.6", endpoint="http://localhost:1234", api_key="",
+            ... )
+        """
+        if not images:
+            return self.chat(messages, model, endpoint, api_key, **kw)
+
+        # Clone messages and inject images into the last user message
+        enriched = []
+        last_user_idx = -1
+        for i, m in enumerate(messages):
+            if m.get("role") == "user":
+                last_user_idx = i
+
+        for i, m in enumerate(messages):
+            if i == last_user_idx:
+                content_parts = []
+                for img in images:
+                    media_type = img.get("media_type", "image/jpeg")
+                    content_parts.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{media_type};base64,{img['data']}",
+                        },
+                    })
+                content_parts.append({
+                    "type": "text",
+                    "text": m.get("content", ""),
+                })
+                enriched.append({"role": "user", "content": content_parts})
+            else:
+                enriched.append(m)
+
+        return self.chat(enriched, model, endpoint, api_key, **kw)
+
     def chat(self, messages, model, endpoint, api_key, **kw):
         """Non-streaming chat completion via OpenAI-compatible API.
 

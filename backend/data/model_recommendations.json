@@ -1,0 +1,410 @@
+{
+  "version": 1,
+  "last_updated": "2026-03-02",
+  "tiers": [
+    {
+      "id": "vram-8gb",
+      "label": "8GB VRAM (RTX 3070, RTX 4060)",
+      "backend": "gguf",
+      "models": [
+        {
+          "id": "lumimaid-8b",
+          "hf_id": "NeverSleep/Llama-3-Lumimaid-8B-v0.2-OAS",
+          "name": "Lumimaid 8B v0.2",
+          "architecture": "llama3",
+          "quant": "IQ4_XS",
+          "vram_gb": 4.2,
+          "capabilities": ["chat", "roleplay", "emotional"],
+          "speed_estimate": "50-70 tok/s",
+          "quality_tier": "good",
+          "license": "Meta Llama",
+          "model_type": "rp-tuned",
+          "notes": "Best 8B for emotional depth; 40% knowledge + 60% RP blend"
+        },
+        {
+          "id": "lunaris-8b",
+          "hf_id": "Sao10K/L3-8B-Lunaris-v1",
+          "name": "Lunaris 8B v1",
+          "architecture": "llama3",
+          "quant": "Q4_K_M",
+          "vram_gb": 5.0,
+          "capabilities": ["chat", "roleplay", "reasoning"],
+          "speed_estimate": "45-65 tok/s",
+          "quality_tier": "good",
+          "license": "Meta Llama",
+          "model_type": "rp-tuned",
+          "notes": "Balanced creativity with logic; top 10 in community RP tests"
+        },
+        {
+          "id": "rpmax-8b",
+          "hf_id": "ArliAI/RPMax-Llama-3.1-8B-v1.2",
+          "name": "RPMax Llama 3.1 8B v1.2",
+          "architecture": "llama3.1",
+          "quant": "Q4_K_M",
+          "vram_gb": 5.0,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "45-65 tok/s",
+          "quality_tier": "good",
+          "license": "Meta Llama",
+          "model_type": "rp-tuned",
+          "notes": "Diverse curated RP datasets; good at maintaining tone"
+        },
+        {
+          "id": "humanish-rp-8b",
+          "hf_id": "Humanish/Humanish-Roleplay-Llama-3.1-8B",
+          "name": "Humanish Roleplay 8B",
+          "architecture": "llama3.1",
+          "quant": "Q4_K_M",
+          "vram_gb": 5.0,
+          "capabilities": ["chat", "roleplay", "emotional"],
+          "speed_estimate": "45-65 tok/s",
+          "quality_tier": "good",
+          "license": "Meta Llama",
+          "model_type": "rp-tuned",
+          "notes": "DPO-optimized for authentic emotional expression"
+        },
+        {
+          "id": "rpmax-nemo-12b-tight",
+          "hf_id": "ArliAI/Mistral-Nemo-12B-ArliAI-RPMax-v1.2",
+          "name": "ArliAI RPMax Nemo 12B (tight)",
+          "architecture": "mistral-nemo",
+          "quant": "IQ4_XS",
+          "vram_gb": 7.0,
+          "capabilities": ["chat", "roleplay", "tools"],
+          "speed_estimate": "25-35 tok/s",
+          "quality_tier": "very_good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "12B quality squeezed to fit 8GB; use IQ4_XS for tight fit"
+        },
+        {
+          "id": "mistral-7b-instruct",
+          "hf_id": "mistralai/Mistral-7B-Instruct-v0.3",
+          "name": "Mistral 7B Instruct v0.3",
+          "architecture": "mistral",
+          "quant": "Q5_K_M",
+          "vram_gb": 5.5,
+          "capabilities": ["chat", "reasoning", "tools", "summarization"],
+          "speed_estimate": "50-70 tok/s",
+          "quality_tier": "good",
+          "license": "Apache 2.0",
+          "model_type": "instruct",
+          "notes": "Utility model for summarization and tool routing"
+        },
+        {
+          "id": "qwen3-vl-8b-tight",
+          "hf_id": "Qwen/Qwen3-VL-8B",
+          "name": "Qwen3-VL-8B (vision)",
+          "architecture": "qwen3",
+          "quant": "IQ4_XS",
+          "vram_gb": 5.0,
+          "capabilities": ["chat", "vision"],
+          "speed_estimate": "30-45 tok/s",
+          "quality_tier": "good",
+          "license": "Apache 2.0",
+          "model_type": "instruct",
+          "notes": "Vision model — tight fit on 8GB"
+        }
+      ]
+    },
+    {
+      "id": "vram-16gb",
+      "label": "16GB VRAM (RTX 5080, RTX 4090)",
+      "backend": "gguf",
+      "models": [
+        {
+          "id": "rpmax-nemo-12b",
+          "hf_id": "ArliAI/Mistral-Nemo-12B-ArliAI-RPMax-v1.2",
+          "name": "ArliAI RPMax Nemo 12B",
+          "architecture": "mistral-nemo",
+          "quant": "Q4_K_M",
+          "vram_gb": 8.5,
+          "capabilities": ["chat", "roleplay", "tools"],
+          "speed_estimate": "60-80 tok/s",
+          "quality_tier": "very_good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Best all-rounder at this tier; 32K context, fast, minimal repetition"
+        },
+        {
+          "id": "rocinante-x-12b",
+          "hf_id": "TheDrummer/Rocinante-X-12B-v1",
+          "name": "Rocinante-X 12B v1",
+          "architecture": "mistral-nemo",
+          "quant": "Q4_K_M",
+          "vram_gb": 8.5,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "60-80 tok/s",
+          "quality_tier": "very_good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Fun dialogue, robust RP, fresh writing style"
+        },
+        {
+          "id": "captain-bmo-12b",
+          "hf_id": "Nitral-AI/Captain_BMO-12B",
+          "name": "Captain BMO 12B",
+          "architecture": "mistral-nemo",
+          "quant": "Q4_K_M",
+          "vram_gb": 8.5,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "60-80 tok/s",
+          "quality_tier": "very_good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "#1 character consistency in community blind testing"
+        },
+        {
+          "id": "chronos-gold-12b",
+          "hf_id": "elinas/Chronos-Gold-12B-1.0",
+          "name": "Chronos-Gold 12B v1.0",
+          "architecture": "mistral-nemo",
+          "quant": "Q5_K_M",
+          "vram_gb": 9.5,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "50-70 tok/s",
+          "quality_tier": "very_good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Excellent long-context memory; mature narrative tone"
+        },
+        {
+          "id": "cydonia-24b",
+          "hf_id": "TheDrummer/Cydonia-24B-v4.3",
+          "name": "Cydonia 24B v4.3",
+          "architecture": "mistral",
+          "quant": "Q4_K_M",
+          "vram_gb": 14.0,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "40-55 tok/s",
+          "quality_tier": "excellent",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Premium pick; fresh non-repetitive writing, great character consistency"
+        },
+        {
+          "id": "euryale-70b-exl2",
+          "hf_id": "Sao10K/L3.3-70B-Euryale-v2.3",
+          "name": "Euryale 70B v2.3 (EXL2 2.5bpw)",
+          "architecture": "llama3.3",
+          "quant": "EXL2 2.5bpw",
+          "vram_gb": 16.0,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "15-25 tok/s",
+          "quality_tier": "outstanding",
+          "license": "Meta Llama",
+          "model_type": "rp-tuned",
+          "notes": "Best overall RP quality; extreme quantization but still coherent"
+        },
+        {
+          "id": "qwen3.5-35b-a3b",
+          "hf_id": "Qwen/Qwen3.5-35B-A3B",
+          "name": "Qwen3.5-35B-A3B (MoE)",
+          "architecture": "qwen3.5",
+          "quant": "Q4_K_M",
+          "vram_gb": 14.0,
+          "capabilities": ["chat", "reasoning", "thinking", "tools", "code", "multilingual"],
+          "speed_estimate": "100-120 tok/s",
+          "quality_tier": "excellent",
+          "license": "Apache 2.0",
+          "model_type": "instruct",
+          "notes": "MoE: 3B active params, 35B total. Best utility/speed ratio."
+        },
+        {
+          "id": "qwen3-vl-8b",
+          "hf_id": "Qwen/Qwen3-VL-8B",
+          "name": "Qwen3-VL-8B (vision)",
+          "architecture": "qwen3",
+          "quant": "Q4_K_M",
+          "vram_gb": 6.0,
+          "capabilities": ["chat", "vision"],
+          "speed_estimate": "40-60 tok/s",
+          "quality_tier": "good",
+          "license": "Apache 2.0",
+          "model_type": "instruct",
+          "notes": "Vision analysis — game spectator, image understanding"
+        }
+      ]
+    },
+    {
+      "id": "unified-32gb",
+      "label": "32GB Unified RAM (M2 Pro / M3 Max)",
+      "backend": "mlx",
+      "models": [
+        {
+          "id": "cydonia-24b-mlx",
+          "hf_id": "TheDrummer/Cydonia-24B-v4.3",
+          "name": "Cydonia 24B v4.3 (MLX)",
+          "architecture": "mistral",
+          "quant": "int4",
+          "vram_gb": 14.0,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "25-40 tok/s",
+          "quality_tier": "excellent",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Best daily driver for Apple Silicon — fast, high-quality RP"
+        },
+        {
+          "id": "rpmax-nemo-12b-mlx",
+          "hf_id": "ArliAI/Mistral-Nemo-12B-ArliAI-RPMax-v1.2",
+          "name": "ArliAI RPMax Nemo 12B (MLX)",
+          "architecture": "mistral-nemo",
+          "quant": "int4",
+          "vram_gb": 8.0,
+          "capabilities": ["chat", "roleplay", "tools"],
+          "speed_estimate": "40-55 tok/s",
+          "quality_tier": "very_good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Fast on MLX; 32K context"
+        },
+        {
+          "id": "euryale-70b-exl2-mlx",
+          "hf_id": "Sao10K/L3.3-70B-Euryale-v2.3",
+          "name": "Euryale 70B v2.3 (MLX EXL2 2.25bpw)",
+          "architecture": "llama3.3",
+          "quant": "EXL2 2.25bpw",
+          "vram_gb": 20.0,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "5-10 tok/s",
+          "quality_tier": "outstanding",
+          "license": "Meta Llama",
+          "model_type": "rp-tuned",
+          "notes": "Fits in ~20GB; slow but best RP quality for special occasions"
+        },
+        {
+          "id": "qwen3.5-27b-mlx",
+          "hf_id": "Qwen/Qwen3.5-27B",
+          "name": "Qwen3.5-27B (MLX)",
+          "architecture": "qwen3.5",
+          "quant": "int4",
+          "vram_gb": 16.0,
+          "capabilities": ["chat", "reasoning", "thinking", "tools", "multilingual"],
+          "speed_estimate": "20-35 tok/s",
+          "quality_tier": "excellent",
+          "license": "Apache 2.0",
+          "model_type": "instruct",
+          "notes": "General-purpose utility model for Apple Silicon"
+        },
+        {
+          "id": "qwen3-vl-8b-mlx",
+          "hf_id": "Qwen/Qwen3-VL-8B",
+          "name": "Qwen3-VL-8B (MLX, vision)",
+          "architecture": "qwen3",
+          "quant": "int4",
+          "vram_gb": 6.0,
+          "capabilities": ["chat", "vision"],
+          "speed_estimate": "30-45 tok/s",
+          "quality_tier": "good",
+          "license": "Apache 2.0",
+          "model_type": "instruct",
+          "notes": "Vision analysis on Apple Silicon"
+        }
+      ]
+    },
+    {
+      "id": "ultra-compact",
+      "label": "Ultra-Compact (3-4B) — Draft Models & Tight VRAM",
+      "backend": "any",
+      "models": [
+        {
+          "id": "qwen3-4b-rpg-rp",
+          "hf_id": "Chun121/Qwen3-4B-RPG-Roleplay-V2",
+          "name": "Qwen3-4B RPG Roleplay v2",
+          "architecture": "qwen3",
+          "quant": "Q4_K_M",
+          "vram_gb": 3.0,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "80-100 tok/s",
+          "quality_tier": "basic",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Best ultra-compact RP; handles basic scenarios"
+        },
+        {
+          "id": "qwen3.5-3b",
+          "hf_id": "Qwen/Qwen3.5-3B",
+          "name": "Qwen3.5-3B",
+          "architecture": "qwen3.5",
+          "quant": "Q4_K_M",
+          "vram_gb": 2.5,
+          "capabilities": ["chat", "reasoning", "thinking"],
+          "speed_estimate": "120-150 tok/s",
+          "quality_tier": "basic",
+          "license": "Apache 2.0",
+          "model_type": "instruct",
+          "notes": "Excellent draft model for speculative decoding; thinking support"
+        },
+        {
+          "id": "llama-3.2-3b",
+          "hf_id": "meta-llama/Llama-3.2-3B-Instruct",
+          "name": "Llama 3.2 3B Instruct",
+          "architecture": "llama3.2",
+          "quant": "Q4_K_M",
+          "vram_gb": 2.5,
+          "capabilities": ["chat"],
+          "speed_estimate": "120-150 tok/s",
+          "quality_tier": "basic",
+          "license": "Meta Llama",
+          "model_type": "instruct",
+          "notes": "Good draft model for Llama-family speculative decoding"
+        }
+      ]
+    }
+  ],
+  "speculative_decoding_pairs": [
+    {
+      "main": "qwen3.5-35b-a3b",
+      "draft": "qwen3.5-3b",
+      "speedup": "20-40%",
+      "notes": "Same Qwen3.5 family; draft fits in CPU RAM"
+    },
+    {
+      "main": "qwen3.5-27b-mlx",
+      "draft": "qwen3.5-3b",
+      "speedup": "20-35%",
+      "notes": "Both run on Apple Silicon"
+    },
+    {
+      "main": "rpmax-nemo-12b",
+      "draft": "mistral-7b-instruct",
+      "speedup": "10-20%",
+      "notes": "Both Mistral architecture"
+    },
+    {
+      "main": "cydonia-24b",
+      "draft": "mistral-7b-instruct",
+      "speedup": "10-20%",
+      "notes": "Both Mistral architecture"
+    },
+    {
+      "main": "euryale-70b-exl2",
+      "draft": "llama-3.2-3b",
+      "speedup": "15-30%",
+      "notes": "Same Llama family"
+    }
+  ],
+  "routing_defaults": {
+    "chat": {
+      "prefer": "largest_loaded",
+      "model_types": ["rp-tuned", "instruct"],
+      "notes": "Prefer largest loaded RP model with thinking support"
+    },
+    "vision": {
+      "prefer": "lowest_latency",
+      "model_types": ["instruct"],
+      "required_capabilities": ["vision"],
+      "notes": "Prefer local device to minimize image transfer latency"
+    },
+    "summarization": {
+      "prefer": "fastest",
+      "model_types": ["instruct"],
+      "notes": "Background task; offload to weakest available device"
+    },
+    "tts": {
+      "prefer": "lowest_latency",
+      "notes": "Audio latency is critical; prefer local device"
+    }
+  }
+}

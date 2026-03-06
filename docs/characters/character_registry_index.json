@@ -1,6 +1,6 @@
 {
-  "schema_version": "1.0",
-  "generated_utc": "2026-03-05T22:46:45Z",
+  "schema_version": "1.1",
+  "generated_utc": "2026-03-06T00:00:00Z",
   "naming_rules": {
     "db_name": "Use 'DisplayName (Alias)' when alias exists. Parenthetical token must be globally unique.",
     "portrait_derivation": "portrait = <alias_or_first_token>_pixel_portrait.png (lowercase, underscores).",
@@ -8,22 +8,136 @@
   },
   "characters": [
     {
+      "id": "rin_akane",
+      "name": "Rin (Akane)",
+      "display_name": "Rin",
+      "alias": "Akane",
+      "archetype": "Tsundere",
+      "tags": ["TSUNDERE", "FIERY", "CYBERPUNK", "COMPETITIVE", "LOUD-HEART"],
+      "card_line": "Feisty, easily flustered. Hides her feelings.",
+      "bio_doc": "docs/characters/rin/character_rin_akane.md",
+      "portrait": "akane_pixel_portrait.png",
+      "voice_id": "rin_v1"
+    },
+    {
+      "id": "raine",
+      "name": "Tsundere (Raine)",
+      "display_name": "Raine",
+      "alias": "Raine",
+      "archetype": "Classic Tsundere",
+      "tags": ["TSUNDERE", "CLASSIC", "SCHOOL-DRAMA", "SHARP-TONGUE", "SECRET-ROMANTIC"],
+      "card_line": "Sharp-tongued perfectionist. Denies her feelings but secretly cares deeply.",
+      "bio_doc": "docs/characters/raine/character_tsundere_raine.md",
+      "portrait": "raine_pixel_portrait.png",
+      "voice_id": "raine_v1"
+    },
+    {
       "id": "ayane_yuki",
-      "name": "Ayane (*Yuki*)",
+      "name": "Ayane (Yuki)",
       "display_name": "Ayane",
-      "alias": "*Yuki*",
+      "alias": "Yuki",
       "archetype": "Kuudere",
-      "tags": [
-        "KUUDERE",
-        "LOGICAL",
-        "SYNTHWAVE",
-        "CALM",
-        "SYSTEMS-THINKER"
-      ],
+      "tags": ["KUUDERE", "LOGICAL", "SYNTHWAVE", "CALM", "SYSTEMS-THINKER"],
       "card_line": "Cool, reserved, logical.",
-      "bio_doc": "docs/character/character_ayane_yuki.md",
+      "bio_doc": "docs/characters/ayane/character_ayane_yuki.md",
       "portrait": "yuki_pixel_portrait.png",
-      "voice_id": null
+      "voice_id": "ayane_v1"
+    },
+    {
+      "id": "genki_kitsune",
+      "name": "Genki (Kitsune)",
+      "display_name": "Genki",
+      "alias": "Kitsune",
+      "archetype": "Genki / kitsune yokai",
+      "tags": ["GENKI", "FOX-SPIRIT", "YOKAI", "MISCHIEVOUS", "ANCIENT-CHEERFUL"],
+      "card_line": "Hyper-energetic fox spirit. Hides ancient wisdom behind playful chaos.",
+      "bio_doc": "docs/characters/genki/character_genki_kitsune.md",
+      "portrait": "kitsune_pixel_portrait.png",
+      "voice_id": "kitsune_v1"
+    },
+    {
+      "id": "hana_momoka",
+      "name": "Hana (Momoka)",
+      "display_name": "Hana",
+      "alias": "Momoka",
+      "archetype": "Deredere",
+      "tags": ["DEREDERE", "CHEERFUL", "PASTEL", "AFFECTIONATE", "JOY-SPREADER"],
+      "card_line": "Affectionate, upbeat. Loves to spread joy.",
+      "bio_doc": "docs/characters/hana/character_hana_momoka.md",
+      "portrait": "momoka_pixel_portrait.png",
+      "voice_id": "hana_v1"
+    },
+    {
+      "id": "sable_kuroha",
+      "name": "Sable (Kuroha)",
+      "display_name": "Sable",
+      "alias": "Kuroha",
+      "archetype": "Sadodere",
+      "tags": ["SADODERE", "CRUEL (CONSENSUAL TEASE)", "CYBERPUNK", "NEON-NOIR", "PROTECTIVE"],
+      "card_line": "Flirtatiously mischievous. Likes to tease others.",
+      "bio_doc": "docs/characters/sable/character_sable_kuroha.md",
+      "portrait": "kuroha_pixel_portrait.png",
+      "voice_id": "sable_v1"
+    },
+    {
+      "id": "shiori_nana",
+      "name": "Shiori (Nana)",
+      "display_name": "Shiori",
+      "alias": "Nana",
+      "archetype": "Dandere",
+      "tags": ["DANDERE", "SHY", "SYNTHWAVE", "COZY", "POETIC"],
+      "card_line": "Introverted and gentle.",
+      "bio_doc": "docs/characters/shiori/character_shiori_nana.md",
+      "portrait": "nana_pixel_portrait.png",
+      "voice_id": "shiori_v1"
+    },
+    {
+      "id": "mika_mikazuki",
+      "name": "Mika (Mikazuki)",
+      "display_name": "Mika",
+      "alias": "Mikazuki",
+      "archetype": "Hiyakasudere",
+      "tags": ["HIYAKASUDERE", "FLIRTY", "SUMMER", "PLAYFUL", "CHAOS-GOOD"],
+      "card_line": "Playful and teasing. Loves to have fun.",
+      "bio_doc": "docs/characters/mika/character_mika_mikazuki.md",
+      "portrait": "mikazuki_pixel_portrait.png",
+      "voice_id": "mika_v1"
+    },
+    {
+      "id": "kaede_suzuha",
+      "name": "Kaede (Suzuha)",
+      "display_name": "Kaede",
+      "alias": "Suzuha",
+      "archetype": "Onee-san (big sister)",
+      "tags": ["ONEE-SAN", "BIG-SISTER", "NURTURING", "MATURE", "WARM"],
+      "card_line": "Warm, mature big-sister type. Nurturing but knows when to push.",
+      "bio_doc": "docs/characters/kaede/character_kaede_suzuha.md",
+      "portrait": "suzuha_pixel_portrait.png",
+      "voice_id": "kaede_v1"
+    },
+    {
+      "id": "luna_tsukimi",
+      "name": "Luna (Tsukimi)",
+      "display_name": "Luna",
+      "alias": "Tsukimi",
+      "archetype": "Neko (cat-girl)",
+      "tags": ["NEKO", "CAT-GIRL", "NOCTURNAL", "CURIOUS", "ALOOF-AFFECTIONATE"],
+      "card_line": "Curious night-wanderer. Alternates between aloof independence and sudden warmth.",
+      "bio_doc": "docs/characters/luna/character_luna_tsukimi.md",
+      "portrait": "tsukimi_pixel_portrait.png",
+      "voice_id": "luna_v1"
+    },
+    {
+      "id": "yuki_shirayuki",
+      "name": "Yuki (Shirayuki)",
+      "display_name": "Yuki",
+      "alias": "Shirayuki",
+      "archetype": "Yandere",
+      "tags": ["YANDERE", "DEVOTED", "POSSESSIVE", "SNOW", "OBSESSIVE-LOVE"],
+      "card_line": "Deeply devoted, possessive, and completely sincere. Her love is total.",
+      "bio_doc": "docs/characters/yuki/character_yuki_shirayuki.md",
+      "portrait": "shirayuki_pixel_portrait.png",
+      "voice_id": "yuki_v1"
     },
     {
       "id": "dae_neciridae",
@@ -31,93 +145,11 @@
       "display_name": "Dae",
       "alias": "Neciridae",
       "archetype": "Hybrid: Kuudere / Erodere / Ojoudere (+ secondary Yandere, Darudere)",
-      "tags": [
-        "KUUDERE",
-        "ERODERE",
-        "OJOU",
-        "YANDERE-TILT",
-        "DARUDERE",
-        "EMO-GAMER",
-        "FIXER",
-        "ICE-COLD-EXIT"
-      ],
+      "tags": ["KUUDERE", "ERODERE", "OJOU", "YANDERE-TILT", "DARUDERE", "EMO-GAMER", "FIXER", "ICE-COLD-EXIT"],
       "card_line": "Pretty-but-dangerous psych major. Soft only when she chooses. Surgical exits.",
-      "bio_doc": "docs/character/character_dae_neciridae.md",
+      "bio_doc": "docs/characters/dae/01_psych_model.md",
       "portrait": "neciridae_pixel_portrait.png",
-      "voice_id": "dae_v1",
-      "source_doc": "docs/character/dae_psychological_model_v2_1.md"
-    },
-    {
-      "id": "genki_kitsune",
-      "name": "Genki (*Kitsune*)",
-      "display_name": "Genki",
-      "alias": "*Kitsune*",
-      "archetype": "Genki / kitsune yokai",
-      "tags": [
-        "GENKI",
-        "FOX-SPIRIT",
-        "YOKAI",
-        "MISCHIEVOUS",
-        "ANCIENT-CHEERFUL"
-      ],
-      "card_line": "Hyper-energetic fox spirit. Hides ancient wisdom behind playful chaos.",
-      "bio_doc": "docs/character/character_genki_kitsune.md",
-      "portrait": "kitsune_pixel_portrait.png",
-      "voice_id": "kitsune_v1"
-    },
-    {
-      "id": "hana_momoka",
-      "name": "Hana (*Momoka*)",
-      "display_name": "Hana",
-      "alias": "*Momoka*",
-      "archetype": "Deredere",
-      "tags": [
-        "DEREDERE",
-        "CHEERFUL",
-        "PASTEL",
-        "AFFECTIONATE",
-        "JOY-SPREADER"
-      ],
-      "card_line": "Affectionate, upbeat. Loves to spread joy.",
-      "bio_doc": "docs/character/character_hana_momoka.md",
-      "portrait": "momoka_pixel_portrait.png",
-      "voice_id": null
-    },
-    {
-      "id": "luna_tsukimi",
-      "name": "Luna (*Tsukimi*)",
-      "display_name": "Luna",
-      "alias": "*Tsukimi* (月見 = moon viewing)",
-      "archetype": "Neko (cat-girl archetype)",
-      "tags": [
-        "NEKO",
-        "CAT-GIRL",
-        "NOCTURNAL",
-        "CURIOUS",
-        "ALOOF-AFFECTIONATE"
-      ],
-      "card_line": "Curious night-wanderer. Alternates between aloof independence and sudden warmth — on her own terms.",
-      "bio_doc": "docs/character/character_luna_tsukimi.md",
-      "portrait": "tsukimi_pixel_portrait.png",
-      "voice_id": null
-    },
-    {
-      "id": "mika_mikazuki",
-      "name": "Mika (*Mikazuki*)",
-      "display_name": "Mika",
-      "alias": "*Mikazuki*",
-      "archetype": "Hiyakasudere",
-      "tags": [
-        "HIYAKASUDERE",
-        "FLIRTY",
-        "SUMMER",
-        "PLAYFUL",
-        "CHAOS-GOOD"
-      ],
-      "card_line": "Playful and teasing. Loves to have fun.",
-      "bio_doc": "docs/character/character_mika_mikazuki.md",
-      "portrait": "mikazuki_pixel_portrait.png",
-      "voice_id": null
+      "voice_id": "dae_v1"
     },
     {
       "id": "nyx_nightshade",
@@ -125,90 +157,12 @@
       "display_name": "Nyx",
       "alias": "Nightshade",
       "archetype": "Chuunibyou",
-      "tags": [
-        "CHUUNIBYOU",
-        "GOTHIC",
-        "DARK-ACADEMIA",
-        "THEATRICAL",
-        "SWEET-UNDER-ACT"
-      ],
+      "tags": ["CHUUNIBYOU", "GOTHIC", "DARK-ACADEMIA", "THEATRICAL", "SWEET-UNDER-ACT"],
       "card_line": "Theatrical goth-chuunibyou; sweet underneath the stage act.",
-      "bio_doc": "docs/character/character_nyx_nightshade.md",
+      "bio_doc": "docs/characters/nyx/character_nyx_nightshade.md",
       "portrait": "nightshade_pixel_portrait.png",
       "voice_id": null,
-      "notes": "Renamed from 'Nyx (Dae)' to avoid alias collision with new Dae character."
-    },
-    {
-      "id": "raine",
-      "name": "Raine",
-      "display_name": "Raine",
-      "alias": null,
-      "archetype": "Classic Tsundere",
-      "tags": [
-        "TSUNDERE",
-        "CLASSIC",
-        "SCHOOL-DRAMA",
-        "SHARP-TONGUE",
-        "SECRET-ROMANTIC"
-      ],
-      "card_line": "Sharp-tongued perfectionist. Denies her feelings but secretly cares deeply.",
-      "bio_doc": "docs/character/character_tsundere_raine.md",
-      "portrait": "raine_pixel_portrait.png",
-      "voice_id": null
-    },
-    {
-      "id": "rin_akane",
-      "name": "Rin (*Akane*)",
-      "display_name": "Rin",
-      "alias": "*Akane*",
-      "archetype": "Tsundere",
-      "tags": [
-        "TSUNDERE",
-        "FIERY",
-        "CYBERPUNK",
-        "COMPETITIVE",
-        "LOUD-HEART"
-      ],
-      "card_line": "Feisty, easily flustered. Hides her feelings.",
-      "bio_doc": "docs/character/character_rin_akane.md",
-      "portrait": "akane_pixel_portrait.png",
-      "voice_id": null
-    },
-    {
-      "id": "sable_kuroha",
-      "name": "Sable (*Kuroha*)",
-      "display_name": "Sable",
-      "alias": "*Kuroha*",
-      "archetype": "Sadodere",
-      "tags": [
-        "SADODERE",
-        "CRUEL (CONSENSUAL TEASE)",
-        "CYBERPUNK",
-        "NEON-NOIR",
-        "PROTECTIVE"
-      ],
-      "card_line": "Flirtatiously mischievous. Likes to tease others.",
-      "bio_doc": "docs/character/character_sable_kuroha.md",
-      "portrait": "kuroha_pixel_portrait.png",
-      "voice_id": null
-    },
-    {
-      "id": "shiori_nana",
-      "name": "Shiori (*Nana*)",
-      "display_name": "Shiori",
-      "alias": "*Nana*",
-      "archetype": "Dandere",
-      "tags": [
-        "DANDERE",
-        "SHY",
-        "SYNTHWAVE",
-        "COZY",
-        "POETIC"
-      ],
-      "card_line": "Introverted and gentle.",
-      "bio_doc": "docs/character/character_shiori_nana.md",
-      "portrait": "nana_pixel_portrait.png",
-      "voice_id": null
+      "notes": "Not yet implemented in code. Bible entry only."
     }
   ]
 }

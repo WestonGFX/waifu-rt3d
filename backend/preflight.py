@@ -2144,6 +2144,62 @@ def migrate_to_v38(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v39(con: sqlite3.Connection) -> bool:
+    """Insert new character 'Dae (Neciridae)' into the characters table (v39).
+
+    Adds the 12th built-in character: Dae, a hybrid kuudere/erodere/ojoudere
+    emo gamer psych major. Her parenthetical alias 'Neciridae' is globally
+    unique and derives to ``neciridae_pixel_portrait.png``.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v39+.
+
+    Example:
+        >>> if migrate_to_v39(con):
+        ...     logger.info("Dae (Neciridae) added to roster")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 39:
+        return False
+
+    try:
+        logger.info("Applying schema v39 migration (add Dae (Neciridae))...")
+
+        # Import Dae's system prompt from init_personas
+        import sys
+        sys.path.insert(0, str(ROOT / "tools"))
+        from init_personas import DAE_SYSTEM_PROMPT
+
+        # Insert only if not already present (idempotent)
+        existing = con.execute(
+            "SELECT id FROM characters WHERE name = 'Dae (Neciridae)'"
+        ).fetchone()
+
+        if existing:
+            logger.info(f"  'Dae (Neciridae)' already exists (id={existing[0]}), skipping insert")
+        else:
+            con.execute(
+                """INSERT INTO characters
+                   (name, system_prompt, avatar_url, voice_id, tts_pitch, tts_rate)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                ("Dae (Neciridae)", DAE_SYSTEM_PROMPT,
+                 "/files/avatars/Kitsune.vrm", "dae_v1", 0.85, 0.95),
+            )
+            logger.info("  Inserted new character 'Dae (Neciridae)'")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (39)")
+        con.commit()
+        logger.info("✅ Schema v39 migration complete (Dae (Neciridae) added)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v39 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -2446,21 +2502,28 @@ def ensure_db():
             if migrate_to_v38(con):
                 version = 38
 
+        # Upgrade from v38 to v39 (Add Dae (Neciridae))
+        if version < 39:
+            logger.info("Upgrading database schema from v38 to v39...")
+            logger.info("  - Adding new character Dae (Neciridae)")
+            if migrate_to_v39(con):
+                version = 39
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 38:
-            raise RuntimeError(f"Database initialization failed: Expected v38, got v{final_version}")
+        if final_version < 39:
+            raise RuntimeError(f"Database initialization failed: Expected v39, got v{final_version}")
 
-        if final_version > 38:
-            logger.warning(f"Database is newer than application (v{final_version} > v38). Some features might be unused.")
+        if final_version > 39:
+            logger.warning(f"Database is newer than application (v{final_version} > v39). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v38 renames Nyx→Ayane)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v39 adds Dae)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

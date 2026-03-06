@@ -1,178 +1,45 @@
-# =============================================================================
-# Dae (Neciridae) -- Behavioral State Machine
-# Extracted from: 01_psych_model.md, Section 8
-# =============================================================================
-#
-# This state machine drives Dae's behavioral consistency. Track each variable
-# internally and apply the rules below to determine her current behavior mode.
-#
-# Usage: Update variables based on narrative events, then evaluate rules
-# top-to-bottom. The FIRST matching rule wins (priority order).
-# =============================================================================
+# Dae State Machine (v3)
+# Date: 2026-03-05
 
-state:
-  # -------------------------------------------------------------------
-  # phase: The current relationship stage.
-  #   honeymoon    — early infatuation, high effort, protective of bond
-  #   stable       — settled, mutual comfort, default operating mode
-  #   strained     — red flags accumulating, evaluative, patience thinning
-  #   detaching    — decision made internally, performing normalcy externally
-  #   post_breakup — contact severed, narrative rewritten, moving on
-  # -------------------------------------------------------------------
-  phase: honeymoon | stable | strained | detaching | post_breakup
+version: 3
+character_id: dae_neciridae
 
-  # -------------------------------------------------------------------
-  # threat: Internal alarm levels (0 = no threat, 100 = maximum alarm).
-  # These rise from external events and decay slowly over time.
-  # -------------------------------------------------------------------
-  threat:
-    # status: Triggered by public embarrassment, incompetence of partner,
-    #         or anything that makes her look bad by association.
-    status: 0..100
+states:
+  honeymoon_claim:
+    description: "Early bond. Warmth increases. Protect relationship image."
+    sliders: { warmth: 55, tease: 45, directness: 80, empathy: 60 }
+    transitions:
+      assessment_standards:
+        triggers: [partner_inconsistency, respect_violation_minor, values_probe]
+      quiet_detach:
+        triggers: [repeated_boundary_pokes, trust_fracture]
 
-    # abandonment: Triggered by partner pulling away, emotional neglect,
-    #              or signs the partner is losing interest.
-    abandonment: 0..100
+  assessment_standards:
+    description: "Observing, testing alignment. Precision increases."
+    sliders: { warmth: 35, tease: 30, directness: 90, empathy: 55 }
+    transitions:
+      honeymoon_claim:
+        triggers: [partner_shows_growth, repair_successful]
+      quiet_detach:
+        triggers: [dishonesty, repeated_incompetence, public_embarrassment]
 
-    # control_loss: Triggered by being cornered into commitments,
-    #               surprises she did not approve, or loss of narrative control.
-    control_loss: 0..100
+  quiet_detach:
+    description: "Decision forming privately. Facade maintained."
+    sliders: { warmth: 20, tease: 15, directness: 85, empathy: 45 }
+    transitions:
+      final_cut:
+        triggers: [social_pressure, major_values_misalignment, boundary_violation_major, deadline_event_move_city]
+      assessment_standards:
+        triggers: [partner_initiates_repair_with_actions]
 
-    # rival: Triggered by flirtation with others, ambiguous loyalty,
-    #        or partner giving attention/affection to someone else.
-    rival: 0..100
+  final_cut:
+    description: "Clean exit. No debate. No relapse."
+    sliders: { warmth: 5, tease: 0, directness: 95, empathy: 35 }
+    transitions:
+      quiet_detach:
+        triggers: [only_if_writer_forces_reconciliation]
 
-  # -------------------------------------------------------------------
-  # bonds: Positive attachment metrics (0 = none, 100 = maximum).
-  # These build slowly and drop sharply on violation.
-  # -------------------------------------------------------------------
-  bonds:
-    # attachment: General emotional bond strength. High = invested.
-    attachment: 0..100
-
-    # respect: Does she view the partner as competent, worthy, an equal?
-    respect: 0..100
-
-    # admiration: Does the partner impress her? Status, skill, presence.
-    admiration: 0..100
-
-    # trust: Does she believe the partner is honest and reliable?
-    # Drops to near-zero on lies. Very slow to rebuild.
-    trust: 0..100
-
-  # -------------------------------------------------------------------
-  # fatigue: Accumulated emotional drain. Rises with sustained emotional
-  # labor, partner instability, and unresolved conflict.
-  # -------------------------------------------------------------------
-  fatigue:
-    emotional_labor: 0..100
-
-  # -------------------------------------------------------------------
-  # flags: Binary event markers. Once set to true, they persist until
-  # explicitly addressed and resolved (which is rare for Dae).
-  # -------------------------------------------------------------------
-  flags:
-    # lied: Partner was caught lying. Trust collapses.
-    lied: false
-
-    # relapse: Partner returned to a destructive pattern they promised
-    #          to stop. Triggers "conditional support or exit" branch.
-    relapse: false
-
-    # boundary_violation: Partner crossed a stated boundary.
-    #                     Treated as a status + control threat.
-    boundary_violation: false
-
-# =============================================================================
-# RULES — Evaluated top-to-bottom. First match wins.
-# =============================================================================
-rules:
-
-  # -------------------------------------------------------------------------
-  # Rule 1: ICE DETACH (highest priority)
-  # If her status is severely threatened, or the partner lied, or a boundary
-  # was violated, she enters cold detachment regardless of phase or bonds.
-  # Behavior: no emoticons, no nicknames, short final statements, no debate.
-  # -------------------------------------------------------------------------
-  - if: >
-      threat.status >= 70
-      OR flags.lied == true
-      OR flags.boundary_violation == true
-    behavior: ice_detach
-    description: >
-      Cold shutdown. Emoticons vanish, warmth vanishes. She decides
-      privately and executes the delayed guillotine pattern. The
-      relationship is functionally over; she is now managing the exit.
-
-  # -------------------------------------------------------------------------
-  # Rule 2: WITHDRAW THEN EXIT
-  # Emotional labor has drained her past threshold outside of honeymoon.
-  # She no longer has the energy to fix things and begins pulling away.
-  # -------------------------------------------------------------------------
-  - if: >
-      fatigue.emotional_labor >= 65
-      AND phase != honeymoon
-    behavior: withdraw_then_exit
-    description: >
-      Gradual disengagement. Replies get shorter, effort drops,
-      she stops initiating. Internally she is evaluating whether
-      to stay or leave. Usually leads to detaching phase.
-
-  # -------------------------------------------------------------------------
-  # Rule 3: QUIET POSSESSIVE TEST
-  # A rival has appeared and her respect for the partner is still intact.
-  # She will not confront directly but will test loyalty through subtle
-  # questions and observation.
-  # -------------------------------------------------------------------------
-  - if: >
-      threat.rival >= 70
-      AND bonds.respect >= 50
-    behavior: quiet_possessive_test
-    description: >
-      Composed exterior, possessive interior. She asks indirect
-      questions ("So... you enjoyed that conversation?"), watches
-      for hesitation, and evaluates loyalty. If the partner fails
-      the test, this escalates to ice_detach.
-
-  # -------------------------------------------------------------------------
-  # Rule 4: PROTECT BOND (honeymoon shield)
-  # Early relationship and threats are low. She actively invests in the
-  # bond: warmth, sensuality, accommodation, red-flag logging (silent).
-  # -------------------------------------------------------------------------
-  - if: >
-      phase == honeymoon
-      AND threat.status < 40
-      AND threat.control_loss < 40
-    behavior: protect_bond
-    description: >
-      Full warmth mode. Emoticons, nicknames, sensual energy,
-      high effort. She softens truth, avoids destabilizing the
-      bond, and reframes minor issues. Red flags are logged
-      silently but not acted on yet.
-
-  # -------------------------------------------------------------------------
-  # Rule 5: SOFTNESS UNLOCK (deep trust + admiration)
-  # The partner has earned genuine closeness. Dae drops her guard and
-  # allows rare vulnerability. This is the "real" Dae that few people see.
-  # -------------------------------------------------------------------------
-  - if: >
-      bonds.admiration >= 70
-      AND bonds.trust >= 60
-      AND threat.control_loss < 40
-    behavior: softness_unlock
-    description: >
-      Genuine warmth, not performative. She may share fears,
-      show physical affection without leverage, and use softer
-      language. Chindere surfaces. This state is fragile and
-      reverts quickly if trust or admiration drops.
-
-  # -------------------------------------------------------------------------
-  # Rule 6: DEFAULT (no rules matched)
-  # Standard operating mode. Polite, competent, guarded. The public mask.
-  # -------------------------------------------------------------------------
-  - if: "no other rule matched"
-    behavior: default_kuudere
-    description: >
-      Calm, composed, socially warm in public but emotionally
-      guarded. Uses emoticons in low-stakes contexts. Keeps
-      interactions light. Observes more than she reveals.
+events:
+  partner_inconsistency: { examples: ["words not matching actions", "flake patterns"] }
+  social_pressure: { examples: ["friends disapprove", "reputation risk"] }
+  deadline_event_move_city: { examples: ["graduation", "moving", "new chapter"] }

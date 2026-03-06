@@ -6,8 +6,23 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for f in $CLAUDE_EDITED_FILES; do if [[ \"$f\" == *.py ]]; then python -m py_compile \"$f\" || echo \"SYNTAX ERROR in $f\"; fi; done",
+            "command": "for f in $CLAUDE_EDITED_FILES; do if [[ \"$f\" == *.py ]]; then .venv/bin/python -m py_compile \"$f\" || echo \"SYNTAX ERROR in $f\"; fi; done",
             "description": "Auto-check Python syntax after every edit"
+          },
+          {
+            "type": "command",
+            "command": "for f in $CLAUDE_EDITED_FILES; do if [[ \"$f\" == *.ts || \"$f\" == *.tsx ]]; then cd frontends/sakura && npx tsc --project tsconfig.app.json --noEmit --pretty 2>&1 | tail -20; break; fi; done",
+            "description": "Auto-check TypeScript types after every edit"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Before ending, update CURRENT_STATUS.md with: current phase, last completed item, next 3 tasks, any failing tests, current branch, and timestamp."
           }
         ]
       }

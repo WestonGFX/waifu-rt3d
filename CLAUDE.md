@@ -48,3 +48,31 @@ Do NOT auto-update on every commit. Only when the above triggers apply.
 ## Bug Fixing
 
 When fixing bugs, limit changes to the minimum necessary to resolve the issue. Do not refactor surrounding code or make "improvements" unless explicitly asked. Large change sets introduce regressions in this codebase.
+
+## Tech Stack
+
+TypeScript, JavaScript, Python, HTML/CSS, Three.js/VRM, Electron, Vite, React 19, Zustand, FastAPI, SQLite, Playwright. GPU: RTX 5080 16GB.
+
+## No-Plan-Mode Rule
+
+NEVER enter plan mode unless the user explicitly says "plan" or "design". If a plan file already exists, execute it — do not rewrite it. If no plan exists, implement directly from the request. Writing code is always the correct first action.
+
+## Smoke Test Before Completion
+
+Before presenting work as done, run both checks:
+1. `.venv/bin/python -m pytest backend/tests/ -q --tb=line`
+2. `cd frontends/sakura && npx tsc --project tsconfig.app.json --noEmit`
+
+Fix any failures before reporting completion. Do NOT claim "all tests pass" without actually running them.
+
+## Commit Checkpoints
+
+Commit after each completed feature or sub-task. Do NOT batch multiple features into one commit. Small, atomic commits prevent work loss on interruption and make rollback easier.
+
+## Plan File Safety
+
+NEVER overwrite or replace plan files. Always READ the existing plan first, then APPEND new sections at the bottom. Completed phases should be marked done but never deleted — they serve as historical records.
+
+## Hypothesis Limit
+
+When debugging, commit to ONE hypothesis and test it before trying another. Do NOT cycle through multiple theories without running code. If 3 hypotheses fail, STOP and present findings to the user as a table. Never explore a 4th hypothesis without user approval.

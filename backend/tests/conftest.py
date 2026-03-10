@@ -113,7 +113,10 @@ def _create_schema(db_path: Path) -> None:
                 mood_intensity REAL DEFAULT 0.8,
                 day_off INTEGER DEFAULT 0,
                 affinity REAL DEFAULT 0.0,
-                emotion_portraits_mode INTEGER DEFAULT 0
+                emotion_portraits_mode INTEGER DEFAULT 0,
+                bible_path TEXT,
+                bible_enabled INTEGER DEFAULT 0,
+                bible_sections TEXT
             );
 
             CREATE TABLE IF NOT EXISTS character_relationships (
@@ -161,6 +164,8 @@ def _create_schema(db_path: Path) -> None:
 
 def _install_fake_llm(monkeypatch: pytest.MonkeyPatch) -> None:
     llm_pkg = types.ModuleType("backend.llm")
+    llm_pkg.__path__ = []  # Make it act as a package so submodule imports work
+
     registry_mod = types.ModuleType("backend.llm.registry")
 
     class StubAdapter:
@@ -176,8 +181,50 @@ def _install_fake_llm(monkeypatch: pytest.MonkeyPatch) -> None:
 
     registry_mod.get_client = get_client
 
+    # Stub submodules that the chat endpoint imports inline
+    importance_mod = types.ModuleType("backend.llm.importance_scorer")
+    importance_mod.score_message = lambda text, role, **kw: 0.5
+
+    token_counter_mod = types.ModuleType("backend.llm.token_counter")
+    token_counter_mod.count_tokens = lambda text, model=None: len(text) // 4
+    token_counter_mod.count_messages_tokens = lambda msgs, model=None: sum(len(m.get("content", "")) // 4 for m in msgs)
+    token_counter_mod.is_tiktoken_available = lambda: False
+
+    context_assembler_mod = types.ModuleType("backend.llm.context_assembler")
+
+    class _StubAssembledContext:
+        """Minimal stub for AssembledContext dataclass."""
+        def __init__(self, **kwargs):
+            self.messages = kwargs.get("messages", [{"role": "system", "content": "stub"}])
+            self.token_count = kwargs.get("token_count", 10)
+            self.budget_summary = kwargs.get("budget_summary", {})
+            self.history_count = kwargs.get("history_count", 0)
+            self.summaries_included = kwargs.get("summaries_included", 0)
+            self.high_importance_kept = kwargs.get("high_importance_kept", 0)
+
+    def _stub_assemble_context(**kwargs):
+        """Return a minimal assembled context with the user message."""
+        user_text = kwargs.get("user_text", "")
+        return _StubAssembledContext(
+            messages=[
+                {"role": "system", "content": "stub system prompt"},
+                {"role": "user", "content": user_text},
+            ],
+        )
+
+    context_assembler_mod.assemble_context = _stub_assemble_context
+    context_assembler_mod.AssembledContext = _StubAssembledContext
+
+    router_mod = types.ModuleType("backend.llm.router")
+    router_mod.get_router = lambda cfg=None: None
+    router_mod.ModelRouter = type("ModelRouter", (), {})
+
     monkeypatch.setitem(sys.modules, "backend.llm", llm_pkg)
     monkeypatch.setitem(sys.modules, "backend.llm.registry", registry_mod)
+    monkeypatch.setitem(sys.modules, "backend.llm.importance_scorer", importance_mod)
+    monkeypatch.setitem(sys.modules, "backend.llm.token_counter", token_counter_mod)
+    monkeypatch.setitem(sys.modules, "backend.llm.context_assembler", context_assembler_mod)
+    monkeypatch.setitem(sys.modules, "backend.llm.router", router_mod)
 
 
 @pytest.fixture()

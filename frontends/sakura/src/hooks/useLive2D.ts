@@ -4,6 +4,7 @@ import { Live2DModel } from 'pixi-live2d-display';
 import { useViewerStore } from '../stores/viewerStore';
 
 // Register the Live2D display module with PIXI's ticker for automatic updates
+// @ts-expect-error pixi.js bundles its own @pixi/ticker that conflicts with pixi-live2d-display's expected type
 Live2DModel.registerTicker(PIXI.Ticker);
 
 // ── Types ───────────────────────────────────────────────────────────────────────
@@ -108,7 +109,7 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
     return () => {
       // Cleanup: destroy PIXI app and remove canvas
       if (modelRef.current) {
-        app.stage.removeChild(modelRef.current);
+        app.stage.removeChild(modelRef.current as any);
         modelRef.current.destroy();
         modelRef.current = null;
       }
@@ -157,7 +158,7 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
 
     // Remove previous model
     if (modelRef.current) {
-      app.stage.removeChild(modelRef.current);
+      app.stage.removeChild(modelRef.current as any);
       modelRef.current.destroy();
       modelRef.current = null;
       setIsLoaded(false);
@@ -175,7 +176,7 @@ export function useLive2D({ container, width, height }: UseLive2DOptions): UseLi
       }
 
       modelRef.current = model;
-      app.stage.addChild(model);
+      app.stage.addChild(model as any);
       fitModelToScreen();
       setIsLoaded(true);
 

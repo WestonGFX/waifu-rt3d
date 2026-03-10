@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Search, Download, Loader2, Trash2, Edit3, Box,
-  Globe, HardDrive, ExternalLink, CheckCircle, AlertCircle
+  Globe, HardDrive, CheckCircle, AlertCircle
 } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
@@ -45,14 +45,14 @@ const FORMAT_COLORS: Record<string, { bg: string; text: string }> = {
  * 4. On completion, refreshes local library and offers character assignment
  */
 export function ModelBrowser() {
-  const { activeOverlay, closeOverlay, characters, activeCharacter } = useAppStore();
+  const { activeOverlay, closeOverlay, characters } = useAppStore();
   const open = activeOverlay === 'modelbrowser';
 
   // ── Tab & search state ──
   const [tab, setTab] = useState<SourceTab>('cc0');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ── Data state ──
   const [models, setModels] = useState<BrowseableModel[]>([]);
@@ -90,7 +90,7 @@ export function ModelBrowser() {
       if (tab === 'local') {
         // Local models come from the 3D model scan endpoint
         const res = await api.scan3dModels();
-        const localModels: BrowseableModel[] = (res.models || [])
+        const localModels: BrowseableModel[] = (res || [])
           .filter((m: { name: string; url: string }) =>
             !debouncedQuery || m.name.toLowerCase().includes(debouncedQuery.toLowerCase())
           )

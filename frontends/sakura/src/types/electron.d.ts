@@ -8,7 +8,7 @@
  * Use `isElectronApp()` from `lib/electron.ts` to check at runtime.
  */
 
-interface ElectronAPI {
+export interface ElectronAPI {
   /** Whether we're running inside Electron. */
   isElectron: true;
 

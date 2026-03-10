@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Wind, Eye, EyeOff, RotateCcw } from 'lucide-react';
 import { useViewerStore } from '../stores/viewerStore';
 
@@ -107,8 +107,6 @@ export function SpringBonePanel({ isOpen }: SpringBonePanelProps) {
   const [windStrength, setWindStrength] = useState(0.5);
   const [colliderDebug, setColliderDebug] = useState(false);
   const [selectedJoint, setSelectedJoint] = useState<number | null>(null);
-  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   // Listen for spring bone info responses from the viewer
   useEffect(() => {
     const handler = (e: MessageEvent) => {

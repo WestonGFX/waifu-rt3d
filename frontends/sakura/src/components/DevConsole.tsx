@@ -334,7 +334,7 @@ export function DevConsole() {
         {activeTab === 'requests' && <RequestsTab listRef={requestListRef} />}
         {activeTab === 'events' && <EventsTab listRef={eventListRef} />}
         {activeTab === 'performance' && <PerformanceTab />}
-        {activeTab === 'prompt' && <PromptInspector />}
+        {activeTab === 'prompt' && <PromptInspector sessionId={useChatStore.getState().sessionId} />}
         {activeTab === 'config' && <RawConfigEditor />}
       </div>
     </div>

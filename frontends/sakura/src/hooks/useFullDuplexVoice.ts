@@ -94,7 +94,7 @@ const LEVEL_UPDATE_MS = 50;
  * });
  */
 export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullDuplexVoiceReturn {
-  const { sessionId, charId, onTranscript, onAIToken, onAIResponse, onError } = options;
+  const { sessionId, charId } = options;
 
   const [state, setState] = useState<VoiceSessionState>('disconnected');
   const [inputLevel, setInputLevel] = useState(0);

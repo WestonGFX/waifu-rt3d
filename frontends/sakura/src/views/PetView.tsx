@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
 import { PetSpeechBubble } from '../components/PetSpeechBubble';
@@ -92,7 +92,6 @@ export function PetView() {
 
   const [showBubble, setShowBubble] = useState(false);
   const [latestMessage, setLatestMessage] = useState('');
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const dragRef = useRef<DragState>({ isDragging: false, startX: 0, startY: 0 });
   const lastTransparentRef = useRef(true);
@@ -592,7 +591,7 @@ function loadCubismCore(): Promise<void> {
  * loading/error overlays — the pet window is a transparent overlay where
  * UI chrome would be distracting. The PIXI app renders with backgroundAlpha: 0.
  */
-function Live2DPetCanvas({ charId }: { charId: number }) {
+function Live2DPetCanvas({ charId: _charId }: { charId: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const hasLoaded = useRef<string | null>(null);

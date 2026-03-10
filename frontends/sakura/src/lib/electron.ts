@@ -6,6 +6,8 @@
  * script exposes `window.electronAPI` — if it exists, we're in Electron.
  */
 
+import type { ElectronAPI } from '../types/electron';
+
 /**
  * Check if the app is running inside Electron.
  * Safe to call in any environment — returns false in normal browsers.

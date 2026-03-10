@@ -58,9 +58,6 @@ function resolveModelUrl(
   return null;
 }
 
-/** Backward-compat alias. */
-const resolveVrmUrl = resolveModelUrl;
-
 /* ═══════════════════════════════════════════════════════════════════════
    Expression Editor Overlay
    ═══════════════════════════════════════════════════════════════════════ */

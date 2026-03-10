@@ -16,7 +16,6 @@ import { useViewerStore } from '../stores/viewerStore';
 import type {
   SpectatorConfig,
   SpectatorFrequency,
-  SpectatorMode,
   SpectatorReaction,
   SpectatorState,
 } from '../lib/types';
@@ -98,7 +97,7 @@ export interface UseGameSpectatorReturn {
  * ```
  */
 export function useGameSpectator(options: UseGameSpectatorOptions): UseGameSpectatorReturn {
-  const { charId, onReaction, onError } = options;
+  const { onReaction, onError } = options;
 
   const [state, setState] = useState<SpectatorState>('idle');
   const [reactions, setReactions] = useState<SpectatorReaction[]>([]);
@@ -110,7 +109,7 @@ export function useGameSpectator(options: UseGameSpectatorOptions): UseGameSpect
   const prevHistogramRef = useRef<number[] | null>(null);
   const configRef = useRef<SpectatorConfig | null>(null);
 
-  const { setExpression } = useViewerStore();
+  const { dispatchExpression } = useViewerStore();
 
   /**
    * Compute a simple brightness histogram (8 bins) from image data
@@ -166,11 +165,10 @@ export function useGameSpectator(options: UseGameSpectatorOptions): UseGameSpect
     video.muted = true;
 
     // Use ImageCapture API if available (more efficient)
-    // @ts-expect-error ImageCapture may not be in TS types
     if (typeof ImageCapture !== 'undefined') {
-      // @ts-expect-error ImageCapture may not be in TS types
       const capture = new ImageCapture(track);
-      capture.grabFrame().then((bitmap: ImageBitmap) => {
+      // grabFrame() exists in the Web API but may be missing from TS lib types
+      (capture as any).grabFrame().then((bitmap: ImageBitmap) => {
         // Scale to target width
         const scale = Math.min(1, TARGET_WIDTH / bitmap.width);
         canvas.width = Math.round(bitmap.width * scale);
@@ -223,7 +221,7 @@ export function useGameSpectator(options: UseGameSpectatorOptions): UseGameSpect
         onReaction?.(reaction);
 
         // Dispatch emotion to the viewer for expression animation
-        setExpression(reaction.emotion, reaction.urgency);
+        dispatchExpression(reaction.emotion, reaction.urgency);
       } else if (msg.type === 'error') {
         onError?.(msg.message || 'Spectator error');
       } else if (msg.type === 'config_ack') {
@@ -232,7 +230,7 @@ export function useGameSpectator(options: UseGameSpectatorOptions): UseGameSpect
     } catch {
       // Non-JSON message — ignore
     }
-  }, [onReaction, onError, setExpression]);
+  }, [onReaction, onError, dispatchExpression]);
 
   /**
    * Start screen capture and connect to the spectator WebSocket.
@@ -291,9 +289,7 @@ export function useGameSpectator(options: UseGameSpectatorOptions): UseGameSpect
       };
 
       ws.onclose = () => {
-        if (state === 'capturing') {
-          setState('idle');
-        }
+        setState((prev) => prev !== 'error' ? 'idle' : prev);
       };
 
     } catch (err) {

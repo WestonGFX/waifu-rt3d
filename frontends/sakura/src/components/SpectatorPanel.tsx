@@ -10,7 +10,7 @@
 
 import { useState, useCallback } from 'react';
 import {
-  Monitor, Play, Square, Volume2, VolumeX,
+  Monitor, Play, Square, Volume2,
   Zap, Coffee, Flame, Eye, Gamepad2,
 } from 'lucide-react';
 import { useGameSpectator } from '../hooks/useGameSpectator';

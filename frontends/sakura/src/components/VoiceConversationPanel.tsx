@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, PhoneOff, Hand } from 'lucide-react';
 import { VoiceOrb } from './VoiceOrb';
 import { useFullDuplexVoice } from '../hooks/useFullDuplexVoice';
-import type { VoiceSessionState, VoiceDuplexConfig } from '../hooks/useFullDuplexVoice';
+import type { VoiceDuplexConfig } from '../hooks/useFullDuplexVoice';
 import { useAppStore } from '../stores/appStore';
 
 // ── Types ───────────────────────────────────────────────────────────────────────

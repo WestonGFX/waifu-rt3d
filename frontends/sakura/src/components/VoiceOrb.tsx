@@ -35,8 +35,6 @@ interface VoiceOrbProps {
  * <VoiceOrb state="listening" inputLevel={0.6} size={64} />
  */
 export function VoiceOrb({ state, inputLevel, outputLevel = 0.5, size = 64 }: VoiceOrbProps) {
-  const radius = size / 2;
-
   // Ring scale based on input level (for listening state)
   const ringScale = 1 + inputLevel * 0.4;
 

@@ -3167,7 +3167,7 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
                 onChange={(e) => save('auto_compact_threshold', parseInt(e.target.value))}
                 className="flex-1" style={{ accentColor: 'var(--color-accent)' }} />
               <span className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)', minWidth: 32, textAlign: 'right' }}>
-                {cfg('auto_compact_threshold', 85)}%
+                {String(cfg('auto_compact_threshold', 85))}%
               </span>
             </div>
           </SettingField>

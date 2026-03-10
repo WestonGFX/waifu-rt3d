@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v35)
+- Database schema migrations (v3 → v4 → … → v40)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -2200,6 +2200,113 @@ def migrate_to_v39(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v40(con: sqlite3.Connection) -> bool:
+    """Insert new character 'Alana Calloway' into the characters table (v40).
+
+    Adds the 13th built-in character: Alana Calloway, a warm-hearted deredere
+    rebel — nursing student, waitress, beer-league soccer player. Irish Catholic
+    middle child who wears her heart on her sleeve.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v40+.
+
+    Example:
+        >>> if migrate_to_v40(con):
+        ...     logger.info("Alana Calloway added to roster")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 40:
+        return False
+
+    try:
+        logger.info("Applying schema v40 migration (add Alana Calloway)...")
+
+        # Import Alana's system prompt from init_personas
+        import sys
+        sys.path.insert(0, str(ROOT / "tools"))
+        from init_personas import ALANA_SYSTEM_PROMPT
+
+        # Insert only if not already present (idempotent)
+        existing = con.execute(
+            "SELECT id FROM characters WHERE name = 'Alana Calloway'"
+        ).fetchone()
+
+        if existing:
+            logger.info(f"  'Alana Calloway' already exists (id={existing[0]}), skipping insert")
+        else:
+            con.execute(
+                """INSERT INTO characters
+                   (name, system_prompt, avatar_url, voice_id, tts_pitch, tts_rate)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                ("Alana Calloway", ALANA_SYSTEM_PROMPT,
+                 "/files/avatars/Kitsune.vrm", "alana_v1", 1.05, 1.1),
+            )
+            logger.info("  Inserted new character 'Alana Calloway'")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (40)")
+        con.commit()
+        logger.info("✅ Schema v40 migration complete (Alana Calloway added)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v40 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v41(con: sqlite3.Connection) -> bool:
+    """Update Yuki (Shirayuki) system prompt with expanded character spec (v41).
+
+    Replaces the original 45-line system prompt with the upgraded ~150-line
+    prompt derived from the full 10-file character spec: 5 behavioral loops,
+    inverted trust ramp, family constellation, social circle, and 5 specific
+    fears.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v41+.
+
+    Example:
+        >>> if migrate_to_v41(con):
+        ...     logger.info("Yuki system prompt upgraded")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 41:
+        return False
+
+    try:
+        logger.info("Applying schema v41 migration (upgrade Yuki system prompt)...")
+
+        # Import Yuki's expanded system prompt from init_personas
+        import sys
+        sys.path.insert(0, str(ROOT / "tools"))
+        from init_personas import YUKI_SYSTEM_PROMPT
+
+        # Update Yuki's system prompt in the characters table
+        result = con.execute(
+            "UPDATE characters SET system_prompt = ? WHERE name = 'Yuki (Shirayuki)'",
+            (YUKI_SYSTEM_PROMPT,),
+        )
+
+        if result.rowcount == 0:
+            logger.warning("  'Yuki (Shirayuki)' not found in characters table, skipping prompt update")
+        else:
+            logger.info(f"  Updated Yuki system prompt ({len(YUKI_SYSTEM_PROMPT)} chars)")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (41)")
+        con.commit()
+        logger.info("✅ Schema v41 migration complete (Yuki prompt upgraded)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v41 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -2509,21 +2616,35 @@ def ensure_db():
             if migrate_to_v39(con):
                 version = 39
 
+        # Upgrade from v39 to v40 (Add Alana Calloway)
+        if version < 40:
+            logger.info("Upgrading database schema from v39 to v40...")
+            logger.info("  - Adding new character Alana Calloway")
+            if migrate_to_v40(con):
+                version = 40
+
+        # Upgrade from v40 to v41 (Upgrade Yuki system prompt)
+        if version < 41:
+            logger.info("Upgrading database schema from v40 to v41...")
+            logger.info("  - Upgrading Yuki (Shirayuki) system prompt with expanded character spec")
+            if migrate_to_v41(con):
+                version = 41
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 39:
-            raise RuntimeError(f"Database initialization failed: Expected v39, got v{final_version}")
+        if final_version < 41:
+            raise RuntimeError(f"Database initialization failed: Expected v41, got v{final_version}")
 
-        if final_version > 39:
-            logger.warning(f"Database is newer than application (v{final_version} > v39). Some features might be unused.")
+        if final_version > 41:
+            logger.warning(f"Database is newer than application (v{final_version} > v41). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v39 adds Dae)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v41 upgrades Yuki prompt)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

@@ -2307,6 +2307,60 @@ def migrate_to_v41(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v42(con: sqlite3.Connection) -> bool:
+    """Update Rin, Raine, and Hana system prompts with expanded character specs (v42).
+
+    Batch 1 of the character quality audit. Replaces the original ~25-50 line
+    system prompts with expanded ~100-150 line prompts derived from full 10-file
+    character specs.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v42+.
+
+    Example:
+        >>> if migrate_to_v42(con):
+        ...     logger.info("Rin/Raine/Hana prompts upgraded")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 42:
+        return False
+
+    try:
+        logger.info("Applying schema v42 migration (upgrade Rin, Raine, Hana prompts)...")
+
+        import sys
+        sys.path.insert(0, str(ROOT / "tools"))
+        from init_personas import RIN_SYSTEM_PROMPT, RAINE_SYSTEM_PROMPT, HANA_SYSTEM_PROMPT
+
+        updates = [
+            ("Rin (Akane)", RIN_SYSTEM_PROMPT),
+            ("Raine", RAINE_SYSTEM_PROMPT),
+            ("Hana (Momoka)", HANA_SYSTEM_PROMPT),
+        ]
+
+        for name, prompt in updates:
+            result = con.execute(
+                "UPDATE characters SET system_prompt = ? WHERE name = ?",
+                (prompt, name),
+            )
+            if result.rowcount == 0:
+                logger.warning(f"  '{name}' not found in characters table, skipping")
+            else:
+                logger.info(f"  Updated {name} system prompt ({len(prompt)} chars)")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (42)")
+        con.commit()
+        logger.info("✅ Schema v42 migration complete (Rin/Raine/Hana prompts upgraded)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v42 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -2630,21 +2684,28 @@ def ensure_db():
             if migrate_to_v41(con):
                 version = 41
 
+        # Upgrade from v41 to v42 (Upgrade Rin, Raine, Hana prompts)
+        if version < 42:
+            logger.info("Upgrading database schema from v41 to v42...")
+            logger.info("  - Upgrading Rin, Raine, Hana system prompts with expanded character specs")
+            if migrate_to_v42(con):
+                version = 42
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 41:
-            raise RuntimeError(f"Database initialization failed: Expected v41, got v{final_version}")
+        if final_version < 42:
+            raise RuntimeError(f"Database initialization failed: Expected v42, got v{final_version}")
 
-        if final_version > 41:
-            logger.warning(f"Database is newer than application (v{final_version} > v41). Some features might be unused.")
+        if final_version > 42:
+            logger.warning(f"Database is newer than application (v{final_version} > v42). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v41 upgrades Yuki prompt)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v42 upgrades Rin/Raine/Hana prompts)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

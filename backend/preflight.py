@@ -2361,6 +2361,70 @@ def migrate_to_v42(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v43(con: sqlite3.Connection) -> bool:
+    """Update Shiori, Mika, Luna, Sable, Kaede, Ayane system prompts (v43).
+
+    Batch 2 of the character quality audit. Replaces the original ~25-50 line
+    system prompts with expanded ~130+ line prompts derived from full 10-file
+    character specs.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v43+.
+
+    Example:
+        >>> if migrate_to_v43(con):
+        ...     logger.info("Batch 2 prompts upgraded")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 43:
+        return False
+
+    try:
+        logger.info("Applying schema v43 migration (upgrade Shiori, Mika, Luna, Sable, Kaede, Ayane prompts)...")
+
+        import sys
+        sys.path.insert(0, str(ROOT / "tools"))
+        from init_personas import (
+            SHIORI_SYSTEM_PROMPT,
+            MIKA_SYSTEM_PROMPT,
+            LUNA_SYSTEM_PROMPT,
+            SABLE_SYSTEM_PROMPT,
+            KAEDE_SYSTEM_PROMPT,
+            AYANE_SYSTEM_PROMPT,
+        )
+
+        updates = [
+            ("Shiori (Nana)", SHIORI_SYSTEM_PROMPT),
+            ("Mika (Mikazuki)", MIKA_SYSTEM_PROMPT),
+            ("Luna (Tsukimi)", LUNA_SYSTEM_PROMPT),
+            ("Sable (Kuroha)", SABLE_SYSTEM_PROMPT),
+            ("Kaede (Suzuha)", KAEDE_SYSTEM_PROMPT),
+            ("Ayane (Yuki)", AYANE_SYSTEM_PROMPT),
+        ]
+
+        for name, prompt in updates:
+            result = con.execute(
+                "UPDATE characters SET system_prompt = ? WHERE name = ?",
+                (prompt, name),
+            )
+            if result.rowcount == 0:
+                logger.warning(f"  '{name}' not found in characters table, skipping")
+            else:
+                logger.info(f"  Updated {name} system prompt ({len(prompt)} chars)")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (43)")
+        con.commit()
+        logger.info("✅ Schema v43 migration complete (batch 2: 6 character prompts upgraded)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v43 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -2691,21 +2755,28 @@ def ensure_db():
             if migrate_to_v42(con):
                 version = 42
 
+        # Upgrade from v42 to v43 (Upgrade Shiori, Mika, Luna, Sable, Kaede, Ayane prompts)
+        if version < 43:
+            logger.info("Upgrading database schema from v42 to v43...")
+            logger.info("  - Upgrading Shiori, Mika, Luna, Sable, Kaede, Ayane system prompts")
+            if migrate_to_v43(con):
+                version = 43
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 42:
-            raise RuntimeError(f"Database initialization failed: Expected v42, got v{final_version}")
+        if final_version < 43:
+            raise RuntimeError(f"Database initialization failed: Expected v43, got v{final_version}")
 
-        if final_version > 42:
-            logger.warning(f"Database is newer than application (v{final_version} > v42). Some features might be unused.")
+        if final_version > 43:
+            logger.warning(f"Database is newer than application (v{final_version} > v43). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v42 upgrades Rin/Raine/Hana prompts)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v43 upgrades batch 2 character prompts)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

@@ -1,0 +1,86 @@
+/* ==========================================================================
+ * AmbientLayer — Background atmosphere for Nova
+ * ==========================================================================
+ * Three layers stacked behind all UI:
+ *   1. bgLayer — deep gradient base
+ *   2. orbContainer — three drifting colored glows
+ *   3. grain — SVG noise texture
+ *
+ * z-index map:
+ *   bgLayer:       0
+ *   orbContainer:  1
+ *   grain:         2
+ *   ViewerFrame:   3  (iframe, set in ViewerFrame.tsx)
+ *   Glass UI:      10+ (panels, nav, chat)
+ * ========================================================================== */
+
+/* --- Deep gradient base --- */
+.bgLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 80%, rgba(40, 20, 50, 0.8), transparent),
+    radial-gradient(ellipse 80% 60% at 30% 20%, rgba(25, 15, 40, 0.6), transparent),
+    linear-gradient(180deg, var(--nova-bg-deep) 0%, var(--nova-bg-mid) 40%, var(--nova-bg-surface) 100%);
+  pointer-events: none;
+}
+
+/* --- Orb container (receives parallax transforms) --- */
+.orbContainer {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* --- Individual orbs --- */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  will-change: transform;
+  pointer-events: none;
+}
+
+.orb1 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, var(--nova-orb-1), transparent 70%);
+  top: 20%;
+  left: 25%;
+  animation: orbDrift1 12s ease-in-out infinite;
+}
+
+.orb2 {
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, var(--nova-orb-2), transparent 70%);
+  top: 50%;
+  right: 15%;
+  animation: orbDrift2 15s ease-in-out infinite;
+}
+
+.orb3 {
+  width: 250px;
+  height: 250px;
+  background: radial-gradient(circle, var(--nova-orb-3), transparent 70%);
+  bottom: 10%;
+  left: 40%;
+  animation: orbDrift3 18s ease-in-out infinite;
+}
+
+/* --- Film grain overlay ---
+ * Inline SVG noise texture at low opacity. Creates subtle texture
+ * over the background without an external image dependency.
+ */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}

@@ -1,0 +1,113 @@
+/* ==========================================================================
+ * Nova — Glass Panel CSS Module
+ * ==========================================================================
+ * Reusable frosted-glass classes for panels, pills, and chat bubbles.
+ * Import as: import glass from '@/styles/glass.module.css';
+ *
+ * Usage:
+ *   <div className={glass.panel}>...</div>
+ *   <div className={`${glass.panel} ${glass.hoverGlow}`}>...</div>
+ * ========================================================================== */
+
+/* --- Standard glass panel ---
+ * Subtle frosted background with thin border. Use for sidebars,
+ * modals, floating toolbars, and content cards.
+ */
+.panel {
+  background: var(--nova-glass-bg);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: var(--nova-radius-panel);
+  backdrop-filter: blur(var(--nova-glass-blur));
+  -webkit-backdrop-filter: blur(var(--nova-glass-blur));
+}
+
+/* --- Strong glass panel ---
+ * Higher opacity for panels that need more visual weight,
+ * such as primary action areas or active selections.
+ */
+.panelStrong {
+  background: var(--nova-glass-bg-strong);
+  border: 1px solid var(--nova-glass-border-strong);
+  border-radius: var(--nova-radius-panel);
+  backdrop-filter: blur(var(--nova-glass-blur));
+  -webkit-backdrop-filter: blur(var(--nova-glass-blur));
+}
+
+/* --- Pill ---
+ * Compact rounded element for tags, badges, status indicators,
+ * and inline action buttons.
+ */
+.pill {
+  background: var(--nova-glass-bg);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: var(--nova-radius-pill);
+  backdrop-filter: blur(var(--nova-glass-blur));
+  -webkit-backdrop-filter: blur(var(--nova-glass-blur));
+  padding: 6px 14px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* --- Chat bubble ---
+ * Rounded container for chat messages. Combine with
+ * --nova-user-bubble-* or --nova-char-bubble-* vars for coloring.
+ */
+.bubble {
+  border-radius: var(--nova-radius-bubble);
+  padding: 10px 16px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* --- User message bubble --- */
+.bubbleUser {
+  composes: bubble;
+  background: var(--nova-user-bubble-bg);
+  border: 1px solid var(--nova-user-bubble-border);
+}
+
+/* --- Character message bubble --- */
+.bubbleChar {
+  composes: bubble;
+  background: var(--nova-char-bubble-bg);
+  border: 1px solid var(--nova-char-bubble-border);
+}
+
+/* ==========================================================================
+ * Interactive Modifiers
+ * Compose these with any panel/pill class for hover and press effects.
+ * ========================================================================== */
+
+/* --- Hover glow ---
+ * Soft pink glow on hover. Apply to clickable glass elements.
+ */
+.hoverGlow {
+  transition:
+    box-shadow var(--nova-transition-normal) ease,
+    border-color var(--nova-transition-normal) ease;
+}
+
+.hoverGlow:hover {
+  box-shadow: 0 0 20px rgba(255, 141, 161, 0.08);
+  border-color: var(--nova-glass-border-strong);
+}
+
+/* --- Press scale ---
+ * Subtle scale-down on click. Spring-like easing via cubic-bezier
+ * that overshoots slightly on release.
+ */
+.pressScale {
+  transition: transform var(--nova-transition-fast) cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pressScale:active {
+  transform: scale(0.95);
+}
+
+/* --- Combined interactive ---
+ * Convenience class that applies both hover glow and press scale.
+ */
+.interactive {
+  composes: hoverGlow;
+  composes: pressScale;
+}

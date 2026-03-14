@@ -8,7 +8,7 @@ type NovaMode = 'companion' | 'focused';
 type NovaTheme = 'dark' | 'light' | 'system';
 
 /** Side panels available in Focused mode. */
-type PanelId = 'chat-history' | 'memory' | 'settings' | null;
+type PanelId = string | null;
 
 interface NovaState {
   /** Current UI mode. Companion is minimal; Focused shows side panels. */

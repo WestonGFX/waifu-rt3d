@@ -1,0 +1,81 @@
+/* ==========================================================================
+ * FocusedView — Chat-centric productivity layout
+ * ========================================================================== */
+
+.layout {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  pointer-events: none;
+}
+
+/* --- Center: Chat thread area --- */
+.chatArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  pointer-events: auto;
+}
+
+.chatHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--nova-glass-border);
+  background: var(--nova-glass-bg);
+  backdrop-filter: blur(var(--nova-glass-blur));
+  -webkit-backdrop-filter: blur(var(--nova-glass-blur));
+  flex-shrink: 0;
+}
+
+/* Override ModeToggle's fixed positioning when inside FocusedView header */
+.chatHeader > div:last-child {
+  position: static !important;
+}
+
+.messagesArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px;
+  overflow-y: auto;
+  mask-image: linear-gradient(to bottom, transparent 0%, black 4%, black 96%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 4%, black 96%, transparent 100%);
+}
+
+.inputArea {
+  padding: 12px 20px 16px;
+  flex-shrink: 0;
+}
+
+/* --- Right: Small 3D viewer panel --- */
+.viewerPanel {
+  width: 300px;
+  position: relative;
+  border-left: 1px solid var(--nova-glass-border);
+  background: var(--nova-glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  flex-shrink: 0;
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.viewerIframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+}
+
+/* --- Responsive: hide viewer panel on narrow screens --- */
+@media (max-width: 900px) {
+  .viewerPanel {
+    display: none;
+  }
+}

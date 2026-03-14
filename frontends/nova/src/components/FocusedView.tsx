@@ -1,9 +1,11 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IconRail } from './IconRail';
 import { ModeToggle } from './ModeToggle';
 import { GlassBubble, TypingIndicator } from './GlassBubble';
 import { InputBar } from './InputBar';
+import { EmotionOrb } from './EmotionOrb';
+import { SettingsPanel } from './SettingsPanel';
 import type { Character } from '../lib/types';
 import glass from '../styles/glass.module.css';
 import styles from './FocusedView.module.css';
@@ -38,6 +40,8 @@ interface FocusedViewProps {
   onSend: (text: string) => void;
   activePanel: string | null;
   onPanelChange: (panel: string | null) => void;
+  /** Current emotion from the LLM for the emotion indicator. */
+  currentEmotion: { emotion: string; intensity: number } | null;
 }
 
 export function FocusedView({
@@ -49,15 +53,21 @@ export function FocusedView({
   onSend,
   activePanel,
   onPanelChange,
+  currentEmotion,
 }: FocusedViewProps) {
   const handleSend = useCallback((text: string) => {
     onSend(text);
   }, [onSend]);
 
+  /** Panel content keyed by rail item ID. */
+  const panelContent = useMemo(() => ({
+    settings: <SettingsPanel />,
+  }), []);
+
   return (
     <div className={styles.layout}>
       {/* Left: Icon rail + expandable panel */}
-      <IconRail activePanel={activePanel} onPanelChange={onPanelChange} />
+      <IconRail activePanel={activePanel} onPanelChange={onPanelChange} panelContent={panelContent} />
 
       {/* Center: Chat thread */}
       <div className={styles.chatArea}>
@@ -85,7 +95,14 @@ export function FocusedView({
               </>
             )}
           </div>
-          <ModeToggle mode={mode} onToggle={onToggleMode} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <EmotionOrb
+              emotion={currentEmotion?.emotion ?? null}
+              intensity={currentEmotion?.intensity ?? 0}
+              variant="focused"
+            />
+            <ModeToggle mode={mode} onToggle={onToggleMode} />
+          </div>
         </div>
 
         {/* Messages */}

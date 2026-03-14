@@ -6,6 +6,7 @@ import { ModeToggle } from './ModeToggle';
 import { QuickActions } from './QuickActions';
 import { GlassBubble, TypingIndicator } from './GlassBubble';
 import { InputBar } from './InputBar';
+import { EmotionOrb } from './EmotionOrb';
 import type { Character } from '../lib/types';
 
 /**
@@ -50,6 +51,9 @@ interface CompanionViewProps {
   /** Send a new message */
   onSend: (text: string) => void;
 
+  /** Current emotion from the LLM for the emotion orb. */
+  currentEmotion: { emotion: string; intensity: number } | null;
+
   /** Callbacks for navigation actions */
   onCharacterSwitch?: () => void;
   onSettings?: () => void;
@@ -63,6 +67,7 @@ export function CompanionView({
   messages,
   isStreaming,
   onSend,
+  currentEmotion,
   onCharacterSwitch,
   onSettings,
   onCommandPalette,
@@ -141,6 +146,13 @@ export function CompanionView({
           placeholder={character ? `Message ${character.name}...` : 'Say something...'}
         />
       </div>
+
+      {/* === Emotion orb (bottom center) === */}
+      <EmotionOrb
+        emotion={currentEmotion?.emotion ?? null}
+        intensity={currentEmotion?.intensity ?? 0}
+        variant="companion"
+      />
 
       {/* === Bottom bar: Quick Actions === */}
       <QuickActions />

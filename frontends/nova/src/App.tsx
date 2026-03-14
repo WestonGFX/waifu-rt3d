@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AmbientLayer } from './components/AmbientLayer';
 import { ViewerFrame } from './components/ViewerFrame';
@@ -8,6 +8,8 @@ import { useNovaStore } from './stores/novaStore';
 import { useAppStore } from './stores/appStore';
 import { useChatStore } from './stores/chatStore';
 import { useViewerStore } from './stores/viewerStore';
+import { applyCharacterTint } from './lib/characterTints';
+import { api } from './lib/api';
 
 /**
  * Nova application shell.
@@ -77,6 +79,42 @@ export function App() {
     }
   }, [currentEmotion, dispatchExpression]);
 
+  // Apply character tint when active character changes
+  useEffect(() => {
+    applyCharacterTint(activeCharacter?.name ?? null);
+  }, [activeCharacter]);
+
+  // Fetch contextual greeting on character load
+  const greetingFetchedFor = useRef<number | null>(null);
+  useEffect(() => {
+    if (!activeCharacter || !activeCharacter.greeting_enabled) return;
+    if (greetingFetchedFor.current === activeCharacter.id) return;
+    greetingFetchedFor.current = activeCharacter.id;
+
+    api.getGreeting(activeCharacter.id)
+      .then((res) => {
+        if (res.ok && res.greeting) {
+          const greetingMsg = {
+            id: `greeting-${activeCharacter.id}`,
+            role: 'assistant' as const,
+            text: res.greeting,
+            createdAt: Date.now(),
+            status: 'sent' as const,
+            emotion: res.emotion ?? undefined,
+          };
+          // Prepend greeting as the first message if chat is empty
+          const current = useChatStore.getState().messages;
+          if (current.length === 0) {
+            useChatStore.setState({ messages: [greetingMsg] });
+            if (res.emotion) {
+              useChatStore.getState().setCurrentEmotion(res.emotion, 1.0);
+            }
+          }
+        }
+      })
+      .catch(() => {}); // Greeting is non-critical
+  }, [activeCharacter]);
+
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -144,6 +182,7 @@ export function App() {
               messages={chatMessages}
               isStreaming={loading}
               onSend={sendMessage}
+              currentEmotion={currentEmotion}
               onCharacterSwitch={handleCharacterSwitch}
               onCommandPalette={toggleCommandPalette}
             />
@@ -166,6 +205,7 @@ export function App() {
               onSend={sendMessage}
               activePanel={activePanel}
               onPanelChange={setActivePanel}
+              currentEmotion={currentEmotion}
             />
           </motion.div>
         )}

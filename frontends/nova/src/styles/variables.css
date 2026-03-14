@@ -60,6 +60,11 @@
   --nova-transition-fast: 150ms;
   --nova-transition-normal: 200ms;
   --nova-transition-slow: 300ms;
+
+  /* --- Character tint (overridden by JS via applyCharacterTint) --- */
+  --tint-hue: 320;
+  --tint-accent: hsla(320, 70%, 75%, 0.6);
+  --tint-ambient: hsla(320, 50%, 60%, 0.08);
 }
 
 /* --------------------------------------------------------------------------

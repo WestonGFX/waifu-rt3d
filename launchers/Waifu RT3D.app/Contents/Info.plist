@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Bundle display name shown in Finder and Dock -->
+    <key>CFBundleName</key>
+    <string>Waifu RT3D</string>
+
+    <!-- Reverse-DNS identifier for macOS bundle system -->
+    <key>CFBundleIdentifier</key>
+    <string>com.waifu-rt3d.launcher</string>
+
+    <!-- Name of the executable inside Contents/MacOS/ -->
+    <key>CFBundleExecutable</key>
+    <string>launcher</string>
+
+    <!-- Icon file reference (without extension) in Contents/Resources/ -->
+    <key>CFBundleIconFile</key>
+    <string>applet</string>
+
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <!-- Enable Retina / HiDPI rendering -->
+    <key>NSHighResolutionCapable</key>
+    <true/>
+
+    <!-- false = show in Dock (not a background-only agent) -->
+    <key>LSUIElement</key>
+    <false/>
+</dict>
+</plist>

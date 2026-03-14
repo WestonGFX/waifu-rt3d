@@ -52,6 +52,9 @@ const store = new Store({
 // Discord RPC — opt-in, gracefully handles missing dependency
 const discord = require('./discord-rpc');
 
+// Backend lifecycle manager — spawns Python/uvicorn as a child process
+const backend = require('./backend-launcher');
+
 /** Base URL of the running FastAPI server. */
 const BASE_URL = 'http://localhost:8080';
 
@@ -706,22 +709,60 @@ function handleDeepLink(url) {
   }
 }
 
-app.whenReady().then(() => {
-  // Register global shortcut: Ctrl+Shift+P → toggle desktop pet
-  globalShortcut.register('CommandOrControl+Shift+P', togglePet);
+/**
+ * Create the splash screen window shown during backend startup.
+ * Frameless, centered, always-on-top — displays progress and errors.
+ *
+ * @returns {BrowserWindow} The splash window instance
+ */
+function createSplashWindow() {
+  const splash = new BrowserWindow({
+    width: 400,
+    height: 280,
+    frame: false,
+    resizable: false,
+    center: true,
+    alwaysOnTop: true,
+    backgroundColor: '#0f0f0f',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+  splash.loadFile(path.join(__dirname, 'splash.html'));
+  return splash;
+}
 
-  // Create system tray
+app.whenReady().then(async () => {
+  globalShortcut.register('CommandOrControl+Shift+P', togglePet);
   createTray();
 
-  // Start with main window
+  // Show splash and start backend
+  const splash = createSplashWindow();
+  backend.onStatusChange((s) => {
+    if (splash && !splash.isDestroyed()) {
+      splash.webContents.send('backend-status', s);
+    }
+  });
+
+  try {
+    await backend.startBackend();
+  } catch (err) {
+    dialog.showErrorBox(
+      'Backend Error',
+      backend.getBackendStatus().error || 'Failed to start backend server.'
+    );
+  }
+
+  // Close splash and show main window
+  if (splash && !splash.isDestroyed()) splash.close();
   createMainWindow();
 
-  // Restore pet window if it was active last session
   if (store.get('petMode', false)) {
     createPetWindow();
   }
 
-  // macOS: re-create window when dock icon is clicked with no windows
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow();
@@ -741,9 +782,12 @@ app.on('window-all-closed', () => {
   }
 });
 
-// Clean up global shortcuts on quit
-app.on('will-quit', () => {
+// Clean up global shortcuts and stop backend on quit
+app.on('will-quit', async (e) => {
+  e.preventDefault();
   globalShortcut.unregisterAll();
+  await backend.stopBackend();
+  app.exit(0);
 });
 
 // Prevent multiple instances

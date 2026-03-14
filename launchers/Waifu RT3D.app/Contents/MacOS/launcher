@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# launcher — One-click macOS launcher for Waifu RT3D.
+#
+# This script is the CFBundleExecutable inside the .app bundle. When a user
+# double-clicks "Waifu RT3D.app" in Finder, macOS runs this script.
+#
+# Flow:
+#   1. Resolve the project root from the bundle's location.
+#   2. Verify the Python venv exists (prompt user to run setup.sh if not).
+#   3. If the backend is already running on port 8080, just open the browser.
+#   4. Otherwise, start uvicorn, wait for it to become healthy, then open
+#      the Sakura frontend in the default browser.
+#   5. Keep the .app process alive (so it stays in the Dock) by waiting on
+#      the backend PID. Clean up on INT/TERM signals.
+
+# --- Resolve project root ---
+# Bundle layout: PROJECT_ROOT/launchers/Waifu RT3D.app/Contents/MacOS/launcher
+# From this script, project root is 4 directories up.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+
+VENV_PYTHON="$PROJECT_ROOT/.venv/bin/python"
+BACKEND_URL="http://localhost:8080"
+HEALTH_URL="$BACKEND_URL/api/health"
+FRONTEND_URL="$BACKEND_URL/sakura/"
+LOG_FILE="$PROJECT_ROOT/backend/storage/launcher.log"
+
+# --- Check for Python venv ---
+if [[ ! -x "$VENV_PYTHON" ]]; then
+    osascript -e 'display dialog "Python virtual environment not found.\n\nPlease run ./setup.sh from the project root first." with title "Waifu RT3D" with icon stop buttons {"OK"} default button "OK"'
+    exit 1
+fi
+
+# --- Check if backend is already running ---
+# If the health endpoint responds with "ok", skip startup and just open the browser.
+if curl -s --max-time 2 "$HEALTH_URL" 2>/dev/null | grep -q "ok"; then
+    open "$FRONTEND_URL"
+    exit 0
+fi
+
+# --- Notify user that startup is in progress ---
+osascript -e 'display notification "Starting backend server..." with title "Waifu RT3D"'
+
+# --- Start the backend server ---
+# cd to project root so Python module resolution works (backend.server, etc.)
+cd "$PROJECT_ROOT"
+
+"$VENV_PYTHON" -m uvicorn backend.server:app \
+    --host 127.0.0.1 \
+    --port 8080 \
+    > "$LOG_FILE" 2>&1 &
+BACKEND_PID=$!
+
+# --- Register cleanup trap before wait ---
+# Ensures the backend process is killed when the .app is quit (Cmd+Q, Dock quit, etc.)
+trap "kill $BACKEND_PID 2>/dev/null; exit 0" INT TERM
+
+# --- Health check loop ---
+# Poll the health endpoint every second, up to 30 attempts (30 seconds total).
+MAX_ATTEMPTS=30
+ATTEMPT=0
+
+while (( ATTEMPT < MAX_ATTEMPTS )); do
+    ATTEMPT=$((ATTEMPT + 1))
+    sleep 1
+
+    if curl -s --max-time 1 "$HEALTH_URL" 2>/dev/null | grep -q "ok"; then
+        # Backend is ready — open the frontend in the default browser
+        open "$FRONTEND_URL"
+
+        # Keep the .app alive in the Dock by waiting on the backend process.
+        # When the user quits the .app, the trap above kills the backend.
+        wait $BACKEND_PID
+        exit 0
+    fi
+done
+
+# --- Timeout: backend failed to start ---
+kill $BACKEND_PID 2>/dev/null
+osascript -e 'display dialog "Backend server failed to start within 30 seconds.\n\nCheck the log at:\nbackend/storage/launcher.log" with title "Waifu RT3D" with icon stop buttons {"OK"} default button "OK"'
+exit 1

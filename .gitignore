@@ -6,6 +6,7 @@ __pycache__/
 *.egg-info/
 dist/
 !frontends/sakura/dist/
+!frontends/nova/dist/
 build/
 venv/
 .venv/
@@ -86,3 +87,4 @@ frontends/dashboard/
 _BACKUP_ROOT/
 .git.zip
 .worktrees/
+.superpowers/

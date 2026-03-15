@@ -326,6 +326,7 @@ export function App() {
               onCharacterSwitch={handleCharacterSwitch}
               onCommandPalette={toggleCommandPalette}
               onForkMessage={handleFork}
+              sessionId={sessionId}
             />
           </motion.div>
         ) : (
@@ -348,6 +349,7 @@ export function App() {
               onPanelChange={setActivePanel}
               currentEmotion={currentEmotion}
               onForkMessage={handleFork}
+              sessionId={sessionId}
             />
           </motion.div>
         )}

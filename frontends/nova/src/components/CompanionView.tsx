@@ -63,6 +63,9 @@ interface CompanionViewProps {
 
   /** Fork the conversation at a specific message ID. */
   onForkMessage?: (messageId: number) => void;
+
+  /** Active session ID — forwarded to GlassBubble for bookmark creation. */
+  sessionId?: number | null;
 }
 
 export function CompanionView({
@@ -77,6 +80,7 @@ export function CompanionView({
   onSettings,
   onCommandPalette,
   onForkMessage,
+  sessionId,
 }: CompanionViewProps) {
   const handleSend = useCallback((text: string) => {
     onSend(text);
@@ -139,6 +143,8 @@ export function CompanionView({
                 noAnimation={i < messages.length - 3}
                 serverMessageId={msg.serverMessageId}
                 onFork={onForkMessage}
+                sessionId={sessionId}
+                characterId={character?.id}
               >
                 {msg.text}
               </GlassBubble>

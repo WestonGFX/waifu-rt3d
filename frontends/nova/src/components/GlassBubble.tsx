@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { GitBranch } from 'lucide-react';
+import { GitBranch, Star } from 'lucide-react';
 import glass from '../styles/glass.module.css';
 import clsx from 'clsx';
+import { api } from '../lib/api';
+import { useNovaStore } from '../stores/novaStore';
 
 /**
  * Glass-backed chat bubble for Companion mode.
@@ -14,6 +16,9 @@ import clsx from 'clsx';
  *
  * In Companion mode these float over the 3D viewer, so the character
  * visually shows through the frosted glass — creating genuine depth.
+ *
+ * Hover actions include a fork button (for conversation branching) and
+ * a bookmark/star button (for saving messages to the bookmarks panel).
  *
  * @example
  * ```tsx
@@ -37,15 +42,37 @@ interface GlassBubbleProps {
   /** Disable the entrance animation (e.g., for pre-loaded history). */
   noAnimation?: boolean;
 
-  /** Server-side message ID — required for fork to work. */
+  /** Server-side message ID — required for fork and bookmark to work. */
   serverMessageId?: number;
 
   /** Callback when the user clicks the fork button. Receives the server message ID. */
   onFork?: (messageId: number) => void;
+
+  /** Active session ID — needed to create bookmarks. */
+  sessionId?: number | null;
+
+  /** Active character ID — stored with the bookmark for filtering. */
+  characterId?: number | null;
 }
 
 /** Spring config for chat bubble entrances — bouncier than UI panels. */
 const bubbleSpring = { stiffness: 200, damping: 18 };
+
+/** Shared inline style for the small hover-action buttons (fork, bookmark). */
+const actionButtonBase: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 24,
+  height: 24,
+  borderRadius: 6,
+  border: 'none',
+  background: 'rgba(255, 255, 255, 0.08)',
+  color: 'var(--nova-text-secondary, rgba(255,255,255,0.5))',
+  cursor: 'pointer',
+  padding: 0,
+  transition: 'background 0.15s ease, color 0.15s ease',
+};
 
 export function GlassBubble({
   role,
@@ -55,12 +82,71 @@ export function GlassBubble({
   noAnimation = false,
   serverMessageId,
   onFork,
+  sessionId,
+  characterId,
 }: GlassBubbleProps) {
   const isUser = role === 'user';
   const [hovered, setHovered] = useState(false);
 
-  /** Whether the fork button should be visible — only when hovered and a valid message ID exists. */
-  const showFork = hovered && serverMessageId != null && onFork != null;
+  /** Tracks the bookmark ID when this message is bookmarked, or null. */
+  const [bookmarkId, setBookmarkId] = useState<number | null>(null);
+
+  const addToast = useNovaStore((s) => s.addToast);
+
+  /**
+   * On mount, check if this message is already bookmarked so we can
+   * show a filled star immediately. Only fires when we have a valid
+   * server message ID.
+   */
+  useEffect(() => {
+    if (serverMessageId == null) return;
+    let cancelled = false;
+    api.getBookmarkForMessage(serverMessageId)
+      .then((res) => {
+        if (!cancelled && res.bookmark) {
+          setBookmarkId(res.bookmark.id);
+        }
+      })
+      .catch(() => {
+        // Non-critical — silently ignore bookmark check failures
+      });
+    return () => { cancelled = true; };
+  }, [serverMessageId]);
+
+  /**
+   * Toggle the bookmark state for this message.
+   * Creates a bookmark if none exists, or deletes the existing one.
+   */
+  const handleToggleBookmark = useCallback(async () => {
+    if (serverMessageId == null || sessionId == null) return;
+
+    try {
+      if (bookmarkId != null) {
+        // Un-bookmark
+        await api.deleteBookmark(bookmarkId);
+        setBookmarkId(null);
+        addToast('Bookmark removed', 'info');
+      } else {
+        // Bookmark
+        const res = await api.createBookmark(
+          serverMessageId,
+          sessionId,
+          characterId ?? undefined,
+        );
+        setBookmarkId(res.bookmark.id);
+        addToast('Message bookmarked', 'success');
+      }
+    } catch {
+      addToast('Bookmark action failed', 'error');
+    }
+  }, [serverMessageId, sessionId, characterId, bookmarkId, addToast]);
+
+  /** Whether the hover action buttons should be visible. */
+  const showActions = hovered && serverMessageId != null;
+  const showFork = showActions && onFork != null;
+  const showBookmark = showActions && sessionId != null;
+
+  const isBookmarked = bookmarkId != null;
 
   return (
     <motion.div
@@ -116,42 +202,73 @@ export function GlassBubble({
         {children}
       </div>
 
-      {/* Fork button — appears on hover, top-right corner */}
-      {showFork && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onFork!(serverMessageId!);
-          }}
-          title="Fork conversation from this message"
-          style={{
-            position: 'absolute',
-            top: 4,
-            right: 4,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 24,
-            height: 24,
-            borderRadius: 6,
-            border: 'none',
-            background: 'rgba(255, 255, 255, 0.08)',
-            color: 'var(--nova-text-secondary, rgba(255,255,255,0.5))',
-            cursor: 'pointer',
-            padding: 0,
-            transition: 'background 0.15s ease, color 0.15s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.18)';
-            e.currentTarget.style.color = 'var(--nova-accent-primary, #ff8da1)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-            e.currentTarget.style.color = 'var(--nova-text-secondary, rgba(255,255,255,0.5))';
-          }}
-        >
-          <GitBranch size={13} />
-        </button>
+      {/* Hover action buttons — top-right corner */}
+      {(showFork || showBookmark) && (
+        <div style={{
+          position: 'absolute',
+          top: 4,
+          right: 4,
+          display: 'flex',
+          gap: 2,
+        }}>
+          {/* Bookmark / star button */}
+          {showBookmark && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleBookmark();
+              }}
+              title={isBookmarked ? 'Remove bookmark' : 'Bookmark this message'}
+              style={{
+                ...actionButtonBase,
+                color: isBookmarked
+                  ? 'var(--nova-accent-primary, #ff8da1)'
+                  : 'var(--nova-text-secondary, rgba(255,255,255,0.5))',
+                background: isBookmarked
+                  ? 'rgba(255, 141, 161, 0.15)'
+                  : 'rgba(255, 255, 255, 0.08)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = isBookmarked
+                  ? 'rgba(255, 141, 161, 0.25)'
+                  : 'rgba(255, 255, 255, 0.18)';
+                e.currentTarget.style.color = 'var(--nova-accent-primary, #ff8da1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = isBookmarked
+                  ? 'rgba(255, 141, 161, 0.15)'
+                  : 'rgba(255, 255, 255, 0.08)';
+                e.currentTarget.style.color = isBookmarked
+                  ? 'var(--nova-accent-primary, #ff8da1)'
+                  : 'var(--nova-text-secondary, rgba(255,255,255,0.5))';
+              }}
+            >
+              <Star size={13} fill={isBookmarked ? 'currentColor' : 'none'} />
+            </button>
+          )}
+
+          {/* Fork button */}
+          {showFork && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onFork!(serverMessageId!);
+              }}
+              title="Fork conversation from this message"
+              style={actionButtonBase}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.18)';
+                e.currentTarget.style.color = 'var(--nova-accent-primary, #ff8da1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                e.currentTarget.style.color = 'var(--nova-text-secondary, rgba(255,255,255,0.5))';
+              }}
+            >
+              <GitBranch size={13} />
+            </button>
+          )}
+        </div>
       )}
     </motion.div>
   );

@@ -91,6 +91,19 @@ Quantization compresses a model to use less VRAM and run faster, at the cost of 
 
 The original model weights are stored in 16-bit floating point (FP16). Quantization reduces the precision of those weights to fewer bits per parameter. Lower bits = smaller file = less VRAM = slightly lower quality.
 
+### Quick GGUF Size Reference
+
+How much VRAM does each quantization level actually use? This table gives you the raw model size (before KV cache overhead) for common parameter counts.
+
+| Quant   | Quality    | 7B    | 13B    | 70B    |
+|---------|-----------|-------|--------|--------|
+| Q4_K_M  | Good      | ~4 GB | ~8 GB  | ~40 GB |
+| Q5_K_M  | Better    | ~5 GB | ~9 GB  | ~48 GB |
+| Q8_0    | Near-FP16 | ~7 GB | ~14 GB | ~72 GB |
+| FP16    | Lossless  | ~14 GB| ~26 GB | ~140 GB|
+
+> **Rule of thumb:** Your actual VRAM usage = model size + 1-2 GB (OS/driver) + KV cache (depends on context length). A Q4_K_M 14B model at 8K context uses roughly 10-11 GB total.
+
 | Format | Bits per Weight | Quality Loss | Best For | Notes |
 |--------|----------------|-------------|----------|-------|
 | **FP16** | 16 bits | None (original) | Research, benchmarking | Twice the VRAM of Q8. Almost nobody runs this locally for inference. |

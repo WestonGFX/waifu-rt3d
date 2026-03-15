@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download, User } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
@@ -211,6 +211,7 @@ export function CharacterPortfolioCard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   // Fetch portfolio whenever the panel opens or the active character changes
   useEffect(() => {
@@ -241,13 +242,28 @@ export function CharacterPortfolioCard() {
   }, [open, activeCharacter?.id]);
 
   /**
-   * Attempt to export the portfolio card as an image.
-   * html2canvas is not bundled in this project, so we fall back to a
-   * user-visible notice instead of a silent failure.
+   * Export the portfolio card as a PNG image using html2canvas.
+   * Captures the card panel DOM element and triggers a browser download.
    */
-  const handleExport = () => {
-    console.log('[CharacterPortfolioCard] export not yet implemented');
-    setExportMsg('Export not yet implemented. Coming soon!');
+  const handleExport = async () => {
+    if (!cardRef.current || !data) return;
+    setExportMsg('Capturing…');
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const canvas = await html2canvas(cardRef.current, {
+        backgroundColor: null,
+        scale: 2,
+        useCORS: true,
+      });
+      const link = document.createElement('a');
+      link.download = `${data.name.replace(/\s+/g, '_')}_portfolio.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      setExportMsg('Saved!');
+    } catch (err) {
+      console.error('[CharacterPortfolioCard] export failed:', err);
+      setExportMsg('Export failed — see console for details.');
+    }
     setTimeout(() => setExportMsg(null), 3000);
   };
 
@@ -275,6 +291,7 @@ export function CharacterPortfolioCard() {
 
           {/* Panel */}
           <motion.div
+            ref={cardRef}
             key="portfolio-panel"
             role="dialog"
             aria-modal="true"

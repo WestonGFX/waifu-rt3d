@@ -245,6 +245,7 @@ function MainApp() {
     { key: k('Relationship timeline',  'alt+t'),   action: () => openOverlay('timeline'),       description: 'Relationship timeline' },
     { key: k('Message schedules',      'alt+h'),   action: () => openOverlay('schedule'),       description: 'Message schedules' },
     { key: k('Global message search',  'alt+f'),   action: () => openOverlay('search'),         description: 'Global message search' },
+    { key: 'ctrl+k',                              action: () => openOverlay('search'),         description: 'Quick search (Ctrl/Cmd+K)', allowInInput: true },
     { key: k('Scenario library',       'alt+i'),   action: () => openOverlay('scenarios'),      description: 'Scenario library' },
     { key: k('Character mood board',   'alt+b'),   action: () => openOverlay('moodboard'),      description: 'Character mood board' },
     { key: k('Model arena',            'alt+p'),   action: () => openOverlay('arena'),          description: 'Model arena' },

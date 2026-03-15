@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, MessageSquare, Loader2 } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
+import { useChatStore } from '../stores/chatStore';
 
 /* ═══════════════════════════════════════════════════════════════════════
    Types
@@ -130,13 +131,31 @@ function formatTimestamp(iso: string): string {
 /**
  * Single search result row showing snippet, timestamp, and a "Jump to" button.
  *
- * @param result - The search result to display.
- * @param query - The current search query (used to determine snippet rendering).
+ * Clicking "Jump to" navigates to the result's session by:
+ * 1. Switching to the matching character in the sidebar
+ * 2. Loading the session's message history into the chat thread
+ * 3. Closing the search panel
+ *
+ * @param props.result - The search result to display.
+ * @param props.onJump - Callback invoked after navigation completes.
  */
-function ResultRow({ result }: { result: SearchResult }) {
+function ResultRow({ result, onJump }: { result: SearchResult; onJump: () => void }) {
   const handleJump = () => {
-    // Placeholder — another agent will wire session navigation.
-    console.log('[GlobalSearchPanel] Jump to session', result.session_id, 'message', result.id);
+    const { characters, selectCharacter } = useAppStore.getState();
+    const { setContext, loadHistory } = useChatStore.getState();
+
+    // Find the character that owns this session
+    const char = characters.find(c => c.id === result.char_id);
+    if (char) {
+      selectCharacter(char);
+    }
+
+    // Load the session into the chat thread
+    setContext(result.session_id, result.char_id);
+    loadHistory(result.session_id);
+
+    // Close the search panel
+    onJump();
   };
 
   return (
@@ -582,7 +601,7 @@ export function GlobalSearchPanel() {
                       {/* Result rows for this character */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         {charResults.map(r => (
-                          <ResultRow key={r.id} result={r} />
+                          <ResultRow key={r.id} result={r} onJump={closeOverlay} />
                         ))}
                       </div>
                     </section>

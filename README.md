@@ -6,7 +6,7 @@
 [![Tests](https://img.shields.io/badge/tests-98%20passed-brightgreen)](backend/tests/)
 [![Schema](https://img.shields.io/badge/DB%20schema-v30-purple)](#)
 [![Themes](https://img.shields.io/badge/themes-18-ff69b4)](#themes)
-[![Frontends](https://img.shields.io/badge/frontends-Neon%20%7C%20Sakura-ff69b4)](#dual-frontend-architecture)
+[![Frontends](https://img.shields.io/badge/frontends-Neon%20%7C%20Sakura%20%7C%20Nova-ff69b4)](#dual-frontend-architecture)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 <p align="center">
@@ -53,7 +53,16 @@ Waifu-RT3D is a **full-stack AI companion platform** where 3D anime characters c
 - **LM Studio** (recommended) or any OpenAI-compatible LLM endpoint
 - macOS / Linux / Windows (WSL or native)
 
-### Option A: Interactive Installer (Recommended)
+### Option A: One-Click Launcher (Easiest)
+
+After running setup once, use a launcher to start everything with a single click:
+
+- **macOS** — Double-click `launchers/Waifu RT3D.app` in Finder. The backend starts automatically and your browser opens to the Sakura frontend.
+- **Electron** — Run `cd electron && npm start`. A native window opens with the backend managed for you, plus desktop pet mode (Ctrl+Shift+P).
+
+See [docs/LAUNCHER_GUIDE.md](docs/LAUNCHER_GUIDE.md) for detailed instructions, troubleshooting, and first-time setup steps.
+
+### Option B: Interactive Installer (Recommended for first-time setup)
 
 ```bash
 git clone https://github.com/WestonGFX/waifu-rt3d.git
@@ -63,7 +72,7 @@ cd waifu-rt3d
 
 The installer walks you through Python venv creation, dependency installation, optional TTS/Sakura frontend setup, and database initialization. It also supports `--repair` (fix existing installs) and `--minimal` (core deps only).
 
-### Option B: Manual Installation
+### Option C: Manual Installation
 
 ```bash
 git clone https://github.com/WestonGFX/waifu-rt3d.git
@@ -278,12 +287,13 @@ Guided onboarding and progressive feature discovery built into the Sakura fronte
 
 ### Dual Frontend Architecture
 
-Two complete frontends sharing the same backend:
+Three complete frontends sharing the same backend:
 
 - **Neon** (default) — Cyberpunk bento-grid dashboard, vanilla JS, power-user focused
-- **Sakura** (new) — Clean, chat-first consumer UI with visual novel dialogue. React 19 + Vite + Tailwind CSS + Framer Motion. 18 built-in themes.
+- **Sakura** — Clean, chat-first consumer UI with visual novel dialogue. React 19 + Vite + Tailwind CSS + Framer Motion. 18 built-in themes.
+- **Nova** — Glassmorphic companion-focused UI with ambient lighting, emotion orb, command palette, and focused/companion view modes. React 19 + Vite + Zustand + CSS Modules.
 
-Switch frontends via `default_frontend` in config or visit `/neon` and `/sakura` directly. Both use the same API and share the 3D viewer iframe.
+Switch frontends via `default_frontend` in config or visit `/neon`, `/sakura`, and `/nova` directly. All three use the same API and share the 3D viewer iframe.
 
 ### Themes
 
@@ -473,6 +483,12 @@ waifu-rt3d/
 │   │   │   ├── components/    # ChatInterface, SettingsModal, WaifuCreator, …
 │   │   │   └── utils/         # Toast, KeyboardShortcuts, VoicePicker
 │   │   └── css/               # Cyber glass theme stylesheets
+│   ├── nova/                  # Glassmorphic companion UI (React 19 + Vite)
+│   │   └── src/
+│   │       ├── components/    # CompanionView, FocusedView, EmotionOrb, CommandPalette, …
+│   │       ├── stores/        # Zustand chat store
+│   │       ├── styles/        # CSS Modules, glass effects, animations
+│   │       └── lib/           # Types, character tints
 │   └── sakura/                # Chat-first consumer UI (React 19 + Vite)
 │       └── src/
 │           ├── views/         # ChatsView, ChatThread, CreateView, SettingsView
@@ -481,10 +497,20 @@ waifu-rt3d/
 │           ├── stores/        # Zustand (appStore, chatStore)
 │           ├── styles/        # 18 CSS themes (themes.css, base.css, components.css)
 │           └── lib/           # Typed API client, event bus, types
+├── launchers/
+│   ├── Waifu RT3D.app/        # macOS one-click launcher bundle
+│   └── build-launcher.sh      # Script to rebuild the .app bundle
+├── electron/
+│   ├── main.js                # Electron main process (app + pet windows, tray, IPC)
+│   ├── preload.js             # Context bridge API for renderer
+│   ├── backend-launcher.js    # Backend lifecycle manager (spawn, health, crash recovery)
+│   ├── splash.html            # Startup splash screen with progress bar
+│   └── assets/                # App icons (icon.png, tray-icon.png)
 ├── setup.sh                   # Interactive installer (fresh + repair modes)
 └── docs/
     ├── plans/                 # 15 design docs and implementation plans
     ├── USER_GUIDE.md
+    ├── LAUNCHER_GUIDE.md      # macOS .app + Electron launcher walkthrough
     ├── SETTINGS_REFERENCE.md  # All 75+ configuration keys
     ├── VRM_INTEGRATION.md
     ├── IMAGE_GEN_GUIDE.md

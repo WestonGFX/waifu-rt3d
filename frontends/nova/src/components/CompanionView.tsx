@@ -32,6 +32,8 @@ interface ChatMessage {
   id: number;
   role: 'user' | 'assistant';
   text: string;
+  /** Server-side message ID for fork operations. */
+  serverMessageId?: number;
 }
 
 interface CompanionViewProps {
@@ -58,6 +60,9 @@ interface CompanionViewProps {
   onCharacterSwitch?: () => void;
   onSettings?: () => void;
   onCommandPalette?: () => void;
+
+  /** Fork the conversation at a specific message ID. */
+  onForkMessage?: (messageId: number) => void;
 }
 
 export function CompanionView({
@@ -71,6 +76,7 @@ export function CompanionView({
   onCharacterSwitch,
   onSettings,
   onCommandPalette,
+  onForkMessage,
 }: CompanionViewProps) {
   const handleSend = useCallback((text: string) => {
     onSend(text);
@@ -131,6 +137,8 @@ export function CompanionView({
                 index={i}
                 characterName={msg.role === 'assistant' && character ? character.name : undefined}
                 noAnimation={i < messages.length - 3}
+                serverMessageId={msg.serverMessageId}
+                onFork={onForkMessage}
               >
                 {msg.text}
               </GlassBubble>

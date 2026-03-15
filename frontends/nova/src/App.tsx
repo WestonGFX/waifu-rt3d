@@ -1,9 +1,11 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useMemo, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AmbientLayer } from './components/AmbientLayer';
 import { ViewerFrame } from './components/ViewerFrame';
 import { CompanionView } from './components/CompanionView';
 import { FocusedView } from './components/FocusedView';
+import { CommandPalette } from './components/CommandPalette';
+import type { CommandAction } from './components/CommandPalette';
 import { ToastContainer } from './components/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useNovaStore } from './stores/novaStore';
@@ -135,6 +137,111 @@ export function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleCommandPalette, toggleMode]);
 
+  // ── Conversation forking ────────────────────────────────────────────────
+  const sessionId = useChatStore((s) => s.sessionId);
+  const loadSession = useChatStore((s) => s.loadSession);
+  const addToast = useNovaStore((s) => s.addToast);
+
+  /**
+   * Fork the current conversation at the given message.
+   * Creates a new session with messages up to messageId, then loads it.
+   */
+  const handleFork = useCallback(async (messageId: number) => {
+    if (sessionId == null) return;
+    try {
+      const result = await api.forkSession(sessionId, messageId);
+      addToast(`Conversation forked (${result.session.message_count} messages)`, 'success');
+      await loadSession(result.session.id);
+    } catch {
+      addToast('Failed to fork conversation', 'error');
+    }
+  }, [sessionId, addToast, loadSession]);
+
+  // ── Command palette state + actions ─────────────────────────────────────
+  const commandPaletteOpen = useNovaStore((s) => s.commandPaletteOpen);
+
+  /** Command palette actions available to the user. */
+  const paletteActions: CommandAction[] = useMemo(() => [
+    {
+      id: 'new-chat',
+      label: 'New Chat',
+      description: 'Start a new conversation with the current character',
+      shortcut: '\u2318N',
+      onExecute: () => {
+        const char = useAppStore.getState().activeCharacter;
+        if (char) createSession(char.id);
+      },
+    },
+    {
+      id: 'switch-mode',
+      label: mode === 'companion' ? 'Switch to Focused Mode' : 'Switch to Companion Mode',
+      description: 'Toggle between immersive and productivity layouts',
+      shortcut: '\u2318\\',
+      onExecute: toggleMode,
+    },
+    {
+      id: 'switch-character',
+      label: 'Next Character',
+      description: 'Cycle to the next character in the roster',
+      onExecute: () => handleCharacterSwitch(),
+    },
+    {
+      id: 'open-settings',
+      label: 'Settings',
+      description: 'Open the settings panel',
+      onExecute: () => {
+        useNovaStore.getState().setActivePanel('settings');
+        if (mode === 'companion') toggleMode();
+      },
+    },
+    {
+      id: 'open-memory',
+      label: 'Memory Manager',
+      description: 'View and manage conversation memories',
+      onExecute: () => {
+        useNovaStore.getState().setActivePanel('memory');
+        if (mode === 'companion') toggleMode();
+      },
+    },
+    {
+      id: 'open-history',
+      label: 'Chat History',
+      description: 'Browse past conversation sessions',
+      onExecute: () => {
+        useNovaStore.getState().setActivePanel('history');
+        if (mode === 'companion') toggleMode();
+      },
+    },
+    {
+      id: 'open-characters',
+      label: 'Characters',
+      description: 'View and switch between characters',
+      onExecute: () => {
+        useNovaStore.getState().setActivePanel('characters');
+        if (mode === 'companion') toggleMode();
+      },
+    },
+    {
+      id: 'open-games',
+      label: 'Games',
+      description: 'Play mini-games with your character',
+      onExecute: () => {
+        useNovaStore.getState().setActivePanel('games');
+        if (mode === 'companion') toggleMode();
+      },
+    },
+    {
+      id: 'open-lorebook',
+      label: 'Lorebook',
+      description: 'Manage world info and lore entries',
+      onExecute: () => {
+        useNovaStore.getState().setActivePanel('lorebook');
+        if (mode === 'companion') toggleMode();
+      },
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [mode, toggleMode, createSession]);
+
   // ── Character switching ─────────────────────────────────────────────────
   const handleCharacterSwitch = useCallback(() => {
     if (characters.length < 2 || !activeCharacter) return;
@@ -151,6 +258,7 @@ export function App() {
     id: typeof m.id === 'string' ? parseInt(m.id, 10) || Math.random() : m.id as number,
     role: m.role as 'user' | 'assistant',
     text: m.text || '',
+    serverMessageId: m.serverMessageId,
   }));
 
   // ── Loading gate ──────────────────────────────────────────────────────
@@ -217,6 +325,7 @@ export function App() {
               currentEmotion={currentEmotion}
               onCharacterSwitch={handleCharacterSwitch}
               onCommandPalette={toggleCommandPalette}
+              onForkMessage={handleFork}
             />
           </motion.div>
         ) : (
@@ -238,10 +347,18 @@ export function App() {
               activePanel={activePanel}
               onPanelChange={setActivePanel}
               currentEmotion={currentEmotion}
+              onForkMessage={handleFork}
             />
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Command palette + message search — Cmd+K */}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={toggleCommandPalette}
+        actions={paletteActions}
+      />
 
       {/* Toast notifications — always on top */}
       <ToastContainer />

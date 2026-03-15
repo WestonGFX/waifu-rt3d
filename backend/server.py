@@ -4063,6 +4063,102 @@ def duplicate_session(session_id: int):
     return {"ok": True, "session": {"id": new_id, "title": new_title}}
 
 
+@app.post("/api/sessions/fork")
+async def fork_session(req: Request):
+    """Fork a conversation from a specific message.
+
+    Creates a new session containing all messages up to and including
+    the specified message copied from the source session. The new
+    session records its lineage via ``forked_from_session_id`` and
+    ``forked_at_message_id`` so the UI can display fork history.
+
+    Args:
+        req: JSON body with ``session_id`` (source session) and
+            ``message_id`` (fork point — messages up to this ID
+            are copied).
+
+    Returns:
+        {
+            "ok": True,
+            "session": {
+                "id": int,
+                "title": str,
+                "forked_from_session_id": int,
+                "forked_at_message_id": int,
+                "message_count": int
+            }
+        }
+
+    Raises:
+        HTTPException(400): If session_id or message_id is missing.
+        HTTPException(404): If the source session does not exist.
+        HTTPException(404): If no messages found up to the given message_id.
+    """
+    body = await req.json()
+    session_id = body.get("session_id")
+    message_id = body.get("message_id")
+
+    if not session_id or not message_id:
+        raise HTTPException(400, "session_id and message_id are required")
+
+    conn = db()
+    cur = conn.cursor()
+
+    # Verify source session exists
+    cur.execute("SELECT title FROM sessions WHERE id=?", (session_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, "Source session not found")
+
+    original_title = row[0] or "Untitled"
+
+    # Get messages up to and including the fork point
+    cur.execute(
+        """SELECT role, text, ts, is_active, emotion, char_id
+           FROM messages
+           WHERE session_id=? AND id<=? AND is_active=1
+           ORDER BY id""",
+        (session_id, message_id),
+    )
+    source_messages = cur.fetchall()
+    if not source_messages:
+        conn.close()
+        raise HTTPException(404, "No messages found up to the specified message_id")
+
+    # Create the forked session with lineage metadata
+    new_title = f"Fork of {original_title}"
+    cur.execute(
+        """INSERT INTO sessions (title, forked_from_session_id, forked_at_message_id)
+           VALUES (?, ?, ?)""",
+        (new_title, session_id, message_id),
+    )
+    new_id = cur.lastrowid
+
+    # Copy messages into the new session
+    for role, text, ts, is_active, emotion, char_id in source_messages:
+        cur.execute(
+            """INSERT INTO messages (session_id, role, text, ts, is_active, emotion, char_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (new_id, role, text, ts, is_active, emotion, char_id),
+        )
+
+    conn.commit()
+    msg_count = len(source_messages)
+    conn.close()
+
+    return {
+        "ok": True,
+        "session": {
+            "id": new_id,
+            "title": new_title,
+            "forked_from_session_id": session_id,
+            "forked_at_message_id": message_id,
+            "message_count": msg_count,
+        },
+    }
+
+
 @app.post("/api/sessions/import")
 async def import_session(req: Request):
     """Import a session from JSON data.
@@ -10726,10 +10822,11 @@ def search_messages(
 
     Returns:
         A dict with:
+        - ``ok``: Always True on success.
         - ``query``: The original search term.
-        - ``results``: List of match dicts, each containing message_id,
-          session_id, char_id, char_name, role, snippet, and ts.
-        - ``count``: Total number of results returned.
+        - ``results``: List of match dicts, each containing id,
+          session_id, char_id, char_name, role, snippet, created_at.
+        - ``total``: Total number of results returned.
 
     Raises:
         HTTPException 422: If ``q`` is empty or whitespace-only.
@@ -10737,7 +10834,7 @@ def search_messages(
 
     Example:
         >>> GET /api/search/messages?q=hello&limit=5
-        {"query": "hello", "results": [...], "count": 2}
+        {"ok": true, "query": "hello", "results": [...], "total": 2}
     """
     if not q or not q.strip():
         raise HTTPException(status_code=422, detail="Query parameter 'q' must not be empty")
@@ -10751,11 +10848,12 @@ def search_messages(
         use_fts = fts_row is not None
 
         if use_fts:
-            # FTS5 path: ranked results with highlighted snippets
+            # FTS5 path: ranked results with highlighted snippets.
+            # snippet() col index 0 = the single 'content' column in messages_fts.
             base_sql = """
                 SELECT m.id, m.session_id, m.role, m.content, m.ts,
                        s.character_id, c.name AS char_name,
-                       snippet(messages_fts, 2, '<mark>', '</mark>', '\u2026', 32) AS snip
+                       snippet(messages_fts, 0, '<mark>', '</mark>', '\u2026', 40) AS snip
                 FROM messages_fts
                 JOIN messages m ON messages_fts.rowid = m.id
                 JOIN sessions s ON m.session_id = s.id
@@ -10789,17 +10887,17 @@ def search_messages(
         rows = conn.execute(base_sql, params).fetchall()
         results = [
             {
-                "message_id": row[0],
+                "id": row[0],
                 "session_id": row[1],
                 "role": row[2],
                 "snippet": row[7],
-                "ts": row[4],
+                "created_at": row[4],
                 "char_id": row[5],
                 "char_name": row[6],
             }
             for row in rows
         ]
-        return {"query": q, "results": results, "count": len(results)}
+        return {"ok": True, "query": q, "results": results, "total": len(results)}
     except HTTPException:
         raise
     except Exception as _exc:

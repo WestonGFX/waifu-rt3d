@@ -214,6 +214,23 @@ export const api = {
   updateSessionTags: (id: number, tags: string[]) =>
     patch<{ ok: boolean; tags: string[] }>(`/api/sessions/${id}/tags`, { tags }),
   deleteSession: (id: number) => del<{ ok: boolean; deleted_messages: number }>(`/api/sessions/${id}`),
+
+  /**
+   * Fork a conversation from a specific message.
+   *
+   * Creates a new session with all messages up to and including the
+   * specified message copied from the source session. The new session
+   * records fork lineage for UI display.
+   *
+   * @param sessionId - Source session to fork from.
+   * @param messageId - Fork point — messages up to this ID are copied.
+   * @returns The newly created forked session with metadata.
+   */
+  forkSession: (sessionId: number, messageId: number) =>
+    post<{ ok: boolean; session: { id: number; title: string; forked_from_session_id: number; forked_at_message_id: number; message_count: number } }>(
+      '/api/sessions/fork',
+      { session_id: sessionId, message_id: messageId },
+    ),
   getMessages: (sessionId: number) =>
     get<{ messages: Array<{ id: number; role: string; content: string; created_at: string }> }>(
       `/api/sessions/${sessionId}/messages`
@@ -820,4 +837,34 @@ export const api = {
       batch_range?: [number, number];
       error?: string;
     }>(`/api/sessions/${sessionId}/compress`, { keep_recent: keepRecent }),
+
+  /**
+   * Full-text search across all message history.
+   *
+   * Uses the FTS5 index for ranked, snippet-highlighted results when
+   * available, falling back to a LIKE scan otherwise.
+   *
+   * @param query - Search query string.
+   * @param limit - Maximum number of results (default 20).
+   * @param charId - Optional character ID filter.
+   * @returns Search response with results array and total count.
+   */
+  searchMessages: (query: string, limit = 20, charId?: number) => {
+    const params = new URLSearchParams({ q: query, limit: String(limit) });
+    if (charId != null) params.set('char_id', String(charId));
+    return get<{
+      ok: boolean;
+      query: string;
+      results: Array<{
+        id: number;
+        session_id: number;
+        role: string;
+        snippet: string;
+        created_at: string;
+        char_id: number;
+        char_name: string;
+      }>;
+      total: number;
+    }>(`/api/search/messages?${params}`);
+  },
 };

@@ -36,6 +36,8 @@ interface FocusedMessage {
   id: number;
   role: 'user' | 'assistant';
   text: string;
+  /** Server-side message ID for fork operations. */
+  serverMessageId?: number;
 }
 
 interface FocusedViewProps {
@@ -49,6 +51,8 @@ interface FocusedViewProps {
   onPanelChange: (panel: string | null) => void;
   /** Current emotion from the LLM for the emotion indicator. */
   currentEmotion: { emotion: string; intensity: number } | null;
+  /** Fork the conversation at a specific message ID. */
+  onForkMessage?: (messageId: number) => void;
 }
 
 export function FocusedView({
@@ -61,6 +65,7 @@ export function FocusedView({
   activePanel,
   onPanelChange,
   currentEmotion,
+  onForkMessage,
 }: FocusedViewProps) {
   const handleSend = useCallback((text: string) => {
     onSend(text);
@@ -129,6 +134,8 @@ export function FocusedView({
                 index={0}
                 characterName={msg.role === 'assistant' && character ? character.name : undefined}
                 noAnimation={i < messages.length - 3}
+                serverMessageId={msg.serverMessageId}
+                onFork={onForkMessage}
               >
                 {msg.text}
               </GlassBubble>

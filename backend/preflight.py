@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v40)
+- Database schema migrations (v3 → v4 → … → v45)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -2425,6 +2425,139 @@ def migrate_to_v43(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v44(con: sqlite3.Connection) -> bool:
+    """Add conversation forking columns to sessions table (v44).
+
+    Adds two columns that track fork lineage:
+    - forked_from_session_id: the source session this was forked from
+    - forked_at_message_id: the message ID where the fork diverged
+
+    Together these allow the UI to show fork history and let users
+    navigate back to the original conversation at the branch point.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v44+.
+
+    Example:
+        >>> if migrate_to_v44(con):
+        ...     logger.info("Conversation forking columns added")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 44:
+        return False
+
+    try:
+        logger.info("Applying schema v44 migration (conversation forking columns)...")
+
+        try:
+            con.execute(
+                "ALTER TABLE sessions ADD COLUMN forked_from_session_id INTEGER REFERENCES sessions(id)"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        try:
+            con.execute(
+                "ALTER TABLE sessions ADD COLUMN forked_at_message_id INTEGER"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (44)")
+        con.commit()
+        logger.info("✅ Schema v44 migration complete (conversation forking columns added)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v44 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v45(con: sqlite3.Connection) -> bool:
+    """Add FTS5 full-text search index on messages table (v45).
+
+    Creates a content-synced FTS5 virtual table backed by the ``messages``
+    table's ``content`` column.  Three triggers keep the index in sync with
+    INSERT, DELETE, and UPDATE operations on ``messages``.
+
+    The FTS table enables the ``/api/search/messages`` endpoint to use
+    ranked, snippet-highlighted full-text search instead of falling back
+    to a slow ``LIKE`` scan.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v45+.
+
+    Example:
+        >>> if migrate_to_v45(con):
+        ...     logger.info("FTS5 search index created")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 45:
+        return False
+
+    try:
+        logger.info("Applying schema v45 migration (FTS5 full-text search index on messages)...")
+
+        # Create the FTS5 virtual table backed by messages.content
+        con.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+                content,
+                content='messages',
+                content_rowid='id',
+                tokenize='unicode61'
+            )
+        """)
+
+        # Populate from existing messages
+        con.execute("""
+            INSERT INTO messages_fts(rowid, content)
+            SELECT id, content FROM messages
+        """)
+
+        # Trigger: keep FTS in sync on INSERT
+        con.execute("""
+            CREATE TRIGGER IF NOT EXISTS messages_fts_insert
+            AFTER INSERT ON messages BEGIN
+                INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+            END
+        """)
+
+        # Trigger: keep FTS in sync on DELETE
+        con.execute("""
+            CREATE TRIGGER IF NOT EXISTS messages_fts_delete
+            AFTER DELETE ON messages BEGIN
+                INSERT INTO messages_fts(messages_fts, rowid, content)
+                VALUES('delete', old.id, old.content);
+            END
+        """)
+
+        # Trigger: keep FTS in sync on UPDATE
+        con.execute("""
+            CREATE TRIGGER IF NOT EXISTS messages_fts_update
+            AFTER UPDATE OF content ON messages BEGIN
+                INSERT INTO messages_fts(messages_fts, rowid, content)
+                VALUES('delete', old.id, old.content);
+                INSERT INTO messages_fts(rowid, content)
+                VALUES (new.id, new.content);
+            END
+        """)
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (45)")
+        con.commit()
+        logger.info("✅ Schema v45 migration complete (FTS5 index + sync triggers)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v45 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -2762,21 +2895,35 @@ def ensure_db():
             if migrate_to_v43(con):
                 version = 43
 
+        # Upgrade from v43 to v44 (Conversation forking columns)
+        if version < 44:
+            logger.info("Upgrading database schema from v43 to v44...")
+            logger.info("  - Adding forked_from_session_id and forked_at_message_id to sessions")
+            if migrate_to_v44(con):
+                version = 44
+
+        # Upgrade from v44 to v45 (FTS5 full-text search index)
+        if version < 45:
+            logger.info("Upgrading database schema from v44 to v45...")
+            logger.info("  - Creating messages_fts FTS5 virtual table + sync triggers")
+            if migrate_to_v45(con):
+                version = 45
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 43:
-            raise RuntimeError(f"Database initialization failed: Expected v43, got v{final_version}")
+        if final_version < 45:
+            raise RuntimeError(f"Database initialization failed: Expected v45, got v{final_version}")
 
-        if final_version > 43:
-            logger.warning(f"Database is newer than application (v{final_version} > v43). Some features might be unused.")
+        if final_version > 45:
+            logger.warning(f"Database is newer than application (v{final_version} > v45). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v43 upgrades batch 2 character prompts)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v45 adds FTS5 search index)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

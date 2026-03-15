@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { GitBranch } from 'lucide-react';
 import glass from '../styles/glass.module.css';
 import clsx from 'clsx';
 
@@ -34,6 +36,12 @@ interface GlassBubbleProps {
 
   /** Disable the entrance animation (e.g., for pre-loaded history). */
   noAnimation?: boolean;
+
+  /** Server-side message ID — required for fork to work. */
+  serverMessageId?: number;
+
+  /** Callback when the user clicks the fork button. Receives the server message ID. */
+  onFork?: (messageId: number) => void;
 }
 
 /** Spring config for chat bubble entrances — bouncier than UI panels. */
@@ -45,8 +53,14 @@ export function GlassBubble({
   children,
   characterName,
   noAnimation = false,
+  serverMessageId,
+  onFork,
 }: GlassBubbleProps) {
   const isUser = role === 'user';
+  const [hovered, setHovered] = useState(false);
+
+  /** Whether the fork button should be visible — only when hovered and a valid message ID exists. */
+  const showFork = hovered && serverMessageId != null && onFork != null;
 
   return (
     <motion.div
@@ -64,6 +78,7 @@ export function GlassBubble({
         // Tail radius: smaller on the sender's side
         borderBottomRightRadius: isUser ? 4 : undefined,
         borderBottomLeftRadius: !isUser ? 4 : undefined,
+        position: 'relative',
       }}
       initial={noAnimation ? false : {
         opacity: 0,
@@ -80,6 +95,8 @@ export function GlassBubble({
         ...bubbleSpring,
         delay: index * 0.15,
       }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       {/* Character name header (assistant messages only) */}
       {!isUser && characterName && (
@@ -98,6 +115,44 @@ export function GlassBubble({
       <div style={{ fontSize: 13.5, lineHeight: 1.55 }}>
         {children}
       </div>
+
+      {/* Fork button — appears on hover, top-right corner */}
+      {showFork && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onFork!(serverMessageId!);
+          }}
+          title="Fork conversation from this message"
+          style={{
+            position: 'absolute',
+            top: 4,
+            right: 4,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 24,
+            height: 24,
+            borderRadius: 6,
+            border: 'none',
+            background: 'rgba(255, 255, 255, 0.08)',
+            color: 'var(--nova-text-secondary, rgba(255,255,255,0.5))',
+            cursor: 'pointer',
+            padding: 0,
+            transition: 'background 0.15s ease, color 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.18)';
+            e.currentTarget.style.color = 'var(--nova-accent-primary, #ff8da1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+            e.currentTarget.style.color = 'var(--nova-text-secondary, rgba(255,255,255,0.5))';
+          }}
+        >
+          <GitBranch size={13} />
+        </button>
+      )}
     </motion.div>
   );
 }

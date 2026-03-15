@@ -11,6 +11,8 @@ import { CharactersPanel } from './CharactersPanel';
 import { MemoryPanel } from './MemoryPanel';
 import { GamesPanel } from './GamesPanel';
 import { LorebookPanel } from './LorebookPanel';
+import { ExpressionPortraitsPanel } from './ExpressionPortraitsPanel';
+import { SpectatorPanel } from './SpectatorPanel';
 import type { Character } from '../lib/types';
 import glass from '../styles/glass.module.css';
 import styles from './FocusedView.module.css';
@@ -70,7 +72,9 @@ export function FocusedView({
     characters: <CharactersPanel />,
     memory: <MemoryPanel />,
     games: <GamesPanel />,
+    spectator: <SpectatorPanel />,
     lorebook: <LorebookPanel />,
+    portraits: <ExpressionPortraitsPanel />,
     settings: <SettingsPanel />,
   }), []);
 

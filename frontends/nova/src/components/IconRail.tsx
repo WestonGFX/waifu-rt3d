@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare, Users, Brain, Gamepad2, BookOpen, Settings,
+  ImageIcon, MonitorPlay,
 } from 'lucide-react';
 import clsx from 'clsx';
 import glass from '../styles/glass.module.css';
@@ -37,7 +38,9 @@ const RAIL_ITEMS: RailItem[] = [
   { id: 'characters', label: 'Characters', Icon: Users },
   { id: 'memory', label: 'Memory', Icon: Brain },
   { id: 'games', label: 'Games', Icon: Gamepad2 },
+  { id: 'spectator', label: 'Game Spectator', Icon: MonitorPlay },
   { id: 'lorebook', label: 'Lorebook', Icon: BookOpen },
+  { id: 'portraits', label: 'Portraits', Icon: ImageIcon },
   { id: 'settings', label: 'Settings', Icon: Settings },
 ];
 

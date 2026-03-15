@@ -19,7 +19,14 @@
           "quality_tier": "good",
           "license": "Meta Llama",
           "model_type": "rp-tuned",
-          "notes": "Best 8B for emotional depth; 40% knowledge + 60% RP blend"
+          "notes": "Best 8B for emotional depth; 40% knowledge + 60% RP blend",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 8,
+            "instruction_following": 6,
+            "roleplay_immersion": 8
+          }
         },
         {
           "id": "lunaris-8b",
@@ -33,7 +40,14 @@
           "quality_tier": "good",
           "license": "Meta Llama",
           "model_type": "rp-tuned",
-          "notes": "Balanced creativity with logic; top 10 in community RP tests"
+          "notes": "Balanced creativity with logic; top 10 in community RP tests",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 8,
+            "instruction_following": 7,
+            "roleplay_immersion": 8
+          }
         },
         {
           "id": "rpmax-8b",
@@ -47,7 +61,14 @@
           "quality_tier": "good",
           "license": "Meta Llama",
           "model_type": "rp-tuned",
-          "notes": "Diverse curated RP datasets; good at maintaining tone"
+          "notes": "Diverse curated RP datasets; good at maintaining tone",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 7,
+            "instruction_following": 7,
+            "roleplay_immersion": 8
+          }
         },
         {
           "id": "humanish-rp-8b",
@@ -61,7 +82,14 @@
           "quality_tier": "good",
           "license": "Meta Llama",
           "model_type": "rp-tuned",
-          "notes": "DPO-optimized for authentic emotional expression"
+          "notes": "DPO-optimized for authentic emotional expression",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 8,
+            "instruction_following": 6,
+            "roleplay_immersion": 8
+          }
         },
         {
           "id": "rpmax-nemo-12b-tight",
@@ -75,7 +103,14 @@
           "quality_tier": "very_good",
           "license": "Apache 2.0",
           "model_type": "rp-tuned",
-          "notes": "12B quality squeezed to fit 8GB; use IQ4_XS for tight fit"
+          "notes": "12B quality squeezed to fit 8GB; use IQ4_XS for tight fit",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 7,
+            "instruction_following": 8,
+            "roleplay_immersion": 8
+          }
         },
         {
           "id": "mistral-7b-instruct",
@@ -89,7 +124,14 @@
           "quality_tier": "good",
           "license": "Apache 2.0",
           "model_type": "instruct",
-          "notes": "Utility model for summarization and tool routing"
+          "notes": "Utility model for summarization and tool routing",
+          "content_rating": "general",
+          "quality_ratings": {
+            "creative_writing": 5,
+            "character_voice": 4,
+            "instruction_following": 8,
+            "roleplay_immersion": 4
+          }
         },
         {
           "id": "qwen3-vl-8b-tight",
@@ -103,7 +145,14 @@
           "quality_tier": "good",
           "license": "Apache 2.0",
           "model_type": "instruct",
-          "notes": "Vision model — tight fit on 8GB"
+          "notes": "Vision model — tight fit on 8GB",
+          "content_rating": "general",
+          "quality_ratings": {
+            "creative_writing": 5,
+            "character_voice": 4,
+            "instruction_following": 8,
+            "roleplay_immersion": 4
+          }
         },
         {
           "id": "neural-dark-waifu-8b",
@@ -117,7 +166,14 @@
           "quality_tier": "good",
           "license": "Meta Llama",
           "model_type": "rp-tuned",
-          "notes": "Waifu-specific RP tuning; emotional companion focus"
+          "notes": "Waifu-specific RP tuning; emotional companion focus",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 8,
+            "instruction_following": 5,
+            "roleplay_immersion": 9
+          }
         },
         {
           "id": "infinite-waifu-8b",
@@ -131,7 +187,14 @@
           "quality_tier": "good",
           "license": "Meta Llama",
           "model_type": "rp-tuned",
-          "notes": "Creative uncensored companion chat; waifu-optimized"
+          "notes": "Creative uncensored companion chat; waifu-optimized",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 8,
+            "instruction_following": 5,
+            "roleplay_immersion": 9
+          }
         }
       ]
     },
@@ -152,7 +215,14 @@
           "quality_tier": "very_good",
           "license": "Apache 2.0",
           "model_type": "rp-tuned",
-          "notes": "Best all-rounder at this tier; 32K context, fast, minimal repetition"
+          "notes": "Best all-rounder at this tier; 32K context, fast, minimal repetition",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 8,
+            "character_voice": 7,
+            "instruction_following": 8,
+            "roleplay_immersion": 8
+          }
         },
         {
           "id": "rocinante-x-12b",
@@ -166,7 +236,14 @@
           "quality_tier": "very_good",
           "license": "Apache 2.0",
           "model_type": "rp-tuned",
-          "notes": "Fun dialogue, robust RP, fresh writing style"
+          "notes": "Fun dialogue, robust RP, fresh writing style",
+          "content_rating": "edgy",
+          "quality_ratings": {
+            "creative_writing": 8,
+            "character_voice": 8,
+            "instruction_following": 7,
+            "roleplay_immersion": 8
+          }
         },
         {
           "id": "captain-bmo-12b",
@@ -180,7 +257,14 @@
           "quality_tier": "very_good",
           "license": "Apache 2.0",
           "model_type": "rp-tuned",
-          "notes": "#1 character consistency in community blind testing"
+          "notes": "#1 character consistency in community blind testing",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 8,
+            "character_voice": 9,
+            "instruction_following": 7,
+            "roleplay_immersion": 9
+          }
         },
         {
           "id": "chronos-gold-12b",
@@ -194,7 +278,14 @@
           "quality_tier": "very_good",
           "license": "Apache 2.0",
           "model_type": "rp-tuned",
-          "notes": "Excellent long-context memory; mature narrative tone"
+          "notes": "Excellent long-context memory; mature narrative tone",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 8,
+            "character_voice": 8,
+            "instruction_following": 7,
+            "roleplay_immersion": 8
+          }
         },
         {
           "id": "cydonia-24b",
@@ -208,7 +299,14 @@
           "quality_tier": "excellent",
           "license": "Apache 2.0",
           "model_type": "rp-tuned",
-          "notes": "Premium pick; fresh non-repetitive writing, great character consistency"
+          "notes": "Premium pick; fresh non-repetitive writing, great character consistency",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 9,
+            "character_voice": 9,
+            "instruction_following": 7,
+            "roleplay_immersion": 9
+          }
         },
         {
           "id": "euryale-70b-exl2",
@@ -222,7 +320,14 @@
           "quality_tier": "outstanding",
           "license": "Meta Llama",
           "model_type": "rp-tuned",
-          "notes": "Best overall RP quality; extreme quantization but still coherent"
+          "notes": "Best overall RP quality; extreme quantization but still coherent",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 9,
+            "character_voice": 9,
+            "instruction_following": 7,
+            "roleplay_immersion": 9
+          }
         },
         {
           "id": "qwen3.5-35b-a3b",
@@ -236,7 +341,14 @@
           "quality_tier": "excellent",
           "license": "Apache 2.0",
           "model_type": "instruct",
-          "notes": "MoE: 3B active params, 35B total. Best utility/speed ratio."
+          "notes": "MoE: 3B active params, 35B total. Best utility/speed ratio.",
+          "content_rating": "general",
+          "quality_ratings": {
+            "creative_writing": 6,
+            "character_voice": 5,
+            "instruction_following": 9,
+            "roleplay_immersion": 5
+          }
         },
         {
           "id": "qwen3-vl-8b",
@@ -250,7 +362,14 @@
           "quality_tier": "good",
           "license": "Apache 2.0",
           "model_type": "instruct",
-          "notes": "Vision analysis — game spectator, image understanding"
+          "notes": "Vision analysis — game spectator, image understanding",
+          "content_rating": "general",
+          "quality_ratings": {
+            "creative_writing": 5,
+            "character_voice": 4,
+            "instruction_following": 8,
+            "roleplay_immersion": 4
+          }
         },
         {
           "id": "magnum-v4-12b",
@@ -264,7 +383,14 @@
           "quality_tier": "excellent",
           "license": "Apache 2.0",
           "model_type": "rp-tuned",
-          "notes": "Excellent emotional range; uncensored; strong character consistency"
+          "notes": "Excellent emotional range; uncensored; strong character consistency",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 8,
+            "character_voice": 9,
+            "instruction_following": 7,
+            "roleplay_immersion": 9
+          }
         },
         {
           "id": "qwen35-9b-uncensored",
@@ -278,7 +404,14 @@
           "quality_tier": "very_good",
           "license": "Apache 2.0",
           "model_type": "rp-tuned",
-          "notes": "Aggressively abliterated Qwen3.5; fast at 9B; good creative freedom"
+          "notes": "Aggressively abliterated Qwen3.5; fast at 9B; good creative freedom",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 7,
+            "instruction_following": 7,
+            "roleplay_immersion": 8
+          }
         },
         {
           "id": "qwen35-9b-abliterated",
@@ -292,7 +425,14 @@
           "quality_tier": "very_good",
           "license": "Apache 2.0",
           "model_type": "rp-tuned",
-          "notes": "Clean abliteration; retains strong instruction following alongside creative freedom"
+          "notes": "Clean abliteration; retains strong instruction following alongside creative freedom",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 7,
+            "instruction_following": 8,
+            "roleplay_immersion": 8
+          }
         },
         {
           "id": "midnight-miqu-70b-exl2",
@@ -306,7 +446,14 @@
           "quality_tier": "outstanding",
           "license": "Apache 2.0",
           "model_type": "rp-tuned",
-          "notes": "Uncensored merge; exceptional creative writing; extreme compression"
+          "notes": "Uncensored merge; exceptional creative writing; extreme compression",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 9,
+            "character_voice": 9,
+            "instruction_following": 6,
+            "roleplay_immersion": 9
+          }
         }
       ]
     },
@@ -327,7 +474,14 @@
           "quality_tier": "excellent",
           "license": "Apache 2.0",
           "model_type": "rp-tuned",
-          "notes": "Best daily driver for Apple Silicon — fast, high-quality RP"
+          "notes": "Best daily driver for Apple Silicon — fast, high-quality RP",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 9,
+            "character_voice": 9,
+            "instruction_following": 7,
+            "roleplay_immersion": 9
+          }
         },
         {
           "id": "rpmax-nemo-12b-mlx",
@@ -341,7 +495,14 @@
           "quality_tier": "very_good",
           "license": "Apache 2.0",
           "model_type": "rp-tuned",
-          "notes": "Fast on MLX; 32K context"
+          "notes": "Fast on MLX; 32K context",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 8,
+            "character_voice": 7,
+            "instruction_following": 8,
+            "roleplay_immersion": 8
+          }
         },
         {
           "id": "euryale-70b-exl2-mlx",
@@ -355,7 +516,14 @@
           "quality_tier": "outstanding",
           "license": "Meta Llama",
           "model_type": "rp-tuned",
-          "notes": "Fits in ~20GB; slow but best RP quality for special occasions"
+          "notes": "Fits in ~20GB; slow but best RP quality for special occasions",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 9,
+            "character_voice": 9,
+            "instruction_following": 7,
+            "roleplay_immersion": 9
+          }
         },
         {
           "id": "qwen3.5-27b-mlx",
@@ -369,7 +537,14 @@
           "quality_tier": "excellent",
           "license": "Apache 2.0",
           "model_type": "instruct",
-          "notes": "General-purpose utility model for Apple Silicon"
+          "notes": "General-purpose utility model for Apple Silicon",
+          "content_rating": "general",
+          "quality_ratings": {
+            "creative_writing": 6,
+            "character_voice": 5,
+            "instruction_following": 9,
+            "roleplay_immersion": 5
+          }
         },
         {
           "id": "qwen3-vl-8b-mlx",
@@ -383,7 +558,14 @@
           "quality_tier": "good",
           "license": "Apache 2.0",
           "model_type": "instruct",
-          "notes": "Vision analysis on Apple Silicon"
+          "notes": "Vision analysis on Apple Silicon",
+          "content_rating": "general",
+          "quality_ratings": {
+            "creative_writing": 5,
+            "character_voice": 4,
+            "instruction_following": 8,
+            "roleplay_immersion": 4
+          }
         },
         {
           "id": "qwen35-27b-distilled-mlx",
@@ -397,7 +579,14 @@
           "quality_tier": "excellent",
           "license": "Apache 2.0",
           "model_type": "instruct",
-          "notes": "Claude Opus reasoning patterns distilled into Qwen3.5; strong logic + creativity"
+          "notes": "Claude Opus reasoning patterns distilled into Qwen3.5; strong logic + creativity",
+          "content_rating": "general",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 5,
+            "instruction_following": 9,
+            "roleplay_immersion": 5
+          }
         }
       ]
     },
@@ -418,7 +607,14 @@
           "quality_tier": "basic",
           "license": "Apache 2.0",
           "model_type": "rp-tuned",
-          "notes": "Best ultra-compact RP; handles basic scenarios"
+          "notes": "Best ultra-compact RP; handles basic scenarios",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 5,
+            "character_voice": 6,
+            "instruction_following": 5,
+            "roleplay_immersion": 6
+          }
         },
         {
           "id": "qwen3.5-3b",
@@ -432,7 +628,14 @@
           "quality_tier": "basic",
           "license": "Apache 2.0",
           "model_type": "instruct",
-          "notes": "Excellent draft model for speculative decoding; thinking support"
+          "notes": "Excellent draft model for speculative decoding; thinking support",
+          "content_rating": "general",
+          "quality_ratings": {
+            "creative_writing": 4,
+            "character_voice": 3,
+            "instruction_following": 7,
+            "roleplay_immersion": 3
+          }
         },
         {
           "id": "llama-3.2-3b",
@@ -446,7 +649,14 @@
           "quality_tier": "basic",
           "license": "Meta Llama",
           "model_type": "instruct",
-          "notes": "Good draft model for Llama-family speculative decoding"
+          "notes": "Good draft model for Llama-family speculative decoding",
+          "content_rating": "general",
+          "quality_ratings": {
+            "creative_writing": 4,
+            "character_voice": 3,
+            "instruction_following": 7,
+            "roleplay_immersion": 3
+          }
         }
       ]
     }

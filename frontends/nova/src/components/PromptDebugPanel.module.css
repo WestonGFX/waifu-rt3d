@@ -1,0 +1,218 @@
+/* ==========================================================================
+ * PromptDebugPanel — Prompt Assembly Debugger
+ * ==========================================================================
+ * Shows what was sent to the LLM: system prompt, lorebook, memory,
+ * chat history, and token counts per section. Collapsible footer bar.
+ * ========================================================================== */
+
+/* --- Outer container (always visible) --- */
+.wrapper {
+  border-top: 1px solid var(--nova-glass-border);
+  background: var(--nova-glass-bg);
+  backdrop-filter: blur(var(--nova-glass-blur));
+  -webkit-backdrop-filter: blur(var(--nova-glass-blur));
+  transition: max-height var(--nova-transition-normal) ease;
+  overflow: hidden;
+}
+
+/* --- Collapsed header bar (always visible) --- */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--nova-transition-fast) ease;
+}
+
+.header:hover {
+  background: var(--nova-glass-bg-strong);
+}
+
+.headerLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nova-text-secondary);
+  flex-shrink: 0;
+}
+
+.headerUsage {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--nova-text-primary);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.chevron {
+  color: var(--nova-text-muted);
+  transition: transform var(--nova-transition-fast) ease;
+  flex-shrink: 0;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* --- Mini budget bar (in collapsed header) --- */
+.miniBar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+  display: flex;
+  min-width: 60px;
+}
+
+.miniBarSegment {
+  height: 100%;
+  transition: width var(--nova-transition-normal) ease;
+}
+
+/* --- Expanded detail area --- */
+.detail {
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* --- Full-width stacked budget bar --- */
+.budgetBar {
+  height: 20px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+  display: flex;
+  position: relative;
+}
+
+.budgetBarSegment {
+  height: 100%;
+  transition: width var(--nova-transition-normal) ease;
+  position: relative;
+}
+
+/* Tooltip on hover */
+.budgetBarSegment::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background: var(--nova-bg-deep);
+  border: 1px solid var(--nova-glass-border-strong);
+  border-radius: 6px;
+  font-size: 10px;
+  color: var(--nova-text-primary);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--nova-transition-fast) ease;
+  z-index: 10;
+}
+
+.budgetBarSegment:hover::after {
+  opacity: 1;
+}
+
+/* --- Section breakdown list --- */
+.sectionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sectionRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--nova-text-primary);
+}
+
+.sectionDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sectionName {
+  flex: 1;
+  text-transform: capitalize;
+  color: var(--nova-text-secondary);
+}
+
+.sectionTokens {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  min-width: 60px;
+  text-align: right;
+}
+
+.sectionPct {
+  font-variant-numeric: tabular-nums;
+  color: var(--nova-text-muted);
+  min-width: 40px;
+  text-align: right;
+}
+
+/* --- Footer totals --- */
+.totals {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--nova-glass-border);
+  font-size: 12px;
+}
+
+.totalLabel {
+  color: var(--nova-text-secondary);
+}
+
+.totalValue {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Color-coded usage level */
+.usageGreen {
+  color: #66d9a0;
+}
+
+.usageOrange {
+  color: #ffb86c;
+}
+
+.usageRed {
+  color: #ff6b6b;
+}
+
+/* --- Error state --- */
+.error {
+  font-size: 11px;
+  color: var(--nova-text-muted);
+  text-align: center;
+  padding: 8px;
+}
+
+/* --- Loading skeleton pulse --- */
+.skeleton {
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.15; }
+}

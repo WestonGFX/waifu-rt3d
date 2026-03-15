@@ -5,6 +5,7 @@ import { ModeToggle } from './ModeToggle';
 import { GlassBubble, TypingIndicator } from './GlassBubble';
 import { InputBar } from './InputBar';
 import { EmotionOrb } from './EmotionOrb';
+import { PromptDebugPanel } from './PromptDebugPanel';
 import { SettingsPanel } from './SettingsPanel';
 import { ChatHistoryPanel } from './ChatHistoryPanel';
 import { CharactersPanel } from './CharactersPanel';
@@ -152,6 +153,9 @@ export function FocusedView({
             placeholder={character ? `Message ${character.name}...` : 'Say something...'}
           />
         </div>
+
+        {/* Prompt Assembly Debugger — collapsible footer */}
+        <PromptDebugPanel charId={character?.id} />
       </div>
 
       {/* Right: Small 3D viewer panel */}

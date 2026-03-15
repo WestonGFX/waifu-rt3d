@@ -671,7 +671,7 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     set({ lastCommand: cmd, _seq: seq });
   },
 
-  dispatchLoadAnimation: (url, name, retarget = false) => {
+  dispatchLoadAnimation: (url: string, name: string, retarget = false) => {
     const state = get();
     const seq = state._seq + 1;
     const cmd: ViewerCommand = { kind: 'loadAnimation', payload: { url, name, retarget }, _seq: seq };
@@ -682,7 +682,7 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     set({ lastCommand: cmd, _seq: seq });
   },
 
-  dispatchPlayAnimation: (name, opts = {}) => {
+  dispatchPlayAnimation: (name: string, opts: Record<string, unknown> = {}) => {
     const state = get();
     const seq = state._seq + 1;
     const cmd: ViewerCommand = { kind: 'playAnimation', payload: { name, ...opts }, _seq: seq };
@@ -715,7 +715,7 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     set({ lastCommand: cmd, _seq: seq });
   },
 
-  dispatchSetAnimationState: (animState, fadeDuration) => {
+  dispatchSetAnimationState: (animState: string, fadeDuration?: number) => {
     const state = get();
     const seq = state._seq + 1;
     const cmd: ViewerCommand = { kind: 'setAnimationState', payload: { state: animState, fadeDuration }, _seq: seq };
@@ -770,7 +770,7 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     set({ lastCommand: cmd, _seq: seq });
   },
 
-  dispatchLoadAnimationManifest: (manifest) => {
+  dispatchLoadAnimationManifest: (manifest: Record<string, unknown>) => {
     const state = get();
     const seq = state._seq + 1;
     const cmd: ViewerCommand = { kind: 'loadAnimationManifest', payload: { manifest }, _seq: seq };

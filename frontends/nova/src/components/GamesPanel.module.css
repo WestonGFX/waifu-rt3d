@@ -1,0 +1,481 @@
+/* ==========================================================================
+ * GamesPanel — Glass-styled mini-games panel for Focused mode
+ * ==========================================================================
+ * Renders inside the IconRail's expandable panel (280px wide).
+ * Game type selector grid, active game displays, and score readouts.
+ * ========================================================================== */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* --- Game type selector grid --- */
+.gameGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.gamePill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--nova-text-secondary);
+  background: var(--nova-glass-bg);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: var(--nova-radius-pill);
+  backdrop-filter: blur(var(--nova-glass-blur));
+  -webkit-backdrop-filter: blur(var(--nova-glass-blur));
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background var(--nova-transition-fast) ease,
+    border-color var(--nova-transition-fast) ease,
+    color var(--nova-transition-fast) ease,
+    transform var(--nova-transition-fast) cubic-bezier(0.34, 1.56, 0.64, 1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gamePill:hover {
+  background: var(--nova-glass-bg-strong);
+  border-color: var(--nova-glass-border-strong);
+  color: var(--nova-text-primary);
+}
+
+.gamePill:active {
+  transform: scale(0.95);
+}
+
+.gamePillActive {
+  background: var(--nova-glass-bg-strong);
+  border-color: var(--nova-accent-primary);
+  color: var(--nova-accent-primary);
+}
+
+/* --- Topic input --- */
+.topicInput {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--nova-text-primary);
+  background: var(--nova-glass-bg-strong);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: var(--nova-radius-pill);
+  outline: none;
+  transition: border-color var(--nova-transition-fast) ease;
+  font-family: inherit;
+}
+
+.topicInput:focus {
+  border-color: var(--nova-accent-primary);
+}
+
+.topicInput::placeholder {
+  color: var(--nova-text-muted);
+}
+
+/* --- Start / Play Again button --- */
+.startButton {
+  width: 100%;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nova-bg-deep);
+  background: var(--nova-accent-primary);
+  border: none;
+  border-radius: var(--nova-radius-pill);
+  cursor: pointer;
+  transition:
+    opacity var(--nova-transition-fast) ease,
+    transform var(--nova-transition-fast) cubic-bezier(0.34, 1.56, 0.64, 1);
+  letter-spacing: 0.02em;
+}
+
+.startButton:hover {
+  opacity: 0.9;
+}
+
+.startButton:active {
+  transform: scale(0.97);
+}
+
+.startButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* --- Active game area --- */
+.gameArea {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--nova-glass-bg);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: var(--nova-radius-panel);
+  padding: 12px;
+}
+
+.gameLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--nova-text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.questionText {
+  font-size: 13px;
+  color: var(--nova-text-primary);
+  line-height: 1.5;
+}
+
+/* --- Trivia option buttons --- */
+.optionGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.optionButton {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--nova-text-primary);
+  background: var(--nova-glass-bg-strong);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background var(--nova-transition-fast) ease,
+    border-color var(--nova-transition-fast) ease;
+  font-family: inherit;
+}
+
+.optionButton:hover {
+  background: var(--nova-glass-bg);
+  border-color: var(--nova-accent-primary);
+}
+
+.optionButton:active {
+  transform: scale(0.98);
+}
+
+/* --- Tic-Tac-Toe board --- */
+.tttBoard {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  aspect-ratio: 1;
+  max-width: 180px;
+  margin: 0 auto;
+}
+
+.tttCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--nova-text-primary);
+  background: var(--nova-glass-bg-strong);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: 8px;
+  cursor: pointer;
+  aspect-ratio: 1;
+  transition:
+    background var(--nova-transition-fast) ease,
+    border-color var(--nova-transition-fast) ease;
+  font-family: inherit;
+}
+
+.tttCell:hover {
+  background: var(--nova-glass-bg);
+  border-color: var(--nova-glass-border-strong);
+}
+
+.tttCellX {
+  color: var(--nova-accent-primary);
+}
+
+.tttCellO {
+  color: var(--nova-accent-secondary);
+}
+
+/* --- Hangman display --- */
+.hangmanDisplay {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.hangmanWord {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 4px;
+  color: var(--nova-text-primary);
+  font-family: monospace;
+}
+
+.hangmanInfo {
+  font-size: 11px;
+  color: var(--nova-text-secondary);
+}
+
+.hangmanGuessed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+}
+
+.letterPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: var(--nova-glass-bg-strong);
+  border: 1px solid var(--nova-glass-border);
+  color: var(--nova-text-muted);
+}
+
+.letterPillWrong {
+  color: var(--nova-accent-secondary);
+  border-color: var(--nova-accent-secondary);
+  opacity: 0.6;
+}
+
+.letterInput {
+  width: 60px;
+  padding: 6px 10px;
+  font-size: 14px;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--nova-text-primary);
+  background: var(--nova-glass-bg-strong);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: 8px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color var(--nova-transition-fast) ease;
+}
+
+.letterInput:focus {
+  border-color: var(--nova-accent-primary);
+}
+
+/* --- Text-based game input (word association, riddles, 20Q) --- */
+.textInput {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--nova-text-primary);
+  background: var(--nova-glass-bg-strong);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: 8px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color var(--nova-transition-fast) ease;
+}
+
+.textInput:focus {
+  border-color: var(--nova-accent-primary);
+}
+
+.textInput::placeholder {
+  color: var(--nova-text-muted);
+}
+
+/* --- Score / result display --- */
+.resultBanner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px;
+  background: var(--nova-glass-bg-strong);
+  border: 1px solid var(--nova-glass-border-strong);
+  border-radius: var(--nova-radius-panel);
+}
+
+.resultEmoji {
+  font-size: 28px;
+}
+
+.resultText {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--nova-text-primary);
+}
+
+.resultScore {
+  font-size: 12px;
+  color: var(--nova-text-secondary);
+}
+
+/* --- Reaction text from character --- */
+.reaction {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--nova-text-secondary);
+  line-height: 1.4;
+  padding: 6px 0;
+}
+
+/* --- Info row (score, remaining, etc.) --- */
+.infoRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.infoLabel {
+  color: var(--nova-text-secondary);
+}
+
+.infoValue {
+  color: var(--nova-text-primary);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Memory match cards grid --- */
+.memoryGrid {
+  display: grid;
+  gap: 4px;
+  margin: 0 auto;
+}
+
+.memoryCard {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: var(--nova-glass-bg-strong);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: 8px;
+  cursor: pointer;
+  aspect-ratio: 1;
+  transition:
+    background var(--nova-transition-fast) ease,
+    border-color var(--nova-transition-fast) ease;
+  user-select: none;
+}
+
+.memoryCard:hover {
+  border-color: var(--nova-glass-border-strong);
+}
+
+.memoryCardMatched {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.memoryCardFlipped {
+  border-color: var(--nova-accent-primary);
+  background: var(--nova-glass-bg);
+}
+
+/* --- Submit row (input + button inline) --- */
+.submitRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.submitRow .textInput {
+  flex: 1;
+}
+
+.submitButton {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--nova-bg-deep);
+  background: var(--nova-accent-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity var(--nova-transition-fast) ease;
+  font-family: inherit;
+}
+
+.submitButton:hover {
+  opacity: 0.9;
+}
+
+/* --- Word association chain --- */
+.chainList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chainWord {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--nova-radius-pill);
+  background: var(--nova-glass-bg);
+  border: 1px solid var(--nova-glass-border);
+}
+
+.chainWordPlayer {
+  color: var(--nova-accent-primary);
+  border-color: rgba(180, 155, 240, 0.2);
+}
+
+.chainWordAi {
+  color: var(--nova-accent-secondary);
+  border-color: rgba(255, 185, 170, 0.2);
+}
+
+/* --- Hints list (riddles) --- */
+.hintList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--nova-text-secondary);
+  padding: 4px 8px;
+  background: var(--nova-glass-bg);
+  border-radius: 6px;
+}
+
+.hintButton {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--nova-accent-primary);
+  background: transparent;
+  border: 1px solid var(--nova-accent-primary);
+  border-radius: var(--nova-radius-pill);
+  cursor: pointer;
+  transition: background var(--nova-transition-fast) ease;
+  font-family: inherit;
+  align-self: flex-start;
+}
+
+.hintButton:hover {
+  background: rgba(180, 155, 240, 0.1);
+}

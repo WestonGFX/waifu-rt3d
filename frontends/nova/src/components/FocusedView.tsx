@@ -6,6 +6,11 @@ import { GlassBubble, TypingIndicator } from './GlassBubble';
 import { InputBar } from './InputBar';
 import { EmotionOrb } from './EmotionOrb';
 import { SettingsPanel } from './SettingsPanel';
+import { ChatHistoryPanel } from './ChatHistoryPanel';
+import { CharactersPanel } from './CharactersPanel';
+import { MemoryPanel } from './MemoryPanel';
+import { GamesPanel } from './GamesPanel';
+import { LorebookPanel } from './LorebookPanel';
 import type { Character } from '../lib/types';
 import glass from '../styles/glass.module.css';
 import styles from './FocusedView.module.css';
@@ -61,6 +66,11 @@ export function FocusedView({
 
   /** Panel content keyed by rail item ID. */
   const panelContent = useMemo(() => ({
+    'chat-history': <ChatHistoryPanel />,
+    characters: <CharactersPanel />,
+    memory: <MemoryPanel />,
+    games: <GamesPanel />,
+    lorebook: <LorebookPanel />,
     settings: <SettingsPanel />,
   }), []);
 

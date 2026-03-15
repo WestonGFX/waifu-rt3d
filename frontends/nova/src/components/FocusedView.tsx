@@ -5,6 +5,7 @@ import { ModeToggle } from './ModeToggle';
 import { GlassBubble, TypingIndicator } from './GlassBubble';
 import { InputBar } from './InputBar';
 import { EmotionOrb } from './EmotionOrb';
+import { ProfileSelector } from './ProfileSelector';
 import { PromptDebugPanel } from './PromptDebugPanel';
 import { SettingsPanel } from './SettingsPanel';
 import { ChatHistoryPanel } from './ChatHistoryPanel';
@@ -14,6 +15,7 @@ import { GamesPanel } from './GamesPanel';
 import { LorebookPanel } from './LorebookPanel';
 import { ExpressionPortraitsPanel } from './ExpressionPortraitsPanel';
 import { SpectatorPanel } from './SpectatorPanel';
+import { BookmarksPanel } from './BookmarksPanel';
 import type { Character } from '../lib/types';
 import glass from '../styles/glass.module.css';
 import styles from './FocusedView.module.css';
@@ -54,6 +56,8 @@ interface FocusedViewProps {
   currentEmotion: { emotion: string; intensity: number } | null;
   /** Fork the conversation at a specific message ID. */
   onForkMessage?: (messageId: number) => void;
+  /** Active session ID — forwarded to GlassBubble for bookmark creation. */
+  sessionId?: number | null;
 }
 
 export function FocusedView({
@@ -67,6 +71,7 @@ export function FocusedView({
   onPanelChange,
   currentEmotion,
   onForkMessage,
+  sessionId,
 }: FocusedViewProps) {
   const handleSend = useCallback((text: string) => {
     onSend(text);
@@ -81,6 +86,7 @@ export function FocusedView({
     spectator: <SpectatorPanel />,
     lorebook: <LorebookPanel />,
     portraits: <ExpressionPortraitsPanel />,
+    bookmarks: <BookmarksPanel />,
     settings: <SettingsPanel />,
   }), []);
 
@@ -116,6 +122,7 @@ export function FocusedView({
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ProfileSelector />
             <EmotionOrb
               emotion={currentEmotion?.emotion ?? null}
               intensity={currentEmotion?.intensity ?? 0}
@@ -137,6 +144,8 @@ export function FocusedView({
                 noAnimation={i < messages.length - 3}
                 serverMessageId={msg.serverMessageId}
                 onFork={onForkMessage}
+                sessionId={sessionId}
+                characterId={character?.id}
               >
                 {msg.text}
               </GlassBubble>

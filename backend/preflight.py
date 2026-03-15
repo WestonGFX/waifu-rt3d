@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v45)
+- Database schema migrations (v3 → v4 → … → v47)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -2558,6 +2558,125 @@ def migrate_to_v45(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v46(con: sqlite3.Connection) -> bool:
+    """Add connection_profiles table for quick LLM backend switching (v46).
+
+    Creates the ``connection_profiles`` table which stores named presets for
+    LLM server configurations.  Each profile contains a server URL, model
+    identifier, context size, and generation parameters.  Only one profile
+    can be active at a time (``is_active = 1``).
+
+    When a profile is activated via ``POST /api/profiles/{id}/activate``,
+    the app's live config (``llm.endpoint``, ``llm.model``, etc.) is
+    updated to match the profile's settings, enabling one-click switching
+    between different LLM backends.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v46+.
+
+    Raises:
+        sqlite3.Error: If migration fails.
+
+    Example:
+        >>> if migrate_to_v46(con):
+        ...     logger.info("Connection profiles table created")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 46:
+        return False
+
+    try:
+        logger.info("Applying schema v46 migration (connection_profiles table for LLM backend switching)...")
+
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS connection_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                server_url TEXT NOT NULL DEFAULT 'http://localhost:1234/v1',
+                model TEXT DEFAULT '',
+                context_size INTEGER DEFAULT 4096,
+                temperature REAL DEFAULT 0.8,
+                top_p REAL DEFAULT 0.95,
+                repeat_penalty REAL DEFAULT 1.1,
+                is_active INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (46)")
+        con.commit()
+        logger.info("\u2705 Schema v46 migration complete (connection_profiles table added)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v46 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v47(con: sqlite3.Connection) -> bool:
+    """Add bookmarks table for starring/saving chat messages (v47).
+
+    Creates the ``bookmarks`` table which lets users star specific messages
+    for easy retrieval later.  Each bookmark references a message and its
+    session, with an optional character scope and freeform label.
+
+    Two indexes are created:
+    - ``idx_bookmarks_session`` for fast per-session bookmark listing.
+    - ``idx_bookmarks_character`` for filtering bookmarks by character.
+
+    The ``message_id`` and ``session_id`` foreign keys cascade on delete
+    so bookmarks are automatically cleaned up when a message or session
+    is removed.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v47+.
+
+    Raises:
+        sqlite3.Error: If migration fails.
+
+    Example:
+        >>> if migrate_to_v47(con):
+        ...     logger.info("Bookmarks table created")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 47:
+        return False
+
+    try:
+        logger.info("Applying schema v47 migration (bookmarks table for message starring)...")
+
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS bookmarks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER NOT NULL,
+                session_id INTEGER NOT NULL,
+                character_id INTEGER,
+                label TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+            )
+        """)
+        con.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_session ON bookmarks(session_id)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_character ON bookmarks(character_id)")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (47)")
+        con.commit()
+        logger.info("\u2705 Schema v47 migration complete (bookmarks table + indexes)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v47 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -2909,21 +3028,35 @@ def ensure_db():
             if migrate_to_v45(con):
                 version = 45
 
+        # Upgrade from v45 to v46 (Connection profiles for LLM backend switching)
+        if version < 46:
+            logger.info("Upgrading database schema from v45 to v46...")
+            logger.info("  - Creating connection_profiles table for one-click LLM backend switching")
+            if migrate_to_v46(con):
+                version = 46
+
+        # Upgrade from v46 to v47 (Bookmarks table for message starring)
+        if version < 47:
+            logger.info("Upgrading database schema from v46 to v47...")
+            logger.info("  - Creating bookmarks table for starring messages")
+            if migrate_to_v47(con):
+                version = 47
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 45:
-            raise RuntimeError(f"Database initialization failed: Expected v45, got v{final_version}")
+        if final_version < 47:
+            raise RuntimeError(f"Database initialization failed: Expected v47, got v{final_version}")
 
-        if final_version > 45:
-            logger.warning(f"Database is newer than application (v{final_version} > v45). Some features might be unused.")
+        if final_version > 47:
+            logger.warning(f"Database is newer than application (v{final_version} > v47). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v45 adds FTS5 search index)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v47 adds bookmarks table)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

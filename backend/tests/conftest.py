@@ -129,6 +129,20 @@ def _create_schema(db_path: Path) -> None:
                 last_updated INTEGER DEFAULT (strftime('%s','now')),
                 FOREIGN KEY(char_id) REFERENCES characters(id)
             );
+
+            CREATE TABLE IF NOT EXISTS connection_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                server_url TEXT NOT NULL DEFAULT 'http://localhost:1234/v1',
+                model TEXT DEFAULT '',
+                context_size INTEGER DEFAULT 4096,
+                temperature REAL DEFAULT 0.8,
+                top_p REAL DEFAULT 0.95,
+                repeat_penalty REAL DEFAULT 1.1,
+                is_active INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
         cur.execute(

@@ -10908,6 +10908,256 @@ def search_messages(
 
 
 # ---------------------------------------------------------------------------
+# Conversation Bookmarks — Star / save messages for easy retrieval
+# ---------------------------------------------------------------------------
+
+@app.get("/api/bookmarks")
+def list_bookmarks(
+    character_id: Optional[int] = None,
+    limit: int = 50,
+):
+    """List bookmarked messages, optionally filtered by character.
+
+    Joins with ``messages`` to fetch a content preview (first 150 chars) and
+    the message role, and with ``characters`` to resolve the character name.
+    Results are ordered by bookmark creation time descending (newest first).
+
+    Args:
+        character_id: Optional character ID to scope results.
+        limit: Maximum number of bookmarks to return (default 50).
+
+    Returns:
+        A dict with:
+        - ``ok``: Always True on success.
+        - ``bookmarks``: List of bookmark dicts, each containing id,
+          message_id, session_id, character_id, character_name, label,
+          content_preview, role, created_at.
+
+    Raises:
+        HTTPException 500: If a database error occurs.
+
+    Example:
+        >>> GET /api/bookmarks?character_id=1&limit=10
+        {"ok": true, "bookmarks": [{"id": 1, "message_id": 42, ...}]}
+    """
+    conn = db()
+    try:
+        sql = """
+            SELECT b.id, b.message_id, b.session_id, b.character_id,
+                   COALESCE(c.name, 'Unknown') AS character_name,
+                   b.label,
+                   SUBSTR(m.content, 1, 150) AS content_preview,
+                   m.role,
+                   b.created_at
+            FROM bookmarks b
+            LEFT JOIN messages m ON b.message_id = m.id
+            LEFT JOIN sessions s ON b.session_id = s.id
+            LEFT JOIN characters c ON b.character_id = c.id
+            WHERE 1=1
+        """
+        params: list = []
+
+        if character_id is not None:
+            sql += " AND b.character_id = ?"
+            params.append(character_id)
+
+        sql += " ORDER BY b.created_at DESC LIMIT ?"
+        params.append(limit)
+
+        rows = conn.execute(sql, params).fetchall()
+        bookmarks = [
+            {
+                "id": row[0],
+                "message_id": row[1],
+                "session_id": row[2],
+                "character_id": row[3],
+                "character_name": row[4],
+                "label": row[5] or "",
+                "content_preview": row[6] or "",
+                "role": row[7] or "unknown",
+                "created_at": row[8],
+            }
+            for row in rows
+        ]
+        return {"ok": True, "bookmarks": bookmarks}
+    except Exception as exc:
+        logger.error("[Bookmarks] list failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to list bookmarks")
+    finally:
+        conn.close()
+
+
+@app.post("/api/bookmarks")
+async def create_bookmark(req: Request):
+    """Bookmark (star) a specific message for later retrieval.
+
+    Creates a row in the ``bookmarks`` table referencing the given message
+    and session.  Duplicate bookmarks on the same message are prevented —
+    if the message is already bookmarked, the existing bookmark is returned.
+
+    Args:
+        req: JSON body with required ``message_id`` and ``session_id``,
+            plus optional ``character_id`` and ``label``.
+
+    Returns:
+        A dict with:
+        - ``ok``: Always True on success.
+        - ``bookmark``: The created (or existing) bookmark dict.
+
+    Raises:
+        HTTPException 400: If ``message_id`` or ``session_id`` is missing.
+        HTTPException 404: If the referenced message does not exist.
+        HTTPException 500: If a database error occurs.
+
+    Example:
+        >>> POST /api/bookmarks {"message_id": 42, "session_id": 3}
+        {"ok": true, "bookmark": {"id": 7, "message_id": 42, ...}}
+    """
+    body = await req.json()
+    message_id = body.get("message_id")
+    session_id = body.get("session_id")
+    character_id = body.get("character_id")
+    label = body.get("label", "")
+
+    if message_id is None or session_id is None:
+        raise HTTPException(status_code=400, detail="message_id and session_id are required")
+
+    conn = db()
+    try:
+        # Verify the message exists
+        msg_row = conn.execute("SELECT id FROM messages WHERE id = ?", (message_id,)).fetchone()
+        if not msg_row:
+            raise HTTPException(status_code=404, detail="Message not found")
+
+        # Check for existing bookmark on this message (prevent duplicates)
+        existing = conn.execute(
+            "SELECT id, message_id, session_id, character_id, label, created_at FROM bookmarks WHERE message_id = ?",
+            (message_id,),
+        ).fetchone()
+        if existing:
+            return {
+                "ok": True,
+                "bookmark": {
+                    "id": existing[0],
+                    "message_id": existing[1],
+                    "session_id": existing[2],
+                    "character_id": existing[3],
+                    "label": existing[4] or "",
+                    "created_at": existing[5],
+                },
+            }
+
+        conn.execute(
+            "INSERT INTO bookmarks (message_id, session_id, character_id, label) VALUES (?, ?, ?, ?)",
+            (message_id, session_id, character_id, label),
+        )
+        bookmark_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.commit()
+
+        bookmark_row = conn.execute(
+            "SELECT id, message_id, session_id, character_id, label, created_at FROM bookmarks WHERE id = ?",
+            (bookmark_id,),
+        ).fetchone()
+
+        return {
+            "ok": True,
+            "bookmark": {
+                "id": bookmark_row[0],
+                "message_id": bookmark_row[1],
+                "session_id": bookmark_row[2],
+                "character_id": bookmark_row[3],
+                "label": bookmark_row[4] or "",
+                "created_at": bookmark_row[5],
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("[Bookmarks] create failed: %s", exc)
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create bookmark")
+    finally:
+        conn.close()
+
+
+@app.delete("/api/bookmarks/{bookmark_id}")
+def delete_bookmark(bookmark_id: int):
+    """Remove a bookmark by its primary key.
+
+    Deletes the ``bookmarks`` row identified by ``bookmark_id``. Returns
+    ``{"ok": true}`` even if the bookmark did not exist (idempotent).
+
+    Args:
+        bookmark_id: Primary key of the bookmark to delete.
+
+    Returns:
+        {"ok": True}
+
+    Raises:
+        HTTPException 500: If a database error occurs.
+
+    Example:
+        >>> DELETE /api/bookmarks/7
+        {"ok": true}
+    """
+    conn = db()
+    try:
+        conn.execute("DELETE FROM bookmarks WHERE id = ?", (bookmark_id,))
+        conn.commit()
+        return {"ok": True}
+    except Exception as exc:
+        logger.error("[Bookmarks] delete failed: %s", exc)
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete bookmark")
+    finally:
+        conn.close()
+
+
+@app.get("/api/bookmarks/message/{message_id}")
+def get_bookmark_for_message(message_id: int):
+    """Check if a specific message is bookmarked.
+
+    Returns the bookmark record if the message has been bookmarked, or
+    ``null`` if it has not. Used by the frontend to show filled/unfilled
+    star icons on chat bubbles.
+
+    Args:
+        message_id: The message ID to check.
+
+    Returns:
+        {"ok": True, "bookmark": {...} | null}
+
+    Example:
+        >>> GET /api/bookmarks/message/42
+        {"ok": true, "bookmark": {"id": 7, "message_id": 42, ...}}
+    """
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT id, message_id, session_id, character_id, label, created_at FROM bookmarks WHERE message_id = ?",
+            (message_id,),
+        ).fetchone()
+        if row:
+            return {
+                "ok": True,
+                "bookmark": {
+                    "id": row[0],
+                    "message_id": row[1],
+                    "session_id": row[2],
+                    "character_id": row[3],
+                    "label": row[4] or "",
+                    "created_at": row[5],
+                },
+            }
+        return {"ok": True, "bookmark": None}
+    except Exception as exc:
+        logger.error("[Bookmarks] check failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to check bookmark")
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Feature #20 — Privacy / Full Data Export
 # ---------------------------------------------------------------------------
 
@@ -11805,6 +12055,258 @@ async def game_best_scores(character_id: int):
             for r in rows
         }
         return {"best_scores": best}
+    finally:
+        conn.close()
+
+
+# ==================== CONNECTION PROFILES ====================
+
+
+@app.get("/api/profiles")
+def get_profiles():
+    """Return all saved connection profiles and the active profile ID.
+
+    Each profile stores a named LLM backend configuration (server URL,
+    model, temperature, context size, etc.) that can be activated with
+    a single click.
+
+    Returns:
+        {
+            "ok": True,
+            "profiles": [...],
+            "active_id": int | None
+        }
+
+    Example:
+        >>> GET /api/profiles
+        {"ok": true, "profiles": [{...}], "active_id": 1}
+    """
+    conn = db()
+    try:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM connection_profiles ORDER BY name"
+        ).fetchall()
+        profiles = [dict(r) for r in rows]
+        active = next((p["id"] for p in profiles if p.get("is_active")), None)
+        return {"ok": True, "profiles": profiles, "active_id": active}
+    except sqlite3.OperationalError:
+        # Table doesn't exist yet (migration hasn't run)
+        return {"ok": True, "profiles": [], "active_id": None}
+    finally:
+        conn.close()
+
+
+@app.post("/api/profiles")
+async def create_profile(req: Request):
+    """Create a new connection profile.
+
+    Accepts a JSON body with at minimum a ``name`` and ``server_url``.
+    All generation parameters (temperature, top_p, etc.) have sensible
+    defaults and are optional.
+
+    Args:
+        req: JSON body with profile fields.
+
+    Returns:
+        {"ok": True, "profile": {...}} with the newly created profile.
+
+    Raises:
+        HTTPException(400): If ``name`` is missing.
+
+    Example:
+        >>> POST /api/profiles {"name": "Local 7B", "server_url": "http://localhost:1234/v1"}
+        {"ok": true, "profile": {"id": 1, "name": "Local 7B", ...}}
+    """
+    body = await req.json()
+    name = body.get("name", "").strip()
+    if not name:
+        raise HTTPException(400, "Profile name is required")
+
+    server_url = body.get("server_url", "http://localhost:1234/v1")
+    model = body.get("model", "")
+    context_size = body.get("context_size", 4096)
+    temperature = body.get("temperature", 0.8)
+    top_p = body.get("top_p", 0.95)
+    repeat_penalty = body.get("repeat_penalty", 1.1)
+
+    conn = db()
+    try:
+        cur = conn.execute(
+            """INSERT INTO connection_profiles
+               (name, server_url, model, context_size, temperature, top_p, repeat_penalty)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (name, server_url, model, context_size, temperature, top_p, repeat_penalty),
+        )
+        conn.commit()
+        profile_id = cur.lastrowid
+
+        conn.row_factory = sqlite3.Row
+        profile = dict(
+            conn.execute(
+                "SELECT * FROM connection_profiles WHERE id = ?", (profile_id,)
+            ).fetchone()
+        )
+        return {"ok": True, "profile": profile}
+    finally:
+        conn.close()
+
+
+@app.put("/api/profiles/{profile_id}")
+async def update_profile(profile_id: int, req: Request):
+    """Update an existing connection profile (partial update).
+
+    Only the fields present in the JSON body are updated; omitted fields
+    remain unchanged.  The ``updated_at`` timestamp is refreshed
+    automatically.
+
+    Args:
+        profile_id: Primary key of the profile to update.
+        req: JSON body with fields to update.
+
+    Returns:
+        {"ok": True, "profile": {...}} with the full updated profile.
+
+    Raises:
+        HTTPException(404): If profile does not exist.
+
+    Example:
+        >>> PUT /api/profiles/1 {"temperature": 0.9}
+        {"ok": true, "profile": {"id": 1, ..., "temperature": 0.9}}
+    """
+    body = await req.json()
+    allowed = {"name", "server_url", "model", "context_size", "temperature", "top_p", "repeat_penalty"}
+    updates = {k: v for k, v in body.items() if k in allowed}
+
+    if not updates:
+        raise HTTPException(400, "No valid fields to update")
+
+    conn = db()
+    try:
+        # Verify profile exists
+        existing = conn.execute(
+            "SELECT id FROM connection_profiles WHERE id = ?", (profile_id,)
+        ).fetchone()
+        if not existing:
+            raise HTTPException(404, f"Profile {profile_id} not found")
+
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [profile_id]
+        conn.execute(
+            f"UPDATE connection_profiles SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            values,
+        )
+        conn.commit()
+
+        conn.row_factory = sqlite3.Row
+        profile = dict(
+            conn.execute(
+                "SELECT * FROM connection_profiles WHERE id = ?", (profile_id,)
+            ).fetchone()
+        )
+        return {"ok": True, "profile": profile}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/profiles/{profile_id}")
+def delete_profile(profile_id: int):
+    """Delete a connection profile.
+
+    If the deleted profile was the active one, no profile will be active
+    afterward (the live config is not reverted).
+
+    Args:
+        profile_id: Primary key of the profile to delete.
+
+    Returns:
+        {"ok": True}
+
+    Raises:
+        HTTPException(404): If profile does not exist.
+
+    Example:
+        >>> DELETE /api/profiles/3
+        {"ok": true}
+    """
+    conn = db()
+    try:
+        existing = conn.execute(
+            "SELECT id FROM connection_profiles WHERE id = ?", (profile_id,)
+        ).fetchone()
+        if not existing:
+            raise HTTPException(404, f"Profile {profile_id} not found")
+
+        conn.execute("DELETE FROM connection_profiles WHERE id = ?", (profile_id,))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.post("/api/profiles/{profile_id}/activate")
+def activate_profile(profile_id: int):
+    """Activate a connection profile and apply it to the live config.
+
+    Sets the specified profile as active (``is_active = 1``) and
+    deactivates all others.  Then updates the running application
+    config (``app.json``) so that ``llm.endpoint``, ``llm.model``,
+    ``context_limit``, ``temperature``, ``top_p``, and
+    ``repeat_penalty`` all reflect the profile's values.
+
+    This means the LLM backend switch takes effect immediately —
+    the next chat request will use the new server/model.
+
+    Args:
+        profile_id: Primary key of the profile to activate.
+
+    Returns:
+        {"ok": True, "profile": {...}} with the activated profile.
+
+    Raises:
+        HTTPException(404): If profile does not exist.
+
+    Example:
+        >>> POST /api/profiles/2/activate
+        {"ok": true, "profile": {"id": 2, "name": "Remote 70B", ..., "is_active": 1}}
+    """
+    conn = db()
+    try:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM connection_profiles WHERE id = ?", (profile_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, f"Profile {profile_id} not found")
+
+        profile = dict(row)
+
+        # Deactivate all, then activate the chosen one
+        conn.execute("UPDATE connection_profiles SET is_active = 0")
+        conn.execute(
+            "UPDATE connection_profiles SET is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (profile_id,),
+        )
+        conn.commit()
+
+        # Apply profile settings to live config
+        cfg = load_config() or {}
+        llm = cfg.get("llm", {})
+        llm["endpoint"] = profile["server_url"]
+        llm["model"] = profile["model"]
+        cfg["llm"] = llm
+        cfg["context_limit"] = profile["context_size"]
+        cfg["temperature"] = profile["temperature"]
+        cfg["top_p"] = profile["top_p"]
+        cfg["repeat_penalty"] = profile["repeat_penalty"]
+        save_config(cfg)
+
+        profile["is_active"] = 1
+        logger.info(
+            f"Activated connection profile '{profile['name']}' "
+            f"(endpoint={profile['server_url']}, model={profile['model']})"
+        )
+        return {"ok": True, "profile": profile}
     finally:
         conn.close()
 

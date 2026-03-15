@@ -79,6 +79,26 @@ export interface DownloadStatus {
   error?: string;
 }
 
+// ─── Connection Profiles types ───────────────────────────────────────────────
+
+/**
+ * A saved LLM backend configuration that can be activated with one click.
+ * Stored in the `connection_profiles` SQLite table (schema v46).
+ */
+export interface ConnectionProfile {
+  id: number;
+  name: string;
+  server_url: string;
+  model: string;
+  context_size: number;
+  temperature: number;
+  top_p: number;
+  repeat_penalty: number;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 /**
@@ -867,4 +887,138 @@ export const api = {
       total: number;
     }>(`/api/search/messages?${params}`);
   },
+
+  // ── Connection Profiles (schema v46) ──────────────────────────────────────
+
+  /**
+   * List all saved connection profiles.
+   *
+   * @returns Object with profiles array and the currently active profile ID.
+   */
+  getProfiles: () =>
+    get<{ ok: boolean; profiles: ConnectionProfile[]; active_id: number | null }>('/api/profiles'),
+
+  /**
+   * Create a new connection profile.
+   *
+   * @param data - Profile fields (name required, others optional with defaults).
+   * @returns The newly created profile.
+   */
+  createProfile: (data: Partial<ConnectionProfile> & { name: string }) =>
+    post<{ ok: boolean; profile: ConnectionProfile }>('/api/profiles', data),
+
+  /**
+   * Update an existing connection profile (partial update).
+   *
+   * @param id - Profile primary key.
+   * @param data - Fields to update.
+   * @returns The full updated profile.
+   */
+  updateProfile: (id: number, data: Partial<ConnectionProfile>) =>
+    put<{ ok: boolean; profile: ConnectionProfile }>(`/api/profiles/${id}`, data),
+
+  /**
+   * Delete a connection profile.
+   *
+   * @param id - Profile primary key.
+   * @returns Success indicator.
+   */
+  deleteProfile: (id: number) =>
+    del<{ ok: boolean }>(`/api/profiles/${id}`),
+
+  /**
+   * Activate a connection profile — switches the live LLM backend.
+   *
+   * Deactivates all other profiles, marks this one active, and updates
+   * the app's running config (llm.endpoint, llm.model, temperature, etc.)
+   * so the next chat request uses the new backend.
+   *
+   * @param id - Profile primary key to activate.
+   * @returns The activated profile.
+   */
+  activateProfile: (id: number) =>
+    post<{ ok: boolean; profile: ConnectionProfile }>(`/api/profiles/${id}/activate`, {}),
+
+  // ── Conversation Bookmarks (schema v47) ─────────────────────────────────────
+
+  /**
+   * List all bookmarked messages, optionally filtered by character.
+   *
+   * @param characterId - Optional character ID to scope results.
+   * @param limit - Maximum number of bookmarks to return (default 50).
+   * @returns List of bookmarks with content preview and metadata.
+   */
+  getBookmarks: (characterId?: number, limit = 50) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (characterId != null) params.set('character_id', String(characterId));
+    return get<{
+      ok: boolean;
+      bookmarks: Array<{
+        id: number;
+        message_id: number;
+        session_id: number;
+        character_id: number | null;
+        character_name: string;
+        label: string;
+        content_preview: string;
+        role: string;
+        created_at: string;
+      }>;
+    }>(`/api/bookmarks?${params}`);
+  },
+
+  /**
+   * Bookmark (star) a specific message.
+   *
+   * @param messageId - The server-side message ID to bookmark.
+   * @param sessionId - The session the message belongs to.
+   * @param characterId - Optional character ID for filtering.
+   * @param label - Optional freeform label for the bookmark.
+   * @returns The created bookmark record.
+   */
+  createBookmark: (messageId: number, sessionId: number, characterId?: number, label?: string) =>
+    post<{
+      ok: boolean;
+      bookmark: {
+        id: number;
+        message_id: number;
+        session_id: number;
+        character_id: number | null;
+        label: string;
+        created_at: string;
+      };
+    }>('/api/bookmarks', {
+      message_id: messageId,
+      session_id: sessionId,
+      character_id: characterId ?? null,
+      label: label ?? '',
+    }),
+
+  /**
+   * Remove a bookmark by its primary key.
+   *
+   * @param bookmarkId - The bookmark ID to delete.
+   * @returns Success confirmation.
+   */
+  deleteBookmark: (bookmarkId: number) =>
+    del<{ ok: boolean }>(`/api/bookmarks/${bookmarkId}`),
+
+  /**
+   * Check if a specific message is bookmarked.
+   *
+   * @param messageId - The message ID to check.
+   * @returns The bookmark record if it exists, or null.
+   */
+  getBookmarkForMessage: (messageId: number) =>
+    get<{
+      ok: boolean;
+      bookmark: {
+        id: number;
+        message_id: number;
+        session_id: number;
+        character_id: number | null;
+        label: string;
+        created_at: string;
+      } | null;
+    }>(`/api/bookmarks/message/${messageId}`),
 };

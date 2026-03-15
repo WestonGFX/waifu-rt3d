@@ -17,6 +17,8 @@ interface AppState {
   config: AppConfig | null;
   /** True once the first `fetchConfig()` call has resolved. */
   configLoaded: boolean;
+  /** True once the first `fetchCharacters()` call has resolved. */
+  charactersLoaded: boolean;
   /** LLM provider connection status. */
   llmStatus: LlmStatus;
 
@@ -38,11 +40,12 @@ export const useAppStore = create<AppState>()((set) => ({
   activeCharacter: null,
   config: null,
   configLoaded: false,
+  charactersLoaded: false,
   llmStatus: { connected: false, provider: '' },
 
   fetchCharacters: async () => {
     const characters = await api.getCharacters();
-    set({ characters });
+    set({ characters, charactersLoaded: true });
   },
 
   setActiveCharacter: (char) => set({ activeCharacter: char }),

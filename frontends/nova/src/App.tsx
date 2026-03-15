@@ -4,6 +4,8 @@ import { AmbientLayer } from './components/AmbientLayer';
 import { ViewerFrame } from './components/ViewerFrame';
 import { CompanionView } from './components/CompanionView';
 import { FocusedView } from './components/FocusedView';
+import { ToastContainer } from './components/Toast';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useNovaStore } from './stores/novaStore';
 import { useAppStore } from './stores/appStore';
 import { useChatStore } from './stores/chatStore';
@@ -42,6 +44,8 @@ export function App() {
   const fetchCharacters = useAppStore((s) => s.fetchCharacters);
   const setActiveCharacter = useAppStore((s) => s.setActiveCharacter);
   const fetchConfig = useAppStore((s) => s.fetchConfig);
+  const configLoaded = useAppStore((s) => s.configLoaded);
+  const charactersLoaded = useAppStore((s) => s.charactersLoaded);
 
   const messages = useChatStore((s) => s.messages);
   const loading = useChatStore((s) => s.loading);
@@ -149,6 +153,33 @@ export function App() {
     text: m.text || '',
   }));
 
+  // ── Loading gate ──────────────────────────────────────────────────────
+  if (!configLoaded || !charactersLoaded) {
+    return (
+      <div
+        style={{
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--nova-bg-deep)',
+        }}
+      >
+        <div
+          style={{
+            color: 'var(--nova-text-secondary)',
+            fontSize: 14,
+            letterSpacing: '0.05em',
+            animation: 'pulse 2s ease-in-out infinite',
+          }}
+        >
+          Loading...
+        </div>
+        <style>{`@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.4 } }`}</style>
+      </div>
+    );
+  }
+
   // ── Mode transition config ──────────────────────────────────────────────
   const modeTransition = {
     type: 'spring' as const,
@@ -157,6 +188,7 @@ export function App() {
   };
 
   return (
+    <ErrorBoundary>
     <div style={{ height: '100%', position: 'relative' }}>
       {/* Layer 0-2: Background atmosphere (always visible) */}
       <AmbientLayer />
@@ -210,6 +242,10 @@ export function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Toast notifications — always on top */}
+      <ToastContainer />
     </div>
+    </ErrorBoundary>
   );
 }

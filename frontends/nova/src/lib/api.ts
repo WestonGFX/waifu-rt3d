@@ -1,4 +1,5 @@
 import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse, VocabEntry, Universe, LoreEntry, UserFact, BrowseableModel, AvatarDownloadStatus, LinkDevice, LinkRoutingDecision, ExtendedHardwareInfo } from './types';
+import { useNovaStore } from '../stores/novaStore';
 
 // ─── LM Studio Model Manager types ───────────────────────────────────────────
 
@@ -89,7 +90,11 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
  */
 async function get<T>(url: string): Promise<T> {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`GET ${url}: ${res.status}`);
+  if (!res.ok) {
+    const msg = `GET ${url}: ${res.status}`;
+    useNovaStore.getState().addToast(msg, 'error');
+    throw new Error(msg);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -107,7 +112,11 @@ async function post<T>(url: string, body: unknown): Promise<T> {
     headers: JSON_HEADERS,
     body: JSON.stringify(body)
   });
-  if (!res.ok) throw new Error(`POST ${url}: ${res.status}`);
+  if (!res.ok) {
+    const msg = `POST ${url}: ${res.status}`;
+    useNovaStore.getState().addToast(msg, 'error');
+    throw new Error(msg);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -125,7 +134,11 @@ async function put<T>(url: string, body: unknown): Promise<T> {
     headers: JSON_HEADERS,
     body: JSON.stringify(body)
   });
-  if (!res.ok) throw new Error(`PUT ${url}: ${res.status}`);
+  if (!res.ok) {
+    const msg = `PUT ${url}: ${res.status}`;
+    useNovaStore.getState().addToast(msg, 'error');
+    throw new Error(msg);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -138,7 +151,11 @@ async function put<T>(url: string, body: unknown): Promise<T> {
  */
 async function del<T>(url: string): Promise<T> {
   const res = await fetch(url, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`DELETE ${url}: ${res.status}`);
+  if (!res.ok) {
+    const msg = `DELETE ${url}: ${res.status}`;
+    useNovaStore.getState().addToast(msg, 'error');
+    throw new Error(msg);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -156,7 +173,11 @@ async function patch<T>(url: string, body: unknown): Promise<T> {
     headers: JSON_HEADERS,
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`PATCH ${url}: ${res.status}`);
+  if (!res.ok) {
+    const msg = `PATCH ${url}: ${res.status}`;
+    useNovaStore.getState().addToast(msg, 'error');
+    throw new Error(msg);
+  }
   return res.json() as Promise<T>;
 }
 

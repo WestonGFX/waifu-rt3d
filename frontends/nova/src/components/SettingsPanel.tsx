@@ -127,6 +127,7 @@ export function SettingsPanel() {
 
   const theme = useNovaStore((s) => s.theme);
   const setTheme = useNovaStore((s) => s.setTheme);
+  const addToast = useNovaStore((s) => s.addToast);
 
   // Section open/closed state
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['character']));
@@ -204,10 +205,11 @@ export function SettingsPanel() {
     try {
       await api.updateCharacter(activeCharacter.id, patch);
       await fetchCharacters();
+      addToast('Character saved', 'success');
     } catch (e) {
-      console.error('[Settings] Failed to save character:', e);
+      addToast('Failed to save character', 'error');
     }
-  }, [activeCharacter, fetchCharacters]);
+  }, [activeCharacter, fetchCharacters, addToast]);
 
   /**
    * Save app config via PUT /api/config.
@@ -217,10 +219,11 @@ export function SettingsPanel() {
     try {
       await api.saveConfig(patch);
       await fetchConfig();
+      addToast('Settings saved', 'success');
     } catch (e) {
-      console.error('[Settings] Failed to save config:', e);
+      addToast('Failed to save settings', 'error');
     }
-  }, [fetchConfig]);
+  }, [fetchConfig, addToast]);
 
   // ── Character section handlers ────────────────────────────────────────
 

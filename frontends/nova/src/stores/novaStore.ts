@@ -10,6 +10,13 @@ type NovaTheme = 'dark' | 'light' | 'system';
 /** Side panels available in Focused mode. */
 type PanelId = string | null;
 
+/** Shape of a single toast notification. */
+interface NovaToast {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
+
 interface NovaState {
   /** Current UI mode. Companion is minimal; Focused shows side panels. */
   mode: NovaMode;
@@ -19,12 +26,18 @@ interface NovaState {
   activePanel: PanelId;
   /** Whether the command palette overlay is visible. */
   commandPaletteOpen: boolean;
+  /** Active toast notifications (max 3, ephemeral — not persisted). */
+  toasts: NovaToast[];
 
   setMode: (mode: NovaMode) => void;
   toggleMode: () => void;
   setTheme: (theme: NovaTheme) => void;
   setActivePanel: (panel: PanelId) => void;
   toggleCommandPalette: () => void;
+  /** Add a toast notification. Auto-dismisses after 3 seconds. Max 3 visible. */
+  addToast: (message: string, type: 'success' | 'error' | 'info') => void;
+  /** Manually remove a toast by ID. */
+  removeToast: (id: string) => void;
 }
 
 /**
@@ -65,6 +78,7 @@ export const useNovaStore = create<NovaState>()(
       theme: 'dark',
       activePanel: null,
       commandPaletteOpen: false,
+      toasts: [],
 
       setMode: (mode) => set({ mode }),
 
@@ -83,6 +97,19 @@ export const useNovaStore = create<NovaState>()(
       toggleCommandPalette: () => {
         set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen }));
       },
+
+      addToast: (message, type) => {
+        const id = crypto.randomUUID();
+        set((s) => ({
+          toasts: [...s.toasts.slice(-2), { id, message, type }], // max 3
+        }));
+        setTimeout(() => {
+          set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+        }, 3000);
+      },
+
+      removeToast: (id) =>
+        set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
     }),
     {
       name: 'nova-ui',

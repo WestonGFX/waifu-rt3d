@@ -1,25 +1,27 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  User, Brain, Volume2, Palette, Info, ChevronDown,
+  User, Brain, Volume2, Palette, Info, ChevronDown, Shield,
 } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useNovaStore } from '../stores/novaStore';
 import { api } from '../lib/api';
 import type { Character, AppConfig, VoiceEntry } from '../lib/types';
+import { CollapsibleModelSuggestions } from './ModelSuggestions';
 import styles from './SettingsPanel.module.css';
 
 /**
  * Glass-styled settings panel for Nova's Focused mode.
  *
  * NOT a port of Sakura's 4200-line SettingsView. This is a clean,
- * focused settings experience with five accordion sections:
+ * focused settings experience with six accordion sections:
  *
  * 1. **Character** — name, avatar, system prompt, model selection
- * 2. **Brain** — LLM endpoint, model, temperature, context budget
+ * 2. **Brain** — LLM endpoint, model, temperature, recommended models
  * 3. **Voice** — TTS provider, voice picker, speed/pitch
  * 4. **Display** — theme toggle, character tint, mode preference
- * 5. **About** — version, links, LLM status
+ * 5. **Safety** — content filter level for LLM output
+ * 6. **About** — version, links, LLM status
  *
  * Each section uses the `AccordionSection` primitive which wraps
  * Framer Motion's AnimatePresence for smooth height animation.
@@ -146,6 +148,8 @@ export function SettingsPanel() {
   const [voices, setVoices] = useState<VoiceEntry[]>([]);
   const [selectedVoice, setSelectedVoice] = useState('');
 
+  const [contentFilter, setContentFilter] = useState(1);
+
   const [llmConnected, setLlmConnected] = useState(false);
   const [llmProvider, setLlmProvider] = useState('');
 
@@ -167,6 +171,9 @@ export function SettingsPanel() {
       const llm = config.llm as Record<string, unknown> | undefined;
       setLlmEndpoint((llm?.endpoint as string) || '');
       setLlmModel((llm?.model as string) || '');
+      // Sync content filter level (default 1 = Light)
+      const filterLevel = config.content_filter_level as number | undefined;
+      setContentFilter(filterLevel ?? 1);
     }
   }, [config]);
 
@@ -367,6 +374,8 @@ export function SettingsPanel() {
             <span className={styles.sliderValue}>{charTemp.toFixed(2)}</span>
           </div>
         </div>
+
+        <CollapsibleModelSuggestions />
       </AccordionSection>
 
       {/* ── 3. Voice ────────────────────────────────────────────── */}
@@ -434,7 +443,40 @@ export function SettingsPanel() {
         </div>
       </AccordionSection>
 
-      {/* ── 5. About ────────────────────────────────────────────── */}
+      {/* ── 5. Safety ───────────────────────────────────────────── */}
+      <AccordionSection
+        id="safety"
+        title="Safety"
+        icon={<Shield size={14} />}
+        isOpen={openSections.has('safety')}
+        onToggle={() => toggleSection('safety')}
+      >
+        <div className={styles.fieldGroup}>
+          <label className={styles.fieldLabel}>Content Filter</label>
+          <select
+            className={styles.fieldSelect}
+            value={contentFilter}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              setContentFilter(val);
+              saveConfig({ content_filter_level: val });
+            }}
+          >
+            <option value={-1}>Off (NSFW Allowed)</option>
+            <option value={0}>Minimal (Model Defaults)</option>
+            <option value={1}>Light (Default)</option>
+            <option value={2}>Moderate</option>
+            <option value={3}>Strict (Family Safe)</option>
+          </select>
+        </div>
+        {contentFilter === -1 && (
+          <div className={styles.filterWarning}>
+            For local models only. Cloud APIs may override this setting.
+          </div>
+        )}
+      </AccordionSection>
+
+      {/* ── 6. About ────────────────────────────────────────────── */}
       <AccordionSection
         id="about"
         title="About"

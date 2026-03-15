@@ -13,11 +13,12 @@
 5. [Understanding Speed](#understanding-speed)
 6. [Expected Speeds by Model Size](#expected-speeds-by-model-size)
 7. [Key RP Model Families](#key-rp-model-families)
-8. [Hardware Tiers](#hardware-tiers)
-9. [CPU Offloading Guide](#cpu-offloading-guide)
-10. [LM Studio Settings for RP](#lm-studio-settings-for-rp)
-11. [Benchmarks That Matter](#benchmarks-that-matter)
-12. [Multi-Model Loading with LM Studio Link](#multi-model-loading-with-lm-studio-link)
+8. [Roleplay & Uncensored Models](#roleplay--uncensored-models)
+9. [Hardware Tiers](#hardware-tiers)
+10. [CPU Offloading Guide](#cpu-offloading-guide)
+11. [LM Studio Settings for RP](#lm-studio-settings-for-rp)
+12. [Benchmarks That Matter](#benchmarks-that-matter)
+13. [Multi-Model Loading with LM Studio Link](#multi-model-loading-with-lm-studio-link)
 
 ---
 
@@ -219,12 +220,95 @@ Known for merge-based models that combine the strengths of multiple fine-tunes. 
 
 Produces creative-writing-focused fine-tunes with strong narrative voice. Models from elinas tend to excel at descriptive prose and maintaining story coherence over long conversations. Particularly good for users who enjoy more literary-style interactions with their companions.
 
+### Cognitive Computations
+
+Creators of the **Dolphin** series. Pioneer of the "uncensored" model movement. Dolphin models start from strong base models and are fine-tuned on datasets with alignment/refusal examples removed. Good general-purpose uncensored models that work well for companion chat when you want zero refusals without RP-specific tuning.
+
+### nocudaexe
+
+Creator of **Neural-Dark-Waifu** and **Infinite-Waifu** — models specifically fine-tuned for anime companion and waifu-style RP. Smaller community creator but highly specialized for this exact use case. Models tend to be 8B range, optimized for character consistency in companion scenarios.
+
 ### How to Find These Models
 
 1. Search HuggingFace for the creator name (e.g., `Sao10K`)
 2. Sort by "Most Downloads" or "Trending"
 3. Look for GGUF quantized versions (often uploaded by bartowski or mradermacher)
 4. Read the model card — good RP models always describe their training data and intended use case
+
+---
+
+## Roleplay & Uncensored Models
+
+One of the key advantages of running LLMs locally is the absence of cloud-based content filters. "Uncensored" or "abliterated" models have had their alignment training removed or reduced, allowing full creative freedom for roleplay scenarios that cloud providers would refuse. These models are for local use only — your hardware, your rules. Responsible use is expected.
+
+### Uncensored Model Techniques
+
+| Technique | What It Means | Examples |
+|-----------|--------------|----------|
+| **Abliteration** | Alignment vectors surgically removed from model weights. Model retains full capability but won't refuse creative scenarios. | huihui-ai abliterated series |
+| **DPO on uncensored data** | Trained with Direct Preference Optimization on datasets without refusal examples. | NeverSleep Lumimaid, Noromaid |
+| **RP-tuned from base** | Fine-tuned from base model (not instruct) so no refusal behavior was ever learned. | Sao10K Euryale, many TheDrummer models |
+| **Merge/Franken** | Multiple models merged to combine strengths and dilute alignment. | Midnight Miqu, Goliath |
+
+### Recommended Uncensored/RP Models by VRAM Tier
+
+#### 8GB VRAM
+
+| Model | Size | Quant | Notes |
+|-------|------|-------|-------|
+| Neural-Dark-Waifu v0.2 | 8B | Q4_K_M | nocudaexe — specifically tuned for companion/waifu RP |
+| Infinite-Waifu | 8B | Q4_K_M | nocudaexe — creative uncensored companion chat |
+| Lumimaid 8B v0.2 | 8B | Q4_K_M | NeverSleep — emotional depth, uncensored, top-tier 8B RP |
+| Qwen3.5-9B Uncensored | 9B | IQ4_XS | HauhauCS — aggressive abliteration of Qwen3.5, tight fit |
+| Qwen3.5-9B Abliterated | 9B | IQ4_XS | huihui-ai — cleaner abliteration, good instruction following |
+
+#### 16GB VRAM (RTX 5080 sweet spot)
+
+| Model | Size | Quant | Notes |
+|-------|------|-------|-------|
+| Magnum v4 12B | 12B | Q4_K_M | TheDrummer — excellent emotional range, uncensored |
+| Rocinante-X 12B | 12B | Q5_K_M | TheDrummer — fresh writing style, robust RP |
+| Qwen3.5-9B Uncensored | 9B | Q5_K_M | Comfortable fit at higher quant, fast |
+| Euryale 70B v2.3 | 70B | EXL2 2.5bpw | Sao10K — gold standard RP, extreme compression |
+| Midnight Miqu 70B | 70B | EXL2 2.5bpw | Merge model — uncensored, strong creative writing |
+| Cydonia 24B v4.3 | 24B | Q4_K_M | TheDrummer — premium pick, 14GB, fresh non-repetitive |
+
+#### 24GB+ VRAM
+
+| Model | Size | Quant | Notes |
+|-------|------|-------|-------|
+| Euryale 70B v2.3 | 70B | Q4_K_M | Sao10K — full quality, no compression trade-offs |
+| Midnight Miqu 103B | 103B | EXL2 2.5bpw | Maximum uncensored quality |
+| Anubis Pro 105B | 105B | EXL2 2.5bpw | TheDrummer — latest large RP model |
+
+### Prompt Format Reference
+
+LM Studio auto-detects the correct prompt format from model metadata in most cases. If your model produces garbled output, **wrong prompt format is the #1 cause.** Check the model card on HuggingFace for the correct template.
+
+| Model Family | Prompt Format | Notes |
+|-------------|--------------|-------|
+| Llama 3 / 3.1 / 3.2 / 3.3 | Llama 3 (llama3) | `<\|begin_of_text\|><\|start_header_id\|>system<\|end_header_id\|>` |
+| Mistral / Mistral Nemo | Mistral v1 | `[INST]` / `[/INST]` wrapping |
+| Qwen 3 / Qwen 3.5 | ChatML | `<\|im_start\|>system` ... `<\|im_end\|>` |
+| Gemma / Gemma 2 | Gemma | `<start_of_turn>user` ... `<end_of_turn>` |
+| Command R+ | Command R | Cohere format |
+| Phi-3 | Phi-3 | `<\|system\|>` ... `<\|end\|>` |
+
+### Notable Mentions: Voice & Speech Models
+
+These are local voice pipeline models you may want to pair with your LLM for a complete companion experience.
+
+| Model | Type | Notes |
+|-------|------|-------|
+| hexgrad/Kokoro-82M | TTS | Tiny, fast, 82M params. Built into Waifu-RT3D. |
+| fishaudio/s2-pro | TTS | High quality voice cloning. FP8 available. |
+| ResembleAI/chatterbox | TTS | Emotional TTS with voice cloning. |
+| nari-labs/Dia-1.6B | TTS | Dialogue-aware TTS — different intonation for different speakers. |
+| Qwen/Qwen3-TTS | TTS | Qwen's TTS model with voice design capabilities. |
+| openai/whisper-large-v3-turbo | STT | Gold standard speech recognition. |
+| Qwen/Qwen3-ASR-0.6B | STT | Tiny, fast ASR — 0.6B params. |
+| nvidia/parakeet-tdt-0.6b-v3 | STT | NVIDIA's fast streaming ASR. |
+| HumeAI/tada-1b | Emotion | Emotion-aware speech synthesis. |
 
 ---
 

@@ -104,6 +104,34 @@
           "license": "Apache 2.0",
           "model_type": "instruct",
           "notes": "Vision model — tight fit on 8GB"
+        },
+        {
+          "id": "neural-dark-waifu-8b",
+          "hf_id": "nocudaexe/Neural-Dark-Waifu-v0.2",
+          "name": "Neural-Dark-Waifu v0.2",
+          "architecture": "llama3",
+          "quant": "Q4_K_M",
+          "vram_gb": 5.0,
+          "capabilities": ["chat", "roleplay", "uncensored"],
+          "speed_estimate": "45-65 tok/s",
+          "quality_tier": "good",
+          "license": "Meta Llama",
+          "model_type": "rp-tuned",
+          "notes": "Waifu-specific RP tuning; emotional companion focus"
+        },
+        {
+          "id": "infinite-waifu-8b",
+          "hf_id": "nocudaexe/Infinite-Waifu",
+          "name": "Infinite-Waifu",
+          "architecture": "llama3",
+          "quant": "Q4_K_M",
+          "vram_gb": 5.0,
+          "capabilities": ["chat", "roleplay", "uncensored"],
+          "speed_estimate": "45-65 tok/s",
+          "quality_tier": "good",
+          "license": "Meta Llama",
+          "model_type": "rp-tuned",
+          "notes": "Creative uncensored companion chat; waifu-optimized"
         }
       ]
     },
@@ -223,6 +251,62 @@
           "license": "Apache 2.0",
           "model_type": "instruct",
           "notes": "Vision analysis — game spectator, image understanding"
+        },
+        {
+          "id": "magnum-v4-12b",
+          "hf_id": "TheDrummer/Magnum-v4-12B-GGUF",
+          "name": "Magnum v4 12B",
+          "architecture": "mistral-nemo",
+          "quant": "Q4_K_M",
+          "vram_gb": 8.5,
+          "capabilities": ["chat", "roleplay", "uncensored", "emotional"],
+          "speed_estimate": "60-80 tok/s",
+          "quality_tier": "excellent",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Excellent emotional range; uncensored; strong character consistency"
+        },
+        {
+          "id": "qwen35-9b-uncensored",
+          "hf_id": "HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive",
+          "name": "Qwen3.5-9B Uncensored",
+          "architecture": "qwen3.5",
+          "quant": "Q5_K_M",
+          "vram_gb": 7.0,
+          "capabilities": ["chat", "roleplay", "uncensored", "reasoning"],
+          "speed_estimate": "50-70 tok/s",
+          "quality_tier": "very_good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Aggressively abliterated Qwen3.5; fast at 9B; good creative freedom"
+        },
+        {
+          "id": "qwen35-9b-abliterated",
+          "hf_id": "huihui-ai/Huihui-Qwen3.5-9B-abliterated",
+          "name": "Qwen3.5-9B Abliterated",
+          "architecture": "qwen3.5",
+          "quant": "Q5_K_M",
+          "vram_gb": 7.0,
+          "capabilities": ["chat", "roleplay", "uncensored", "reasoning"],
+          "speed_estimate": "50-70 tok/s",
+          "quality_tier": "very_good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Clean abliteration; retains strong instruction following alongside creative freedom"
+        },
+        {
+          "id": "midnight-miqu-70b-exl2",
+          "hf_id": "NeverSleep/Midnight-Miqu-70B-v1.5",
+          "name": "Midnight Miqu 70B (EXL2 2.5bpw)",
+          "architecture": "mistral",
+          "quant": "EXL2 2.5bpw",
+          "vram_gb": 16.0,
+          "capabilities": ["chat", "roleplay", "uncensored"],
+          "speed_estimate": "10-18 tok/s",
+          "quality_tier": "outstanding",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Uncensored merge; exceptional creative writing; extreme compression"
         }
       ]
     },
@@ -300,6 +384,20 @@
           "license": "Apache 2.0",
           "model_type": "instruct",
           "notes": "Vision analysis on Apple Silicon"
+        },
+        {
+          "id": "qwen35-27b-distilled-mlx",
+          "hf_id": "Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled",
+          "name": "Qwen3.5-27B Opus-Distilled (MLX)",
+          "architecture": "qwen3.5",
+          "quant": "int4",
+          "vram_gb": 16.0,
+          "capabilities": ["chat", "reasoning", "thinking"],
+          "speed_estimate": "20-35 tok/s",
+          "quality_tier": "excellent",
+          "license": "Apache 2.0",
+          "model_type": "instruct",
+          "notes": "Claude Opus reasoning patterns distilled into Qwen3.5; strong logic + creativity"
         }
       ]
     },

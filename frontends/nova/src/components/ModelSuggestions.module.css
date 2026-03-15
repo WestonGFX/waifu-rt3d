@@ -1,0 +1,245 @@
+/* ==========================================================================
+ * ModelSuggestions — Compact model recommendation cards for Nova Brain tab
+ * ==========================================================================
+ * Designed for the 280px-wide settings panel. Shows detected GPU info
+ * and a vertical stack of model cards with capability pills.
+ * ========================================================================== */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* --- Hardware info banner --- */
+.hwBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--nova-glass-bg);
+  border: 1px solid var(--nova-glass-border);
+  font-size: 10px;
+  color: var(--nova-text-secondary);
+}
+
+.hwRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hwLabel {
+  color: var(--nova-text-muted);
+}
+
+.hwValue {
+  color: var(--nova-text-primary);
+  font-weight: 500;
+}
+
+.tierLabel {
+  font-size: 10px;
+  color: var(--nova-accent-primary);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+
+/* --- Model card list --- */
+.modelList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.modelCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--nova-glass-bg);
+  border: 1px solid var(--nova-glass-border);
+  transition: border-color var(--nova-transition-fast) ease;
+  min-height: 54px;
+}
+
+.modelCard:hover {
+  border-color: var(--nova-accent-primary);
+}
+
+/* Top row: name + quant */
+.modelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+}
+
+.modelName {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--nova-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.modelQuant {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--nova-text-muted);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--nova-glass-bg-strong);
+  flex-shrink: 0;
+}
+
+/* Middle row: VRAM + speed + quality */
+.modelMeta {
+  display: flex;
+  gap: 6px;
+  font-size: 9px;
+  color: var(--nova-text-secondary);
+}
+
+.modelMetaItem {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Bottom row: capability pills + copy button */
+.modelFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+}
+
+.pillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pill {
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.pillRoleplay {
+  background: rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+}
+
+.pillUncensored {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.pillVision {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.pillReasoning {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+}
+
+.pillTools {
+  background: rgba(249, 115, 22, 0.2);
+  color: #fb923c;
+}
+
+.pillDefault {
+  background: rgba(156, 163, 175, 0.2);
+  color: #9ca3af;
+}
+
+/* Copy ID button */
+.copyBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  border: 1px solid var(--nova-glass-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--nova-text-muted);
+  font-size: 9px;
+  cursor: pointer;
+  transition: all var(--nova-transition-fast) ease;
+  flex-shrink: 0;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.copyBtn:hover {
+  border-color: var(--nova-accent-primary);
+  color: var(--nova-accent-primary);
+}
+
+.copyBtnCopied {
+  border-color: #4cd964;
+  color: #4cd964;
+}
+
+/* --- Loading / empty state --- */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  font-size: 10px;
+  color: var(--nova-text-muted);
+}
+
+.empty {
+  padding: 8px;
+  font-size: 10px;
+  color: var(--nova-text-muted);
+  text-align: center;
+}
+
+/* --- Collapsible toggle in settings --- */
+.toggleHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggleTitle {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--nova-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.toggleChevron {
+  color: var(--nova-text-muted);
+  transition: transform var(--nova-transition-fast) ease;
+}
+
+.toggleChevronOpen {
+  transform: rotate(180deg);
+}

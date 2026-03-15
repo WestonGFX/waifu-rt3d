@@ -232,6 +232,17 @@
   background: #ff3b30;
 }
 
+/* --- Filter warning --- */
+.filterWarning {
+  font-size: 10px;
+  color: #f87171;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  line-height: 1.4;
+}
+
 /* --- About section --- */
 .aboutSection {
   display: flex;

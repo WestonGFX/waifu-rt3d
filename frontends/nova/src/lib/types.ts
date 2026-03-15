@@ -527,6 +527,7 @@ export interface ExtendedHardwareInfo {
     backend?: string;
     models: Array<{
       id: string;
+      hf_id?: string;
       name?: string;
       quant?: string;
       vram_gb?: number;

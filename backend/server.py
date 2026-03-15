@@ -1677,6 +1677,28 @@ def _build_prompt_sections(
     if _author_note_text and _author_note_position == "before_system":
         sections.append(_section("Author's Note", f"[Author's Note: {_author_note_text}]"))
 
+    # 0b. Prompt template macro expansion (T0-4)
+    # Expand {{char_name}}, {{time}}, {{date}}, {{mood}}, etc. in system prompt
+    try:
+        from backend.llm.macro_expander import expand_macros, build_macro_context
+        _msg_count = cur.execute(
+            "SELECT COUNT(*) FROM messages WHERE session_id=? AND is_active=1",
+            (session_id,)
+        ).fetchone()[0]
+        _macro_ctx = build_macro_context(
+            char_name=char_name,
+            user_name=cfg.get("user_name", ""),
+            mood=last_emotion,
+            affinity=affinity,
+            message_count=_msg_count,
+            first_chat_date=first_chat_date,
+        )
+        system_prompt = expand_macros(system_prompt, _macro_ctx)
+        if _author_note_text:
+            _author_note_text = expand_macros(_author_note_text, _macro_ctx)
+    except Exception as _macro_err:
+        logger.warning(f"[Macros] Failed to expand prompt macros: {_macro_err}")
+
     # 1. Base system prompt
     if system_prompt:
         sections.append(_section("System Prompt", system_prompt))

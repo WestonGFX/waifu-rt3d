@@ -1,0 +1,88 @@
+/* ==========================================================================
+ * SlashAutocomplete — Command autocomplete dropdown for the InputBar.
+ * ==========================================================================
+ * Positioned above the input bar using absolute positioning on a relative
+ * wrapper. Uses Nova's glass design tokens for consistent frosted styling.
+ *
+ * Max 6 visible items; scrolls if more. Active item uses the accent color.
+ * ========================================================================== */
+
+.wrapper {
+  position: relative;
+}
+
+.dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 8px;
+  background: var(--nova-glass-bg-strong);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: var(--nova-radius-panel);
+  backdrop-filter: blur(var(--nova-glass-blur));
+  -webkit-backdrop-filter: blur(var(--nova-glass-blur));
+  overflow-y: auto;
+  max-height: 258px; /* ~6 items at 43px each */
+  z-index: 50;
+  padding: 4px;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.18);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+  border: 1px solid transparent;
+  user-select: none;
+}
+
+.item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.itemActive {
+  composes: item;
+  background: rgba(255, 141, 161, 0.1);
+  border-color: var(--nova-accent-primary);
+}
+
+.commandName {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nova-accent-primary);
+  white-space: nowrap;
+}
+
+.commandArgs {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--nova-text-tertiary);
+  white-space: nowrap;
+}
+
+.commandDesc {
+  font-family: 'Outfit', sans-serif;
+  font-size: 12.5px;
+  color: var(--nova-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-left: auto;
+}
+
+.empty {
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--nova-text-tertiary);
+  text-align: center;
+  font-family: 'Outfit', sans-serif;
+}

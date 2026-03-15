@@ -92,6 +92,7 @@ export function PetView() {
 
   const [showBubble, setShowBubble] = useState(false);
   const [latestMessage, setLatestMessage] = useState('');
+  const [petMuted, setPetMuted] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const dragRef = useRef<DragState>({ isDragging: false, startX: 0, startY: 0 });
   const lastTransparentRef = useRef(true);
@@ -99,6 +100,15 @@ export function PetView() {
   const attentionCountRef = useRef(0);
 
   const electronAPI = getElectronAPI();
+
+  // ── Sync mute state from Electron main process ────────────────────────────
+
+  useEffect(() => {
+    if (!electronAPI) return;
+    electronAPI.getAppState().then(state => setPetMuted(state.muted));
+    const cleanup = electronAPI.onMuteChanged(muted => setPetMuted(muted));
+    return cleanup;
+  }, [electronAPI]);
 
   // ── Track latest AI message for speech bubble ─────────────────────────────
 
@@ -210,9 +220,9 @@ export function PetView() {
     if (lastTransparentRef.current) return; // Only on character, not transparent area
     electronAPI?.showPetContextMenu({
       characterName: activeCharacter?.name || 'Character',
-      isMuted: false, // TODO: read from store when mute state is lifted to React
+      isMuted: petMuted,
     });
-  }, [electronAPI, activeCharacter?.name]);
+  }, [electronAPI, activeCharacter?.name, petMuted]);
 
   // ── Track user interaction for attention-seeking ──────────────────────────
 

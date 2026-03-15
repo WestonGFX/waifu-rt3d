@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone } from 'lucide-react';
+import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard } from 'lucide-react';
 import { VNTextBox } from '../components/VNTextBox';
 import { VNPortrait } from '../components/VNPortrait';
 import { useAppStore } from '../stores/appStore';
@@ -111,7 +111,7 @@ function generateChips(text: string, charName: string): string[] {
  */
 export function ChatThread() {
   const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode } = useAppStore();
-  const { messages, draft, loading, setDraft, sendMessage, abortMessage, setContext, loadHistory, sessionId } = useChatStore();
+  const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
@@ -444,9 +444,13 @@ export function ChatThread() {
   const handleSend = useCallback(() => {
     if (!draft.trim() || loading) return;
     idleFired.current = false;
-    setGreetingDismissed(true); // dismiss greeting on first user message
-    sendMessage(draft, true, incognito, effectiveMaxTokens);
-  }, [draft, loading, sendMessage, incognito, effectiveMaxTokens]);
+    setGreetingDismissed(true);
+    if (directorMode) {
+      sendDirectorNote(draft);
+    } else {
+      sendMessage(draft, true, incognito, effectiveMaxTokens);
+    }
+  }, [draft, loading, sendMessage, sendDirectorNote, directorMode, incognito, effectiveMaxTokens]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -922,6 +926,25 @@ export function ChatThread() {
               <GesturePicker onGesture={handleGesture} className="mb-2" />
             )}
 
+            {/* Director Mode banner — shown above textarea when active */}
+            {directorMode && (
+              <div
+                style={{
+                  backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                  borderTop: '1px solid rgba(245, 158, 11, 0.3)',
+                  color: 'rgb(245, 158, 11)',
+                  fontSize: 10,
+                  padding: '6px 16px',
+                  width: '100%',
+                  marginBottom: 6,
+                  borderRadius: 6,
+                }}
+              >
+                <Clapperboard size={10} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 5 }} />
+                DIRECTOR MODE — Stage directions steer the AI without breaking immersion
+              </div>
+            )}
+
             {/* Feature 26: Incognito banner — shown above textarea when active */}
             {incognito && (
               <div
@@ -986,6 +1009,22 @@ export function ChatThread() {
                 <Drama size={16} />
               </button>
 
+              {/* Director Mode toggle — sends OOC stage directions instead of chat */}
+              <button
+                onClick={() => setDirectorMode(!directorMode)}
+                title={directorMode ? 'Exit director mode' : 'Director mode — send stage directions'}
+                aria-label="Toggle director mode"
+                aria-pressed={directorMode}
+                className="p-2 rounded-lg transition-all duration-150 flex-shrink-0 text-base leading-none"
+                style={{
+                  backgroundColor: directorMode ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
+                  color: directorMode ? 'rgb(245, 158, 11)' : 'var(--color-text-tertiary)',
+                  boxShadow: directorMode ? '0 0 8px rgba(245, 158, 11, 0.2)' : 'none',
+                }}
+              >
+                <Clapperboard size={16} />
+              </button>
+
               {/* Reply length badge — cycles through brief/normal/detailed/auto on click */}
               <button
                 onClick={cycleReplyLengthMode}
@@ -1019,6 +1058,7 @@ export function ChatThread() {
                 placeholder={
                   dictating ? 'Dictating — speak now…' :
                   voiceActive ? 'Voice mode active — speak to send…' :
+                  directorMode ? "Director's note — stage direction…" :
                   incognito ? 'Incognito — not saved…' :
                   `Message ${activeCharacter.name}…`
                 }
@@ -1027,7 +1067,9 @@ export function ChatThread() {
                 style={{
                   backgroundColor: 'var(--color-background)',
                   borderRadius: 'var(--radius-input)',
-                  border: voiceActive
+                  border: directorMode
+                    ? '1px solid rgb(245, 158, 11)'
+                    : voiceActive
                     ? '1px solid color-mix(in srgb, var(--color-accent) 50%, transparent)'
                     : incognito
                     ? '1px solid var(--color-accent)'

@@ -199,6 +199,30 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
     }
   };
 
+  // Director Mode messages: centered amber/gold cards with clapperboard icon
+  if (message.role === 'director') {
+    return (
+      <div className="flex justify-center mb-3">
+        <div
+          style={{
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            borderRadius: 'var(--radius-card)',
+            padding: '8px 16px',
+            maxWidth: '80%',
+            fontSize: '0.8rem',
+            color: 'rgb(245, 158, 11)',
+            textAlign: 'center',
+            fontStyle: 'italic',
+          }}
+        >
+          <span style={{ marginRight: 6 }}>🎬</span>
+          {message.text}
+        </div>
+      </div>
+    );
+  }
+
   // Auto-compact system messages: render as centered inline divider
   if (message.role === 'system' && message.text.startsWith('\u27F3')) {
     return (

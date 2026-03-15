@@ -15,9 +15,14 @@ interface ChatState {
   currentEmotion: { emotion: string; intensity: number } | null;
   /** Phase 15: Latest emotion per character (charId → { emotion, timestamp }). */
   latestEmotionByChar: Record<number, { emotion: string; timestamp: number }>;
+  /** Director Mode toggle — when active, input sends director notes instead of chat messages. */
+  directorMode: boolean;
+  setDirectorMode: (v: boolean) => void;
   setDraft: (text: string) => void;
   setContext: (sessionId: number, charId: number) => void;
   sendMessage: (text: string, speak?: boolean, incognito?: boolean, maxTokens?: number) => Promise<void>;
+  /** Send a director note — stored in DB but does NOT trigger LLM response. */
+  sendDirectorNote: (text: string) => Promise<void>;
   abortMessage: () => void;
   loadHistory: (sessionId: number) => Promise<void>;
   clear: () => void;
@@ -85,7 +90,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   abortController: null,
   currentEmotion: null,
   latestEmotionByChar: {},
+  directorMode: false,
 
+  setDirectorMode: (v) => set({ directorMode: v }),
   setDraft: (text) => set({ draft: text }),
 
   setCurrentEmotion: (emotion, intensity) => {
@@ -103,6 +110,48 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   setContext: (sessionId, charId) => set({ sessionId, charId, messages: [] }),
 
   clear: () => set({ messages: [], draft: '', loading: false }),
+
+  sendDirectorNote: async (text) => {
+    const { sessionId, charId } = get();
+    if (!sessionId || !charId) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    // Optimistic local insert
+    const noteMsg: ChatMessage = {
+      id: genId(),
+      role: 'director',
+      text: trimmed,
+      createdAt: Date.now(),
+      status: 'sent',
+    };
+    set((s) => ({ messages: [...s.messages, noteMsg], draft: '' }));
+
+    // Persist to backend (no LLM call)
+    try {
+      const res = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: trimmed,
+          session_id: sessionId,
+          character_id: charId,
+          role: 'director',
+        }),
+      });
+      const data = await res.json();
+      if (data.message_id) {
+        // Patch with server ID
+        set((s) => ({
+          messages: s.messages.map((m) =>
+            m.id === noteMsg.id ? { ...m, serverMessageId: data.message_id } : m
+          ),
+        }));
+      }
+    } catch (err) {
+      console.error('[DirectorMode] Failed to save note:', err);
+    }
+  },
 
   loadHistory: async (sessionId) => {
     const data = await api.getMessages(sessionId);

@@ -183,6 +183,7 @@ def assemble_context(
 
     recent_rows = cur.execute(
         "SELECT role, text FROM messages WHERE session_id = ? AND is_active = 1 "
+        "AND role != 'director' "
         "ORDER BY id DESC LIMIT ?",
         (session_id, effective_limit),
     ).fetchall()

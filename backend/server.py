@@ -1701,6 +1701,22 @@ def _build_prompt_sections(
     if _author_note_text and _author_note_position == "after_system":
         sections.append(_section("Author's Note", f"\n[Author's Note: {_author_note_text}]"))
 
+    # 1a-director. Director Mode: cumulative stage directions from message history
+    # Collects ALL director notes in the session and injects them as persistent scene context.
+    try:
+        _director_rows = cur.execute(
+            "SELECT text FROM messages WHERE session_id=? AND role='director' AND is_active=1 ORDER BY id ASC",
+            (session_id,)
+        ).fetchall()
+        if _director_rows:
+            _dir_lines = "\n".join(f"{i+1}. {r[0]}" for i, r in enumerate(_director_rows))
+            sections.append(_section(
+                "Director Notes (Cumulative)",
+                f"\n[Director's Stage Directions — persistent scene context]\n{_dir_lines}"
+            ))
+    except Exception:
+        pass
+
     # 1b. Feature A4: Mood context prefix (time-of-day + session gap + affinity)
     if mood_enabled and char_name:
         try:
@@ -1840,6 +1856,30 @@ def _build_prompt_sections(
     # before the emotion/format instructions — still contextually recent.
     if _author_note_text and _author_note_position in ("before_last", "after_last2"):
         sections.append(_section("Author's Note", f"\n[Author's Note: {_author_note_text}]"))
+
+    # 6c. Director Mode: immediate notes — only notes after the last assistant message
+    # These are urgent per-turn steering cues the LLM should follow for its next reply.
+    try:
+        _all_recent = cur.execute(
+            "SELECT role, text FROM messages WHERE session_id=? AND is_active=1 ORDER BY id ASC",
+            (session_id,)
+        ).fetchall()
+        if _all_recent:
+            # Find boundary: last assistant message
+            _boundary = -1
+            for _ri in range(len(_all_recent) - 1, -1, -1):
+                if _all_recent[_ri][0] == "assistant":
+                    _boundary = _ri
+                    break
+            _immediate_notes = [r[1] for r in _all_recent[_boundary + 1:] if r[0] == "director"]
+            if _immediate_notes:
+                _imm_text = "\n".join(f"→ {n}" for n in _immediate_notes)
+                sections.append(_section(
+                    "Director Notes (Immediate)",
+                    f"\n[IMMEDIATE Director's Note — follow these for your very next reply:]\n{_imm_text}"
+                ))
+    except Exception:
+        pass
 
     # 7. Emotion / gesture instructions
     emotion_instruction = (
@@ -2056,6 +2096,25 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
     session_id = int(body.get("session_id") or session_id or 1)
     char_id = int(body.get("char_id") or char_id or 1)
     client_message_id: Optional[str] = body.get("client_message_id")
+    msg_role = body.get("role", "user")
+
+    # ── Director Mode: store director note without calling LLM ─────────
+    if msg_role == "director":
+        con = db()
+        cur = con.cursor()
+        cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)",
+                    (session_id, f"Session {session_id}"))
+        try:
+            cur.execute(
+                "INSERT INTO messages(session_id, role, text, char_id, importance_score) VALUES (?,?,?,?,?)",
+                (session_id, "director", text, char_id, 0.5))
+        except sqlite3.OperationalError:
+            cur.execute(
+                "INSERT INTO messages(session_id, role, text, char_id) VALUES (?,?,?,?)",
+                (session_id, "director", text, char_id))
+        director_msg_id = cur.lastrowid
+        con.commit()
+        return {"ok": True, "type": "director_note", "message_id": director_msg_id}
 
     cfg = load_config() or {}
     con = db()
@@ -2853,6 +2912,7 @@ async def chat_stream(req: Request):
     session_id = int(body.get("session_id") or 1)
     char_id = int(body.get("character_id") or body.get("char_id") or 1)
     speak = bool(body.get("speak", False))
+    msg_role = body.get("role", "user")
     # Incognito mode (#123): when True, messages are NOT persisted to the DB
     # and TTS audio files are deleted immediately after playback.
     incognito = bool(body.get("incognito", False))
@@ -2860,6 +2920,24 @@ async def chat_stream(req: Request):
     request_speech_rate = body.get("speech_rate")  # float or None
     # Per-request reply length override from adaptive pacing (#21)
     request_max_tokens = body.get("max_tokens")  # int | None
+
+    # ── Director Mode: store director note without calling LLM ─────────
+    if msg_role == "director":
+        con = db()
+        cur = con.cursor()
+        cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)",
+                    (session_id, f"Session {session_id}"))
+        try:
+            cur.execute(
+                "INSERT INTO messages(session_id, role, text, char_id, importance_score) VALUES (?,?,?,?,?)",
+                (session_id, "director", text, char_id, 0.5))
+        except sqlite3.OperationalError:
+            cur.execute(
+                "INSERT INTO messages(session_id, role, text, char_id) VALUES (?,?,?,?)",
+                (session_id, "director", text, char_id))
+        director_msg_id = cur.lastrowid
+        con.commit()
+        return JSONResponse({"ok": True, "type": "director_note", "message_id": director_msg_id})
 
     cfg = load_config() or {}
 

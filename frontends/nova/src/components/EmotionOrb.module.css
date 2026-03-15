@@ -1,0 +1,106 @@
+/* ==========================================================================
+ * EmotionOrb — Mood visualization component
+ * ==========================================================================
+ * Companion mode: large glass orb (bottom-center) with animated gradient.
+ * Focused mode: compact inline indicator in the header area.
+ *
+ * The orb uses conic-gradient for a prismatic effect that rotates via
+ * CSS animation. The glow pulse is layered behind via box-shadow.
+ * ========================================================================== */
+
+/* --- Companion mode: full orb --- */
+.companionOrb {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+  cursor: default;
+}
+
+.orbRing {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    box-shadow 2s ease,
+    background 2s ease;
+}
+
+.orbInner {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: var(--nova-bg-deep);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--nova-glass-border);
+}
+
+.orbGradient {
+  position: absolute;
+  inset: -20%;
+  border-radius: 50%;
+  opacity: 0.85;
+  animation: orbSpin 8s linear infinite;
+  transition: background 2s ease;
+}
+
+@keyframes orbSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.orbLabel {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: capitalize;
+  color: var(--nova-text-secondary);
+  padding: 3px 10px;
+  border-radius: var(--nova-radius-pill);
+  background: var(--nova-glass-bg);
+  border: 1px solid var(--nova-glass-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: color 2s ease;
+}
+
+/* --- Focused mode: compact indicator --- */
+.focusedIndicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--nova-radius-pill);
+  background: var(--nova-glass-bg);
+  border: 1px solid var(--nova-glass-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 2s ease;
+}
+
+.focusedDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: background 2s ease, box-shadow 2s ease;
+  animation: glowPulse 3s ease-in-out infinite;
+}
+
+.focusedLabel {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: capitalize;
+  color: var(--nova-text-secondary);
+  letter-spacing: 0.03em;
+}

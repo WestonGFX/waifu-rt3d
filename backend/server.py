@@ -277,6 +277,7 @@ FRONTEND = Path(ROOT_DIR) / "frontends" / "neon"
 FRONTEND_DASHBOARD_DIST = Path(ROOT_DIR) / "frontends" / "dashboard" / "dist"
 FRONTEND_V2_DIST = Path(ROOT_DIR) / "frontends" / "v2" / "dist"
 FRONTEND_SAKURA_DIST = Path(ROOT_DIR) / "frontends" / "sakura" / "dist"
+FRONTEND_NOVA_DIST = Path(ROOT_DIR) / "frontends" / "nova" / "dist"
 STORAGE  = Path(ROOT_DIR) / "backend" / "storage"
 CONFIG   = Path(ROOT_DIR) / "backend" / "config" / "app.json"
 DEFAULT_FRONTEND_ENV = "WAIFU_DEFAULT_FRONTEND"
@@ -554,7 +555,7 @@ def index():
         2. ``default_frontend`` key in ``app.json``
         3. Falls back to ``"neon"``
 
-    Valid values: ``"neon"``, ``"sakura"``, ``"v2"``
+    Valid values: ``"neon"``, ``"sakura"``, ``"nova"``, ``"v2"``
     """
     # Check env var first, then config file
     target = str(os.environ.get(DEFAULT_FRONTEND_ENV, "")).strip().lower()
@@ -567,6 +568,11 @@ def index():
         if sakura_index.exists():
             return sakura_index.read_text(encoding="utf-8")
         logger.warning("default_frontend=sakura but dist missing; falling back to neon")
+    elif target == "nova":
+        nova_index = FRONTEND_NOVA_DIST / "index.html"
+        if nova_index.exists():
+            return nova_index.read_text(encoding="utf-8")
+        logger.warning("default_frontend=nova but dist missing; falling back to neon")
     elif target == "v2":
         v2_index = FRONTEND_V2_DIST / "index.html"
         if v2_index.exists():
@@ -599,6 +605,27 @@ async def sakura_frontend(full_path: str = ""):
         return FileResponse(str(index))
     return JSONResponse(
         {"error": "Sakura frontend not built. Run: cd frontends/sakura && npm run build"},
+        status_code=404
+    )
+
+
+@app.get("/nova")
+@app.get("/nova/{full_path:path}")
+async def nova_frontend(full_path: str = ""):
+    """Serve the Nova React frontend (SPA fallback).
+
+    Static assets (JS/CSS in ``dist/assets/``) are served directly;
+    all other paths return ``index.html`` for client-side routing.
+    """
+    if full_path.startswith("assets/"):
+        asset = FRONTEND_NOVA_DIST / full_path
+        if asset.exists() and asset.is_file():
+            return FileResponse(str(asset))
+    index = FRONTEND_NOVA_DIST / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return JSONResponse(
+        {"error": "Nova frontend not built. Run: cd frontends/nova && npm run build"},
         status_code=404
     )
 
@@ -674,6 +701,10 @@ def logo_png():
 # Sakura frontend (built React app)
 if FRONTEND_SAKURA_DIST.exists() and (FRONTEND_SAKURA_DIST / "assets").exists():
     app.mount("/sakura/assets", StaticFiles(directory=str(FRONTEND_SAKURA_DIST / "assets")), name="sakura-assets")
+
+# Nova frontend (built React app)
+if FRONTEND_NOVA_DIST.exists() and (FRONTEND_NOVA_DIST / "assets").exists():
+    app.mount("/nova/assets", StaticFiles(directory=str(FRONTEND_NOVA_DIST / "assets")), name="nova-assets")
 
 app.mount("/shared", StaticFiles(directory=str(Path(ROOT_DIR) / "frontends" / "shared")), name="shared")
 app.mount("/assets", StaticFiles(directory=str(FRONTEND / "assets")), name="assets")
@@ -1365,6 +1396,8 @@ async def get_frontend_info():
     available = [{"id": "neon", "name": "Neon (Cyberpunk)", "ready": True}]
     sakura_ready = (FRONTEND_SAKURA_DIST / "index.html").exists()
     available.append({"id": "sakura", "name": "Sakura (Modern)", "ready": sakura_ready})
+    nova_ready = (FRONTEND_NOVA_DIST / "index.html").exists()
+    available.append({"id": "nova", "name": "Nova (Glass)", "ready": nova_ready})
 
     return {"default": default, "available": available}
 
@@ -1385,12 +1418,14 @@ async def switch_frontend(req: Request):
     body = await req.json()
     target = str(body.get("frontend", "")).strip().lower()
 
-    valid = {"neon", "sakura"}
+    valid = {"neon", "sakura", "nova"}
     if target not in valid:
         raise HTTPException(400, f"Invalid frontend '{target}'. Must be one of: {', '.join(sorted(valid))}")
 
     if target == "sakura" and not (FRONTEND_SAKURA_DIST / "index.html").exists():
         raise HTTPException(400, "Sakura frontend is not built. Run 'cd frontends/sakura && npm run build' first.")
+    if target == "nova" and not (FRONTEND_NOVA_DIST / "index.html").exists():
+        raise HTTPException(400, "Nova frontend is not built. Run 'cd frontends/nova && npm run build' first.")
 
     cfg = load_config()
     cfg["default_frontend"] = target

@@ -1,0 +1,334 @@
+/* ==========================================================================
+ * SpectatorPanel — Game spectator/companion panel for Focused mode
+ * ==========================================================================
+ * Renders inside the IconRail's expandable panel (280px wide).
+ * Game tag input, frequency selector, start/stop, and reaction feed.
+ * ========================================================================== */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* --- Status indicator row --- */
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--nova-text-muted);
+  flex-shrink: 0;
+  transition: background var(--nova-transition-fast) ease;
+}
+
+.statusDotActive {
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.statusText {
+  font-size: 11px;
+  color: var(--nova-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Game name input --- */
+.gameInput {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--nova-text-primary);
+  background: var(--nova-glass-bg-strong);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: var(--nova-radius-pill);
+  outline: none;
+  transition: border-color var(--nova-transition-fast) ease;
+  font-family: inherit;
+}
+
+.gameInput:focus {
+  border-color: var(--nova-accent-primary);
+}
+
+.gameInput::placeholder {
+  color: var(--nova-text-muted);
+}
+
+.gameInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- Mode toggle row --- */
+.modeRow {
+  display: flex;
+  gap: 6px;
+}
+
+.modePill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--nova-text-secondary);
+  background: var(--nova-glass-bg);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: var(--nova-radius-pill);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background var(--nova-transition-fast) ease,
+    border-color var(--nova-transition-fast) ease,
+    color var(--nova-transition-fast) ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.modePill:hover {
+  background: var(--nova-glass-bg-strong);
+}
+
+.modePillActive {
+  background: var(--nova-glass-bg-strong);
+  border-color: var(--nova-accent-primary);
+  color: var(--nova-accent-primary);
+}
+
+.modePillDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.comingSoon {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--nova-text-muted);
+  font-style: italic;
+}
+
+/* --- Frequency selector row --- */
+.frequencyLabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--nova-text-secondary);
+  letter-spacing: 0.02em;
+  padding: 0 4px;
+}
+
+.frequencyRow {
+  display: flex;
+  gap: 6px;
+}
+
+.freqPill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--nova-text-secondary);
+  background: var(--nova-glass-bg);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: var(--nova-radius-pill);
+  backdrop-filter: blur(var(--nova-glass-blur));
+  -webkit-backdrop-filter: blur(var(--nova-glass-blur));
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background var(--nova-transition-fast) ease,
+    border-color var(--nova-transition-fast) ease,
+    color var(--nova-transition-fast) ease,
+    transform var(--nova-transition-fast) cubic-bezier(0.34, 1.56, 0.64, 1);
+  font-family: inherit;
+}
+
+.freqPill:hover {
+  background: var(--nova-glass-bg-strong);
+  border-color: var(--nova-glass-border-strong);
+  color: var(--nova-text-primary);
+}
+
+.freqPill:active {
+  transform: scale(0.95);
+}
+
+.freqPillActive {
+  background: var(--nova-glass-bg-strong);
+  border-color: var(--nova-accent-primary);
+  color: var(--nova-accent-primary);
+}
+
+.freqInterval {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--nova-text-muted);
+}
+
+/* --- Start / Stop button --- */
+.actionButton {
+  width: 100%;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nova-bg-deep);
+  background: var(--nova-accent-primary);
+  border: none;
+  border-radius: var(--nova-radius-pill);
+  cursor: pointer;
+  transition:
+    opacity var(--nova-transition-fast) ease,
+    transform var(--nova-transition-fast) cubic-bezier(0.34, 1.56, 0.64, 1);
+  letter-spacing: 0.02em;
+  font-family: inherit;
+}
+
+.actionButton:hover {
+  opacity: 0.9;
+}
+
+.actionButton:active {
+  transform: scale(0.97);
+}
+
+.actionButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.actionButtonStop {
+  composes: actionButton;
+  background: var(--nova-accent-secondary);
+}
+
+/* --- Reaction feed --- */
+.reactionFeed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reactionCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--nova-glass-bg);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.reactionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.emotionTag {
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: var(--nova-radius-pill);
+  text-transform: capitalize;
+}
+
+/* Emotion color variants */
+.emotionExcited {
+  color: #fb923c;
+  background: rgba(251, 146, 60, 0.15);
+}
+
+.emotionAmused {
+  color: #f472b6;
+  background: rgba(244, 114, 182, 0.15);
+}
+
+.emotionWorried {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.15);
+}
+
+.emotionProud {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.15);
+}
+
+.emotionSurprised {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.15);
+}
+
+/* Fallback for unknown emotions */
+.emotionDefault {
+  color: var(--nova-text-secondary);
+  background: var(--nova-glass-bg-strong);
+}
+
+.reactionTimestamp {
+  font-size: 10px;
+  color: var(--nova-text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.reactionText {
+  font-size: 12px;
+  color: var(--nova-text-primary);
+  line-height: 1.4;
+  font-style: italic;
+}
+
+/* --- Divider --- */
+.divider {
+  height: 1px;
+  background: var(--nova-glass-border);
+  margin: 2px 0;
+}
+
+/* --- Empty state --- */
+.emptyReactions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px;
+  text-align: center;
+}
+
+.emptyIcon {
+  color: var(--nova-text-muted);
+  opacity: 0.5;
+}
+
+.emptyText {
+  font-size: 12px;
+  color: var(--nova-text-muted);
+  line-height: 1.4;
+}

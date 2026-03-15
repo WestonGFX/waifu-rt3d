@@ -1,0 +1,138 @@
+/* ==========================================================================
+ * Nova — Command Palette CSS Module
+ * ==========================================================================
+ * Styles for the ⌘K command palette overlay.
+ * Backdrop uses frosted glass; panel reuses Nova glass tokens.
+ *
+ * Usage: import styles from '@/components/CommandPalette.module.css';
+ * ========================================================================== */
+
+/* --- Full-viewport frosted glass backdrop --- */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 20vh;
+}
+
+/* --- Centered glass panel --- */
+.panel {
+  max-width: 520px;
+  width: 90%;
+  background: var(--nova-glass-bg-strong);
+  border: 1px solid var(--nova-glass-border-strong);
+  border-radius: var(--nova-radius-panel);
+  backdrop-filter: blur(var(--nova-glass-blur));
+  -webkit-backdrop-filter: blur(var(--nova-glass-blur));
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* --- Search input at top of panel --- */
+.searchInput {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--nova-glass-border);
+  padding: 16px 20px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--nova-text-primary);
+  outline: none;
+}
+
+.searchInput::placeholder {
+  color: var(--nova-text-muted);
+}
+
+/* --- Scrollable action list --- */
+.actionList {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+/* --- Individual action row --- */
+.actionItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background var(--nova-transition-fast) ease;
+  font-family: 'Outfit', sans-serif;
+}
+
+.actionItem:hover {
+  background: rgba(255, 141, 161, 0.06);
+}
+
+/* --- Keyboard-selected highlight --- */
+.actionItemActive {
+  background: rgba(255, 141, 161, 0.1);
+}
+
+.actionItemActive:hover {
+  background: rgba(255, 141, 161, 0.1);
+}
+
+/* --- Action label text --- */
+.actionLabel {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--nova-text-primary);
+  line-height: 1.3;
+}
+
+/* --- Action description text --- */
+.actionDescription {
+  font-size: 11px;
+  color: var(--nova-text-secondary);
+  line-height: 1.3;
+  margin-top: 1px;
+}
+
+/* --- Icon container --- */
+.actionIcon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nova-text-secondary);
+}
+
+/* --- Text column (label + description stacked) --- */
+.actionText {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --- Shortcut key badge --- */
+.shortcutBadge {
+  flex-shrink: 0;
+  font-family: 'Outfit', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--nova-text-muted);
+  background: var(--nova-glass-bg);
+  border: 1px solid var(--nova-glass-border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  line-height: 1.4;
+}
+
+/* --- Empty state --- */
+.emptyState {
+  padding: 24px 20px;
+  text-align: center;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  color: var(--nova-text-muted);
+}

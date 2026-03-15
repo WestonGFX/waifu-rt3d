@@ -158,4 +158,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{ connected: boolean, error?: string }>}
    */
   setDiscordRpcEnabled: (enabled) => ipcRenderer.invoke('set-discord-rpc-enabled', enabled),
+
+  /**
+   * Listen for backend server status updates from the main process.
+   * Used by the splash screen to show startup progress.
+   *
+   * @param {(status: { status: string, pid: number|null, port: number, url: string, error: string|null, restartCount: number }) => void} callback
+   * @returns {() => void} Cleanup function to remove the listener
+   */
+  onBackendStatus: (callback) => {
+    const handler = (_event, status) => callback(status);
+    ipcRenderer.on('backend-status', handler);
+    return () => ipcRenderer.removeListener('backend-status', handler);
+  },
 });

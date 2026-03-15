@@ -1,0 +1,87 @@
+/* ==========================================================================
+ * IconRail — Focused mode collapsible sidebar
+ * ========================================================================== */
+
+.container {
+  display: flex;
+  height: 100%;
+  pointer-events: auto;
+}
+
+/* --- Icon column (always visible in Focused mode) --- */
+.rail {
+  width: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 0;
+  border-radius: 0;
+  border-right: 1px solid var(--nova-glass-border);
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.railButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nova-text-muted);
+  transition:
+    color var(--nova-transition-fast) ease,
+    background var(--nova-transition-fast) ease,
+    transform var(--nova-transition-fast) cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.railButton:hover {
+  color: var(--nova-text-primary);
+  background: var(--nova-glass-bg);
+}
+
+.railButton:active {
+  transform: scale(0.92);
+}
+
+.railButtonActive {
+  color: var(--nova-accent-pink);
+  background: rgba(255, 141, 161, 0.1);
+}
+
+/* --- Expanded content panel --- */
+.panel {
+  overflow: hidden;
+  border-radius: 0;
+  border-right: 1px solid var(--nova-glass-border);
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  flex-shrink: 0;
+}
+
+.panelInner {
+  width: 280px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.panelHeader {
+  padding: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nova-text-primary);
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--nova-glass-border);
+  flex-shrink: 0;
+}
+
+.panelContent {
+  flex: 1;
+  overflow-y: auto;
+}

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Waifu RT3D</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0f0f0f;
+      color: #e0e0e0;
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+
+    .splash {
+      text-align: center;
+      width: 320px;
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: 700;
+      color: #b49bf0;
+      margin-bottom: 28px;
+      letter-spacing: 0.5px;
+    }
+
+    .status-text {
+      font-size: 13px;
+      color: #999;
+      margin-bottom: 14px;
+      min-height: 18px;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 6px;
+      background: #1a1a1a;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: #b49bf0;
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+
+    .progress-bar.indeterminate {
+      width: 40%;
+      animation: indeterminate 1.4s ease-in-out infinite;
+    }
+
+    @keyframes indeterminate {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+
+    .percent {
+      font-size: 11px;
+      color: #666;
+      min-height: 15px;
+    }
+
+    .error-text {
+      font-size: 12px;
+      color: #ff6b6b;
+      margin-top: 12px;
+      min-height: 16px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="splash">
+    <div class="title">Waifu RT3D</div>
+    <div class="status-text" id="statusText">Initializing...</div>
+    <div class="progress-track">
+      <div class="progress-bar indeterminate" id="progressBar"></div>
+    </div>
+    <div class="percent" id="percentText"></div>
+    <div class="error-text" id="errorText"></div>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('statusText');
+    const barEl = document.getElementById('progressBar');
+    const percentEl = document.getElementById('percentText');
+    const errorEl = document.getElementById('errorText');
+
+    /** Map backend status to user-facing label and progress percentage. */
+    const STATUS_MAP = {
+      checking:        { label: 'Checking for running server...', percent: null },
+      spawning:        { label: 'Starting backend server...', percent: null },
+      waiting_health:  { label: 'Waiting for server to respond...', percent: 60 },
+      ready:           { label: 'Server ready!', percent: 100 },
+      already_running: { label: 'Server already running!', percent: 100 },
+      crash:           { label: 'Server crashed', percent: 0 },
+      restarting:      { label: 'Restarting server...', percent: null },
+      no_venv:         { label: 'Python environment not found', percent: 0 },
+      failed:          { label: 'Failed to start server', percent: 0 },
+      stopping:        { label: 'Stopping server...', percent: null },
+    };
+
+    /**
+     * Update the splash UI based on a backend status object.
+     * @param {object} s - Status object from backend-launcher
+     */
+    function updateUI(s) {
+      const info = STATUS_MAP[s.status] || { label: s.status, percent: null };
+
+      statusEl.textContent = info.label;
+
+      if (info.percent === null) {
+        barEl.className = 'progress-bar indeterminate';
+        barEl.style.width = '';
+        percentEl.textContent = '';
+      } else {
+        barEl.className = 'progress-bar';
+        barEl.style.width = info.percent + '%';
+        percentEl.textContent = info.percent > 0 ? info.percent + '%' : '';
+      }
+
+      if (s.error && ['no_venv', 'crash', 'failed'].includes(s.status)) {
+        errorEl.textContent = s.error;
+      } else {
+        errorEl.textContent = '';
+      }
+    }
+
+    // Listen for status updates from the main process via preload bridge
+    if (window.electronAPI && window.electronAPI.onBackendStatus) {
+      window.electronAPI.onBackendStatus(updateUI);
+    }
+  </script>
+</body>
+</html>

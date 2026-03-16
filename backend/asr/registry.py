@@ -3,12 +3,14 @@ from .adapters.base import ASRAdapter
 from .adapters.whisper_api import WhisperAPIAdapter
 from .adapters.whisper_local import WhisperLocalAdapter
 from .adapters.faster_whisper import FasterWhisperAdapter
+from .adapters.groq_asr import GroqASRAdapter
 
 # Registry of available ASR adapters
 ASR_ADAPTERS = {
     "whisper_api": WhisperAPIAdapter,
     "whisper_local": WhisperLocalAdapter,
     "faster_whisper": FasterWhisperAdapter,
+    "groq": GroqASRAdapter,
 }
 
 def get_asr_adapter(cfg: Dict) -> Optional[ASRAdapter]:
@@ -44,6 +46,7 @@ def get_asr_adapter(cfg: Dict) -> Optional[ASRAdapter]:
     if ptype == "openai" or ptype == "whisper_api": adapter_key = "whisper_api"
     elif ptype == "whisper_local": adapter_key = "whisper_local"
     elif ptype == "faster_whisper": adapter_key = "faster_whisper"
+    elif ptype == "groq": adapter_key = "groq"
     
     if not adapter_key: 
         return None # Browser ASR is client side only

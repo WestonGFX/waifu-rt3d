@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v50)
+- Database schema migrations (v3 → v4 → … → v51)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -2813,6 +2813,60 @@ def migrate_to_v50(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v51(con: sqlite3.Connection) -> bool:
+    """Add screenshots table for Photo Mode gallery (v51).
+
+    Creates the screenshots table with indexes for character filtering,
+    favorites, and chronological sorting. Stores metadata for captured
+    screenshots alongside filesystem paths.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v51+.
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 51:
+        return False
+
+    try:
+        logger.info("Applying schema v51 migration (screenshots table for Photo Mode)...")
+
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS screenshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL UNIQUE,
+                character_id INTEGER,
+                character_name TEXT,
+                emotion TEXT,
+                gesture TEXT,
+                quality INTEGER DEFAULT 1,
+                transparent INTEGER DEFAULT 0,
+                width INTEGER,
+                height INTEGER,
+                file_size INTEGER,
+                file_path TEXT NOT NULL,
+                caption TEXT DEFAULT '',
+                favorite INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE SET NULL
+            )
+        """)
+        con.execute("CREATE INDEX IF NOT EXISTS idx_screenshots_char ON screenshots(character_id)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_screenshots_fav ON screenshots(favorite)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_screenshots_created ON screenshots(created_at DESC)")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (51)")
+        con.commit()
+        logger.info("\u2705 Schema v51 migration complete (screenshots table)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v51 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -3196,21 +3250,27 @@ def ensure_db():
             if migrate_to_v50(con):
                 version = 50
 
+        if version < 51:
+            logger.info("Upgrading database schema from v50 to v51...")
+            logger.info("  - Adding screenshots table for Photo Mode gallery")
+            if migrate_to_v51(con):
+                version = 51
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 50:
-            raise RuntimeError(f"Database initialization failed: Expected v50, got v{final_version}")
+        if final_version < 51:
+            raise RuntimeError(f"Database initialization failed: Expected v51, got v{final_version}")
 
-        if final_version > 50:
-            logger.warning(f"Database is newer than application (v{final_version} > v50). Some features might be unused.")
+        if final_version > 51:
+            logger.warning(f"Database is newer than application (v{final_version} > v51). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v50 adds scene context)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v51 adds screenshots table)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

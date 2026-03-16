@@ -261,7 +261,7 @@ async def lifespan(app: FastAPI):
     logger.info("Application shutdown complete")
 
 
-app = FastAPI(title="Waifu-RT3D", version="5.31.0", lifespan=lifespan)
+app = FastAPI(title="Waifu-RT3D", version="5.34.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -857,7 +857,7 @@ def health_check():
 
     return {
         "ok": True,
-        "version": "5.32.0",
+        "version": app.version,
         "services": {
             "db": db_status,
             "llm": "connected" if llm_ok else "disconnected",
@@ -9089,6 +9089,204 @@ def delete_image(filename: str):
     except Exception as e:
         logger.error(f"Failed to delete image {filename}: {e}")
         raise HTTPException(500, f"Delete failed: {e}")
+
+
+# ==================== GALLERY (PHOTO MODE) ====================
+
+from backend.gallery.manager import GalleryManager
+
+_gallery_mgr = GalleryManager()
+
+
+@app.post("/api/gallery")
+async def gallery_save(req: Request):
+    """Save a screenshot to the gallery.
+
+    Accepts a base64 PNG data URL and metadata, writes the file to
+    ``backend/storage/images/screenshots/``, generates a thumbnail,
+    and inserts a row into the screenshots table.
+
+    Args:
+        req: JSON body with:
+            - ``data_url`` (str, required): base64 PNG data URL.
+            - ``character_id`` (int, optional): Character ID.
+            - ``character_name`` (str, optional): Character name.
+            - ``emotion`` (str, optional): Active emotion.
+            - ``gesture`` (str, optional): Active gesture.
+            - ``quality`` (int, optional): Supersampling multiplier (1/2/4).
+            - ``transparent`` (bool, optional): Whether bg was transparent.
+            - ``caption`` (str, optional): User caption.
+
+    Returns:
+        dict: Saved screenshot metadata with ``url`` and ``thumb_url``.
+
+    Raises:
+        HTTPException 400: If data_url is missing or invalid.
+    """
+    body = await req.json()
+    data_url = body.get("data_url")
+    if not data_url:
+        raise HTTPException(400, "data_url is required")
+
+    try:
+        con = sqlite3.connect(str(STORAGE / "app.db"))
+        con.execute("PRAGMA journal_mode=WAL")
+        meta = _gallery_mgr.save(
+            con,
+            data_url=data_url,
+            character_id=body.get("character_id"),
+            character_name=body.get("character_name"),
+            emotion=body.get("emotion"),
+            gesture=body.get("gesture"),
+            quality=body.get("quality", 1),
+            transparent=body.get("transparent", False),
+            caption=body.get("caption", ""),
+        )
+        return meta.to_dict()
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    finally:
+        con.close()
+
+
+@app.get("/api/gallery")
+def gallery_list(
+    character_id: Optional[int] = None,
+    favorites_only: bool = False,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """List gallery screenshots with pagination and filtering.
+
+    Args:
+        character_id: Filter by character (query param).
+        favorites_only: Only return favorited screenshots.
+        limit: Max results per page (default 50).
+        offset: Pagination offset.
+
+    Returns:
+        dict: ``{items, total, limit, offset}``
+    """
+    con = sqlite3.connect(str(STORAGE / "app.db"))
+    try:
+        return _gallery_mgr.list(
+            con,
+            character_id=character_id,
+            favorites_only=favorites_only,
+            limit=limit,
+            offset=offset,
+        )
+    finally:
+        con.close()
+
+
+@app.get("/api/gallery/{screenshot_id}")
+def gallery_get(screenshot_id: int):
+    """Get a single screenshot's metadata.
+
+    Args:
+        screenshot_id: Database row ID.
+
+    Returns:
+        dict: Screenshot metadata with ``url`` and ``thumb_url``.
+
+    Raises:
+        HTTPException 404: If screenshot not found.
+    """
+    con = sqlite3.connect(str(STORAGE / "app.db"))
+    try:
+        meta = _gallery_mgr.get(con, screenshot_id)
+        if not meta:
+            raise HTTPException(404, "Screenshot not found")
+        return meta.to_dict()
+    finally:
+        con.close()
+
+
+@app.patch("/api/gallery/{screenshot_id}")
+async def gallery_update(screenshot_id: int, req: Request):
+    """Update screenshot metadata (favorite toggle, caption edit).
+
+    Args:
+        screenshot_id: Database row ID.
+        req: JSON body with optional ``favorite`` (bool) and/or ``caption`` (str).
+
+    Returns:
+        dict: Updated screenshot metadata.
+
+    Raises:
+        HTTPException 404: If screenshot not found.
+    """
+    body = await req.json()
+    con = sqlite3.connect(str(STORAGE / "app.db"))
+    try:
+        meta = _gallery_mgr.update(
+            con,
+            screenshot_id,
+            favorite=body.get("favorite"),
+            caption=body.get("caption"),
+        )
+        if not meta:
+            raise HTTPException(404, "Screenshot not found")
+        return meta.to_dict()
+    finally:
+        con.close()
+
+
+@app.delete("/api/gallery/{screenshot_id}")
+def gallery_delete(screenshot_id: int):
+    """Delete a screenshot — removes file, thumbnail, and DB row.
+
+    Args:
+        screenshot_id: Database row ID.
+
+    Returns:
+        dict: ``{"ok": True}``
+
+    Raises:
+        HTTPException 404: If screenshot not found.
+    """
+    con = sqlite3.connect(str(STORAGE / "app.db"))
+    try:
+        deleted = _gallery_mgr.delete(con, screenshot_id)
+        if not deleted:
+            raise HTTPException(404, "Screenshot not found")
+        return {"ok": True}
+    finally:
+        con.close()
+
+
+@app.get("/api/gallery/{screenshot_id}/download")
+def gallery_download(screenshot_id: int):
+    """Serve the full-size PNG file for download.
+
+    Args:
+        screenshot_id: Database row ID.
+
+    Returns:
+        FileResponse: PNG file with appropriate Content-Disposition header.
+
+    Raises:
+        HTTPException 404: If screenshot or file not found.
+    """
+    con = sqlite3.connect(str(STORAGE / "app.db"))
+    try:
+        meta = _gallery_mgr.get(con, screenshot_id)
+        if not meta:
+            raise HTTPException(404, "Screenshot not found")
+
+        file_path = _gallery_mgr.get_file_path(con, screenshot_id)
+        if not file_path or not file_path.exists():
+            raise HTTPException(404, "Screenshot file not found on disk")
+
+        filename = f"{meta.character_name or 'screenshot'}-{meta.uuid[:8]}.png"
+        return FileResponse(
+            str(file_path),
+            media_type="image/png",
+            filename=filename,
+        )
+    finally:
+        con.close()
 
 
 # ==================== ASR (SPEECH RECOGNITION) ====================

@@ -57,6 +57,7 @@ import { useAppStore } from './stores/appStore';
 import { useChatStore } from './stores/chatStore';
 import { useTheme } from './hooks/useTheme';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { usePhotoHotkeys } from './hooks/usePhotoHotkeys';
 
 /**
  * Root layout — desktop-first with left sidebar + main content area.
@@ -273,6 +274,9 @@ function MainApp() {
   ], [openOverlay, closeOverlay, activeOverlay, toggleSidebar, setSidebarSection, showHelp, customKeyBindings, cinematicMode, toggleCinematicMode]);
 
   useKeyboardShortcuts(shortcuts);
+
+  // Photo Mode global hotkeys (Ctrl+Shift+P/G/S)
+  usePhotoHotkeys();
 
   /** Determine what to render in the main content area. */
   const mainContent = (() => {

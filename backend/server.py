@@ -2348,6 +2348,16 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         raw_reply = res["reply"]
 
         emotion, gesture, clean_reply = _parse_emotion_gesture(raw_reply)
+
+        # T1-7: Apply user-defined regex format rules (non-streaming path)
+        try:
+            from backend.llm.output_formatter import apply_format_rules, load_format_rules
+            _fmt_rules_ns = load_format_rules(cur, char_id)
+            if _fmt_rules_ns:
+                clean_reply = apply_format_rules(clean_reply, _fmt_rules_ns)
+        except Exception:
+            pass
+
         intensity = 1.0
 
         # Score assistant message importance
@@ -3554,6 +3564,15 @@ async def chat_stream(req: Request):
 
                 # Stream complete — parse emotion/gesture, save to DB, emit done event
                 emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
+
+                # T1-7: Apply user-defined regex format rules
+                try:
+                    from backend.llm.output_formatter import apply_format_rules, load_format_rules
+                    _fmt_rules = load_format_rules(cur, char_id)
+                    if _fmt_rules:
+                        clean_reply = apply_format_rules(clean_reply, _fmt_rules)
+                except Exception as _fmt_err:
+                    logger.warning(f"[FormatRules] Failed to apply: {_fmt_err}")
 
                 # Calculate generation timing for token stats
                 generation_time_ms = None
@@ -7124,6 +7143,142 @@ async def pin_message(message_id: int, req: Request):
 
     logger.info(f"[Pin] Message {message_id} pinned={pinned_val}")
     return {"message_id": message_id, "pinned": pinned_val}
+
+
+# ── Feature T1-7 — Output Format Rules CRUD ──────────────────────────────────
+
+@app.get("/api/characters/{character_id}/format-rules")
+async def list_format_rules(character_id: int):
+    """List all output format rules for a character.
+
+    Args:
+        character_id: Character whose rules to list.
+
+    Returns:
+        dict: ``{"rules": [{id, rule_name, pattern, replacement, is_enabled, priority}]}``
+    """
+    conn = db()
+    try:
+        rows = conn.execute(
+            "SELECT id, rule_name, pattern, replacement, is_enabled, priority "
+            "FROM output_format_rules WHERE character_id = ? ORDER BY priority ASC",
+            (character_id,)
+        ).fetchall()
+        return {"rules": [
+            {"id": r[0], "rule_name": r[1], "pattern": r[2], "replacement": r[3],
+             "is_enabled": bool(r[4]), "priority": r[5]}
+            for r in rows
+        ]}
+    except Exception:
+        return {"rules": []}
+    finally:
+        conn.close()
+
+
+@app.post("/api/characters/{character_id}/format-rules")
+async def create_format_rule(character_id: int, req: Request):
+    """Create a new output format rule for a character.
+
+    Args:
+        character_id: Character to attach the rule to.
+        req: JSON body with ``rule_name``, ``pattern``, ``replacement`` (optional),
+            ``is_enabled`` (optional, default true), ``priority`` (optional, default 0).
+
+    Returns:
+        dict: ``{"ok": True, "id": int}``
+    """
+    body = await req.json()
+    rule_name = body.get("rule_name", "Unnamed Rule")
+    pattern = body.get("pattern", "")
+    replacement = body.get("replacement", "")
+    is_enabled = int(body.get("is_enabled", True))
+    priority = int(body.get("priority", 0))
+
+    if not pattern:
+        raise HTTPException(400, "pattern is required")
+
+    # Validate regex
+    try:
+        re.compile(pattern)
+    except re.error as e:
+        raise HTTPException(400, f"Invalid regex: {e}")
+
+    conn = db()
+    try:
+        cur = conn.execute(
+            "INSERT INTO output_format_rules (character_id, rule_name, pattern, replacement, is_enabled, priority) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (character_id, rule_name, pattern, replacement, is_enabled, priority)
+        )
+        conn.commit()
+        return {"ok": True, "id": cur.lastrowid}
+    finally:
+        conn.close()
+
+
+@app.patch("/api/format-rules/{rule_id}")
+async def update_format_rule(rule_id: int, req: Request):
+    """Update an existing format rule.
+
+    Args:
+        rule_id: ID of the rule to update.
+        req: JSON body with any subset of ``rule_name``, ``pattern``,
+            ``replacement``, ``is_enabled``, ``priority``.
+
+    Returns:
+        dict: ``{"ok": True}``
+    """
+    body = await req.json()
+    updates = []
+    params = []
+    for field in ("rule_name", "pattern", "replacement"):
+        if field in body:
+            updates.append(f"{field} = ?")
+            params.append(body[field])
+    if "is_enabled" in body:
+        updates.append("is_enabled = ?")
+        params.append(int(body["is_enabled"]))
+    if "priority" in body:
+        updates.append("priority = ?")
+        params.append(int(body["priority"]))
+
+    if not updates:
+        return {"ok": True}
+
+    # Validate regex if pattern is being updated
+    if "pattern" in body:
+        try:
+            re.compile(body["pattern"])
+        except re.error as e:
+            raise HTTPException(400, f"Invalid regex: {e}")
+
+    params.append(rule_id)
+    conn = db()
+    try:
+        conn.execute(f"UPDATE output_format_rules SET {', '.join(updates)} WHERE id = ?", params)
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/format-rules/{rule_id}")
+async def delete_format_rule(rule_id: int):
+    """Delete a format rule.
+
+    Args:
+        rule_id: ID of the rule to delete.
+
+    Returns:
+        dict: ``{"ok": True}``
+    """
+    conn = db()
+    try:
+        conn.execute("DELETE FROM output_format_rules WHERE id = ?", (rule_id,))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
 
 
 # ── Feature T0-3 — Branch Listing ─────────────────────────────────────────────

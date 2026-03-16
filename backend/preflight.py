@@ -2677,6 +2677,54 @@ def migrate_to_v47(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v48(con: sqlite3.Connection) -> bool:
+    """Add output_format_rules table for user-defined regex output cleaning (v48).
+
+    Creates the ``output_format_rules`` table which stores per-character
+    regex pattern/replacement pairs applied to LLM output before display.
+    Rules are applied in priority order (lower = first).
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v48+.
+
+    Example:
+        >>> if migrate_to_v48(con):
+        ...     logger.info("Format rules table created")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 48:
+        return False
+
+    try:
+        logger.info("Applying schema v48 migration (output_format_rules table)...")
+
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS output_format_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
+                rule_name TEXT NOT NULL,
+                pattern TEXT NOT NULL,
+                replacement TEXT NOT NULL DEFAULT '',
+                is_enabled INTEGER DEFAULT 1,
+                priority INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        con.execute("CREATE INDEX IF NOT EXISTS idx_format_rules_char ON output_format_rules(character_id, is_enabled)")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (48)")
+        con.commit()
+        logger.info("\u2705 Schema v48 migration complete (output_format_rules table)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v48 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -3042,13 +3090,19 @@ def ensure_db():
             if migrate_to_v47(con):
                 version = 47
 
+        if version < 48:
+            logger.info("Upgrading database schema from v47 to v48...")
+            logger.info("  - Creating output_format_rules table for regex output cleaning")
+            if migrate_to_v48(con):
+                version = 48
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 47:
-            raise RuntimeError(f"Database initialization failed: Expected v47, got v{final_version}")
+        if final_version < 48:
+            raise RuntimeError(f"Database initialization failed: Expected v48, got v{final_version}")
 
-        if final_version > 47:
+        if final_version > 48:
             logger.warning(f"Database is newer than application (v{final_version} > v47). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external

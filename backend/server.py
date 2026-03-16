@@ -3626,6 +3626,16 @@ async def chat_stream(req: Request):
                 else:
                     assistant_message_id = None  # incognito: no DB record
 
+                # T1-8: Record daily interaction for streak/XP tracking
+                if not incognito:
+                    try:
+                        from backend.rewards.tracker import record_interaction
+                        _reward = record_interaction(con, char_id, message_count_delta=1)
+                        if _reward.get("milestones"):
+                            logger.info(f"[Rewards] char={char_id} milestones={_reward['milestones']}")
+                    except Exception as _rew_err:
+                        logger.debug(f"[Rewards] tracking failed (pre-v49?): {_rew_err}")
+
                 if vector_store and not incognito:
                     vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
 
@@ -7143,6 +7153,29 @@ async def pin_message(message_id: int, req: Request):
 
     logger.info(f"[Pin] Message {message_id} pinned={pinned_val}")
     return {"message_id": message_id, "pinned": pinned_val}
+
+
+# ── Feature T1-8 — Streak & Rewards Info ──────────────────────────────────────
+
+@app.get("/api/characters/{character_id}/streak")
+async def get_character_streak(character_id: int):
+    """Get streak, XP, and relationship tier info for a character.
+
+    Args:
+        character_id: Character to query.
+
+    Returns:
+        dict: ``{streak, total_xp, tier, next_tier, xp_to_next}``
+    """
+    conn = db()
+    try:
+        from backend.rewards.tracker import get_streak_info
+        return get_streak_info(conn, character_id)
+    except Exception:
+        return {"streak": 0, "total_xp": 0, "tier": "stranger",
+                "next_tier": "acquaintance", "xp_to_next": 100}
+    finally:
+        conn.close()
 
 
 # ── Feature T1-7 — Output Format Rules CRUD ──────────────────────────────────

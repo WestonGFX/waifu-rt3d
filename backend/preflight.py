@@ -2725,6 +2725,56 @@ def migrate_to_v48(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v49(con: sqlite3.Connection) -> bool:
+    """Add interaction_rewards table and character streak/XP columns (v49).
+
+    Enables daily interaction tracking, streak counting, XP accumulation,
+    and relationship milestone detection per character.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v49+.
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 49:
+        return False
+
+    try:
+        logger.info("Applying schema v49 migration (interaction rewards + streaks)...")
+
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS interaction_rewards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                interaction_date TEXT NOT NULL,
+                message_count INTEGER DEFAULT 0,
+                xp_earned INTEGER DEFAULT 0,
+                streak_day INTEGER DEFAULT 1,
+                milestone_hit TEXT,
+                UNIQUE(character_id, interaction_date)
+            )
+        """)
+        con.execute("CREATE INDEX IF NOT EXISTS idx_rewards_char_date ON interaction_rewards(character_id, interaction_date DESC)")
+
+        # Add streak/XP columns to characters (safe to re-run)
+        for col, default in [("current_streak", "0"), ("total_xp", "0"), ("relationship_tier", "'stranger'")]:
+            try:
+                con.execute(f"ALTER TABLE characters ADD COLUMN {col} {'INTEGER' if col != 'relationship_tier' else 'TEXT'} DEFAULT {default}")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (49)")
+        con.commit()
+        logger.info("\u2705 Schema v49 migration complete (interaction_rewards + character streaks)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v49 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -3096,13 +3146,19 @@ def ensure_db():
             if migrate_to_v48(con):
                 version = 48
 
+        if version < 49:
+            logger.info("Upgrading database schema from v48 to v49...")
+            logger.info("  - Creating interaction_rewards table + character streak columns")
+            if migrate_to_v49(con):
+                version = 49
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 48:
-            raise RuntimeError(f"Database initialization failed: Expected v48, got v{final_version}")
+        if final_version < 49:
+            raise RuntimeError(f"Database initialization failed: Expected v49, got v{final_version}")
 
-        if final_version > 48:
+        if final_version > 49:
             logger.warning(f"Database is newer than application (v{final_version} > v47). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external

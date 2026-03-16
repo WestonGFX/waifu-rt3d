@@ -3420,7 +3420,7 @@ function VoiceTab({ save, cfg }: TabProps) {
           {/* Groq ASR API key — shown only when Groq provider is selected */}
           {String(cfg('asr_provider', 'browser')) === 'groq' && (
             <SettingField label="Groq API Key" description="Free API key from console.groq.com."
-              tooltip="Sign up at console.groq.com for a free API key. Groq uses Whisper large-v3 in the cloud with very fast inference.">
+              tooltip="Get a free API key at console.groq.com. Groq runs Whisper large-v3 in the cloud with sub-second latency — no local GPU needed. The free tier includes generous monthly limits.">
               <input
                 type="password"
                 value={String(cfg('groq_api_key', ''))}

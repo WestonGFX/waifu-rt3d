@@ -146,9 +146,14 @@ export function FormatRulesEditor({ characterId }: { characterId: number }) {
     <div className="space-y-3">
       {/* Rule list */}
       {rules.length === 0 && (
-        <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-          No format rules yet. Add one below or pick a preset.
-        </p>
+        <>
+          <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+            No format rules yet. Add one below or pick a preset.
+          </p>
+          <p className="text-[10px] mt-1" style={{ color: 'var(--color-text-tertiary)', opacity: 0.8 }}>
+            Format rules are regex patterns applied to AI responses before display. Use them to strip unwanted markers, clean formatting, or enforce output style.
+          </p>
+        </>
       )}
 
       {rules.map(rule => (
@@ -230,6 +235,7 @@ export function FormatRulesEditor({ characterId }: { characterId: number }) {
             border: '1px solid var(--color-accent)',
             background: showForm ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)' : 'transparent',
           }}
+          title="Create a custom regex rule to clean up AI output"
         >
           <Plus size={12} /> Add Rule
         </button>
@@ -240,6 +246,7 @@ export function FormatRulesEditor({ characterId }: { characterId: number }) {
             onClick={() => setShowPresets(s => !s)}
             className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors"
             style={{ color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)', background: 'transparent' }}
+            title="Add a commonly-used formatting rule with one click"
           >
             Add Preset <ChevronDown size={10} />
           </button>
@@ -333,11 +340,15 @@ export function FormatRulesEditor({ characterId }: { characterId: number }) {
       {/* Test preview */}
       {rules.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+          <p
+            className="text-xs font-medium"
+            style={{ color: 'var(--color-text-secondary)' }}
+            title="Paste sample text below to see how your active rules transform it"
+          >
             Test Preview
           </p>
           <textarea
-            placeholder="Paste sample LLM output here to test your rules…"
+            placeholder="Paste sample AI output here... e.g. *She smiles* (OOC: this is a test) Hello!"
             value={testInput}
             onChange={e => setTestInput(e.target.value)}
             rows={3}

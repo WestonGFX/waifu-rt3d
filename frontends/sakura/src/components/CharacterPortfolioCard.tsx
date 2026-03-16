@@ -645,6 +645,7 @@ export function CharacterPortfolioCard() {
                       onMouseLeave={e => {
                         (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
                       }}
+                      title="Save a visual screenshot of this portfolio card as PNG"
                     >
                       <Download size={14} />
                       Download Card (Screenshot)

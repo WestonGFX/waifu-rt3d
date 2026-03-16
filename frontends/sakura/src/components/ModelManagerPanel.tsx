@@ -216,7 +216,10 @@ export function ModelManagerPanel() {
               style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border)' }}
             >
               {formatInfo && (
-                <div className="flex items-center gap-2">
+                <div
+                  className="flex items-center gap-2"
+                  title="This is the recommended model file format for your hardware. MLX runs natively on Apple Silicon; GGUF works with NVIDIA and AMD GPUs via LM Studio."
+                >
                   <Monitor size={11} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
                   <span>
                     <span className="font-semibold" style={{ color: 'var(--color-accent)' }}>
@@ -227,7 +230,10 @@ export function ModelManagerPanel() {
                 </div>
               )}
               {quantInfo && (
-                <div className="flex items-center gap-2">
+                <div
+                  className="flex items-center gap-2"
+                  title="Quantization reduces model size at a slight quality cost. Q4_K_M is the best balance for most GPUs. Higher (Q5, Q6, Q8) means better quality but uses more VRAM."
+                >
                   <HardDrive size={11} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
                   <span>
                     Suggested quant:{' '}
@@ -246,7 +252,11 @@ export function ModelManagerPanel() {
       {/* ── Currently Loaded (read-only) ─────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
+          <h4
+            className="text-xs font-semibold uppercase tracking-wider"
+            style={{ color: 'var(--color-text-secondary)' }}
+            title="Models currently loaded in your LM Studio or Ollama backend. Manage models directly in those applications."
+          >
             Currently Loaded
           </h4>
           <button
@@ -309,7 +319,11 @@ export function ModelManagerPanel() {
 
       {/* ── Recommended Models (catalog with HF links) ───────────────────── */}
       <section>
-        <h4 className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+        <h4
+          className="text-xs font-semibold uppercase tracking-wider mb-1"
+          style={{ color: 'var(--color-text-secondary)' }}
+          title="Curated models tested for roleplay and companion chat. Click any model name to view it on HuggingFace, then install it in LM Studio or Ollama."
+        >
           Recommended Models
         </h4>
         <p className="text-[10px] mb-3" style={{ color: 'var(--color-text-tertiary)' }}>

@@ -58,12 +58,17 @@ export interface ModelFile {
   size?: number;
 }
 
-/** GPU/RAM info returned by /api/hardware. */
+/** GPU/RAM/platform info returned by /api/hardware. */
 export interface HardwareInfo {
-  gpu_name?: string;
-  /** Detected GPU VRAM in MB. */
-  vram_mb?: number;
-  ram_mb?: number;
+  cpu?: string;
+  gpu?: string;
+  /** Detected GPU VRAM in GB. On Apple Silicon this equals RAM (unified memory). */
+  vram_gb?: number;
+  ram_gb?: number;
+  /** OS platform: 'darwin', 'linux', 'win32'. */
+  platform?: string;
+  /** CPU architecture: 'arm64', 'x86_64'. */
+  arch?: string;
 }
 
 /** Download progress snapshot from /api/models/download-status. */

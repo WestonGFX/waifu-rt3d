@@ -49,12 +49,12 @@ export function StepHardwareScan({ onNext, onSkip, setWizardData }: WizardStepPr
         const hw = await api.getHardwareInfo();
         if (cancelled) return;
         const parts: string[] = [];
-        if (hw.gpu_name) parts.push(hw.gpu_name);
-        if (hw.vram_mb) parts.push(`${Math.round(hw.vram_mb / 1024)} GB VRAM`);
-        if (hw.ram_mb) parts.push(`${Math.round(hw.ram_mb / 1024)} GB RAM`);
-        data.gpu_name = hw.gpu_name || null;
-        data.vram_mb = hw.vram_mb || 0;
-        data.ram_mb = hw.ram_mb || 0;
+        if (hw.gpu) parts.push(hw.gpu);
+        if (hw.vram_gb) parts.push(`${hw.vram_gb.toFixed(1)} GB VRAM`);
+        if (hw.ram_gb) parts.push(`${hw.ram_gb.toFixed(0)} GB RAM`);
+        data.gpu_name = hw.gpu || null;
+        data.vram_mb = (hw.vram_gb || 0) * 1024;
+        data.ram_mb = (hw.ram_gb || 0) * 1024;
         updateRow(0, {
           status: 'ok',
           detail: parts.length > 0 ? parts.join(' · ') : 'No GPU detected',

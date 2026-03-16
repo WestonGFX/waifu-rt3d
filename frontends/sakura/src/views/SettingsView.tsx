@@ -2955,6 +2955,25 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
               >
                 {modelListLoading ? '...' : '↻'}
               </button>
+              {/* HuggingFace link — extract repo from model path */}
+              {currentModel && (() => {
+                // LM Studio format: "author/repo-name/filename.gguf" or "author/repo-name"
+                const parts = currentModel.split('/');
+                const hfRepo = parts.length >= 2 ? `${parts[0]}/${parts[1]}` : null;
+                if (!hfRepo || hfRepo.includes('.')) return null;
+                return (
+                  <a
+                    href={`https://huggingface.co/${hfRepo}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs px-2 py-1 rounded flex items-center gap-1"
+                    style={{ ...selectStyle, color: 'var(--color-accent)', textDecoration: 'none' }}
+                    title={`View ${hfRepo} on HuggingFace`}
+                  >
+                    <ExternalLink size={10} /> HF
+                  </a>
+                );
+              })()}
             </div>
           </SettingField>
         </div>

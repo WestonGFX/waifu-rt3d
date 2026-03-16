@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { Cpu, Trash2, Play, Square, Download, RefreshCw, HardDrive, Loader } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Cpu, ExternalLink, RefreshCw, HardDrive, Loader, AlertTriangle, Monitor } from 'lucide-react';
 import { api } from '../lib/api';
-import type { LMStudioModel, RecommendedModel, ModelFile, HardwareInfo, DownloadStatus } from '../lib/api';
+import type { LMStudioModel, RecommendedModel, HardwareInfo } from '../lib/api';
 
 type ModelCategory = 'llm' | 'coding' | 'vlm' | 'asr';
 
@@ -38,48 +38,98 @@ function detectArch(modelId: string): string | null {
 /**
  * Color-code a VRAM requirement chip relative to available GPU VRAM.
  *
- * @param required - Required VRAM in MB
- * @param available - Available VRAM in MB (0 = unknown)
+ * @param requiredGb - Required VRAM in GB
+ * @param availableGb - Available VRAM in GB (0 = unknown)
  * @returns CSS color string
  */
-function vramColor(required: number, available: number): string {
-  if (!available || !required) return 'var(--color-text-secondary)';
-  const ratio = required / available;
+function vramFitColor(requiredGb: number, availableGb: number): string {
+  if (!availableGb || !requiredGb) return 'var(--color-text-secondary)';
+  const ratio = requiredGb / availableGb;
   if (ratio <= 0.6) return '#4ade80';   // green — fits comfortably
-  if (ratio <= 0.9) return '#facc15';   // yellow — tight fit
-  return '#f87171';                      // red — won't fit
+  if (ratio <= 0.85) return '#facc15';  // yellow — tight fit
+  if (ratio <= 1.0) return '#f97316';   // orange — very tight, may need offload
+  return '#f87171';                      // red — won't fit, CPU offload needed
 }
 
-const inputStyle = {
-  backgroundColor: 'var(--color-background)',
-  border: '1px solid var(--color-border)',
-  color: 'var(--color-text-primary)',
-} as const;
+/**
+ * Get a human-readable VRAM fit label and warning.
+ *
+ * @param requiredGb - VRAM the model needs in GB
+ * @param availableGb - User's total VRAM in GB
+ * @returns Object with label and optional warning message
+ */
+function vramFitInfo(requiredGb: number, availableGb: number): { label: string; warning?: string } {
+  if (!availableGb || !requiredGb) return { label: '' };
+  const ratio = requiredGb / availableGb;
+  if (ratio <= 0.6) return { label: 'Fits easily' };
+  if (ratio <= 0.85) return { label: 'Tight fit' };
+  if (ratio <= 1.0) return { label: 'Very tight', warning: 'May need partial CPU offload, which reduces speed significantly.' };
+  return {
+    label: 'Too large',
+    warning: `Needs ${requiredGb.toFixed(1)} GB but you have ${availableGb.toFixed(1)} GB. CPU offload would make this too slow to be usable.`,
+  };
+}
 
 /**
- * LM Studio model management panel.
+ * Detect whether this system should use MLX (Apple Silicon) or GGUF (NVIDIA/CPU).
  *
- * Shows a hardware banner, installed model list with LOAD/UNLOAD/DELETE,
- * and a curated catalog of recommended models with one-click download via
- * quantization picker. Polls /api/models/download-status during active downloads.
+ * @param hw - Hardware info from the backend
+ * @returns Recommended model format and explanation
+ */
+function detectModelFormat(hw: HardwareInfo): { format: string; reason: string } {
+  const isDarwin = hw.platform === 'darwin';
+  const isArm = hw.arch?.toLowerCase().includes('arm');
+  if (isDarwin && isArm) {
+    return { format: 'MLX', reason: 'Apple Silicon detected — MLX models run natively on unified memory' };
+  }
+  if (hw.gpu?.toLowerCase().includes('nvidia') || hw.gpu?.toLowerCase().includes('geforce') || hw.gpu?.toLowerCase().includes('rtx')) {
+    return { format: 'GGUF', reason: 'NVIDIA GPU detected — use GGUF format in LM Studio' };
+  }
+  if (hw.gpu?.toLowerCase().includes('amd') || hw.gpu?.toLowerCase().includes('radeon')) {
+    return { format: 'GGUF', reason: 'AMD GPU detected — use GGUF with ROCm or Vulkan backend' };
+  }
+  return { format: 'GGUF', reason: 'Use GGUF format for broadest compatibility' };
+}
+
+/**
+ * Suggest a quantization level based on available VRAM and model parameter count.
+ *
+ * @param vramGb - Available VRAM in GB
+ * @returns Recommended quant and explanation
+ */
+function suggestQuant(vramGb: number): { quant: string; note: string } {
+  if (vramGb >= 24) return { quant: 'Q5_K_M or Q6_K', note: 'Plenty of VRAM — higher quants give better quality' };
+  if (vramGb >= 16) return { quant: 'Q4_K_M', note: 'Sweet spot for 16GB — best quality-to-size ratio' };
+  if (vramGb >= 8) return { quant: 'IQ4_XS or Q4_K_M', note: 'Tight VRAM — use smaller quants for larger models' };
+  return { quant: 'IQ3_XXS or IQ4_XS', note: 'Limited VRAM — aggressive quantization needed' };
+}
+
+/** Format GB to a human-readable string. */
+function fmtSize(gb?: number): string {
+  if (!gb) return '';
+  if (gb < 1) return `${(gb * 1024).toFixed(0)} MB`;
+  return `${gb.toFixed(1)} GB`;
+}
+
+/**
+ * Hardware-aware model recommendation panel.
+ *
+ * Shows the user's hardware profile, recommended model format (MLX vs GGUF),
+ * suggested quantization, and a curated catalog of models with HuggingFace links.
+ * Models are color-coded by VRAM fit. Users install models via their local AI
+ * backend (LM Studio, Ollama) — this panel is for discovery and guidance.
+ *
+ * Also shows currently installed/loaded models from the connected backend (read-only).
  */
 export function ModelManagerPanel() {
   const [activeCategory, setActiveCategory] = useState<ModelCategory>('llm');
   const [installed, setInstalled] = useState<LMStudioModel[]>([]);
   const [recommended, setRecommended] = useState<RecommendedModel[]>([]);
   const [hardware, setHardware] = useState<HardwareInfo | null>(null);
-  const [downloadStatus, setDownloadStatus] = useState<DownloadStatus | null>(null);
-  // Map of modelId → array of files fetched from HF
-  const [fileOptions, setFileOptions] = useState<Record<string, ModelFile[]>>({});
-  // Map of modelId → selected filename for install
-  const [selectedFiles, setSelectedFiles] = useState<Record<string, string>>({});
-  // Track which modelId is currently being loaded/unloaded/deleted
-  const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [installedLoading, setInstalledLoading] = useState(true);
   const [recommendedLoading, setRecommendedLoading] = useState(true);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  /** Load installed models from LM Studio. */
+  /** Load installed models from LM Studio / Ollama (read-only). */
   const loadInstalled = useCallback(async () => {
     setInstalledLoading(true);
     try {
@@ -114,220 +164,96 @@ export function ModelManagerPanel() {
   // Reload recommended whenever category changes
   useEffect(() => { loadRecommended(activeCategory); }, [activeCategory, loadRecommended]);
 
-  // ── Download progress polling ─────────────────────────────────────────────
+  // ── Derived values ────────────────────────────────────────────────────────
 
-  /** Start polling /api/models/download-status every 1.5s. */
-  const startPolling = useCallback(() => {
-    if (pollRef.current) return;
-    pollRef.current = setInterval(async () => {
-      try {
-        const status = await api.getDownloadStatus();
-        setDownloadStatus(status);
-        if (!status.active) {
-          stopPolling();
-          loadInstalled();
-        }
-      } catch {
-        stopPolling();
-      }
-    }, 1500);
-  }, [loadInstalled]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const stopPolling = () => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  };
-
-  useEffect(() => () => stopPolling(), []);
-
-  // ── Model actions ─────────────────────────────────────────────────────────
-
-  /**
-   * Fetch GGUF file list for a model lazily (on first INSTALL click).
-   * Picks Q4_K_M as the default selection when available.
-   */
-  const fetchFiles = async (modelId: string) => {
-    if (fileOptions[modelId]) return; // already fetched
-    try {
-      const data = await api.getModelDetails(modelId);
-      const files = (data.files ?? []).filter(f => f.rfilename.endsWith('.gguf'));
-      setFileOptions(prev => ({ ...prev, [modelId]: files }));
-      // Pre-select Q4_K_M if present, else the first file
-      const q4 = files.find(f => f.rfilename.toLowerCase().includes('q4_k_m'));
-      setSelectedFiles(prev => ({
-        ...prev,
-        [modelId]: prev[modelId] ?? (q4?.rfilename ?? files[0]?.rfilename ?? ''),
-      }));
-    } catch {
-      setFileOptions(prev => ({ ...prev, [modelId]: [] }));
-    }
-  };
-
-  /**
-   * Start downloading a model file.
-   * Fires POST /api/models/install then begins progress polling.
-   */
-  const installModel = async (modelId: string) => {
-    const file = selectedFiles[modelId];
-    if (!file) return;
-    try {
-      setActionInProgress(modelId);
-      await api.installModel({ repo_id: modelId, file });
-      startPolling();
-    } catch (err) {
-      console.error('Install failed:', err);
-    } finally {
-      setActionInProgress(null);
-    }
-  };
-
-  /**
-   * Load a model into LM Studio VRAM.
-   * The model ID comes from the installed list (LM Studio internal id).
-   */
-  const loadModel = async (id: string) => {
-    setActionInProgress(id);
-    try {
-      await api.loadModel(id);
-      await loadInstalled();
-    } catch (err) {
-      console.error('Load failed:', err);
-    } finally {
-      setActionInProgress(null);
-    }
-  };
-
-  /** Unload a model from VRAM without deleting it. */
-  const unloadModel = async (id: string) => {
-    setActionInProgress(id);
-    try {
-      await api.unloadModel(id);
-      await loadInstalled();
-    } catch (err) {
-      console.error('Unload failed:', err);
-    } finally {
-      setActionInProgress(null);
-    }
-  };
-
-  /**
-   * Permanently delete a model.
-   * Uses a two-step inline confirm (button turns red → second click confirms).
-   */
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-
-  const handleDeleteClick = async (m: LMStudioModel) => {
-    if (confirmDelete !== m.id) {
-      setConfirmDelete(m.id);
-      return;
-    }
-    setConfirmDelete(null);
-    setActionInProgress(m.id);
-    try {
-      const type = m.format ?? 'gguf';
-      await api.deleteModel(type, m.id);
-      await loadInstalled();
-    } catch (err) {
-      console.error('Delete failed:', err);
-    } finally {
-      setActionInProgress(null);
-    }
-  };
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  const vramGb = hardware?.vram_gb ?? 0;
+  const formatInfo = hardware ? detectModelFormat(hardware) : null;
+  const quantInfo = vramGb ? suggestQuant(vramGb) : null;
+  const isLoaded = (m: LMStudioModel) => m.state === 'loaded';
 
   const isInstalled = (modelId: string) =>
     installed.some(m => m.id.includes(modelId.split('/').pop() ?? ''));
 
-  const isLoaded = (m: LMStudioModel) => m.state === 'loaded';
-
-  const vramMb = hardware?.vram_mb ?? 0;
-
-  /** Format bytes to a human-readable MB/GB string. */
-  function fmtSize(gb?: number): string {
-    if (!gb) return '';
-    if (gb < 1) return `${(gb * 1024).toFixed(0)} MB`;
-    return `${gb.toFixed(1)} GB`;
-  }
-
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col gap-5">
 
-      {/* ── Hardware Banner ─────────────────────────────────────────────── */}
+      {/* ── Hardware Detection Banner ────────────────────────────────────── */}
       {hardware && (
         <div
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs"
+          className="rounded-lg px-3 py-3 text-xs flex flex-col gap-2"
           style={{
             backgroundColor: 'var(--color-surface)',
             border: '1px solid var(--color-border-subtle)',
           }}
         >
-          <Cpu size={14} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
-          <div className="flex flex-wrap gap-x-4 gap-y-1" style={{ color: 'var(--color-text-secondary)' }}>
-            {hardware.gpu_name && (
-              <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                {hardware.gpu_name}
-              </span>
-            )}
-            {hardware.vram_mb && (
-              <span className="flex items-center gap-1">
-                <HardDrive size={11} />
-                {(hardware.vram_mb / 1024).toFixed(1)} GB VRAM
-              </span>
-            )}
-            {hardware.ram_mb && (
-              <span>{(hardware.ram_mb / 1024).toFixed(0)} GB RAM</span>
-            )}
+          {/* System specs row */}
+          <div className="flex items-center gap-3">
+            <Cpu size={14} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+            <div className="flex flex-wrap gap-x-4 gap-y-1" style={{ color: 'var(--color-text-secondary)' }}>
+              {hardware.gpu && (
+                <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                  {hardware.gpu}
+                </span>
+              )}
+              {vramGb > 0 && (
+                <span className="flex items-center gap-1">
+                  <HardDrive size={11} />
+                  {vramGb.toFixed(1)} GB VRAM
+                </span>
+              )}
+              {hardware.ram_gb && (
+                <span>{hardware.ram_gb.toFixed(0)} GB RAM</span>
+              )}
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* ── Active Download Progress ─────────────────────────────────────── */}
-      {downloadStatus?.active && (
-        <div
-          className="rounded-lg px-3 py-2.5 text-xs flex flex-col gap-1.5"
-          style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-accent-soft, var(--color-border))' }}
-        >
-          <div className="flex items-center justify-between">
-            <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>
-              Downloading {downloadStatus.file ?? '…'}
-            </span>
-            <span style={{ color: 'var(--color-text-secondary)' }}>
-              {downloadStatus.progress ?? 0}%
-              {downloadStatus.speed_mb_s ? ` · ${downloadStatus.speed_mb_s.toFixed(1)} MB/s` : ''}
-              {downloadStatus.eta_s ? ` · ${Math.round(downloadStatus.eta_s)}s left` : ''}
-            </span>
-          </div>
-          <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-border)' }}>
+          {/* Format + quant recommendation */}
+          {(formatInfo || quantInfo) && (
             <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${downloadStatus.progress ?? 0}%`,
-                background: 'linear-gradient(90deg, var(--color-accent), #4ade80)',
-              }}
-            />
-          </div>
-          <p className="truncate" style={{ color: 'var(--color-text-secondary)' }}>
-            {downloadStatus.repo_id}
-          </p>
+              className="rounded px-2.5 py-2 flex flex-col gap-1"
+              style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border)' }}
+            >
+              {formatInfo && (
+                <div className="flex items-center gap-2">
+                  <Monitor size={11} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+                  <span>
+                    <span className="font-semibold" style={{ color: 'var(--color-accent)' }}>
+                      {formatInfo.format}
+                    </span>
+                    {' '}<span style={{ color: 'var(--color-text-secondary)' }}>{formatInfo.reason}</span>
+                  </span>
+                </div>
+              )}
+              {quantInfo && (
+                <div className="flex items-center gap-2">
+                  <HardDrive size={11} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
+                  <span>
+                    Suggested quant:{' '}
+                    <span className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                      {quantInfo.quant}
+                    </span>
+                    {' '}<span style={{ color: 'var(--color-text-tertiary)' }}>— {quantInfo.note}</span>
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── Installed Models ─────────────────────────────────────────────── */}
+      {/* ── Currently Loaded (read-only) ─────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-            Installed Models
+            Currently Loaded
           </h4>
           <button
             onClick={loadInstalled}
             className="text-[11px] px-1.5 py-0.5 rounded flex items-center gap-1"
-            style={inputStyle}
-            title="Refresh installed list"
+            style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)' }}
+            title="Refresh from LM Studio / Ollama"
           >
             <RefreshCw size={10} />
           </button>
@@ -335,18 +261,16 @@ export function ModelManagerPanel() {
 
         {installedLoading ? (
           <div className="text-xs py-3 flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
-            <Loader size={12} className="animate-spin" /> Loading…
+            <Loader size={12} className="animate-spin" /> Checking…
           </div>
         ) : installed.length === 0 ? (
           <p className="text-xs py-3" style={{ color: 'var(--color-text-secondary)' }}>
-            No models found — make sure LM Studio is running.
+            No models found. Make sure LM Studio or Ollama is running.
           </p>
         ) : (
           <div className="flex flex-col gap-2">
             {installed.map(m => {
               const loaded = isLoaded(m);
-              const busy = actionInProgress === m.id;
-              const confirmingDelete = confirmDelete === m.id;
               return (
                 <div
                   key={m.id}
@@ -361,7 +285,6 @@ export function ModelManagerPanel() {
                       {m.id.split('/').pop()}
                     </span>
                     <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>
-                      {/* State badge */}
                       <span
                         className="px-1.5 py-0.5 rounded font-semibold uppercase"
                         style={{
@@ -369,53 +292,13 @@ export function ModelManagerPanel() {
                           border: `1px solid ${loaded ? 'rgba(74,222,128,0.3)' : 'rgba(147,197,253,0.3)'}`,
                         }}
                       >
-                        {loaded ? 'Loaded' : 'Downloaded'}
+                        {loaded ? 'Active' : 'Ready'}
                       </span>
                       {m.max_context_length && (
                         <span>{(m.max_context_length / 1000).toFixed(0)}k ctx</span>
                       )}
                       {m.architecture && <span>{m.architecture}</span>}
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {busy ? (
-                      <Loader size={14} className="animate-spin" style={{ color: 'var(--color-text-secondary)' }} />
-                    ) : (
-                      <>
-                        {/* Load / Unload */}
-                        {loaded ? (
-                          <button
-                            onClick={() => unloadModel(m.id)}
-                            className="text-[11px] px-2 py-1 rounded flex items-center gap-1"
-                            style={inputStyle}
-                          >
-                            <Square size={10} />
-                            Unload
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => loadModel(m.id)}
-                            className="text-[11px] px-2 py-1 rounded flex items-center gap-1"
-                            style={inputStyle}
-                          >
-                            <Play size={10} />
-                            Load
-                          </button>
-                        )}
-
-                        {/* Delete (two-click confirm) */}
-                        <button
-                          onClick={() => handleDeleteClick(m)}
-                          className="text-[11px] px-2 py-1 rounded flex items-center gap-1"
-                          style={{ ...inputStyle, color: confirmingDelete ? '#f87171' : 'var(--color-text-secondary)' }}
-                          title={confirmingDelete ? 'Click again to confirm delete' : 'Delete model'}
-                        >
-                          <Trash2 size={10} />
-                          {confirmingDelete ? 'Confirm?' : 'Delete'}
-                        </button>
-                      </>
-                    )}
                   </div>
                 </div>
               );
@@ -424,11 +307,14 @@ export function ModelManagerPanel() {
         )}
       </section>
 
-      {/* ── Recommended Models ───────────────────────────────────────────── */}
+      {/* ── Recommended Models (catalog with HF links) ───────────────────── */}
       <section>
-        <h4 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-          Recommended
+        <h4 className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+          Recommended Models
         </h4>
+        <p className="text-[10px] mb-3" style={{ color: 'var(--color-text-tertiary)' }}>
+          Install these in LM Studio or Ollama. Click a model name to view on HuggingFace.
+        </p>
 
         {/* Category tab pills */}
         <div className="flex gap-1 mb-3 flex-wrap">
@@ -466,10 +352,10 @@ export function ModelManagerPanel() {
             {recommended.map(model => {
               const arch = detectArch(model.id);
               const alreadyInstalled = isInstalled(model.id);
-              const files = fileOptions[model.id];
-              const selectedFile = selectedFiles[model.id];
-              const busy = actionInProgress === model.id;
-              const isDownloading = downloadStatus?.active && downloadStatus.repo_id === model.id;
+              // VRAM fit calculation
+              const modelVramGb = model.vram_required_mb ? model.vram_required_mb / 1024 : (model.size_gb ?? 0);
+              const fitInfo = modelVramGb && vramGb ? vramFitInfo(modelVramGb, vramGb) : null;
+              const fitColor = modelVramGb && vramGb ? vramFitColor(modelVramGb, vramGb) : 'var(--color-text-secondary)';
 
               return (
                 <div
@@ -478,14 +364,21 @@ export function ModelManagerPanel() {
                   style={{
                     backgroundColor: 'var(--color-surface)',
                     border: `1px solid ${alreadyInstalled ? 'var(--color-accent)' : 'var(--color-border-subtle)'}`,
-                    opacity: alreadyInstalled ? 1 : 0.9,
                   }}
                 >
-                  {/* Name + chips row */}
+                  {/* Name row — clickable HF link */}
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                    <a
+                      href={`https://huggingface.co/${model.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium flex items-center gap-1 hover:underline"
+                      style={{ color: 'var(--color-accent)' }}
+                      title={`View ${model.id} on HuggingFace`}
+                    >
                       {model.name ?? model.id.split('/').pop()}
-                    </span>
+                      <ExternalLink size={10} style={{ opacity: 0.6 }} />
+                    </a>
                     {arch && (
                       <span
                         className="text-[10px] px-1.5 py-0.5 rounded"
@@ -502,15 +395,15 @@ export function ModelManagerPanel() {
                         {fmtSize(model.size_gb)}
                       </span>
                     )}
-                    {model.vram_required_mb && (
+                    {/* VRAM requirement with fit indicator */}
+                    {modelVramGb > 0 && (
                       <span
                         className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                        style={{
-                          backgroundColor: 'var(--color-background)',
-                          color: vramColor(model.vram_required_mb, vramMb),
-                        }}
+                        style={{ backgroundColor: 'var(--color-background)', color: fitColor }}
+                        title={fitInfo?.warning || fitInfo?.label || ''}
                       >
-                        ~{(model.vram_required_mb / 1024).toFixed(1)} GB VRAM
+                        ~{modelVramGb.toFixed(1)} GB
+                        {fitInfo && ` · ${fitInfo.label}`}
                       </span>
                     )}
                     {alreadyInstalled && (
@@ -530,58 +423,33 @@ export function ModelManagerPanel() {
                     </p>
                   )}
 
-                  {/* Quantization picker + Download (only when files fetched) */}
-                  {files && files.length > 0 && !alreadyInstalled && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <select
-                        value={selectedFile ?? ''}
-                        onChange={e => setSelectedFiles(prev => ({ ...prev, [model.id]: e.target.value }))}
-                        className="text-xs px-2 py-1 rounded flex-1 min-w-[140px]"
-                        style={inputStyle}
-                      >
-                        {files.map(f => (
-                          <option key={f.rfilename} value={f.rfilename}>
-                            {f.rfilename}
-                            {f.size ? ` (${(f.size / 1024 / 1024 / 1024).toFixed(1)} GB)` : ''}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => installModel(model.id)}
-                        disabled={busy || !selectedFile || !!isDownloading}
-                        className="text-xs px-3 py-1 rounded flex items-center gap-1.5"
-                        style={{
-                          background: 'var(--color-accent-gradient)',
-                          color: 'var(--color-accent-text)',
-                          opacity: busy || isDownloading ? 0.5 : 1,
-                          cursor: busy || isDownloading ? 'not-allowed' : 'pointer',
-                        }}
-                      >
-                        {busy ? <Loader size={11} className="animate-spin" /> : <Download size={11} />}
-                        {isDownloading ? 'Downloading…' : 'Download'}
-                      </button>
+                  {/* CPU offload warning */}
+                  {fitInfo?.warning && (
+                    <div
+                      className="flex items-start gap-2 text-[11px] px-2.5 py-1.5 rounded"
+                      style={{
+                        backgroundColor: 'color-mix(in srgb, #f87171 8%, var(--color-background))',
+                        border: '1px solid color-mix(in srgb, #f87171 20%, var(--color-border))',
+                        color: '#f87171',
+                      }}
+                    >
+                      <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} />
+                      <span>{fitInfo.warning}</span>
                     </div>
                   )}
 
-                  {/* Files list failed / empty */}
-                  {files && files.length === 0 && !alreadyInstalled && (
-                    <p className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
-                      No GGUF files found for this model.
-                    </p>
-                  )}
-
-                  {/* Action bar (Install button or already-installed badge) */}
-                  {!alreadyInstalled && !files && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => fetchFiles(model.id)}
-                        disabled={busy}
-                        className="text-xs px-3 py-1 rounded flex items-center gap-1.5"
-                        style={{ ...inputStyle, opacity: busy ? 0.5 : 1 }}
-                      >
-                        <Download size={11} />
-                        Install…
-                      </button>
+                  {/* Tags (if any) */}
+                  {model.tags && model.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {model.tags.map(tag => (
+                        <span
+                          key={tag}
+                          className="text-[9px] px-1.5 py-0.5 rounded"
+                          style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-text-tertiary)' }}
+                        >
+                          {tag}
+                        </span>
+                      ))}
                     </div>
                   )}
                 </div>

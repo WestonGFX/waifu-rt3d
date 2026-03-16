@@ -23,6 +23,7 @@ import { UserKnowledgePanel } from './components/UserKnowledgePanel';
 import { GamePanel } from './components/GamePanel';
 import { ModelBrowser } from './components/ModelBrowser';
 import { PhotoModeOverlay } from './components/PhotoModeOverlay';
+import { GalleryOverlay } from './components/GalleryOverlay';
 import { CinematicOverlay } from './components/CinematicOverlay';
 import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
 import { SettingsDrawer } from './components/SettingsDrawer';
@@ -328,6 +329,9 @@ function MainApp() {
 
       {/* Photo Mode — full-viewport overlay with sidebar controls */}
       {activeOverlay === 'photomode' && <PhotoModeOverlay />}
+
+      {/* Gallery — screenshot browser with lightbox */}
+      {activeOverlay === 'gallery' && <GalleryOverlay />}
 
       {/* Overlay drawers — Feature C3 User Knowledge Graph */}
       {activeOverlay === 'userknowledge' && <UserKnowledgePanel />}

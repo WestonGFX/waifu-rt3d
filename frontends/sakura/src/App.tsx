@@ -28,7 +28,8 @@ import { CinematicOverlay } from './components/CinematicOverlay';
 import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { ShortcutHelpModal } from './components/ShortcutHelpModal';
-import { FeatureTipQueue } from './components/discovery/FeatureTipQueue';
+// Feature tips disabled — import kept for potential re-enablement
+// import { FeatureTipQueue } from './components/discovery/FeatureTipQueue';
 
 // Lazy-load all wizards and the dev console — they are conditionally rendered
 // and most users never see them in a given session. Deferring them cuts the
@@ -124,14 +125,15 @@ function MainApp() {
       if (!config.onboarded) {
         openWizard('onboarding');
       } else {
-        // Check server version for "What's New" — only for returning users
+        // Silently sync version — What's New info is in Settings > Help, not a popup
         fetch('/api/health')
           .then(r => r.json())
           .then(data => {
             const serverVersion = data.version as string | undefined;
-            const { lastSeenVersion, activeWizard: current } = useWizardStore.getState();
-            if (serverVersion && serverVersion !== lastSeenVersion && !current) {
-              openWizard('whats-new');
+            const { lastSeenVersion } = useWizardStore.getState();
+            if (serverVersion && serverVersion !== lastSeenVersion) {
+              useWizardStore.setState({ lastSeenVersion: serverVersion });
+              useAppStore.getState().saveConfig({ last_seen_version: serverVersion } as Record<string, unknown>).catch(() => {});
             }
           })
           .catch(() => {}); // Non-critical — fail silently
@@ -399,8 +401,8 @@ function MainApp() {
       {/* Toast notifications — top-right floating */}
       <ToastQueue />
 
-      {/* Feature discovery tip cards — bottom-right floating */}
-      <FeatureTipQueue />
+      {/* Feature discovery tips disabled — too distracting */}
+      {/* <FeatureTipQueue /> */}
 
       {/* PWA install prompt — only visible when browser fires beforeinstallprompt */}
       {showInstallBtn && (

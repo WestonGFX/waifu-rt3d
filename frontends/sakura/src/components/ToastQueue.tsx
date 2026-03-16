@@ -30,10 +30,10 @@ interface ToastState {
 }
 
 /** Maximum number of toasts visible simultaneously. */
-const MAX_VISIBLE = 5;
+const MAX_VISIBLE = 3;
 
 /** Default auto-dismiss delay in milliseconds. */
-const DEFAULT_DURATION = 4000;
+const DEFAULT_DURATION = 2500;
 
 /* ── Store ────────────────────────────────────────────────────────────── */
 
@@ -91,12 +91,12 @@ export function ToastQueue() {
     <div
       style={{
         position: 'fixed',
-        top: 56,
+        bottom: 16,
         right: 16,
         zIndex: 9000,
         display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
+        flexDirection: 'column-reverse',
+        gap: 6,
         pointerEvents: 'none',
       }}
     >
@@ -149,15 +149,15 @@ function ToastItem({ toast }: { toast: Toast }) {
       onClick={handleClick}
       style={{
         pointerEvents: 'auto',
-        maxWidth: 320,
-        padding: '8px 14px',
-        borderRadius: 10,
+        maxWidth: 260,
+        padding: '6px 10px',
+        borderRadius: 8,
         background: 'var(--color-surface)',
-        border: '1px solid var(--color-border)',
-        borderLeft: `3px solid ${accentColor}`,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-        color: 'var(--color-text)',
-        fontSize: '0.78rem',
+        border: '1px solid var(--color-border-subtle)',
+        borderLeft: `2px solid ${accentColor}`,
+        boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+        color: 'var(--color-text-secondary)',
+        fontSize: '0.68rem',
         fontWeight: 500,
         display: 'flex',
         alignItems: 'center',

@@ -316,6 +316,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             }
             break;
 
+          case 'stream_reset':
+            // T0-25: Provider failed mid-stream — clear partial text before error
+            fullText = '';
+            tokenCount = 0;
+            patchAssistant({ text: '', status: 'pending' });
+            break;
+
           case 'error':
             patchAssistant({
               text: `Error: ${data.error || 'Unknown stream error'}`,

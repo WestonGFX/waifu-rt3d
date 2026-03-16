@@ -3525,6 +3525,9 @@ async def chat_stream(req: Request):
 
                     elif msg_type == "error":
                         _telemetry_inc("chat.failures_total")
+                        # T0-25: Send stream_reset so frontend clears partial text
+                        if full_reply:
+                            yield f"event: stream_reset\ndata: {json.dumps({'reason': 'provider_error', 'partial_length': len(full_reply)})}\n\n"
                         yield f"event: error\ndata: {json.dumps({'error': payload})}\n\n"
                         return
 

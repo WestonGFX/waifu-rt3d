@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Eye, MessageSquare, Search, Download, X, BarChart2, Globe } from 'lucide-react';
+import { Eye, MessageSquare, Search, Download, X, BarChart2, Globe, Camera } from 'lucide-react';
 import type { Character } from '../lib/types';
 import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
@@ -506,6 +506,18 @@ export function StatusBar({
           aria-label="Open conversation analytics"
         >
           <BarChart2 size={18} />
+        </button>
+        <button
+          onClick={() => openOverlay('photomode')}
+          title="Photo Mode (Ctrl+Shift+P)"
+          aria-label="Open Photo Mode"
+          className="rounded-lg transition-all duration-200"
+          style={{
+            ...btnStyle(false),
+            padding: '6px 8px',
+          }}
+        >
+          <Camera size={16} />
         </button>
         <button
           onClick={toggleModelPanel}

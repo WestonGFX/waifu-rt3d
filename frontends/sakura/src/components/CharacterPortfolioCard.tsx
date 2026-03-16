@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Download, User } from 'lucide-react';
+import { X, Download, Share2, User } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
+import { api } from '../lib/api';
 
 /* ═══════════════════════════════════════════════════════════════════════
    Types
@@ -211,6 +212,7 @@ export function CharacterPortfolioCard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const [shareMsg, setShareMsg] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Fetch portfolio whenever the panel opens or the active character changes
@@ -265,6 +267,22 @@ export function CharacterPortfolioCard() {
       setExportMsg('Export failed — see console for details.');
     }
     setTimeout(() => setExportMsg(null), 3000);
+  };
+
+  /**
+   * Export character as a SillyTavern CHARA v2 PNG card.
+   * Downloads a PNG with embedded JSON metadata — machine-readable and shareable.
+   */
+  const handleShareAsCard = async () => {
+    if (!activeCharacter) return;
+    setShareMsg('Generating card…');
+    try {
+      await api.exportCharaCard(activeCharacter.id, `${(data?.name ?? activeCharacter.name).replace(/\s+/g, '_')}.png`);
+      setShareMsg('Card downloaded!');
+    } catch {
+      setShareMsg('Export failed');
+    }
+    setTimeout(() => setShareMsg(null), 3000);
   };
 
   const tier = data ? affinityTier(data.affinity) : null;
@@ -601,7 +619,7 @@ export function CharacterPortfolioCard() {
                   </section>
 
                   {/* ── Section 5: Export ── */}
-                  <section>
+                  <section style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <button
                       onClick={handleExport}
                       style={{
@@ -629,25 +647,57 @@ export function CharacterPortfolioCard() {
                       }}
                     >
                       <Download size={14} />
-                      Download Card
+                      Download Card (Screenshot)
                     </button>
 
-                    {/* Transient feedback message for export stub */}
+                    {/* Share as CHARA v2 card — machine-readable PNG for SillyTavern sharing */}
+                    <button
+                      onClick={handleShareAsCard}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '10px 16px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--color-accent)',
+                        backgroundColor: 'transparent',
+                        color: 'var(--color-accent)',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'background-color 0.12s',
+                      }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+                          'color-mix(in srgb, var(--color-accent) 8%, transparent)';
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+                      }}
+                      title="Export as SillyTavern-compatible CHARA v2 card (PNG with embedded JSON)"
+                    >
+                      <Share2 size={14} />
+                      Share as Card (CHARA v2)
+                    </button>
+
+                    {/* Transient feedback messages */}
                     <AnimatePresence>
-                      {exportMsg && (
+                      {(exportMsg || shareMsg) && (
                         <motion.p
                           key="export-msg"
                           initial={{ opacity: 0, y: -4 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0 }}
                           style={{
-                            marginTop: '8px',
                             fontSize: '0.75rem',
                             color: 'var(--color-text-tertiary)',
                             textAlign: 'center',
+                            margin: 0,
                           }}
                         >
-                          {exportMsg}
+                          {exportMsg || shareMsg}
                         </motion.p>
                       )}
                     </AnimatePresence>

@@ -22,6 +22,7 @@ import { LorePanel } from './components/LorePanel';
 import { UserKnowledgePanel } from './components/UserKnowledgePanel';
 import { GamePanel } from './components/GamePanel';
 import { ModelBrowser } from './components/ModelBrowser';
+import { PhotoModeOverlay } from './components/PhotoModeOverlay';
 import { CinematicOverlay } from './components/CinematicOverlay';
 import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
 import { SettingsDrawer } from './components/SettingsDrawer';
@@ -324,6 +325,9 @@ function MainApp() {
 
       {/* Overlay drawers — Section A: Model Browser */}
       <ModelBrowser />
+
+      {/* Photo Mode — full-viewport overlay with sidebar controls */}
+      {activeOverlay === 'photomode' && <PhotoModeOverlay />}
 
       {/* Overlay drawers — Feature C3 User Knowledge Graph */}
       {activeOverlay === 'userknowledge' && <UserKnowledgePanel />}

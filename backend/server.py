@@ -12501,7 +12501,12 @@ async def game_move(session_id: int, body: dict):
         elif game_type == "twenty_questions":
             if "guess" in body:
                 state = tq_engine.process_guess(state, body["guess"], adapter, cfg)
-                event = "won" if state["won"] else "guess_wrong"
+                if state["won"]:
+                    event = "won"
+                elif state.get("finished"):
+                    event = "lost"
+                else:
+                    event = "guess_wrong"
                 reaction = state.get("reveal")
             elif "question" in body:
                 answer = tq_engine.answer_question(state, body["question"], adapter, cfg)

@@ -160,11 +160,12 @@ def answer_question(state: dict, question: str, adapter, cfg: dict) -> str:
 
 
 def process_guess(state: dict, guess: str, adapter, cfg: dict) -> dict:
-    """Evaluate the player's final guess against the secret thing.
+    """Evaluate the player's guess against the secret thing.
 
     A guess is considered correct if it fuzzy-matches the secret thing
-    (case-insensitive substring check). An LLM reaction line is generated
-    for both win and loss cases.
+    (case-insensitive substring check). Correct guesses end the game
+    immediately (win). Wrong guesses cost one question turn — the game
+    only ends on a wrong guess if no questions remain.
 
     Args:
         state: Current game state (mutated in place).
@@ -173,47 +174,70 @@ def process_guess(state: dict, guess: str, adapter, cfg: dict) -> dict:
         cfg: App config dict.
 
     Returns:
-        Updated state dict with ``won`` set to True/False, ``finished``
-        True, and ``reveal`` set to a reaction line.
+        Updated state dict. On correct guess: ``won=True, finished=True``.
+        On wrong guess with questions remaining: game continues.
+        On wrong guess with no questions left: ``won=False, finished=True``.
 
     Example:
         >>> state = process_guess(state, "Mount Fuji", adapter, cfg)
-        >>> state["won"] in (True, False)
+        >>> state["won"] in (True, False, None)
         True
     """
     thing = state["thing"]
     won = _fuzzy_match(guess, thing)
-    state["won"] = won
-    state["finished"] = True
 
     if won:
-        reaction_prompt = (
-            f"The player just correctly guessed '{thing}' in 20 Questions!"
-            " React with genuine surprise and delight in 1-2 short sentences."
-            " Be playful and warm."
-        )
-    else:
-        reaction_prompt = (
-            f"The player guessed '{guess}' but you were thinking of '{thing}'."
-            " React with playful teasing in 1-2 short sentences."
-            " Reveal what you were thinking of warmly."
-        )
+        # Correct guess — game over, player wins
+        state["won"] = True
+        state["finished"] = True
 
-    try:
-        reveal = adapter.complete(
-            reaction_prompt,
-            system="You are a playful AI companion playing 20 Questions. React briefly.",
-            **cfg.get("llm_kwargs", {}),
-        )
-        state["reveal"] = reveal.strip()
-    except Exception as e:
-        logger.warning("[20Q] LLM reaction failed: %s", e)
-        if won:
-            state["reveal"] = f"Yes! You got it — I was thinking of **{thing}**! Amazing!"
-        else:
-            state["reveal"] = (
-                f"Not quite! I was thinking of **{thing}**. Better luck next time!"
+        try:
+            reveal = adapter.complete(
+                f"The player just correctly guessed '{thing}' in 20 Questions!"
+                " React with genuine surprise and delight in 1-2 short sentences."
+                " Be playful and warm.",
+                system="You are a playful AI companion playing 20 Questions. React briefly.",
+                **cfg.get("llm_kwargs", {}),
             )
+            state["reveal"] = reveal.strip()
+        except Exception as e:
+            logger.warning("[20Q] LLM reaction failed: %s", e)
+            state["reveal"] = f"Yes! You got it — I was thinking of **{thing}**! Amazing!"
+
+    else:
+        # Wrong guess — costs one question turn but game continues
+        state["questions"].append({"q": f"Guess: {guess}", "a": "Nope, that's not it!"})
+        state["remaining"] -= 1
+
+        if state["remaining"] <= 0:
+            # Out of questions — game over, player loses
+            state["won"] = False
+            state["finished"] = True
+            try:
+                reveal = adapter.complete(
+                    f"The player ran out of guesses in 20 Questions. They last guessed "
+                    f"'{guess}' but you were thinking of '{thing}'."
+                    " Reveal the answer warmly with playful teasing in 1-2 sentences.",
+                    system="You are a playful AI companion playing 20 Questions. React briefly.",
+                    **cfg.get("llm_kwargs", {}),
+                )
+                state["reveal"] = reveal.strip()
+            except Exception as e:
+                logger.warning("[20Q] LLM reaction failed: %s", e)
+                state["reveal"] = f"Not quite! I was thinking of **{thing}**. Better luck next time!"
+        else:
+            # Generate a hint/tease reaction for the wrong guess
+            try:
+                reveal = adapter.complete(
+                    f"The player guessed '{guess}' but you are thinking of '{thing}'."
+                    " Give a brief playful 'nope!' reaction in 1 short sentence."
+                    " Do NOT reveal the answer.",
+                    system="You are a playful AI companion playing 20 Questions. React briefly without spoilers.",
+                    **cfg.get("llm_kwargs", {}),
+                )
+                state["reveal"] = reveal.strip()
+            except Exception:
+                state["reveal"] = "Nope! Keep trying~"
 
     return state
 

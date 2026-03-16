@@ -1,10 +1,10 @@
 # Waifu-RT3D
 
-> **AI Companion Platform** — 3D anime avatars with personality-driven animation, local/cloud LLM integration, 9-provider TTS, offline STT, agentic tool use, mini games, lorebook, tiered memory, character moods, 18 themes, cinematic mode, and OBS streaming overlays.
+> **AI Companion Platform** — 3D anime avatars with personality-driven animation, local/cloud LLM integration, 45-model catalog with hardware-aware recommendations, director mode, daily streaks, full-duplex voice conversation, 9-provider TTS, offline STT, agentic tool use, mini games, lorebook, tiered memory, character moods, 18 themes, cinematic mode, and OBS streaming overlays.
 
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-98%20passed-brightgreen)](backend/tests/)
-[![Schema](https://img.shields.io/badge/DB%20schema-v30-purple)](#)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue)](requirements.txt)
+[![Tests](https://img.shields.io/badge/tests-286%20passed-brightgreen)](backend/tests/)
+[![Schema](https://img.shields.io/badge/DB%20schema-v49-purple)](#)
 [![Themes](https://img.shields.io/badge/themes-18-ff69b4)](#themes)
 [![Frontends](https://img.shields.io/badge/frontends-Neon%20%7C%20Sakura%20%7C%20Nova-ff69b4)](#dual-frontend-architecture)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -49,9 +49,11 @@ Waifu-RT3D is a **full-stack AI companion platform** where 3D anime characters c
 ## Quick Start
 
 ### Prerequisites
-- **Python 3.11+**
+- **Python 3.12+** (recommend 3.14)
 - **LM Studio** (recommended) or any OpenAI-compatible LLM endpoint
 - macOS / Linux / Windows (WSL or native)
+
+> **Homebrew Python users:** Use `.venv/bin/python` instead of bare `python` or `python3` to avoid Conda/system Python conflicts. The project venv is built on Homebrew Python 3.14.
 
 ### Option A: One-Click Launcher (Easiest)
 
@@ -260,6 +262,11 @@ Additional TTS features:
 - **ASR confidence display** — minimum threshold to accept transcription
 - **Live transcription preview** — see words as you speak
 
+### Groq ASR (Cloud Whisper)
+- **Free cloud ASR** via Groq's Whisper large-v3 endpoint
+- Near-instant transcription with no local resources
+- Requires free API key from console.groq.com
+
 ### Character Management
 - **Create-a-Waifu** — full-page character creator with tabbed wizard (Identity, Appearance, Voice, Personality)
 - **SillyTavern card import** — drag-drop PNG character cards with embedded CHARA v2 JSON
@@ -273,6 +280,50 @@ Additional TTS features:
 - **Mood persistence** — emotion carries between sessions
 - **Character diary** — LLM-written session summaries that influence future behavior
 - **Anniversary tracking** — milestone detection based on first chat date
+
+### Director Mode
+Out-of-character stage directions that steer AI behavior without appearing as dialogue:
+- **Cumulative notes** persist across the conversation ("she should be shy now")
+- **Immediate notes** apply to the next reply only ("describe the rain outside")
+- Amber-gold card styling distinguishes director notes from chat messages
+- Toggle via the director button in the chat input bar
+
+### Daily Interaction Rewards
+Streak tracking and XP system that deepens character relationships over time:
+- **Daily streaks** -- consecutive day counter with fire badge in status bar
+- **XP accumulation** -- earn XP per interaction (bonus for streaks)
+- **Relationship tiers** -- Stranger -> Acquaintance -> Friend -> Close Friend -> Best Friend -> Soulmate
+- Streak badge shows current count + tier info on hover
+
+### Output Format Rules
+Per-character regex rules that clean up LLM output before display:
+- **Pattern matching** -- regex-based find-and-replace on AI responses
+- **Built-in presets** -- Strip OOC markers, remove narrator text, clean double asterisks
+- **Live test preview** -- paste sample text to see rules applied in real-time
+- **Toggle/reorder** -- enable/disable individual rules without deleting
+
+### Hardware-Aware Model Catalog
+45 curated RP/anime models with intelligent hardware recommendations:
+- **Auto-detects GPU** -- NVIDIA (GGUF), Apple Silicon (MLX), AMD (ROCm)
+- **VRAM fit scoring** -- green/yellow/orange/red compatibility indicators
+- **Quant suggestions** -- recommends Q4_K_M, Q5_K_M, etc. based on available VRAM
+- **CPU offload warnings** -- flags models that would need slow CPU offload
+- **HuggingFace links** -- click model names to view/download from HF
+- Users install models via LM Studio or Ollama; this panel is for discovery
+
+### Message Branching
+Regenerate AI responses and browse alternatives:
+- **Regenerate** -- create a new response branch for any assistant message
+- **Arrow navigation** -- browse between response variants with left/right arrows
+- **Branch history** -- all alternatives preserved, switch between them anytime
+
+### Prompt Template Macros
+Variable substitution in system prompts and templates:
+- `{{char}}` -- character name
+- `{{user}}` -- user display name
+- `{{time}}` -- current time
+- `{{date}}` -- current date
+- `{{persona}}` -- character personality summary
 
 ### Setup Wizards & Feature Discovery
 
@@ -422,11 +473,14 @@ Most local TTS engines (Kokoro, Chatterbox, XTTS) require running a separate ser
 ```
 waifu-rt3d/
 ├── backend/
-│   ├── server.py              # FastAPI server (main application, ~7000+ lines)
-│   ├── preflight.py           # DB migrations (schema v3 → v30)
+│   ├── server.py              # FastAPI server (main application, ~9000+ lines)
+│   ├── preflight.py           # DB migrations (schema v3 → v49)
 │   ├── llm/
 │   │   ├── registry.py        # LLM adapter factory
 │   │   ├── capability_detector.py  # Smart tool protocol detection + cache
+│   │   ├── context_assembler.py   # Token-budget-aware context assembly
+│   │   ├── link_manager.py        # Multi-machine LM Studio Link routing
+│   │   ├── token_counter.py       # tiktoken wrapper with fallback
 │   │   └── adapters/          # openai_compat, ollama, lmstudio, gemini, claude_api
 │   ├── tts/
 │   │   ├── registry.py        # TTS adapter factory
@@ -435,7 +489,14 @@ waifu-rt3d/
 │   │   └── adapters/          # edge_tts, kokoro, chatterbox, gptsovits, elevenlabs, …
 │   ├── asr/
 │   │   ├── registry.py        # STT adapter factory
-│   │   └── adapters/          # faster_whisper, whisper_api
+│   │   └── adapters/          # faster_whisper, whisper_api, groq_whisper
+│   ├── voice/
+│   │   ├── duplex.py          # Full-duplex voice conversation state machine
+│   │   └── audio_utils.py     # Audio format conversion (WebM/Opus → PCM)
+│   ├── spectator/             # Browser game companion
+│   │   ├── analyzer.py        # VLM game frame analysis
+│   │   ├── throttle.py        # Reaction frequency presets
+│   │   └── memory.py          # Game session history + context injection
 │   ├── agent/
 │   │   ├── runner.py          # Agentic loop (XML tool call parser + native function calling)
 │   │   ├── tools/             # 12 agent tools (voice, diary, memory, image, etc.)
@@ -456,20 +517,23 @@ waifu-rt3d/
 │   ├── image_gen/
 │   │   └── portrait_generator.py # AI expression portrait generation
 │   ├── models/
-│   │   └── manager.py         # LM Studio model manager integration
+│   │   ├── manager.py         # LM Studio model manager integration
+│   │   └── avatar_browser.py  # CC0 model catalog + Sketchfab search
 │   ├── memory/
 │   │   ├── vector_store.py    # RAG vector store (sqlite-vec)
 │   │   └── tiered_memory.py   # Three-tier memory manager (fleeting/recent/permanent)
 │   ├── config/
 │   │   ├── app.json           # Runtime configuration
-│   │   ├── mood_profiles.json # Time-of-day × personality → mood descriptors
+│   │   ├── mood_profiles.json # Time-of-day x personality → mood descriptors
 │   │   └── emotion_expressions.json # Emotion → VRM blend shape mappings
+│   ├── data/
+│   │   └── model_recommendations.json # 45-model curated RP/anime catalog
 │   ├── storage/
-│   │   ├── app.db             # SQLite database (schema v30)
+│   │   ├── app.db             # SQLite database (schema v49)
 │   │   ├── avatars/           # Uploaded VRM/GLB files
 │   │   ├── audio/             # Generated TTS audio cache
 │   │   └── images/            # AI-generated images
-│   └── tests/                 # 98 pytest tests
+│   └── tests/                 # 286 pytest tests
 ├── frontends/
 │   ├── shared/                # Assets shared between frontends
 │   │   ├── viewer/            # Three.js VRM renderer + OBS overlay
@@ -547,11 +611,21 @@ waifu-rt3d/
 | `GET` | `/api/v2/memory/search` | RAG memory search (tiered) |
 | `GET` | `/api/search/messages` | Full-text message search (FTS5) |
 | `GET` | `/api/data/export` | Export all data as ZIP |
+| `GET` | `/api/characters/{id}/streak` | Daily streak + XP + relationship tier |
+| `GET/POST/PATCH/DELETE` | `/api/characters/{id}/format-rules` | Output format rules CRUD |
+| `POST` | `/api/messages/{id}/regenerate` | Regenerate assistant message (new branch) |
+| `POST` | `/api/messages/{id}/activate` | Switch to a branched response |
+| `GET` | `/api/messages/{id}/branches` | List branch siblings |
+| `WS` | `/ws/voice` | Full-duplex voice conversation |
+| `GET` | `/api/hardware` | GPU/VRAM/platform detection |
+| `GET` | `/api/link/devices` | LM Studio Link device discovery |
+| `GET` | `/api/context-budget/{session_id}` | Token usage breakdown |
+| `WS` | `/ws/spectator` | Game companion screen analysis |
 | `WS` | `/ws/overlay` | OBS overlay WebSocket |
 
-### Database Schema (v30)
+### Database Schema (v49)
 
-The SQLite database (schema v30) auto-migrates on startup. Key tables:
+The SQLite database (schema v49) auto-migrates on startup. Key tables:
 - **sessions** — chat sessions with summary, archive, tags, and author's note
 - **messages** — chat history with emotion, branching (parent_id), token stats, pinning, reactions
 - **characters** — full character profiles (40+ columns including animation_profile, capability_profile, diary, voice config, mood settings, greeting config)
@@ -565,26 +639,43 @@ The SQLite database (schema v30) auto-migrates on startup. Key tables:
 - **prompt_templates** — reusable system prompt templates
 - **character_docs** — uploaded reference documents
 - **universes** — shared world builder (universe definitions)
+- **interaction_rewards** — daily streaks, XP, relationship tiers
+- **format_rules** — per-character regex output formatting
+- **game_companion_sessions** — browser game spectator sessions
+- **game_companion_reactions** — AI reactions to game events
 
 ---
 
 ## Running Tests
 
 ```bash
-# Run all 152 backend tests
+# Run all 286 backend tests
 python -m pytest backend/tests/ -v
 
 # Quick run (stop on first failure)
 python -m pytest backend/tests/ -x --tb=short
 ```
 
-**232 total tests:** 152 backend (API, CRUD, agents, voice module, memory), 80 frontend (wizards, discovery, settings), 26 E2E (Playwright).
+**286 backend tests** covering API endpoints, CRUD, agents, voice module, memory, spectator, link manager, context assembler, and more. Plus frontend component tests and 26 Playwright E2E tests.
 
 ---
 
 ## Roadmap
 
-### Recently Completed (v9.0.0)
+### Recently Completed (v10.0.0)
+- **Director Mode** — dual-layer OOC stage directions (cumulative + immediate notes)
+- **Daily Interaction Rewards** — streaks, XP, relationship tiers (Stranger to Soulmate)
+- **Output Format Rules** — per-character regex-based LLM output cleanup
+- **Groq ASR** — free cloud Whisper STT via Groq's large-v3 endpoint
+- **Message Branching** — regenerate + navigate response alternatives with arrow keys
+- **Hardware-Aware Model Catalog** — 45 curated RP/anime models with GPU/VRAM recommendations
+- **LM Studio Link** — multi-machine device discovery + smart routing
+- **Browser Game Companion** — VLM screen analysis with AI commentary
+- **Context Assembler** — token-budget-aware prompt assembly with tiktoken
+- **Portfolio Card Export** — CHARA v2 PNG sharing from portfolio overlay
+- **Prompt Template Macros** — variable substitution (char, user, time, date, persona)
+
+### Previously Completed (v9.0.0)
 - **Full-Duplex Voice Conversation** — WebSocket duplex audio, Silero VAD, barge-in interrupt, VoiceOrb UI, echo gating
 - **Live2D Runtime** — pixi-live2d-display with viewerStore mediator, expression/gesture routing, lip sync, transparent PIXI canvas
 - **Desktop Pet (Electron)** — transparent always-on-top overlay, click-through hit testing, drag-to-move, speech bubble, system tray, global shortcut
@@ -612,8 +703,6 @@ python -m pytest backend/tests/ -x --tb=short
 
 ### Planned
 - **Desktop Pet Phase 3** — right-click context menu, compact sidebar mode, edge docking, idle behaviors
-- **Emulator Gaming Integration** — PS1/PS2 emulation with AI companion co-op (EmulatorJS + PCSX2)
-- **AI Music Generation** — ACE-Step 1.5, HeartMuLa integration for character humming/singing
 - Docker Compose one-command setup
 - Twitch chat integration
 

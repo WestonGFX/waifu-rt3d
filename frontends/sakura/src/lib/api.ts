@@ -662,6 +662,26 @@ export const api = {
     ),
 
   /**
+   * Fetch the scene context for a session.
+   *
+   * @param sessionId - Session primary key.
+   * @returns Current scene text and enabled flag.
+   */
+  getScene: (sessionId: number) =>
+    get<{ scene: string; enabled: boolean }>(`/api/sessions/${sessionId}/scene`),
+
+  /**
+   * Update the scene context for a session (partial patch).
+   *
+   * @param sessionId - Session primary key.
+   * @param data - Fields to update (scene text and/or enabled flag).
+   */
+  updateScene: (sessionId: number, data: { scene?: string; enabled?: boolean }) =>
+    patch<{ ok: boolean; scene: string; enabled: boolean }>(
+      `/api/sessions/${sessionId}/scene`, data
+    ),
+
+  /**
    * Import a SillyTavern CHARA v2 PNG character card.
    *
    * @param file - PNG file with embedded CHARA v2 tEXt chunk.

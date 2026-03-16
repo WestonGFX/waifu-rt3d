@@ -7,6 +7,7 @@ import { useAppStore } from '../stores/appStore';
 import type { Session } from '../lib/types';
 import { BranchingVisualizer } from './BranchingVisualizer';
 import { AuthorNoteEditor } from './AuthorNoteEditor';
+import { SceneContextEditor } from './SceneContextEditor';
 
 interface SessionDrawerProps {
   open: boolean;
@@ -449,6 +450,9 @@ export function SessionDrawer({ open, onClose, characterId, characterName }: Ses
 
                 {/* Feature B4: Author's Note */}
                 <AuthorNoteEditor sessionId={sessionId} />
+
+                {/* Scene / Setting Context */}
+                <SceneContextEditor sessionId={sessionId} />
               </div>
             )}
           </motion.div>

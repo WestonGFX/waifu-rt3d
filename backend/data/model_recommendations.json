@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "last_updated": "2026-03-02",
+  "version": 2,
+  "last_updated": "2026-03-15",
   "tiers": [
     {
       "id": "vram-8gb",
@@ -194,6 +194,111 @@
             "character_voice": 8,
             "instruction_following": 5,
             "roleplay_immersion": 9
+          }
+        },
+        {
+          "id": "stheno-v3-8b",
+          "hf_id": "Sao10K/L3-8B-Stheno-v3.4",
+          "name": "Stheno v3.4 8B",
+          "architecture": "llama3",
+          "quant": "Q4_K_M",
+          "vram_gb": 5.0,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "45-65 tok/s",
+          "quality_tier": "very_good",
+          "license": "Meta Llama",
+          "model_type": "rp-tuned",
+          "notes": "Top-tier 8B RP; Sao10K's best for character voice consistency",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 8,
+            "character_voice": 9,
+            "instruction_following": 6,
+            "roleplay_immersion": 9
+          }
+        },
+        {
+          "id": "dolphin3-abliterated-8b",
+          "hf_id": "cognitivecomputations/Dolphin3-Llama3.1-8B-abliterated",
+          "name": "Dolphin3 Abliterated 8B",
+          "architecture": "llama3.1",
+          "quant": "Q4_K_M",
+          "vram_gb": 5.0,
+          "capabilities": ["chat", "roleplay", "uncensored", "tools"],
+          "speed_estimate": "45-65 tok/s",
+          "quality_tier": "good",
+          "license": "Meta Llama",
+          "model_type": "rp-tuned",
+          "notes": "Abliterated Dolphin3; tool-capable + uncensored; good all-rounder",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 6,
+            "instruction_following": 8,
+            "roleplay_immersion": 7
+          }
+        },
+        {
+          "id": "natsumura-rp-8b",
+          "hf_id": "Nitral-AI/Natsumura-Roleplay-L3.1-8B",
+          "name": "Natsumura Roleplay 8B",
+          "architecture": "llama3.1",
+          "quant": "Q4_K_M",
+          "vram_gb": 5.0,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "45-65 tok/s",
+          "quality_tier": "good",
+          "license": "Meta Llama",
+          "model_type": "rp-tuned",
+          "notes": "Nitral's companion-focused RP model; warm, conversational style",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 8,
+            "instruction_following": 6,
+            "roleplay_immersion": 8
+          }
+        },
+        {
+          "id": "waifuai-l3-8b",
+          "hf_id": "saishf/WaifuAI-L3-8B-v1",
+          "name": "WaifuAI L3 8B v1",
+          "architecture": "llama3",
+          "quant": "Q4_K_M",
+          "vram_gb": 5.0,
+          "capabilities": ["chat", "roleplay", "uncensored"],
+          "speed_estimate": "45-65 tok/s",
+          "quality_tier": "good",
+          "license": "Meta Llama",
+          "model_type": "rp-tuned",
+          "notes": "Anime waifu-specialized; trained on curated anime RP datasets",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 8,
+            "instruction_following": 5,
+            "roleplay_immersion": 9
+          }
+        },
+        {
+          "id": "qwen25-7b-uncensored",
+          "hf_id": "Orion-zhen/Qwen2.5-7B-Instruct-Uncensored",
+          "name": "Qwen 2.5 7B Uncensored",
+          "architecture": "qwen2.5",
+          "quant": "Q4_K_M",
+          "vram_gb": 4.5,
+          "capabilities": ["chat", "roleplay", "uncensored"],
+          "speed_estimate": "50-70 tok/s",
+          "quality_tier": "good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Uncensored Qwen 2.5; fast, Apache-licensed, good creative freedom",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 6,
+            "character_voice": 6,
+            "instruction_following": 7,
+            "roleplay_immersion": 7
           }
         }
       ]
@@ -454,6 +559,174 @@
             "instruction_following": 6,
             "roleplay_immersion": 9
           }
+        },
+        {
+          "id": "violet-lotus-12b",
+          "hf_id": "TheDrummer/Violet-Lotus-12B-v3.1",
+          "name": "Violet Lotus 12B v3.1",
+          "architecture": "mistral-nemo",
+          "quant": "Q4_K_M",
+          "vram_gb": 8.5,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "60-80 tok/s",
+          "quality_tier": "excellent",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Lyrical prose style; poetic descriptions; great for romance and drama",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 9,
+            "character_voice": 8,
+            "instruction_following": 7,
+            "roleplay_immersion": 9
+          }
+        },
+        {
+          "id": "mag-mell-r1-12b",
+          "hf_id": "ArliAI/Mag-Mell-R1-12B-v1.0",
+          "name": "Mag Mell R1 12B",
+          "architecture": "mistral-nemo",
+          "quant": "Q4_K_M",
+          "vram_gb": 8.5,
+          "capabilities": ["chat", "roleplay", "reasoning"],
+          "speed_estimate": "55-75 tok/s",
+          "quality_tier": "very_good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "R1-distilled reasoning + RP blend; thoughtful character responses",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 8,
+            "character_voice": 8,
+            "instruction_following": 8,
+            "roleplay_immersion": 8
+          }
+        },
+        {
+          "id": "noromaid-20b",
+          "hf_id": "NeverSleep/Noromaid-20B-v0.1.1",
+          "name": "Noromaid 20B v0.1.1",
+          "architecture": "mistral",
+          "quant": "IQ4_XS",
+          "vram_gb": 12.0,
+          "capabilities": ["chat", "roleplay", "emotional"],
+          "speed_estimate": "30-45 tok/s",
+          "quality_tier": "excellent",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "20B merge — richer world-building than 12B models; strong emotional range",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 9,
+            "character_voice": 8,
+            "instruction_following": 7,
+            "roleplay_immersion": 9
+          }
+        },
+        {
+          "id": "eva-qwen25-14b",
+          "hf_id": "EVA-UNIT-01/EVA-Qwen2.5-14B-v0.2",
+          "name": "Eva Qwen 2.5 14B v0.2",
+          "architecture": "qwen2.5",
+          "quant": "Q4_K_M",
+          "vram_gb": 10.0,
+          "capabilities": ["chat", "roleplay", "uncensored"],
+          "speed_estimate": "40-55 tok/s",
+          "quality_tier": "very_good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Abliterated Qwen 2.5 14B; creative freedom with strong instruction following",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 8,
+            "character_voice": 7,
+            "instruction_following": 8,
+            "roleplay_immersion": 8
+          }
+        },
+        {
+          "id": "anime-qwen3-14b",
+          "hf_id": "Aratako/Anime-Qwen3-14B-v1",
+          "name": "Anime Qwen3 14B",
+          "architecture": "qwen3",
+          "quant": "Q4_K_M",
+          "vram_gb": 10.0,
+          "capabilities": ["chat", "roleplay", "uncensored"],
+          "speed_estimate": "35-50 tok/s",
+          "quality_tier": "very_good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Anime-specialized RP; trained on light novel + anime dialogue datasets",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 8,
+            "character_voice": 9,
+            "instruction_following": 6,
+            "roleplay_immersion": 9
+          }
+        },
+        {
+          "id": "deepseek-r1-abliterated-14b",
+          "hf_id": "huihui-ai/DeepSeek-R1-Distill-Qwen-14B-abliterated",
+          "name": "DeepSeek R1 Abliterated 14B",
+          "architecture": "qwen2.5",
+          "quant": "Q4_K_M",
+          "vram_gb": 10.0,
+          "capabilities": ["chat", "reasoning", "thinking", "uncensored"],
+          "speed_estimate": "35-50 tok/s",
+          "quality_tier": "very_good",
+          "license": "MIT",
+          "model_type": "rp-tuned",
+          "notes": "R1 reasoning chains + abliteration; great for complex character logic",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 6,
+            "instruction_following": 8,
+            "roleplay_immersion": 7
+          }
+        },
+        {
+          "id": "mythomax-l2-13b",
+          "hf_id": "Gryphe/MythoMax-L2-13b",
+          "name": "MythoMax L2 13B",
+          "architecture": "llama2",
+          "quant": "Q4_K_M",
+          "vram_gb": 8.5,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "40-55 tok/s",
+          "quality_tier": "good",
+          "license": "Meta Llama",
+          "model_type": "rp-tuned",
+          "notes": "Classic community favorite; stable character voice; well-tested over 2+ years",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 7,
+            "character_voice": 8,
+            "instruction_following": 6,
+            "roleplay_immersion": 8
+          }
+        },
+        {
+          "id": "gemma-27b-abliterated",
+          "hf_id": "huihui-ai/gemma-3-27b-it-abliterated",
+          "name": "Gemma 3 27B Abliterated",
+          "architecture": "gemma3",
+          "quant": "IQ4_XS",
+          "vram_gb": 15.0,
+          "capabilities": ["chat", "reasoning", "uncensored", "multilingual"],
+          "speed_estimate": "20-30 tok/s",
+          "quality_tier": "excellent",
+          "license": "Gemma",
+          "model_type": "rp-tuned",
+          "notes": "Google's 27B abliterated; multilingual strength; tight fit on 16GB",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 8,
+            "character_voice": 7,
+            "instruction_following": 8,
+            "roleplay_immersion": 7
+          }
         }
       ]
     },
@@ -656,6 +929,48 @@
             "character_voice": 3,
             "instruction_following": 7,
             "roleplay_immersion": 3
+          }
+        },
+        {
+          "id": "moe-girl-3b",
+          "hf_id": "saishf/MoE-Girl-3B-v1",
+          "name": "MoE Girl 3B",
+          "architecture": "phi",
+          "quant": "Q4_K_M",
+          "vram_gb": 2.0,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "100-130 tok/s",
+          "quality_tier": "basic",
+          "license": "MIT",
+          "model_type": "rp-tuned",
+          "notes": "Anime-specialized tiny model; MoE architecture; surprisingly good for 3B",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 5,
+            "character_voice": 7,
+            "instruction_following": 4,
+            "roleplay_immersion": 7
+          }
+        },
+        {
+          "id": "gemma3-waifu-4b",
+          "hf_id": "saishf/Gemma-3-Waifu-4B-v1",
+          "name": "Gemma 3 Waifu 4B",
+          "architecture": "gemma3",
+          "quant": "Q4_K_M",
+          "vram_gb": 3.0,
+          "capabilities": ["chat", "roleplay"],
+          "speed_estimate": "80-100 tok/s",
+          "quality_tier": "good",
+          "license": "Gemma",
+          "model_type": "rp-tuned",
+          "notes": "Anime waifu fine-tune on Gemma 3; punches above weight for 4B",
+          "content_rating": "mature",
+          "quality_ratings": {
+            "creative_writing": 6,
+            "character_voice": 7,
+            "instruction_following": 5,
+            "roleplay_immersion": 7
           }
         }
       ]

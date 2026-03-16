@@ -7123,6 +7123,62 @@ async def pin_message(message_id: int, req: Request):
     return {"message_id": message_id, "pinned": pinned_val}
 
 
+# ── Feature T0-3 — Branch Listing ─────────────────────────────────────────────
+
+@app.get("/api/messages/{message_id}/branches")
+async def get_message_branches(message_id: int):
+    """List all branch siblings of a message (for swipe-to-browse UI).
+
+    Finds the ``parent_id`` of the given message, then returns all
+    messages sharing that parent. Used by the frontend to show
+    ``◄ 1/3 ►`` navigation arrows on assistant messages.
+
+    Args:
+        message_id: ID of any message in a branch group.
+
+    Returns:
+        dict: ``{"branches": [...], "active_index": int, "total": int}``
+
+    Raises:
+        HTTPException: 404 if the message does not exist.
+    """
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT id, parent_id FROM messages WHERE id = ?", (message_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Message not found")
+
+        _msg_id, parent_id = row
+        if parent_id is None:
+            # No parent — this message has no branches
+            r = conn.execute(
+                "SELECT id, text, emotion, created_at, is_active FROM messages WHERE id = ?",
+                (message_id,)
+            ).fetchone()
+            return {
+                "branches": [{"id": r[0], "text": r[1], "emotion": r[2], "created_at": r[3], "is_active": bool(r[4])}],
+                "active_index": 0,
+                "total": 1,
+            }
+
+        siblings = conn.execute(
+            "SELECT id, text, emotion, created_at, is_active FROM messages WHERE parent_id = ? ORDER BY id ASC",
+            (parent_id,)
+        ).fetchall()
+
+        branches = [
+            {"id": s[0], "text": s[1], "emotion": s[2], "created_at": s[3], "is_active": bool(s[4])}
+            for s in siblings
+        ]
+        active_index = next((i for i, b in enumerate(branches) if b["is_active"]), 0)
+
+        return {"branches": branches, "active_index": active_index, "total": len(branches)}
+    finally:
+        conn.close()
+
+
 # ── Feature #14 — Branch Activation ───────────────────────────────────────────
 
 @app.post("/api/messages/{message_id}/activate")

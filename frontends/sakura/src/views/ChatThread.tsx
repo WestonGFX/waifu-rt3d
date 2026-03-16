@@ -465,6 +465,24 @@ export function ChatThread() {
     sendMessage(choice, true, incognito, effectiveMaxTokens);
   }, [sendMessage, incognito, effectiveMaxTokens]);
 
+  // ── T0-3: Regenerate + branch switch ────────────────────────────────────
+  const handleRegenerate = useCallback(async (serverMessageId: number) => {
+    try {
+      const res = await api.regenerateMessage(serverMessageId);
+      if (res.ok) {
+        // Reload history to pick up the new branch
+        if (sessionId) await loadHistory(sessionId);
+      }
+    } catch (err) {
+      console.error('[Regenerate] failed:', err);
+    }
+  }, [sessionId, loadHistory]);
+
+  const handleBranchSwitch = useCallback((_newMsgId: number, _newText: string, _newEmotion?: string) => {
+    // Reload history to reflect the activated branch
+    if (sessionId) loadHistory(sessionId);
+  }, [sessionId, loadHistory]);
+
   // ── Search filter ────────────────────────────────────────────────────────
   const visibleMessages = useMemo(() => {
     if (!searchQuery.trim()) return messages;
@@ -720,6 +738,8 @@ export function ChatThread() {
                 isPlaying={playingAudioId === msg.id}
                 searchQuery={searchQuery}
                 onChoiceSelect={handleChoiceSelect}
+                onRegenerate={handleRegenerate}
+                onBranchSwitch={handleBranchSwitch}
               />
             </div>
           ))}

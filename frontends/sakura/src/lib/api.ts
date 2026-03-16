@@ -201,6 +201,24 @@ export const api = {
   pinMessage: (messageId: number, pinned: boolean) =>
     put<{ ok: boolean }>(`/api/messages/${messageId}/pin`, { pinned }),
 
+  /** Get all branch siblings of a message for swipe navigation. */
+  getMessageBranches: (messageId: number) =>
+    get<{ branches: Array<{ id: number; text: string; emotion: string; created_at: string; is_active: boolean }>; active_index: number; total: number }>(
+      `/api/messages/${messageId}/branches`
+    ),
+
+  /** Regenerate an assistant message, creating a new branch. */
+  regenerateMessage: (messageId: number) =>
+    post<{ ok: boolean; new_message_id: number; reply: string; emotion?: string }>(
+      `/api/messages/${messageId}/regenerate`, {}
+    ),
+
+  /** Activate a branched message, deactivating siblings. */
+  activateBranch: (messageId: number) =>
+    post<{ ok: boolean; message_id: number; deactivated: number[] }>(
+      `/api/messages/${messageId}/activate`, {}
+    ),
+
   // Chat
   sendChat: (req: { text: string; session_id: number; char_id: number; speak: boolean }) =>
     post<ChatResponse>('/api/chat', req),

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Volume2, Pin } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Volume2, Pin, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
 import { api } from '../lib/api';
@@ -87,6 +87,10 @@ interface DialogueBubbleProps {
   searchQuery?: string;
   /** Feature E: called when the user clicks a dialogue choice button. */
   onChoiceSelect?: (choice: string) => void;
+  /** T0-3: called when user clicks regenerate on an assistant message. */
+  onRegenerate?: (serverMessageId: number) => void;
+  /** T0-3: called when user navigates to a different branch. */
+  onBranchSwitch?: (newMessageId: number, newText: string, newEmotion?: string) => void;
 }
 
 /** Highlight occurrences of `query` inside `text` using <mark> spans. */
@@ -161,9 +165,43 @@ function MarkdownText({ text, query }: { text: string; query: string }) {
  * PUT /api/messages/{serverMessageId}/pin and tracks pinned state locally.
  * Pinned messages show a filled Pin indicator in the top-right corner.
  */
-export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect }: DialogueBubbleProps) {
+export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onBranchSwitch }: DialogueBubbleProps) {
   const [pinned, setPinned] = useState(message.pinned ?? false);
   const [hovered, setHovered] = useState(false);
+
+  // T0-3: Branch navigation state
+  const [branchTotal, setBranchTotal] = useState(1);
+  const [branchIndex, setBranchIndex] = useState(0);
+  const [branchIds, setBranchIds] = useState<number[]>([]);
+  const branchFetched = useRef(false);
+
+  // Fetch branch info on first hover for assistant messages with serverMessageId
+  const fetchBranches = useCallback(async () => {
+    if (branchFetched.current || !message.serverMessageId || message.role !== 'assistant') return;
+    branchFetched.current = true;
+    try {
+      const data = await api.getMessageBranches(message.serverMessageId);
+      setBranchTotal(data.total);
+      setBranchIndex(data.active_index);
+      setBranchIds(data.branches.map(b => b.id));
+    } catch { /* silent */ }
+  }, [message.serverMessageId, message.role]);
+
+  const handleBranchNav = useCallback(async (direction: -1 | 1) => {
+    const newIdx = branchIndex + direction;
+    if (newIdx < 0 || newIdx >= branchTotal || !branchIds[newIdx]) return;
+    try {
+      await api.activateBranch(branchIds[newIdx]);
+      const data = await api.getMessageBranches(branchIds[newIdx]);
+      const active = data.branches[data.active_index];
+      setBranchIndex(data.active_index);
+      if (active && onBranchSwitch) {
+        onBranchSwitch(active.id, active.text, active.emotion);
+      }
+    } catch (err) {
+      console.error('[BranchNav] switch failed:', err);
+    }
+  }, [branchIndex, branchTotal, branchIds, onBranchSwitch]);
 
   // Phase 15: Lazily load expression portraits for this character
   const charId = character?.id;
@@ -444,6 +482,51 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
         )}
 
         <MessageMeta message={message} />
+
+        {/* T0-3: Branch navigation — arrows + regenerate on hover */}
+        {hovered && message.serverMessageId != null && message.status === 'sent' && (
+          <div
+            className="flex items-center gap-1.5 mt-2 pt-1.5"
+            style={{ borderTop: '1px solid var(--color-border-subtle)', fontSize: '0.7rem' }}
+            onMouseEnter={fetchBranches}
+          >
+            {branchTotal > 1 && (
+              <>
+                <button
+                  onClick={() => handleBranchNav(-1)}
+                  disabled={branchIndex <= 0}
+                  className="p-0.5 rounded transition-colors disabled:opacity-30"
+                  style={{ color: 'var(--color-text-tertiary)' }}
+                  title="Previous version"
+                >
+                  <ChevronLeft size={12} />
+                </button>
+                <span style={{ color: 'var(--color-text-muted)', minWidth: 28, textAlign: 'center' }}>
+                  {branchIndex + 1}/{branchTotal}
+                </span>
+                <button
+                  onClick={() => handleBranchNav(1)}
+                  disabled={branchIndex >= branchTotal - 1}
+                  className="p-0.5 rounded transition-colors disabled:opacity-30"
+                  style={{ color: 'var(--color-text-tertiary)' }}
+                  title="Next version"
+                >
+                  <ChevronRight size={12} />
+                </button>
+              </>
+            )}
+            {onRegenerate && (
+              <button
+                onClick={() => onRegenerate(message.serverMessageId!)}
+                className="p-0.5 rounded transition-colors ml-auto"
+                style={{ color: 'var(--color-text-tertiary)' }}
+                title="Regenerate response"
+              >
+                <RefreshCw size={11} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

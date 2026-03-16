@@ -14,6 +14,7 @@
 
 import { useState } from 'react';
 import { CheckCircle, XCircle, Trophy, RotateCcw } from 'lucide-react';
+import { GameCelebration } from './GameCelebration';
 import { api } from '../lib/api';
 import type { GameState, GameMoveResponse } from '../lib/types';
 
@@ -71,7 +72,8 @@ export function TriviaGame({ sessionId, initialState, charName, onExit }: Props)
     const pct = Math.round((score / total) * 100);
     const grade = pct >= 80 ? '🌸 Excellent!' : pct >= 50 ? '👍 Not bad!' : '😅 Keep trying!';
     return (
-      <div className="trivia-panel trivia-result">
+      <div className="trivia-panel trivia-result" style={{ position: 'relative', overflow: 'hidden' }}>
+        <GameCelebration won={pct >= 50} message={grade.replace(/^[^\s]+ /, '')} />
         <Trophy size={40} style={{ color: 'var(--color-accent)', margin: '0 auto 12px' }} />
         <h3 className="trivia-result-title">{charName}'s Trivia Challenge</h3>
         <p className="trivia-result-score">{score} / {total}</p>

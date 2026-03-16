@@ -8,6 +8,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
+import { GameCelebration } from './GameCelebration';
 import type { GameState, WaChainEntry } from '../lib/types';
 
 interface Props {
@@ -127,7 +128,8 @@ export function WordAssociationGame({ sessionId, initialState, charName, onExit 
 
       {/* Result */}
       {finished && (
-        <div className={`hangman-result hangman-result--${state.won ? 'win' : 'loss'}`}>
+        <div className={`hangman-result hangman-result--${state.won ? 'win' : 'loss'}`} style={{ position: 'relative', overflow: 'hidden' }}>
+          <GameCelebration won={!!state.won} />
           <p className="hangman-result-title">
             {state.won ? `Chain complete! 🎉` : `Chain broken`}
           </p>

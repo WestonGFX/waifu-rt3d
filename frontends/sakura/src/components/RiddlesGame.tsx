@@ -8,6 +8,7 @@
 import { useState, useCallback } from 'react';
 import { Lightbulb, Send } from 'lucide-react';
 import { api } from '../lib/api';
+import { GameCelebration } from './GameCelebration';
 import type { GameState } from '../lib/types';
 
 interface Props {
@@ -125,7 +126,8 @@ export function RiddlesGame({ sessionId, initialState, charName, onExit }: Props
 
       {/* Result */}
       {state.finished && (
-        <div className={`hangman-result hangman-result--${state.won ? 'win' : 'loss'}`}>
+        <div className={`hangman-result hangman-result--${state.won ? 'win' : 'loss'}`} style={{ position: 'relative', overflow: 'hidden' }}>
+          <GameCelebration won={!!state.won} />
           <p className="hangman-result-title">{state.won ? '🎉 Correct!' : 'Not quite…'}</p>
           {!state.won && <p className="hangman-result-word">The answer: <strong>{state.answer}</strong></p>}
           {state.reveal && <p className="hangman-result-reaction">{charName}: "{state.reveal}"</p>}

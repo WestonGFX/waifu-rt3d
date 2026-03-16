@@ -15,6 +15,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Send, Lightbulb, Trophy, XCircle, RotateCcw } from 'lucide-react';
+import { GameCelebration } from './GameCelebration';
 import { api } from '../lib/api';
 import type { GameState, GameMoveResponse } from '../lib/types';
 
@@ -75,7 +76,8 @@ export function TwentyQGame({ sessionId, initialState, charName, onExit }: Props
   if (state.finished) {
     const won = state.won;
     return (
-      <div className="tq-panel tq-result">
+      <div className="tq-panel tq-result" style={{ position: 'relative', overflow: 'hidden' }}>
+        <GameCelebration won={!!won} />
         {won ? (
           <Trophy size={40} style={{ color: 'var(--color-accent)', margin: '0 auto 12px' }} />
         ) : (

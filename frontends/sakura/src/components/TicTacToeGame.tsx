@@ -8,6 +8,7 @@
 
 import { useState, useCallback } from 'react';
 import { api } from '../lib/api';
+import { GameCelebration } from './GameCelebration';
 import type { GameState } from '../lib/types';
 
 interface Props {
@@ -102,7 +103,8 @@ export function TicTacToeGame({ sessionId, initialState, charName, difficulty, o
 
       {/* Result */}
       {finished && (
-        <div className={`hangman-result hangman-result--${winner === 'X' ? 'win' : winner === 'draw' ? 'draw' : 'loss'}`}>
+        <div className={`hangman-result hangman-result--${winner === 'X' ? 'win' : winner === 'draw' ? 'draw' : 'loss'}`} style={{ position: 'relative', overflow: 'hidden' }}>
+          <GameCelebration won={winner === 'X'} />
           <p className="hangman-result-title">
             {winner === 'X' ? '🎉 You won!' : winner === 'draw' ? '🤝 Draw!' : `${charName} wins!`}
           </p>

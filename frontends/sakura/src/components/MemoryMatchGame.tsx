@@ -8,6 +8,7 @@
 
 import { useState, useCallback } from 'react';
 import { api } from '../lib/api';
+import { GameCelebration } from './GameCelebration';
 import type { GameState, MemoryCard } from '../lib/types';
 
 interface Props {
@@ -111,7 +112,8 @@ export function MemoryMatchGame({ sessionId, initialState, charName, onExit }: P
 
       {/* Result */}
       {state.finished && (
-        <div className="hangman-result hangman-result--win">
+        <div className="hangman-result hangman-result--win" style={{ position: 'relative', overflow: 'hidden' }}>
+          <GameCelebration won={true} />
           <p className="hangman-result-title">🎉 You found all pairs!</p>
           <p className="wa-result-stats">{pairs} pairs in {moves} moves</p>
           {state.reaction && <p className="hangman-result-reaction">{charName}: "{state.reaction}"</p>}

@@ -8,6 +8,7 @@
 
 import { useState, useCallback } from 'react';
 import { api } from '../lib/api';
+import { GameCelebration } from './GameCelebration';
 import type { GameState } from '../lib/types';
 
 const KEYBOARD_ROWS = [
@@ -135,7 +136,8 @@ export function HangmanGame({ sessionId, initialState, charName, onExit }: Props
 
       {/* Result */}
       {finished && (
-        <div className={`hangman-result hangman-result--${won ? 'win' : 'loss'}`}>
+        <div className={`hangman-result hangman-result--${won ? 'win' : 'loss'}`} style={{ position: 'relative', overflow: 'hidden' }}>
+          <GameCelebration won={!!won} />
           <p className="hangman-result-title">{won ? '🎉 You won!' : '💀 Game over'}</p>
           {!won && <p className="hangman-result-word">The word was: <strong>{state.word}</strong></p>}
           {state.reveal && <p className="hangman-result-reaction">{charName}: "{state.reveal}"</p>}

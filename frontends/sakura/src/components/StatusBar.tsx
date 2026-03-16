@@ -4,6 +4,7 @@ import type { Character } from '../lib/types';
 import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
 import { RELEASE_NOTES } from '../data/changelog';
+import { StreakBadge } from './StreakBadge';
 
 /** Current app version, sourced from the latest changelog entry. */
 const APP_VERSION = RELEASE_NOTES[0]?.version ?? '0.0.0';
@@ -406,6 +407,8 @@ export function StatusBar({
             </span>
             {/* Feature B4: Author's Note active badge */}
             <AuthorNoteBadge sessionId={sessionId} />
+            {/* Feature T1-8: Daily interaction streak badge */}
+            <StreakBadge charId={character.id} messageCount={messageCount} />
           </div>
           <p className="text-xs truncate" style={{ color: 'var(--color-text-tertiary)' }}>
             {idlePhrase}

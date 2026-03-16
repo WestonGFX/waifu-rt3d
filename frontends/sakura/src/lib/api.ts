@@ -817,4 +817,59 @@ export const api = {
       batch_range?: [number, number];
       error?: string;
     }>(`/api/sessions/${sessionId}/compress`, { keep_recent: keepRecent }),
+
+  // ── Feature T1-8: Daily Interaction Streaks ─────────────────────────────
+
+  /**
+   * Get the current streak, XP, and relationship tier for a character.
+   *
+   * @param charId - Character primary key.
+   * @returns Streak count, total XP, current tier, next tier, and XP remaining.
+   */
+  getCharacterStreak: (charId: number) =>
+    get<{ streak: number; total_xp: number; tier: string; next_tier: string; xp_to_next: number }>(
+      `/api/characters/${charId}/streak`
+    ),
+
+  // ── Feature T1-7: Output Format Rules ───────────────────────────────────
+
+  /**
+   * List all output format rules for a character.
+   *
+   * @param charId - Character primary key.
+   * @returns Array of format rule objects ordered by priority DESC.
+   */
+  getFormatRules: (charId: number) =>
+    get<{ rules: Array<{ id: number; rule_name: string; pattern: string; replacement: string; is_enabled: boolean; priority: number }> }>(
+      `/api/characters/${charId}/format-rules`
+    ),
+
+  /**
+   * Create a new output format rule for a character.
+   *
+   * @param charId - Character primary key.
+   * @param rule - Rule fields: name, regex pattern, replacement string, priority.
+   * @returns The new rule's ID.
+   */
+  createFormatRule: (charId: number, rule: { rule_name: string; pattern: string; replacement?: string; priority?: number }) =>
+    post<{ ok: boolean; id: number }>(`/api/characters/${charId}/format-rules`, rule),
+
+  /**
+   * Update an existing format rule (partial patch).
+   *
+   * @param ruleId - Format rule primary key.
+   * @param fields - Fields to update (rule_name, pattern, replacement, is_enabled, priority).
+   * @returns Success flag.
+   */
+  updateFormatRule: (ruleId: number, fields: Record<string, unknown>) =>
+    patch<{ ok: boolean }>(`/api/format-rules/${ruleId}`, fields),
+
+  /**
+   * Delete a format rule.
+   *
+   * @param ruleId - Format rule primary key.
+   * @returns Success flag.
+   */
+  deleteFormatRule: (ruleId: number) =>
+    del<{ ok: boolean }>(`/api/format-rules/${ruleId}`),
 };

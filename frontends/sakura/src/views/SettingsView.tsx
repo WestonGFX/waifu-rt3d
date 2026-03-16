@@ -19,6 +19,7 @@ import { api } from '../lib/api';
 import { ExpressionPortraitGrid } from '../components/ExpressionPortraitGrid';
 import { LinkStatusPanel } from '../components/LinkStatusPanel';
 import { useToastStore } from '../components/ToastQueue';
+import { FormatRulesEditor } from '../components/FormatRulesEditor';
 
 /* ─── Helper: deep-get nested config key like "llm.model" ──────────── */
 function cfgGet(config: Record<string, unknown>, key: string, fallback: unknown = ''): unknown {
@@ -1166,6 +1167,14 @@ function CharacterTab() {
           )}
         </section>
       )}
+
+      {/* Feature T1-7: Output Format Rules */}
+      <section className="mb-6">
+        <SectionHeader title="Output Format Rules" />
+        <div style={cardStyle} className="px-4 py-3">
+          <FormatRulesEditor characterId={activeCharacter.id} />
+        </div>
+      </section>
 
       {/* Save + Delete buttons */}
       <div className="flex items-center justify-between gap-3">
@@ -3377,7 +3386,7 @@ function VoiceTab({ save, cfg }: TabProps) {
         <SectionHeader title="Speech Recognition (ASR)" />
         <div style={cardStyle} className="px-4">
           <SettingField label="ASR Provider" description="Speech recognition engine for voice input."
-            tooltip="Browser: Web Speech API (cloud). Faster-Whisper: local offline (pip install faster-whisper).">
+            tooltip="Browser: Web Speech API (cloud). Faster-Whisper: local offline. Groq: free cloud Whisper API.">
             <select
               value={String(cfg('asr_provider', 'browser'))}
               onChange={(e) => save('asr_provider', e.target.value)}
@@ -3385,8 +3394,24 @@ function VoiceTab({ save, cfg }: TabProps) {
             >
               <option value="browser">Browser (Web Speech API)</option>
               <option value="faster_whisper">Faster-Whisper (Local)</option>
+              <option value="groq">Groq (Free Cloud)</option>
             </select>
           </SettingField>
+
+          {/* Groq ASR API key — shown only when Groq provider is selected */}
+          {String(cfg('asr_provider', 'browser')) === 'groq' && (
+            <SettingField label="Groq API Key" description="Free API key from console.groq.com."
+              tooltip="Sign up at console.groq.com for a free API key. Groq uses Whisper large-v3 in the cloud with very fast inference.">
+              <input
+                type="password"
+                value={String(cfg('groq_api_key', ''))}
+                onChange={(e) => save('groq_api_key', e.target.value)}
+                placeholder="gsk_..."
+                className="text-sm px-2 py-1.5 rounded w-64 font-mono"
+                style={selectStyle}
+              />
+            </SettingField>
+          )}
 
           <SettingField label="Whisper Model Size" description="Accuracy vs speed tradeoff." advanced
             tooltip="tiny.en: fastest. base.en: good balance. large-v3: best accuracy, needs ~4GB RAM.">

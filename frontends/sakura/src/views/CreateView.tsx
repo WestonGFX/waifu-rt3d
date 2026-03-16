@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Upload, Check, Zap, Shuffle, Sparkles, Lock, Unlock, Loader2, X, FileImage } from 'lucide-react';
+import { Upload, Check, Zap, Shuffle, Sparkles, Lock, Unlock, Loader2, X, FileImage, Wand2 } from 'lucide-react';
+import { useWizardStore } from '../stores/wizardStore';
 import { WizardStep } from '../components/WizardStep';
 import { VoicePicker } from '../components/VoicePicker';
 import { CharacterCardImporter } from '../components/CharacterCardImporter';
@@ -562,6 +563,21 @@ export function CreateView() {
                 >
                   {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                   {generating ? 'Generating...' : 'AI Generate'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => useWizardStore.getState().openWizard('character-gen')}
+                  disabled={!llmStatus.connected}
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-all disabled:opacity-40"
+                  style={{
+                    backgroundColor: 'var(--color-surface)',
+                    border: '1px solid var(--color-accent)',
+                    color: 'var(--color-accent)',
+                  }}
+                  title={llmStatus.connected ? 'Open the full AI character creation wizard' : 'Requires LLM brain to be connected'}
+                >
+                  <Wand2 size={14} />
+                  Wizard
                 </button>
 
               </div>

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain, Settings,
-  ChevronLeft, Search, Wifi, WifiOff, Pencil, BookMarked, UserCircle, Gamepad2, HelpCircle, Download
+  ChevronLeft, Search, Wifi, WifiOff, Pencil, BookMarked, UserCircle, Gamepad2, HelpCircle, Download, Wand2
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
@@ -278,6 +278,18 @@ export function Sidebar() {
                 <p className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
                   The full creation wizard is shown in the main panel.
                 </p>
+                <button
+                  onClick={() => useWizardStore.getState().openWizard('character-gen')}
+                  className="flex items-center gap-2 mx-auto mt-3 px-4 py-2 text-xs font-medium rounded-lg transition-all"
+                  style={{
+                    backgroundColor: 'var(--color-surface)',
+                    border: '1px solid var(--color-accent)',
+                    color: 'var(--color-accent)',
+                  }}
+                >
+                  <Wand2 size={14} />
+                  Create with AI
+                </button>
               </motion.div>
             )}
           </AnimatePresence>

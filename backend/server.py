@@ -5375,6 +5375,51 @@ def get_recent_messages_per_character():
     return {"ok": True, "recent": recent}
 
 
+@app.post("/api/characters/generate")
+async def generate_character(req: Request):
+    """Generate a character profile from personality traits using the connected LLM.
+
+    The LLM produces a complete CHARA v2-compatible character with system prompt,
+    personality, greeting, backstory, and example messages. All fields are editable
+    in the frontend wizard before saving.
+
+    Args:
+        req: JSON body with:
+            - ``traits`` (list[str], required): Personality trait keywords.
+            - ``name`` (str, optional): Character name.
+            - ``gender`` (str, optional): Gender hint.
+            - ``age_range`` (str, optional): Age range hint.
+            - ``setting`` (str, optional): World/setting hint.
+
+    Returns:
+        dict: Generated character profile with all required fields.
+
+    Raises:
+        HTTPException 400: If traits list is empty.
+    """
+    body = await req.json()
+    traits = body.get("traits", [])
+    if not traits:
+        raise HTTPException(400, "At least one trait is required")
+
+    cfg = load_config() or {}
+    from backend.llm.registry import get_client
+    adapter = get_client(cfg)
+
+    from backend.characters.generator import CharacterGenerator
+    generator = CharacterGenerator()
+    result = generator.generate(
+        adapter=adapter,
+        cfg=cfg,
+        traits=traits,
+        name=body.get("name"),
+        gender=body.get("gender"),
+        age_range=body.get("age_range"),
+        setting=body.get("setting"),
+    )
+    return {"ok": True, "character": result}
+
+
 @app.post("/api/characters")
 async def create_character(req: Request):
     """Create a new character with all supported fields.

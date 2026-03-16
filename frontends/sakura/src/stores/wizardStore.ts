@@ -11,7 +11,8 @@ export type WizardId =
   | 'expression-setup'
   | 'card-import'
   | 'llm-setup'
-  | 'whats-new';
+  | 'whats-new'
+  | 'character-gen';
 
 /** A contextual feature tip queued for display. */
 export interface FeatureTip {

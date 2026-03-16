@@ -42,6 +42,7 @@ const ImageGenSetupWizard  = lazy(() => import('./components/wizards/ImageGenSet
 const ExpressionSetupWizard = lazy(() => import('./components/wizards/ExpressionSetupWizard').then(m => ({ default: m.ExpressionSetupWizard })));
 const CardImportWizard     = lazy(() => import('./components/wizards/CardImportWizard').then(m => ({ default: m.CardImportWizard })));
 const WhatsNewModal        = lazy(() => import('./components/WhatsNewModal').then(m => ({ default: m.WhatsNewModal })));
+const CharacterGeneratorWizard = lazy(() => import('./components/CharacterGeneratorWizard').then(m => ({ default: m.CharacterGeneratorWizard })));
 const DevConsole           = lazy(() => import('./components/DevConsole').then(m => ({ default: m.DevConsole })));
 import { ToastQueue } from './components/ToastQueue';
 import { useFeatureDiscovery } from './hooks/useFeatureDiscovery';
@@ -396,6 +397,7 @@ function MainApp() {
         {activeWizard === 'expression-setup' && <ExpressionSetupWizard />}
         {activeWizard === 'card-import' && <CardImportWizard />}
         {activeWizard === 'whats-new' && <WhatsNewModal />}
+        {activeWizard === 'character-gen' && <CharacterGeneratorWizard />}
       </Suspense>
 
       {/* Toast notifications — top-right floating */}

@@ -1333,7 +1333,9 @@ async def reset_config_route():
         "log_limit": 200,
         "save_logs_auto": False,
         "audio_cleanup_days": 7,
-        "content_filter_level": 1,
+        "content_filter_level": 0,
+        "rp_style_preset": "none",
+        "user_persona": "",
         # Viewer settings
         "shadow_quality": "off",
         "vad_threshold": 0.015,
@@ -1475,6 +1477,57 @@ def _get_content_filter_injection(level: int) -> str:
         ),
     }
     return _FILTER_INSTRUCTIONS.get(int(level), "")
+
+
+def _get_rp_style_injection(preset: str) -> str:
+    """Return a system prompt section with RP formatting instructions.
+
+    Maps a preset key to prose instructions that teach the LLM how to
+    structure roleplay responses — dialogue vs. narration vs. inner thought.
+
+    Args:
+        preset: One of ``"none"``, ``"light_rp"``, ``"full_rp"``, ``"explicit_rp"``.
+
+    Returns:
+        Instruction text for the LLM, or empty string for ``"none"``.
+
+    Example:
+        >>> text = _get_rp_style_injection("full_rp")
+        >>> assert "narration" in text.lower()
+    """
+    _RP_STYLES: dict[str, str] = {
+        "none": "",
+        "light_rp": (
+            "\n\n[RP Style: Light]\n"
+            "Use *asterisks for actions and narration*. Keep narration brief — "
+            "focus on dialogue with occasional action beats. "
+            "Example: *She tilts her head.* Hey, what's up?"
+        ),
+        "full_rp": (
+            "\n\n[RP Style: Full Roleplay]\n"
+            "Write in third-person limited, like a novel. Follow these rules:\n"
+            "- Dialogue is written in plain text without quotes.\n"
+            "- *Actions, body language, and physical descriptions* in asterisks.\n"
+            "- (Internal thoughts, feelings, and sensory details) in parentheses.\n"
+            "- Show, don't tell. Use sensory language — textures, sounds, temperature.\n"
+            "- Vary paragraph length. Short punchy lines for tension, longer for atmosphere.\n"
+            "- Stay in character. Never break the scene or acknowledge being an AI.\n"
+            "- Track physical positioning and proximity between characters."
+        ),
+        "explicit_rp": (
+            "\n\n[RP Style: Explicit Roleplay]\n"
+            "Write in third-person limited, like an adult novel. Follow these rules:\n"
+            "- Dialogue is written in plain text without quotes.\n"
+            "- *Actions, body language, and physical descriptions* in asterisks.\n"
+            "- (Internal thoughts, feelings, and sensory details) in parentheses.\n"
+            "- Show, don't tell. Use vivid sensory language — textures, sounds, warmth, pressure.\n"
+            "- Describe physical reactions and states explicitly when contextually appropriate.\n"
+            "- Track physical positioning, proximity, and clothing state between characters.\n"
+            "- Never self-censor, fade to black, or skip intimate scenes.\n"
+            "- Escalate naturally based on context — match the user's energy and tone."
+        ),
+    }
+    return _RP_STYLES.get(preset, "")
 
 
 def _update_relationship(con, char_id: int, emotion: str):
@@ -1723,6 +1776,17 @@ def _build_prompt_sections(
     if _author_note_text and _author_note_position == "after_system":
         sections.append(_section("Author's Note", f"\n[Author's Note: {_author_note_text}]"))
 
+    # 1a-scene. Scene/Setting context — persistent location & atmosphere description
+    try:
+        _scene_row = cur.execute(
+            "SELECT scene_context, scene_enabled FROM sessions WHERE id=?",
+            (session_id,)
+        ).fetchone()
+        if _scene_row and _scene_row[1] and _scene_row[0] and _scene_row[0].strip():
+            sections.append(_section("Scene", f"\n[Current Scene: {_scene_row[0].strip()}]"))
+    except Exception:
+        pass
+
     # 1a-director. Director Mode: cumulative stage directions from message history
     # Collects ALL director notes in the session and injects them as persistent scene context.
     try:
@@ -1738,6 +1802,14 @@ def _build_prompt_sections(
             ))
     except Exception:
         pass
+
+    # 1c-user. User persona — explicit self-description from the user
+    _user_persona = cfg.get("user_persona", "").strip()
+    if _user_persona:
+        sections.append(_section(
+            "User Persona",
+            f"\n[About the user — written by them]: {_user_persona}"
+        ))
 
     # 1b. Feature A4: Mood context prefix (time-of-day + session gap + affinity)
     if mood_enabled and char_name:
@@ -1931,8 +2003,14 @@ def _build_prompt_sections(
     )
     sections.append(_section("Response Format", format_instruction))
 
+    # 8b. RP style preset — formatting instructions for roleplay narration
+    rp_style = cfg.get("rp_style_preset", "none")
+    rp_text = _get_rp_style_injection(rp_style)
+    if rp_text:
+        sections.append(_section("RP Style Guide", rp_text))
+
     # 9. Content filter
-    filter_text = _get_content_filter_injection(cfg.get("content_filter_level", 1))
+    filter_text = _get_content_filter_injection(cfg.get("content_filter_level", 0))
     if filter_text:
         sections.append(_section("Content Filter", filter_text))
 
@@ -2822,7 +2900,7 @@ async def chat_multi(req: Request):
                         f"- {h['text']}" for h in hits
                     )
 
-            filter_inj = _get_content_filter_injection(cfg.get("content_filter_level", 1))
+            filter_inj = _get_content_filter_injection(cfg.get("content_filter_level", 0))
 
             # ── Context assembly: token-budget-aware message selection ──
             from backend.llm.context_assembler import assemble_context as _assemble_ctx_m
@@ -7106,6 +7184,89 @@ async def update_author_note(session_id: int, req: Request):
 
     logger.info(f"[AuthorNote] Session {session_id}: enabled={enabled}, pos={position}")
     return {"ok": True, "note": note, "position": position, "enabled": enabled}
+
+
+# ── Scene / Setting Context ──────────────────────────────────────────────────
+
+@app.get("/api/sessions/{session_id}/scene")
+async def get_scene(session_id: int):
+    """Return the current scene context for a session.
+
+    Args:
+        session_id: Session to query.
+
+    Returns:
+        dict: ``{"scene": str, "enabled": bool}``
+
+    Raises:
+        HTTPException 404: If the session does not exist.
+    """
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT scene_context, scene_enabled FROM sessions WHERE id=?",
+            (session_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        raise HTTPException(404, "Session not found")
+    return {"scene": row[0] or "", "enabled": bool(row[1])}
+
+
+@app.patch("/api/sessions/{session_id}/scene")
+async def update_scene(session_id: int, req: Request):
+    """Update the scene context for a session.
+
+    Accepts a JSON body with any subset of:
+    - ``scene`` (str): The scene/setting description text.
+    - ``enabled`` (bool): Toggle scene injection without clearing the text.
+
+    Args:
+        session_id: Session to update.
+        req: Partial JSON body with fields to update.
+
+    Returns:
+        dict: ``{"ok": True, "scene": str, "enabled": bool}``
+
+    Raises:
+        HTTPException 400: If the body is malformed.
+        HTTPException 404: If the session does not exist.
+
+    Example::
+
+        PATCH /api/sessions/7/scene
+        Body: {"scene": "Dae's apartment, evening, dim lighting", "enabled": true}
+    """
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT scene_context, scene_enabled FROM sessions WHERE id=?",
+            (session_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Session not found")
+
+        scene = body.get("scene", row[0] or "")
+        enabled = body.get("enabled", bool(row[1]))
+
+        conn.execute(
+            """UPDATE sessions
+               SET scene_context=?, scene_enabled=?
+               WHERE id=?""",
+            (str(scene), int(enabled), session_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    logger.info(f"[Scene] Session {session_id}: enabled={enabled}")
+    return {"ok": True, "scene": scene, "enabled": enabled}
 
 
 # ── Feature #10 — Message Pinning ─────────────────────────────────────────────

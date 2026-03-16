@@ -2494,6 +2494,46 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
         </div>
       </section>
 
+      {/* User Persona — "About You" */}
+      <section className="mb-6">
+        <SectionHeader title="About You" />
+        <div style={cardStyle} className="px-4">
+          <SettingField
+            label="Tell your characters about yourself"
+            description="This text is shared with all characters. It helps them understand who you are and adapt their personality."
+            tooltip="Injected into the system prompt as [About the user]. Max 500 characters."
+          >
+            <div style={{ width: '100%' }}>
+              <textarea
+                value={String(cfg('user_persona', ''))}
+                onChange={(e) => {
+                  if (e.target.value.length <= 500) save('user_persona', e.target.value);
+                }}
+                placeholder="e.g. I'm a 25yo guy who likes anime, gaming, and late-night conversations..."
+                rows={3}
+                style={{
+                  width: '100%',
+                  resize: 'vertical',
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--color-border)',
+                  backgroundColor: 'var(--color-surface)',
+                  color: 'var(--color-text)',
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '0.8rem',
+                  lineHeight: 1.55,
+                  boxSizing: 'border-box',
+                  outline: 'none',
+                }}
+              />
+              <div style={{ textAlign: 'right', fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+                {String(cfg('user_persona', '')).length}/500
+              </div>
+            </div>
+          </SettingField>
+        </div>
+      </section>
+
       {/* Feature Discovery */}
       <section className="mb-6">
         <SectionHeader title="Feature Discovery" />
@@ -3518,8 +3558,8 @@ function VoiceTab({ save, cfg }: TabProps) {
 
 const CONTENT_FILTER_OPTIONS = [
   { value: -1, label: 'Off (NSFW Allowed)', color: '#ef4444' },
-  { value: 0, label: 'Minimal (Model Defaults)', color: '#9ca3af' },
-  { value: 1, label: 'Light (Default)', color: '#eab308' },
+  { value: 0, label: 'Off (Default)', color: '#9ca3af' },
+  { value: 1, label: 'Light', color: '#eab308' },
   { value: 2, label: 'Moderate', color: '#f97316' },
   { value: 3, label: 'Strict (Family Safe)', color: '#22c55e' },
 ];
@@ -3542,6 +3582,20 @@ function SafetyTab({ save, cfg }: TabProps) {
                   {opt.value} — {opt.label}
                 </option>
               ))}
+            </select>
+          </SettingField>
+
+          <SettingField label="RP Style Preset" description="How much narration formatting to inject into the LLM prompt."
+            tooltip="None: natural chat. Light: brief *action* beats. Full: novel-quality narration with (thoughts), *actions*, and sensory detail. Explicit: Full + unrestricted intimate scenes.">
+            <select
+              value={String(cfg('rp_style_preset', 'none'))}
+              onChange={(e) => save('rp_style_preset', e.target.value)}
+              className="text-sm px-2 py-1 rounded" style={selectStyle}
+            >
+              <option value="none">None — Natural chat</option>
+              <option value="light_rp">Light RP — Brief action beats</option>
+              <option value="full_rp">Full RP — Novel-quality narration</option>
+              <option value="explicit_rp">Explicit RP — Unrestricted adult</option>
             </select>
           </SettingField>
 

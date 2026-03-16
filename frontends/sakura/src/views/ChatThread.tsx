@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard } from 'lucide-react';
+import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles } from 'lucide-react';
 import { VNTextBox } from '../components/VNTextBox';
 import { VNPortrait } from '../components/VNPortrait';
 import { useAppStore } from '../stores/appStore';
@@ -110,7 +110,7 @@ function generateChips(text: string, charName: string): string[] {
  * - Search, export, session history drawer
  */
 export function ChatThread() {
-  const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode } = useAppStore();
+  const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode, config, saveConfig } = useAppStore();
   const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -231,6 +231,37 @@ export function ChatThread() {
     const idx = order.indexOf(replyLengthMode);
     setReplyLengthMode(order[(idx + 1) % order.length]);
   }, [replyLengthMode, setReplyLengthMode]);
+
+  /**
+   * Cycles content filter level: 0 (Off) → -1 (NSFW) → 1 (SFW) → 0 (Off).
+   * Persists to backend config via appStore.saveConfig().
+   */
+  const contentFilterLevel = Number(config?.content_filter_level ?? 0);
+  const cycleContentFilter = useCallback(() => {
+    const order = [0, -1, 1];
+    const idx = order.indexOf(contentFilterLevel);
+    const next = order[(idx + 1) % order.length];
+    saveConfig({ content_filter_level: next });
+  }, [contentFilterLevel, saveConfig]);
+
+  /** Content filter display label + tint color. */
+  const filterLabel = contentFilterLevel === -1 ? '18+' : contentFilterLevel === 1 ? 'SFW' : 'Off';
+  const filterColor = contentFilterLevel === -1 ? '#ef4444' : contentFilterLevel === 1 ? '#22c55e' : undefined;
+
+  /**
+   * Cycles RP style preset: none → light_rp → full_rp → explicit_rp → none.
+   * Controls how much narration instruction the LLM receives.
+   */
+  const rpStyle = String(config?.rp_style_preset ?? 'none');
+  const cycleRpStyle = useCallback(() => {
+    const order = ['none', 'light_rp', 'full_rp', 'explicit_rp'];
+    const idx = order.indexOf(rpStyle);
+    const next = order[(idx + 1) % order.length];
+    saveConfig({ rp_style_preset: next });
+  }, [rpStyle, saveConfig]);
+
+  /** RP style display label. */
+  const rpLabel = rpStyle === 'light_rp' ? 'RP' : rpStyle === 'full_rp' ? 'RP+' : rpStyle === 'explicit_rp' ? '18+RP' : 'Chat';
 
   // ── Proactive idle messages (Issue 8) ───────────────────────────────────
   const lastMsg = messages[messages.length - 1];
@@ -1067,6 +1098,38 @@ export function ChatThread() {
                     {effectiveMaxTokens}t
                   </span>
                 )}
+              </button>
+
+              {/* Content filter badge — cycles Off → 18+ → SFW → Off */}
+              <button
+                onClick={cycleContentFilter}
+                title={`Content filter: ${filterLabel}. Click to cycle. (Off → NSFW → SFW → Off)`}
+                aria-label={`Content filter: ${filterLabel}`}
+                className="flex-shrink-0 flex items-center gap-1 justify-center leading-none rounded-lg px-1.5 py-1 transition-all duration-150"
+                style={{
+                  color: filterColor ?? 'var(--color-text-tertiary)',
+                  backgroundColor: contentFilterLevel !== 0 ? 'var(--color-accent-soft)' : 'transparent',
+                  minWidth: 32,
+                }}
+              >
+                <Shield size={11} />
+                <span style={{ fontSize: 9, fontWeight: 600, lineHeight: 1.2 }}>{filterLabel}</span>
+              </button>
+
+              {/* RP style badge — cycles Chat → RP → RP+ → 18+RP → Chat */}
+              <button
+                onClick={cycleRpStyle}
+                title={`RP style: ${rpLabel}. Click to cycle. (Chat → Light RP → Full RP → Explicit RP → Chat)`}
+                aria-label={`RP style: ${rpLabel}`}
+                className="flex-shrink-0 flex items-center gap-1 justify-center leading-none rounded-lg px-1.5 py-1 transition-all duration-150"
+                style={{
+                  color: rpStyle !== 'none' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                  backgroundColor: rpStyle !== 'none' ? 'var(--color-accent-soft)' : 'transparent',
+                  minWidth: 32,
+                }}
+              >
+                <Sparkles size={11} />
+                <span style={{ fontSize: 9, fontWeight: 600, lineHeight: 1.2 }}>{rpLabel}</span>
               </button>
 
               {/* Text input */}

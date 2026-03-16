@@ -26,6 +26,7 @@ type Overlay =
   | 'portfolio' | 'replay' | 'relweb'
   | 'universes' | 'lore' | 'userknowledge' | 'games'
   | 'modelbrowser'
+  | 'photomode' | 'gallery'
   | null;
 
 /**

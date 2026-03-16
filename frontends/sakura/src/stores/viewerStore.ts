@@ -50,6 +50,13 @@ export interface ViewerCommand {
     | 'clearParticles'
     | 'setAmbientParticles'
     | 'setEmotionParticles'
+    // Photo Mode
+    | 'enterPhotoMode'
+    | 'exitPhotoMode'
+    | 'holdGesture'
+    | 'releaseGesture'
+    | 'getCameraState'
+    | 'setCameraState'
     // Phase 6: Motion capture, IK & animation
     | 'setEyeGaze'
     | 'loadAnimation'
@@ -109,7 +116,27 @@ interface ViewerState {
   dispatchKeyframes: (data: Record<string, unknown>) => void;
 
   /** Request a screenshot from the active renderer. */
-  dispatchScreenshot: () => void;
+  dispatchScreenshot: (opts?: { quality?: number; transparent?: boolean }) => void;
+
+  // ── Photo Mode ──────────────────────────────────────────────────────────
+
+  /** Enter Photo Mode — freezes idle fidgets and emotion auto-decay. */
+  dispatchEnterPhotoMode: () => void;
+
+  /** Exit Photo Mode — resumes idle behaviors and tweens camera back. */
+  dispatchExitPhotoMode: () => void;
+
+  /** Freeze the current gesture at its current frame (Photo Mode). */
+  dispatchHoldGesture: () => void;
+
+  /** Release a held gesture, allowing it to complete/resume (Photo Mode). */
+  dispatchReleaseGesture: () => void;
+
+  /** Request current camera position and target from the viewer. */
+  dispatchGetCameraState: () => void;
+
+  /** Tween camera to a specific position and target. */
+  dispatchSetCameraState: (position: { x: number; y: number; z: number }, target: { x: number; y: number; z: number }, duration?: number) => void;
 
   /** Load a 3D model in the active renderer. */
   dispatchLoadModel: (modelUrl: string) => void;
@@ -338,19 +365,81 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     set({ lastCommand: cmd, _seq: seq });
   },
 
-  dispatchScreenshot: () => {
+  dispatchScreenshot: (opts = {}) => {
     const state = get();
     const seq = state._seq + 1;
     const cmd: ViewerCommand = {
       kind: 'screenshot',
-      payload: {},
+      payload: opts,
       _seq: seq,
     };
 
     if (state.mode === 'vrm') {
-      postToIframe(state.iframeRef, { type: 'captureScreenshot' });
+      postToIframe(state.iframeRef, { type: 'captureScreenshot', payload: opts });
     } else if (state.mode === 'unity') {
       postToUnity(state.unityIframeRef, 'CaptureScreenshot');
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  // ── Photo Mode ──────────────────────────────────────────────────────────
+
+  dispatchEnterPhotoMode: () => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'enterPhotoMode', payload: {}, _seq: seq };
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'enterPhotoMode' });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchExitPhotoMode: () => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'exitPhotoMode', payload: {}, _seq: seq };
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'exitPhotoMode' });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchHoldGesture: () => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'holdGesture', payload: {}, _seq: seq };
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'holdGesture' });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchReleaseGesture: () => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'releaseGesture', payload: {}, _seq: seq };
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'releaseGesture' });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchGetCameraState: () => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'getCameraState', payload: {}, _seq: seq };
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'getCameraState' });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchSetCameraState: (position, target, duration = 500) => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'setCameraState', payload: { position, target, duration }, _seq: seq };
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'setCameraState', payload: { position, target, duration } });
     }
     set({ lastCommand: cmd, _seq: seq });
   },

@@ -897,6 +897,8 @@
             }
 
             update(dt) {
+                // Photo Mode: skip fidget scheduling when frozen
+                if (this._frozen) return;
                 super.update(dt);
                 const p = this.personality;
 
@@ -961,6 +963,8 @@
             }
 
             update(dt) {
+                // Photo Mode: hold current emotion posture when frozen
+                if (this._frozen) return;
                 super.update(dt);
                 const t = this.time;
                 const p = this.personality;
@@ -1204,6 +1208,17 @@
 
             update(dt) {
                 if (!this.isPlaying || !this.currentGesture) return;
+                // Photo Mode: hold gesture at current frame when frozen
+                if (this._frozen) {
+                    const gestureDef = GestureLayer.GESTURES[this.currentGesture];
+                    if (gestureDef) {
+                        const progress = this._gestureTime / this._gestureDuration;
+                        const envelope = this._envelope(Math.min(progress, 0.5));
+                        const expressScale = 0.5 + this.personality.expressiveness;
+                        gestureDef.apply(this._gestureTime, envelope * expressScale, (name) => this.getBone(name));
+                    }
+                    return;
+                }
                 super.update(dt);
 
                 this._gestureTime += dt;
@@ -3600,6 +3615,69 @@
              * @param {boolean} [opts.transparent=false] - Capture with transparent background
              * @returns {string} Base64 PNG data URL
              */
+            // ── Photo Mode state ─────────────────────────────────────────────
+            let _photoMode = false;
+            let _savedCameraState = null;
+
+            /**
+             * Enter Photo Mode — freeze idle behaviors and emotion auto-decay.
+             * Stores camera state for restoration on exit.
+             */
+            function enterPhotoMode() {
+                _photoMode = true;
+                // Store camera state
+                _savedCameraState = {
+                    position: camera.position.clone(),
+                    target: controls.target.clone(),
+                };
+                // Freeze idle fidgets and emotion auto-decay
+                if (animationDirector) {
+                    const idle = animationDirector.getLayer('idle');
+                    if (idle) idle._frozen = true;
+                    const emotion = animationDirector.getLayer('emotion');
+                    if (emotion) emotion._frozen = true;
+                }
+                window.parent.postMessage({
+                    type: 'photoModeReady',
+                    cameraState: {
+                        position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+                        target: { x: controls.target.x, y: controls.target.y, z: controls.target.z },
+                    },
+                }, '*');
+            }
+
+            /**
+             * Exit Photo Mode — resume idle behaviors and emotion auto-decay.
+             * Optionally tweens camera back to stored position.
+             */
+            function exitPhotoMode() {
+                _photoMode = false;
+                // Resume layers
+                if (animationDirector) {
+                    const idle = animationDirector.getLayer('idle');
+                    if (idle) idle._frozen = false;
+                    const emotion = animationDirector.getLayer('emotion');
+                    if (emotion) emotion._frozen = false;
+                    // Release any held gesture
+                    const gesture = animationDirector.getLayer('gesture');
+                    if (gesture) gesture._frozen = false;
+                }
+                // Tween camera back if we have saved state
+                if (_savedCameraState) {
+                    controls.tweenTo(_savedCameraState.position, _savedCameraState.target, 500);
+                    _savedCameraState = null;
+                }
+            }
+
+            /**
+             * Capture a screenshot at the specified quality level.
+             *
+             * @param {Object} opts
+             * @param {number} [opts.quality=1] - Supersampling multiplier (1, 2, or 4)
+             * @param {boolean} [opts.supersampled] - Legacy: treat as quality=2
+             * @param {boolean} [opts.transparent] - Remove background for alpha PNG
+             * @returns {string} PNG data URL
+             */
             function captureScreenshot(opts = {}) {
                 const savedBg = scene.background;
                 const savedAlpha = renderer.getClearAlpha();
@@ -3612,31 +3690,50 @@
                     renderer.setClearAlpha(0);
                 }
 
-                if (opts.supersampled) {
-                    // Render at 2x resolution to a temporary render target
-                    const rt = new THREE.WebGLRenderTarget(w * 2, h * 2, {
-                        format: THREE.RGBAFormat,
-                        type: THREE.UnsignedByteType,
-                    });
+                // Determine scale: quality param takes priority, then legacy supersampled flag
+                const scale = opts.quality || (opts.supersampled ? 2 : 1);
+
+                if (scale > 1) {
+                    // Render at Nx resolution to a temporary render target
+                    const sw = w * scale;
+                    const sh = h * scale;
+                    let rt;
+                    try {
+                        rt = new THREE.WebGLRenderTarget(sw, sh, {
+                            format: THREE.RGBAFormat,
+                            type: THREE.UnsignedByteType,
+                        });
+                    } catch (e) {
+                        // OOM on high multiplier — fall back to 1x
+                        console.warn(`[Screenshot] ${scale}x render target failed, falling back to 1x:`, e);
+                        renderer.render(scene, camera);
+                        const fallback = renderer.domElement.toDataURL('image/png');
+                        if (opts.transparent) {
+                            scene.background = savedBg;
+                            renderer.setClearAlpha(savedAlpha);
+                        }
+                        return fallback;
+                    }
+
                     renderer.setRenderTarget(rt);
                     renderer.render(scene, camera);
                     renderer.setRenderTarget(null);
 
                     // Read pixels from the render target
-                    const pixels = new Uint8Array(w * 2 * h * 2 * 4);
-                    renderer.readRenderTargetPixels(rt, 0, 0, w * 2, h * 2, pixels);
+                    const pixels = new Uint8Array(sw * sh * 4);
+                    renderer.readRenderTargetPixels(rt, 0, 0, sw, sh, pixels);
 
                     // Draw to an offscreen canvas
                     const offCanvas = document.createElement('canvas');
-                    offCanvas.width = w * 2;
-                    offCanvas.height = h * 2;
+                    offCanvas.width = sw;
+                    offCanvas.height = sh;
                     const ctx = offCanvas.getContext('2d');
-                    const imgData = ctx.createImageData(w * 2, h * 2);
+                    const imgData = ctx.createImageData(sw, sh);
                     // Flip vertically (WebGL origin is bottom-left)
-                    for (let y = 0; y < h * 2; y++) {
-                        const srcRow = (h * 2 - 1 - y) * w * 2 * 4;
-                        const dstRow = y * w * 2 * 4;
-                        for (let x = 0; x < w * 2 * 4; x++) {
+                    for (let y = 0; y < sh; y++) {
+                        const srcRow = (sh - 1 - y) * sw * 4;
+                        const dstRow = y * sw * 4;
+                        for (let x = 0; x < sw * 4; x++) {
                             imgData.data[dstRow + x] = pixels[srcRow + x];
                         }
                     }
@@ -3651,7 +3748,7 @@
                     return offCanvas.toDataURL('image/png');
                 }
 
-                // Standard resolution capture
+                // Standard resolution capture (1x)
                 renderer.render(scene, camera);
                 const dataUrl = renderer.domElement.toDataURL('image/png');
 
@@ -4576,7 +4673,56 @@
                 }
                 if (type === 'captureScreenshot') {
                     const dataUrl = captureScreenshot(payload || {});
-                    window.parent.postMessage({ type: 'screenshotReady', dataUrl }, '*');
+                    window.parent.postMessage({
+                        type: 'screenshotReady',
+                        dataUrl,
+                        width: renderer.domElement.width * (payload?.quality || 1),
+                        height: renderer.domElement.height * (payload?.quality || 1),
+                    }, '*');
+                    return;
+                }
+
+                // ── Photo Mode Handlers ──────────────────────────────────
+                if (type === 'enterPhotoMode') {
+                    enterPhotoMode();
+                    return;
+                }
+                if (type === 'exitPhotoMode') {
+                    exitPhotoMode();
+                    return;
+                }
+                if (type === 'holdGesture') {
+                    if (animationDirector) {
+                        const gesture = animationDirector.getLayer('gesture');
+                        if (gesture) gesture._frozen = true;
+                    }
+                    return;
+                }
+                if (type === 'releaseGesture') {
+                    if (animationDirector) {
+                        const gesture = animationDirector.getLayer('gesture');
+                        if (gesture) gesture._frozen = false;
+                    }
+                    return;
+                }
+                if (type === 'getCameraState') {
+                    window.parent.postMessage({
+                        type: 'cameraState',
+                        position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+                        target: { x: controls.target.x, y: controls.target.y, z: controls.target.z },
+                    }, '*');
+                    return;
+                }
+                if (type === 'setCameraState') {
+                    const pos = payload?.position;
+                    const tgt = payload?.target;
+                    if (pos && tgt) {
+                        controls.tweenTo(
+                            new THREE.Vector3(pos.x, pos.y, pos.z),
+                            new THREE.Vector3(tgt.x, tgt.y, tgt.z),
+                            payload?.duration || 500
+                        );
+                    }
                     return;
                 }
 

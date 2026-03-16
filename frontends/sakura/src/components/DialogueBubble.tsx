@@ -110,16 +110,22 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
   );
 }
 
-/** Tokenise markdown-flavoured text into typed segments for rendering. */
-function tokenizeMarkdown(text: string): Array<{ type: 'plain' | 'bold' | 'italic'; text: string }> {
-  const tokens: Array<{ type: 'plain' | 'bold' | 'italic'; text: string }> = [];
-  const regex = /\*\*(.+?)\*\*|\*([^*\n]+)\*/g;
+/**
+ * Tokenise markdown-flavoured text into typed segments for rendering.
+ * Supports **bold**, *italic*, and (parenthetical narration) for RP styling.
+ * Narration requires 4+ chars inside parens to avoid false-matching "(lol)" etc.
+ */
+type TokenType = 'plain' | 'bold' | 'italic' | 'narration';
+function tokenizeMarkdown(text: string): Array<{ type: TokenType; text: string }> {
+  const tokens: Array<{ type: TokenType; text: string }> = [];
+  const regex = /\*\*(.+?)\*\*|\*([^*\n]+)\*|\(([^)]{4,})\)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) tokens.push({ type: 'plain', text: text.slice(lastIndex, match.index) });
     if (match[1] !== undefined) tokens.push({ type: 'bold', text: match[1] });
-    else tokens.push({ type: 'italic', text: match[2] });
+    else if (match[2] !== undefined) tokens.push({ type: 'italic', text: match[2] });
+    else if (match[3] !== undefined) tokens.push({ type: 'narration', text: match[3] });
     lastIndex = regex.lastIndex;
   }
   if (lastIndex < text.length) tokens.push({ type: 'plain', text: text.slice(lastIndex) });
@@ -147,6 +153,16 @@ function MarkdownText({ text, query }: { text: string; query: string }) {
             ));
             if (tok.type === 'bold') return <strong key={ti}>{inner}</strong>;
             if (tok.type === 'italic') return <em key={ti}>{inner}</em>;
+            if (tok.type === 'narration') return (
+              <span key={ti} style={{
+                fontStyle: 'italic',
+                color: 'var(--color-text-secondary)',
+                opacity: 0.85,
+                fontSize: '0.93em',
+              }}>
+                ({inner})
+              </span>
+            );
             return <span key={ti}>{inner}</span>;
           })}
         </p>

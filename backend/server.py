@@ -8358,6 +8358,60 @@ def delete_user_fact(char_id: int, fact_id: int):
     return {"ok": True, "deleted": fact_id}
 
 
+@app.patch("/api/characters/{char_id}/user-facts/{fact_id}")
+async def update_user_fact(char_id: int, fact_id: int, req: Request):
+    """Update a user fact's text.
+
+    Args:
+        char_id: Character ID (used for access scoping).
+        fact_id: User fact ID.
+        req: JSON body with ``fact_text`` (str, required).
+
+    Returns:
+        {"ok": True, "fact": updated_fact_dict}
+
+    Raises:
+        HTTPException 400: If fact_text is missing.
+        HTTPException 404: If the fact does not exist for this character.
+    """
+    body = await req.json()
+    new_text = body.get("fact_text", "").strip()
+    if not new_text:
+        raise HTTPException(400, "fact_text is required")
+
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT id FROM user_facts WHERE id = ? AND character_id = ?",
+            (fact_id, char_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "User fact not found")
+        conn.execute(
+            "UPDATE user_facts SET fact_text = ? WHERE id = ?",
+            (new_text, fact_id),
+        )
+        conn.commit()
+        updated = conn.execute(
+            "SELECT id, character_id, category, fact_text, confidence, source, created_at FROM user_facts WHERE id = ?",
+            (fact_id,),
+        ).fetchone()
+        return {
+            "ok": True,
+            "fact": {
+                "id": updated[0],
+                "character_id": updated[1],
+                "category": updated[2],
+                "fact_text": updated[3],
+                "confidence": updated[4],
+                "source": updated[5],
+                "created_at": updated[6],
+            },
+        }
+    finally:
+        conn.close()
+
+
 @app.get("/api/sessions/{session_id}/emotions")
 def get_emotion_timeline(session_id: int):
     """Get the emotion timeline for a session.

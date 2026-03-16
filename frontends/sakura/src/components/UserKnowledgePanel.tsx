@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
-import { X, Plus, User, Heart, Clock, Smile, Tag, Trash2, Loader2 } from 'lucide-react';
+import { X, Plus, User, Heart, Clock, Smile, Tag, Trash2, Loader2, Edit3, Check } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
 import type { UserFact } from '../lib/types';
@@ -193,7 +193,9 @@ export function UserKnowledgePanel() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {catFacts.map(fact => (
-                      <FactRow key={fact.id} fact={fact} onDelete={handleDelete} />
+                      <FactRow key={fact.id} fact={fact} charId={charId!} onDelete={handleDelete} onEdit={(id, text) => {
+                        setFacts(prev => prev.map(f => f.id === id ? { ...f, fact_text: text } : f));
+                      }} />
                     ))}
                   </div>
                 </div>
@@ -289,17 +291,46 @@ export function UserKnowledgePanel() {
   );
 }
 
-/** Single fact row with source badge and delete button. */
+/** Single fact row with source badge, inline edit, and delete button. */
 function FactRow({
   fact,
+  charId,
   onDelete,
+  onEdit,
 }: {
   fact: UserFact;
+  charId: number;
   onDelete: (id: number) => void;
+  onEdit: (id: number, newText: string) => void;
 }) {
   const [hovering, setHovering] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(fact.fact_text);
+  const [saving, setSaving] = useState(false);
   const isManual = fact.source === 'manual';
   const confidencePct = Math.round(fact.confidence * 100);
+
+  const handleSave = async () => {
+    const trimmed = editText.trim();
+    if (!trimmed || trimmed === fact.fact_text) {
+      setEditing(false);
+      setEditText(fact.fact_text);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/characters/${charId}/user-facts/${fact.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fact_text: trimmed }),
+      });
+      if (res.ok) {
+        onEdit(fact.id, trimmed);
+        setEditing(false);
+      }
+    } catch { /* non-fatal */ }
+    finally { setSaving(false); }
+  };
 
   return (
     <div
@@ -307,19 +338,44 @@ function FactRow({
       onMouseLeave={() => setHovering(false)}
       style={{
         display: 'flex', alignItems: 'center', gap: 8,
-        backgroundColor: hovering ? 'var(--color-surface-raised)' : 'transparent',
+        backgroundColor: hovering || editing ? 'var(--color-surface-raised)' : 'transparent',
         borderRadius: 6, padding: '5px 6px',
         transition: 'background-color 0.12s ease',
       }}
     >
-      <span
-        style={{
-          flex: 1, fontSize: '0.82rem',
-          color: 'var(--color-text-primary)',
-        }}
-      >
-        {fact.fact_text}
-      </span>
+      {editing ? (
+        <input
+          type="text"
+          value={editText}
+          onChange={(e) => setEditText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSave();
+            if (e.key === 'Escape') { setEditing(false); setEditText(fact.fact_text); }
+          }}
+          autoFocus
+          disabled={saving}
+          style={{
+            flex: 1, fontSize: '0.82rem',
+            color: 'var(--color-text-primary)',
+            backgroundColor: 'var(--color-surface)',
+            border: '1px solid var(--color-accent)',
+            borderRadius: 4, padding: '2px 6px',
+            outline: 'none',
+          }}
+        />
+      ) : (
+        <span
+          style={{
+            flex: 1, fontSize: '0.82rem',
+            color: 'var(--color-text-primary)',
+            cursor: 'pointer',
+          }}
+          onDoubleClick={() => setEditing(true)}
+          title="Double-click to edit"
+        >
+          {fact.fact_text}
+        </span>
+      )}
       {/* Source + confidence badge */}
       <span
         style={{
@@ -333,6 +389,21 @@ function FactRow({
       >
         {isManual ? 'you' : `AI ${confidencePct}%`}
       </span>
+      {/* Edit button (save when editing, edit icon when not) */}
+      <button
+        onClick={() => editing ? handleSave() : setEditing(true)}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: editing ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+          padding: 2,
+          opacity: hovering || editing ? 1 : 0,
+          transition: 'opacity 0.12s ease',
+          flexShrink: 0,
+        }}
+        title={editing ? 'Save edit' : 'Edit this fact'}
+      >
+        {editing ? <Check size={13} /> : <Edit3 size={13} />}
+      </button>
       {/* Delete button (only visible on hover) */}
       <button
         onClick={() => onDelete(fact.id)}

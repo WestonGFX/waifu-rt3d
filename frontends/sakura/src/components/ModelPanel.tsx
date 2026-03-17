@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
+import { Component, useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Sliders, RotateCcw, Eye, EyeOff, Loader2, AlertTriangle, Box, RefreshCw, Sparkles, Wifi, WifiOff, X, Camera } from 'lucide-react';
+import { ChevronLeft, Sliders, RotateCcw, Eye, EyeOff, Loader2, AlertTriangle, Box, RefreshCw, Sparkles, Wifi, WifiOff, X, Camera, MessageSquare, User, ArrowDown, ScanLine } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
 import { useViewerStore } from '../stores/viewerStore';
@@ -9,6 +9,49 @@ import type { Character } from '../lib/types';
 import { SpringBonePanel } from './SpringBonePanel';
 import { EffectsPanel } from './EffectsPanel';
 import { AnimationBrowser } from './AnimationBrowser';
+import { FloatingComposer } from './FloatingComposer';
+
+/**
+ * Error boundary for Live2D canvas — catches Cubism SDK import errors
+ * (thrown at module load time by pixi-live2d-display) and renders a
+ * friendly fallback instead of crashing the entire React tree.
+ */
+class Live2DErrorBoundary extends Component<
+  { children: React.ReactNode; onError?: (msg: string) => void },
+  { error: string | null }
+> {
+  state = { error: null as string | null };
+
+  static getDerivedStateFromError(err: Error) {
+    return { error: err.message || 'Live2D failed to load' };
+  }
+
+  componentDidCatch(err: Error) {
+    console.warn('[ModelPanel] Live2D load error caught:', err.message);
+    this.props.onError?.(err.message);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', width: '100%', height: '100%', gap: 8,
+          color: 'var(--color-text-tertiary)', fontSize: '0.78rem', padding: 20,
+          textAlign: 'center',
+        }}>
+          <AlertTriangle size={28} style={{ color: 'var(--color-warning)', opacity: 0.7 }} />
+          <span style={{ fontWeight: 600 }}>Live2D Unavailable</span>
+          <span style={{ fontSize: '0.68rem' }}>
+            Cubism SDK not loaded. The Live2D viewer requires the Cubism runtime.
+            <br />Use a VRM/GLB model instead, or install the Cubism SDK.
+          </span>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /**
  * Lazy-load Live2DCanvas to avoid importing pixi-live2d-display eagerly.
@@ -227,6 +270,19 @@ export function ModelPanel({ character }: ModelPanelProps) {
 
   /** Whether the bottom control bar (camera presets, expressions) is visible. */
   const [controlsVisible, setControlsVisible] = useState(true);
+
+  /** Floating chat composer visibility — allows chatting while viewing the 3D model. */
+  const [showFloatingComposer, setShowFloatingComposer] = useState(false);
+
+  /** Currently active camera preset for the accent underline indicator. */
+  const [activePreset, setActivePreset] = useState<string | null>('fullbody');
+
+  /** Custom camera saves stored in localStorage (max 5). */
+  const [customCameras, setCustomCameras] = useState<Array<{ name: string; position: number[]; target: number[]; radius: number }>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('waifu-camera-presets') || '[]');
+    } catch { return []; }
+  });
 
   /** AI motion backend: 'procedural' | 'motion_diffuse' | null (unknown) */
   const [motionBackend, setMotionBackend] = useState<string | null>(null);
@@ -501,6 +557,80 @@ export function ModelPanel({ character }: ModelPanelProps) {
     api.getMotionModelStatus().then(s => setMotionBackend(s.active_backend)).catch(() => {});
   }
 
+  // ── Ctrl+Shift+C toggles floating composer ─────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+        e.preventDefault();
+        setShowFloatingComposer(v => !v);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Auto-show floating composer when entering cinematic mode
+  useEffect(() => {
+    if (cinematicMode) setShowFloatingComposer(true);
+  }, [cinematicMode]);
+
+  /** Camera preset definitions for the horizontal preset strip. */
+  const cameraPresets = [
+    { id: 'fullbody', label: 'Full', icon: User },
+    { id: 'bust', label: 'Bust', icon: User },
+    { id: 'face', label: 'Face', icon: User },
+    { id: 'threeQuarter', label: '3/4', icon: ScanLine },
+    { id: 'sideProfile', label: 'Side', icon: ArrowDown },
+    { id: 'lowAngle', label: 'Low', icon: ArrowDown },
+  ] as const;
+
+  /**
+   * Save the current camera position to localStorage.
+   * Captures camera state via postMessage and stores up to 5 custom views.
+   */
+  const handleSaveCamera = useCallback(() => {
+    // Request camera state from viewer — response comes via the message listener
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'cameraState') {
+        window.removeEventListener('message', handler);
+        const { position, target, radius } = e.data;
+        const name = `View ${customCameras.length + 1}`;
+        const updated = [...customCameras, { name, position, target, radius }].slice(-5);
+        setCustomCameras(updated);
+        localStorage.setItem('waifu-camera-presets', JSON.stringify(updated));
+      }
+    };
+    window.addEventListener('message', handler);
+    // Safety: clean up after 3s if viewer doesn't respond
+    setTimeout(() => window.removeEventListener('message', handler), 3000);
+    viewer.dispatchGetCameraState();
+  }, [customCameras, viewer]);
+
+  /**
+   * Delete a saved custom camera position by index.
+   *
+   * @param idx - Index of the custom camera to remove.
+   */
+  const handleDeleteCamera = useCallback((idx: number) => {
+    const updated = customCameras.filter((_, i) => i !== idx);
+    setCustomCameras(updated);
+    localStorage.setItem('waifu-camera-presets', JSON.stringify(updated));
+  }, [customCameras]);
+
+  /**
+   * Restore a saved custom camera position.
+   *
+   * @param cam - The saved camera state to restore.
+   */
+  const handleLoadCamera = useCallback((cam: { position: number[]; target: number[]; radius: number }) => {
+    setActivePreset(null);
+    viewer.dispatchSetCameraState(
+      { x: cam.position[0], y: cam.position[1], z: cam.position[2] },
+      { x: cam.target[0], y: cam.target[1], z: cam.target[2] },
+      500
+    );
+  }, [viewer]);
+
   return (
     <AnimatePresence>
       {(modelPanelOpen || cinematicMode) && (
@@ -521,6 +651,36 @@ export function ModelPanel({ character }: ModelPanelProps) {
             flexDirection: 'column',
           }}
         >
+          {/* Top bar — "3D Viewer" label + back-to-chat button */}
+          <div
+            className="flex items-center justify-between px-3 flex-shrink-0"
+            style={{
+              height: 36,
+              backgroundColor: 'var(--color-surface)',
+              borderBottom: '1px solid var(--color-border-subtle)',
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
+              3D Viewer
+            </span>
+            <button
+              onClick={toggleModelPanel}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors duration-150"
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--color-accent)',
+                backgroundColor: 'var(--color-accent-soft)',
+                border: '1px solid color-mix(in srgb, var(--color-accent) 25%, transparent)',
+              }}
+              title="Close 3D viewer and return to chat"
+              aria-label="Close 3D viewer"
+            >
+              <ChevronLeft size={14} />
+              Back to Chat
+            </button>
+          </div>
+
           {/* Viewer area — Unity iframe, Live2D canvas, or VRM/GLB iframe */}
           <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
             {isUnity ? (
@@ -541,29 +701,34 @@ export function ModelPanel({ character }: ModelPanelProps) {
                 transition={{ duration: 1.2, ease: [0.33, 1, 0.68, 1] }}
                 style={{ width: '100%', height: '100%' }}
               >
-                <Suspense fallback={
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
-                    <Loader2 size={24} className="animate-spin" style={{ color: 'var(--color-accent)' }} />
-                  </div>
-                }>
-                  <Live2DCanvas
-                    modelUrl={character.live2d_model!}
-                    onLoadStateChange={(state, reason) => {
-                      if (state === 'loaded') setVrmLoadState('loaded');
-                      else if (state === 'failed') {
-                        setVrmLoadState('failed');
-                        setVrmFailReason(reason || 'Live2D model failed to load');
-                      } else {
-                        setVrmLoadState('loading');
-                      }
-                    }}
-                  />
-                </Suspense>
+                <Live2DErrorBoundary onError={(msg) => {
+                  setVrmLoadState('failed');
+                  setVrmFailReason(msg);
+                }}>
+                  <Suspense fallback={
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+                      <Loader2 size={24} className="animate-spin" style={{ color: 'var(--color-accent)' }} />
+                    </div>
+                  }>
+                    <Live2DCanvas
+                      modelUrl={character.live2d_model!}
+                      onLoadStateChange={(state, reason) => {
+                        if (state === 'loaded') setVrmLoadState('loaded');
+                        else if (state === 'failed') {
+                          setVrmLoadState('failed');
+                          setVrmFailReason(reason || 'Live2D model failed to load');
+                        } else {
+                          setVrmLoadState('loading');
+                        }
+                      }}
+                    />
+                  </Suspense>
+                </Live2DErrorBoundary>
               </motion.div>
             ) : (
               <iframe
                 ref={setIframeEl}
-                src="/shared/viewer/viewer.html?v=6"
+                src="/shared/viewer/viewer.html?v=7"
                 className="w-full h-full border-0"
                 title="3D Viewer"
               />
@@ -692,7 +857,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
               )}
             </div>
 
-            {/* ── LEFT side: camera preset column (shown when model loaded + controls visible) ── */}
+            {/* ── LEFT side: expression editor toggle (shown when model loaded + controls visible) ── */}
             {vrmUrl && vrmLoadState === 'loaded' && controlsVisible && (
               <div
                 style={{
@@ -701,24 +866,6 @@ export function ModelPanel({ character }: ModelPanelProps) {
                   opacity: 0.85,
                 }}
               >
-                {(['fullbody', 'bust', 'face'] as const).map(preset => (
-                  <button
-                    key={preset}
-                    onClick={() => viewer.dispatchCameraPreset(preset)}
-                    className="px-2 py-1.5 text-xs capitalize"
-                    style={{
-                      backgroundColor: 'var(--color-surface)',
-                      borderRadius: 'var(--radius-button)',
-                      boxShadow: 'var(--shadow-card)',
-                      color: 'var(--color-text-secondary)',
-                      border: '1px solid var(--color-border)',
-                      minWidth: 44,
-                    }}
-                    title={`${preset.charAt(0).toUpperCase() + preset.slice(1)} camera view`}
-                  >
-                    {preset}
-                  </button>
-                ))}
                 <button
                   onClick={() => showExprEditor ? setShowExprEditor(false) : handleOpenExprEditor()}
                   className="flex items-center gap-1 px-2 py-1.5 text-xs"
@@ -736,6 +883,107 @@ export function ModelPanel({ character }: ModelPanelProps) {
                 </button>
               </div>
             )}
+
+            {/* ── Horizontal camera preset strip — above bottom bar ── */}
+            {vrmUrl && vrmLoadState === 'loaded' && controlsVisible && (
+              <div
+                style={{
+                  position: 'absolute', bottom: 48, left: '50%', transform: 'translateX(-50%)',
+                  display: 'flex', alignItems: 'center', gap: 3, zIndex: 15,
+                  padding: '3px 5px',
+                  background: 'color-mix(in srgb, var(--color-surface) 80%, transparent)',
+                  backdropFilter: 'blur(8px)',
+                  borderRadius: 'var(--radius-card, 10px)',
+                  border: '1px solid var(--color-border)',
+                  boxShadow: 'var(--shadow-card)',
+                }}
+              >
+                {cameraPresets.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setActivePreset(p.id);
+                      viewer.dispatchCameraPreset(p.id as 'fullbody' | 'bust' | 'face' | 'threeQuarter' | 'sideProfile' | 'lowAngle');
+                    }}
+                    className="px-2 py-1 text-[10px]"
+                    style={{
+                      background: activePreset === p.id ? 'var(--color-accent-soft)' : 'transparent',
+                      borderRadius: 'var(--radius-button, 6px)',
+                      color: activePreset === p.id ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontWeight: activePreset === p.id ? 700 : 500,
+                      borderBottom: activePreset === p.id ? '2px solid var(--color-accent)' : '2px solid transparent',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={`${p.label} camera view`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+                {/* Custom saved cameras */}
+                {customCameras.map((cam, idx) => (
+                  <button
+                    key={`custom-${idx}`}
+                    onClick={() => handleLoadCamera(cam)}
+                    onContextMenu={(e) => { e.preventDefault(); handleDeleteCamera(idx); }}
+                    className="px-1.5 py-1 text-[10px]"
+                    style={{
+                      background: 'transparent',
+                      borderRadius: 'var(--radius-button, 6px)',
+                      color: 'var(--color-text-tertiary)',
+                      border: '1px dashed var(--color-border)',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={`${cam.name} (right-click to delete)`}
+                  >
+                    {cam.name}
+                  </button>
+                ))}
+                {/* Save current view */}
+                {customCameras.length < 5 && (
+                  <button
+                    onClick={handleSaveCamera}
+                    className="px-1.5 py-1 text-[10px]"
+                    style={{
+                      background: 'transparent',
+                      borderRadius: 'var(--radius-button, 6px)',
+                      color: 'var(--color-text-tertiary)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      opacity: 0.6,
+                    }}
+                    title="Save current camera position"
+                  >
+                    ★
+                  </button>
+                )}
+                {/* Divider + Reset */}
+                <div style={{ width: 1, height: 16, background: 'var(--color-border)', margin: '0 2px' }} />
+                <button
+                  onClick={() => { setActivePreset('fullbody'); viewer.dispatchResetCamera(); }}
+                  className="flex items-center gap-0.5 px-1.5 py-1 text-[10px]"
+                  style={{
+                    background: 'transparent',
+                    borderRadius: 'var(--radius-button, 6px)',
+                    color: 'var(--color-text-tertiary)',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                  title="Reset camera to default"
+                >
+                  <RotateCcw size={10} />
+                </button>
+              </div>
+            )}
+
+            {/* ── Floating chat composer (overlays 3D viewport) ── */}
+            <FloatingComposer
+              visible={showFloatingComposer && vrmLoadState === 'loaded'}
+              onClose={() => setShowFloatingComposer(false)}
+            />
 
             {/* ── Bottom-left: close button + right: screenshot + hide toggle ── */}
             <div
@@ -776,6 +1024,44 @@ export function ModelPanel({ character }: ModelPanelProps) {
 
               {/* Right: screenshot + hide-controls toggle */}
               <div className="flex items-center gap-2">
+                {/* Photo Mode — only when model is loaded */}
+                {vrmLoadState === 'loaded' && (
+                  <button
+                    onClick={() => openOverlay('photomode')}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                    style={{
+                      backgroundColor: 'var(--color-surface)',
+                      borderRadius: 'var(--radius-button)',
+                      boxShadow: 'var(--shadow-card)',
+                      color: 'var(--color-text-secondary)',
+                      border: '1px solid var(--color-border)',
+                    }}
+                    title="Photo Mode (Ctrl+Shift+P)"
+                    aria-label="Open Photo Mode"
+                  >
+                    <Camera size={13} /> Photo
+                  </button>
+                )}
+
+                {/* Floating Chat toggle — only when model is loaded */}
+                {vrmLoadState === 'loaded' && (
+                  <button
+                    onClick={() => setShowFloatingComposer(v => !v)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                    style={{
+                      backgroundColor: showFloatingComposer ? 'var(--color-accent)' : 'var(--color-surface)',
+                      borderRadius: 'var(--radius-button)',
+                      boxShadow: 'var(--shadow-card)',
+                      color: showFloatingComposer ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
+                      border: '1px solid var(--color-border)',
+                    }}
+                    title="Floating chat (Ctrl+Shift+C)"
+                    aria-label="Toggle floating chat composer"
+                  >
+                    <MessageSquare size={13} />
+                  </button>
+                )}
+
                 {/* Screenshot — only when model is fully loaded */}
                 {vrmLoadState === 'loaded' && (
                   <button
@@ -816,6 +1102,30 @@ export function ModelPanel({ character }: ModelPanelProps) {
                 </button>
               </div>
             </div>
+
+            {/* ── Controls rescue pill — shows when controls are hidden so user can recover ── */}
+            {!controlsVisible && (
+              <button
+                onClick={() => setControlsVisible(true)}
+                style={{
+                  position: 'absolute', bottom: 8, right: 8, zIndex: 5,
+                  padding: '3px 10px', borderRadius: 12,
+                  background: 'color-mix(in srgb, var(--color-surface) 50%, transparent)',
+                  backdropFilter: 'blur(6px)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text-tertiary)',
+                  fontSize: '0.6rem', fontWeight: 500,
+                  cursor: 'pointer',
+                  opacity: 0.6,
+                  transition: 'opacity 0.2s',
+                }}
+                onMouseEnter={(e) => { (e.target as HTMLElement).style.opacity = '1'; }}
+                onMouseLeave={(e) => { (e.target as HTMLElement).style.opacity = '0.6'; }}
+                title="Show controls"
+              >
+                Show controls
+              </button>
+            )}
           </div>
 
           {/* Spring Bone Physics Panel — shown when VRM model loaded */}

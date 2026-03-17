@@ -27,6 +27,8 @@ export interface ViewerCommand {
     | 'screenshot'
     | 'loadModel'
     | 'cameraPreset'
+    | 'resetCamera'
+    | 'setFOV'
     | 'blendShape'
     | 'blendShapes'
     | 'getBlendShapes'
@@ -142,7 +144,13 @@ interface ViewerState {
   dispatchLoadModel: (modelUrl: string) => void;
 
   /** Set camera preset (VRM only). */
-  dispatchCameraPreset: (preset: 'fullbody' | 'bust' | 'face') => void;
+  dispatchCameraPreset: (preset: 'fullbody' | 'bust' | 'face' | 'threeQuarter' | 'sideProfile' | 'lowAngle') => void;
+
+  /** Reset camera to default fullbody view (VRM only). */
+  dispatchResetCamera: () => void;
+
+  /** Set camera field-of-view in degrees (30–90, default 50). */
+  dispatchSetFOV: (fov: number) => void;
 
   /** Set a single blend shape (VRM only). */
   dispatchBlendShape: (name: string, value: number) => void;
@@ -478,6 +486,28 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
         type: 'setCameraPreset',
         payload: { preset },
       });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchResetCamera: () => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'resetCamera', payload: {}, _seq: seq };
+
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'resetCamera' });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchSetFOV: (fov) => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'setFOV', payload: { fov }, _seq: seq };
+
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'setFOV', payload: { fov } });
     }
     set({ lastCommand: cmd, _seq: seq });
   },

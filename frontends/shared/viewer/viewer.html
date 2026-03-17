@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>Viewer</title>
+    <title>WAIFU.EXE</title>
     <style>
         html,
         body {
@@ -147,7 +147,7 @@
                 this.panOffset = new THREE.Vector3();
 
                 // Limits
-                this.minDistance = 0.3;
+                this.minDistance = 0.5;
                 this.maxDistance = 5;
                 this.minPolarAngle = 0.1;
                 this.maxPolarAngle = Math.PI - 0.1;
@@ -160,6 +160,7 @@
                 this._panStart = new THREE.Vector2();
                 this._isRotating = false;
                 this._isPanning = false;
+                this._zoomVelocity = 0;
 
                 this._bindEvents();
                 this._updateSpherical();
@@ -179,6 +180,7 @@
                 el.addEventListener('pointerleave', () => this._onPointerUp());
                 el.addEventListener('wheel', (e) => this._onWheel(e), { passive: false });
                 el.addEventListener('contextmenu', (e) => e.preventDefault());
+                el.addEventListener('dblclick', () => this._onDoubleClick());
             }
 
             _onPointerDown(e) {
@@ -202,9 +204,9 @@
                     this._rotateStart.set(e.clientX, e.clientY);
                 }
                 if (this._isPanning) {
-                    const dx = (e.clientX - this._panStart.x) * this.panSpeed * 0.002;
-                    const dy = (e.clientY - this._panStart.y) * this.panSpeed * 0.002;
-                    // Pan relative to camera orientation
+                    const distanceScale = Math.max(this.spherical.radius / 2.0, 0.3);
+                    const dx = (e.clientX - this._panStart.x) * this.panSpeed * 0.002 * distanceScale;
+                    const dy = (e.clientY - this._panStart.y) * this.panSpeed * 0.002 * distanceScale;
                     const right = new THREE.Vector3();
                     const up = new THREE.Vector3();
                     right.setFromMatrixColumn(this.camera.matrix, 0);
@@ -223,12 +225,13 @@
             _onWheel(e) {
                 if (!this.enabled) return;
                 e.preventDefault();
+                // Logarithmic zoom: finer when close, coarser when far
+                const zoomFactor = 1 + 0.05 * this.zoomSpeed * Math.max(this.spherical.radius / 2, 0.5);
                 if (e.deltaY > 0) {
-                    this.spherical.radius *= (1 + 0.05 * this.zoomSpeed);
+                    this._zoomVelocity += 0.02 * this.zoomSpeed;
                 } else {
-                    this.spherical.radius *= (1 - 0.05 * this.zoomSpeed);
+                    this._zoomVelocity -= 0.02 * this.zoomSpeed;
                 }
-                this.spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this.spherical.radius));
             }
 
             /** Call each frame to apply accumulated deltas and advance any active tween. */
@@ -246,6 +249,15 @@
                     if (t >= 1) this._tween = null; // tween complete
                     this.camera.lookAt(this.target);
                     return; // skip manual-delta handling while tweening
+                }
+
+                // Apply zoom damping (momentum from scroll wheel)
+                if (Math.abs(this._zoomVelocity) > 0.0005) {
+                    this.spherical.radius *= (1 + this._zoomVelocity);
+                    this.spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this.spherical.radius));
+                    this._zoomVelocity *= 0.85; // decay
+                } else {
+                    this._zoomVelocity = 0;
                 }
 
                 // Apply pan
@@ -289,6 +301,17 @@
                     elapsed:    0,
                     startTime:  performance.now(),
                 };
+            }
+
+            /** Double-click recenters camera to fullbody default view. */
+            _onDoubleClick() {
+                if (!this.enabled || !_vrmFrameData) return;
+                const { targetY, camZ, modelHeight } = _vrmFrameData;
+                this.tweenTo(
+                    new THREE.Vector3(0, targetY + modelHeight * 0.05, camZ * 1.15),
+                    new THREE.Vector3(0, targetY, 0),
+                    400
+                );
             }
 
             /** Get serializable camera state for presets. */
@@ -2056,6 +2079,8 @@
                 this._mouseTimeout = null;
                 /** Phase 6: Whether eye gaze IK is enabled (driven by postMessage). */
                 this._eyeGazeEnabled = true;
+                /** Persistent Object3D used as the VRM lookAt target (must have getWorldPosition). */
+                this._gazeObject3D = new THREE.Object3D();
 
                 if (canvas) {
                     canvas.addEventListener('mousemove', (e) => {
@@ -2099,7 +2124,8 @@
                         // Map mouse (-1..1) to world-space gaze target ~1m in front of character
                         const gazeX = this._mouseX * 0.8;   // horizontal gaze range
                         const gazeY = -this._mouseY * 0.5 + 1.3; // vertical (head height)
-                        this.vrm.lookAt.target = { position: { x: gazeX, y: gazeY, z: 2.0 } };
+                        this._gazeObject3D.position.set(gazeX, gazeY, 2.0);
+                        this.vrm.lookAt.target = this._gazeObject3D;
                     }
                 } else {
                     // Gaze wander: pick a new imaginary "point of interest" every 2–5s.
@@ -3170,7 +3196,7 @@
         /**
          * Frame data stored after a VRM model loads so camera presets can
          * compute positions relative to the actual model size.
-         * @type {{targetY: number, camZ: number, modelHeight: number, headY: number}|null}
+         * @type {{targetY: number, camZ: number, modelHeight: number, headY: number, faceY: number}|null}
          */
         let _vrmFrameData = null;
 
@@ -3792,6 +3818,13 @@
                 }
             }
 
+            // ── Forward declarations for entrance/exit animators ─────
+            // These must be declared before animate() to avoid TDZ errors,
+            // since animate() runs via requestAnimationFrame before the
+            // class definitions and assignments further down.
+            let entranceAnimator = null;
+            let exitAnimator = null;
+
             // ── Animation Loop ──────────────────────────────────
 
             function animate() {
@@ -4017,8 +4050,7 @@
 
             /** @type {{ enabled: boolean, direction: 'left'|'right', duration: number, style: string, emotion: string }} */
             let entranceConfig = { enabled: true, direction: 'right', duration: 1.2, style: 'walk', emotion: 'neutral' };
-            /** @type {EntranceAnimator|null} */
-            let entranceAnimator = null;
+            // entranceAnimator declared above animate() to avoid TDZ
             /** Queued gesture to play after entrance completes. */
 
             // ── Spring Bone Wind & Debug State ───────────────
@@ -4268,7 +4300,7 @@
                     }
                 }
             }
-            let exitAnimator = null;
+            // exitAnimator declared above animate() to avoid TDZ
 
             /**
              * Loads a 3D model (VRM or GLB/GLTF) into the scene.
@@ -4344,6 +4376,13 @@
                                 VRMUtils.combineMorphs(vrm);
                             }
 
+                            // Set lookAt target BEFORE assigning currentVrm to prevent
+                            // animate() from calling vrm.update() with an invalid target
+                            // (three-vrm calls target.getWorldPosition — must be Object3D)
+                            if (vrm.lookAt) {
+                                vrm.lookAt.target = camera;
+                            }
+
                             scene.add(vrm.scene);
                             currentVrm = vrm;
                             window._vrm = vrm;
@@ -4387,17 +4426,28 @@
                                 modelBottom = fp.y;
                             }
                             const modelHeight = modelTop - modelBottom;
-                            const targetY = modelBottom + modelHeight * 0.55;
-                            const camZ = Math.max(modelHeight * 1.0, 0.8);
+                            const targetY = modelBottom + modelHeight * 0.48;
+                            const camZ = Math.max(modelHeight * 1.15, 0.8);
                             controls.reset(
-                                new THREE.Vector3(0, targetY + 0.05, camZ),
+                                new THREE.Vector3(0, targetY + modelHeight * 0.05, camZ * 1.15),
                                 new THREE.Vector3(0, targetY, 0)
                             );
 
                             const headY = headBone
                                 ? (() => { const hp = new THREE.Vector3(); headBone.getWorldPosition(hp); return hp.y; })()
                                 : targetY + modelHeight * 0.35;
-                            _vrmFrameData = { targetY, camZ, modelHeight, headY };
+
+                            // Compute eye-level faceY for accurate face preset framing
+                            const leftEye = vrm.humanoid.getRawBoneNode('leftEye');
+                            const rightEye = vrm.humanoid.getRawBoneNode('rightEye');
+                            let faceY = headY + modelHeight * 0.06; // fallback: slightly above head bone
+                            if (leftEye && rightEye) {
+                                const lp = new THREE.Vector3(), rp = new THREE.Vector3();
+                                leftEye.getWorldPosition(lp);
+                                rightEye.getWorldPosition(rp);
+                                faceY = (lp.y + rp.y) / 2;
+                            }
+                            _vrmFrameData = { targetY, camZ, modelHeight, headY, faceY };
 
                             console.log('[Viewer] VRM loaded successfully');
 
@@ -4822,33 +4872,49 @@
                 if (type === 'resetCamera') {
                     controls.reset();
                     _vrmFrameData && controls.tweenTo(
-                        new THREE.Vector3(0, _vrmFrameData.targetY + 0.05, _vrmFrameData.camZ),
+                        new THREE.Vector3(0, _vrmFrameData.targetY + _vrmFrameData.modelHeight * 0.05, _vrmFrameData.camZ * 1.15),
                         new THREE.Vector3(0, _vrmFrameData.targetY, 0),
-                        500
+                        400
                     );
                     return;
                 }
                 if (type === 'setCameraPreset') {
-                    // Camera preset buttons (#27): bust / fullbody / face
-                    // Positions are derived from the loaded model's actual frame data.
                     if (!_vrmFrameData) return;
-                    const { targetY, camZ, modelHeight, headY } = _vrmFrameData;
+                    const { targetY, camZ, modelHeight, headY, faceY } = _vrmFrameData;
                     const presets = {
                         fullbody: {
-                            pos:    new THREE.Vector3(0, targetY + 0.05, camZ),
+                            pos:    new THREE.Vector3(0, targetY + modelHeight * 0.05, camZ * 1.15),
                             target: new THREE.Vector3(0, targetY, 0),
                         },
                         bust: {
-                            pos:    new THREE.Vector3(0, targetY + modelHeight * 0.15, camZ * 0.55),
-                            target: new THREE.Vector3(0, targetY + modelHeight * 0.15, 0),
+                            pos:    new THREE.Vector3(camZ * 0.03, targetY + modelHeight * 0.20, camZ * 0.60),
+                            target: new THREE.Vector3(0, targetY + modelHeight * 0.20, 0),
                         },
                         face: {
-                            pos:    new THREE.Vector3(0, headY, camZ * 0.28),
+                            pos:    new THREE.Vector3(camZ * 0.04, (faceY || headY) + modelHeight * 0.02, camZ * 0.38),
+                            target: new THREE.Vector3(0, (faceY || headY) + modelHeight * 0.02, 0),
+                        },
+                        threeQuarter: {
+                            pos:    new THREE.Vector3(camZ * 0.35, targetY + modelHeight * 0.20, camZ * 0.50),
+                            target: new THREE.Vector3(0, targetY + modelHeight * 0.20, 0),
+                        },
+                        sideProfile: {
+                            pos:    new THREE.Vector3(camZ * 0.55, headY, camZ * 0.05),
                             target: new THREE.Vector3(0, headY, 0),
+                        },
+                        lowAngle: {
+                            pos:    new THREE.Vector3(0, targetY - modelHeight * 0.1, camZ * 0.8),
+                            target: new THREE.Vector3(0, targetY + modelHeight * 0.15, 0),
                         },
                     };
                     const p = presets[payload?.preset];
                     if (p) controls.tweenTo(p.pos, p.target, 500);
+                    return;
+                }
+                if (type === 'setFOV') {
+                    const fov = Math.max(30, Math.min(90, Number(payload?.fov) || 50));
+                    camera.fov = fov;
+                    camera.updateProjectionMatrix();
                     return;
                 }
                 if (type === 'setCameraEnabled') {

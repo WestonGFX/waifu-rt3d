@@ -75,6 +75,19 @@ export function FloatingComposer({ visible, onClose }: FloatingComposerProps) {
   const setReplyLengthMode = useAppStore((s) => s.setReplyLengthMode);
   const incognito = useAppStore((s) => s.incognito);
 
+  // ── Floating message bubbles ─────────────────────────────────────────
+  const messages = useChatStore((s) => s.messages);
+  const recentAssistant = messages.filter(m => m.role === 'assistant').slice(-3);
+  const [showBubbles, setShowBubbles] = useState(true);
+
+  // Auto-dismiss bubbles after 15s of no new messages
+  useEffect(() => {
+    if (recentAssistant.length === 0) return;
+    setShowBubbles(true);
+    const timer = setTimeout(() => setShowBubbles(false), 15_000);
+    return () => clearTimeout(timer);
+  }, [messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [focused, setFocused] = useState(false);
 
@@ -180,6 +193,36 @@ export function FloatingComposer({ visible, onClose }: FloatingComposerProps) {
             transition: 'border-color 0.15s ease',
           }}
         >
+          {/* Floating message bubbles — last 2-3 assistant replies */}
+          <AnimatePresence>
+            {showBubbles && recentAssistant.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                transition={{ duration: 0.2 }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 4 }}
+              >
+                {recentAssistant.map((msg) => (
+                  <div
+                    key={msg.id}
+                    style={{
+                      fontSize: 11, lineHeight: '1.3',
+                      padding: '4px 10px', borderRadius: 8,
+                      background: 'color-mix(in srgb, var(--color-surface) 60%, transparent)',
+                      color: 'var(--color-text-secondary)',
+                      maxWidth: '100%', overflow: 'hidden',
+                      textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}
+                    title={msg.text}
+                  >
+                    {msg.text.length > 120 ? msg.text.slice(0, 120) + '...' : msg.text}
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Input row */}
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
             <textarea

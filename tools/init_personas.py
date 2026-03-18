@@ -1935,10 +1935,12 @@ def init_db():
                       voice_id TEXT,
                       created_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # Ensure columns exist (pitch/rate)
-    for col in ("tts_pitch", "tts_rate"):
+    # Ensure columns exist (pitch/rate, system_prompt_lite)
+    for col, col_type in [("tts_pitch", "REAL DEFAULT 1.0"),
+                           ("tts_rate", "REAL DEFAULT 1.0"),
+                           ("system_prompt_lite", "TEXT DEFAULT NULL")]:
         try:
-            c.execute(f"ALTER TABLE characters ADD COLUMN {col} REAL DEFAULT 1.0")
+            c.execute(f"ALTER TABLE characters ADD COLUMN {col} {col_type}")
         except sqlite3.OperationalError:
             pass
 
@@ -1984,6 +1986,31 @@ def init_db():
     conn.commit()
     conn.close()
     print("Personas Initialized.")
+
+    # Populate system_prompt_lite from tier markers in docs
+    _populate_lite_prompts()
+
+
+def _populate_lite_prompts():
+    """Extract CORE-tier prompts from character docs and update DB.
+
+    Reads <!-- TIER: CORE --> markers from docs/characters/*/03_prompt_pack.md
+    and writes the extracted CORE-only content to system_prompt_lite. This
+    ensures fresh installs get properly tiered prompts without a separate
+    extraction step.
+    """
+    try:
+        from extract_tiered_prompts import process_character, DIR_TO_CHAR_NAME
+        print("\nPopulating lite prompts from tier markers...")
+        for dir_name in sorted(DIR_TO_CHAR_NAME.keys()):
+            result = process_character(dir_name, dry_run=False, verbose=False)
+            if result and result["has_markers"]:
+                print(f"  ✅ {result['char_name']}: {result['lite_tokens']} tokens (lite)")
+        print("Lite prompts populated.")
+    except ImportError:
+        print("  ⚠ extract_tiered_prompts.py not found — run it manually to populate lite prompts")
+    except Exception as e:
+        print(f"  ⚠ Lite prompt extraction failed: {e}")
 
 
 if __name__ == "__main__":

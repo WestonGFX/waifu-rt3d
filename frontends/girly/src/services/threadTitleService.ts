@@ -1,15 +1,17 @@
-/**
- * Thread title generation — waifu-rt3d adapter.
- *
- * The LLM-based title generator is stubbed to return null because
- * waifu-rt3d's backend handles auto-titling natively. ChatContext
- * falls back to heuristic titles when this returns null.
- */
+import { executeLLM } from '../providers/registry.ts';
 import {
   type ChatThread,
   type PersonaProfile,
 } from '../types/companion.ts';
 import { type ChatMessage, type ProviderConfig } from '../types/index.ts';
+
+function cleanTitle(raw: string): string {
+  return raw
+    .replace(/^["'`]+|["'`]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.?!]+$/, '');
+}
 
 export function buildHeuristicThreadTitle(messages: ChatMessage[]): string | null {
   const firstUserMessage = messages.find((message) => message.role === 'user' && message.content.trim().length > 0);
@@ -29,11 +31,41 @@ export function buildTimestampThreadTitle(timestamp: number): string {
 }
 
 export async function generateThreadTitleWithLLM(
-  _thread: ChatThread,
-  _messages: ChatMessage[],
-  _persona: PersonaProfile | null,
-  _providerConfig: ProviderConfig,
+  thread: ChatThread,
+  messages: ChatMessage[],
+  persona: PersonaProfile | null,
+  providerConfig: ProviderConfig,
 ): Promise<string | null> {
-  // waifu-rt3d backend handles auto-titling; return null → heuristic fallback
-  return null;
+  const firstUser = messages.find((message) => message.role === 'user' && message.content.trim().length > 0);
+  const firstAssistant = messages.find((message) => message.role === 'assistant' && !message.isStreaming && message.content.trim().length > 0);
+  if (!firstUser || !firstAssistant) return null;
+
+  const promptMessages = [
+    {
+      role: 'system',
+      content: [
+        'You write short conversation titles for a messaging app.',
+        'Return only a short title, 2 to 5 words if possible.',
+        'No quotes. No markdown. No speaker labels. No explanation.',
+      ].join(' '),
+    },
+    {
+      role: 'user',
+      content: [
+        `Persona: ${persona?.name ?? 'Unknown persona'}`,
+        `User opener: ${firstUser.content}`,
+        `Assistant reply: ${firstAssistant.content}`,
+        `Current placeholder title: ${thread.title}`,
+        'Write a concise chat title:',
+      ].join('\n'),
+    },
+  ];
+
+  try {
+    const result = await executeLLM(promptMessages, providerConfig.llm, { maxTokens: 20 }, providerConfig.providerOptions);
+    const cleaned = cleanTitle(result);
+    return cleaned || null;
+  } catch {
+    return null;
+  }
 }

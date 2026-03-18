@@ -1,9 +1,5 @@
-/**
- * Provider health service — waifu-rt3d stub.
- *
- * Original tested direct LLM provider connections via getLLMProvider().
- * Since the backend handles all LLM routing, we always return 'ok'.
- */
+import { getLLMProvider } from '../providers/registry.ts';
+import { hasKey } from './apiKeyService.ts';
 
 export type LLMConnectionStatus =
   | 'idle'
@@ -18,8 +14,26 @@ export interface LLMConnectionResult {
 }
 
 /**
- * Stub — always returns 'ok' since waifu-rt3d backend handles providers.
+ * Runs a uniform LLM connectivity check used by setup, status, and API-key UI.
  */
-export async function testLLMConnection(_providerName: string): Promise<LLMConnectionResult> {
-  return { status: 'ok', message: 'Connected to waifu-rt3d backend.' };
+export async function testLLMConnection(providerName: string): Promise<LLMConnectionResult> {
+  const provider = getLLMProvider(providerName);
+
+  if (provider.requiresApiKey && !hasKey(providerName)) {
+    return {
+      status: 'missing_key',
+      message: `Missing API key for ${provider.label}.`,
+    };
+  }
+
+  try {
+    const ok = await provider.testConnection();
+    if (ok) {
+      return { status: 'ok', message: `${provider.label} is reachable.` };
+    }
+    return { status: 'unreachable', message: `${provider.label} is not reachable.` };
+  } catch {
+    return { status: 'unreachable', message: `${provider.label} is not reachable.` };
+  }
 }
+

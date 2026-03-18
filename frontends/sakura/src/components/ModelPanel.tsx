@@ -1,6 +1,6 @@
 import { Component, useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Sliders, RotateCcw, Eye, EyeOff, Loader2, AlertTriangle, Box, RefreshCw, Sparkles, Wifi, WifiOff, X, Camera, MessageSquare, User, ArrowDown, ScanLine } from 'lucide-react';
+import { ChevronLeft, Sliders, RotateCcw, Eye, EyeOff, Loader2, AlertTriangle, Box, RefreshCw, Sparkles, Wifi, WifiOff, X, Camera, MessageSquare } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
 import { useViewerStore } from '../stores/viewerStore';
@@ -576,12 +576,12 @@ export function ModelPanel({ character }: ModelPanelProps) {
 
   /** Camera preset definitions for the horizontal preset strip. */
   const cameraPresets = [
-    { id: 'fullbody', label: 'Full', icon: User },
-    { id: 'bust', label: 'Bust', icon: User },
-    { id: 'face', label: 'Face', icon: User },
-    { id: 'threeQuarter', label: '3/4', icon: ScanLine },
-    { id: 'sideProfile', label: 'Side', icon: ArrowDown },
-    { id: 'lowAngle', label: 'Low', icon: ArrowDown },
+    { id: 'fullbody', label: 'Full' },
+    { id: 'bust', label: 'Bust' },
+    { id: 'face', label: 'Face' },
+    { id: 'threeQuarter', label: '3/4' },
+    { id: 'sideProfile', label: 'Side' },
+    { id: 'lowAngle', label: 'Low' },
   ] as const;
 
   /**
@@ -921,26 +921,44 @@ export function ModelPanel({ character }: ModelPanelProps) {
                     {p.label}
                   </button>
                 ))}
-                {/* Custom saved cameras */}
+                {/* Custom saved cameras — click to load, X to delete */}
                 {customCameras.map((cam, idx) => (
-                  <button
+                  <div
                     key={`custom-${idx}`}
-                    onClick={() => handleLoadCamera(cam)}
-                    onContextMenu={(e) => { e.preventDefault(); handleDeleteCamera(idx); }}
-                    className="px-1.5 py-1 text-[10px]"
-                    style={{
-                      background: 'transparent',
-                      borderRadius: 'var(--radius-button, 6px)',
-                      color: 'var(--color-text-tertiary)',
-                      border: '1px dashed var(--color-border)',
-                      cursor: 'pointer',
-                      fontWeight: 500,
-                      whiteSpace: 'nowrap',
-                    }}
-                    title={`${cam.name} (right-click to delete)`}
+                    style={{ display: 'flex', alignItems: 'center', gap: 1 }}
                   >
-                    {cam.name}
-                  </button>
+                    <button
+                      onClick={() => handleLoadCamera(cam)}
+                      className="px-1.5 py-1 text-[10px]"
+                      style={{
+                        background: 'transparent',
+                        borderRadius: 'var(--radius-button, 6px)',
+                        color: 'var(--color-text-tertiary)',
+                        border: '1px dashed var(--color-border)',
+                        cursor: 'pointer',
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={cam.name}
+                    >
+                      {cam.name}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteCamera(idx); }}
+                      style={{
+                        border: 'none', background: 'none', cursor: 'pointer',
+                        padding: '0 1px', opacity: 0.4, lineHeight: 1,
+                        color: 'var(--color-text-tertiary)',
+                        transition: 'opacity 0.15s',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.4'; }}
+                      title="Delete saved view"
+                      aria-label={`Delete ${cam.name}`}
+                    >
+                      <X size={8} />
+                    </button>
+                  </div>
                 ))}
                 {/* Save current view */}
                 {customCameras.length < 5 && (

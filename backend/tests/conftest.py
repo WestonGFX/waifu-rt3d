@@ -116,7 +116,8 @@ def _create_schema(db_path: Path) -> None:
                 emotion_portraits_mode INTEGER DEFAULT 0,
                 bible_path TEXT,
                 bible_enabled INTEGER DEFAULT 0,
-                bible_sections TEXT
+                bible_sections TEXT,
+                system_prompt_lite TEXT DEFAULT NULL
             );
 
             CREATE TABLE IF NOT EXISTS character_relationships (

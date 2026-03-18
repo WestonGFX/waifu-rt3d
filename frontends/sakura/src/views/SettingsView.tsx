@@ -3126,6 +3126,25 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
             </div>
           </SettingField>
 
+          {/* Character Detail Level — tiered prompt selection */}
+          <SettingField
+            label="Character Detail"
+            description="How much personality to include in the system prompt."
+            tooltip="Auto selects based on context window: ≤8K uses Lite (~1K tokens), ≤16K uses Full (~3K), >16K uses Full + Character Bible. Override to force a specific level."
+          >
+            <select
+              value={String(cfg('prompt_tier', 'auto'))}
+              onChange={(e) => save('prompt_tier', e.target.value)}
+              className="text-sm px-2 py-1 rounded"
+              style={selectStyle}
+            >
+              <option value="auto">Auto (Recommended)</option>
+              <option value="lite">Lite — minimal personality (~1K tokens)</option>
+              <option value="full">Full — complete character (~3K tokens)</option>
+              <option value="deep">Deep — full + character bible (~5K+ tokens)</option>
+            </select>
+          </SettingField>
+
           {/* Tool Protocol Override (dev-only) */}
           <SettingField
             label="Tool Call Protocol" tier={2}

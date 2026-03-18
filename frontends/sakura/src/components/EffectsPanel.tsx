@@ -40,13 +40,16 @@ interface EffectsPanelProps {
  * - Bloom: enable + strength/radius/threshold sliders
  * - Color Grading: presets + brightness/contrast/saturation sliders
  * - Particles: ambient type selector + emotion-reactive toggle
+ * - Camera: FOV slider (30–90°, default 50)
  * - Screenshot: supersampled + transparent checkboxes
  *
  * All changes are dispatched through viewerStore to the viewer iframe
  * via postMessage commands.
  */
 export function EffectsPanel({ isOpen }: EffectsPanelProps) {
-  const viewer = useViewerStore();
+  const dispatchSetEffects = useViewerStore(s => s.dispatchSetEffects);
+  const dispatchSetAmbientParticles = useViewerStore(s => s.dispatchSetAmbientParticles);
+  const dispatchSetEmotionParticles = useViewerStore(s => s.dispatchSetEmotionParticles);
   const [expanded, setExpanded] = useState(false);
 
   // ── Bloom state ──
@@ -65,13 +68,17 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
   const [ambientType, setAmbientType] = useState<string | null>(null);
   const [emotionParticles, setEmotionParticles] = useState(true);
 
+  // ── Camera / FOV state ──
+  const [fov, setFov] = useState(50);
+  const dispatchSetFOV = useViewerStore(s => s.dispatchSetFOV);
+
   // ── Screenshot options ──
   const [ssSupersample, setSsSupersample] = useState(false);
   const [ssTransparent, setSsTransparent] = useState(false);
 
   // Sync effects to viewer when bloom parameters change
   const syncBloom = useCallback(() => {
-    viewer.dispatchSetEffects({
+    dispatchSetEffects({
       bloom: {
         enabled: bloomEnabled,
         strength: bloomStrength,
@@ -79,13 +86,13 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
         threshold: bloomThreshold,
       },
     });
-  }, [bloomEnabled, bloomStrength, bloomRadius, bloomThreshold, viewer]);
+  }, [bloomEnabled, bloomStrength, bloomRadius, bloomThreshold, dispatchSetEffects]);
 
   useEffect(() => { syncBloom(); }, [syncBloom]);
 
   // Sync color grading to viewer
   const syncColorGrade = useCallback(() => {
-    viewer.dispatchSetEffects({
+    dispatchSetEffects({
       colorGrade: {
         enabled: colorGradeEnabled,
         brightness,
@@ -93,19 +100,19 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
         saturation,
       },
     });
-  }, [colorGradeEnabled, brightness, contrast, saturation, viewer]);
+  }, [colorGradeEnabled, brightness, contrast, saturation, dispatchSetEffects]);
 
   useEffect(() => { syncColorGrade(); }, [syncColorGrade]);
 
   // Sync ambient particles
   useEffect(() => {
-    viewer.dispatchSetAmbientParticles(ambientType);
-  }, [ambientType, viewer]);
+    dispatchSetAmbientParticles(ambientType);
+  }, [ambientType, dispatchSetAmbientParticles]);
 
   // Sync emotion particles toggle
   useEffect(() => {
-    viewer.dispatchSetEmotionParticles(emotionParticles);
-  }, [emotionParticles, viewer]);
+    dispatchSetEmotionParticles(emotionParticles);
+  }, [emotionParticles, dispatchSetEmotionParticles]);
 
   /**
    * Apply a color grading preset.
@@ -127,16 +134,16 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
   }, []);
 
   /** Take screenshot with current options. */
+  const iframeRef = useViewerStore(s => s.iframeRef);
   const handleScreenshot = useCallback(() => {
-    const iframe = viewer.iframeRef;
-    iframe?.contentWindow?.postMessage({
+    iframeRef?.contentWindow?.postMessage({
       type: 'captureScreenshot',
       payload: {
         supersampled: ssSupersample,
         transparent: ssTransparent,
       },
     }, window.location.origin);
-  }, [viewer.iframeRef, ssSupersample, ssTransparent]);
+  }, [iframeRef, ssSupersample, ssTransparent]);
 
   if (!isOpen) return null;
 
@@ -328,6 +335,46 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
                 Emotion-reactive particles (hearts on love, sparkles on happy, etc.)
               </span>
             </label>
+          </div>
+
+          {/* ── Camera / FOV ── */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+              <Camera size={12} style={{ color: 'var(--color-accent)' }} />
+              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                Camera
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '8px' }}>
+              <span style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)', minWidth: '65px' }}>
+                FOV: {fov}°
+              </span>
+              <input
+                type="range"
+                min={30}
+                max={90}
+                step={1}
+                value={fov}
+                onChange={e => {
+                  const val = parseInt(e.target.value, 10);
+                  setFov(val);
+                  dispatchSetFOV(val);
+                }}
+                style={{ flex: 1, accentColor: 'var(--color-accent)', height: '14px' }}
+              />
+              <button
+                onClick={() => { setFov(50); dispatchSetFOV(50); }}
+                style={{
+                  padding: '2px 6px', fontSize: '0.6rem',
+                  border: '1px solid var(--color-border)', borderRadius: '4px',
+                  background: 'none', color: 'var(--color-text-tertiary)',
+                  cursor: 'pointer',
+                }}
+                title="Reset FOV to default (50°)"
+              >
+                Reset
+              </button>
+            </div>
           </div>
 
           {/* ── Screenshot Options ── */}

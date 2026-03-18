@@ -74,6 +74,7 @@ import { migrateLegacyStateIfNeeded } from '../services/legacyMigrationService.t
 import { DEFAULT_RENDER_SETTINGS } from '../services/renderProfiles.ts';
 import { getDefaultPersonaPresets } from '../services/personaPresets.ts';
 import { getDefaultVoiceProfiles } from '../services/voiceProfileService.ts';
+import { fetchBackendPersonas, isBackendPersona } from '../services/backendCharacterBridge.ts';
 import {
   buildMemoryRecords,
   buildThreadSummaryRecord,
@@ -315,26 +316,53 @@ export function CompanionProvider({ children }: { children: ReactNode }) {
       titleSource: thread.titleSource ?? (thread.title === 'New conversation' ? 'timestamp' : 'heuristic'),
     }));
 
+    // Try to fetch backend characters non-blocking — returns [] if the backend
+    // is unreachable so hydration always completes in offline mode.
+    const backendPersonas = await fetchBackendPersonas();
+
     const mergedPersonas = [
-      ...DEFAULT_PERSONAS.map((defaultPersona) => {
-        const persistedPersona = personas.find((persona) => persona.id === defaultPersona.id);
-        if (!persistedPersona) return defaultPersona;
-
-        const isLegacyStockPersona = !persistedPersona.dereTypes || !persistedPersona.tagline || !persistedPersona.backstory;
-        if (isLegacyStockPersona) {
-          return {
-            ...defaultPersona,
-            rawPromptOverride: persistedPersona.rawPromptOverride,
-            defaultVoiceProfileId: persistedPersona.defaultVoiceProfileId ?? defaultPersona.defaultVoiceProfileId,
-            createdAt: persistedPersona.createdAt ?? defaultPersona.createdAt,
-            updatedAt: Math.max(persistedPersona.updatedAt ?? 0, defaultPersona.updatedAt),
-          };
-        }
-
-        return { ...defaultPersona, ...persistedPersona };
+      // 1. Backend characters are the canonical source — they appear first so
+      //    the active persona defaults to the first backend character when present.
+      //    Any user customisations persisted in IndexedDB (rawPromptOverride,
+      //    defaultVoiceProfileId) are layered on top of the live backend data.
+      ...backendPersonas.map((bp) => {
+        const persisted = personas.find((p) => p.id === bp.id);
+        if (!persisted) return bp;
+        return {
+          ...bp,
+          rawPromptOverride: persisted.rawPromptOverride ?? bp.rawPromptOverride,
+          defaultVoiceProfileId: persisted.defaultVoiceProfileId ?? bp.defaultVoiceProfileId,
+        };
       }),
+      // 2. Girly's built-in preset personas — offline fallback. Filtered to
+      //    exclude any preset whose ID is shadowed by a backend character (no
+      //    collisions expected, but guards against future ID changes).
+      ...DEFAULT_PERSONAS
+        .filter((defaultPersona) => !backendPersonas.some((bp) => bp.id === defaultPersona.id))
+        .map((defaultPersona) => {
+          const persistedPersona = personas.find((persona) => persona.id === defaultPersona.id);
+          if (!persistedPersona) return defaultPersona;
+
+          const isLegacyStockPersona = !persistedPersona.dereTypes || !persistedPersona.tagline || !persistedPersona.backstory;
+          if (isLegacyStockPersona) {
+            return {
+              ...defaultPersona,
+              rawPromptOverride: persistedPersona.rawPromptOverride,
+              defaultVoiceProfileId: persistedPersona.defaultVoiceProfileId ?? defaultPersona.defaultVoiceProfileId,
+              createdAt: persistedPersona.createdAt ?? defaultPersona.createdAt,
+              updatedAt: Math.max(persistedPersona.updatedAt ?? 0, defaultPersona.updatedAt),
+            };
+          }
+
+          return { ...defaultPersona, ...persistedPersona };
+        }),
+      // 3. User-created custom personas — not a preset, not a backend character.
       ...personas
-        .filter((persona) => !DEFAULT_PERSONAS.some((defaultPersona) => defaultPersona.id === persona.id))
+        .filter(
+          (persona) =>
+            !DEFAULT_PERSONAS.some((defaultPersona) => defaultPersona.id === persona.id) &&
+            !isBackendPersona(persona.id),
+        )
         .map((persona) => ({
           ...DEFAULT_PERSONAS[0],
           ...persona,

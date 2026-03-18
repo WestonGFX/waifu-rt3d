@@ -205,6 +205,8 @@ async def lifespan(app: FastAPI):
         "vocab_enabled", "vocab_limit", "vocab_path", "vocab",
         "onboarded", "avatar_url", "model_vrm", "live2d_model",
         "bg_image", "background_mode", "memory", "services", "system",
+        "prompt_tier", "default_frontend", "rp_style_preset", "user_persona",
+        "soundscape_enabled",
     }
     for key in cfg:
         if key not in _KNOWN_CFG_KEYS:
@@ -1615,6 +1617,53 @@ def _update_relationship(con, char_id: int, emotion: str):
         logger.warning(f"Relationship update failed for char {char_id}: {e}")
 
 
+def _select_system_prompt(
+    system_prompt: str,
+    system_prompt_lite: str | None,
+    cfg: dict,
+    prompt_tier: str = "auto",
+) -> tuple[str, bool]:
+    """Select the appropriate system prompt tier based on context budget.
+
+    The tiered prompt system prevents personality from consuming too much
+    context in small-window models. A 7B model with 8K context shouldn't
+    lose 37% of its window to a 3,000-token system prompt.
+
+    Args:
+        system_prompt: Full system prompt text (all tiers).
+        system_prompt_lite: CORE-only condensed prompt, or None if not available.
+        cfg: App config dict (needs ``context_limit``).
+        prompt_tier: Override tier selection. One of:
+            - ``"auto"`` (default): Select by context budget.
+            - ``"lite"``: Force CORE-only prompt, skip bible.
+            - ``"full"``: Force full prompt, skip bible.
+            - ``"deep"``: Force full prompt + bible sections.
+
+    Returns:
+        Tuple of ``(effective_prompt, skip_bible)`` where ``skip_bible``
+        tells the caller whether to omit character bible injection.
+
+    Example:
+        >>> prompt, skip = _select_system_prompt("Full prompt...", "Lite...", {"context_limit": 8192})
+        >>> # Returns ("Lite...", True) because 8K context is small
+    """
+    if prompt_tier == "auto":
+        context_limit = cfg.get("context_limit", 131072)
+        if context_limit <= 8192 and system_prompt_lite:
+            return system_prompt_lite, True
+        elif context_limit <= 16384:
+            return system_prompt, True   # Full prompt but skip bible to save tokens
+        else:
+            return system_prompt, False  # Big context — use everything
+    elif prompt_tier == "lite":
+        effective = system_prompt_lite if system_prompt_lite else system_prompt
+        return effective, True
+    elif prompt_tier == "full":
+        return system_prompt, True
+    else:  # "deep"
+        return system_prompt, False
+
+
 def _load_bible_sections(
     bible_path: str,
     section_nums: list[int] | None = None,
@@ -1697,6 +1746,7 @@ def _build_prompt_sections(
     day_off: bool = False,
     mood_enabled: bool = True,
     mood_intensity: float = 0.8,
+    skip_bible: bool = False,
 ) -> list[dict]:
     """Build all system prompt injection sections with per-section token estimates.
 
@@ -1726,6 +1776,8 @@ def _build_prompt_sections(
         day_off: Whether the character has the day_off flag set.
         mood_enabled: Whether time-of-day mood injection is active.
         mood_intensity: 0.0--1.0 scale factor for mood strength.
+        skip_bible: If True, omit character bible injection to save tokens.
+            Set by ``_select_system_prompt()`` when using lite/auto tiers.
 
     Returns:
         List of dicts, each with keys:
@@ -1792,20 +1844,22 @@ def _build_prompt_sections(
         sections.append(_section("System Prompt", system_prompt))
 
     # 1-bible. Character Bible injection — load selected sections from markdown
-    try:
-        _bible_row = cur.execute(
-            "SELECT bible_path, bible_sections, bible_enabled FROM characters WHERE id=?",
-            (char_id,),
-        ).fetchone()
-        if _bible_row and _bible_row[2] and _bible_row[0]:
-            _bible_text = _load_bible_sections(
-                _bible_row[0],
-                json.loads(_bible_row[1]) if _bible_row[1] else None,
-            )
-            if _bible_text:
-                sections.append(_section("Character Bible", "\n" + _bible_text))
-    except Exception as _bible_err:
-        logger.warning(f"[Bible] Failed to load character bible: {_bible_err}")
+    # Skipped when skip_bible=True (lite/auto tier with small context windows)
+    if not skip_bible:
+        try:
+            _bible_row = cur.execute(
+                "SELECT bible_path, bible_sections, bible_enabled FROM characters WHERE id=?",
+                (char_id,),
+            ).fetchone()
+            if _bible_row and _bible_row[2] and _bible_row[0]:
+                _bible_text = _load_bible_sections(
+                    _bible_row[0],
+                    json.loads(_bible_row[1]) if _bible_row[1] else None,
+                )
+                if _bible_text:
+                    sections.append(_section("Character Bible", "\n" + _bible_text))
+        except Exception as _bible_err:
+            logger.warning(f"[Bible] Failed to load character bible: {_bible_err}")
 
     # 1a. Feature B4: Author's Note — "after_system" position
     if _author_note_text and _author_note_position == "after_system":
@@ -2284,6 +2338,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             vector_store.add_memory(session_id, char_id, "user", text)
 
         system_prompt = "You are a friendly anime companion."
+        _system_prompt_lite = None
         voice_params = {}
         char_last_chat_date = None
         is_daily_first = False
@@ -2302,7 +2357,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 "SELECT system_prompt, voice_id, tts_provider, tts_pitch, tts_rate, "
                 "llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, first_chat_date, "
                 "diary, diary_date, capability_profile, emotion_voice_overrides, "
-                "name, mood_enabled, mood_intensity, day_off, affinity "
+                "name, mood_enabled, mood_intensity, day_off, affinity, system_prompt_lite "
                 "FROM characters WHERE id=?",
                 (char_id,)
             )
@@ -2310,6 +2365,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             if row:
                 if row[0]:
                     system_prompt = row[0]
+                _system_prompt_lite = row[20] if len(row) > 20 else None
                 if row[1]:
                     voice_params['voice_id'] = row[1]
                 if row[2]:
@@ -2375,6 +2431,12 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 )
         # ── End Phase 9 capability profile (non-streaming) ─────────
 
+        # Tiered prompt selection: auto-select lite/full/deep based on context budget
+        _prompt_tier = cfg.get("prompt_tier", "auto")
+        system_prompt, _skip_bible = _select_system_prompt(
+            system_prompt, _system_prompt_lite, cfg, _prompt_tier
+        )
+
         # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, mood, emotion, filter)
         sections = _build_prompt_sections(
             cfg, system_prompt, char_id, session_id, cur,
@@ -2390,6 +2452,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             day_off=_ns_day_off,
             mood_enabled=_ns_mood_enabled,
             mood_intensity=_ns_mood_intensity,
+            skip_bible=_skip_bible,
         )
         system_content = "".join(s["content"] for s in sections)
         # Check is_daily_first from sections (Daily Greeting section present = first of day)
@@ -2654,10 +2717,11 @@ async def get_context_budget(session_id: int, char_id: int = None):
         _cb_mood_intensity = 0.8
         _cb_day_off = False
         _cb_affinity = 0.0
+        _cb_prompt_lite = None
         try:
             cur.execute(
                 "SELECT system_prompt, last_chat_date, last_emotion, first_chat_date, diary, diary_date, "
-                "name, mood_enabled, mood_intensity, day_off, affinity "
+                "name, mood_enabled, mood_intensity, day_off, affinity, system_prompt_lite "
                 "FROM characters WHERE id=?", (char_id,)
             )
             row = cur.fetchone()
@@ -2673,8 +2737,15 @@ async def get_context_budget(session_id: int, char_id: int = None):
                 _cb_mood_intensity = float(row[8]) if row[8] is not None else 0.8
                 _cb_day_off = bool(row[9]) if row[9] is not None else False
                 _cb_affinity = float(row[10]) if row[10] is not None else 0.0
+                _cb_prompt_lite = row[11] if len(row) > 11 else None
         except Exception:
             pass
+
+        # Tiered prompt selection
+        _prompt_tier = cfg.get("prompt_tier", "auto")
+        system_prompt, _skip_bible = _select_system_prompt(
+            system_prompt, _cb_prompt_lite, cfg, _prompt_tier
+        )
 
         # Build prompt sections (no user_text for RAG since this is a snapshot)
         sections = _build_prompt_sections(
@@ -2690,6 +2761,7 @@ async def get_context_budget(session_id: int, char_id: int = None):
             day_off=_cb_day_off,
             mood_enabled=_cb_mood_enabled,
             mood_intensity=_cb_mood_intensity,
+            skip_bible=_skip_bible,
         )
 
         # Estimate chat history tokens
@@ -2784,10 +2856,12 @@ async def dev_prompt_inspect(session_id: int, char_id: int = None):
         _pi_mood_intensity = 0.8
         _pi_day_off = False
         _pi_affinity = 0.0
+        _pi_prompt_lite = None
         try:
             cur.execute(
                 "SELECT system_prompt, last_chat_date, last_emotion, first_chat_date, "
-                "diary, diary_date, name, mood_enabled, mood_intensity, day_off, affinity "
+                "diary, diary_date, name, mood_enabled, mood_intensity, day_off, affinity, "
+                "system_prompt_lite "
                 "FROM characters WHERE id=?", (char_id,)
             )
             row = cur.fetchone()
@@ -2803,8 +2877,15 @@ async def dev_prompt_inspect(session_id: int, char_id: int = None):
                 _pi_mood_intensity = float(row[8]) if row[8] is not None else 0.8
                 _pi_day_off = bool(row[9]) if row[9] is not None else False
                 _pi_affinity = float(row[10]) if row[10] is not None else 0.0
+                _pi_prompt_lite = row[11] if len(row) > 11 else None
         except Exception:
             pass
+
+        # Tiered prompt selection
+        _prompt_tier = cfg.get("prompt_tier", "auto")
+        system_prompt, _skip_bible = _select_system_prompt(
+            system_prompt, _pi_prompt_lite, cfg, _prompt_tier
+        )
 
         # Build prompt sections (no user_text — this is a snapshot inspection)
         sections = _build_prompt_sections(
@@ -2820,6 +2901,7 @@ async def dev_prompt_inspect(session_id: int, char_id: int = None):
             day_off=_pi_day_off,
             mood_enabled=_pi_mood_enabled,
             mood_intensity=_pi_mood_intensity,
+            skip_bible=_skip_bible,
         )
 
         # Chat history info
@@ -2921,10 +3003,14 @@ async def chat_multi(req: Request):
             char_id = int(char_id)
 
             # Get character data
-            cur.execute("SELECT system_prompt, name FROM characters WHERE id=?", (char_id,))
+            cur.execute("SELECT system_prompt, name, system_prompt_lite FROM characters WHERE id=?", (char_id,))
             row = cur.fetchone()
             system_prompt = row[0] if row else "You are a friendly anime companion."
             char_name = row[1] if row else f"Character {char_id}"
+            _multi_lite = row[2] if row and len(row) > 2 else None
+            # Tiered prompt selection for multi-chat
+            _prompt_tier = cfg.get("prompt_tier", "auto")
+            system_prompt, _ = _select_system_prompt(system_prompt, _multi_lite, cfg, _prompt_tier)
 
             # Memory context
             memory_context = ""
@@ -3137,6 +3223,7 @@ async def chat_stream(req: Request):
         vector_store.add_memory(session_id, char_id, "user", text)
 
     system_prompt = "You are a friendly anime companion."
+    _stream_prompt_lite = None
     voice_params = {}
     stream_char_last_chat_date = None
     stream_char_last_emotion = "neutral"
@@ -3156,7 +3243,7 @@ async def chat_stream(req: Request):
             "SELECT system_prompt, llm_endpoint, llm_model, llm_temperature, last_chat_date, last_emotion, "
             "voice_id, tts_provider, tts_pitch, tts_rate, first_chat_date, diary, diary_date, "
             "capability_profile, name, emotion_voice_overrides, "
-            "mood_enabled, mood_intensity, day_off, affinity "
+            "mood_enabled, mood_intensity, day_off, affinity, system_prompt_lite "
             "FROM characters WHERE id=?",
             (char_id,)
         )
@@ -3165,6 +3252,7 @@ async def chat_stream(req: Request):
             stream_char_name = row[14] or ""
             if row[0]:
                 system_prompt = row[0]
+            _stream_prompt_lite = row[20] if len(row) > 20 else None
             # Per-character LLM override (e.g. TinyAya on Ollama for multilingual characters)
             if row[1]:
                 cfg.setdefault("llm", {})["endpoint"] = row[1]
@@ -3269,6 +3357,12 @@ async def chat_stream(req: Request):
         logger.warning(f"[Universe#23] Could not inject universe lore for char_id={char_id}: {_ue}")
     # ── End Feature #23 ─────────────────────────────────────────────
 
+    # Tiered prompt selection: auto-select lite/full/deep based on context budget
+    _prompt_tier = cfg.get("prompt_tier", "auto")
+    system_prompt, _skip_bible = _select_system_prompt(
+        system_prompt, _stream_prompt_lite, cfg, _prompt_tier
+    )
+
     # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, mood, vocab, emotion, filter)
     sections = _build_prompt_sections(
         cfg, system_prompt, char_id, session_id, cur,
@@ -3284,6 +3378,7 @@ async def chat_stream(req: Request):
         day_off=_stream_day_off,
         mood_enabled=_stream_mood_enabled,
         mood_intensity=_stream_mood_intensity,
+        skip_bible=_skip_bible,
     )
     system_content = "".join(s["content"] for s in sections)
     _is_daily_first = any(s["name"] == "Daily Greeting" for s in sections)
@@ -5307,7 +5402,7 @@ def list_characters():
                    expr_portraits, first_chat_date, diary, diary_date, capability_profile,
                    tts_pitch, tts_rate, vocab_categories, animation_profile, emotion_voice_overrides,
                    mood_enabled, mood_intensity, emotion_portraits_mode,
-                   bible_path, bible_enabled, bible_sections
+                   bible_path, bible_enabled, bible_sections, system_prompt_lite
             FROM characters
             ORDER BY id ASC
         """)
@@ -5373,6 +5468,8 @@ def list_characters():
             "bible_path": row[34] if len(row) > 34 else None,
             "bible_enabled": bool(row[35]) if len(row) > 35 and row[35] is not None else False,
             "bible_sections": json.loads(row[36]) if len(row) > 36 and row[36] else None,
+            # v52: Tiered prompts — lite CORE-only prompt for small context windows
+            "system_prompt_lite": row[37] if len(row) > 37 else None,
         }
         characters.append(char)
     conn.close()

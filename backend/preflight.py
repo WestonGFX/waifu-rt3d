@@ -2867,6 +2867,43 @@ def migrate_to_v51(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v52(con: sqlite3.Connection) -> bool:
+    """Add system_prompt_lite column for small-context-window character prompts (v52).
+
+    When the user's model has a small context window (≤8K tokens), the backend
+    uses this shorter prompt instead of the full system_prompt. This prevents
+    the personality from consuming all available context budget.
+
+    The lite prompt contains only CORE personality: identity, voice, 3 key rules.
+    The full system_prompt adds: trust ramp, behavioral loops, family, dialogue examples.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v52+.
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 52:
+        return False
+
+    try:
+        logger.info("Applying schema v52 migration (system_prompt_lite for tiered prompts)...")
+
+        cols = {r[1] for r in con.execute("PRAGMA table_info(characters)").fetchall()}
+        if "system_prompt_lite" not in cols:
+            con.execute("ALTER TABLE characters ADD COLUMN system_prompt_lite TEXT DEFAULT NULL")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (52)")
+        con.commit()
+        logger.info("✅ Schema v52 migration complete (system_prompt_lite column)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v52 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -3256,21 +3293,27 @@ def ensure_db():
             if migrate_to_v51(con):
                 version = 51
 
+        if version < 52:
+            logger.info("Upgrading database schema from v51 to v52...")
+            logger.info("  - Adding system_prompt_lite for tiered character prompts")
+            if migrate_to_v52(con):
+                version = 52
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 51:
-            raise RuntimeError(f"Database initialization failed: Expected v51, got v{final_version}")
+        if final_version < 52:
+            raise RuntimeError(f"Database initialization failed: Expected v52, got v{final_version}")
 
-        if final_version > 51:
-            logger.warning(f"Database is newer than application (v{final_version} > v51). Some features might be unused.")
+        if final_version > 52:
+            logger.warning(f"Database is newer than application (v{final_version} > v52). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v51 adds screenshots table)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v52 adds tiered prompts)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

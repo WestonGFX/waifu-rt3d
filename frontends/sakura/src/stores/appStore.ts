@@ -162,6 +162,10 @@ interface AppState {
   settingsMode: 'drawer' | 'sidebar';
   setSettingsMode: (m: 'drawer' | 'sidebar') => void;
 
+  // Soundscape player toggle (controlled from header Music button)
+  soundscapeOpen: boolean;
+  toggleSoundscape: () => void;
+
   // Quick-reply chips display preference
   showQuickChips: boolean;
   setShowQuickChips: (v: boolean) => void;
@@ -329,6 +333,10 @@ export const useAppStore = create<AppState>()(
       // Settings panel layout
       settingsMode: 'drawer',
       setSettingsMode: (m) => set({ settingsMode: m }),
+
+      // Soundscape player toggle
+      soundscapeOpen: false,
+      toggleSoundscape: () => set((s) => ({ soundscapeOpen: !s.soundscapeOpen })),
 
       // Quick-reply chips
       showQuickChips: true,

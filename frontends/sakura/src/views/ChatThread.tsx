@@ -245,7 +245,7 @@ export function ChatThread() {
   }, [contentFilterLevel, saveConfig]);
 
   /** Content filter display label + tint color. */
-  const filterLabel = contentFilterLevel === -1 ? '18+' : contentFilterLevel === 1 ? 'SFW' : 'Off';
+  const filterLabel = contentFilterLevel === -1 ? 'Filter: 18+' : contentFilterLevel === 1 ? 'Filter: SFW' : 'Filter: Off';
   const filterColor = contentFilterLevel === -1 ? '#ef4444' : contentFilterLevel === 1 ? '#22c55e' : undefined;
 
   /**
@@ -261,7 +261,7 @@ export function ChatThread() {
   }, [rpStyle, saveConfig]);
 
   /** RP style display label. */
-  const rpLabel = rpStyle === 'light_rp' ? 'RP' : rpStyle === 'full_rp' ? 'RP+' : rpStyle === 'explicit_rp' ? '18+RP' : 'Chat';
+  const rpLabel = rpStyle === 'light_rp' ? 'Style: RP' : rpStyle === 'full_rp' ? 'Style: RP+' : rpStyle === 'explicit_rp' ? 'Style: 18+RP' : 'Style: Chat';
 
   // ── Proactive idle messages (Issue 8) ───────────────────────────────────
   const lastMsg = messages[messages.length - 1];
@@ -573,6 +573,29 @@ export function ChatThread() {
     URL.revokeObjectURL(url);
   }, [messages, activeCharacter, sessionId]);
 
+  /**
+   * Exports the conversation as a JSON file via the backend export API.
+   * Uses the server's /api/sessions/{id}/export?format=json endpoint which
+   * returns structured data with session metadata and message history.
+   */
+  const handleExportJson = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const resp = await fetch(`/api/sessions/${sessionId}/export?format=json`);
+      if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const charName = (activeCharacter?.name ?? 'chat').replace(/[^a-z0-9]/gi, '_');
+      a.download = `${charName}-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[ChatThread] JSON export failed:', err);
+    }
+  }, [sessionId, activeCharacter]);
+
   // ── Audio playback ───────────────────────────────────────────────────────
   const playAudio = useCallback((msg: { id: string; audioUrl?: string }) => {
     if (!msg.audioUrl) return;
@@ -604,6 +627,7 @@ export function ChatThread() {
             onSearchChange={setSearchQuery}
             onExport={handleExport}
             onExportMarkdown={handleExportMarkdown}
+            onExportJson={handleExportJson}
             messageCount={messages.length}
             sessionId={sessionId}
           />
@@ -1089,9 +1113,9 @@ export function ChatThread() {
                 }}
               >
                 <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'capitalize', lineHeight: 1.2 }}>
-                  {replyLengthMode === 'brief' ? 'Brief' :
-                   replyLengthMode === 'detailed' ? 'Long' :
-                   replyLengthMode === 'auto' ? 'Auto' : 'Norm'}
+                  {replyLengthMode === 'brief' ? 'Len: Brief' :
+                   replyLengthMode === 'detailed' ? 'Len: Long' :
+                   replyLengthMode === 'auto' ? 'Len: Auto' : 'Len: Norm'}
                 </span>
                 {replyLengthMode === 'auto' && (
                   <span style={{ fontSize: 9, color: 'var(--color-text-tertiary)', lineHeight: 1.2 }}>

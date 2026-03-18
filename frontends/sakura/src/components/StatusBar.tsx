@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Eye, MessageSquare, Search, Download, X, BarChart2, Globe, Camera } from 'lucide-react';
+import { Eye, MessageSquare, Search, Download, X, Globe, Music, Settings, Box } from 'lucide-react';
 import type { Character } from '../lib/types';
 import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
@@ -240,6 +240,7 @@ export function StatusBar({
   onSearchChange,
   onExport,
   onExportMarkdown,
+  onExportJson,
   messageCount = 0,
   sessionId,
 }: {
@@ -248,10 +249,11 @@ export function StatusBar({
   onSearchChange?: (query: string) => void;
   onExport?: () => void;
   onExportMarkdown?: () => void;
+  onExportJson?: () => void;
   messageCount?: number;
   sessionId?: number | null;
 }) {
-  const { toggleModelPanel, modelPanelOpen, openOverlay, settingsTier, setSettingsTier } = useAppStore();
+  const { toggleModelPanel, modelPanelOpen, openOverlay, settingsTier, setSettingsTier, soundscapeOpen, toggleSoundscape } = useAppStore();
   const [idlePhrase, setIdlePhrase] = useState(IDLE_PHRASES[0]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -493,31 +495,49 @@ export function StatusBar({
                     Export as Markdown (.md)
                   </button>
                 )}
+                {onExportJson && (
+                  <button
+                    role="menuitem"
+                    onClick={() => { setExportOpen(false); onExportJson(); }}
+                    className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150"
+                    style={{ color: 'var(--color-text-primary)' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                  >
+                    Export as JSON (.json)
+                  </button>
+                )}
               </div>
             )}
           </div>
         )}
 
         <button
-          onClick={() => openOverlay('analytics')}
+          onClick={toggleSoundscape}
+          title="Ambient sounds"
+          aria-label={soundscapeOpen ? 'Close soundscape player' : 'Open soundscape player'}
           className="p-2 rounded-lg transition-all duration-200"
-          style={btnStyle()}
-          title="Conversation analytics (Alt+A)"
-          aria-label="Open conversation analytics"
+          style={btnStyle(soundscapeOpen)}
         >
-          <BarChart2 size={18} />
+          <Music size={18} />
         </button>
         <button
-          onClick={() => openOverlay('photomode')}
-          title="Photo Mode (Ctrl+Shift+P)"
-          aria-label="Open Photo Mode"
-          className="rounded-lg transition-all duration-200"
-          style={{
-            ...btnStyle(false),
-            padding: '6px 8px',
-          }}
+          onClick={() => openOverlay('modelbrowser')}
+          title="Models"
+          aria-label="Open model browser"
+          className="p-2 rounded-lg transition-all duration-200"
+          style={btnStyle()}
         >
-          <Camera size={16} />
+          <Box size={18} />
+        </button>
+        <button
+          onClick={() => openOverlay('settings')}
+          title="Settings"
+          aria-label="Open settings"
+          className="p-2 rounded-lg transition-all duration-200"
+          style={btnStyle()}
+        >
+          <Settings size={18} />
         </button>
         <button
           onClick={toggleModelPanel}
@@ -535,7 +555,7 @@ export function StatusBar({
           }}
         >
           <Eye size={16} />
-          <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.05em', color: 'var(--color-accent)', lineHeight: 1 }}>3D</span>
+          <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.05em', color: 'var(--color-accent)', lineHeight: 1 }}>{modelPanelOpen ? 'Close' : '3D'}</span>
         </button>
 
         {/* Version label — 5 rapid clicks unlock Developer Mode */}

@@ -7,6 +7,7 @@ import { QuickActions } from './QuickActions';
 import { GlassBubble, TypingIndicator } from './GlassBubble';
 import { InputBar } from './InputBar';
 import { EmotionOrb } from './EmotionOrb';
+import { FrontendSwitcher } from './FrontendSwitcher';
 import type { Character } from '../lib/types';
 
 /**
@@ -99,6 +100,8 @@ export function CompanionView({
         onSettings={onSettings}
         onCommandPalette={onCommandPalette}
       />
+
+      <FrontendSwitcher style={{ position: 'fixed', top: 68, left: 20, zIndex: 20 }} />
 
       {character && (
         <CharacterInfoPill

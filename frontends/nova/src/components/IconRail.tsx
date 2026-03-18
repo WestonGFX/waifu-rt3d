@@ -7,6 +7,7 @@ import {
 import clsx from 'clsx';
 import glass from '../styles/glass.module.css';
 import styles from './IconRail.module.css';
+import { FrontendSwitcher } from './FrontendSwitcher';
 
 /**
  * Collapsible icon rail for Focused mode.
@@ -79,6 +80,9 @@ export function IconRail({ activePanel, onPanelChange, panelContent }: IconRailP
             <item.Icon size={20} strokeWidth={1.5} />
           </button>
         ))}
+        <div style={{ marginTop: 'auto', paddingBottom: 8, paddingTop: 8 }}>
+          <FrontendSwitcher style={{ flexDirection: 'column', gap: 2, padding: '4px 2px' }} />
+        </div>
       </div>
 
       {/* Expandable panel */}

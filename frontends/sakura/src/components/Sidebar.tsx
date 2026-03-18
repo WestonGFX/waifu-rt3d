@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
-  MessageCircle, Users, Sparkles, Brain, Settings,
-  ChevronLeft, Search, Wifi, WifiOff, Pencil, BookMarked, UserCircle, Gamepad2, HelpCircle, Download, Wand2
+  MessageCircle, Users, Sparkles, Brain,
+  ChevronLeft, ChevronRight, Search, Wifi, WifiOff, Pencil, BookMarked, UserCircle, Gamepad2, HelpCircle, Wand2, BarChart2
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
@@ -101,26 +101,33 @@ export function Sidebar() {
             </div>
           </div>
         ) : (
-          /* Collapsed state: the wifi indicator IS the toggle — no separate chevron needed
-             at 56px width, ml-auto would push a second button off-screen. */
-          <button
-            onClick={toggleSidebar}
-            className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0 mx-auto"
-            style={{
-              background: llmStatus.connected ? 'var(--color-success)' : 'var(--color-border)',
-              opacity: 0.85,
-              border: 'none',
-              cursor: 'pointer',
-            }}
-            title="Expand sidebar"
-            aria-label="Expand sidebar"
-          >
-            {llmStatus.connected ? (
-              <Wifi size={14} style={{ color: 'white' }} />
-            ) : (
-              <WifiOff size={14} style={{ color: 'white' }} />
-            )}
-          </button>
+          <div className="flex flex-col items-center gap-1.5 mx-auto">
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                backgroundColor: llmStatus.connected ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+                boxShadow: llmStatus.connected ? '0 0 4px var(--color-success)' : 'none',
+                flexShrink: 0,
+              }}
+              title={llmStatus.connected ? (llmStatus.provider || 'Online') : 'Offline'}
+            />
+            <button
+              onClick={toggleSidebar}
+              className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--color-border-subtle)',
+                cursor: 'pointer',
+                color: 'var(--color-text-secondary)',
+              }}
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         )}
         {!sidebarCollapsed && (
           <button
@@ -134,6 +141,32 @@ export function Sidebar() {
           </button>
         )}
       </div>
+
+      {/* ── Frontend Switcher ─────────────────────── */}
+      {!sidebarCollapsed && (
+        <div className="flex gap-1 px-3 pb-1.5" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+          {[
+            { id: 'neon', label: 'Neon', path: '/' },
+            { id: 'sakura', label: 'Sakura', path: '/sakura/' },
+            { id: 'nova', label: 'Nova', path: '/nova/' },
+            { id: 'girly', label: 'Girly', path: '/girly/' },
+          ].map(fe => (
+            <button
+              key={fe.id}
+              onClick={() => { if (fe.id !== 'sakura') window.location.href = fe.path; }}
+              style={{
+                flex: 1, padding: '2px 0', fontSize: '0.55rem', fontWeight: 600,
+                borderRadius: 4, border: 'none',
+                cursor: fe.id === 'sakura' ? 'default' : 'pointer',
+                backgroundColor: fe.id === 'sakura' ? 'var(--color-accent)' : 'transparent',
+                color: fe.id === 'sakura' ? 'white' : 'var(--color-text-tertiary)',
+              }}
+            >
+              {fe.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Section Nav ───────────────────────────────────── */}
       <div className="flex flex-col gap-0.5 p-2 flex-shrink-0">
@@ -175,7 +208,7 @@ export function Sidebar() {
 
       {/* ── Section Content ───────────────────────────────── */}
       {!sidebarCollapsed && (
-        <div className="flex-1 overflow-y-auto px-2 pb-2" style={{ scrollbarWidth: 'thin' }}>
+        <div className="flex-1 overflow-y-auto px-2 pb-2" style={{ scrollbarWidth: 'thin', minHeight: 0 }}>
           <AnimatePresence mode="wait">
             {/* ─── Chats section: character list for opening chat threads ─── */}
             {sidebarSection === 'chats' && (
@@ -298,70 +331,65 @@ export function Sidebar() {
 
       {/* ── Bottom Toolbar ─────────────────────────────────── */}
       <div
-        className="flex items-center gap-1 px-2 py-2 flex-shrink-0"
+        className="flex-shrink-0"
         style={{ borderTop: '1px solid var(--color-border-subtle)' }}
       >
-        <button
-          onClick={() => openOverlay('memory')}
-          className="sidebar-tool-btn flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors flex-1"
-          style={{ color: 'var(--color-text-tertiary)' }}
-          title="Memory Bank"
-        >
-          <Brain size={16} />
-          {!sidebarCollapsed && <span className="text-[10px] font-medium">Memory</span>}
-        </button>
-        <button
-          onClick={() => openOverlay('lore')}
-          className="sidebar-tool-btn flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors flex-1"
-          style={{ color: 'var(--color-text-tertiary)' }}
-          title="Lorebook"
-          aria-label="Lorebook"
-        >
-          <BookMarked size={16} />
-          {!sidebarCollapsed && <span className="text-[10px] font-medium">Lore</span>}
-        </button>
-        <button
-          onClick={() => openOverlay('userknowledge')}
-          className="sidebar-tool-btn flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors flex-1"
-          style={{ color: 'var(--color-text-tertiary)' }}
-          title="About Me — what the character knows about you"
-          aria-label="About Me"
-        >
-          <UserCircle size={16} />
-          {!sidebarCollapsed && <span className="text-[10px] font-medium">About Me</span>}
-        </button>
-        <button
-          onClick={() => openOverlay('games')}
-          className="sidebar-tool-btn flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors flex-1"
-          style={{ color: 'var(--color-text-tertiary)' }}
-          title="Mini Games"
-          aria-label="Mini Games"
-        >
-          <Gamepad2 size={16} />
-          {!sidebarCollapsed && <span className="text-[10px] font-medium">Games</span>}
-        </button>
-        <button
-          onClick={() => openOverlay('modelbrowser')}
-          className="sidebar-tool-btn flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors flex-1"
-          style={{ color: 'var(--color-text-tertiary)' }}
-          title="Browse & Download 3D Models"
-          aria-label="Model Browser"
-        >
-          <Download size={16} />
-          {!sidebarCollapsed && <span className="text-[10px] font-medium">Models</span>}
-        </button>
-        <button
-          onClick={() => openOverlay('settings')}
-          className="sidebar-tool-btn flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors flex-1"
-          style={{ color: 'var(--color-text-tertiary)' }}
-          title="Settings"
-          aria-label="Settings"
-        >
-          <Settings size={16} />
-          {!sidebarCollapsed && <span className="text-[10px] font-medium">Settings</span>}
-        </button>
-        <NotificationBadge onNavigateToChar={handleNavigateToChar} />
-        <HelpDropdown />
+        {/* Toolbar items — shared between collapsed and expanded layouts */}
+        {(() => {
+          const TOOLS = [
+            { action: () => openOverlay('memory'),        icon: Brain,      label: 'Memory',   short: 'Memory' },
+            { action: () => openOverlay('lore'),           icon: BookMarked, label: 'Lorebook', short: 'Lore' },
+            { action: () => openOverlay('userknowledge'),  icon: UserCircle, label: 'About Me', short: 'About' },
+            { action: () => openOverlay('games'),          icon: Gamepad2,   label: 'Games',    short: 'Games' },
+            { action: () => openOverlay('analytics'),      icon: BarChart2,  label: 'Analytics', short: 'Stats' },
+          ];
+
+          return sidebarCollapsed ? (
+            /* Collapsed: vertical icon column — each icon gets full 56px width */
+            <div className="flex flex-col items-center gap-0.5 py-2">
+              {TOOLS.map(({ action, icon: Icon, label }) => (
+                <button
+                  key={label}
+                  onClick={action}
+                  className="sidebar-tool-btn flex items-center justify-center w-full py-1.5 rounded-lg transition-colors"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  title={label}
+                  aria-label={label}
+                >
+                  <Icon size={18} />
+                </button>
+              ))}
+              <NotificationBadge onNavigateToChar={handleNavigateToChar} />
+              <HelpDropdown />
+            </div>
+          ) : (
+            /* Expanded: 5-column icon grid with labels below */
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(5, 1fr)',
+                gap: 2,
+                padding: '6px 8px',
+              }}
+            >
+              {TOOLS.map(({ action, icon: Icon, label, short }) => (
+                <button
+                  key={label}
+                  onClick={action}
+                  className="sidebar-tool-btn flex flex-col items-center gap-0.5 py-1.5 rounded-lg transition-colors"
+                  style={{ color: 'var(--color-text-primary)', opacity: 0.7 }}
+                  title={label}
+                  aria-label={label}
+                >
+                  <Icon size={17} />
+                  <span style={{ fontSize: '0.6rem', fontWeight: 500, whiteSpace: 'nowrap' }}>{short}</span>
+                </button>
+              ))}
+              <NotificationBadge onNavigateToChar={handleNavigateToChar} />
+              <HelpDropdown />
+            </div>
+          );
+        })()}
       </div>
     </aside>
   );

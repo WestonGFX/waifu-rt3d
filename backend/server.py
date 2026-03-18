@@ -278,6 +278,7 @@ FRONTEND_DASHBOARD_DIST = Path(ROOT_DIR) / "frontends" / "dashboard" / "dist"
 FRONTEND_V2_DIST = Path(ROOT_DIR) / "frontends" / "v2" / "dist"
 FRONTEND_SAKURA_DIST = Path(ROOT_DIR) / "frontends" / "sakura" / "dist"
 FRONTEND_NOVA_DIST = Path(ROOT_DIR) / "frontends" / "nova" / "dist"
+FRONTEND_GIRLY_DIST = Path(ROOT_DIR) / "frontends" / "girly" / "dist"
 STORAGE  = Path(ROOT_DIR) / "backend" / "storage"
 CONFIG   = Path(ROOT_DIR) / "backend" / "config" / "app.json"
 DEFAULT_FRONTEND_ENV = "WAIFU_DEFAULT_FRONTEND"
@@ -573,6 +574,11 @@ def index():
         if nova_index.exists():
             return nova_index.read_text(encoding="utf-8")
         logger.warning("default_frontend=nova but dist missing; falling back to neon")
+    elif target == "girly":
+        girly_index = FRONTEND_GIRLY_DIST / "index.html"
+        if girly_index.exists():
+            return girly_index.read_text(encoding="utf-8")
+        logger.warning("default_frontend=girly but dist missing; falling back to neon")
     elif target == "v2":
         v2_index = FRONTEND_V2_DIST / "index.html"
         if v2_index.exists():
@@ -626,6 +632,27 @@ async def nova_frontend(full_path: str = ""):
         return FileResponse(str(index))
     return JSONResponse(
         {"error": "Nova frontend not built. Run: cd frontends/nova && npm run build"},
+        status_code=404
+    )
+
+
+@app.get("/girly")
+@app.get("/girly/{full_path:path}")
+async def girly_frontend(full_path: str = ""):
+    """Serve the Girly (AnimeGirly) React frontend (SPA fallback).
+
+    Static assets (JS/CSS in ``dist/assets/``) are served directly;
+    all other paths return ``index.html`` for client-side routing.
+    """
+    if full_path.startswith("assets/"):
+        asset = FRONTEND_GIRLY_DIST / full_path
+        if asset.exists() and asset.is_file():
+            return FileResponse(str(asset))
+    index = FRONTEND_GIRLY_DIST / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return JSONResponse(
+        {"error": "Girly frontend not built. Run: cd frontends/girly && npm run build"},
         status_code=404
     )
 
@@ -705,6 +732,10 @@ if FRONTEND_SAKURA_DIST.exists() and (FRONTEND_SAKURA_DIST / "assets").exists():
 # Nova frontend (built React app)
 if FRONTEND_NOVA_DIST.exists() and (FRONTEND_NOVA_DIST / "assets").exists():
     app.mount("/nova/assets", StaticFiles(directory=str(FRONTEND_NOVA_DIST / "assets")), name="nova-assets")
+
+# Girly frontend (built React app)
+if FRONTEND_GIRLY_DIST.exists() and (FRONTEND_GIRLY_DIST / "assets").exists():
+    app.mount("/girly/assets", StaticFiles(directory=str(FRONTEND_GIRLY_DIST / "assets")), name="girly-assets")
 
 app.mount("/shared", StaticFiles(directory=str(Path(ROOT_DIR) / "frontends" / "shared")), name="shared")
 app.mount("/assets", StaticFiles(directory=str(FRONTEND / "assets")), name="assets")
@@ -1400,6 +1431,8 @@ async def get_frontend_info():
     available.append({"id": "sakura", "name": "Sakura (Modern)", "ready": sakura_ready})
     nova_ready = (FRONTEND_NOVA_DIST / "index.html").exists()
     available.append({"id": "nova", "name": "Nova (Glass)", "ready": nova_ready})
+    girly_ready = (FRONTEND_GIRLY_DIST / "index.html").exists()
+    available.append({"id": "girly", "name": "Girly (Anime)", "ready": girly_ready})
 
     return {"default": default, "available": available}
 
@@ -1420,7 +1453,7 @@ async def switch_frontend(req: Request):
     body = await req.json()
     target = str(body.get("frontend", "")).strip().lower()
 
-    valid = {"neon", "sakura", "nova"}
+    valid = {"neon", "sakura", "nova", "girly"}
     if target not in valid:
         raise HTTPException(400, f"Invalid frontend '{target}'. Must be one of: {', '.join(sorted(valid))}")
 
@@ -1428,6 +1461,8 @@ async def switch_frontend(req: Request):
         raise HTTPException(400, "Sakura frontend is not built. Run 'cd frontends/sakura && npm run build' first.")
     if target == "nova" and not (FRONTEND_NOVA_DIST / "index.html").exists():
         raise HTTPException(400, "Nova frontend is not built. Run 'cd frontends/nova && npm run build' first.")
+    if target == "girly" and not (FRONTEND_GIRLY_DIST / "index.html").exists():
+        raise HTTPException(400, "Girly frontend is not built. Run 'cd frontends/girly && npm run build' first.")
 
     cfg = load_config()
     cfg["default_frontend"] = target

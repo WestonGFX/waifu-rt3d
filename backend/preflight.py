@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v51)
+- Database schema migrations (v3 → v4 → … → v55)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -27,6 +27,10 @@ Migration Strategy:
     - v20 → v21: Message reactions table + day_off flag on characters (Features 22/29)
     - v21 → v22: Universe / Shared World Builder — universes table + universe_id FK on characters (#23)
     - v22 → v23: Character Mood Engine — mood_enabled + mood_intensity columns (Feature A4)
+    - v51 → v52: system_prompt_lite for tiered character prompts
+    - v52 → v53: Proactive AI messages — proactive columns on characters + proactive_milestones table
+    - v53 → v54: Hierarchical summarization — meta_summary_id on session_summaries
+    - v54 → v55: Adaptive Intelligence — user_profiles table + engagement columns on messages
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -2904,6 +2908,215 @@ def migrate_to_v52(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v53(con: sqlite3.Connection) -> bool:
+    """Add proactive messaging columns and milestones table (v53).
+
+    Introduces the scaffolding for the proactive AI messages feature:
+    - ``proactive_enabled``: per-character toggle for proactive messages.
+    - ``proactive_frequency``: message frequency preset ('quiet', 'normal', 'chatty').
+    - ``proactive_hours``: hour-range string (e.g. '9-22') restricting when messages
+      may be sent.
+    - ``scheduled_messages.trigger_type``: distinguishes schedule-driven messages from
+      milestone- or event-driven ones.
+    - ``proactive_milestones`` table: records which milestone events (e.g.
+      'first_week', 'affinity_50') have already fired so they are not re-triggered.
+
+    All ALTER TABLE statements are guarded by a column-existence check so this
+    migration is safe to apply more than once.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v53+.
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 53:
+        return False
+
+    try:
+        logger.info("Applying schema v53 migration (proactive messaging)...")
+
+        # --- characters table new columns ---
+        char_cols = {r[1] for r in con.execute("PRAGMA table_info(characters)").fetchall()}
+        if "proactive_enabled" not in char_cols:
+            con.execute("ALTER TABLE characters ADD COLUMN proactive_enabled INTEGER DEFAULT 0")
+        if "proactive_frequency" not in char_cols:
+            con.execute("ALTER TABLE characters ADD COLUMN proactive_frequency TEXT DEFAULT 'normal'")
+        if "proactive_hours" not in char_cols:
+            con.execute("ALTER TABLE characters ADD COLUMN proactive_hours TEXT DEFAULT '9-22'")
+
+        # --- scheduled_messages.trigger_type ---
+        sched_cols = {r[1] for r in con.execute("PRAGMA table_info(scheduled_messages)").fetchall()}
+        if "trigger_type" not in sched_cols:
+            con.execute("ALTER TABLE scheduled_messages ADD COLUMN trigger_type TEXT DEFAULT 'schedule'")
+
+        # --- proactive_milestones table ---
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS proactive_milestones (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id      INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                milestone_type TEXT NOT NULL,
+                triggered_at TEXT,
+                created_at   TEXT DEFAULT (datetime('now'))
+            )
+            """
+        )
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (53)")
+        con.commit()
+        logger.info("✅ Schema v53 migration complete (proactive messaging columns + milestones table)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v53 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v54(con: sqlite3.Connection) -> bool:
+    """Add meta_summary_id to session_summaries for hierarchical summarization (v54).
+
+    When multiple rolling summaries accumulate (>5), they can be distilled
+    into a meta-summary.  Child summaries that have been rolled up point to
+    the parent via ``meta_summary_id`` and are skipped by the context assembler.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v54+.
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 54:
+        return False
+
+    try:
+        logger.info("Applying schema v54 migration (hierarchical summarization)...")
+
+        # Add meta_summary_id column to session_summaries
+        ss_cols = {r[1] for r in con.execute("PRAGMA table_info(session_summaries)").fetchall()}
+        if "meta_summary_id" not in ss_cols:
+            con.execute(
+                "ALTER TABLE session_summaries ADD COLUMN meta_summary_id INTEGER DEFAULT NULL"
+            )
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (54)")
+        con.commit()
+        logger.info("\u2705 Schema v54 migration complete (meta_summary_id on session_summaries)")
+        return True
+    except Exception as e:
+        logger.error(f"Schema v54 migration failed: {e}")
+        con.rollback()
+        raise
+
+
+def migrate_to_v55(con: sqlite3.Connection) -> bool:
+    """Add Adaptive Intelligence tables and engagement columns (v55).
+
+    Introduces per-character user preference profiles and per-message engagement
+    tracking so the AI can learn each user's communication style over time.
+
+    Schema changes:
+        New table ``user_profiles``:
+            - ``id``: primary key
+            - ``char_id``: FK → characters(id) ON DELETE CASCADE
+            - ``pref_response_length`` (REAL DEFAULT 0.5): 0=terse … 1=verbose
+            - ``pref_formality`` (REAL DEFAULT 0.5): 0=casual … 1=formal
+            - ``pref_humor`` (REAL DEFAULT 0.5): 0=serious … 1=very humorous
+            - ``pref_empathy`` (REAL DEFAULT 0.5): 0=direct … 1=highly empathetic
+            - ``pref_depth`` (REAL DEFAULT 0.5): 0=surface … 1=deep/intellectual
+            - ``topic_affinities`` (TEXT DEFAULT '{}'): JSON map of topic→weight
+            - ``trait_weights`` (TEXT DEFAULT '{}'): JSON map of personality trait→weight
+            - ``preferred_active_hours`` (TEXT): JSON array of hour ints user is typically active
+            - ``preferred_greeting_style`` (TEXT): e.g. 'formal' | 'casual' | 'playful'
+            - ``last_reflection_at`` (TEXT): ISO datetime of last profile reflection
+            - ``reflection_memo`` (TEXT): short LLM-written summary of last reflection
+            - ``total_reflections`` (INTEGER DEFAULT 0): cumulative reflection count
+            - ``created_at`` / ``updated_at`` (TEXT): ISO datetimes
+
+        New columns on ``messages``:
+            - ``engagement_score`` (REAL): 0.0–1.0 signal derived from reply length/timing
+            - ``detected_mood`` (TEXT): mood label inferred at send time (e.g. 'happy')
+            - ``response_time_ms`` (INTEGER): milliseconds from send → LLM first-token
+
+    All ALTER TABLE statements are guarded by a column-existence check.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v55+.
+
+    Example:
+        >>> if migrate_to_v55(con):
+        ...     print("Adaptive Intelligence schema applied")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 55:
+        return False
+
+    try:
+        logger.info("Applying schema v55 migration (Adaptive Intelligence)...")
+
+        # --- user_profiles table ---
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id                 INTEGER NOT NULL
+                                            REFERENCES characters(id) ON DELETE CASCADE,
+                pref_response_length    REAL    DEFAULT 0.5,
+                pref_formality          REAL    DEFAULT 0.5,
+                pref_humor              REAL    DEFAULT 0.5,
+                pref_empathy            REAL    DEFAULT 0.5,
+                pref_depth              REAL    DEFAULT 0.5,
+                topic_affinities        TEXT    DEFAULT '{}',
+                trait_weights           TEXT    DEFAULT '{}',
+                preferred_active_hours  TEXT,
+                preferred_greeting_style TEXT,
+                last_reflection_at      TEXT,
+                reflection_memo         TEXT,
+                total_reflections       INTEGER DEFAULT 0,
+                created_at              TEXT    DEFAULT (datetime('now')),
+                updated_at              TEXT    DEFAULT (datetime('now'))
+            )
+            """
+        )
+
+        # Index for fast per-character profile lookup
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_user_profiles_char ON user_profiles(char_id)"
+        )
+
+        # --- engagement columns on messages ---
+        msg_cols = {r[1] for r in con.execute("PRAGMA table_info(messages)").fetchall()}
+        if "engagement_score" not in msg_cols:
+            con.execute("ALTER TABLE messages ADD COLUMN engagement_score REAL")
+        if "detected_mood" not in msg_cols:
+            con.execute("ALTER TABLE messages ADD COLUMN detected_mood TEXT DEFAULT ''")
+        if "response_time_ms" not in msg_cols:
+            con.execute("ALTER TABLE messages ADD COLUMN response_time_ms INTEGER")
+
+        # Index for querying high-engagement messages per session
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_messages_engagement "
+            "ON messages(session_id, engagement_score)"
+        )
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (55)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v55 migration complete "
+            "(user_profiles table + engagement columns on messages)"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v55 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -3299,21 +3512,40 @@ def ensure_db():
             if migrate_to_v52(con):
                 version = 52
 
+        if version < 53:
+            logger.info("Upgrading database schema from v52 to v53...")
+            logger.info("  - Adding proactive messaging columns + milestones table")
+            if migrate_to_v53(con):
+                version = 53
+
+        if version < 54:
+            logger.info("Upgrading database schema from v53 to v54...")
+            logger.info("  - Adding meta_summary_id for hierarchical summarization")
+            if migrate_to_v54(con):
+                version = 54
+
+        if version < 55:
+            logger.info("Upgrading database schema from v54 to v55...")
+            logger.info("  - Creating user_profiles table (Adaptive Intelligence)")
+            logger.info("  - Adding engagement_score, detected_mood, response_time_ms to messages")
+            if migrate_to_v55(con):
+                version = 55
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 52:
-            raise RuntimeError(f"Database initialization failed: Expected v52, got v{final_version}")
+        if final_version < 55:
+            raise RuntimeError(f"Database initialization failed: Expected v55, got v{final_version}")
 
-        if final_version > 52:
-            logger.warning(f"Database is newer than application (v{final_version} > v52). Some features might be unused.")
+        if final_version > 55:
+            logger.warning(f"Database is newer than application (v{final_version} > v55). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v52 adds tiered prompts)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v55 adds adaptive intelligence)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

@@ -1022,33 +1022,43 @@ def _parse_emotion_gesture(text: str) -> tuple:
     return emotion, gesture, clean or text
 
 
-def _maybe_auto_compress(session_id: int, total_active: int, max_history: int) -> None:
-    """Fire background auto-compression when history approaches the limit.
+def _maybe_auto_compress(
+    session_id: int,
+    total_active: int,
+    max_history: int,
+    assembled_token_count: int = 0,
+    context_limit: int = 0,
+) -> None:
+    """Fire background auto-compression when history approaches limits.
 
-    When the number of active messages in a session exceeds 90% of the
-    configured ``max_history``, this schedules a non-blocking compression
-    task so the *next* request benefits from a shorter context.  The current
-    request is unaffected — the user gets a normal response while compression
-    happens in the background.
+    Dual-trigger: fires when EITHER the message count exceeds 90% of
+    ``max_history`` OR the assembled token count exceeds 85% of the
+    context window.  Token-based triggering catches cases where a few
+    long messages fill the window before the count threshold is reached.
 
     Args:
         session_id: Session to potentially compress.
         total_active: Current count of active (non-archived) messages.
-        max_history: Configured history limit (0 = unlimited → skip).
+        max_history: Configured history limit (0 = unlimited → skip count trigger).
+        assembled_token_count: Token count from the most recent context assembly.
+        context_limit: Provider context window size (0 = skip token trigger).
     """
-    if max_history <= 0:
-        return
-    threshold = int(max_history * 0.9)
-    if total_active < threshold:
+    # Message count trigger
+    count_triggered = max_history > 0 and total_active >= int(max_history * 0.9)
+    # Token budget trigger — 85% threshold leaves headroom for next turn
+    token_triggered = context_limit > 0 and assembled_token_count >= int(context_limit * 0.85)
+
+    if not count_triggered and not token_triggered:
         return
 
     import asyncio
 
     async def _do_compress():
         try:
+            _trigger = "count" if count_triggered else "tokens"
             logger.info(
-                f"Auto-compressing session {session_id}: "
-                f"{total_active} msgs >= {threshold} threshold (limit={max_history})"
+                f"Auto-compressing session {session_id} (trigger={_trigger}): "
+                f"{total_active} msgs, {assembled_token_count}/{context_limit} tokens"
             )
             await compress_session(session_id)
         except Exception as e:
@@ -2003,16 +2013,8 @@ def _build_prompt_sections(
         except (ValueError, TypeError):
             pass
 
-    # 5. RAG memory context
-    if vector_store and user_text:
-        memories = vector_store.query_memory(user_text, char_id=char_id)
-        if memories:
-            mem_text = "\n[MEMORY_CONTEXT]\nRelevant past conversations:\n"
-            for memory in memories:
-                mem_text += f"- {memory['role'].upper()}: {memory['text']}\n"
-            sections.append(_section("RAG Memory", mem_text))
-    else:
-        memories = []
+    # 5. RAG memory context — MOVED to context_assembler as budget-managed tier.
+    # Kept as no-op comment so section numbering is preserved for future readers.
 
     # 6. Vocabulary context
     if include_vocab:
@@ -2318,7 +2320,14 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         _is_first_msg = cur.execute(
             "SELECT COUNT(*) FROM messages WHERE session_id = ? AND is_active = 1", (session_id,)
         ).fetchone()[0] == 0
-        _user_imp = _score_msg(text, "user", is_first=_is_first_msg, has_question="?" in text)
+        # Fetch previous message text for topic-shift detection
+        _prev_row = cur.execute(
+            "SELECT text FROM messages WHERE session_id = ? AND is_active = 1 "
+            "ORDER BY id DESC LIMIT 1", (session_id,)
+        ).fetchone()
+        _prev_text = _prev_row[0] if _prev_row else ""
+        _user_imp = _score_msg(text, "user", is_first=_is_first_msg,
+                               has_question="?" in text, prev_text=_prev_text)
 
         try:
             cur.execute(
@@ -2437,6 +2446,17 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             system_prompt, _system_prompt_lite, cfg, _prompt_tier
         )
 
+        # ── Adaptive Intelligence: inject learned user preferences ────────
+        try:
+            from backend.adaptive.tuner import load_user_profile, profile_to_prompt_instructions
+            _user_profile = load_user_profile(char_id, cur)
+            if _user_profile:
+                _adaptive_instructions = profile_to_prompt_instructions(_user_profile)
+                if _adaptive_instructions:
+                    system_prompt += "\n\n[Adaptive preferences]\n" + _adaptive_instructions
+        except Exception as _adapt_err:
+            logger.debug(f"[Adaptive] profile injection skipped: {_adapt_err}")
+
         # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, mood, emotion, filter)
         sections = _build_prompt_sections(
             cfg, system_prompt, char_id, session_id, cur,
@@ -2470,24 +2490,30 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         _ctx_budget_ns = int(cap_ns.get("context_budget", 0))
         max_history = cfg.get("llm", {}).get("history_limit",
                       cfg.get("history_limit", 0)) or 30
+        _is_claude_ns = cfg.get("llm", {}).get("provider", "") == "claude"
         assembled_ns = _assemble_ctx_ns(
             session_id=session_id, char_id=char_id, user_text=text,
             sections=sections, cfg=cfg, cur=cur,
             context_budget=_ctx_budget_ns,
             max_history=max_history,
             skip_user_append=True,  # user msg already inserted into DB above
+            vector_store=vector_store,
+            cache_hints=_is_claude_ns,
         )
         messages = assembled_ns.messages
         # Derive hist for lorebook keyword scanning (non-system messages)
         hist = [m for m in messages if m["role"] != "system"]
 
         # Auto-compress when history nears the limit (background, non-blocking)
-        if max_history > 0:
-            total_active = cur.execute(
-                "SELECT COUNT(*) FROM messages WHERE session_id=? AND is_active=1",
-                (session_id,)
-            ).fetchone()[0]
-            _maybe_auto_compress(session_id, total_active, max_history)
+        total_active = cur.execute(
+            "SELECT COUNT(*) FROM messages WHERE session_id=? AND is_active=1",
+            (session_id,)
+        ).fetchone()[0]
+        _maybe_auto_compress(
+            session_id, total_active, max_history,
+            assembled_token_count=assembled_ns.token_count,
+            context_limit=cfg.get("context_limit", 131072),
+        )
 
         # ── Feature A6: Lorebook / World Info injection (non-streaming) ──
         _inject_lore_entries(messages, con, char_id, hist)
@@ -2501,6 +2527,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             if cap_ns.get("supports_thinking") is False:
                 thinking_enabled = False
             extra_body = _build_thinking_extra_body(llm_model_name, thinking_enabled)
+            _cache_bp = assembled_ns.cache_breakpoints if assembled_ns.cache_breakpoints else None
             res = await run_in_threadpool(
                 adapter.chat,
                 messages,
@@ -2512,6 +2539,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 repeat_penalty=cfg.get("repeat_penalty"),
                 frequency_penalty=cfg.get("frequency_penalty"),
                 extra_body=extra_body,
+                cache_breakpoints=_cache_bp,
             )
         except Exception as e:
             _telemetry_inc("chat.failures_total")
@@ -2571,6 +2599,22 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             con.commit()
         except Exception as _e:
             logger.warning(f"Could not persist mood/date for char {char_id}: {_e}")
+
+        # ── Adaptive Intelligence: engagement scoring + reflection check ──
+        try:
+            from backend.adaptive.reflector import compute_engagement_score, should_reflect
+            _eng_score = compute_engagement_score(text, clean_reply)
+            cur.execute(
+                "UPDATE messages SET engagement_score = ? WHERE id = ?",
+                (_eng_score, assistant_message_id)
+            )
+            con.commit()
+            # Check if we've hit the reflection threshold (async, non-blocking)
+            if should_reflect(char_id, cur, threshold=50):
+                logger.info(f"[Adaptive] Reflection threshold reached for char {char_id}")
+                # TODO: queue async reflection task (Phase 9B wiring)
+        except Exception as _eng_err:
+            logger.debug(f"[Adaptive] engagement scoring skipped: {_eng_err}")
 
         if vector_store:
             vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
@@ -3036,6 +3080,7 @@ async def chat_multi(req: Request):
                 sections=_sections_multi, cfg=cfg, cur=cur,
                 max_history=max_history,
                 skip_user_append=True,  # user msg already inserted above
+                vector_store=vector_store,
             )
             llm_messages = assembled_m.messages
 
@@ -3101,7 +3146,7 @@ async def _tts_chunk_async(tts_client, text: str, tts_cfg: dict, index: int) -> 
             return {**res, "chunk_index": index}
     except Exception as e:
         logger.warning(f"TTS chunk {index} failed: {e}")
-    return None
+    return {"ok": False, "error": f"TTS chunk {index} generation failed", "chunk_index": index}
 
 
 # Pattern for detecting sentence boundaries in the token stream.
@@ -3205,7 +3250,14 @@ async def chat_stream(req: Request):
         _is_first_s = cur.execute(
             "SELECT COUNT(*) FROM messages WHERE session_id = ? AND is_active = 1", (session_id,)
         ).fetchone()[0] == 0
-        _user_imp_s = _score_msg_s(text, "user", is_first=_is_first_s, has_question="?" in text)
+        # Fetch previous message text for topic-shift detection
+        _prev_row_s = cur.execute(
+            "SELECT text FROM messages WHERE session_id = ? AND is_active = 1 "
+            "ORDER BY id DESC LIMIT 1", (session_id,)
+        ).fetchone()
+        _prev_text_s = _prev_row_s[0] if _prev_row_s else ""
+        _user_imp_s = _score_msg_s(text, "user", is_first=_is_first_s,
+                                   has_question="?" in text, prev_text=_prev_text_s)
 
         try:
             cur.execute(
@@ -3411,24 +3463,30 @@ async def chat_stream(req: Request):
     _ctx_budget_s = int(cap.get("context_budget", 0))
     max_history = cfg.get("llm", {}).get("history_limit",
                   cfg.get("history_limit", 0)) or 30
+    _is_claude_s = cfg.get("llm", {}).get("provider", "") == "claude"
     assembled_s = _assemble_ctx_s(
         session_id=session_id, char_id=char_id, user_text=text,
         sections=sections, cfg=cfg, cur=cur,
         context_budget=_ctx_budget_s,
         max_history=max_history,
         skip_user_append=True,  # user msg already inserted into DB above
+        vector_store=vector_store,
+        cache_hints=_is_claude_s,
     )
     llm_messages = assembled_s.messages
     # Derive hist for lorebook keyword scanning (non-system messages)
     hist = [m for m in llm_messages if m["role"] != "system"]
 
     # Auto-compress when history nears the limit (background, non-blocking)
-    if max_history > 0:
-        total_active = cur.execute(
-            "SELECT COUNT(*) FROM messages WHERE session_id=? AND is_active=1",
-            (session_id,)
-        ).fetchone()[0]
-        _maybe_auto_compress(session_id, total_active, max_history)
+    total_active = cur.execute(
+        "SELECT COUNT(*) FROM messages WHERE session_id=? AND is_active=1",
+        (session_id,)
+    ).fetchone()[0]
+    _maybe_auto_compress(
+        session_id, total_active, max_history,
+        assembled_token_count=assembled_s.token_count,
+        context_limit=cfg.get("context_limit", 131072),
+    )
 
     # ── Feature A6: Lorebook / World Info injection (streaming) ──
     _inject_lore_entries(llm_messages, con, char_id, hist)
@@ -3558,6 +3616,16 @@ async def chat_stream(req: Request):
                 else:
                     assistant_message_id = None
 
+                # T1-8: Record daily interaction for streak/XP tracking (stream path)
+                if not incognito:
+                    try:
+                        from backend.rewards.tracker import record_interaction
+                        _reward = record_interaction(con, char_id, message_count_delta=1)
+                        if _reward.get("milestones"):
+                            logger.info(f"[Rewards] char={char_id} milestones={_reward['milestones']}")
+                    except Exception as _rew_err:
+                        logger.debug(f"[Rewards] tracking failed (pre-v49?): {_rew_err}")
+
                 if vector_store and not incognito:
                     vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
 
@@ -3664,6 +3732,7 @@ async def chat_stream(req: Request):
             """Run the synchronous LLM streaming generator in a dedicated thread."""
             try:
                 first_token = True
+                _stream_cache_bp = assembled_s.cache_breakpoints if assembled_s.cache_breakpoints else None
                 for token in adapter.chat_stream(
                     llm_messages,
                     routed_model,
@@ -3674,6 +3743,7 @@ async def chat_stream(req: Request):
                     repeat_penalty=cfg.get("repeat_penalty"),
                     frequency_penalty=cfg.get("frequency_penalty"),
                     extra_body=stream_extra_body,
+                    cache_breakpoints=_stream_cache_bp,
                 ):
                     if first_token:
                         # Signal that prefill is complete and generation has begun
@@ -4836,12 +4906,23 @@ async def summarize_session(session_id: int, req: Request = None):
         f"{'User' if r[0] == 'user' else 'AI'}: {r[1]}" for r in reversed(rows)
     )
 
+    # Resolve character name for context-aware summarization
+    _sum_char_row = conn.execute(
+        "SELECT c.name FROM sessions s JOIN characters c ON c.id = s.character_id "
+        "WHERE s.id = ?", (session_id,)
+    ).fetchone()
+    _sum_char_name = _sum_char_row[0] if _sum_char_row else "the AI"
+
     summarize_prompt = (
-        "You are a conversation summarizer. Provide a concise summary of the following conversation. "
-        "Include key topics discussed, decisions made, emotional tone, and any important details. "
-        "Keep it under 200 words.\n\n"
+        f"Summarize this conversation between the user and {_sum_char_name}. "
+        "Preserve:\n"
+        "- Key topics and decisions\n"
+        "- Emotional tone and relationship dynamics\n"
+        "- User preferences, facts, and personal details mentioned\n"
+        "- Any promises or commitments made by either party\n"
+        "- Named entities (people, places, media) that may be referenced later\n\n"
         f"CONVERSATION:\n{messages_text}\n\n"
-        "SUMMARY:"
+        f"Write a dense, factual summary under 200 words. Use '{_sum_char_name}', not 'the AI'."
     )
 
     cfg = load_config()
@@ -4959,12 +5040,23 @@ async def compress_session(session_id: int, req: Request = None):
             f"{'User' if role == 'user' else 'AI'}: {text}" for _, role, text in batch
         )
 
+        # Resolve character name for context-aware summarization
+        _char_row = conn.execute(
+            "SELECT c.name FROM sessions s JOIN characters c ON c.id = s.character_id "
+            "WHERE s.id = ?", (session_id,)
+        ).fetchone()
+        _char_name = _char_row[0] if _char_row else "the AI"
+
         summarize_prompt = (
-            "You are a conversation summarizer. Provide a concise summary of the following conversation segment. "
-            "Include key topics discussed, decisions made, emotional tone, and any important details. "
-            "Keep it under 300 words.\n\n"
+            f"Summarize this conversation between the user and {_char_name}. "
+            "Preserve:\n"
+            "- Key topics and decisions\n"
+            "- Emotional tone and relationship dynamics\n"
+            "- User preferences, facts, and personal details mentioned\n"
+            "- Any promises or commitments made by either party\n"
+            "- Named entities (people, places, media) that may be referenced later\n\n"
             f"CONVERSATION SEGMENT:\n{messages_text}\n\n"
-            "SUMMARY:"
+            f"Write a dense, factual summary under 300 words. Use '{_char_name}', not 'the AI'."
         )
 
         cfg = load_config()
@@ -5020,13 +5112,24 @@ async def compress_session(session_id: int, req: Request = None):
         conn.execute("UPDATE sessions SET summary = ? WHERE id = ?", (summary, session_id))
         conn.commit()
 
-        return {
+        # Hierarchical summarization: distill old summaries into meta-summaries
+        meta_result = None
+        try:
+            from backend.llm.context_assembler import maybe_create_meta_summary
+            meta_result = await maybe_create_meta_summary(session_id, cfg, conn)
+        except Exception as e:
+            logger.warning(f"Meta-summary creation failed (non-fatal): {e}")
+
+        result = {
             "ok": True,
             "summary": summary,
             "archived": archived_count,
             "kept": keep_recent,
             "batch_range": [range_start, range_end],
         }
+        if meta_result:
+            result["meta_summary"] = meta_result
+        return result
     finally:
         conn.close()
 
@@ -5402,7 +5505,8 @@ def list_characters():
                    expr_portraits, first_chat_date, diary, diary_date, capability_profile,
                    tts_pitch, tts_rate, vocab_categories, animation_profile, emotion_voice_overrides,
                    mood_enabled, mood_intensity, emotion_portraits_mode,
-                   bible_path, bible_enabled, bible_sections, system_prompt_lite
+                   bible_path, bible_enabled, bible_sections, system_prompt_lite,
+                   proactive_enabled, proactive_frequency, proactive_hours
             FROM characters
             ORDER BY id ASC
         """)
@@ -5470,6 +5574,10 @@ def list_characters():
             "bible_sections": json.loads(row[36]) if len(row) > 36 and row[36] else None,
             # v52: Tiered prompts — lite CORE-only prompt for small context windows
             "system_prompt_lite": row[37] if len(row) > 37 else None,
+            # v53: Proactive AI messaging settings
+            "proactive_enabled": bool(row[38]) if len(row) > 38 and row[38] is not None else False,
+            "proactive_frequency": row[39] if len(row) > 39 else "normal",
+            "proactive_hours": row[40] if len(row) > 40 else "9-22",
         }
         characters.append(char)
     conn.close()
@@ -6573,7 +6681,7 @@ def get_relationship(char_id: int):
     ).fetchone()
 
     if not row:
-        return {"ok": True, "relationship": {"affinity": 0.5, "mood": 0.5, "trust": 0.5, "interactions": 0, "last_updated": None}}
+        return {"ok": True, "relationship": {"affinity": 0.0, "mood": 0.5, "trust": 0.0, "interactions": 0, "last_updated": None}}
 
     return {
         "ok": True,
@@ -9971,26 +10079,39 @@ async def _scheduler_loop(db_path: str) -> None:
 def _run_scheduler_tick(db_path: str) -> None:
     """Execute one scheduling tick: evaluate all enabled schedules and queue messages.
 
+    Uses the ``backend.proactive`` module for trigger evaluation, rate limiting,
+    milestone detection, and LLM-powered message generation.  Falls back to
+    template-based messages when the LLM is unreachable.
+
     Args:
         db_path: Filesystem path to the SQLite database.
     """
     import datetime as _dt
+    from backend.proactive.triggers import (
+        evaluate_time_trigger,
+        evaluate_idle_trigger,
+        evaluate_milestone_triggers,
+        get_daily_message_count,
+        get_daily_cap,
+        is_within_active_hours,
+    )
+    from backend.proactive.generator import generate_proactive_message
 
     now = _dt.datetime.now()
     now_ts = int(now.timestamp())
-    today_str = now.strftime("%Y-%m-%d")
-    now_total_minutes = now.hour * 60 + now.minute
+    cfg = load_config() or {}
 
     conn = sqlite3.connect(db_path)
     try:
         cur = conn.cursor()
+
+        # ── 1. Schedule-based triggers ────────────────────────────────────
         # Feature #29 (Day Off Mode): characters with day_off = 1 are excluded
         # entirely so the scheduler generates no proactive messages for them.
-        # Sending a single "farewell" message when day_off is first enabled is
-        # a future enhancement — the frontend should show a local toast instead.
         cur.execute("""
             SELECT cs.id, cs.char_id, cs.schedule_type, cs.time_of_day,
-                   cs.hours_away, cs.last_triggered, c.name
+                   cs.hours_away, cs.last_triggered, c.name,
+                   c.proactive_enabled, c.proactive_frequency, c.proactive_hours
             FROM character_schedules cs
             JOIN characters c ON c.id = cs.char_id
             WHERE cs.enabled = 1
@@ -9999,26 +10120,32 @@ def _run_scheduler_tick(db_path: str) -> None:
         schedules = cur.fetchall()
 
         for (sched_id, char_id, sched_type, time_of_day,
-             hours_away, last_triggered, char_name) in schedules:
+             hours_away, last_triggered, char_name,
+             proactive_enabled, proactive_frequency, proactive_hours) in schedules:
 
+            # Skip if proactive is explicitly disabled for this character
+            if not proactive_enabled:
+                continue
+
+            frequency = proactive_frequency or "normal"
+            active_hours = proactive_hours or "9-22"
+
+            # Active hours gate
+            if not is_within_active_hours(active_hours, now):
+                continue
+
+            # Daily rate limit
+            daily_count = get_daily_message_count(char_id, cur)
+            if daily_count >= get_daily_cap(frequency):
+                continue
+
+            # Evaluate trigger
             should_fire = False
+            trigger_type = "schedule"
 
             if sched_type == "time_of_day" and time_of_day:
-                try:
-                    t_h, t_m = int(time_of_day[:2]), int(time_of_day[3:])
-                    target_minutes = t_h * 60 + t_m
-                    diff = abs(now_total_minutes - target_minutes)
-                    # Account for midnight wrap-around
-                    diff = min(diff, 1440 - diff)
-                    in_window = diff <= 5
-                    already_fired_today = (
-                        last_triggered is not None
-                        and last_triggered.startswith(today_str)
-                    )
-                    should_fire = in_window and not already_fired_today
-                except (ValueError, IndexError):
-                    logger.warning("[Scheduler] Invalid time_of_day for schedule %s", sched_id)
-
+                should_fire = evaluate_time_trigger(time_of_day, last_triggered, now)
+                trigger_type = "time_of_day"
             elif sched_type == "hours_away" and hours_away:
                 row = cur.execute("""
                     SELECT MAX(m.ts)
@@ -10027,31 +10154,22 @@ def _run_scheduler_tick(db_path: str) -> None:
                     WHERE s.character_id = ? AND m.role = 'user'
                 """, (char_id,)).fetchone()
                 last_user_ts = row[0] if row and row[0] else None
-                away_secs = hours_away * 3600
-                user_away_long_enough = (
-                    (now_ts - int(last_user_ts)) >= away_secs
-                    if last_user_ts is not None else True
+                should_fire = evaluate_idle_trigger(
+                    hours_away, last_user_ts, last_triggered, now
                 )
-                fired_recently = False
-                if last_triggered is not None:
-                    try:
-                        lt_ts = int(_dt.datetime.fromisoformat(last_triggered).timestamp())
-                        fired_recently = (now_ts - lt_ts) < away_secs
-                    except ValueError:
-                        pass
-                should_fire = user_away_long_enough and not fired_recently
+                trigger_type = "hours_away"
 
             if not should_fire:
                 continue
 
-            message_text = (
-                f"Hey! It's {char_name}. "
-                "I've been thinking about you - come chat with me when you get a chance!"
+            # Generate contextual message via LLM (with template fallback)
+            message_text = generate_proactive_message(
+                char_id, char_name, trigger_type, db_path, cfg
             )
             cur.execute(
-                "INSERT INTO scheduled_messages (char_id, text, triggered_at, delivered) "
-                "VALUES (?, ?, ?, 0)",
-                (char_id, message_text, now_ts)
+                "INSERT INTO scheduled_messages (char_id, text, triggered_at, delivered, trigger_type) "
+                "VALUES (?, ?, ?, 0, ?)",
+                (char_id, message_text, now_ts, trigger_type)
             )
             cur.execute(
                 "UPDATE character_schedules SET last_triggered = ? WHERE id = ?",
@@ -10059,15 +10177,58 @@ def _run_scheduler_tick(db_path: str) -> None:
             )
             conn.commit()
             logger.info(
-                "[Scheduler] Queued proactive message for char_id=%s ('%s')",
-                char_id, char_name
+                "[Scheduler] Queued proactive message for char_id=%s ('%s') trigger=%s",
+                char_id, char_name, trigger_type
             )
+
+        # ── 2. Milestone triggers (independent of schedules) ──────────────
+        # Check all proactive-enabled characters for milestone events.
+        cur.execute("""
+            SELECT id, name, proactive_frequency, proactive_hours
+            FROM characters
+            WHERE proactive_enabled = 1
+              AND COALESCE(day_off, 0) = 0
+        """)
+        chars = cur.fetchall()
+        for (char_id, char_name, frequency, active_hours) in chars:
+            frequency = frequency or "normal"
+            active_hours = active_hours or "9-22"
+
+            if not is_within_active_hours(active_hours, now):
+                continue
+
+            daily_count = get_daily_message_count(char_id, cur)
+            if daily_count >= get_daily_cap(frequency):
+                continue
+
+            milestones = evaluate_milestone_triggers(char_id, cur)
+            for ms_type in milestones:
+                # Re-check cap inside loop (milestones can stack)
+                if get_daily_message_count(char_id, cur) >= get_daily_cap(frequency):
+                    break
+
+                message_text = generate_proactive_message(
+                    char_id, char_name, ms_type, db_path, cfg
+                )
+                cur.execute(
+                    "INSERT INTO scheduled_messages (char_id, text, triggered_at, delivered, trigger_type) "
+                    "VALUES (?, ?, ?, 0, ?)",
+                    (char_id, message_text, now_ts, ms_type)
+                )
+                # Record milestone as triggered
+                cur.execute(
+                    "INSERT INTO proactive_milestones (char_id, milestone_type, triggered_at) "
+                    "VALUES (?, ?, ?)",
+                    (char_id, ms_type, now.isoformat())
+                )
+                conn.commit()
+                logger.info(
+                    "[Scheduler] Queued milestone message for char_id=%s ('%s') milestone=%s",
+                    char_id, char_name, ms_type
+                )
+
     except Exception as _e:
         logger.warning("[Scheduler] Tick error: %s", _e)
-        try:
-            conn.rollback()
-        except Exception:
-            pass
     finally:
         conn.close()
 
@@ -11667,7 +11828,8 @@ def get_scheduler_pending():
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT sm.id, sm.char_id, c.name, c.avatar_url, sm.text, sm.triggered_at
+            SELECT sm.id, sm.char_id, c.name, c.avatar_url, sm.text, sm.triggered_at,
+                   sm.trigger_type
             FROM scheduled_messages sm
             JOIN characters c ON c.id = sm.char_id
             WHERE sm.delivered = 0
@@ -11682,6 +11844,7 @@ def get_scheduler_pending():
                 "char_avatar_url": row[3],
                 "text": row[4],
                 "triggered_at": row[5],
+                "trigger_type": row[6] or "schedule",
             }
             for row in rows
         ]
@@ -11732,6 +11895,273 @@ async def acknowledge_scheduler_message(req: Request):
     except Exception as _exc:
         logger.error("[Scheduler] Error acknowledging message %s: %s", message_id, _exc)
         raise HTTPException(status_code=500, detail="Failed to acknowledge message")
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Proactive AI Messages — settings, history, chat injection, idle trigger
+# ---------------------------------------------------------------------------
+
+@app.patch("/api/characters/{char_id}/proactive")
+async def update_proactive_settings(char_id: int, req: Request):
+    """Update proactive messaging settings for a character.
+
+    Args:
+        char_id: Character database ID.
+        req: JSON body with optional keys: enabled (bool), frequency (str), hours (str).
+
+    Returns:
+        {"ok": true, "proactive_enabled": int, "proactive_frequency": str, "proactive_hours": str}
+
+    Raises:
+        HTTPException 400: If frequency value is invalid.
+        HTTPException 404: If character not found.
+
+    Example:
+        >>> PATCH /api/characters/5/proactive
+        >>> {"enabled": true, "frequency": "chatty", "hours": "8-23"}
+        {"ok": true, "proactive_enabled": 1, ...}
+    """
+    body = await req.json()
+    conn = db()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM characters WHERE id = ?", (char_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Character not found")
+
+        updates: list[str] = []
+        params: list = []
+
+        if "enabled" in body:
+            updates.append("proactive_enabled = ?")
+            params.append(1 if body["enabled"] else 0)
+        if "frequency" in body:
+            freq = body["frequency"]
+            if freq not in ("quiet", "normal", "chatty"):
+                raise HTTPException(status_code=400, detail="frequency must be quiet, normal, or chatty")
+            updates.append("proactive_frequency = ?")
+            params.append(freq)
+        if "hours" in body:
+            updates.append("proactive_hours = ?")
+            params.append(body["hours"])
+
+        if updates:
+            params.append(char_id)
+            cur.execute(
+                f"UPDATE characters SET {', '.join(updates)} WHERE id = ?",
+                params,
+            )
+            conn.commit()
+
+        cur.execute(
+            "SELECT proactive_enabled, proactive_frequency, proactive_hours FROM characters WHERE id = ?",
+            (char_id,),
+        )
+        row = cur.fetchone()
+        return {
+            "ok": True,
+            "proactive_enabled": row[0],
+            "proactive_frequency": row[1],
+            "proactive_hours": row[2],
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("[Proactive] Error updating settings for char %s: %s", char_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to update proactive settings")
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/proactive/history")
+def get_proactive_history(char_id: int, limit: int = 20):
+    """Retrieve recent proactive messages sent by a character.
+
+    Args:
+        char_id: Character database ID.
+        limit: Max messages to return (default 20).
+
+    Returns:
+        {"ok": true, "messages": [...]}
+
+    Example:
+        >>> GET /api/characters/5/proactive/history?limit=10
+        {"ok": true, "messages": [{"id": 1, "text": "Good morning!", ...}]}
+    """
+    conn = db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, text, triggered_at, delivered, trigger_type
+            FROM scheduled_messages
+            WHERE char_id = ?
+            ORDER BY triggered_at DESC
+            LIMIT ?
+            """,
+            (char_id, limit),
+        )
+        rows = cur.fetchall()
+        messages = [
+            {
+                "id": row[0],
+                "text": row[1],
+                "triggered_at": row[2],
+                "delivered": bool(row[3]),
+                "trigger_type": row[4] or "schedule",
+            }
+            for row in rows
+        ]
+        return {"ok": True, "messages": messages}
+    except Exception as exc:
+        logger.error("[Proactive] Error fetching history for char %s: %s", char_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to fetch proactive history")
+    finally:
+        conn.close()
+
+
+@app.post("/api/characters/{char_id}/proactive/inject")
+async def inject_proactive_messages(char_id: int, req: Request):
+    """Inject pending proactive messages into the chat as assistant messages.
+
+    Finds undelivered scheduled messages for the character, inserts them into
+    the active session's message history as assistant-role messages, marks them
+    delivered, and returns the injected messages.
+
+    Args:
+        char_id: Character database ID.
+        req: JSON body with session_id (int).
+
+    Returns:
+        {"ok": true, "injected": [...]}
+
+    Raises:
+        HTTPException 400: If session_id is missing.
+
+    Example:
+        >>> POST /api/characters/5/proactive/inject
+        >>> {"session_id": 42}
+        {"ok": true, "injected": [{"message_id": 101, "text": "Good morning!"}]}
+    """
+    body = await req.json()
+    session_id = body.get("session_id")
+    if session_id is None:
+        raise HTTPException(status_code=400, detail="session_id is required")
+
+    conn = db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, text, trigger_type FROM scheduled_messages WHERE char_id = ? AND delivered = 0 ORDER BY triggered_at ASC",
+            (char_id,),
+        )
+        pending = cur.fetchall()
+
+        injected: list[dict] = []
+        import time as _time
+        for (msg_id, text, trigger_type) in pending:
+            ts = int(_time.time())
+            cur.execute(
+                "INSERT INTO messages (session_id, role, text, ts, char_id, is_active, emotion) "
+                "VALUES (?, 'assistant', ?, ?, ?, 1, 'neutral')",
+                (session_id, text, ts, char_id),
+            )
+            new_msg_id = cur.lastrowid
+            cur.execute(
+                "UPDATE scheduled_messages SET delivered = 1 WHERE id = ?",
+                (msg_id,),
+            )
+            injected.append({
+                "message_id": new_msg_id,
+                "text": text,
+                "trigger_type": trigger_type or "schedule",
+                "ts": ts,
+            })
+
+        conn.commit()
+        return {"ok": True, "injected": injected}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("[Proactive] Error injecting messages for char %s: %s", char_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to inject proactive messages")
+    finally:
+        conn.close()
+
+
+@app.post("/api/proactive/trigger-idle/{char_id}")
+async def trigger_idle_proactive(char_id: int):
+    """Instantly trigger an idle-type proactive message for a character.
+
+    Bypasses the 5-minute scheduler wait.  Respects active hours and daily cap.
+    Useful for the frontend idle-detection hook to request an immediate message.
+
+    Args:
+        char_id: Character database ID.
+
+    Returns:
+        {"ok": true, "message": {...}} on success, or {"ok": false, "reason": "..."}.
+
+    Example:
+        >>> POST /api/proactive/trigger-idle/5
+        {"ok": true, "message": {"id": 42, "text": "Still there?", "trigger_type": "idle"}}
+    """
+    import datetime as _dt
+    from backend.proactive.triggers import is_within_active_hours, get_daily_message_count, get_daily_cap
+    from backend.proactive.generator import generate_proactive_message
+
+    conn = db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT name, proactive_enabled, proactive_frequency, proactive_hours, day_off FROM characters WHERE id = ?",
+            (char_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Character not found")
+
+        char_name, proactive_enabled, frequency, active_hours, day_off = row
+        frequency = frequency or "normal"
+        active_hours = active_hours or "9-22"
+
+        if not proactive_enabled:
+            return {"ok": False, "reason": "proactive_disabled"}
+        if day_off:
+            return {"ok": False, "reason": "day_off"}
+
+        now = _dt.datetime.now()
+        if not is_within_active_hours(active_hours, now):
+            return {"ok": False, "reason": "outside_active_hours"}
+
+        daily_count = get_daily_message_count(char_id, cur)
+        if daily_count >= get_daily_cap(frequency):
+            return {"ok": False, "reason": "daily_cap_reached"}
+
+        cfg = load_config() or {}
+        message_text = generate_proactive_message(
+            char_id, char_name, "idle", str(STORAGE / "app.db"), cfg
+        )
+        now_ts = int(now.timestamp())
+        cur.execute(
+            "INSERT INTO scheduled_messages (char_id, text, triggered_at, delivered, trigger_type) "
+            "VALUES (?, ?, ?, 0, 'idle')",
+            (char_id, message_text, now_ts),
+        )
+        msg_id = cur.lastrowid
+        conn.commit()
+
+        return {
+            "ok": True,
+            "message": {"id": msg_id, "text": message_text, "trigger_type": "idle"},
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("[Proactive] Error triggering idle for char %s: %s", char_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to trigger idle message")
     finally:
         conn.close()
 

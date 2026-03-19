@@ -73,6 +73,9 @@ def _create_schema(db_path: Path) -> None:
                 input_token_count INTEGER,
                 generation_time_ms INTEGER,
                 tokens_per_second REAL,
+                engagement_score REAL,
+                detected_mood TEXT DEFAULT '',
+                response_time_ms INTEGER,
                 FOREIGN KEY(session_id) REFERENCES sessions(id)
             );
 
@@ -117,7 +120,59 @@ def _create_schema(db_path: Path) -> None:
                 bible_path TEXT,
                 bible_enabled INTEGER DEFAULT 0,
                 bible_sections TEXT,
-                system_prompt_lite TEXT DEFAULT NULL
+                system_prompt_lite TEXT DEFAULT NULL,
+                proactive_enabled INTEGER DEFAULT 0,
+                proactive_frequency TEXT DEFAULT 'normal',
+                proactive_hours TEXT DEFAULT '9-22'
+            );
+
+            CREATE TABLE IF NOT EXISTS scheduled_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                triggered_at TEXT,
+                delivered INTEGER DEFAULT 0,
+                trigger_type TEXT DEFAULT 'schedule',
+                FOREIGN KEY(char_id) REFERENCES characters(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS proactive_milestones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                milestone_type TEXT NOT NULL,
+                triggered_at TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id                 INTEGER NOT NULL
+                                            REFERENCES characters(id) ON DELETE CASCADE,
+                pref_response_length    REAL    DEFAULT 0.5,
+                pref_formality          REAL    DEFAULT 0.5,
+                pref_humor              REAL    DEFAULT 0.5,
+                pref_empathy            REAL    DEFAULT 0.5,
+                pref_depth              REAL    DEFAULT 0.5,
+                topic_affinities        TEXT    DEFAULT '{}',
+                trait_weights           TEXT    DEFAULT '{}',
+                preferred_active_hours  TEXT,
+                preferred_greeting_style TEXT,
+                last_reflection_at      TEXT,
+                reflection_memo         TEXT,
+                total_reflections       INTEGER DEFAULT 0,
+                created_at              TEXT    DEFAULT (datetime('now')),
+                updated_at              TEXT    DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS character_schedules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id INTEGER NOT NULL,
+                schedule_type TEXT NOT NULL DEFAULT 'time_of_day',
+                time_of_day TEXT,
+                hours_away INTEGER,
+                enabled INTEGER DEFAULT 1,
+                last_triggered TEXT,
+                FOREIGN KEY(char_id) REFERENCES characters(id)
             );
 
             CREATE TABLE IF NOT EXISTS character_relationships (
@@ -216,6 +271,8 @@ def _install_fake_llm(monkeypatch: pytest.MonkeyPatch) -> None:
             self.history_count = kwargs.get("history_count", 0)
             self.summaries_included = kwargs.get("summaries_included", 0)
             self.high_importance_kept = kwargs.get("high_importance_kept", 0)
+            self.semantic_memories_included = kwargs.get("semantic_memories_included", 0)
+            self.cache_breakpoints = kwargs.get("cache_breakpoints", [])
 
     def _stub_assemble_context(**kwargs):
         """Return a minimal assembled context with the user message."""

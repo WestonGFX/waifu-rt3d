@@ -1,7 +1,10 @@
+import logging
 import requests
 import io
 from typing import Dict, Optional
 from .base import ASRAdapter
+
+logger = logging.getLogger(__name__)
 
 class WhisperLocalAdapter(ASRAdapter):
     """Local Whisper.cpp adapter for offline transcription."""
@@ -77,5 +80,6 @@ class WhisperLocalAdapter(ASRAdapter):
         try:
             response = requests.get(self.endpoint, timeout=2)
             return response.status_code in [200, 404]  # 404 is ok for root
-        except:
+        except Exception as e:
+            logger.debug("Whisper.cpp server not reachable: %s", e)
             return False

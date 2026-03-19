@@ -185,7 +185,9 @@ def give_gift(
         )
 
     row_id, gift_name, gift_category, is_favorite_raw = gift_row
-    is_favorite = bool(is_favorite_raw)
+    # Use == 1 (not bool()) because bool(-1) is True, which would
+    # incorrectly treat disliked gifts (is_favorite = -1) as favorites.
+    is_favorite = (is_favorite_raw == 1)
 
     # Map gift type to XP action key
     if is_favorite:

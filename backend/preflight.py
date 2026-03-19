@@ -31,6 +31,9 @@ Migration Strategy:
     - v52 → v53: Proactive AI messages — proactive columns on characters + proactive_milestones table
     - v53 → v54: Hierarchical summarization — meta_summary_id on session_summaries
     - v54 → v55: Adaptive Intelligence — user_profiles table + engagement columns on messages
+    - v55 → v56: Bond Progression System — bond_stories, character_gifts, gift_history tables
+                  + bond_level/bond_xp/relationship_mode/covenant_date on character_relationships
+                  + active_outfit_id on characters
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -3117,6 +3120,188 @@ def migrate_to_v55(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v56(con: sqlite3.Connection) -> bool:
+    """Add Bond Progression System tables and columns (v56).
+
+    Introduces the full data layer for tracking relationship depth between a
+    user and each character via experience points, milestones, gift-giving, and
+    unlockable story scenes.
+
+    Schema changes:
+
+        New table ``bond_stories``:
+            - ``id``: primary key
+            - ``char_id``: FK → characters(id) ON DELETE CASCADE
+            - ``bond_level_required`` (INTEGER NOT NULL): minimum bond level to unlock
+            - ``title`` (TEXT NOT NULL): short scene title
+            - ``scene_text`` (TEXT NOT NULL): full scene prose / dialogue
+            - ``scene_type`` (TEXT DEFAULT 'dialogue'): 'dialogue' | 'flashback' | 'confession' etc.
+            - ``choices`` (TEXT): optional JSON array of branching choices
+            - ``unlocked`` (INTEGER DEFAULT 0): 1 once the level threshold is met
+            - ``viewed`` (INTEGER DEFAULT 0): 1 after the player has read the scene
+            - ``created_at`` (TEXT): ISO datetime
+
+        New table ``character_gifts``:
+            - ``id``: primary key
+            - ``char_id``: FK → characters(id) ON DELETE CASCADE
+            - ``gift_name`` (TEXT NOT NULL): human-readable gift name
+            - ``gift_category`` (TEXT NOT NULL): e.g. 'food' | 'accessory' | 'book'
+            - ``affinity_boost`` (REAL DEFAULT 1.0): XP multiplier when gifted
+            - ``is_favorite`` (INTEGER DEFAULT 0): 1 if this is a favourite gift
+            - ``description`` (TEXT): optional flavour text
+
+        New table ``gift_history``:
+            - ``id``: primary key
+            - ``char_id`` (INTEGER NOT NULL): which character received the gift
+            - ``gift_id`` (INTEGER NOT NULL): FK-style reference to character_gifts.id
+            - ``given_at`` (TEXT): ISO datetime of gift event
+            - ``reaction`` (TEXT): optional LLM-generated reaction snippet
+
+        New columns on ``character_relationships``:
+            - ``bond_level`` (INTEGER DEFAULT 0): current tier (0 = Stranger … N = Soulbound)
+            - ``bond_xp`` (INTEGER DEFAULT 0): XP within the current tier
+            - ``relationship_mode`` (TEXT DEFAULT 'friend'): active relationship archetype
+            - ``covenant_date`` (TEXT): ISO date when a covenant/commitment was made
+
+        New column on ``characters``:
+            - ``active_outfit_id`` (INTEGER): future outfit system — FK slot reserved now
+
+    All ALTER TABLE statements are guarded by a PRAGMA column-existence check so
+    the migration is idempotent.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v56+.
+
+    Example:
+        >>> if migrate_to_v56(con):
+        ...     print("Bond Progression schema applied")
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 56:
+        return False
+
+    try:
+        logger.info("Applying schema v56 migration (Bond Progression System)...")
+
+        # ------------------------------------------------------------------ #
+        # bond_stories — scripted scenes unlocked at bond milestones
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bond_stories (
+                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id              INTEGER NOT NULL
+                                         REFERENCES characters(id) ON DELETE CASCADE,
+                bond_level_required  INTEGER NOT NULL,
+                title                TEXT    NOT NULL,
+                scene_text           TEXT    NOT NULL,
+                scene_type           TEXT    DEFAULT 'dialogue',
+                choices              TEXT,
+                unlocked             INTEGER DEFAULT 0,
+                viewed               INTEGER DEFAULT 0,
+                created_at           TEXT    DEFAULT (datetime('now'))
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_bond_stories_char "
+            "ON bond_stories(char_id)"
+        )
+        # Fast lookup of unlocked-but-unread scenes per character
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_bond_stories_char_level "
+            "ON bond_stories(char_id, bond_level_required)"
+        )
+
+        # ------------------------------------------------------------------ #
+        # character_gifts — gift definitions with per-character preferences
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS character_gifts (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id         INTEGER NOT NULL
+                                    REFERENCES characters(id) ON DELETE CASCADE,
+                gift_name       TEXT    NOT NULL,
+                gift_category   TEXT    NOT NULL,
+                affinity_boost  REAL    DEFAULT 1.0,
+                is_favorite     INTEGER DEFAULT 0,
+                description     TEXT
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_character_gifts_char "
+            "ON character_gifts(char_id)"
+        )
+
+        # ------------------------------------------------------------------ #
+        # gift_history — audit log of every gift given
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS gift_history (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id  INTEGER NOT NULL,
+                gift_id  INTEGER NOT NULL,
+                given_at TEXT    DEFAULT (datetime('now')),
+                reaction TEXT
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_gift_history_char "
+            "ON gift_history(char_id)"
+        )
+
+        # ------------------------------------------------------------------ #
+        # character_relationships — bond progression columns
+        # ------------------------------------------------------------------ #
+        rel_cols = {r[1] for r in con.execute("PRAGMA table_info(character_relationships)").fetchall()}
+        if "bond_level" not in rel_cols:
+            con.execute(
+                "ALTER TABLE character_relationships ADD COLUMN bond_level INTEGER DEFAULT 0"
+            )
+        if "bond_xp" not in rel_cols:
+            con.execute(
+                "ALTER TABLE character_relationships ADD COLUMN bond_xp INTEGER DEFAULT 0"
+            )
+        if "relationship_mode" not in rel_cols:
+            con.execute(
+                "ALTER TABLE character_relationships ADD COLUMN relationship_mode TEXT DEFAULT 'friend'"
+            )
+        if "covenant_date" not in rel_cols:
+            con.execute(
+                "ALTER TABLE character_relationships ADD COLUMN covenant_date TEXT"
+            )
+
+        # ------------------------------------------------------------------ #
+        # characters — active_outfit_id slot (future outfit system)
+        # ------------------------------------------------------------------ #
+        char_cols = {r[1] for r in con.execute("PRAGMA table_info(characters)").fetchall()}
+        if "active_outfit_id" not in char_cols:
+            con.execute(
+                "ALTER TABLE characters ADD COLUMN active_outfit_id INTEGER"
+            )
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (56)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v56 migration complete "
+            "(bond_stories + character_gifts + gift_history tables; "
+            "bond_level/bond_xp/relationship_mode/covenant_date on character_relationships; "
+            "active_outfit_id on characters)"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v56 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -3531,21 +3716,29 @@ def ensure_db():
             if migrate_to_v55(con):
                 version = 55
 
+        if version < 56:
+            logger.info("Upgrading database schema from v55 to v56...")
+            logger.info("  - Creating bond_stories, character_gifts, gift_history tables")
+            logger.info("  - Adding bond_level/bond_xp/relationship_mode/covenant_date to character_relationships")
+            logger.info("  - Adding active_outfit_id to characters")
+            if migrate_to_v56(con):
+                version = 56
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 55:
-            raise RuntimeError(f"Database initialization failed: Expected v55, got v{final_version}")
+        if final_version < 56:
+            raise RuntimeError(f"Database initialization failed: Expected v56, got v{final_version}")
 
-        if final_version > 55:
-            logger.warning(f"Database is newer than application (v{final_version} > v55). Some features might be unused.")
+        if final_version > 56:
+            logger.warning(f"Database is newer than application (v{final_version} > v56). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v55 adds adaptive intelligence)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v56 adds Bond Progression System)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

@@ -123,7 +123,8 @@ def _create_schema(db_path: Path) -> None:
                 system_prompt_lite TEXT DEFAULT NULL,
                 proactive_enabled INTEGER DEFAULT 0,
                 proactive_frequency TEXT DEFAULT 'normal',
-                proactive_hours TEXT DEFAULT '9-22'
+                proactive_hours TEXT DEFAULT '9-22',
+                active_outfit_id INTEGER
             );
 
             CREATE TABLE IF NOT EXISTS scheduled_messages (
@@ -183,7 +184,44 @@ def _create_schema(db_path: Path) -> None:
                 trust REAL DEFAULT 0.5,
                 interactions INTEGER DEFAULT 0,
                 last_updated INTEGER DEFAULT (strftime('%s','now')),
+                bond_level INTEGER DEFAULT 0,
+                bond_xp INTEGER DEFAULT 0,
+                relationship_mode TEXT DEFAULT 'friend',
+                covenant_date TEXT,
                 FOREIGN KEY(char_id) REFERENCES characters(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS bond_stories (
+                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id              INTEGER NOT NULL
+                                         REFERENCES characters(id) ON DELETE CASCADE,
+                bond_level_required  INTEGER NOT NULL,
+                title                TEXT    NOT NULL,
+                scene_text           TEXT    NOT NULL,
+                scene_type           TEXT    DEFAULT 'dialogue',
+                choices              TEXT,
+                unlocked             INTEGER DEFAULT 0,
+                viewed               INTEGER DEFAULT 0,
+                created_at           TEXT    DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS character_gifts (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id         INTEGER NOT NULL
+                                    REFERENCES characters(id) ON DELETE CASCADE,
+                gift_name       TEXT    NOT NULL,
+                gift_category   TEXT    NOT NULL,
+                affinity_boost  REAL    DEFAULT 1.0,
+                is_favorite     INTEGER DEFAULT 0,
+                description     TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS gift_history (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id  INTEGER NOT NULL,
+                gift_id  INTEGER NOT NULL,
+                given_at TEXT    DEFAULT (datetime('now')),
+                reaction TEXT
             );
 
             CREATE TABLE IF NOT EXISTS connection_profiles (

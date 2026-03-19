@@ -2616,6 +2616,20 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         except Exception as _eng_err:
             logger.debug(f"[Adaptive] engagement scoring skipped: {_eng_err}")
 
+        # ── Bond Progression: earn XP for each message exchange ──────────
+        try:
+            from backend.bond.progression import add_bond_xp, get_xp_for_action, get_bond_level
+            _bond_info = get_bond_level(char_id, cur)
+            _msg_xp = get_xp_for_action("message", _bond_info.get("bond_level", 0))
+            _bond_result = add_bond_xp(char_id, cur, _msg_xp, source="message")
+            con.commit()
+            if _bond_result.get("leveled_up"):
+                logger.info(f"[Bond] char={char_id} leveled up to {_bond_result['new_level']}")
+            if _bond_result.get("unlocked_stories"):
+                logger.info(f"[Bond] char={char_id} unlocked stories: {_bond_result['unlocked_stories']}")
+        except Exception as _bond_err:
+            logger.debug(f"[Bond] XP tracking skipped: {_bond_err}")
+
         if vector_store:
             vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
 
@@ -6718,6 +6732,167 @@ def reset_relationship(char_id: int):
         )
     conn.commit()
     return {"ok": True}
+
+
+# ── Bond Progression System (Phase 13A) ───────────────────────────────────────
+
+
+@app.get("/api/characters/{char_id}/bond")
+def get_character_bond(char_id: int):
+    """Get the bond level, XP, tier, and relationship mode for a character.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        {"ok": True, "bond": {bond_level, bond_xp, xp_to_next, tier, relationship_mode}}
+
+    Example:
+        >>> resp = client.get("/api/characters/1/bond")
+        >>> resp.json()["bond"]["tier"]
+        'stranger'
+    """
+    conn = db()
+    try:
+        from backend.bond.progression import get_bond_level
+        bond = get_bond_level(char_id, conn.cursor())
+        return {"ok": True, "bond": bond}
+    except Exception as e:
+        logger.warning(f"[Bond] get_bond failed: {e}")
+        return {"ok": True, "bond": {"bond_level": 0, "bond_xp": 0, "xp_to_next": 50, "tier": "stranger", "relationship_mode": "friend"}}
+
+
+@app.get("/api/characters/{char_id}/bond/gifts")
+def get_character_gifts(char_id: int):
+    """List all available gifts for a character with preference indicators.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        {"ok": True, "gifts": [{id, gift_name, gift_category, affinity_boost, is_favorite, description}]}
+    """
+    conn = db()
+    try:
+        from backend.bond.gifts import get_available_gifts
+        gifts = get_available_gifts(char_id, conn.cursor())
+        return {"ok": True, "gifts": gifts}
+    except Exception as e:
+        logger.warning(f"[Bond] get_gifts failed: {e}")
+        return {"ok": True, "gifts": []}
+
+
+@app.post("/api/characters/{char_id}/bond/gift")
+async def give_character_gift(char_id: int, req: Request):
+    """Give a gift to a character, earning bond XP.
+
+    Request body: {"gift_id": int}
+
+    Args:
+        char_id: Character ID.
+        req: Request with gift_id in body.
+
+    Returns:
+        {"ok": True, "reaction": str, "xp_earned": int, "bond_update": {...}}
+    """
+    body = await req.json()
+    gift_id = body.get("gift_id")
+    if not gift_id:
+        return {"ok": False, "error": "gift_id required"}
+
+    conn = db()
+    try:
+        from backend.bond.gifts import give_gift
+        cur = conn.cursor()
+        result = give_gift(char_id, gift_id, cur)
+        conn.commit()
+        return {"ok": True, **result}
+    except Exception as e:
+        logger.warning(f"[Bond] give_gift failed: {e}")
+        return {"ok": False, "error": str(e)}
+
+
+@app.get("/api/characters/{char_id}/bond/stories")
+def get_bond_stories(char_id: int):
+    """List bond stories for a character (both locked and unlocked).
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        {"ok": True, "stories": [{id, title, bond_level_required, unlocked, viewed, scene_text?}]}
+        scene_text is only included for unlocked stories.
+    """
+    conn = db()
+    try:
+        cur = conn.cursor()
+        rows = cur.execute(
+            """SELECT id, bond_level_required, title, scene_text, scene_type,
+                      unlocked, viewed
+               FROM bond_stories
+               WHERE char_id = ?
+               ORDER BY bond_level_required ASC""",
+            (char_id,),
+        ).fetchall()
+
+        stories = []
+        for row in rows:
+            story = {
+                "id": row[0],
+                "bond_level_required": row[1],
+                "title": row[2],
+                "scene_type": row[4],
+                "unlocked": bool(row[5]),
+                "viewed": bool(row[6]),
+            }
+            if row[5]:  # only include scene_text for unlocked stories
+                story["scene_text"] = row[3]
+            stories.append(story)
+
+        return {"ok": True, "stories": stories}
+    except Exception as e:
+        logger.warning(f"[Bond] get_stories failed: {e}")
+        return {"ok": True, "stories": []}
+
+
+@app.post("/api/characters/{char_id}/bond/stories/{story_id}/view")
+def mark_story_viewed(char_id: int, story_id: int):
+    """Mark a bond story as viewed.
+
+    Args:
+        char_id: Character ID.
+        story_id: Bond story ID.
+
+    Returns:
+        {"ok": True}
+    """
+    conn = db()
+    conn.execute(
+        "UPDATE bond_stories SET viewed = 1 WHERE id = ? AND char_id = ?",
+        (story_id, char_id),
+    )
+    conn.commit()
+    return {"ok": True}
+
+
+@app.get("/api/characters/{char_id}/bond/gift-history")
+def get_character_gift_history(char_id: int):
+    """Get recent gift history for a character.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        {"ok": True, "history": [{gift_name, given_at, reaction}]}
+    """
+    conn = db()
+    try:
+        from backend.bond.gifts import get_gift_history
+        history = get_gift_history(char_id, conn.cursor())
+        return {"ok": True, "history": history}
+    except Exception as e:
+        logger.warning(f"[Bond] get_gift_history failed: {e}")
+        return {"ok": True, "history": []}
 
 
 # ── Character Diary (#57) ─────────────────────────────────────────────────────

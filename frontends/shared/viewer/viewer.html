@@ -106,6 +106,8 @@
         let clock = new THREE.Clock();
         let lipSync = null;
         let blinkController = null;
+        let saccadeController = null;
+        let microTremorController = null;
         let headMovement = null;
         let expressionController = null;
         let gestureController = null;
@@ -2308,12 +2310,14 @@
                     this.currentSource = source;
                     this.isPlaying = true;
                     isTalking = true;  // Phase 6D: switch to talk motion params
+                    if (saccadeController) saccadeController.setTalking(true);
                     source.start(0);
 
                     source.onended = () => {
                         this.isPlaying = false;
                         this.currentSource = null;
                         isTalking = false;  // Phase 6D: revert to idle motion params
+                        if (saccadeController) saccadeController.setTalking(false);
                         this._zeroAllVisemes();
                     };
 
@@ -2445,28 +2449,65 @@
         };
 
         // ══════════════════════════════════════════════════════════
-        // Blink Controller
+        // Enhanced Blink Controller (Phase 12-P1)
         // ══════════════════════════════════════════════════════════
+        // Features: Poisson-distributed intervals, emotion modulation,
+        // asymmetric L/R timing, 15% double-blink chance, variable speed.
 
         class BlinkController {
             constructor(vrm) {
                 this.vrm = vrm;
-                this.nextBlinkTime = this.getNextBlinkDelay();
+                this.nextBlinkTime = this._poissonDelay();
                 this.isBlinking = false;
                 this.blinkProgress = 0;
+                this.doubleBlink = false;
+                this.blinkSpeed = 8;  // base close/open speed
+                /** Emotion state affects blink rate and speed.
+                 *  Set externally via setEmotion(). */
+                this._emotionMod = { rateMul: 1.0, speedMul: 1.0 };
+            }
+
+            /**
+             * Set emotion modulation for blink behavior.
+             * @param {string} emotion - Current emotion name
+             */
+            setEmotion(emotion) {
+                const mods = {
+                    nervous:   { rateMul: 1.8, speedMul: 1.3 },
+                    excited:   { rateMul: 1.5, speedMul: 1.2 },
+                    happy:     { rateMul: 1.1, speedMul: 1.0 },
+                    calm:      { rateMul: 0.7, speedMul: 0.9 },
+                    sad:       { rateMul: 0.6, speedMul: 0.7 },
+                    tired:     { rateMul: 0.5, speedMul: 0.6 },
+                    neutral:   { rateMul: 1.0, speedMul: 1.0 },
+                };
+                this._emotionMod = mods[emotion] || mods.neutral;
             }
 
             update(deltaTime) {
+                const speed = this.blinkSpeed * this._emotionMod.speedMul;
                 if (this.isBlinking) {
-                    this.blinkProgress += deltaTime * 10;
-                    if (this.blinkProgress < 0.5) this.setBlinkValue(this.blinkProgress * 2);
-                    else this.setBlinkValue(1.0 - ((this.blinkProgress - 0.5) * 2));
+                    this.blinkProgress += deltaTime * speed;
+                    // Asymmetric: right eye leads by ~15ms (1 frame at 60fps)
+                    const rightVal = Math.min(1, this.blinkProgress < 0.5
+                        ? this.blinkProgress * 2 : 1.0 - ((this.blinkProgress - 0.5) * 2));
+                    const leftDelay = Math.max(0, this.blinkProgress - 0.02);
+                    const leftVal = Math.min(1, leftDelay < 0.5
+                        ? leftDelay * 2 : 1.0 - ((leftDelay - 0.5) * 2));
+                    this._setBlinkLR(leftVal, rightVal);
 
                     if (this.blinkProgress >= 1.0) {
                         this.isBlinking = false;
                         this.blinkProgress = 0;
-                        this.setBlinkValue(0);
-                        this.nextBlinkTime = this.getNextBlinkDelay();
+                        this._setBlinkLR(0, 0);
+                        // 15% chance of immediate double-blink
+                        if (!this.doubleBlink && Math.random() < 0.15) {
+                            this.doubleBlink = true;
+                            this.nextBlinkTime = 0.08; // near-instant second blink
+                        } else {
+                            this.doubleBlink = false;
+                            this.nextBlinkTime = this._poissonDelay();
+                        }
                     }
                 } else {
                     this.nextBlinkTime -= deltaTime;
@@ -2474,13 +2515,109 @@
                 }
             }
 
-            setBlinkValue(value) {
+            _setBlinkLR(leftVal, rightVal) {
                 if (!this.vrm) return;
-                if (this.vrm.expressionManager) this.vrm.expressionManager.setValue('blink', value);
-                else if (this.vrm.blendShapeProxy) this.vrm.blendShapeProxy.setValue('blink', value);
+                const em = this.vrm.expressionManager || this.vrm.blendShapeProxy;
+                if (!em) return;
+                // Try per-eye first, fall back to combined blink
+                if (em.setValue) {
+                    try { em.setValue('blinkLeft', leftVal); em.setValue('blinkRight', rightVal); return; }
+                    catch { /* per-eye not supported */ }
+                    em.setValue('blink', rightVal); // fallback to combined
+                }
             }
 
-            getNextBlinkDelay() { return 2 + Math.random() * 4; }
+            /** Poisson-distributed blink interval (~4.5 blinks/min = 13.3s mean).
+             *  Emotion modulation scales the rate. */
+            _poissonDelay() {
+                const baseMean = 13.3 / this._emotionMod.rateMul;
+                // Exponential distribution (memoryless, natural feel)
+                return -baseMean * Math.log(1 - Math.random()) * 0.5 + 1.5;
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Eye Saccade Controller (Phase 12-P1)
+        // ══════════════════════════════════════════════════════════
+        // Random gaze fixation shifts every 2-5 seconds.
+        // Creates the "looking around, alive" feeling.
+
+        class SaccadeController {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.nextSaccadeTime = 2 + Math.random() * 3;
+                this.targetYaw = 0;
+                this.targetPitch = 0;
+                this.currentYaw = 0;
+                this.currentPitch = 0;
+                this._saccadeSpeed = 0.15; // lerp factor per frame
+                this._isTalking = false;
+            }
+
+            /** When character is talking, eyes stay more fixed on camera. */
+            setTalking(talking) { this._isTalking = talking; }
+
+            update(deltaTime) {
+                this.nextSaccadeTime -= deltaTime;
+                if (this.nextSaccadeTime <= 0) {
+                    // Pick new gaze target
+                    const range = this._isTalking ? 0.05 : 0.15; // narrower during speech
+                    this.targetYaw = (Math.random() - 0.5) * range;
+                    this.targetPitch = (Math.random() - 0.5) * range * 0.5;
+                    this.nextSaccadeTime = 2 + Math.random() * 3;
+                }
+
+                // Smooth pursuit toward target (fast saccade, not drift)
+                this.currentYaw += (this.targetYaw - this.currentYaw) * this._saccadeSpeed;
+                this.currentPitch += (this.targetPitch - this.currentPitch) * this._saccadeSpeed;
+
+                // Apply to eye bones
+                if (!this.vrm?.humanoid) return;
+                const leftEye = this.vrm.humanoid.getNormalizedBoneNode('leftEye');
+                const rightEye = this.vrm.humanoid.getNormalizedBoneNode('rightEye');
+                if (leftEye) {
+                    leftEye.rotation.y += this.currentYaw;
+                    leftEye.rotation.x += this.currentPitch;
+                }
+                if (rightEye) {
+                    rightEye.rotation.y += this.currentYaw;
+                    rightEye.rotation.x += this.currentPitch;
+                }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Micro-Tremor Controller (Phase 12-P1)
+        // ══════════════════════════════════════════════════════════
+        // High-frequency, imperceptible jitter on idle bones.
+        // Prevents the "perfectly still = dead" perception.
+        // Only active during idle state — disabled during gestures.
+
+        class MicroTremorController {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.enabled = true;
+                this._time = Math.random() * 100; // random phase offset
+            }
+
+            update(deltaTime) {
+                if (!this.enabled || !this.vrm?.humanoid) return;
+                this._time += deltaTime;
+
+                const t = this._time;
+                // Apply tiny high-frequency noise to core bones
+                const bones = ['spine', 'chest', 'head', 'neck'];
+                for (const name of bones) {
+                    const bone = this.vrm.humanoid.getNormalizedBoneNode(name);
+                    if (!bone) continue;
+                    // Different frequency per bone + axis for organic feel
+                    const seed = name.charCodeAt(0) * 0.1;
+                    const amp = name === 'head' ? 0.002 : 0.001; // head tremors slightly more
+                    bone.rotation.x += Math.sin(t * 11.3 + seed) * amp;
+                    bone.rotation.y += Math.sin(t * 9.7 + seed + 1.5) * amp * 0.7;
+                    bone.rotation.z += Math.sin(t * 13.1 + seed + 3.0) * amp * 0.5;
+                }
+            }
         }
 
         // ══════════════════════════════════════════════════════════
@@ -3897,6 +4034,12 @@
                     }
 
                     if (blinkController) blinkController.update(delta);
+                    if (saccadeController) saccadeController.update(delta);
+                    if (microTremorController) {
+                        // Only apply micro-tremor during idle — disable during active gestures
+                        microTremorController.enabled = animationDirector?.state === 'idle';
+                        microTremorController.update(delta);
+                    }
                     if (expressionController) expressionController.update(delta);
                 } else if (currentGlbMixer) {
                     // GLB mode: tick the AnimationMixer for embedded clip playback
@@ -4353,6 +4496,8 @@
                         // Clear VRM-specific controllers
                         lipSync = null;
                         blinkController = null;
+                        saccadeController = null;
+                        microTremorController = null;
                         expressionController = null;
                         animationDirector = null;
                         window._vrm = null;
@@ -4392,6 +4537,8 @@
                             // Initialize controllers
                             lipSync = new AudioLipSync(vrm);
                             blinkController = new BlinkController(vrm);
+                            saccadeController = new SaccadeController(vrm);
+                            microTremorController = new MicroTremorController(vrm);
                             expressionController = new ExpressionController(vrm);
 
                             // Legacy controllers disabled — replaced by AnimationDirector layers
@@ -5065,6 +5212,8 @@
                         const emotionLayer = animationDirector.getLayer('emotion');
                         if (emotionLayer) emotionLayer.setEmotion(e.data.emotion, e.data.intensity || 0.7);
                     }
+                    // Phase 12-P1: modulate blink rate by emotion
+                    if (blinkController) blinkController.setEmotion(e.data.emotion || 'neutral');
                     _triggerAutoAnimation(e.data.emotion);
                     // Phase 5: emotion-reactive particles
                     triggerEmotionParticles(e.data.emotion);

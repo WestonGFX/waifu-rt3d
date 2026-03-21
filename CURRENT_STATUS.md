@@ -57,6 +57,19 @@
 2. **Phase 11A** [MVP] — Environment poses + time-of-day lighting (needs Blender assets)
 3. **Task 3B** [STRETCH] — Specialty shaders (hair anisotropic, eye sparkle, skin SSS)
 
+## Estimate vs Actual (AI-Assisted Dev)
+
+| Phase | Plan Estimate | Actual | Ratio | Notes |
+|-------|--------------|--------|-------|-------|
+| 12-P1 | 1.5w (11h proto) | ~1h | 1/11 | Breathing, blinks, saccades |
+| 12-P2 | 1.5w (10.5h proto) | ~40min | 1/16 | Micro-expressions |
+| 12-P3 | 1.5w (11h proto) | ~1h | 1/11 | Touch + camera presets |
+| 12-P4 | 2w (21h proto) | ~45min | 1/28 | Shaders, gradients, particles |
+| 13A | 3.2d (19h proto) | ~1.5h | 1/13 | Bond progression |
+| 13B | 1.4d (8.5h proto) | ~30min | 1/17 | Character journal |
+
+**Calibration factor: divide traditional estimates by ~12 for AI-assisted time.**
+
 ## Plan File Location
 
 **Full master plan:** `.claude/plans/replicated-foraging-nebula.md` (~3,400 lines, all details)

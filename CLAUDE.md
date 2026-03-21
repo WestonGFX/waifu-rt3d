@@ -98,6 +98,15 @@ NEVER overwrite or replace plan files. Always READ the existing plan first, then
 - **Verification:** Before claiming work is done, verify that status files (`CURRENT_STATUS.md`, master plan) reflect the current state. Stale status files cause context amnesia in future sessions.
 - **Insights:** When completing a feature, include key architectural decisions and non-obvious implementation details in the commit message body — not just "what" but "why".
 
+## Session Handoffs
+
+When context gets heavy (5+ agent dispatches, 15+ large file reads, or 30+ conversation turns), proactively suggest a session handoff. Before ending:
+1. Run `/checkpoint` to sync all status files
+2. Update `docs/plans/RESUME_PROMPT.md` with what was done, what's next, and key context
+3. After large sprints, ask the user if they'd like to continue or start fresh
+
+The next session should read `CURRENT_STATUS.md` → `RESUME_PROMPT.md` → latest plan file for instant context recovery.
+
 ## Hypothesis Limit
 
 When debugging, commit to ONE hypothesis and test it before trying another. Do NOT cycle through multiple theories without running code. If 3 hypotheses fail, STOP and present findings to the user as a table. Never explore a 4th hypothesis without user approval.

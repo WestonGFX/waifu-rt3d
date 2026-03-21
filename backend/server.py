@@ -1577,20 +1577,26 @@ def _get_rp_style_injection(preset: str) -> str:
     return _RP_STYLES.get(preset, "")
 
 
-def _update_relationship(con, char_id: int, emotion: str):
-    """Update relationship scores for a character based on detected emotion.
+def _update_relationship(con, char_id: int, emotion: str, user_msg_len: int = 0):
+    """Update relationship scores for a character based on detected emotion and engagement.
 
     Emotion → score adjustments (affinity, mood, trust):
       - happy/excited → +affinity, +mood, +trust (small)
-      - sad/worried → −mood (small), +trust (tiny)
+      - sad/worried → −mood (small), +trust (tiny — vulnerability builds trust)
       - angry/frustrated → −affinity (small), −mood
       - neutral → no significant change
       - surprised → +mood (small)
+
+    Engagement-based trust bonus (Phase 9D):
+      - Long user messages (>100 chars) add extra trust (+0.003)
+      - Self-disclosure signals ("I feel", "I think", personal topics) add trust (+0.005)
+      - Returning after absence (>24h gap) adds trust (+0.01)
 
     Args:
         con: SQLite connection (already open).
         char_id: The character whose relationship to update.
         emotion: Detected emotion string from LLM response.
+        user_msg_len: Character length of user's message (for engagement bonus).
     """
     EMOTION_DELTAS = {
         "happy":     {"affinity": 0.015, "mood": 0.02, "trust": 0.005},
@@ -1606,12 +1612,34 @@ def _update_relationship(con, char_id: int, emotion: str):
     }
     deltas = EMOTION_DELTAS.get(emotion, EMOTION_DELTAS["neutral"])
 
+    # Phase 9D: Engagement-based trust bonus
+    trust_bonus = 0.0
+    if user_msg_len > 100:
+        trust_bonus += 0.003  # Long messages signal investment
+
     try:
         # Ensure a relationship row exists
         con.execute(
             "INSERT OR IGNORE INTO character_relationships (char_id) VALUES (?)",
             (char_id,)
         )
+
+        # Check for returning-after-absence bonus (>24h since last interaction)
+        try:
+            last_updated_row = con.execute(
+                "SELECT last_updated FROM character_relationships WHERE char_id = ?",
+                (char_id,)
+            ).fetchone()
+            if last_updated_row and last_updated_row[0]:
+                import time as _time
+                gap = _time.time() - float(last_updated_row[0])
+                if gap > 86400:  # >24 hours
+                    trust_bonus += 0.01  # Returning after absence builds trust
+        except Exception:
+            pass  # Non-critical, skip if timestamp unavailable
+
+        total_trust = deltas["trust"] + trust_bonus
+
         # Apply deltas, clamping to [0, 1]
         con.execute("""
             UPDATE character_relationships SET
@@ -1621,7 +1649,7 @@ def _update_relationship(con, char_id: int, emotion: str):
                 interactions = interactions + 1,
                 last_updated = strftime('%s','now')
             WHERE char_id = ?
-        """, (deltas["affinity"], deltas["mood"], deltas["trust"], char_id))
+        """, (deltas["affinity"], deltas["mood"], total_trust, char_id))
         con.commit()
     except Exception as e:
         logger.warning(f"Relationship update failed for char {char_id}: {e}")
@@ -2579,8 +2607,8 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         assistant_message_id = cur.lastrowid
         con.commit()
 
-        # Update relationship scores based on detected emotion
-        _update_relationship(con, char_id, emotion)
+        # Update relationship scores based on detected emotion + engagement
+        _update_relationship(con, char_id, emotion, user_msg_len=len(text))
 
         # Persist mood + daily-greeting state (#56, #54) and first_chat_date (#109)
         from datetime import datetime as _dt
@@ -3609,7 +3637,7 @@ async def chat_stream(req: Request):
                     assistant_message_id = cur.lastrowid
                     con.commit()
 
-                    _update_relationship(con, char_id, emotion)
+                    _update_relationship(con, char_id, emotion, user_msg_len=len(text))
 
                     from datetime import datetime as _dt
                     _today_str = _dt.now().strftime('%Y-%m-%d')
@@ -3895,8 +3923,8 @@ async def chat_stream(req: Request):
                     assistant_message_id = cur.lastrowid
                     con.commit()
 
-                    # Update relationship scores based on detected emotion
-                    _update_relationship(con, char_id, emotion)
+                    # Update relationship scores based on detected emotion + engagement
+                    _update_relationship(con, char_id, emotion, user_msg_len=len(text))
 
                     # Persist mood + daily-greeting state (#56, #54) and first_chat_date (#109)
                     from datetime import datetime as _dt

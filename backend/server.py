@@ -313,9 +313,15 @@ DEFAULT_COMFYUI_ENDPOINT = os.environ.get("WAIFU_COMFYUI_ENDPOINT", "http://loca
 
 
 def _get_llm_endpoint(cfg: dict) -> str:
-    """Get the LLM endpoint from env var, config, or hardcoded default.
+    """Get a working LLM endpoint with smart fallback discovery.
 
-    Priority: WAIFU_LLM_ENDPOINT env var > app.json llm.endpoint > localhost:1234
+    Priority:
+        1. WAIFU_LLM_ENDPOINT env var (if set, no fallback)
+        2. Smart fallback: try configured endpoint first, then probe
+           Ollama (11434), LM Studio (1234), vLLM (8000) until one responds
+        3. Hardcoded default (localhost:1234) as last resort
+
+    The fallback result is cached for 60s to avoid repeated probing.
 
     Args:
         cfg: Loaded app config dict.
@@ -325,7 +331,34 @@ def _get_llm_endpoint(cfg: dict) -> str:
     """
     if os.environ.get("WAIFU_LLM_ENDPOINT"):
         return DEFAULT_LLM_ENDPOINT
-    return cfg.get("llm", {}).get("endpoint", DEFAULT_LLM_ENDPOINT)
+    try:
+        from backend.llm.endpoint_fallback import resolve_endpoint
+        endpoint, _model, _key = resolve_endpoint(cfg)
+        return endpoint
+    except Exception:
+        return cfg.get("llm", {}).get("endpoint", DEFAULT_LLM_ENDPOINT)
+
+
+def _get_llm_model_resolved(cfg: dict) -> str:
+    """Get the best available LLM model using smart endpoint fallback.
+
+    If the configured model isn't available, discovers what models are
+    loaded at the resolved endpoint and picks the best one (preferring
+    qwen > llama > mistral > first available).
+
+    Args:
+        cfg: Loaded app config dict.
+
+    Returns:
+        Model ID string (may differ from the configured model if fallback
+        discovered a different endpoint or the configured model isn't loaded).
+    """
+    try:
+        from backend.llm.endpoint_fallback import resolve_endpoint
+        _endpoint, model, _key = resolve_endpoint(cfg)
+        return model
+    except Exception:
+        return cfg.get("llm", {}).get("model", "")
 
 
 def _get_comfyui_endpoint(cfg: dict, section: str = "image_gen") -> str:
@@ -845,15 +878,23 @@ def health_check():
     cfg = load_config()
     llm_endpoint = cfg.get("llm", {}).get("endpoint", "")
     llm_ok = False
-    if llm_endpoint:
-        try:
-            base = llm_endpoint.rstrip("/")
-            if base.endswith("/v1"):
-                base = base[:-3]
-            r = _requests.get(f"{base}/v1/models", timeout=2)
-            llm_ok = r.status_code == 200
-        except Exception:
-            pass
+    _resolved_endpoint = None
+    _resolved_model = None
+    try:
+        from backend.llm.endpoint_fallback import resolve_endpoint, NoLLMAvailableError
+        _resolved_endpoint, _resolved_model, _ = resolve_endpoint(cfg)
+        llm_ok = True
+    except Exception:
+        # Fallback to simple probe if the fallback module fails
+        if llm_endpoint:
+            try:
+                base = llm_endpoint.rstrip("/")
+                if base.endswith("/v1"):
+                    base = base[:-3]
+                r = _requests.get(f"{base}/v1/models", timeout=2)
+                llm_ok = r.status_code == 200
+            except Exception:
+                pass
 
     db_status = "connected"
     try:
@@ -2304,7 +2345,7 @@ async def llm_generate(req: Request):
 
     cfg = load_config() or {}
     endpoint = _get_llm_endpoint(cfg)
-    model = cfg.get("llm", {}).get("model", "")
+    model = _get_llm_model_resolved(cfg)
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(10, read=120)) as client:
@@ -2463,7 +2504,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             logger.error(f"Error fetching character data: {e}")
 
         # ── LM Studio model auto-switch (non-streaming) ──────────
-        _resolved_model_ns = cfg.get("llm", {}).get("model", "")
+        _resolved_model_ns = _get_llm_model_resolved(cfg)
         if _resolved_model_ns:
             await _ensure_lms_model(_resolved_model_ns)
 
@@ -2576,7 +2617,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             from backend.llm.registry import get_client
             adapter = get_client(cfg)
             # Build thinking-mode extra_body for supported architectures
-            llm_model_name = cfg["llm"].get("model", "")
+            llm_model_name = _get_llm_model_resolved(cfg)
             thinking_enabled = cfg.get("llm", {}).get("thinking_mode", False)
             if cap_ns.get("supports_thinking") is False:
                 thinking_enabled = False
@@ -3162,7 +3203,7 @@ async def chat_multi(req: Request):
 
             # Call LLM
             endpoint = _get_llm_endpoint(cfg)
-            model = cfg.get("llm", {}).get("model", "")
+            model = _get_llm_model_resolved(cfg)
             api_key = cfg.get("llm", {}).get("api_key", "lm-studio")
 
             from backend.llm.adapters.openai_compat import OpenAICompatAdapter
@@ -3430,7 +3471,7 @@ async def chat_stream(req: Request):
     # ── LM Studio model auto-switch ──────────────────────────────────
     # Ensure only the active character's model is loaded in LM Studio
     # to avoid blowing VRAM with multiple models simultaneously.
-    _resolved_model = cfg.get("llm", {}).get("model", "")
+    _resolved_model = _get_llm_model_resolved(cfg)
     if _resolved_model:
         await _ensure_lms_model(_resolved_model)
 
@@ -3581,7 +3622,7 @@ async def chat_stream(req: Request):
 
     # Multi-model routing: select the best model for this request
     router = get_router(cfg)
-    routed_model = router.route(text) if router else cfg["llm"]["model"]
+    routed_model = router.route(text) if router else _get_llm_model_resolved(cfg)
 
     # Build thinking-mode extra_body for supported architectures
     # Phase 9: Gate thinking mode on character capability flag too
@@ -4008,6 +4049,28 @@ async def chat_stream(req: Request):
 
                 if vector_store and not incognito:
                     vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
+
+                # ── Bond Progression: earn XP for each message exchange ──
+                if not incognito:
+                    try:
+                        from backend.bond.progression import add_bond_xp, get_xp_for_action, get_bond_level
+                        _bond_info_s = get_bond_level(char_id, cur)
+                        _msg_xp_s = get_xp_for_action("message", _bond_info_s.get("bond_level", 0))
+                        _bond_res_s = add_bond_xp(char_id, cur, _msg_xp_s, source="message")
+                        con.commit()
+                        if _bond_res_s.get("leveled_up"):
+                            logger.info(f"[Bond] char={char_id} leveled up to {_bond_res_s['new_level']}")
+                    except Exception as _bond_err_s:
+                        logger.debug(f"[Bond] XP tracking skipped (stream): {_bond_err_s}")
+
+                # ── Content Gating: update intimacy + physical state ──
+                if not incognito:
+                    try:
+                        update_intimacy_after_turn(
+                            session_id, char_id, text, clean_reply, cfg, con,
+                        )
+                    except Exception:
+                        pass
 
                 memory_hits = [
                     {

@@ -1,11 +1,18 @@
 # Current Project Status
 
-**Last updated:** 2026-03-21 01:00 PST
+**Last updated:** 2026-03-21 02:30 PST
 **Branch:** master
 **Schema version:** v56
-**Tests:** 525 passing (backend pytest), tsc clean (frontend)
+**Tests:** 529 passing (backend pytest), tsc clean (frontend)
 
-## Completed This Session (Mar 20-21, 2026) — 13 commits
+## Completed This Session (Mar 21, 2026) — 2 commits
+
+| Commit | Phase | What |
+|--------|-------|------|
+| `466f0e9` | 12-P5 | Procedural character audio engine + settings UI |
+| `ac316e6` | 11A | Time-of-day lighting + procedural pose system + scene context |
+
+## Completed Previous Session (Mar 20-21, 2026) — 13 commits
 
 | Commit | Phase | What |
 |--------|-------|------|
@@ -37,13 +44,13 @@
 | Phase 9A-C | ✅ DONE | Adaptive Intelligence Engine |
 | Phase 9D-E | ✅ DONE | Trust/mood updates + topic steering |
 | Phase 10 | NOT STARTED [POST-MVP] | Model Asset Spec document |
-| Phase 11A | NOT STARTED [MVP] | Environment poses + lighting (Three.js) |
+| Phase 11A | ✅ DONE | Environment poses + lighting (Three.js) |
 | Phase 11B | NOT STARTED [POST-MVP] | Unity Premium renderer |
 | Phase 12-P1 | ✅ DONE | Breathing, blinking, saccades, hair physics |
 | Phase 12-P2 | ✅ DONE | Micro-expressions, emotion body language |
 | Phase 12-P3 | ✅ DONE | Touch interaction, cinematic camera |
 | Phase 12-P4 | ✅ DONE | Anime shaders, backgrounds, particles |
-| Phase 12-P5 | NOT STARTED [MVP] | Sound design, lip sync |
+| Phase 12-P5 | ✅ DONE | Sound design + ambient audio |
 | Phase 12-P6 | NOT STARTED [POST-MVP] | Webcam face/hand tracking |
 | Phase 13A | ✅ DONE | Bond progression + gifts + story scenes |
 | Phase 13B | ✅ DONE | Character journal + memory transparency |
@@ -53,9 +60,9 @@
 
 ## Next 3 Tasks (Priority Order)
 
-1. **Phase 12-P5** [MVP] — Sound design + lip sync in viewer.html + new frontend hook
-2. **Phase 11A** [MVP] — Environment poses + time-of-day lighting (needs Blender assets)
-3. **Task 3B** [STRETCH] — Specialty shaders (hair anisotropic, eye sparkle, skin SSS)
+1. **Task 3B** [STRETCH] — Specialty shaders (hair anisotropic, eye sparkle, skin SSS)
+2. **Test in browser** — Director Mode + Character Audio + Pose System interactive validation
+3. **Remaining character enrichment** — Ayane needs one milestone scene; 8 chars at gold
 
 ## Estimate vs Actual (AI-Assisted Dev)
 
@@ -67,6 +74,8 @@
 | 12-P4 | 2w (21h proto) | ~45min | 1/28 | Shaders, gradients, particles |
 | 13A | 3.2d (19h proto) | ~1.5h | 1/13 | Bond progression |
 | 13B | 1.4d (8.5h proto) | ~30min | 1/17 | Character journal |
+| 12-P5 | 1w (8h proto) | ~15min | 1/32 | Procedural audio engine |
+| 11A | 3w (14h proto) | ~20min | 1/42 | Poses + lighting (no Blender!) |
 
 **Calibration factor: divide traditional estimates by ~12 for AI-assisted time.**
 

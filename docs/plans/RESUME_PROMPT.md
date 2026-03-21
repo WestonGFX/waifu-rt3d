@@ -26,17 +26,29 @@ I'm Chris. Sole developer of Waifu-RT3D, a commercial AI companion platform with
 - SessionEnd hook error (prompt → command type)
 - embeddinggemma benchmark (MLX format issue discovered)
 
-## WHAT TO DO NOW
+## WHAT TO DO NOW — Multi-Session Workflow
 
-### IMMEDIATE (Phase 14B Assembly)
-1. Read the 3 research agent output files (if they survived /tmp)
-2. Create `docs/design/competitive-research-cycle-2-deep-dives-2026-03-21.md` — full write-ups for all 12 sources
-3. Create `docs/design/research-dashboard.html` — interactive dark-theme dashboard with:
-   - Cards per source with score, killer feature, takeaway
-   - Expandable detail sections
-   - Radar/bar charts for scoring
-   - Feature comparison matrix
-   - Color-coded priorities, filterable by category
+### SESSION 2 (HIGH effort — Research Enrichment)
+Set effort to HIGH before starting. Read `project_session_brief_research_enrichment.md` for full details.
+
+1. **Enrich the research doc** — expand `competitive-research-cycle-2-deep-dives-2026-03-21.md` to 3-4x length with community quotes, technical architecture, deeper analysis
+2. **Create interactive HTML dashboard** — `docs/design/research-dashboard.html` with dark theme, radar charts, filterable cards, expandable sections
+3. **Create "Science World" learning experience** — `docs/design/research-learning-experience.html` with interactive modules (Content Gating Lab, Memory Architecture, Retention Workshop, etc.)
+4. **User persona deep-dive** — search Reddit r/waifuism, r/VirtualYouTubers, anime Discord for what target users actually want
+5. **UX friction audit** — list every confusion point in the app
+6. **Gap analysis** — what competitors have that we don't, what we have that they don't
+
+### SESSION 3 (EXTRA HIGH effort — Planning Enrichment)
+Set effort to EXTRA HIGH.
+
+1. **Revise plan** — enrich `/Users/chris/.claude/plans/cached-imagining-cocke.md` with code sketches, dependency maps, risk analysis
+2. **User flow diagrams** — content gating, memory inspector, bond progression
+3. **Effort recalibration** — use actual 1/12-1/42x ratios
+4. **Milestone definitions** — acceptance criteria for each feature
+5. **Testing strategy** — what proves each feature works?
+
+### SESSION 4+ (MEDIUM/HIGH effort — Implementation)
+Execute the enriched plan using `/go`.
 
 ### THEN (Phase 15 — Embedding)
 - **ISSUE**: embeddinggemma-300m is MLX format, won't load with standard transformers

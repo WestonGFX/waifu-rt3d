@@ -5636,6 +5636,10 @@
                     if (microExpressionController) microExpressionController.update(delta);
                     if (expressionController) expressionController.update(delta);
                     if (poseController) poseController.update(delta);
+                    // Task 3B: Update eye sparkle time uniform for shimmer animation
+                    if (_effectsConfig.eyeSparkle.enabled && currentVrm?.scene) {
+                        updateEyeSparkleParams(currentVrm.scene, { time: clock.elapsedTime });
+                    }
                 } else if (currentGlbMixer) {
                     // GLB mode: tick the AnimationMixer for embedded clip playback
                     currentGlbMixer.update(delta);

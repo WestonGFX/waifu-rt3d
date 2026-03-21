@@ -1,4 +1,4 @@
-# Resume: Waifu-RT3D — Post-12-P4 Session (Mar 21, 2026)
+# Resume: Waifu-RT3D — Cycle 2 Research + Expansion Session (Mar 21, 2026)
 
 ## WHO I AM
 
@@ -6,64 +6,81 @@ I'm Chris. Sole developer of Waifu-RT3D, a commercial AI companion platform with
 
 **3 dev machines:** Mac M2 Pro (32GB), Win RTX 5080 (16GB), Win RTX 3070 (8GB). M2 Pro is the GPU floor.
 
-## WHAT HAPPENED LAST SESSION
+## WHAT HAPPENED THIS SESSION
 
-Phase 12-P4 (Anime Shaders + Gradient Backgrounds + Emotion Particles) — completed in ~45min across 3 waves:
+### Implementation (3 features, ~45min)
+| Commit | Phase | What | Time |
+|--------|-------|------|------|
+| `466f0e9` | 12-P5 | Procedural character audio engine (breathing, vocalizations, touch sounds) | ~15min |
+| `ac316e6` | 11A | Time-of-day lighting + procedural poses + scene context injection | ~20min |
+| `ed6a7f0` + `4b932c7` | 3B | Hair anisotropic + eye sparkle specialty shaders + time uniform fix | ~10min |
 
-| Commit | What |
-|--------|------|
-| `4acb87f` | Plan hygiene rules + /checkpoint skill + session handoff rules |
-| `57814bb` | Wave 1: Emotion color grading (11 presets), gradient bg shader plane, 4 new particle types |
-| `db5584e` | Wave 2: Anime outline pass, emotion rim glow, god rays post-processing |
-| `4e74b48` | Wave 3: Toon cel-shading via onBeforeCompile injection |
-| `c22a8a6` | Checkpoint: status files updated, phase marked done |
-| `3737978` | Estimate vs actual time tracking table |
-| `8a90355` | Session handoff rules added to CLAUDE.md |
+### Research (Phase 14A done, 14B agents done)
+| Commit | Phase | What |
+|--------|-------|------|
+| `4d5409c` | 14A | 24 mature/18+ sources ranked → `docs/design/competitive-research-cycle-2-sources-2026-03-21.md` |
 
-**New files created:** `OutlineShader.js`, `GodRaysShader.js`, `ToonShader.js`
-**Modified:** `viewer.html` (+920 lines), `EffectsPanel.tsx` (+170 lines)
-**10 new togglable effects** in EffectsPanel — all work via postMessage API
+3 research agents completed deep-dives on top 12 sources. **Outputs may be in /tmp — if not, re-run agents.**
 
-**Process improvements this session:**
-- `/checkpoint` skill created — auto-updates CURRENT_STATUS.md + master plan
-- Plan files now use `YYYY-MM-DD-description.md` naming
-- Commit messages reference plan phases: `feat(12-P4): ...`
-- Session handoff rules in CLAUDE.md
-- Actual time tracking in CURRENT_STATUS.md
+### Also Fixed
+- SessionEnd hook error (prompt → command type)
+- embeddinggemma benchmark (MLX format issue discovered)
 
 ## WHAT TO DO NOW
 
-**Sprint plan:** `.claude/plans/2026-03-21-next-sprint-lip-sync-groq-macros-formatting.md`
+### IMMEDIATE (Phase 14B Assembly)
+1. Read the 3 research agent output files (if they survived /tmp)
+2. Create `docs/design/competitive-research-cycle-2-deep-dives-2026-03-21.md` — full write-ups for all 12 sources
+3. Create `docs/design/research-dashboard.html` — interactive dark-theme dashboard with:
+   - Cards per source with score, killer feature, takeaway
+   - Expandable detail sections
+   - Radar/bar charts for scoring
+   - Feature comparison matrix
+   - Color-coded priorities, filterable by category
 
-Execute these 4 tasks using `/go`:
+### THEN (Phase 15 — Embedding)
+- **ISSUE**: embeddinggemma-300m is MLX format, won't load with standard transformers
+- **Fix**: Download standard PyTorch version from HuggingFace (`google/embeddinggemma-300m`) OR install `mlx` packages
+- **Dimension**: 768 (not 256 as initially estimated). sqlite-vec needs FLOAT[768]
+- **Task-specific prompts**: Use `"task: search result | query: "` prefix for retrieval queries
+- Benchmark AFTER fixing format, then decide: replace MiniLM everywhere vs dual-provider
 
-1. **Lip Sync + Breathing/Foley** (~40min) — Enhance AudioLipSync in viewer.html with Web Audio API frequency analysis → viseme mapping. Add CharacterAudioController for breathing + foley.
-2. **Groq ASR** (~15min) — New `backend/asr/adapters/groq_asr.py`, register provider, add to settings UI.
-3. **Prompt Template Macros** (~15min) — New `backend/llm/macro_expander.py`, wire into `_build_prompt_sections()`.
-4. **Regex Output Formatting** (~25min) — New `backend/llm/output_formatter.py`, schema bump, CRUD endpoints, FormatRulesEditor.tsx.
+### THEN (Phase 18 — Content Gating)
+Port from AnimeGirly:
+- `frontends/girly/src/types/content.ts` → `backend/content/types.py`
+- `frontends/girly/src/services/contentGatingService.ts` → `backend/content/gating.py`
+- `frontends/girly/src/services/intimacyTrackingService.ts` → `backend/content/intimacy.py`
 
-**After sprint:** Write soundscape plan file (`.claude/plans/2026-03-21-soundscape-audio-tracks.md` already exists with spec).
+## KEY RESEARCH FINDINGS
 
-## DEFERRED ITEMS (do NOT implement unless asked)
+1. **Auto-summarization at context boundaries** — #1 missing feature across ALL platforms
+2. **Janitor AI 70% female users** — narrative depth > cosmetics for retention
+3. **SpicyChat mode switching** (flirty→romantic→explicit) — content escalation UX to adopt
+4. **Chub recursive lorebook scanning** — missing from our lore matcher, breaks imported cards
+5. **NovelAI generation presets** — shareable LLM sampling configs = free engagement loop
+6. **In-chat model hot-swap** (Crushon) — fits our link_manager multi-machine architecture
 
-- What's New Modal / Changelog — defer indefinitely
-- Swipe for Alternatives — low priority
-- Character Generator Wizard — low priority
-- Floating Chat Mode — low priority
-- Director Mode Browser Test — low priority
-- Specialty Shaders hair/eyes — low priority
-- Native OS Notifications — NEVER
-- See full list: memory file `project_deferred_items.md`
+## PLAN FILE
+
+`/Users/chris/.claude/plans/cached-imagining-cocke.md` — Phases 14A through 20:
+- 14A/B: Research (14A done, 14B assembling)
+- 15: embeddinggemma integration
+- 16: AI model ecosystem analysis
+- 17: Animation library + smart sequencing
+- 18: Content gating port
+- 19: On-device learning
+- 20: Model database + README
 
 ## KEY RULES
 
-- **Resume = implement immediately.** Use `/go` to execute the sprint plan.
-- **Desktop-only app** — no mobile, no swipe gestures
+- **Resume = implement immediately.** Use `/go` to execute.
+- **Desktop-only app** — no mobile
 - **Use `.venv/bin/python`** for ALL Python commands
-- **Commit after each task** with phase reference: `feat(12-P5): lip sync controller`
-- **Run `/checkpoint`** after completing the sprint
-- **Track actual time** — add to the estimate vs actual table in CURRENT_STATUS.md
+- **Commit after each task** with phase reference
+- **Run `/checkpoint`** after completing phases
 - **NEVER add "Co-Authored-By: Claude"** to commits
+- **Animation preference**: Build MULTIPLE systems and compare, no manual downloads
+- **Content filter**: User wants fully unrestricted 18+ option with age gate
 
 ## ARCHITECTURE
 
@@ -71,9 +88,10 @@ Execute these 4 tasks using `/go`:
 |-----------|-------|-----------|
 | Backend | FastAPI, SQLite v56, Python 3.14 | `backend/server.py` (~13K lines) |
 | Frontend | React 19, Zustand, Vite | `frontends/sakura/src/` |
-| 3D Viewer | Three.js, VRM (iframe) | `frontends/shared/viewer/viewer.html` (~6.7K lines) |
-| TTS | Kokoro 82M + VoiceModulator | `backend/tts/voice_modulator.py` |
-| Voice | Full-duplex WebSocket | `backend/voice/duplex.py` |
-| Tests | 525 pytest, tsc clean | `backend/tests/`, `tsconfig.app.json` |
+| 3D Viewer | Three.js, VRM (iframe) | `frontends/shared/viewer/viewer.html` (~7.3K lines) |
+| Memory | sqlite-vec, all-MiniLM-L6-v2 (384-dim) | `backend/memory/tiered_memory.py` |
+| Adaptive | Reflector + Tuner + Journal | `backend/adaptive/` |
+| Content | 5-level prompt injection (needs upgrade) | `server.py:1487` |
+| Tests | 529 pytest, tsc clean | `backend/tests/` |
 
-**13 characters, 18 themes, schema v56, 525 tests.**
+**13 characters, 18 themes, schema v56, 529 tests.**

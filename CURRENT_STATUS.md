@@ -1,39 +1,23 @@
 # Current Project Status
 
-**Last updated:** 2026-03-21 04:15 PST
+**Last updated:** 2026-03-21 (current session)
 **Branch:** master
-**Schema version:** v56
-**Tests:** 529 passing (backend pytest), tsc clean (frontend)
+**Schema version:** v58
+**Tests:** 701 passing (backend pytest), tsc clean (frontend)
 **Plan file:** `/Users/chris/.claude/plans/cached-imagining-cocke.md` (Phases 14A-20)
 
-## Completed This Session (Mar 21, 2026) — 7 commits
+## Completed This Session — 4 commits
 
 | Commit | Phase | What |
 |--------|-------|------|
-| `466f0e9` | 12-P5 | Procedural character audio engine + settings UI |
-| `ac316e6` | 11A | Time-of-day lighting + procedural pose system + scene context |
-| `bd9a95d` | docs | Checkpoint status update |
-| `ed6a7f0` | 3B | Hair anisotropic + eye sparkle specialty shaders |
-| `2fe1e4d` | docs | Checkpoint status update |
-| `4b932c7` | fix | Eye sparkle time uniform wiring |
-| `4d5409c` | 14A | Competitive research Cycle 2 — 24 mature/18+ sources ranked |
+| `7121ae0` | 15A-B | Embedding provider abstraction + semantic lore matching (schema v57) |
+| `fbec7d6` | 15C | Server integration wiring + semantic topic-shift detection |
+| `4a93b2d` | 18A | Content gating — types, ceiling resolver, intimacy tracking, prompts |
+| `9ab6605` | 18B | Wire content gating into chat pipeline + intimacy per turn (schema v58) |
 
-## Completed Previous Session (Mar 20-21, 2026) — 13 commits
+## Completed Previous Sessions (Mar 20-21, 2026)
 
-| Commit | Phase | What |
-|--------|-------|------|
-| `301009c` | 3+6+9A-C | Adaptive intelligence engine + advisor agent + edge fixes |
-| `5846453` | 13A | Bond progression — XP, tiers, gifts, story unlocks |
-| `c7d934e` | bugfix | is_favorite == 1 instead of bool() |
-| `44ed169` | 12-P1 | Saccades, smart blinks, micro-tremor |
-| `fe6b4fd` | 9D-E | Engagement-based trust + topic steering |
-| `004164a` | 13B | Character journal + memory transparency API |
-| `81f86a3` | 12-P2 | Micro-expressions (random facial twitches) |
-| `8990eaf` | 12-P3 | Touch raycasting + 5 camera presets |
-| `4acb87f` | chore | Plan hygiene rules + /checkpoint skill |
-| `57814bb` | 12-P4 | Emotion color grading, gradient backgrounds, enhanced particles |
-| `db5584e` | 12-P4 | Anime outline, rim glow, god rays post-processing |
-| `4e74b48` | 12-P4 | Toon/cel-shading via onBeforeCompile injection |
+See `git log` for full history. Key highlights: Phases 1-3, 6, 9A-E, 11A, 12-P1 through P5, 13A-B, 14A-B, 3B all complete.
 
 ## Phase Completion Status
 
@@ -63,20 +47,20 @@
 | Phase 13C | NOT STARTED [POST-MVP] | Community character gallery |
 | Phase 13D | NOT STARTED [POST-MVP] | Extension API + marketplace |
 | Phase 14A | ✅ DONE | Research Cycle 2 source collection (24 ranked) |
-| Phase 14B | IN PROGRESS | Research Cycle 2A deep-dives (12 sources, agents done) |
-| Phase 15 | NOT STARTED | embeddinggemma integration |
+| Phase 14B | ✅ DONE | Research Cycle 2A deep-dives (12 sources) |
+| Phase 15 | ✅ DONE | Embedding provider abstraction + semantic lore |
 | Phase 16 | NOT STARTED | AI model ecosystem analysis |
 | Phase 17 | NOT STARTED | Animation library + smart sequencing |
-| Phase 18 | NOT STARTED | Content gating port from AnimeGirly |
+| Phase 18A-B | ✅ DONE | Content gating backend (types + pipeline + intimacy) |
+| Phase 18C-D | NOT STARTED | Content gating frontend UI + migration |
 | Phase 19 | NOT STARTED | On-device learning (privacy-first) |
 | Phase 20 | NOT STARTED | Model database + README updates |
 
 ## Next 3 Tasks (Priority Order)
 
-1. **Phase 14B IN PROGRESS** — Assemble 3 research agent outputs into deep-dive doc (agents completed, outputs at /private/tmp/claude-501/.../tasks/*.output)
-2. **Phase 15** — Fix embeddinggemma MLX format (download standard PyTorch version or install mlx packages), then implement provider abstraction
-3. **Phase 18** — Port AnimeGirly content gating system to backend
-4. **Key research finding**: Auto-summarization at context boundaries is #1 most impactful feature across ALL platforms (see agent output af708c1926d3154f5)
+1. **Phase 18C-D** — Content gating frontend settings UI + legacy migration
+2. **Phase 17** — Animation library expansion + smart sequencing
+3. **Phase 19** — On-device learning (continuous signals, rolling preferences)
 
 ## Estimate vs Actual (AI-Assisted Dev)
 
@@ -94,16 +78,12 @@
 
 **Calibration factor: divide traditional estimates by ~12 for AI-assisted time.**
 
-## Plan File Location
-
-**Full master plan:** `.claude/plans/replicated-foraging-nebula.md` (~3,400 lines, all details)
-
 ## Key Architecture
 
+- `backend/embeddings/` — provider.py (EmbeddingProvider protocol, MiniLM + Gemma)
+- `backend/content/` — types.py, gating.py, intimacy.py, prompts.py, bridge.py (Content Gating)
 - `backend/adaptive/` — reflector.py, tuner.py, journal.py (Adaptive Intelligence)
 - `backend/bond/` — progression.py, gifts.py, seed_data.py (Bond Progression)
-- `backend/proactive/` — triggers.py, generator.py (Proactive Messages)
-- `frontends/shared/viewer/viewer.html` — 3D viewer (5,700+ lines, all animation controllers)
 - `backend/server.py` — FastAPI server (~13K lines, all API endpoints)
-- `.claude/agents/` — 8 specialized agent definitions
+- `frontends/shared/viewer/viewer.html` — 3D viewer (5,700+ lines)
 - `docs/design/competitive-research-2026-03-18.md` — 34-source competitive analysis

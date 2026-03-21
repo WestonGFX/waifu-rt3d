@@ -456,6 +456,14 @@ from backend.embeddings.provider import get_provider as get_embedding_provider
 
 # Feature 18: Content gating system
 from backend.content.bridge import get_content_blocks, update_intimacy_after_turn
+from backend.content.types import (
+    ContentRatingLevel,
+    CONTENT_RATING_ORDER,
+)
+from backend.content.gating import (
+    hash_content_lock_password,
+    verify_content_lock_password,
+)
 
 # Feature A2: In-App Mini Games — all game engines
 from backend.games import trivia as trivia_engine
@@ -1473,6 +1481,248 @@ async def set_webhooks(req: Request):
     cfg["webhooks"] = urls
     save_config(cfg)
     return {"ok": True, "webhooks": urls}
+
+
+# ── Content Gate API (Phase 18C) ───────────────────────────────────────
+
+@app.get("/api/content-gate")
+def get_content_gate():
+    """Return the global content gate config and per-character ceilings.
+
+    Returns:
+        {
+            "global_content_ceiling": "general"|"edgy"|"mature"|"explicit",
+            "age_verified": bool,
+            "content_lock_enabled": bool,
+            "per_character_ceilings": {<char_id>: <ceiling>, ...}
+        }
+    """
+    con = db()
+    try:
+        row = con.execute(
+            "SELECT global_content_ceiling, age_verified, "
+            "content_lock_enabled FROM content_gate_config WHERE id = 1"
+        ).fetchone()
+        if not row:
+            return {
+                "global_content_ceiling": "general",
+                "age_verified": False,
+                "content_lock_enabled": False,
+                "per_character_ceilings": {},
+            }
+        per_char = {}
+        for r in con.execute(
+            "SELECT char_id, ceiling FROM persona_content_ceilings"
+        ).fetchall():
+            per_char[r[0]] = r[1]
+        return {
+            "global_content_ceiling": row[0],
+            "age_verified": bool(row[1]),
+            "content_lock_enabled": bool(row[2]),
+            "per_character_ceilings": per_char,
+        }
+    finally:
+        con.close()
+
+
+@app.put("/api/content-gate")
+async def update_content_gate(req: Request):
+    """Update the global content ceiling.
+
+    Requires age_verified=true to set ceiling to 'mature' or 'explicit'.
+    Requires content lock to be disabled (or password provided) to change.
+
+    Args:
+        req: JSON body ``{"global_content_ceiling": "general"|"edgy"|"mature"|"explicit",
+                          "unlock_password": "..." (optional, if lock is enabled)}``
+
+    Returns:
+        {"ok": True, "global_content_ceiling": <new_ceiling>}
+
+    Raises:
+        HTTPException: 400 if invalid ceiling, 403 if age not verified or lock active.
+    """
+    body = await req.json()
+    ceiling = body.get("global_content_ceiling", "general")
+    if ceiling not in CONTENT_RATING_ORDER:
+        raise HTTPException(400, f"Invalid ceiling: {ceiling}. Must be one of {CONTENT_RATING_ORDER}")
+
+    con = db()
+    try:
+        row = con.execute(
+            "SELECT age_verified, content_lock_enabled, "
+            "content_lock_password_hash FROM content_gate_config WHERE id = 1"
+        ).fetchone()
+        age_verified = bool(row[0]) if row else False
+        lock_enabled = bool(row[1]) if row else False
+        lock_hash = row[2] if row else ""
+
+        # Age gate: mature/explicit requires verification
+        if ceiling in ("mature", "explicit") and not age_verified:
+            raise HTTPException(403, "Age verification required for mature/explicit content")
+
+        # Content lock: must provide password to change ceiling
+        if lock_enabled:
+            pw = body.get("unlock_password", "")
+            if not pw or not verify_content_lock_password(pw, lock_hash):
+                raise HTTPException(403, "Content lock is active. Provide correct unlock_password.")
+
+        con.execute(
+            "UPDATE content_gate_config SET global_content_ceiling = ?, "
+            "updated_at = datetime('now') WHERE id = 1",
+            (ceiling,),
+        )
+        con.commit()
+        return {"ok": True, "global_content_ceiling": ceiling}
+    finally:
+        con.close()
+
+
+@app.post("/api/content-gate/verify-age")
+async def verify_age(req: Request):
+    """Set age_verified = true (one-time confirmation).
+
+    Args:
+        req: JSON body ``{"confirmed": true}``
+
+    Returns:
+        {"ok": True, "age_verified": True}
+
+    Raises:
+        HTTPException: 400 if confirmed is not true.
+    """
+    body = await req.json()
+    if not body.get("confirmed"):
+        raise HTTPException(400, "Must send {\"confirmed\": true}")
+    con = db()
+    try:
+        con.execute(
+            "UPDATE content_gate_config SET age_verified = 1, "
+            "updated_at = datetime('now') WHERE id = 1"
+        )
+        con.commit()
+        return {"ok": True, "age_verified": True}
+    finally:
+        con.close()
+
+
+@app.post("/api/content-gate/lock")
+async def set_content_lock(req: Request):
+    """Enable content lock with a password.
+
+    Args:
+        req: JSON body ``{"password": "..."}``
+
+    Returns:
+        {"ok": True, "content_lock_enabled": True}
+
+    Raises:
+        HTTPException: 400 if password is empty or too short.
+    """
+    body = await req.json()
+    password = body.get("password", "")
+    if not password or len(password) < 4:
+        raise HTTPException(400, "Password must be at least 4 characters")
+    hashed = hash_content_lock_password(password)
+    con = db()
+    try:
+        con.execute(
+            "UPDATE content_gate_config SET content_lock_enabled = 1, "
+            "content_lock_password_hash = ?, updated_at = datetime('now') "
+            "WHERE id = 1",
+            (hashed,),
+        )
+        con.commit()
+        return {"ok": True, "content_lock_enabled": True}
+    finally:
+        con.close()
+
+
+@app.post("/api/content-gate/unlock")
+async def unlock_content(req: Request):
+    """Disable content lock by verifying the password.
+
+    Args:
+        req: JSON body ``{"password": "..."}``
+
+    Returns:
+        {"ok": True, "content_lock_enabled": False}
+
+    Raises:
+        HTTPException: 403 if password is incorrect.
+    """
+    body = await req.json()
+    password = body.get("password", "")
+    con = db()
+    try:
+        row = con.execute(
+            "SELECT content_lock_password_hash FROM content_gate_config WHERE id = 1"
+        ).fetchone()
+        stored_hash = row[0] if row else ""
+        if not verify_content_lock_password(password, stored_hash):
+            raise HTTPException(403, "Incorrect password")
+        con.execute(
+            "UPDATE content_gate_config SET content_lock_enabled = 0, "
+            "content_lock_password_hash = '', updated_at = datetime('now') "
+            "WHERE id = 1"
+        )
+        con.commit()
+        return {"ok": True, "content_lock_enabled": False}
+    finally:
+        con.close()
+
+
+@app.put("/api/content-gate/character/{char_id}")
+async def set_character_ceiling(char_id: int, req: Request):
+    """Set or clear a per-character content ceiling override.
+
+    Args:
+        char_id: The character ID.
+        req: JSON body ``{"ceiling": "general"|"edgy"|"mature"|"explicit"|null}``
+             Pass null to remove the override (use global ceiling).
+
+    Returns:
+        {"ok": True, "char_id": int, "ceiling": str|null}
+
+    Raises:
+        HTTPException: 400 if invalid ceiling, 403 if ceiling exceeds age verification.
+    """
+    body = await req.json()
+    ceiling = body.get("ceiling")
+
+    con = db()
+    try:
+        # Remove override
+        if ceiling is None:
+            con.execute(
+                "DELETE FROM persona_content_ceilings WHERE char_id = ?",
+                (char_id,),
+            )
+            con.commit()
+            return {"ok": True, "char_id": char_id, "ceiling": None}
+
+        if ceiling not in CONTENT_RATING_ORDER:
+            raise HTTPException(400, f"Invalid ceiling: {ceiling}")
+
+        # Check age verification for mature/explicit
+        row = con.execute(
+            "SELECT age_verified FROM content_gate_config WHERE id = 1"
+        ).fetchone()
+        age_verified = bool(row[0]) if row else False
+        if ceiling in ("mature", "explicit") and not age_verified:
+            raise HTTPException(403, "Age verification required for mature/explicit content")
+
+        con.execute(
+            "INSERT INTO persona_content_ceilings (char_id, ceiling, updated_at) "
+            "VALUES (?, ?, datetime('now')) "
+            "ON CONFLICT(char_id) DO UPDATE SET ceiling = excluded.ceiling, "
+            "updated_at = excluded.updated_at",
+            (char_id, ceiling),
+        )
+        con.commit()
+        return {"ok": True, "char_id": char_id, "ceiling": ceiling}
+    finally:
+        con.close()
 
 
 @app.get("/api/frontend")

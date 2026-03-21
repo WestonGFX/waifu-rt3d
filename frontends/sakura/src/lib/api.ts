@@ -897,4 +897,64 @@ export const api = {
    */
   deleteFormatRule: (ruleId: number) =>
     del<{ ok: boolean }>(`/api/format-rules/${ruleId}`),
+
+  // ── Content Gate (Phase 18C) ────────────────────────────────────────
+
+  /**
+   * Fetch the global content gate config and per-character ceilings.
+   *
+   * @returns Global ceiling, age-verification status, lock state, and per-character overrides.
+   */
+  getContentGate: () =>
+    get<{
+      global_content_ceiling: string;
+      age_verified: boolean;
+      content_lock_enabled: boolean;
+      per_character_ceilings: Record<string, string>;
+    }>('/api/content-gate'),
+
+  /**
+   * Update the global content ceiling.
+   *
+   * @param body - New ceiling value and optional unlock password.
+   * @returns Updated ceiling value.
+   */
+  updateContentGate: (body: { global_content_ceiling: string; unlock_password?: string }) =>
+    put<{ ok: boolean; global_content_ceiling: string }>('/api/content-gate', body),
+
+  /**
+   * Confirm age verification (one-time).
+   *
+   * @returns Updated age verification status.
+   */
+  verifyAge: () =>
+    post<{ ok: boolean; age_verified: boolean }>('/api/content-gate/verify-age', { confirmed: true }),
+
+  /**
+   * Enable content lock with a password.
+   *
+   * @param password - Password to lock content controls (min 4 chars).
+   * @returns Updated lock state.
+   */
+  setContentLock: (password: string) =>
+    post<{ ok: boolean; content_lock_enabled: boolean }>('/api/content-gate/lock', { password }),
+
+  /**
+   * Unlock content by verifying password.
+   *
+   * @param password - Password to verify before unlocking.
+   * @returns Updated lock state.
+   */
+  unlockContent: (password: string) =>
+    post<{ ok: boolean; content_lock_enabled: boolean }>('/api/content-gate/unlock', { password }),
+
+  /**
+   * Set or clear a per-character content ceiling override.
+   *
+   * @param charId - Character primary key.
+   * @param ceiling - Ceiling level string, or null to inherit global setting.
+   * @returns Updated per-character ceiling.
+   */
+  setCharacterCeiling: (charId: number, ceiling: string | null) =>
+    put<{ ok: boolean; char_id: number; ceiling: string | null }>(`/api/content-gate/character/${charId}`, { ceiling }),
 };

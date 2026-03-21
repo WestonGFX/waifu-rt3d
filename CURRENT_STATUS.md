@@ -1,9 +1,9 @@
 # Current Project Status
 
-**Last updated:** 2026-03-21 (current session)
+**Last updated:** 2026-03-21 16:00 PDT
 **Branch:** master
-**Schema version:** v58
-**Tests:** 701 passing (backend pytest), tsc clean (frontend)
+**Schema version:** v59
+**Tests:** 745 passing (backend pytest), tsc clean (frontend)
 **Plan file:** `/Users/chris/.claude/plans/cached-imagining-cocke.md` (Phases 14A-20)
 
 ## Completed This Session — 4 commits
@@ -52,15 +52,15 @@ See `git log` for full history. Key highlights: Phases 1-3, 6, 9A-E, 11A, 12-P1 
 | Phase 16 | NOT STARTED | AI model ecosystem analysis |
 | Phase 17 | NOT STARTED | Animation library + smart sequencing |
 | Phase 18A-B | ✅ DONE | Content gating backend (types + pipeline + intimacy) |
-| Phase 18C-D | NOT STARTED | Content gating frontend UI + migration |
+| Phase 18C-D | ✅ DONE | Content gating frontend UI + legacy migration (schema v59) |
 | Phase 19 | NOT STARTED | On-device learning (privacy-first) |
 | Phase 20 | NOT STARTED | Model database + README updates |
 
 ## Next 3 Tasks (Priority Order)
 
-1. **Phase 18C-D** — Content gating frontend settings UI + legacy migration
-2. **Phase 17** — Animation library expansion + smart sequencing
-3. **Phase 19** — On-device learning (continuous signals, rolling preferences)
+1. **Phase 17** — Animation library expansion + smart sequencing
+2. **Phase 19** — On-device learning (continuous signals, rolling preferences)
+3. **Phase 20** — Model database + README updates
 
 ## Estimate vs Actual (AI-Assisted Dev)
 

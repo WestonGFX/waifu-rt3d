@@ -38,6 +38,7 @@ Migration Strategy:
                   + embedding_model column on memories table
     - v57 → v58: Content Gating System — content_gate_config (singleton),
                   persona_content_ceilings, intimacy_states, physical_states tables
+    - v58 → v59: Legacy content_filter_level migration to content_gate_config
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -3568,6 +3569,88 @@ def migrate_to_v58(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v59(con: sqlite3.Connection) -> bool:
+    """v58 → v59: Migrate legacy content_filter_level to content_gate_config.
+
+    Reads the old integer ``content_filter_level`` from app.json and maps it
+    into the new ``content_gate_config`` singleton row.  If the user already
+    changed their ceiling via the new UI (i.e. it's no longer the default
+    'general'), this migration is a no-op.
+
+    Legacy mapping:
+        -1 → explicit (+ age_verified=1)
+         0 → mature   (+ age_verified=1)
+         1 → edgy
+         2 → general
+         3 → general  (+ content_lock_enabled=1)
+
+    Returns:
+        True on success.
+
+    Raises:
+        Exception: If the migration fails (rolls back automatically).
+    """
+    try:
+        # Check if the new config is still at defaults (ceiling='general',
+        # not age-verified, not locked).  If the user already changed settings
+        # via the Phase 18C UI, skip this migration.
+        row = con.execute(
+            "SELECT global_content_ceiling, age_verified, content_lock_enabled "
+            "FROM content_gate_config WHERE id = 1"
+        ).fetchone()
+        if row and (row[0] != "general" or row[1] or row[2]):
+            logger.info(
+                "  - content_gate_config already customised — skipping legacy migration"
+            )
+            con.execute(
+                "INSERT OR REPLACE INTO schema_version (version) VALUES (59)"
+            )
+            con.commit()
+            return True
+
+        # Read legacy setting from app.json
+        legacy_level = 0
+        if APP_JSON.exists():
+            try:
+                cfg = json.loads(APP_JSON.read_text(encoding="utf-8"))
+                legacy_level = int(cfg.get("content_filter_level", 0))
+            except (json.JSONDecodeError, ValueError, TypeError):
+                pass
+
+        # Map to new system
+        level_map = {-1: "explicit", 0: "mature", 1: "edgy", 2: "general", 3: "general"}
+        new_ceiling = level_map.get(legacy_level, "general")
+
+        # Determine age_verified: mature/explicit require it
+        age_verified = 1 if new_ceiling in ("mature", "explicit") else 0
+
+        # Determine lock: old level 3 was "strict + locked"
+        lock_enabled = 1 if legacy_level == 3 else 0
+
+        con.execute(
+            "UPDATE content_gate_config SET "
+            "global_content_ceiling = ?, age_verified = ?, "
+            "content_lock_enabled = ?, updated_at = datetime('now') "
+            "WHERE id = 1",
+            (new_ceiling, age_verified, lock_enabled),
+        )
+
+        con.execute(
+            "INSERT OR REPLACE INTO schema_version (version) VALUES (59)"
+        )
+        con.commit()
+        logger.info(
+            f"\u2705 Schema v59 migration complete "
+            f"(legacy content_filter_level={legacy_level} → "
+            f"ceiling={new_ceiling}, age_verified={bool(age_verified)})"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v59 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -4006,21 +4089,27 @@ def ensure_db():
             if migrate_to_v58(con):
                 version = 58
 
+        if version < 59:
+            logger.info("Upgrading database schema from v58 to v59...")
+            logger.info("  - Migrating legacy content_filter_level to content_gate_config")
+            if migrate_to_v59(con):
+                version = 59
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 58:
-            raise RuntimeError(f"Database initialization failed: Expected v58, got v{final_version}")
+        if final_version < 59:
+            raise RuntimeError(f"Database initialization failed: Expected v59, got v{final_version}")
 
-        if final_version > 58:
-            logger.warning(f"Database is newer than application (v{final_version} > v58). Some features might be unused.")
+        if final_version > 59:
+            logger.warning(f"Database is newer than application (v{final_version} > v59). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v58 adds Content Gating System)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v59 adds Content Gate legacy migration)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

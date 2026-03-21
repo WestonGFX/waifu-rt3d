@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Brain, Volume2, Palette, Shield, Image, Settings, Package, User, Monitor,
   Eye, Wrench, Lightbulb, Cpu, RefreshCw, CheckCircle, HelpCircle, ExternalLink, Wand2,
-  ChevronDown, Upload
+  ChevronDown, ChevronRight, Upload, Lock
 } from 'lucide-react';
 import type { ModelCapabilities } from '../lib/api';
 import type { LayoutMode, ReplyLengthMode } from '../stores/appStore';
@@ -3747,35 +3747,393 @@ function VoiceTab({ save, cfg }: TabProps) {
    Tab: Safety
    ═══════════════════════════════════════════════════════════════════════ */
 
-const CONTENT_FILTER_OPTIONS = [
-  { value: -1, label: 'Off (NSFW Allowed)', color: '#ef4444' },
-  { value: 0, label: 'Off (Default)', color: '#9ca3af' },
-  { value: 1, label: 'Light', color: '#eab308' },
-  { value: 2, label: 'Moderate', color: '#f97316' },
-  { value: 3, label: 'Strict (Family Safe)', color: '#22c55e' },
+/** Maps content ceiling level name to legacy integer for backward compat with bridge.py. */
+const CEILING_TO_INT: Record<string, number> = {
+  general: 2,
+  edgy: 1,
+  mature: 0,
+  explicit: -1,
+};
+
+/** Display metadata for each content ceiling level. */
+const CEILING_OPTIONS: Array<{
+  value: string;
+  label: string;
+  description: string;
+  accentColor: string;
+  requiresVerification: boolean;
+}> = [
+  { value: 'general',  label: 'General',  description: 'Family-safe. No mature themes.',       accentColor: '#22c55e', requiresVerification: false },
+  { value: 'edgy',     label: 'Edgy',     description: 'Violence, dark humor, mild language.',  accentColor: '#eab308', requiresVerification: false },
+  { value: 'mature',   label: 'Mature',   description: 'Adult themes, suggestive content.',     accentColor: '#f97316', requiresVerification: true  },
+  { value: 'explicit', label: 'Explicit', description: 'Unrestricted adult content.',           accentColor: '#ef4444', requiresVerification: true  },
 ];
 
+/**
+ * Safety / Content Gate settings tab.
+ *
+ * Renders five sections:
+ * 1. Content Ceiling — radio-card selector backed by the /api/content-gate endpoint.
+ * 2. Age Verification — one-time confirmation gate for mature/explicit levels.
+ * 3. Per-Character Overrides — collapsible per-character ceiling dropdowns.
+ * 4. Content Lock — optional password lock that disables all ceiling controls.
+ * 5. RP Style, Audio Cache, Vocabulary — pre-existing config-backed settings.
+ */
 function SafetyTab({ save, cfg }: TabProps) {
+  const { characters } = useAppStore();
+
+  // ── Content gate remote state ────────────────────────────────────
+  const [ceiling, setCeiling] = useState<string>('general');
+  const [ageVerified, setAgeVerified] = useState(false);
+  const [lockEnabled, setLockEnabled] = useState(false);
+  const [perCharCeilings, setPerCharCeilings] = useState<Record<string, string>>({});
+  const [gateLoading, setGateLoading] = useState(true);
+  const [gateError, setGateError] = useState<string | null>(null);
+
+  // ── Age verification UI state ────────────────────────────────────
+  const [ageCheckPending, setAgeCheckPending] = useState(false);
+
+  // ── Content lock UI state ────────────────────────────────────────
+  const [lockPassword, setLockPassword] = useState('');
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [lockBusy, setLockBusy] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
+
+  // ── Per-character overrides section collapse state ───────────────
+  const [charOverridesOpen, setCharOverridesOpen] = useState(false);
+
+  /** Load content gate settings from the backend on mount. */
+  useEffect(() => {
+    setGateLoading(true);
+    api.getContentGate()
+      .then(data => {
+        setCeiling(data.global_content_ceiling);
+        setAgeVerified(data.age_verified);
+        setLockEnabled(data.content_lock_enabled);
+        setPerCharCeilings(data.per_character_ceilings ?? {});
+        setGateError(null);
+      })
+      .catch(err => {
+        setGateError(String(err));
+      })
+      .finally(() => setGateLoading(false));
+  }, []);
+
+  /**
+   * Change the global content ceiling via API.
+   * Also keeps the legacy `content_filter_level` integer in sync for bridge.py compat.
+   *
+   * @param newCeiling - One of 'general' | 'edgy' | 'mature' | 'explicit'.
+   */
+  const handleCeilingChange = async (newCeiling: string) => {
+    try {
+      const res = await api.updateContentGate({ global_content_ceiling: newCeiling });
+      setCeiling(res.global_content_ceiling);
+      // Backward compat: keep the integer field in sync
+      save('content_filter_level', CEILING_TO_INT[res.global_content_ceiling] ?? 1);
+    } catch (err) {
+      setGateError(`Failed to save: ${String(err)}`);
+    }
+  };
+
+  /**
+   * Confirm age verification after user checks the checkbox and confirms the dialog.
+   */
+  const handleVerifyAge = async () => {
+    if (!window.confirm('I confirm I am 18 years of age or older.')) return;
+    setAgeCheckPending(true);
+    try {
+      const res = await api.verifyAge();
+      setAgeVerified(res.age_verified);
+    } catch (err) {
+      setGateError(`Verification failed: ${String(err)}`);
+    } finally {
+      setAgeCheckPending(false);
+    }
+  };
+
+  /**
+   * Enable the content lock with the provided password.
+   */
+  const handleSetLock = async () => {
+    if (lockPassword.length < 4) {
+      setLockError('Password must be at least 4 characters.');
+      return;
+    }
+    setLockBusy(true);
+    setLockError(null);
+    try {
+      const res = await api.setContentLock(lockPassword);
+      setLockEnabled(res.content_lock_enabled);
+      setLockPassword('');
+    } catch (err) {
+      setLockError(`Failed to set lock: ${String(err)}`);
+    } finally {
+      setLockBusy(false);
+    }
+  };
+
+  /**
+   * Unlock content controls by verifying the password.
+   */
+  const handleUnlock = async () => {
+    setLockBusy(true);
+    setLockError(null);
+    try {
+      const res = await api.unlockContent(unlockPassword);
+      setLockEnabled(res.content_lock_enabled);
+      setUnlockPassword('');
+    } catch (err) {
+      setLockError('Incorrect password.');
+    } finally {
+      setLockBusy(false);
+    }
+  };
+
+  /**
+   * Update the per-character ceiling override for one character.
+   *
+   * @param charId - Character primary key.
+   * @param value - Ceiling level string, or 'global' to inherit global setting.
+   */
+  const handleCharCeiling = async (charId: number, value: string) => {
+    const resolved = value === 'global' ? null : value;
+    try {
+      const res = await api.setCharacterCeiling(charId, resolved);
+      setPerCharCeilings(prev => {
+        const next = { ...prev };
+        if (res.ceiling === null) {
+          delete next[charId];
+        } else {
+          next[charId] = res.ceiling;
+        }
+        return next;
+      });
+    } catch (err) {
+      setGateError(`Failed to update character ceiling: ${String(err)}`);
+    }
+  };
+
+  const controlsDisabled = lockEnabled || gateLoading;
+
   return (
     <>
+      {/* ── Section 1: Content Ceiling ─────────────────────────────── */}
       <section className="mb-6">
-        <SectionHeader title="Content Safety" />
-        <div style={cardStyle} className="px-4">
-          <SettingField label="Content Filter" description="Controls what content the AI is allowed to generate."
-            tooltip="The filter works by adding instructions to the system prompt. -1: NSFW allowed. 0: model decides. 1: no explicit (default). 2: all-ages. 3: fully PG.">
-            <select
-              value={Number(cfg('content_filter_level', 1))}
-              onChange={(e) => save('content_filter_level', parseInt(e.target.value))}
-              className="text-sm px-2 py-1 rounded" style={selectStyle}
-            >
-              {CONTENT_FILTER_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.value} — {opt.label}
-                </option>
-              ))}
-            </select>
-          </SettingField>
+        <SectionHeader title="Content Ceiling" />
+        <div style={cardStyle} className="px-4 py-3">
+          {gateLoading && (
+            <p className="text-xs py-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Loading…
+            </p>
+          )}
+          {gateError && (
+            <p className="text-xs py-2" style={{ color: '#ef4444' }}>
+              {gateError}
+            </p>
+          )}
+          {lockEnabled && (
+            <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded text-xs"
+              style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}>
+              <Lock size={12} />
+              <span>Content controls are locked. Enter your password below to make changes.</span>
+            </div>
+          )}
+          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+            {CEILING_OPTIONS.map(opt => {
+              const isSelected = ceiling === opt.value;
+              const needsVerify = opt.requiresVerification && !ageVerified;
+              return (
+                <button
+                  key={opt.value}
+                  disabled={controlsDisabled || (needsVerify)}
+                  onClick={() => handleCeilingChange(opt.value)}
+                  style={{
+                    border: isSelected
+                      ? `2px solid ${opt.accentColor}`
+                      : '2px solid var(--color-border)',
+                    borderRadius: 'var(--radius-card)',
+                    backgroundColor: isSelected
+                      ? `color-mix(in srgb, ${opt.accentColor} 12%, var(--color-surface))`
+                      : 'var(--color-surface)',
+                    padding: '10px 12px',
+                    textAlign: 'left',
+                    cursor: controlsDisabled || needsVerify ? 'not-allowed' : 'pointer',
+                    opacity: controlsDisabled || needsVerify ? 0.5 : 1,
+                    transition: 'border-color 0.15s, background-color 0.15s',
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-semibold" style={{ color: isSelected ? opt.accentColor : 'var(--color-text)' }}>
+                      {opt.label}
+                    </span>
+                    {needsVerify && <Lock size={12} style={{ color: 'var(--color-text-secondary)' }} />}
+                  </div>
+                  <p className="text-xs" style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
+                    {opt.description}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
+      {/* ── Section 2: Age Verification ────────────────────────────── */}
+      {!ageVerified && (
+        <section className="mb-6">
+          <SectionHeader title="Age Verification" />
+          <div style={cardStyle} className="px-4">
+            <SettingField
+              label="I am 18 years or older"
+              description="Required to access Mature and Explicit ceiling levels."
+              tooltip="Age verification is stored locally and never transmitted. You only need to confirm once.">
+              <button
+                disabled={ageCheckPending || lockEnabled}
+                onClick={handleVerifyAge}
+                className="text-xs px-3 py-1 rounded"
+                style={{
+                  backgroundColor: 'var(--color-accent)',
+                  color: 'var(--color-text-on-accent, #fff)',
+                  border: 'none',
+                  cursor: ageCheckPending || lockEnabled ? 'not-allowed' : 'pointer',
+                  opacity: ageCheckPending || lockEnabled ? 0.6 : 1,
+                }}
+              >
+                {ageCheckPending ? 'Confirming…' : 'Confirm Age'}
+              </button>
+            </SettingField>
+          </div>
+        </section>
+      )}
+
+      {/* ── Section 3: Per-Character Overrides ─────────────────────── */}
+      <section className="mb-6">
+        <SectionHeader title="Per-Character Overrides" />
+        <div style={cardStyle} className="px-4">
+          {/* Collapsible header row */}
+          <button
+            onClick={() => setCharOverridesOpen(o => !o)}
+            className="flex items-center justify-between w-full py-3 text-sm"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text)' }}
+          >
+            <span>Override ceiling per character</span>
+            <span style={{ color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span className="text-xs">{charOverridesOpen ? 'Hide' : 'Show'}</span>
+              {charOverridesOpen
+                ? <ChevronDown size={14} />
+                : <ChevronRight size={14} />}
+            </span>
+          </button>
+
+          {charOverridesOpen && (
+            <div style={{ borderTop: '1px solid var(--color-border-subtle)', paddingTop: 8, paddingBottom: 8 }}>
+              {characters.length === 0 && (
+                <p className="text-xs py-2" style={{ color: 'var(--color-text-secondary)' }}>No characters found.</p>
+              )}
+              {characters.map(char => (
+                <div key={char.id} className="flex items-center justify-between py-2"
+                  style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+                  <span className="text-sm" style={{ color: 'var(--color-text)' }}>
+                    {char.name}
+                  </span>
+                  <select
+                    disabled={controlsDisabled}
+                    value={perCharCeilings[char.id] ?? 'global'}
+                    onChange={e => handleCharCeiling(char.id, e.target.value)}
+                    className="text-sm px-2 py-1 rounded"
+                    style={{ ...selectStyle, minWidth: 110, opacity: controlsDisabled ? 0.5 : 1 }}
+                  >
+                    <option value="global">Use Global</option>
+                    <option value="general">General</option>
+                    <option value="edgy">Edgy</option>
+                    <option value="mature">Mature</option>
+                    <option value="explicit">Explicit</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── Section 4: Content Lock ────────────────────────────────── */}
+      <section className="mb-6">
+        <SectionHeader title="Content Lock" />
+        <div style={cardStyle} className="px-4">
+          {!lockEnabled ? (
+            <SettingField
+              label="Lock content controls"
+              description="Protect settings with a password to prevent accidental changes."
+              tooltip="Once locked, a password is required to change any content ceiling settings. Minimum 4 characters.">
+              <div className="flex items-center gap-2">
+                <input
+                  type="password"
+                  placeholder="Password (min 4)"
+                  value={lockPassword}
+                  onChange={e => { setLockPassword(e.target.value); setLockError(null); }}
+                  className="text-sm px-2 py-1 rounded"
+                  style={{ ...selectStyle, width: 130 }}
+                />
+                <button
+                  disabled={lockBusy || lockPassword.length < 4}
+                  onClick={handleSetLock}
+                  className="text-xs px-3 py-1 rounded"
+                  style={{
+                    backgroundColor: 'var(--color-accent)',
+                    color: 'var(--color-text-on-accent, #fff)',
+                    border: 'none',
+                    cursor: lockBusy || lockPassword.length < 4 ? 'not-allowed' : 'pointer',
+                    opacity: lockBusy || lockPassword.length < 4 ? 0.6 : 1,
+                  }}
+                >
+                  {lockBusy ? 'Locking…' : 'Enable Lock'}
+                </button>
+              </div>
+              {lockError && (
+                <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{lockError}</p>
+              )}
+            </SettingField>
+          ) : (
+            <SettingField
+              label="Locked"
+              description="Enter your password to unlock content controls.">
+              <div className="flex items-center gap-2">
+                <input
+                  type="password"
+                  placeholder="Enter password"
+                  value={unlockPassword}
+                  onChange={e => { setUnlockPassword(e.target.value); setLockError(null); }}
+                  className="text-sm px-2 py-1 rounded"
+                  style={{ ...selectStyle, width: 130 }}
+                />
+                <button
+                  disabled={lockBusy || !unlockPassword}
+                  onClick={handleUnlock}
+                  className="text-xs px-3 py-1 rounded"
+                  style={{
+                    backgroundColor: 'var(--color-accent)',
+                    color: 'var(--color-text-on-accent, #fff)',
+                    border: 'none',
+                    cursor: lockBusy || !unlockPassword ? 'not-allowed' : 'pointer',
+                    opacity: lockBusy || !unlockPassword ? 0.6 : 1,
+                  }}
+                >
+                  {lockBusy ? 'Checking…' : 'Unlock'}
+                </button>
+              </div>
+              {lockError && (
+                <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{lockError}</p>
+              )}
+            </SettingField>
+          )}
+        </div>
+      </section>
+
+      {/* ── Section 5: RP Style ────────────────────────────────────── */}
+      <section className="mb-6">
+        <SectionHeader title="RP Style" />
+        <div style={cardStyle} className="px-4">
           <SettingField label="RP Style Preset" description="How much narration formatting to inject into the LLM prompt."
             tooltip="None: natural chat. Light: brief *action* beats. Full: novel-quality narration with (thoughts), *actions*, and sensory detail. Explicit: Full + unrestricted intimate scenes.">
             <select
@@ -3789,7 +4147,13 @@ function SafetyTab({ save, cfg }: TabProps) {
               <option value="explicit_rp">Explicit RP — Unrestricted adult</option>
             </select>
           </SettingField>
+        </div>
+      </section>
 
+      {/* ── Section 6: Audio Cache ─────────────────────────────────── */}
+      <section className="mb-6">
+        <SectionHeader title="Audio Cache" />
+        <div style={cardStyle} className="px-4">
           <SliderField
             label="Audio Cache Retention" description="Days to keep cached TTS audio (0 = forever)."
             tooltip="Audio files older than this are automatically deleted."
@@ -3801,6 +4165,7 @@ function SafetyTab({ save, cfg }: TabProps) {
         </div>
       </section>
 
+      {/* ── Section 7: Vocabulary ─────────────────────────────────── */}
       <section className="mb-6">
         <SectionHeader title="Vocabulary" />
         <div style={cardStyle} className="px-4">

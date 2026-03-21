@@ -5,12 +5,14 @@
 **Schema version:** v56
 **Tests:** 529 passing (backend pytest), tsc clean (frontend)
 
-## Completed This Session (Mar 21, 2026) — 2 commits
+## Completed This Session (Mar 21, 2026) — 4 commits
 
 | Commit | Phase | What |
 |--------|-------|------|
 | `466f0e9` | 12-P5 | Procedural character audio engine + settings UI |
 | `ac316e6` | 11A | Time-of-day lighting + procedural pose system + scene context |
+| `bd9a95d` | docs | Checkpoint status update |
+| `ed6a7f0` | 3B | Hair anisotropic + eye sparkle specialty shaders |
 
 ## Completed Previous Session (Mar 20-21, 2026) — 13 commits
 
@@ -60,9 +62,9 @@
 
 ## Next 3 Tasks (Priority Order)
 
-1. **Task 3B** [STRETCH] — Specialty shaders (hair anisotropic, eye sparkle, skin SSS)
-2. **Test in browser** — Director Mode + Character Audio + Pose System interactive validation
-3. **Remaining character enrichment** — Ayane needs one milestone scene; 8 chars at gold
+1. **Test in browser** — Director Mode + Character Audio + Pose System + Shaders interactive validation
+2. **Remaining character enrichment** — Ayane needs one milestone scene; 8 chars at gold
+3. **Pick next from feature menu** — `docs/plans/2026-03-15-actionable-implementation-specs.md`
 
 ## Estimate vs Actual (AI-Assisted Dev)
 
@@ -76,6 +78,7 @@
 | 13B | 1.4d (8.5h proto) | ~30min | 1/17 | Character journal |
 | 12-P5 | 1w (8h proto) | ~15min | 1/32 | Procedural audio engine |
 | 11A | 3w (14h proto) | ~20min | 1/42 | Poses + lighting (no Blender!) |
+| 3B | 1.5d (5h proto) | ~10min | 1/30 | Hair + eye shaders |
 
 **Calibration factor: divide traditional estimates by ~12 for AI-assisted time.**
 

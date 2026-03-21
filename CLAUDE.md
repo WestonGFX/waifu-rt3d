@@ -72,7 +72,7 @@ When fixing bugs, limit changes to the minimum necessary to resolve the issue. D
 
 ## Tech Stack
 
-TypeScript, JavaScript, Python, HTML/CSS, Three.js/VRM, Electron, Vite, React 19, Zustand, FastAPI, SQLite, Playwright. GPU: RTX 5080 16GB.
+TypeScript, JavaScript, Python, HTML/CSS, Three.js/VRM, Electron, Vite, React 19, Zustand, FastAPI, SQLite, Playwright. Multi-machine dev: Mac M2 Pro (32GB), Windows RTX 5080 (16GB VRAM), Windows RTX 3070 (8GB VRAM). M2 Pro is the GPU floor for rendering targets.
 
 ## Smoke Test Before Completion
 

@@ -1,87 +1,66 @@
-# Resume: Waifu-RT3D — Cycle 2 Research + Expansion Session (Mar 21, 2026)
+# Resume: Waifu-RT3D — Post-Phase 15+18 Session (Mar 21, 2026)
 
 ## WHO I AM
 
-I'm Chris. Sole developer of Waifu-RT3D, a commercial AI companion platform with 3D anime avatars + local LLM integration. I run 3 flagship AI subscriptions (Anthropic Opus, OpenAI, Google) in parallel. AI-assisted implementation is ~12x faster than traditional estimates. Desktop-only app.
+I'm Chris. Sole developer of Waifu-RT3D, a commercial AI companion platform with 3D anime avatars + local LLM integration. AI-assisted implementation is ~12x faster than traditional estimates. Desktop-only app.
 
-**3 dev machines:** Mac M2 Pro (32GB), Win RTX 5080 (16GB), Win RTX 3070 (8GB). M2 Pro is the GPU floor.
+**3 dev machines:** Mac M2 Pro (24GB unified), Win RTX 5080 (16GB), Win RTX 3070 (8GB). M2 Pro is the GPU floor. 8-9B models run fast, 14B is too slow on M2 Pro.
 
-## WHAT HAPPENED THIS SESSION
+## WHAT HAPPENED THIS SESSION (6 commits)
 
-### Implementation (3 features, ~45min)
-| Commit | Phase | What | Time |
-|--------|-------|------|------|
-| `466f0e9` | 12-P5 | Procedural character audio engine (breathing, vocalizations, touch sounds) | ~15min |
-| `ac316e6` | 11A | Time-of-day lighting + procedural poses + scene context injection | ~20min |
-| `ed6a7f0` + `4b932c7` | 3B | Hair anisotropic + eye sparkle specialty shaders + time uniform fix | ~10min |
+| Commit | Phase | What | Verified |
+|--------|-------|------|----------|
+| `7121ae0` | 15A-B | Embedding provider abstraction (MiniLM + Gemma) + semantic lore matching | Unit tests |
+| `fbec7d6` | 15C | Server integration + semantic topic-shift detection in importance scorer | Unit tests |
+| `4a93b2d` | 18A | Content gating system (types, ceiling, intimacy, prompts) — ported from AnimeGirly | Unit tests |
+| `9ab6605` | 18B | Wire content gating into chat pipeline + intimacy tracking per turn | Unit tests |
+| `3b1787d` | docs | Checkpoint — status files updated | — |
+| `ff64154` | new | Smart LLM endpoint fallback + stream post-processing hooks | **Browser E2E** |
 
-### Research (Phase 14A done, 14B agents done)
-| Commit | Phase | What |
-|--------|-------|------|
-| `4d5409c` | 14A | 24 mature/18+ sources ranked → `docs/design/competitive-research-cycle-2-sources-2026-03-21.md` |
+**Tests: 529 → 701 (+172). Schema: v56 → v58.**
 
-3 research agents completed deep-dives on top 12 sources. **Outputs may be in /tmp — if not, re-run agents.**
+### Browser-Verified E2E Results
+- Smart fallback auto-discovered qwen3:8b on Ollama when configured model was missing
+- Intimacy tracking: level=5, trend=rising after flirty message exchange
+- Physical actions captured from `*action*` markers in both user and AI messages
+- Bond XP accumulating (xp=2 after first exchange)
+- Emotion tags + gesture tags parsed and displayed correctly
 
-### Also Fixed
-- SessionEnd hook error (prompt → command type)
-- embeddinggemma benchmark (MLX format issue discovered)
+## NEW KEY MODULES
 
-## WHAT TO DO NOW — Multi-Session Workflow
+| Module | Purpose |
+|--------|---------|
+| `backend/embeddings/provider.py` | EmbeddingProvider protocol, MiniLM + Gemma implementations, factory |
+| `backend/content/types.py` | ContentRatingLevel, IntimacyState, PhysicalState, ContentGateConfig |
+| `backend/content/gating.py` | resolve_effective_ceiling(), cloud provider caps, password utils |
+| `backend/content/intimacy.py` | 5 regex pattern groups, evaluate_intimacy_shift(), physical state tracking |
+| `backend/content/prompts.py` | 4 graduated prompt builders (directive, physical, sensory, gate) |
+| `backend/content/bridge.py` | DB load/save, legacy config mapping, get_content_blocks() |
+| `backend/llm/endpoint_fallback.py` | Smart LLM endpoint discovery with 60s cache, model preference |
 
-### SESSION 2 (HIGH effort — Research Enrichment)
-Set effort to HIGH before starting. Read `project_session_brief_research_enrichment.md` for full details.
+## WHAT TO DO NOW
 
-1. **Enrich the research doc** — expand `competitive-research-cycle-2-deep-dives-2026-03-21.md` to 3-4x length with community quotes, technical architecture, deeper analysis
-2. **Create interactive HTML dashboard** — `docs/design/research-dashboard.html` with dark theme, radar charts, filterable cards, expandable sections
-3. **Create "Science World" learning experience** — `docs/design/research-learning-experience.html` with interactive modules (Content Gating Lab, Memory Architecture, Retention Workshop, etc.)
-4. **User persona deep-dive** — search Reddit r/waifuism, r/VirtualYouTubers, anime Discord for what target users actually want
-5. **UX friction audit** — list every confusion point in the app
-6. **Gap analysis** — what competitors have that we don't, what we have that they don't
+### Priority 1: Phase 18C-D — Content Gating Frontend
+- Settings UI: "Content & Privacy" panel with ceiling selector, age verification, password lock
+- Per-character ceiling overrides
+- Map legacy `content_filter_level` integer to new system
+- **Backend is done** — just needs frontend components
 
-### SESSION 3 (EXTRA HIGH effort — Planning Enrichment)
-Set effort to EXTRA HIGH.
+### Priority 2: Phase 17 — Animation Library
+- Expand from 45 procedural animations to 200+
+- AnimationSequencer class for emotion-to-animation mapping
+- Multi-source: procedural v2, open-source packs (CMU MoCap, 100STYLE)
 
-1. **Revise plan** — enrich `/Users/chris/.claude/plans/cached-imagining-cocke.md` with code sketches, dependency maps, risk analysis
-2. **User flow diagrams** — content gating, memory inspector, bond progression
-3. **Effort recalibration** — use actual 1/12-1/42x ratios
-4. **Milestone definitions** — acceptance criteria for each feature
-5. **Testing strategy** — what proves each feature works?
+### Priority 3: Phase 19 — On-device Learning
+- Continuous signal collection (per-turn, no LLM call)
+- Rolling preference learning (replace batch-50 gate)
 
-### SESSION 4+ (MEDIUM/HIGH effort — Implementation)
-Execute the enriched plan using `/go`.
+## KNOWN ISSUES / CONTEXT
 
-### THEN (Phase 15 — Embedding)
-- **ISSUE**: embeddinggemma-300m is MLX format, won't load with standard transformers
-- **Fix**: Download standard PyTorch version from HuggingFace (`google/embeddinggemma-300m`) OR install `mlx` packages
-- **Dimension**: 768 (not 256 as initially estimated). sqlite-vec needs FLOAT[768]
-- **Task-specific prompts**: Use `"task: search result | query: "` prefix for retrieval queries
-- Benchmark AFTER fixing format, then decide: replace MiniLM everywhere vs dual-provider
-
-### THEN (Phase 18 — Content Gating)
-Port from AnimeGirly:
-- `frontends/girly/src/types/content.ts` → `backend/content/types.py`
-- `frontends/girly/src/services/contentGatingService.ts` → `backend/content/gating.py`
-- `frontends/girly/src/services/intimacyTrackingService.ts` → `backend/content/intimacy.py`
-
-## KEY RESEARCH FINDINGS
-
-1. **Auto-summarization at context boundaries** — #1 missing feature across ALL platforms
-2. **Janitor AI 70% female users** — narrative depth > cosmetics for retention
-3. **SpicyChat mode switching** (flirty→romantic→explicit) — content escalation UX to adopt
-4. **Chub recursive lorebook scanning** — missing from our lore matcher, breaks imported cards
-5. **NovelAI generation presets** — shareable LLM sampling configs = free engagement loop
-6. **In-chat model hot-swap** (Crushon) — fits our link_manager multi-machine architecture
-
-## PLAN FILE
-
-`/Users/chris/.claude/plans/cached-imagining-cocke.md` — Phases 14A through 20:
-- 14A/B: Research (14A done, 14B assembling)
-- 15: embeddinggemma integration
-- 16: AI model ecosystem analysis
-- 17: Animation library + smart sequencing
-- 18: Content gating port
-- 19: On-device learning
-- 20: Model database + README
+- **LLM config in app.json** still points to non-existent `dirty-muse-writer-v01-uncensored-erotica-nsfw-i1` — the fallback handles this but should update to `qwen3:8b` + `http://localhost:11434/v1`
+- **Content gating defaults** — `global_content_ceiling` in DB = `"general"`, but user's `content_filter_level: -1` maps to `"explicit"` via bridge. Both systems coexist.
+- **embeddinggemma** — provider built but not tested live. MLX local version doesn't work with sentence_transformers. Use HF model ID `google/embeddinggemma-300m` instead.
+- **Qwen3:8b** downloaded on Ollama. User prefers managing model downloads themselves via Ollama GUI.
 
 ## KEY RULES
 
@@ -90,20 +69,19 @@ Port from AnimeGirly:
 - **Use `.venv/bin/python`** for ALL Python commands
 - **Commit after each task** with phase reference
 - **Run `/checkpoint`** after completing phases
-- **NEVER add "Co-Authored-By: Claude"** to commits
-- **Animation preference**: Build MULTIPLE systems and compare, no manual downloads
+- **8-9B models only** on M2 Pro (24GB unified, not 32GB)
 - **Content filter**: User wants fully unrestricted 18+ option with age gate
 
 ## ARCHITECTURE
 
 | Component | Stack | Key Files |
 |-----------|-------|-----------|
-| Backend | FastAPI, SQLite v56, Python 3.14 | `backend/server.py` (~13K lines) |
+| Backend | FastAPI, SQLite v58, Python 3.14 | `backend/server.py` (~13K lines) |
 | Frontend | React 19, Zustand, Vite | `frontends/sakura/src/` |
 | 3D Viewer | Three.js, VRM (iframe) | `frontends/shared/viewer/viewer.html` (~7.3K lines) |
-| Memory | sqlite-vec, all-MiniLM-L6-v2 (384-dim) | `backend/memory/tiered_memory.py` |
-| Adaptive | Reflector + Tuner + Journal | `backend/adaptive/` |
-| Content | 5-level prompt injection (needs upgrade) | `server.py:1487` |
-| Tests | 529 pytest, tsc clean | `backend/tests/` |
+| Memory | sqlite-vec, EmbeddingProvider (MiniLM default) | `backend/memory/tiered_memory.py` |
+| Content | 4-level gating + intimacy tracking + prompt injection | `backend/content/` |
+| LLM | Smart fallback across Ollama/LM Studio/vLLM | `backend/llm/endpoint_fallback.py` |
+| Tests | 701 pytest, tsc clean | `backend/tests/` |
 
-**13 characters, 18 themes, schema v56, 529 tests.**
+**13 characters, 18 themes, schema v58, 701 tests.**

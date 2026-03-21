@@ -36,6 +36,8 @@ Migration Strategy:
                   + active_outfit_id on characters
     - v56 → v57: Embedding Provider Infrastructure — lore_embeddings table
                   + embedding_model column on memories table
+    - v57 → v58: Content Gating System — content_gate_config (singleton),
+                  persona_content_ceilings, intimacy_states, physical_states tables
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -3386,6 +3388,186 @@ def migrate_to_v57(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v58(con: sqlite3.Connection) -> bool:
+    """Apply schema v58: Content Gating System.
+
+    Creates four new tables that together power the content gating subsystem.
+    No existing tables or columns are modified.
+
+    Schema changes:
+
+        New table ``content_gate_config`` (singleton, id always 1):
+            - ``id`` (INTEGER PRIMARY KEY DEFAULT 1): enforced singleton via
+              CHECK (id = 1).
+            - ``global_content_ceiling`` (TEXT NOT NULL DEFAULT 'general'):
+              one of 'general' | 'edgy' | 'mature' | 'explicit'.
+            - ``age_verified`` (INTEGER DEFAULT 0): 1 once the user has
+              confirmed age gate.
+            - ``content_lock_enabled`` (INTEGER DEFAULT 0): 1 when a
+              parental-lock password is set.
+            - ``content_lock_password_hash`` (TEXT DEFAULT ''): bcrypt hash
+              of the lock password.
+            - ``updated_at`` (TEXT): ISO datetime of last change.
+
+        New table ``persona_content_ceilings``:
+            - ``char_id`` (INTEGER PRIMARY KEY): FK → characters(id)
+              ON DELETE CASCADE — one row per character.
+            - ``ceiling`` (TEXT NOT NULL DEFAULT 'general'): per-character
+              content ceiling override; must be <= global_content_ceiling
+              at runtime.
+            - ``updated_at`` (TEXT): ISO datetime of last change.
+
+        New table ``intimacy_states``:
+            - ``id`` (INTEGER PRIMARY KEY AUTOINCREMENT).
+            - ``session_id`` (INTEGER NOT NULL): references sessions(id).
+            - ``char_id`` (INTEGER NOT NULL): references characters(id).
+            - ``level`` (INTEGER NOT NULL DEFAULT 0): 0–100 intimacy score.
+            - ``trend`` (TEXT DEFAULT 'stable'): 'rising' | 'stable' |
+              'cooling'.
+            - ``last_update_turn`` (INTEGER DEFAULT 0): message turn index
+              of most recent level change.
+            - ``updated_at`` (TEXT): ISO datetime of last change.
+            - UNIQUE(session_id, char_id).
+            - Index: ``idx_intimacy_session_char`` on (session_id, char_id).
+
+        New table ``physical_states``:
+            - ``id`` (INTEGER PRIMARY KEY AUTOINCREMENT).
+            - ``session_id`` (INTEGER NOT NULL): references sessions(id).
+            - ``char_id`` (INTEGER NOT NULL): references characters(id).
+            - ``user_clothing`` (TEXT DEFAULT 'casual clothes').
+            - ``companion_clothing`` (TEXT DEFAULT 'default outfit').
+            - ``physical_context`` (TEXT DEFAULT 'sitting across from each
+              other'): free-text scene description.
+            - ``arousal_level`` (INTEGER DEFAULT 0): 0–100 scale.
+            - ``recent_actions`` (TEXT DEFAULT '[]'): JSON array of recent
+              physical action tags.
+            - ``last_updated_at`` (REAL DEFAULT 0.0): Unix timestamp for
+              fast age checks.
+            - UNIQUE(session_id, char_id).
+            - Index: ``idx_physical_session_char`` on (session_id, char_id).
+
+    Migration note — mapping old ``content_filter_level`` integer from
+    app.json to the new ceiling vocabulary:
+        -1  → 'explicit'
+         0  → 'mature'
+         1  → 'edgy'
+         2  → 'general'
+         3  → 'general' (with content_lock_enabled = 1)
+    The actual mapping is performed at runtime by the server when it first
+    reads app.json; this migration only creates the tables with safe
+    defaults.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v58+.
+
+    Example:
+        >>> con = sqlite3.connect("app.db")
+        >>> migrate_to_v58(con)
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 58:
+        return False
+
+    try:
+        logger.info("Applying schema v58 migration (Content Gating System)...")
+
+        # ------------------------------------------------------------------ #
+        # content_gate_config — global singleton row for content gate settings
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS content_gate_config (
+                id                         INTEGER PRIMARY KEY DEFAULT 1
+                                               CHECK (id = 1),
+                global_content_ceiling     TEXT    NOT NULL DEFAULT 'general',
+                age_verified               INTEGER DEFAULT 0,
+                content_lock_enabled       INTEGER DEFAULT 0,
+                content_lock_password_hash TEXT    DEFAULT '',
+                updated_at                 TEXT    DEFAULT (datetime('now'))
+            )
+            """
+        )
+        # Ensure the singleton row exists.
+        con.execute("INSERT OR IGNORE INTO content_gate_config (id) VALUES (1)")
+
+        # ------------------------------------------------------------------ #
+        # persona_content_ceilings — per-character ceiling overrides
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS persona_content_ceilings (
+                char_id    INTEGER PRIMARY KEY
+                               REFERENCES characters(id) ON DELETE CASCADE,
+                ceiling    TEXT    NOT NULL DEFAULT 'general',
+                updated_at TEXT    DEFAULT (datetime('now'))
+            )
+            """
+        )
+
+        # ------------------------------------------------------------------ #
+        # intimacy_states — intimacy level per session+character pair
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS intimacy_states (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id       INTEGER NOT NULL,
+                char_id          INTEGER NOT NULL,
+                level            INTEGER NOT NULL DEFAULT 0,
+                trend            TEXT    DEFAULT 'stable',
+                last_update_turn INTEGER DEFAULT 0,
+                updated_at       TEXT    DEFAULT (datetime('now')),
+                UNIQUE(session_id, char_id)
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_intimacy_session_char "
+            "ON intimacy_states(session_id, char_id)"
+        )
+
+        # ------------------------------------------------------------------ #
+        # physical_states — physical scene state per session+character pair
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS physical_states (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id         INTEGER NOT NULL,
+                char_id            INTEGER NOT NULL,
+                user_clothing      TEXT    DEFAULT 'casual clothes',
+                companion_clothing TEXT    DEFAULT 'default outfit',
+                physical_context   TEXT    DEFAULT 'sitting across from each other',
+                arousal_level      INTEGER DEFAULT 0,
+                recent_actions     TEXT    DEFAULT '[]',
+                last_updated_at    REAL    DEFAULT 0.0,
+                UNIQUE(session_id, char_id)
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_physical_session_char "
+            "ON physical_states(session_id, char_id)"
+        )
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (58)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v58 migration complete "
+            "(content_gate_config, persona_content_ceilings, "
+            "intimacy_states, physical_states)"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v58 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -3815,21 +3997,30 @@ def ensure_db():
             if migrate_to_v57(con):
                 version = 57
 
+        if version < 58:
+            logger.info("Upgrading database schema from v57 to v58...")
+            logger.info("  - Creating content_gate_config singleton table")
+            logger.info("  - Creating persona_content_ceilings table")
+            logger.info("  - Creating intimacy_states table")
+            logger.info("  - Creating physical_states table")
+            if migrate_to_v58(con):
+                version = 58
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 57:
-            raise RuntimeError(f"Database initialization failed: Expected v57, got v{final_version}")
+        if final_version < 58:
+            raise RuntimeError(f"Database initialization failed: Expected v58, got v{final_version}")
 
-        if final_version > 57:
-            logger.warning(f"Database is newer than application (v{final_version} > v57). Some features might be unused.")
+        if final_version > 58:
+            logger.warning(f"Database is newer than application (v{final_version} > v58). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v57 adds Embedding Provider Infrastructure)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v58 adds Content Gating System)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

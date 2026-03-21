@@ -4,8 +4,9 @@
 **Branch:** master
 **Schema version:** v56
 **Tests:** 529 passing (backend pytest), tsc clean (frontend)
+**Plan file:** `/Users/chris/.claude/plans/cached-imagining-cocke.md` (Phases 14A-20)
 
-## Completed This Session (Mar 21, 2026) — 4 commits
+## Completed This Session (Mar 21, 2026) — 7 commits
 
 | Commit | Phase | What |
 |--------|-------|------|
@@ -13,6 +14,9 @@
 | `ac316e6` | 11A | Time-of-day lighting + procedural pose system + scene context |
 | `bd9a95d` | docs | Checkpoint status update |
 | `ed6a7f0` | 3B | Hair anisotropic + eye sparkle specialty shaders |
+| `2fe1e4d` | docs | Checkpoint status update |
+| `4b932c7` | fix | Eye sparkle time uniform wiring |
+| `4d5409c` | 14A | Competitive research Cycle 2 — 24 mature/18+ sources ranked |
 
 ## Completed Previous Session (Mar 20-21, 2026) — 13 commits
 
@@ -62,9 +66,10 @@
 
 ## Next 3 Tasks (Priority Order)
 
-1. **Test in browser** — Director Mode + Character Audio + Pose System + Shaders interactive validation
-2. **Remaining character enrichment** — Ayane needs one milestone scene; 8 chars at gold
-3. **Pick next from feature menu** — `docs/plans/2026-03-15-actionable-implementation-specs.md`
+1. **Phase 14B IN PROGRESS** — Assemble 3 research agent outputs into deep-dive doc (agents completed, outputs at /private/tmp/claude-501/.../tasks/*.output)
+2. **Phase 15** — Fix embeddinggemma MLX format (download standard PyTorch version or install mlx packages), then implement provider abstraction
+3. **Phase 18** — Port AnimeGirly content gating system to backend
+4. **Key research finding**: Auto-summarization at context boundaries is #1 most impactful feature across ALL platforms (see agent output af708c1926d3154f5)
 
 ## Estimate vs Actual (AI-Assisted Dev)
 

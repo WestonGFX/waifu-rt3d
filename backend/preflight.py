@@ -34,6 +34,8 @@ Migration Strategy:
     - v55 → v56: Bond Progression System — bond_stories, character_gifts, gift_history tables
                   + bond_level/bond_xp/relationship_mode/covenant_date on character_relationships
                   + active_outfit_id on characters
+    - v56 → v57: Embedding Provider Infrastructure — lore_embeddings table
+                  + embedding_model column on memories table
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -3302,6 +3304,88 @@ def migrate_to_v56(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v57(con: sqlite3.Connection) -> bool:
+    """Apply schema v57: Embedding provider infrastructure.
+
+    Creates the ``lore_embeddings`` table for pre-computed lore entry
+    embeddings and adds an ``embedding_model`` tracking column to the
+    ``memories`` table.  Together these two changes let the embedding
+    subsystem record which model produced each vector so that stale
+    embeddings can be detected and regenerated when the active provider
+    changes.
+
+    Schema changes:
+
+        New table ``lore_embeddings``:
+            - ``lore_entry_id`` (INTEGER PRIMARY KEY): FK → lore_entries(id)
+              ON DELETE CASCADE — one row per lore entry.
+            - ``embedding`` (BLOB NOT NULL): raw binary embedding vector.
+            - ``model`` (TEXT NOT NULL): identifier of the model that
+              produced this embedding (e.g. 'all-MiniLM-L6-v2').
+            - ``updated_at`` (TEXT): ISO datetime of last update.
+
+        New column on ``memories``:
+            - ``embedding_model`` (TEXT DEFAULT 'all-MiniLM-L6-v2'): the
+              embedding model used to produce this memory's vector.
+
+    All ALTER TABLE statements are guarded by a PRAGMA column-existence
+    check so the migration is idempotent.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True if migration was applied, False if already at v57+.
+
+    Example:
+        >>> con = sqlite3.connect("app.db")
+        >>> migrate_to_v57(con)
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 57:
+        return False
+
+    try:
+        logger.info("Applying schema v57 migration (Embedding Provider Infrastructure)...")
+
+        # ------------------------------------------------------------------ #
+        # lore_embeddings — pre-computed vectors for semantic lore matching
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lore_embeddings (
+                lore_entry_id INTEGER PRIMARY KEY
+                                   REFERENCES lore_entries(id) ON DELETE CASCADE,
+                embedding     BLOB NOT NULL,
+                model         TEXT NOT NULL,
+                updated_at    TEXT DEFAULT (datetime('now'))
+            )
+            """
+        )
+
+        # ------------------------------------------------------------------ #
+        # memories — track which embedding model produced each vector
+        # ------------------------------------------------------------------ #
+        mem_cols = {r[1] for r in con.execute("PRAGMA table_info(memories)").fetchall()}
+        if "embedding_model" not in mem_cols:
+            con.execute(
+                "ALTER TABLE memories ADD COLUMN embedding_model TEXT DEFAULT 'all-MiniLM-L6-v2'"
+            )
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (57)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v57 migration complete "
+            "(lore_embeddings table; embedding_model on memories)"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v57 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -3724,21 +3808,28 @@ def ensure_db():
             if migrate_to_v56(con):
                 version = 56
 
+        if version < 57:
+            logger.info("Upgrading database schema from v56 to v57...")
+            logger.info("  - Creating lore_embeddings table for semantic lore matching")
+            logger.info("  - Adding embedding_model column to memories")
+            if migrate_to_v57(con):
+                version = 57
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 56:
-            raise RuntimeError(f"Database initialization failed: Expected v56, got v{final_version}")
+        if final_version < 57:
+            raise RuntimeError(f"Database initialization failed: Expected v57, got v{final_version}")
 
-        if final_version > 56:
-            logger.warning(f"Database is newer than application (v{final_version} > v56). Some features might be unused.")
+        if final_version > 57:
+            logger.warning(f"Database is newer than application (v{final_version} > v57). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v56 adds Bond Progression System)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v57 adds Embedding Provider Infrastructure)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

@@ -24,7 +24,7 @@
   "onboarded": true,
   "llm": {
     "provider": "openai",
-    "endpoint": "http://localhost:1234/v1",
+    "endpoint": "http://localhost:11434/v1",
     "model": "dirty-muse-writer-v01-uncensored-erotica-nsfw-i1",
     "api_key": "lm-studio",
     "history_limit": 30,
@@ -70,7 +70,7 @@
     "enabled": false,
     "model": "base.en"
   },
-  "content_filter_level": 1,
+  "content_filter_level": -1,
   "image_gen": {
     "provider": "easydiffusion",
     "endpoint": "http://10.0.0.202:9000/",
@@ -84,5 +84,20 @@
     "endpoint": "http://localhost:8188"
   },
   "antialias": false,
-  "auto_compact_threshold": 85
+  "auto_compact_threshold": 85,
+  "discovered_features": [],
+  "last_seen_version": "5.34.0",
+  "wizard_message_count": 0,
+  "wizard_session_count": 46,
+  "tips_snoozed_until": null,
+  "tooltips_hidden": false,
+  "voice_setup_completed": false,
+  "image_gen_setup_completed": false,
+  "onboarding_version": 2,
+  "rp_style_preset": "none",
+  "user_persona": "25yo guy who likes anime and gaming",
+  "typewriter_enabled": true,
+  "embedding": {
+    "model": "minilm"
+  }
 }

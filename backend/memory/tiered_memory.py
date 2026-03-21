@@ -6,6 +6,13 @@ Architecture:
     the ChromaDB ``docs_collection`` for character knowledge base documents
     (unchanged — the VectorStore class still handles those).
 
+    Embedding is performed via an :class:`~backend.embeddings.provider.EmbeddingProvider`
+    instance, which is injected at construction time.  The default provider is
+    :class:`~backend.embeddings.provider.MiniLMProvider` (all-MiniLM-L6-v2, 384-dim),
+    preserving identical behaviour to the original implementation when no provider
+    is supplied.  Pass a different provider (e.g. ``GemmaEmbeddingProvider``) to
+    swap models without changing any other code.
+
 Tiers:
     Tier 1 — Fleeting: Recent messages from the current session. High recall weight.
     Tier 2 — Recent: Emotionally/factually significant from the last N weeks.
@@ -22,6 +29,11 @@ Usage::
     mgr.init()               # creates vec table if needed
     mgr.add(session_id, char_id, "user", "I love ramen")
     results = mgr.search("favourite food", char_id=1, top_k=5)
+
+    # Custom provider:
+    from backend.embeddings.provider import GemmaEmbeddingProvider
+    provider = GemmaEmbeddingProvider()
+    mgr = TieredMemoryManager(db_path, storage_path, embedding_provider=provider)
 """
 
 from __future__ import annotations
@@ -33,10 +45,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from backend.embeddings.provider import EmbeddingProvider, MiniLMProvider
 
-# Embedding dimension for all-MiniLM-L6-v2
-EMBEDDING_DIM = 384
+logger = logging.getLogger(__name__)
 
 # Tier constants
 TIER_FLEETING = 1
@@ -68,12 +79,18 @@ class TieredMemoryManager:
     legacy ChromaDB ``VectorStore`` so existing call sites can be swapped
     with minimal friction.
 
+    Embedding is handled by the injected ``embedding_provider``.  When no
+    provider is supplied, a :class:`~backend.embeddings.provider.MiniLMProvider`
+    is created automatically, preserving full backward compatibility.
+
     Args:
         db_path: Path to the SQLite database file (the main app.db).
         storage_path: Base path for optional cache files (unused currently).
         decay_mode: "off" | "keep" | "prune" — controls memory lifecycle.
         top_k: Default number of results to return from ``search``.
         salience_threshold: Minimum salience to retain on decay pass.
+        embedding_provider: Provider used to embed memory text.  Defaults to
+            ``MiniLMProvider()`` (all-MiniLM-L6-v2, 384-dim).
 
     Example:
         >>> mgr = TieredMemoryManager("backend/storage/app.db")
@@ -92,12 +109,16 @@ class TieredMemoryManager:
         decay_mode: str = "off",
         top_k: int = 5,
         salience_threshold: float = 0.3,
+        *,
+        embedding_provider: EmbeddingProvider | None = None,
     ):
         self.db_path = str(db_path)
         self.decay_mode = decay_mode
         self.top_k = top_k
         self.salience_threshold = salience_threshold
-        self._model = None  # lazy-loaded SentenceTransformer
+        self._provider: EmbeddingProvider = (
+            embedding_provider if embedding_provider is not None else MiniLMProvider()
+        )
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -115,15 +136,16 @@ class TieredMemoryManager:
         con = self._conn()
         try:
             self._load_vec_ext(con)
+            dim = self._provider.dimension
             con.execute(f"""
                 CREATE VIRTUAL TABLE IF NOT EXISTS memories_vec
                 USING vec0(
                     memory_id INTEGER PRIMARY KEY,
-                    embedding FLOAT[{EMBEDDING_DIM}]
+                    embedding FLOAT[{dim}]
                 )
             """)
             con.commit()
-            logger.info("[TieredMemory] sqlite-vec table ready (dim=%d)", EMBEDDING_DIM)
+            logger.info("[TieredMemory] sqlite-vec table ready (dim=%d)", dim)
         except Exception as e:
             logger.warning("[TieredMemory] init failed (running without vec support): %s", e)
         finally:
@@ -549,19 +571,18 @@ class TieredMemoryManager:
     # ------------------------------------------------------------------
 
     def _embed(self, text: str) -> list[float]:
-        """Embed ``text`` using all-MiniLM-L6-v2 (lazy-loaded).
+        """Embed text using the configured provider.
+
+        Delegates entirely to :attr:`_provider`, which handles lazy model
+        loading and any fallback logic internally.
 
         Args:
             text: Text to embed.
 
         Returns:
-            384-dimensional float list.
+            Float list with length equal to ``self._provider.dimension``.
         """
-        if self._model is None:
-            from sentence_transformers import SentenceTransformer
-            logger.info("[TieredMemory] Loading all-MiniLM-L6-v2...")
-            self._model = SentenceTransformer("all-MiniLM-L6-v2")
-        return self._model.encode(text).tolist()
+        return self._provider.embed(text)
 
     def _conn(self) -> sqlite3.Connection:
         """Open a new SQLite connection to the main app database.

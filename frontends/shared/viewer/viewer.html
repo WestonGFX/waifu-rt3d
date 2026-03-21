@@ -109,6 +109,7 @@
         let _currentGlbAction = null; // Currently playing GLB AnimationAction (for crossfade)
         let clock = new THREE.Clock();
         let lipSync = null;
+        let characterAudio = null;  // Phase 12-P5: ambient audio engine
         let blinkController = null;
         let saccadeController = null;
         let microTremorController = null;
@@ -433,6 +434,9 @@
             const now = performance.now();
             if (_touchCooldowns[zone] && now - _touchCooldowns[zone] < 2000) return;
             _touchCooldowns[zone] = now;
+
+            // Phase 12-P5: play interaction sound immediately in viewer
+            if (characterAudio) characterAudio.playInteractionSound(zone);
 
             // Notify parent frame
             window.parent.postMessage({
@@ -2519,6 +2523,477 @@
                 }
                 this.isPlaying = false;
                 this._zeroAllVisemes();
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Character Audio Engine (Phase 12-P5)
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Emotion-to-audio parameter mapping for procedural breathing synthesis.
+         * Each emotion modulates breath cycle time and depth to match the
+         * character's emotional state — excited characters breathe faster,
+         * tired ones slower and deeper.
+         *
+         * @type {Object<string, {breathCycle: number, breathDepth: number, breathRate: number}>}
+         */
+        const EMOTION_AUDIO_PARAMS = {
+            neutral:     { breathCycle: 2.3, breathDepth: 0.3, breathRate: 1.0 },
+            happy:       { breathCycle: 1.8, breathDepth: 0.4, breathRate: 1.3 },
+            sad:         { breathCycle: 3.0, breathDepth: 0.5, breathRate: 0.7 },
+            angry:       { breathCycle: 1.5, breathDepth: 0.6, breathRate: 1.5 },
+            embarrassed: { breathCycle: 2.0, breathDepth: 0.35, breathRate: 1.2 },
+            tired:       { breathCycle: 3.5, breathDepth: 0.6, breathRate: 0.5 },
+            excited:     { breathCycle: 1.4, breathDepth: 0.5, breathRate: 1.6 },
+            nervous:     { breathCycle: 1.6, breathDepth: 0.25, breathRate: 1.4 },
+            thinking:    { breathCycle: 2.5, breathDepth: 0.3, breathRate: 0.9 },
+            romantic:    { breathCycle: 2.8, breathDepth: 0.45, breathRate: 0.8 },
+        };
+
+        /**
+         * Touch zone → interaction sound parameters.
+         * Each zone produces a distinct filtered noise burst whose character
+         * suggests the physical interaction (soft pat vs sharp poke).
+         *
+         * freq: center frequency of the bandpass filter (Hz)
+         * Q: filter resonance (higher = more tonal)
+         * duration: burst length in seconds
+         * gain: relative volume 0–1
+         *
+         * @type {Object<string, {freq: number, Q: number, duration: number, gain: number}>}
+         */
+        const TOUCH_SOUND_PARAMS = {
+            head:      { freq: 800,  Q: 2.0, duration: 0.25, gain: 0.4 },  // soft pat
+            face:      { freq: 1200, Q: 3.0, duration: 0.15, gain: 0.3 },  // gentle touch
+            shoulders: { freq: 600,  Q: 1.5, duration: 0.20, gain: 0.5 },  // firm touch
+            torso:     { freq: 500,  Q: 1.0, duration: 0.18, gain: 0.4 },  // poke
+            legs:      { freq: 400,  Q: 1.0, duration: 0.22, gain: 0.35 }, // tap
+        };
+
+        /**
+         * Vocalization presets for procedural synthesis.
+         * Each type specifies oscillator parameters that approximate
+         * a short human vocalization (hum, sigh, giggle, etc.)
+         * without requiring audio samples.
+         *
+         * baseFreq: fundamental frequency (Hz)
+         * formants: array of formant filter frequencies for vowel shaping
+         * duration: vocalization length in seconds
+         * gain: relative volume 0–1
+         * pitchEnvelope: [start_mult, end_mult] for pitch bend over duration
+         *
+         * @type {Object<string, {baseFreq: number, formants: number[], duration: number, gain: number, pitchEnvelope: number[]}>}
+         */
+        const VOCAL_PARAMS = {
+            thinking:    { baseFreq: 220, formants: [500, 1500],       duration: 0.5,  gain: 0.25, pitchEnvelope: [1.0, 0.95] },
+            agreement:   { baseFreq: 250, formants: [600, 1800],       duration: 0.3,  gain: 0.3,  pitchEnvelope: [0.9, 1.1]  },
+            confusion:   { baseFreq: 280, formants: [700, 2000],       duration: 0.3,  gain: 0.3,  pitchEnvelope: [1.0, 1.3]  },
+            realization: { baseFreq: 300, formants: [800, 2200],       duration: 0.2,  gain: 0.35, pitchEnvelope: [0.8, 1.2]  },
+            contentment: { baseFreq: 180, formants: [400, 1200],       duration: 0.8,  gain: 0.2,  pitchEnvelope: [1.0, 0.85] },
+            effort:      { baseFreq: 160, formants: [350, 1000],       duration: 0.12, gain: 0.2,  pitchEnvelope: [1.1, 0.9]  },
+            giggle:      { baseFreq: 350, formants: [800, 2200, 3200], duration: 0.4,  gain: 0.3,  pitchEnvelope: [1.0, 1.15] },
+        };
+
+        /**
+         * Emotion-to-vocalization mapping — which vocal types are likely
+         * during idle moments for each emotional state.
+         * @type {Object<string, string[]>}
+         */
+        const EMOTION_VOCALS = {
+            neutral:     ['thinking', 'contentment'],
+            happy:       ['giggle', 'contentment', 'agreement'],
+            sad:         ['contentment', 'thinking'],
+            angry:       ['effort', 'thinking'],
+            embarrassed: ['effort', 'thinking', 'confusion'],
+            tired:       ['contentment', 'effort'],
+            excited:     ['giggle', 'realization', 'agreement'],
+            nervous:     ['thinking', 'confusion', 'effort'],
+            thinking:    ['thinking', 'confusion', 'realization'],
+            romantic:    ['contentment', 'giggle', 'thinking'],
+        };
+
+        /**
+         * Procedural ambient audio engine for character presence.
+         *
+         * Generates breathing, clothing rustle, vocalizations, and touch-
+         * interaction sounds entirely via Web Audio API — no audio files needed.
+         *
+         * Architecture:
+         *   Breathing: White noise → BandpassFilter → GainEnvelope (cyclic)
+         *   Interaction: Noise burst → BandpassFilter → GainEnvelope (one-shot)
+         *   Vocalizations: Oscillator → FormantFilters → GainEnvelope (one-shot)
+         *   Room tone: Noise → LowpassFilter → very low gain (continuous)
+         *
+         * All layers connect to a master gain node for global volume control.
+         * Emotion changes modulate breathing rate/depth and vocalization selection.
+         */
+        class CharacterAudioEngine {
+            /**
+             * @param {AudioContext} audioContext - Shared context (reused from AudioLipSync)
+             */
+            constructor(audioContext) {
+                this.ctx = audioContext;
+                this.enabled = false;
+                this.emotion = 'neutral';
+
+                // Master output
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.gain.value = 0.15;
+                this.masterGain.connect(this.ctx.destination);
+
+                // Layer sub-gains
+                this.breathGain = this.ctx.createGain();
+                this.breathGain.gain.value = 0.4;
+                this.breathGain.connect(this.masterGain);
+
+                this.interactionGain = this.ctx.createGain();
+                this.interactionGain.gain.value = 0.7;
+                this.interactionGain.connect(this.masterGain);
+
+                this.vocalGain = this.ctx.createGain();
+                this.vocalGain.gain.value = 0.5;
+                this.vocalGain.connect(this.masterGain);
+
+                this.roomToneGain = this.ctx.createGain();
+                this.roomToneGain.gain.value = 0.05;
+                this.roomToneGain.connect(this.masterGain);
+
+                // Layer enable flags
+                this.breathingEnabled = true;
+                this.vocalsEnabled = true;
+                this.interactionEnabled = true;
+
+                // Breathing state
+                this._breathTimer = null;
+                this._breathPhase = 0;       // 0 = inhale, 1 = exhale
+                this._breathNoiseNode = null;
+                this._breathFilter = null;
+                this._breathEnvelope = null;
+
+                // Vocalization scheduling
+                this._vocalTimeout = null;
+
+                // Room tone
+                this._roomNoiseNode = null;
+                this._roomFilter = null;
+            }
+
+            /**
+             * Enable the audio engine — starts breathing, room tone,
+             * and schedules idle vocalizations.
+             */
+            enable() {
+                if (this.enabled) return;
+                this.enabled = true;
+                if (this.breathingEnabled) this._startBreathing();
+                this._startRoomTone();
+                if (this.vocalsEnabled) this._scheduleNextVocal();
+                console.log('[CharacterAudio] Enabled');
+            }
+
+            /**
+             * Disable all audio layers and clean up nodes.
+             */
+            disable() {
+                this.enabled = false;
+                this._stopBreathing();
+                this._stopRoomTone();
+                if (this._vocalTimeout) {
+                    clearTimeout(this._vocalTimeout);
+                    this._vocalTimeout = null;
+                }
+                console.log('[CharacterAudio] Disabled');
+            }
+
+            /**
+             * Set master volume for all audio layers.
+             * @param {number} v - Volume 0–1
+             */
+            setVolume(v) {
+                this.masterGain.gain.setTargetAtTime(
+                    Math.max(0, Math.min(1, v)), this.ctx.currentTime, 0.1
+                );
+            }
+
+            /**
+             * Update emotion — modulates breathing rate/depth and vocalization selection.
+             * @param {string} emotion - Emotion name matching EMOTION_AUDIO_PARAMS keys
+             */
+            setEmotion(emotion) {
+                this.emotion = emotion || 'neutral';
+                const params = EMOTION_AUDIO_PARAMS[this.emotion] || EMOTION_AUDIO_PARAMS.neutral;
+
+                // Update breathing filter to reflect new emotion
+                if (this._breathFilter) {
+                    // Shift filter frequency: excited → higher, tired → lower
+                    const baseFreq = 200 + params.breathDepth * 400;
+                    this._breathFilter.frequency.setTargetAtTime(baseFreq, this.ctx.currentTime, 0.5);
+                }
+            }
+
+            /**
+             * Toggle individual audio layers on/off.
+             * @param {boolean} breathing - Enable breathing sounds
+             * @param {boolean} vocals - Enable idle vocalizations
+             * @param {boolean} interaction - Enable touch interaction sounds
+             */
+            setLayers(breathing, vocals, interaction) {
+                this.breathingEnabled = breathing;
+                this.vocalsEnabled = vocals;
+                this.interactionEnabled = interaction;
+
+                if (this.enabled) {
+                    if (breathing && !this._breathNoiseNode) this._startBreathing();
+                    else if (!breathing) this._stopBreathing();
+
+                    if (vocals && !this._vocalTimeout) this._scheduleNextVocal();
+                    else if (!vocals && this._vocalTimeout) {
+                        clearTimeout(this._vocalTimeout);
+                        this._vocalTimeout = null;
+                    }
+                }
+            }
+
+            /**
+             * Play a touch interaction sound for the given body zone.
+             * Produces a short filtered noise burst whose character varies by zone.
+             * @param {string} zone - Body zone: 'head', 'face', 'shoulders', 'torso', 'legs'
+             */
+            playInteractionSound(zone) {
+                if (!this.enabled || !this.interactionEnabled) return;
+
+                const params = TOUCH_SOUND_PARAMS[zone] || TOUCH_SOUND_PARAMS.torso;
+                const now = this.ctx.currentTime;
+
+                // Create noise source (short burst)
+                const bufferSize = Math.ceil(this.ctx.sampleRate * params.duration);
+                const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = noiseBuffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1);
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = noiseBuffer;
+
+                // Bandpass filter gives each zone a distinct tonal character
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.value = params.freq;
+                filter.Q.value = params.Q;
+
+                // Quick attack, natural decay envelope
+                const envelope = this.ctx.createGain();
+                envelope.gain.setValueAtTime(0, now);
+                envelope.gain.linearRampToValueAtTime(params.gain, now + 0.01);
+                envelope.gain.exponentialRampToValueAtTime(0.001, now + params.duration);
+
+                noise.connect(filter);
+                filter.connect(envelope);
+                envelope.connect(this.interactionGain);
+
+                noise.start(now);
+                noise.stop(now + params.duration + 0.01);
+            }
+
+            /**
+             * Play a procedural vocalization.
+             * Uses an oscillator + formant filters to approximate short human sounds.
+             * @param {string} type - Vocalization type from VOCAL_PARAMS
+             */
+            playVocalization(type) {
+                if (!this.enabled || !this.vocalsEnabled) return;
+
+                const params = VOCAL_PARAMS[type] || VOCAL_PARAMS.thinking;
+                const now = this.ctx.currentTime;
+
+                // Oscillator (fundamental voice frequency)
+                const osc = this.ctx.createOscillator();
+                osc.type = 'sawtooth'; // rich harmonics for voice synthesis
+                osc.frequency.setValueAtTime(params.baseFreq * params.pitchEnvelope[0], now);
+                osc.frequency.linearRampToValueAtTime(
+                    params.baseFreq * params.pitchEnvelope[1],
+                    now + params.duration
+                );
+
+                // Chain formant filters (simulate vocal tract resonances)
+                let lastNode = osc;
+                for (const formantFreq of params.formants) {
+                    const formant = this.ctx.createBiquadFilter();
+                    formant.type = 'bandpass';
+                    formant.frequency.value = formantFreq;
+                    formant.Q.value = 5;
+                    lastNode.connect(formant);
+                    lastNode = formant;
+                }
+
+                // Amplitude envelope: soft attack → sustain → decay
+                const envelope = this.ctx.createGain();
+                envelope.gain.setValueAtTime(0, now);
+                envelope.gain.linearRampToValueAtTime(params.gain, now + 0.03);
+                envelope.gain.setValueAtTime(params.gain, now + params.duration * 0.6);
+                envelope.gain.exponentialRampToValueAtTime(0.001, now + params.duration);
+
+                lastNode.connect(envelope);
+                envelope.connect(this.vocalGain);
+
+                osc.start(now);
+                osc.stop(now + params.duration + 0.01);
+            }
+
+            // ── Private: Breathing ───────────────────────────────
+
+            /**
+             * Start the continuous breathing cycle.
+             * Uses a looping noise source with a cyclic gain envelope
+             * that simulates inhale/exhale rhythm.
+             */
+            _startBreathing() {
+                if (this._breathNoiseNode) return;
+
+                // Create a looping noise buffer (2 seconds of white noise)
+                const bufLen = this.ctx.sampleRate * 2;
+                const noiseBuf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+                const d = noiseBuf.getChannelData(0);
+                for (let i = 0; i < bufLen; i++) d[i] = Math.random() * 2 - 1;
+
+                this._breathNoiseNode = this.ctx.createBufferSource();
+                this._breathNoiseNode.buffer = noiseBuf;
+                this._breathNoiseNode.loop = true;
+
+                // Bandpass around 200-600Hz range — breathy character
+                this._breathFilter = this.ctx.createBiquadFilter();
+                this._breathFilter.type = 'bandpass';
+                this._breathFilter.frequency.value = 350;
+                this._breathFilter.Q.value = 0.8;
+
+                // Gain envelope driven by setInterval for breath cycle
+                this._breathEnvelope = this.ctx.createGain();
+                this._breathEnvelope.gain.value = 0;
+
+                this._breathNoiseNode.connect(this._breathFilter);
+                this._breathFilter.connect(this._breathEnvelope);
+                this._breathEnvelope.connect(this.breathGain);
+                this._breathNoiseNode.start();
+
+                this._breathPhase = 0;
+                this._runBreathCycle();
+            }
+
+            /**
+             * Run one breath cycle (inhale then exhale), then schedule the next.
+             * Breath timing adapts to current emotion via EMOTION_AUDIO_PARAMS.
+             */
+            _runBreathCycle() {
+                if (!this.enabled || !this.breathingEnabled) return;
+
+                const params = EMOTION_AUDIO_PARAMS[this.emotion] || EMOTION_AUDIO_PARAMS.neutral;
+                const cycle = params.breathCycle;
+                const depth = params.breathDepth;
+                const now = this.ctx.currentTime;
+
+                // Inhale: 40% of cycle, ramp gain up
+                const inhaleEnd = now + cycle * 0.4;
+                this._breathEnvelope.gain.setValueAtTime(0.01, now);
+                this._breathEnvelope.gain.linearRampToValueAtTime(depth, inhaleEnd);
+
+                // Brief hold (5% of cycle)
+                const holdEnd = inhaleEnd + cycle * 0.05;
+
+                // Exhale: 45% of cycle, ramp gain down
+                const exhaleEnd = holdEnd + cycle * 0.45;
+                this._breathEnvelope.gain.setValueAtTime(depth, holdEnd);
+                this._breathEnvelope.gain.linearRampToValueAtTime(0.01, exhaleEnd);
+
+                // Pause at bottom (10% of cycle), then schedule next
+                this._breathTimer = setTimeout(() => {
+                    this._runBreathCycle();
+                }, cycle * 1000);
+            }
+
+            /**
+             * Stop breathing loop and disconnect noise source.
+             */
+            _stopBreathing() {
+                if (this._breathTimer) {
+                    clearTimeout(this._breathTimer);
+                    this._breathTimer = null;
+                }
+                if (this._breathNoiseNode) {
+                    try { this._breathNoiseNode.stop(); } catch (e) {}
+                    this._breathNoiseNode.disconnect();
+                    this._breathNoiseNode = null;
+                }
+                if (this._breathFilter) {
+                    this._breathFilter.disconnect();
+                    this._breathFilter = null;
+                }
+                if (this._breathEnvelope) {
+                    this._breathEnvelope.disconnect();
+                    this._breathEnvelope = null;
+                }
+            }
+
+            // ── Private: Room Tone ───────────────────────────────
+
+            /**
+             * Start ultra-subtle room tone — continuous filtered noise
+             * at very low volume to prevent dead silence.
+             */
+            _startRoomTone() {
+                if (this._roomNoiseNode) return;
+
+                const bufLen = this.ctx.sampleRate * 2;
+                const noiseBuf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+                const d = noiseBuf.getChannelData(0);
+                for (let i = 0; i < bufLen; i++) d[i] = Math.random() * 2 - 1;
+
+                this._roomNoiseNode = this.ctx.createBufferSource();
+                this._roomNoiseNode.buffer = noiseBuf;
+                this._roomNoiseNode.loop = true;
+
+                this._roomFilter = this.ctx.createBiquadFilter();
+                this._roomFilter.type = 'lowpass';
+                this._roomFilter.frequency.value = 200;
+                this._roomFilter.Q.value = 0.5;
+
+                this._roomNoiseNode.connect(this._roomFilter);
+                this._roomFilter.connect(this.roomToneGain);
+                this._roomNoiseNode.start();
+            }
+
+            /**
+             * Stop room tone and disconnect nodes.
+             */
+            _stopRoomTone() {
+                if (this._roomNoiseNode) {
+                    try { this._roomNoiseNode.stop(); } catch (e) {}
+                    this._roomNoiseNode.disconnect();
+                    this._roomNoiseNode = null;
+                }
+                if (this._roomFilter) {
+                    this._roomFilter.disconnect();
+                    this._roomFilter = null;
+                }
+            }
+
+            // ── Private: Vocalizations ───────────────────────────
+
+            /**
+             * Schedule the next random idle vocalization.
+             * Interval: 15–30 seconds, type selected from emotion-matched pool.
+             */
+            _scheduleNextVocal() {
+                if (!this.enabled || !this.vocalsEnabled) return;
+
+                const delay = 15000 + Math.random() * 15000; // 15-30s
+                this._vocalTimeout = setTimeout(() => {
+                    const pool = EMOTION_VOCALS[this.emotion] || EMOTION_VOCALS.neutral;
+                    const type = pool[Math.floor(Math.random() * pool.length)];
+                    this.playVocalization(type);
+                    this._scheduleNextVocal();
+                }, delay);
             }
         }
 
@@ -5201,6 +5676,7 @@
                         }
                         // Clear VRM-specific controllers
                         lipSync = null;
+                        if (characterAudio) { characterAudio.disable(); characterAudio = null; }
                         blinkController = null;
                         saccadeController = null;
                         microTremorController = null;
@@ -5243,6 +5719,8 @@
 
                             // Initialize controllers
                             lipSync = new AudioLipSync(vrm);
+                            // Phase 12-P5: Share AudioContext from lipSync for ambient audio
+                            characterAudio = new CharacterAudioEngine(lipSync.audioContext);
                             blinkController = new BlinkController(vrm);
                             saccadeController = new SaccadeController(vrm);
                             microTremorController = new MicroTremorController(vrm);
@@ -5938,6 +6416,23 @@
                 else if (type === 'stopAudio') {
                     if (lipSync) lipSync.stop();
                 }
+                // Phase 12-P5: Character ambient audio commands
+                else if (type === 'characterAudio') {
+                    if (characterAudio) {
+                        const action = e.data.action || payload?.action;
+                        if (action === 'enable') characterAudio.enable();
+                        else if (action === 'disable') characterAudio.disable();
+                        else if (action === 'setVolume') characterAudio.setVolume(e.data.volume ?? payload?.volume ?? 0.15);
+                        else if (action === 'setEmotion') characterAudio.setEmotion(e.data.emotion || payload?.emotion || 'neutral');
+                        else if (action === 'setLayers') characterAudio.setLayers(
+                            e.data.breathing ?? payload?.breathing ?? true,
+                            e.data.vocals ?? payload?.vocals ?? true,
+                            e.data.interaction ?? payload?.interaction ?? true
+                        );
+                        else if (action === 'playInteraction') characterAudio.playInteractionSound(e.data.zone || payload?.zone || 'torso');
+                        else if (action === 'playVocal') characterAudio.playVocalization(e.data.vocalType || payload?.vocalType || 'thinking');
+                    }
+                }
                 else if (type === 'setExpression') {
                     if (expressionController) {
                         expressionController.setExpression(e.data.emotion, e.data.intensity || 1.0, e.data.duration || 0.3);
@@ -5958,6 +6453,8 @@
                     setEmotionAmbientParticles(e.data.emotion);
                     applyEmotionGodRayTint(e.data.emotion);
                     applyEmotionRimLight(e.data.emotion);
+                    // Phase 12-P5: sync audio engine with emotion
+                    if (characterAudio) characterAudio.setEmotion(e.data.emotion);
                     // B2: auto-reset to neutral after 8s so the expression doesn't freeze permanently
                     if (window._b2ResetTimer) clearTimeout(window._b2ResetTimer);
                     if (e.data.emotion && e.data.emotion !== 'neutral') {
@@ -5977,6 +6474,8 @@
                         if (emotionLayer) emotionLayer.setEmotion(emo, inten);
                     }
                     _triggerAutoAnimation(emo);
+                    // Phase 12-P5: sync audio engine with emotion
+                    if (characterAudio) characterAudio.setEmotion(emo);
                 }
                 else if (type === 'playGesture') {
                     const gesture = payload?.gesture || e.data.gesture;

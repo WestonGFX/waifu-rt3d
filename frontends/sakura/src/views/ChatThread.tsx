@@ -10,6 +10,7 @@ import { useProactive } from '../hooks/useProactive';
 import { useVoiceMode } from '../hooks/useVoiceMode';
 import { useAutoBackground } from '../hooks/useAutoBackground';
 import { useAdaptivePacing } from '../hooks/useAdaptivePacing';
+import { useCharacterAudio } from '../hooks/useCharacterAudio';
 import { api } from '../lib/api';
 import { DialogueBubble } from '../components/DialogueBubble';
 import { WaveformVisualizer } from '../components/WaveformVisualizer';
@@ -143,6 +144,9 @@ export function ChatThread() {
 
   // ── Feature A1: Full-duplex voice conversation mode ─────────────────────
   const [fullDuplexVoice, setFullDuplexVoice] = useState(false);
+
+  // ── Phase 12-P5: Character ambient audio ──────────────────────────────
+  useCharacterAudio();
 
   // ── Feature B3: VN reader — index of the message currently shown ────────
   // Starts at last message; advances to next on each "advance" action.
@@ -284,6 +288,22 @@ export function ChatThread() {
     enabled: proactiveEnabled,
     idleMinutes: 5,
     onTrigger: handleProactiveTrigger,
+  });
+
+  // ── Scheduler-backed proactive idle (pings backend to enqueue a message) ──
+  // Distinct from the direct LLM call above — this path lets the backend
+  // scheduler generate the message and deliver it via the poller, so it can
+  // be persisted and acknowledged like any other scheduled message.
+  const handleSchedulerIdleTrigger = useCallback(() => {
+    if (activeCharacter?.id) {
+      fetch(`/api/proactive/trigger-idle/${activeCharacter.id}`, { method: 'POST' }).catch(() => {});
+    }
+  }, [activeCharacter?.id]);
+
+  useProactive({
+    enabled: Boolean(activeCharacter?.proactive_enabled),
+    idleMinutes: 10,
+    onTrigger: handleSchedulerIdleTrigger,
   });
 
   // ── Feature I: Auto scene background on emotion change ──────────────────

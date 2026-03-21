@@ -1,13 +1,25 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$CLAUDE_TOOL_INPUT\" | grep -qE '(\\.env\"|app\\.db\"|credentials|\\.local\\.json\")' && echo 'BLOCKED: Sensitive file — confirm with user before editing .env, app.db, credentials, or .local.json files' >&2 && exit 2 || exit 0",
+            "description": "Block edits to sensitive files (.env, app.db, credentials, .local.json)"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "for f in $CLAUDE_EDITED_FILES; do if [[ \"$f\" == *.py ]]; then .venv/bin/python -m py_compile \"$f\" || echo \"SYNTAX ERROR in $f\"; fi; done",
-            "description": "Auto-check Python syntax after every edit"
+            "command": "for f in $CLAUDE_EDITED_FILES; do if [[ \"$f\" == *.py ]]; then /opt/homebrew/bin/ruff check --fix --quiet \"$f\" 2>/dev/null; .venv/bin/python -m py_compile \"$f\" || echo \"SYNTAX ERROR in $f\"; fi; done",
+            "description": "Auto-lint with Ruff + syntax check after every Python edit"
           },
           {
             "type": "command",
@@ -21,8 +33,9 @@
       {
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "Before ending, update CURRENT_STATUS.md with: current phase, last completed item, next 3 tasks, any failing tests, current branch, and timestamp."
+            "type": "command",
+            "command": "sed -i '' \"s/^\\*\\*Last updated:\\*\\*.*/\\*\\*Last updated:\\*\\* $(date '+%Y-%m-%d %H:%M %Z')/\" CURRENT_STATUS.md 2>/dev/null || true",
+            "description": "Stamp session-exit timestamp on CURRENT_STATUS.md"
           }
         ]
       }

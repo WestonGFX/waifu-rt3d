@@ -2138,7 +2138,51 @@ interface GeneralTabProps {
 }
 
 function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMode, layoutMode, setLayoutMode }: GeneralTabProps) {
-  const { incognito, setIncognito, showQuickChips, setShowQuickChips, settingsMode, setSettingsMode, settingsTier, setSettingsTier } = useAppStore();
+  const { incognito, setIncognito, showQuickChips, setShowQuickChips, settingsMode, setSettingsMode, settingsTier, setSettingsTier, activeCharacter } = useAppStore();
+
+  /** Proactive messages: enabled toggle (per-character, PATCH /api/characters/{id}/proactive). */
+  const [proactiveEnabled, setProactiveEnabled] = useState(Boolean(activeCharacter?.proactive_enabled));
+  /** Proactive messages: frequency preset — 'quiet' | 'normal' | 'chatty'. */
+  const [proactiveFrequency, setProactiveFrequency] = useState<string>(activeCharacter?.proactive_frequency ?? 'normal');
+  /** Proactive messages: active hour window as "start-end" string, e.g. "9-22". */
+  const [proactiveHours, setProactiveHours] = useState<string>(activeCharacter?.proactive_hours ?? '9-22');
+  /** Proactive messages: recent history records fetched from /api/characters/{id}/proactive/history. */
+  const [proactiveHistory, setProactiveHistory] = useState<Array<{id: number; text: string; triggered_at: number; trigger_type: string}>>([]);
+
+  /** Sync proactive state and fetch recent history whenever the active character changes. */
+  useEffect(() => {
+    if (!activeCharacter?.id) return;
+    setProactiveEnabled(Boolean(activeCharacter.proactive_enabled));
+    setProactiveFrequency(activeCharacter.proactive_frequency ?? 'normal');
+    setProactiveHours(activeCharacter.proactive_hours ?? '9-22');
+    fetch(`/api/characters/${activeCharacter.id}/proactive/history?limit=5`)
+      .then(r => r.json())
+      .then((data: { ok?: boolean; messages?: Array<{id: number; text: string; triggered_at: number; trigger_type: string}> }) => {
+        if (data.ok) setProactiveHistory(data.messages ?? []);
+      })
+      .catch(() => {});
+  }, [activeCharacter?.id]);
+
+  /**
+   * PATCHes per-character proactive message settings to the backend.
+   *
+   * Args:
+   *   updates: Partial proactive config — any of { enabled, frequency, hours }.
+   *
+   * Errors are swallowed silently so a failed network call never disrupts
+   * the settings UI.
+   */
+  const saveProactive = async (updates: Record<string, unknown>) => {
+    if (!activeCharacter?.id) return;
+    try {
+      await fetch(`/api/characters/${activeCharacter.id}/proactive`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+    } catch { /* silent — non-critical */ }
+  };
+
   return (
     <>
       {/* Theme */}
@@ -2347,15 +2391,89 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
             />
           </SettingField>
 
-          <SettingField label="Proactive Messages" description="Character sends unprompted check-in messages after idle time." advanced
-            tooltip="Uses a lightweight LLM call after configurable idle minutes.">
+          {/* Proactive Messages — expanded per-character settings group */}
+          <SettingField label="Proactive Messages" description="Character sends unprompted messages based on time, mood, and milestones." advanced
+            tooltip="When enabled, the character will initiate conversations based on schedules, idle detection, and relationship milestones.">
             <input
               type="checkbox"
-              checked={Boolean(cfg('proactive_messages', false))}
-              onChange={(e) => save('proactive_messages', e.target.checked)}
-              className="accent-[var(--color-accent)]"
+              checked={proactiveEnabled}
+              onChange={(e) => {
+                setProactiveEnabled(e.target.checked);
+                saveProactive({ enabled: e.target.checked });
+              }}
+              style={{ accentColor: 'var(--color-accent)' }}
             />
           </SettingField>
+
+          {proactiveEnabled && (
+            <>
+              <SettingField label="Frequency" description={`Max ${proactiveFrequency === 'quiet' ? '1' : proactiveFrequency === 'chatty' ? '5' : '3'} messages/day`} advanced>
+                <select
+                  value={proactiveFrequency}
+                  onChange={(e) => {
+                    setProactiveFrequency(e.target.value);
+                    saveProactive({ frequency: e.target.value });
+                  }}
+                  style={selectStyle}
+                  className="text-sm px-2 py-1 rounded"
+                >
+                  <option value="quiet">Quiet (1/day)</option>
+                  <option value="normal">Normal (3/day)</option>
+                  <option value="chatty">Chatty (5/day)</option>
+                </select>
+              </SettingField>
+
+              <SettingField label="Active Hours" description="Only send messages during these hours" advanced>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                  <input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={parseInt(proactiveHours.split('-')[0]) || 9}
+                    onChange={(e) => {
+                      const start = e.target.value;
+                      const end = proactiveHours.split('-')[1] || '22';
+                      const newHours = `${start}-${end}`;
+                      setProactiveHours(newHours);
+                      saveProactive({ hours: newHours });
+                    }}
+                    style={{ ...selectStyle, width: 64, padding: '2px 6px', borderRadius: 4 }}
+                  />
+                  <span style={{ color: 'var(--color-text-secondary)' }}>to</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={parseInt(proactiveHours.split('-')[1]) || 22}
+                    onChange={(e) => {
+                      const start = proactiveHours.split('-')[0] || '9';
+                      const end = e.target.value;
+                      const newHours = `${start}-${end}`;
+                      setProactiveHours(newHours);
+                      saveProactive({ hours: newHours });
+                    }}
+                    style={{ ...selectStyle, width: 64, padding: '2px 6px', borderRadius: 4 }}
+                  />
+                </div>
+              </SettingField>
+
+              {proactiveHistory.length > 0 && (
+                <SettingField label="Recent Messages" description="Last proactive messages sent" advanced>
+                  <div style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4, maxWidth: 320 }}>
+                    {proactiveHistory.slice(0, 3).map(m => (
+                      <div key={m.id} style={{ color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={m.text}>
+                        <span style={{ opacity: 0.6 }}>
+                          {new Date(m.triggered_at * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {' — '}
+                        {m.text.length > 60 ? m.text.slice(0, 60) + '...' : m.text}
+                      </div>
+                    ))}
+                  </div>
+                </SettingField>
+              )}
+            </>
+          )}
 
           <SettingField label="Message During AI Response" description="What to do when you send while AI is still responding." advanced
             tooltip="Queue: buffered and auto-fired when response finishes. Steer: aborts current generation. Discard: message is dropped.">
@@ -3565,6 +3683,60 @@ function VoiceTab({ save, cfg }: TabProps) {
             onChange={(v) => save('voice.speaking_vad_threshold', v)}
             format={(v) => v.toFixed(2)}
           />
+        </div>
+      </section>
+
+      {/* ── Phase 12-P5: Character Audio ──────────────────────────────── */}
+      <section className="mb-6">
+        <SectionHeader title="Character Audio" />
+        <div style={cardStyle} className="px-4">
+          <SettingField label="Ambient Audio" description="Breathing, vocalizations, and interaction sounds.">
+            <select
+              value={String(cfg('character_audio.enabled', 'false'))}
+              onChange={(e) => save('character_audio.enabled', e.target.value === 'true')}
+              className="text-sm px-2 py-1 rounded" style={selectStyle}
+            >
+              <option value="false">Disabled</option>
+              <option value="true">Enabled</option>
+            </select>
+          </SettingField>
+          <SliderField
+            label="Audio Volume" description="Master volume for character sounds."
+            value={Number(cfg('character_audio.volume', 0.15))}
+            min={0} max={1} step={0.01}
+            onChange={(v) => save('character_audio.volume', v)}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
+          <SettingField label="Breathing Sounds" description="Subtle breathing cycle synced to emotion.">
+            <select
+              value={String(cfg('character_audio.breathing', 'true'))}
+              onChange={(e) => save('character_audio.breathing', e.target.value === 'true')}
+              className="text-sm px-2 py-1 rounded" style={selectStyle}
+            >
+              <option value="true">On</option>
+              <option value="false">Off</option>
+            </select>
+          </SettingField>
+          <SettingField label="Idle Vocalizations" description="Occasional 'hmm', sighs, giggles during silence.">
+            <select
+              value={String(cfg('character_audio.vocals', 'true'))}
+              onChange={(e) => save('character_audio.vocals', e.target.value === 'true')}
+              className="text-sm px-2 py-1 rounded" style={selectStyle}
+            >
+              <option value="true">On</option>
+              <option value="false">Off</option>
+            </select>
+          </SettingField>
+          <SettingField label="Touch Sounds" description="Sound effects when tapping the character.">
+            <select
+              value={String(cfg('character_audio.interaction', 'true'))}
+              onChange={(e) => save('character_audio.interaction', e.target.value === 'true')}
+              className="text-sm px-2 py-1 rounded" style={selectStyle}
+            >
+              <option value="true">On</option>
+              <option value="false">Off</option>
+            </select>
+          </SettingField>
         </div>
       </section>
     </>

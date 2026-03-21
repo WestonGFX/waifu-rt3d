@@ -71,7 +71,10 @@ export interface ViewerCommand {
     | 'stopMocap'
     | 'getMocapStatus'
     | 'loadAnimationManifest'
-    | 'browseAnimations';
+    | 'browseAnimations'
+    // Phase 11A: Environment
+    | 'setPose'
+    | 'setTimeOfDay';
   payload: Record<string, unknown>;
   _seq: number;
 }
@@ -239,6 +242,12 @@ interface ViewerState {
   dispatchLoadAnimationManifest: (manifest: Record<string, unknown>) => void;
   /** Request the viewer to return all animation clips grouped by category. */
   dispatchBrowseAnimations: () => void;
+
+  // Phase 11A: Environment poses + time-of-day lighting
+  /** Set character pose (standing, sitting_couch, sitting_desk, lying_bed). */
+  dispatchSetPose: (pose: 'standing' | 'sitting_couch' | 'sitting_desk' | 'lying_bed') => void;
+  /** Set time-of-day lighting (0-23 hour) or enable auto mode. */
+  dispatchSetTimeOfDay: (opts: { hour?: number; auto?: boolean }) => void;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -907,6 +916,30 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
 
     if (state.mode === 'vrm') {
       postToIframe(state.iframeRef, { type: 'browseAnimations' });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  // Phase 11A: Environment poses + time-of-day lighting
+
+  dispatchSetPose: (pose) => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'setPose', payload: { pose }, _seq: seq };
+
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'setPose', payload: { pose } });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchSetTimeOfDay: (opts) => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'setTimeOfDay', payload: opts, _seq: seq };
+
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'setTimeOfDay', payload: opts });
     }
     set({ lastCommand: cmd, _seq: seq });
   },

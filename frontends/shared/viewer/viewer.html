@@ -110,6 +110,8 @@
         let clock = new THREE.Clock();
         let lipSync = null;
         let characterAudio = null;  // Phase 12-P5: ambient audio engine
+        let timeOfDayLighting = null; // Phase 11A: time-of-day lighting
+        let poseController = null;    // Phase 11A: procedural pose system
         let blinkController = null;
         let saccadeController = null;
         let microTremorController = null;
@@ -2998,6 +3000,384 @@
         }
 
         // ══════════════════════════════════════════════════════════
+        // Time-of-Day Lighting System (Phase 11A)
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Time-of-day lighting presets.
+         *
+         * Each hour window defines color temperature and intensity for the
+         * 3-point lighting rig + ambient. Colors simulate real daylight:
+         * warm golden at sunrise/sunset, cool blue at night, neutral at noon.
+         *
+         * The system interpolates between adjacent presets for smooth transitions.
+         *
+         * @type {Object<string, {key: {color: number, intensity: number}, fill: {color: number, intensity: number}, rim: {color: number, intensity: number}, ambient: {color: number, intensity: number}}>}
+         */
+        const TIME_OF_DAY_PRESETS = {
+            // Dawn (5-7): warm gold, low intensity, soft shadows
+            dawn: {
+                key:     { color: 0xffb347, intensity: 1.0 },
+                fill:    { color: 0xffd4a3, intensity: 0.35 },
+                rim:     { color: 0xff8c42, intensity: 0.5 },
+                ambient: { color: 0xffecd2, intensity: 0.25 },
+            },
+            // Morning (7-10): warm white, building intensity
+            morning: {
+                key:     { color: 0xfff0d0, intensity: 1.3 },
+                fill:    { color: 0xd8e8ff, intensity: 0.45 },
+                rim:     { color: 0xffffff, intensity: 0.6 },
+                ambient: { color: 0xfff8f0, intensity: 0.3 },
+            },
+            // Noon (10-14): neutral white, bright, high contrast
+            noon: {
+                key:     { color: 0xfff4e0, intensity: 1.6 },
+                fill:    { color: 0xd0e8ff, intensity: 0.55 },
+                rim:     { color: 0xffffff, intensity: 0.75 },
+                ambient: { color: 0xffffff, intensity: 0.3 },
+            },
+            // Afternoon (14-17): slightly warm, softening
+            afternoon: {
+                key:     { color: 0xffe8c0, intensity: 1.4 },
+                fill:    { color: 0xd4e4ff, intensity: 0.5 },
+                rim:     { color: 0xfff0e0, intensity: 0.65 },
+                ambient: { color: 0xfff8f0, intensity: 0.3 },
+            },
+            // Golden hour (17-19): deep warm, cinematic
+            golden: {
+                key:     { color: 0xffa040, intensity: 1.2 },
+                fill:    { color: 0xffc880, intensity: 0.4 },
+                rim:     { color: 0xff6820, intensity: 0.7 },
+                ambient: { color: 0xffe0b0, intensity: 0.2 },
+            },
+            // Evening (19-21): cool transition, dimming
+            evening: {
+                key:     { color: 0xc8b0ff, intensity: 0.9 },
+                fill:    { color: 0x8090c0, intensity: 0.3 },
+                rim:     { color: 0xa090d0, intensity: 0.5 },
+                ambient: { color: 0xd0c0e8, intensity: 0.2 },
+            },
+            // Night (21-5): cool blue, low, intimate
+            night: {
+                key:     { color: 0x6080c0, intensity: 0.6 },
+                fill:    { color: 0x405080, intensity: 0.2 },
+                rim:     { color: 0x8070b0, intensity: 0.4 },
+                ambient: { color: 0x303860, intensity: 0.15 },
+            },
+        };
+
+        /**
+         * Map hour (0-23) to the preset name and interpolation factor
+         * between the current and next preset.
+         *
+         * @param {number} hour - Hour in 24h format (0-23, can include fractional minutes)
+         * @returns {{from: string, to: string, t: number}} Preset names and blend factor
+         */
+        function getTimeOfDayBlend(hour) {
+            if (hour >= 5  && hour < 7)  return { from: 'night',     to: 'dawn',      t: (hour - 5) / 2 };
+            if (hour >= 7  && hour < 10) return { from: 'dawn',      to: 'morning',   t: (hour - 7) / 3 };
+            if (hour >= 10 && hour < 14) return { from: 'morning',   to: 'noon',      t: (hour - 10) / 4 };
+            if (hour >= 14 && hour < 17) return { from: 'noon',      to: 'afternoon', t: (hour - 14) / 3 };
+            if (hour >= 17 && hour < 19) return { from: 'afternoon', to: 'golden',    t: (hour - 17) / 2 };
+            if (hour >= 19 && hour < 21) return { from: 'golden',    to: 'evening',   t: (hour - 19) / 2 };
+            if (hour >= 21 && hour < 24) return { from: 'evening',   to: 'night',     t: (hour - 21) / 3 };
+            // 0-5: solid night
+            return { from: 'night', to: 'night', t: 0 };
+        }
+
+        /**
+         * Manages time-of-day lighting transitions on the 3-point rig.
+         *
+         * Accepts an hour value (0-23) and smoothly transitions the key,
+         * fill, rim, and ambient lights to match the corresponding preset.
+         * Interpolates between adjacent presets for smooth color/intensity blending.
+         *
+         * Uses exponential smoothing (setTargetAtTime) for flicker-free transitions
+         * when the hour changes in real-time.
+         */
+        class TimeOfDayLighting {
+            /**
+             * @param {THREE.DirectionalLight} key - Key light reference
+             * @param {THREE.DirectionalLight} fill - Fill light reference
+             * @param {THREE.DirectionalLight} rim - Rim light reference
+             * @param {THREE.AmbientLight} ambient - Ambient light reference
+             */
+            constructor(key, fill, rim, ambient) {
+                this.keyLight = key;
+                this.fillLight = fill;
+                this.rimLight = rim;
+                this.ambientLight = ambient;
+                this.currentHour = 12; // default noon
+                this.autoMode = false;
+                this._autoInterval = null;
+                this._tempColor = new THREE.Color();
+            }
+
+            /**
+             * Set lighting to match a specific hour.
+             * Interpolates between the two surrounding presets.
+             *
+             * @param {number} hour - Hour 0-23 (fractional OK, e.g. 14.5)
+             * @param {boolean} [animate=true] - Whether to lerp or snap
+             */
+            setHour(hour, animate = true) {
+                this.currentHour = hour;
+                const { from, to, t } = getTimeOfDayBlend(hour);
+                const a = TIME_OF_DAY_PRESETS[from];
+                const b = TIME_OF_DAY_PRESETS[to];
+
+                this._lerpLight(this.keyLight,     a.key,     b.key,     t);
+                this._lerpLight(this.fillLight,    a.fill,    b.fill,    t);
+                this._lerpLight(this.rimLight,     a.rim,     b.rim,     t);
+                this._lerpLight(this.ambientLight, a.ambient, b.ambient, t);
+            }
+
+            /**
+             * Enable auto mode — syncs lighting to the user's local clock.
+             * Updates every 60 seconds.
+             */
+            enableAuto() {
+                this.autoMode = true;
+                this._syncToRealTime();
+                this._autoInterval = setInterval(() => this._syncToRealTime(), 60000);
+            }
+
+            /**
+             * Disable auto mode — freezes at current lighting.
+             */
+            disableAuto() {
+                this.autoMode = false;
+                if (this._autoInterval) {
+                    clearInterval(this._autoInterval);
+                    this._autoInterval = null;
+                }
+            }
+
+            /**
+             * Sync lighting to the user's local clock time.
+             */
+            _syncToRealTime() {
+                const now = new Date();
+                const hour = now.getHours() + now.getMinutes() / 60;
+                this.setHour(hour);
+            }
+
+            /**
+             * Interpolate a single light's color and intensity between two presets.
+             *
+             * @param {THREE.Light} light - The light to modify
+             * @param {{color: number, intensity: number}} a - From preset
+             * @param {{color: number, intensity: number}} b - To preset
+             * @param {number} t - Blend factor 0-1
+             */
+            _lerpLight(light, a, b, t) {
+                const colorA = this._tempColor.set(a.color);
+                const colorB = new THREE.Color(b.color);
+                light.color.copy(colorA).lerp(colorB, t);
+                light.intensity = a.intensity + (b.intensity - a.intensity) * t;
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Procedural Pose System (Phase 11A)
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Pose definitions — each specifies bone rotations (Euler angles in radians)
+         * and a camera preset suggestion.
+         *
+         * Bone names follow the VRM humanoid specification:
+         *   hips, spine, chest, upperChest, neck, head,
+         *   leftUpperLeg, leftLowerLeg, rightUpperLeg, rightLowerLeg,
+         *   leftUpperArm, leftLowerArm, rightUpperArm, rightLowerArm
+         *
+         * Only bones that differ from the default standing pose are listed.
+         * The PoseController lerps from current rotations to target rotations.
+         *
+         * @type {Object<string, {bones: Object<string, {x?: number, y?: number, z?: number}>, camera: string, yOffset: number, description: string}>}
+         */
+        const POSE_DEFINITIONS = {
+            standing: {
+                bones: {},  // default T-pose reset
+                camera: 'fullbody',
+                yOffset: 0,
+                description: "You're standing together, facing each other",
+            },
+            sitting_couch: {
+                bones: {
+                    hips:          { x: -0.5 },                     // tilt pelvis back
+                    spine:         { x: 0.15 },                     // slight lean back
+                    leftUpperLeg:  { x: -1.4, z: 0.1 },            // thighs forward+spread
+                    rightUpperLeg: { x: -1.4, z: -0.1 },
+                    leftLowerLeg:  { x: 1.2 },                     // knees bent ~70°
+                    rightLowerLeg: { x: 1.2 },
+                    leftUpperArm:  { x: 0, z: 0.3 },               // arms resting at sides
+                    rightUpperArm: { x: 0, z: -0.3 },
+                    leftLowerArm:  { x: -0.3 },                    // forearms on lap
+                    rightLowerArm: { x: -0.3 },
+                },
+                camera: 'bust',
+                yOffset: -0.35,  // lower character for seated position
+                description: "You're both sitting on the couch together, relaxing",
+            },
+            sitting_desk: {
+                bones: {
+                    hips:          { x: -0.4 },
+                    spine:         { x: 0.25 },                     // leaning slightly forward
+                    chest:         { x: 0.05 },
+                    leftUpperLeg:  { x: -1.57 },                   // 90° thighs
+                    rightUpperLeg: { x: -1.57 },
+                    leftLowerLeg:  { x: 1.57 },                    // 90° knees
+                    rightLowerLeg: { x: 1.57 },
+                    leftUpperArm:  { x: -0.3, z: 0.2 },            // arms forward on desk
+                    rightUpperArm: { x: -0.3, z: -0.2 },
+                    leftLowerArm:  { x: -0.8 },                    // forearms on desk
+                    rightLowerArm: { x: -0.8 },
+                },
+                camera: 'bust',
+                yOffset: -0.35,
+                description: "You're sitting at the desk together, close by",
+            },
+            lying_bed: {
+                bones: {
+                    hips:          { x: -1.57 },                   // lying flat
+                    spine:         { x: 0.1 },                     // slight arch
+                    neck:          { x: 0.2 },                     // head propped
+                    head:          { x: 0.15 },
+                    leftUpperLeg:  { x: 0 },                       // legs straight
+                    rightUpperLeg: { x: 0 },
+                    leftLowerLeg:  { x: 0.1 },                     // slight knee bend
+                    rightLowerLeg: { x: 0.1 },
+                    leftUpperArm:  { x: 0, z: 0.5 },               // arms splayed
+                    rightUpperArm: { x: 0, z: -0.5 },
+                    leftLowerArm:  { x: -0.4 },
+                    rightLowerArm: { x: -0.4 },
+                },
+                camera: 'bust',
+                yOffset: -0.6,  // lower for lying
+                description: "You're lying on the bed together, comfortable and cozy",
+            },
+        };
+
+        /**
+         * Controls character poses by smoothly interpolating VRM bone rotations.
+         *
+         * Uses per-frame lerp for smooth transitions (0.3-0.5s crossfade)
+         * rather than snapping. Each pose also suggests a camera preset
+         * and Y-offset for the character's root position.
+         *
+         * The controller stores starting rotations when a transition begins,
+         * then interpolates toward the target on each update() tick.
+         */
+        class PoseController {
+            /**
+             * @param {Object} vrm - Loaded VRM model with humanoid bone access
+             */
+            constructor(vrm) {
+                this.vrm = vrm;
+                this.currentPose = 'standing';
+                this.targetPose = 'standing';
+                this.transitioning = false;
+                this.transitionProgress = 0;
+                this.transitionDuration = 0.4; // seconds
+                this._startRotations = {};     // bone → {x,y,z} snapshot at transition start
+                this._targetRotations = {};    // bone → {x,y,z} target
+            }
+
+            /**
+             * Initiate a pose transition.
+             * @param {string} poseName - Key in POSE_DEFINITIONS
+             * @returns {{camera: string, yOffset: number, description: string}|null} Pose metadata, or null if unknown pose
+             */
+            setPose(poseName) {
+                const def = POSE_DEFINITIONS[poseName];
+                if (!def) {
+                    console.warn(`[PoseController] Unknown pose: ${poseName}`);
+                    return null;
+                }
+                if (poseName === this.currentPose && !this.transitioning) return def;
+
+                // Snapshot current bone rotations
+                this._startRotations = {};
+                const allBones = new Set([
+                    ...Object.keys(POSE_DEFINITIONS[this.currentPose]?.bones || {}),
+                    ...Object.keys(def.bones),
+                ]);
+
+                for (const boneName of allBones) {
+                    const node = this._getBone(boneName);
+                    if (node) {
+                        this._startRotations[boneName] = {
+                            x: node.rotation.x,
+                            y: node.rotation.y,
+                            z: node.rotation.z,
+                        };
+                    }
+                }
+
+                // Set target rotations (bones not in the target def → default 0)
+                this._targetRotations = {};
+                for (const boneName of allBones) {
+                    this._targetRotations[boneName] = {
+                        x: def.bones[boneName]?.x ?? 0,
+                        y: def.bones[boneName]?.y ?? 0,
+                        z: def.bones[boneName]?.z ?? 0,
+                    };
+                }
+
+                this.targetPose = poseName;
+                this.transitioning = true;
+                this.transitionProgress = 0;
+                return def;
+            }
+
+            /**
+             * Per-frame update — call from the animation loop.
+             * Advances the transition by deltaTime and applies interpolated rotations.
+             *
+             * @param {number} deltaTime - Seconds since last frame
+             */
+            update(deltaTime) {
+                if (!this.transitioning) return;
+
+                this.transitionProgress += deltaTime / this.transitionDuration;
+                // Smooth step easing for natural feel
+                const raw = Math.min(this.transitionProgress, 1);
+                const t = raw * raw * (3 - 2 * raw); // smoothstep
+
+                for (const boneName of Object.keys(this._targetRotations)) {
+                    const node = this._getBone(boneName);
+                    if (!node) continue;
+
+                    const from = this._startRotations[boneName] || { x: 0, y: 0, z: 0 };
+                    const to = this._targetRotations[boneName];
+
+                    node.rotation.x = from.x + (to.x - from.x) * t;
+                    node.rotation.y = from.y + (to.y - from.y) * t;
+                    node.rotation.z = from.z + (to.z - from.z) * t;
+                }
+
+                if (raw >= 1) {
+                    this.transitioning = false;
+                    this.currentPose = this.targetPose;
+                }
+            }
+
+            /**
+             * Get a VRM bone node by humanoid name.
+             * Handles VRM 0.x and 1.0 API differences.
+             *
+             * @param {string} name - VRM humanoid bone name
+             * @returns {THREE.Object3D|null}
+             */
+            _getBone(name) {
+                return this.vrm.humanoid.getNormalizedBoneNode?.(name)
+                    || this.vrm.humanoid.getBoneNode?.(name)
+                    || null;
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
         // Idle vs. Talking Motion Parameters (Phase 6D)
         // ══════════════════════════════════════════════════════════
 
@@ -4061,6 +4441,9 @@
             // Ambient: reduced so lights have actual contrast
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
             scene.add(keyLight, fillLight, rimLight, ambientLight);
+
+            // Phase 11A: Initialize time-of-day lighting controller
+            timeOfDayLighting = new TimeOfDayLighting(keyLight, fillLight, rimLight, ambientLight);
 
             // Soft shadows (PCFSoftShadowMap blurs shadow edges naturally)
             renderer.shadowMap.enabled = true;
@@ -5214,6 +5597,7 @@
                     }
                     if (microExpressionController) microExpressionController.update(delta);
                     if (expressionController) expressionController.update(delta);
+                    if (poseController) poseController.update(delta);
                 } else if (currentGlbMixer) {
                     // GLB mode: tick the AnimationMixer for embedded clip playback
                     currentGlbMixer.update(delta);
@@ -5677,6 +6061,7 @@
                         // Clear VRM-specific controllers
                         lipSync = null;
                         if (characterAudio) { characterAudio.disable(); characterAudio = null; }
+                        poseController = null;
                         blinkController = null;
                         saccadeController = null;
                         microTremorController = null;
@@ -5721,6 +6106,7 @@
                             lipSync = new AudioLipSync(vrm);
                             // Phase 12-P5: Share AudioContext from lipSync for ambient audio
                             characterAudio = new CharacterAudioEngine(lipSync.audioContext);
+                            poseController = new PoseController(vrm);
                             blinkController = new BlinkController(vrm);
                             saccadeController = new SaccadeController(vrm);
                             microTremorController = new MicroTremorController(vrm);
@@ -6268,6 +6654,59 @@
                     };
                     const p = presets[payload?.preset];
                     if (p) controls.tweenTo(p.pos, p.target, 500);
+                    return;
+                }
+                // Phase 11A: Time-of-day lighting
+                if (type === 'setTimeOfDay') {
+                    if (timeOfDayLighting) {
+                        const hour = payload?.hour ?? e.data.hour;
+                        const auto = payload?.auto ?? e.data.auto;
+                        if (auto === true) {
+                            timeOfDayLighting.enableAuto();
+                        } else if (auto === false) {
+                            timeOfDayLighting.disableAuto();
+                        }
+                        if (hour !== undefined) {
+                            timeOfDayLighting.setHour(Number(hour));
+                        }
+                    }
+                    return;
+                }
+                // Phase 11A: Procedural pose system
+                if (type === 'setPose') {
+                    if (poseController) {
+                        const poseName = payload?.pose || e.data.pose || 'standing';
+                        const result = poseController.setPose(poseName);
+                        if (result) {
+                            // Apply Y-offset by moving VRM root
+                            if (currentVrm?.scene) {
+                                const targetY = result.yOffset || 0;
+                                // Animate Y offset over 0.4s via requestAnimationFrame
+                                const startY = currentVrm.scene.position.y;
+                                const startTime = performance.now();
+                                const duration = 400;
+                                function animateY(now) {
+                                    const t = Math.min((now - startTime) / duration, 1);
+                                    const eased = t * t * (3 - 2 * t); // smoothstep
+                                    currentVrm.scene.position.y = startY + (targetY - startY) * eased;
+                                    if (t < 1) requestAnimationFrame(animateY);
+                                }
+                                requestAnimationFrame(animateY);
+                            }
+                            // Suggest camera preset for this pose
+                            if (result.camera && _vrmFrameData) {
+                                // Re-dispatch as a camera preset command
+                                window.postMessage({ type: 'setCameraPreset', payload: { preset: result.camera } }, '*');
+                            }
+                            // Notify parent with pose metadata
+                            window.parent.postMessage({
+                                type: 'poseChanged',
+                                pose: poseName,
+                                description: result.description,
+                            }, '*');
+                            console.log(`[Pose] Set: ${poseName}`);
+                        }
+                    }
                     return;
                 }
                 if (type === 'setFOV') {

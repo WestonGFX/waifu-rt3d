@@ -100,6 +100,7 @@
         // Phase 12-P4: Anime shaders
         import { OutlinePass } from '/shared/lib/shaders/OutlineShader.js';
         import { GodRaysShader } from '/shared/lib/shaders/GodRaysShader.js';
+        import { injectToonShading, removeToonShading, updateToonParams } from '/shared/lib/shaders/ToonShader.js';
 
         let currentVrm = null;
         let currentGlb = null;        // Currently loaded GLB scene (null when VRM or empty)
@@ -3649,6 +3650,7 @@
                 emotionColorGrade: { enabled: false },
                 emotionGradient: { enabled: false },
                 emotionAmbient: { enabled: false },
+                toonShading: { enabled: false, levels: 3, softness: 0.02, shadowBias: 0.3 },
             };
 
             // ── Phase 12-P4: Emotion Color Grading ──────────────────────
@@ -3882,8 +3884,22 @@
                 if (config.emotionAmbient !== undefined) {
                     Object.assign(_effectsConfig.emotionAmbient, config.emotionAmbient);
                 }
+                if (config.toonShading !== undefined) {
+                    const prev = _effectsConfig.toonShading.enabled;
+                    Object.assign(_effectsConfig.toonShading, config.toonShading);
+                    if (_effectsConfig.toonShading.enabled && currentVrm?.scene) {
+                        if (!prev) {
+                            const count = injectToonShading(currentVrm.scene, _effectsConfig.toonShading);
+                            console.log('[Viewer] Toon shading injected into', count, 'materials');
+                        } else {
+                            updateToonParams(currentVrm.scene, _effectsConfig.toonShading);
+                        }
+                    } else if (!_effectsConfig.toonShading.enabled && prev && currentVrm?.scene) {
+                        const count = removeToonShading(currentVrm.scene);
+                        console.log('[Viewer] Toon shading removed from', count, 'materials');
+                    }
+                }
                 if (config.rimLight !== undefined) {
-                    // Rim light is handled separately (mesh overlays, not a pass)
                     _rimLightConfig = { ..._rimLightConfig, ...config.rimLight };
                     updateRimLightMeshes();
                 }
@@ -5233,7 +5249,10 @@
                             microExpressionController = new MicroExpressionController(vrm);
                             expressionController = new ExpressionController(vrm);
 
-                            // Phase 12-P4: Create rim light overlay meshes if enabled
+                            // Phase 12-P4: Apply toon shading + rim light if enabled
+                            if (_effectsConfig.toonShading.enabled) {
+                                injectToonShading(vrm.scene, _effectsConfig.toonShading);
+                            }
                             if (_rimLightConfig.enabled) {
                                 createRimLightMeshes(vrm.scene);
                             }

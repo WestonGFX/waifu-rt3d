@@ -77,13 +77,15 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
   const [emotionGradient, setEmotionGradient] = useState(false);
   const [emotionAmbient, setEmotionAmbient] = useState(false);
 
-  // ── Phase 12-P4: Outline, rim light, god rays ──
+  // ── Phase 12-P4: Outline, rim light, god rays, toon shading ──
   const [outlineEnabled, setOutlineEnabled] = useState(false);
   const [outlineThickness, setOutlineThickness] = useState(1.5);
   const [rimLightEnabled, setRimLightEnabled] = useState(false);
   const [rimLightIntensity, setRimLightIntensity] = useState(0.5);
   const [godRaysEnabled, setGodRaysEnabled] = useState(false);
   const [godRaysIntensity, setGodRaysIntensity] = useState(0.4);
+  const [toonEnabled, setToonEnabled] = useState(false);
+  const [toonLevels, setToonLevels] = useState(3);
 
   // ── Camera / FOV state ──
   const [fov, setFov] = useState(50);
@@ -150,6 +152,11 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
   useEffect(() => {
     dispatchSetEffects({ godRays: { enabled: godRaysEnabled, intensity: godRaysIntensity } });
   }, [godRaysEnabled, godRaysIntensity, dispatchSetEffects]);
+
+  // Phase 12-P4: Sync toon shading
+  useEffect(() => {
+    dispatchSetEffects({ toonShading: { enabled: toonEnabled, levels: toonLevels } });
+  }, [toonEnabled, toonLevels, dispatchSetEffects]);
 
   const iframeRefForGradient = useViewerStore(s => s.iframeRef);
   useEffect(() => {
@@ -365,6 +372,47 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
                 Emotion gradient background
               </span>
             </label>
+          </div>
+
+          {/* ── Cel-Shading ── */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                Cel-Shading
+              </span>
+              <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={toonEnabled}
+                  onChange={e => setToonEnabled(e.target.checked)}
+                  style={{ accentColor: 'var(--color-accent)' }}
+                />
+                <span style={{ fontSize: '0.62rem', color: 'var(--color-text-tertiary)' }}>Enable</span>
+              </label>
+            </div>
+            {toonEnabled && (
+              <div style={{ display: 'flex', gap: '4px', paddingLeft: '8px' }}>
+                {[2, 3].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setToonLevels(n)}
+                    style={{
+                      padding: '3px 10px',
+                      borderRadius: '12px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.62rem',
+                      fontWeight: toonLevels === n ? 600 : 400,
+                      backgroundColor: toonLevels === n ? 'var(--color-accent)' : 'var(--color-background)',
+                      color: toonLevels === n ? 'var(--color-accent-text)' : 'var(--color-text-tertiary)',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {n} bands
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* ── Anime Outline ── */}

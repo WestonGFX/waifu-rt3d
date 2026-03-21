@@ -332,6 +332,113 @@
                 if (preset.target) this.target.fromArray(preset.target);
                 this._updateSpherical();
             }
+
+            /**
+             * Smoothly transition to a named camera preset.
+             * Uses VRM frame data for model-relative positioning.
+             *
+             * @param {string} presetName - 'fullbody'|'upper'|'face'|'side'|'low'
+             * @param {number} [durationMs=600] - Transition duration
+             */
+            goToPreset(presetName, durationMs = 600) {
+                if (!_vrmFrameData) return;
+                const { targetY, camZ, modelHeight } = _vrmFrameData;
+                const presets = {
+                    fullbody: {
+                        pos: [0, targetY + modelHeight * 0.05, camZ * 1.15],
+                        target: [0, targetY, 0],
+                    },
+                    upper: {
+                        pos: [0, targetY + modelHeight * 0.2, camZ * 0.7],
+                        target: [0, targetY + modelHeight * 0.15, 0],
+                    },
+                    face: {
+                        pos: [0, targetY + modelHeight * 0.35, camZ * 0.35],
+                        target: [0, targetY + modelHeight * 0.35, 0],
+                    },
+                    side: {
+                        pos: [camZ * 0.8, targetY + modelHeight * 0.1, camZ * 0.6],
+                        target: [0, targetY + modelHeight * 0.05, 0],
+                    },
+                    low: {
+                        pos: [0, targetY - modelHeight * 0.1, camZ * 1.0],
+                        target: [0, targetY + modelHeight * 0.1, 0],
+                    },
+                };
+                const preset = presets[presetName] || presets.fullbody;
+                this.tweenTo(
+                    new THREE.Vector3(...preset.pos),
+                    new THREE.Vector3(...preset.target),
+                    durationMs
+                );
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Character Touch/Poke Raycaster (Phase 12-P3)
+        // ══════════════════════════════════════════════════════════
+        // Detects clicks on the character model and maps hit position
+        // to body zones (head, cheeks, shoulders, torso).
+
+        const _raycaster = new THREE.Raycaster();
+        const _pointerNDC = new THREE.Vector2();
+        let _touchCooldowns = {};
+
+        /**
+         * Handle pointer click on canvas — raycast to detect character touch.
+         * Maps hit Y-coordinate to body zone and posts event to parent.
+         *
+         * @param {PointerEvent} event
+         */
+        function _onCharacterTouch(event) {
+            if (!currentVrm || !camera) return;
+
+            // Convert screen coords to NDC (-1 to +1)
+            const rect = renderer.domElement.getBoundingClientRect();
+            _pointerNDC.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            _pointerNDC.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            _raycaster.setFromCamera(_pointerNDC, camera);
+
+            // Get all meshes from VRM scene
+            const meshes = [];
+            currentVrm.scene.traverse(child => {
+                if (child.isMesh) meshes.push(child);
+            });
+
+            const hits = _raycaster.intersectObjects(meshes, false);
+            if (hits.length === 0) return;
+
+            const hit = hits[0];
+            const worldY = hit.point.y;
+
+            // Map world Y to body zone using model bounding box
+            const bbox = new THREE.Box3().setFromObject(currentVrm.scene);
+            const modelBottom = bbox.min.y;
+            const modelTop = bbox.max.y;
+            const normalizedY = (worldY - modelBottom) / (modelTop - modelBottom);
+
+            let zone = 'torso';
+            if (normalizedY > 0.85) zone = 'head';
+            else if (normalizedY > 0.75) zone = 'face';
+            else if (normalizedY > 0.65) zone = 'shoulders';
+            else if (normalizedY > 0.3) zone = 'torso';
+            else zone = 'legs';
+
+            // Cooldown check
+            const now = performance.now();
+            if (_touchCooldowns[zone] && now - _touchCooldowns[zone] < 2000) return;
+            _touchCooldowns[zone] = now;
+
+            // Notify parent frame
+            window.parent.postMessage({
+                type: 'characterTouch',
+                zone: zone,
+                normalizedY: normalizedY,
+                worldPosition: hit.point.toArray(),
+            }, '*');
+
+            console.log(`[Touch] Zone: ${zone} (Y: ${normalizedY.toFixed(2)})`);
         }
 
 
@@ -5662,7 +5769,18 @@
                         keyLight.shadow.mapSize.height = 1024;
                     }
                 }
+
+                // Phase 12-P3: Camera preset commands
+                else if (type === 'cameraPreset') {
+                    if (controls) {
+                        controls.goToPreset(payload?.preset || 'fullbody', payload?.duration || 600);
+                    }
+                }
+
             });
+
+            // Phase 12-P3: Touch/poke detection on character
+            renderer.domElement.addEventListener('click', _onCharacterTouch);
 
             window.addEventListener('resize', () => {
                 renderer.setSize(window.innerWidth, window.innerHeight);

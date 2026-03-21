@@ -101,6 +101,9 @@
         import { OutlinePass } from '/shared/lib/shaders/OutlineShader.js';
         import { GodRaysShader } from '/shared/lib/shaders/GodRaysShader.js';
         import { injectToonShading, removeToonShading, updateToonParams } from '/shared/lib/shaders/ToonShader.js';
+        // Task 3B: Specialty shaders
+        import { injectHairShading, removeHairShading, updateHairParams } from '/shared/lib/shaders/HairShader.js';
+        import { injectEyeSparkle, removeEyeSparkle, updateEyeSparkleParams } from '/shared/lib/shaders/EyeShader.js';
 
         let currentVrm = null;
         let currentGlb = null;        // Currently loaded GLB scene (null when VRM or empty)
@@ -4509,6 +4512,9 @@
                 emotionGradient: { enabled: false },
                 emotionAmbient: { enabled: false },
                 toonShading: { enabled: false, levels: 3, softness: 0.02, shadowBias: 0.3 },
+                // Task 3B: Specialty shaders
+                hairShading: { enabled: false, shiftPrimary: 0.0, shiftSecondary: 0.3, specPower: 80, specPowerSecondary: 20 },
+                eyeSparkle: { enabled: false, intensity: 0.6, size: 0.15, points: 4, shimmerSpeed: 0.3 },
             };
 
             // ── Phase 12-P4: Emotion Color Grading ──────────────────────
@@ -4755,6 +4761,38 @@
                     } else if (!_effectsConfig.toonShading.enabled && prev && currentVrm?.scene) {
                         const count = removeToonShading(currentVrm.scene);
                         console.log('[Viewer] Toon shading removed from', count, 'materials');
+                    }
+                }
+                // Task 3B: Hair anisotropic shader
+                if (config.hairShading !== undefined) {
+                    const prev = _effectsConfig.hairShading.enabled;
+                    Object.assign(_effectsConfig.hairShading, config.hairShading);
+                    if (_effectsConfig.hairShading.enabled && currentVrm?.scene) {
+                        if (!prev) {
+                            const count = injectHairShading(currentVrm.scene, _effectsConfig.hairShading);
+                            console.log('[Viewer] Hair shading injected into', count, 'materials');
+                        } else {
+                            updateHairParams(currentVrm.scene, _effectsConfig.hairShading);
+                        }
+                    } else if (!_effectsConfig.hairShading.enabled && prev && currentVrm?.scene) {
+                        const count = removeHairShading(currentVrm.scene);
+                        console.log('[Viewer] Hair shading removed from', count, 'materials');
+                    }
+                }
+                // Task 3B: Eye sparkle shader
+                if (config.eyeSparkle !== undefined) {
+                    const prev = _effectsConfig.eyeSparkle.enabled;
+                    Object.assign(_effectsConfig.eyeSparkle, config.eyeSparkle);
+                    if (_effectsConfig.eyeSparkle.enabled && currentVrm?.scene) {
+                        if (!prev) {
+                            const count = injectEyeSparkle(currentVrm.scene, _effectsConfig.eyeSparkle);
+                            console.log('[Viewer] Eye sparkle injected into', count, 'materials');
+                        } else {
+                            updateEyeSparkleParams(currentVrm.scene, _effectsConfig.eyeSparkle);
+                        }
+                    } else if (!_effectsConfig.eyeSparkle.enabled && prev && currentVrm?.scene) {
+                        const count = removeEyeSparkle(currentVrm.scene);
+                        console.log('[Viewer] Eye sparkle removed from', count, 'materials');
                     }
                 }
                 if (config.rimLight !== undefined) {
@@ -6116,6 +6154,13 @@
                             // Phase 12-P4: Apply toon shading + rim light if enabled
                             if (_effectsConfig.toonShading.enabled) {
                                 injectToonShading(vrm.scene, _effectsConfig.toonShading);
+                            }
+                            // Task 3B: Apply specialty shaders if enabled
+                            if (_effectsConfig.hairShading.enabled) {
+                                injectHairShading(vrm.scene, _effectsConfig.hairShading);
+                            }
+                            if (_effectsConfig.eyeSparkle.enabled) {
+                                injectEyeSparkle(vrm.scene, _effectsConfig.eyeSparkle);
                             }
                             if (_rimLightConfig.enabled) {
                                 createRimLightMeshes(vrm.scene);

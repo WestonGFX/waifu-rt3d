@@ -8900,6 +8900,133 @@ async def update_user_fact(char_id: int, fact_id: int, req: Request):
         conn.close()
 
 
+# ── Character Journal (Phase 13B) ─────────────────────────────────────────
+
+
+@app.get("/api/characters/{char_id}/journal")
+def get_character_journal(char_id: int, limit: int = 10):
+    """Get recent journal entries for a character.
+
+    Journal entries are short, first-person reflections the character
+    "writes" between sessions, creating the illusion of inner life.
+
+    Args:
+        char_id: Character ID.
+        limit: Maximum entries to return (default 10).
+
+    Returns:
+        {"ok": True, "entries": [{id, session_id, entry_text, created_at}]}
+    """
+    try:
+        from backend.adaptive.journal import get_journal_entries
+        conn = db()
+        entries = get_journal_entries(char_id, conn.cursor(), limit=limit)
+        return {"ok": True, "entries": entries}
+    except Exception as e:
+        logger.debug(f"[Journal] get entries failed: {e}")
+        return {"ok": True, "entries": []}
+
+
+@app.post("/api/characters/{char_id}/journal/generate")
+async def generate_character_journal(char_id: int, session_id: int = 0):
+    """Trigger journal generation for a character's session.
+
+    Normally triggered automatically on session end, but can be called
+    manually for testing.
+
+    Args:
+        char_id: Character ID.
+        session_id: Session ID to reflect on (0 = most recent).
+
+    Returns:
+        {"ok": True, "entry": {id, entry_text, created_at}} or
+        {"ok": False, "reason": "..."}
+    """
+    try:
+        from backend.adaptive.journal import generate_journal_entry
+        cfg = load_config() or {}
+        result = await run_in_threadpool(
+            generate_journal_entry, char_id, session_id, str(DB_PATH), cfg
+        )
+        if result:
+            return {"ok": True, "entry": result}
+        return {"ok": False, "reason": "No journal generated (too few messages or already exists)"}
+    except Exception as e:
+        logger.warning(f"[Journal] generation failed: {e}")
+        return {"ok": False, "reason": str(e)}
+
+
+# ── Memory Transparency (Phase 13B) ──────────────────────────────────────
+
+
+@app.get("/api/characters/{char_id}/memory/overview")
+def get_memory_overview(char_id: int):
+    """Get a comprehensive memory overview for a character.
+
+    Combines user facts, recent journal entries, learned preferences,
+    and memory stats into one response for the Memory Transparency UI.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        {"ok": True, "user_facts": [...], "journal_entries": [...],
+         "profile": {...}, "stats": {...}}
+    """
+    conn = db()
+    cur = conn.cursor()
+
+    # User facts
+    facts = []
+    try:
+        rows = cur.execute(
+            "SELECT id, category, fact_text, confidence, created_ts FROM user_facts WHERE character_id = ? ORDER BY confidence DESC",
+            (char_id,),
+        ).fetchall()
+        facts = [{"id": r[0], "category": r[1], "fact_text": r[2], "confidence": r[3], "created_at": r[4]} for r in rows]
+    except Exception:
+        pass
+
+    # Journal entries
+    journal = []
+    try:
+        from backend.adaptive.journal import get_journal_entries
+        journal = get_journal_entries(char_id, cur, limit=5)
+    except Exception:
+        pass
+
+    # Adaptive profile
+    profile = None
+    try:
+        from backend.adaptive.tuner import load_user_profile
+        profile = load_user_profile(char_id, cur)
+    except Exception:
+        pass
+
+    # Stats
+    stats = {}
+    try:
+        msg_count = cur.execute(
+            "SELECT COUNT(*) FROM messages WHERE char_id = ?", (char_id,)
+        ).fetchone()[0]
+        stats["total_messages"] = msg_count
+        stats["total_facts"] = len(facts)
+        stats["total_journal_entries"] = cur.execute(
+            "SELECT COUNT(*) FROM character_journals WHERE char_id = ?", (char_id,)
+        ).fetchone()[0] if journal else 0
+        stats["has_profile"] = profile is not None
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "user_facts": facts,
+        "journal_entries": journal,
+        "profile": profile,
+        "stats": stats,
+    }
+
+
 @app.get("/api/sessions/{session_id}/emotions")
 def get_emotion_timeline(session_id: int):
     """Get the emotion timeline for a session.

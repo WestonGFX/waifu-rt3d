@@ -1,11 +1,11 @@
 # Current Project Status
 
-**Last updated:** 2026-03-20 22:00 PST
+**Last updated:** 2026-03-21 01:00 PST
 **Branch:** master
 **Schema version:** v56
 **Tests:** 525 passing (backend pytest), tsc clean (frontend)
 
-## Completed This Session (Mar 20, 2026) — 8 commits
+## Completed This Session (Mar 20-21, 2026) — 13 commits
 
 | Commit | Phase | What |
 |--------|-------|------|
@@ -17,6 +17,10 @@
 | `004164a` | 13B | Character journal + memory transparency API |
 | `81f86a3` | 12-P2 | Micro-expressions (random facial twitches) |
 | `8990eaf` | 12-P3 | Touch raycasting + 5 camera presets |
+| `4acb87f` | chore | Plan hygiene rules + /checkpoint skill |
+| `57814bb` | 12-P4 | Emotion color grading, gradient backgrounds, enhanced particles |
+| `db5584e` | 12-P4 | Anime outline, rim glow, god rays post-processing |
+| `4e74b48` | 12-P4 | Toon/cel-shading via onBeforeCompile injection |
 
 ## Phase Completion Status
 
@@ -38,7 +42,7 @@
 | Phase 12-P1 | ✅ DONE | Breathing, blinking, saccades, hair physics |
 | Phase 12-P2 | ✅ DONE | Micro-expressions, emotion body language |
 | Phase 12-P3 | ✅ DONE | Touch interaction, cinematic camera |
-| Phase 12-P4 | NOT STARTED [MVP] | Anime shaders, backgrounds, particles |
+| Phase 12-P4 | ✅ DONE | Anime shaders, backgrounds, particles |
 | Phase 12-P5 | NOT STARTED [MVP] | Sound design, lip sync |
 | Phase 12-P6 | NOT STARTED [POST-MVP] | Webcam face/hand tracking |
 | Phase 13A | ✅ DONE | Bond progression + gifts + story scenes |
@@ -49,9 +53,9 @@
 
 ## Next 3 Tasks (Priority Order)
 
-1. **Phase 12-P4** [MVP] — **IN PROGRESS** — Anime shaders + gradient backgrounds + emotion particles in viewer.html. Plan: `.claude/plans/2026-03-20-phase-12-p4-anime-shaders.md`
-2. **Phase 12-P5** [MVP] — Sound design + lip sync in viewer.html + new frontend hook
-3. **Phase 11A** [MVP] — Environment poses + time-of-day lighting (needs Blender assets)
+1. **Phase 12-P5** [MVP] — Sound design + lip sync in viewer.html + new frontend hook
+2. **Phase 11A** [MVP] — Environment poses + time-of-day lighting (needs Blender assets)
+3. **Task 3B** [STRETCH] — Specialty shaders (hair anisotropic, eye sparkle, skin SSS)
 
 ## Plan File Location
 

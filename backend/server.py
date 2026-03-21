@@ -421,6 +421,9 @@ from backend.lore.matcher import match_lore, match_lore_hybrid
 # Feature 15A: Embedding provider abstraction
 from backend.embeddings.provider import get_provider as get_embedding_provider
 
+# Feature 18: Content gating system
+from backend.content.bridge import get_content_blocks, update_intimacy_after_turn
+
 # Feature A2: In-App Mini Games — all game engines
 from backend.games import trivia as trivia_engine
 from backend.games import twenty_questions as tq_engine
@@ -2133,10 +2136,26 @@ def _build_prompt_sections(
     if rp_text:
         sections.append(_section("RP Style Guide", rp_text))
 
-    # 9. Content filter
-    filter_text = _get_content_filter_injection(cfg.get("content_filter_level", 0))
-    if filter_text:
-        sections.append(_section("Content Filter", filter_text))
+    # 9. Content gating (v58+) or legacy content filter fallback
+    try:
+        _provider_name = cfg.get("llm", {}).get("provider", "openai")
+        _content_conn = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn:
+            _content_blocks = get_content_blocks(
+                cfg, char_id, session_id, _provider_name, _content_conn
+            )
+            for _cb in _content_blocks:
+                sections.append(_section("Content Gating", _cb))
+        else:
+            # Fallback if no connection available
+            filter_text = _get_content_filter_injection(cfg.get("content_filter_level", 0))
+            if filter_text:
+                sections.append(_section("Content Filter", filter_text))
+    except Exception as _cg_err:
+        logger.debug("[ContentGating] Falling back to legacy filter: %s", _cg_err)
+        filter_text = _get_content_filter_injection(cfg.get("content_filter_level", 0))
+        if filter_text:
+            sections.append(_section("Content Filter", filter_text))
 
     return sections
 
@@ -2665,6 +2684,14 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         except Exception as _bond_err:
             logger.debug(f"[Bond] XP tracking skipped: {_bond_err}")
 
+        # ── Content Gating: update intimacy + physical state ─────────────
+        try:
+            update_intimacy_after_turn(
+                session_id, char_id, text, clean_reply, cfg, con,
+            )
+        except Exception as _intimacy_err:
+            logger.debug(f"[ContentGating] Intimacy update skipped: {_intimacy_err}")
+
         if vector_store:
             vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
 
@@ -3159,6 +3186,14 @@ async def chat_multi(req: Request):
                 emotion = "sad"
             elif any(w in reply_lower for w in ["love", "❤", "blush", "~"]):
                 emotion = "love"
+
+            # ── Content Gating: update intimacy + physical state ─────
+            try:
+                update_intimacy_after_turn(
+                    session_id, char_id, text, reply, cfg, con,
+                )
+            except Exception:
+                pass
 
             responses.append({
                 "char_id": char_id,
@@ -3677,6 +3712,14 @@ async def chat_stream(req: Request):
 
                 if vector_store and not incognito:
                     vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
+
+                # ── Content Gating: update intimacy + physical state ──
+                try:
+                    update_intimacy_after_turn(
+                        session_id, char_id, user_text, clean_reply, cfg, con,
+                    )
+                except Exception:
+                    pass
 
                 memory_hits = [
                     {

@@ -97,6 +97,9 @@
         import { RenderPass } from '/shared/lib/postprocessing/RenderPass.js';
         import { UnrealBloomPass } from '/shared/lib/postprocessing/UnrealBloomPass.js';
         import { ShaderPass } from '/shared/lib/postprocessing/ShaderPass.js';
+        // Phase 12-P4: Anime shaders
+        import { OutlinePass } from '/shared/lib/shaders/OutlineShader.js';
+        import { GodRaysShader } from '/shared/lib/shaders/GodRaysShader.js';
 
         let currentVrm = null;
         let currentGlb = null;        // Currently loaded GLB scene (null when VRM or empty)
@@ -3762,6 +3765,72 @@
             colorGradePass.enabled = false;
             composer.addPass(colorGradePass);
 
+            // Phase 12-P4: Anime Outline Pass
+            // Inserted into composer. Pass order: Render → Outline → Bloom → GodRays → ColorGrade
+            const outlinePass = new OutlinePass(scene, camera, {
+                thickness: _effectsConfig.animeOutline.thickness,
+                color: _effectsConfig.animeOutline.color,
+                opacity: _effectsConfig.animeOutline.opacity,
+            });
+            outlinePass.enabled = false;
+            composer.insertPass(outlinePass, 1); // After RenderPass, before Bloom
+
+            // Phase 12-P4: God Rays Pass
+            const godRaysPass = new ShaderPass(GodRaysShader);
+            godRaysPass.enabled = false;
+            // Insert after Bloom (index 3 now: 0=Render, 1=Outline, 2=Bloom, 3=GodRays, 4=ColorGrade)
+            composer.insertPass(godRaysPass, 3);
+
+            // God ray state
+            const _godRaysConfig = { enabled: false, intensity: 0.4, decay: 0.96, density: 0.8 };
+
+            // Emotion-tinted god ray presets
+            const EMOTION_GODRAY_TINTS = {
+                neutral:  new THREE.Color(0xffffee),
+                happy:    new THREE.Color(0xffe4b5),
+                excited:  new THREE.Color(0xffe066),
+                sad:      new THREE.Color(0x4a7ba7),
+                angry:    new THREE.Color(0xff6347),
+                love:     new THREE.Color(0xffb6d9),
+                calm:     new THREE.Color(0x87ceeb),
+                proud:    new THREE.Color(0xffd700),
+                awe:      new THREE.Color(0xe0f6ff),
+            };
+
+            /**
+             * Update god ray light position from character head bone.
+             * Called per frame when god rays are enabled.
+             *
+             * @param {THREE.Camera} cam - Active camera
+             */
+            function updateGodRayLightPos(cam) {
+                if (!godRaysPass.enabled) return;
+                // Find head bone from current VRM
+                const headBone = currentVrm?.humanoid?.getNormalizedBoneNode('head')
+                    || currentVrm?.humanoid?.getBoneNode?.('head');
+                if (!headBone) return;
+                // Project to screen NDC (0-1 range)
+                const pos = new THREE.Vector3();
+                headBone.getWorldPosition(pos);
+                pos.project(cam);
+                // Convert from NDC (-1 to 1) to UV (0 to 1)
+                godRaysPass.uniforms.uLightPos.value.set(
+                    pos.x * 0.5 + 0.5,
+                    pos.y * 0.5 + 0.5
+                );
+            }
+
+            /**
+             * Apply emotion tint to god rays.
+             *
+             * @param {string} emotion - Current emotion
+             */
+            function applyEmotionGodRayTint(emotion) {
+                if (!godRaysPass.enabled) return;
+                const tint = EMOTION_GODRAY_TINTS[emotion] || EMOTION_GODRAY_TINTS.neutral;
+                godRaysPass.uniforms.uTint.value.copy(tint);
+            }
+
             /**
              * Update post-processing pipeline from configuration.
              * Called by the setEffects postMessage handler.
@@ -3783,15 +3852,25 @@
                     colorGradePass.uniforms.contrast.value = _effectsConfig.colorGrade.contrast;
                     colorGradePass.uniforms.saturation.value = _effectsConfig.colorGrade.saturation;
                 }
+                if (config.animeOutline !== undefined) {
+                    Object.assign(_effectsConfig.animeOutline, config.animeOutline);
+                    outlinePass.enabled = _effectsConfig.animeOutline.enabled;
+                    outlinePass.updateConfig(_effectsConfig.animeOutline);
+                }
+                if (config.godRays !== undefined) {
+                    Object.assign(_godRaysConfig, config.godRays);
+                    godRaysPass.enabled = _godRaysConfig.enabled;
+                    if (_godRaysConfig.intensity !== undefined) godRaysPass.uniforms.uIntensity.value = _godRaysConfig.intensity;
+                    if (_godRaysConfig.decay !== undefined) godRaysPass.uniforms.uDecay.value = _godRaysConfig.decay;
+                    if (_godRaysConfig.density !== undefined) godRaysPass.uniforms.uDensity.value = _godRaysConfig.density;
+                }
                 if (config.emotionColorGrade !== undefined) {
                     Object.assign(_effectsConfig.emotionColorGrade, config.emotionColorGrade);
-                    // When disabling, reset color grade to neutral
                     if (!_effectsConfig.emotionColorGrade.enabled) {
                         _emotionGradeProgress = 1.0;
                         colorGradePass.uniforms.brightness.value = 0;
                         colorGradePass.uniforms.contrast.value = 0;
                         colorGradePass.uniforms.saturation.value = 0;
-                        // Only disable the pass if manual color grade is also off
                         if (!_effectsConfig.colorGrade.enabled) {
                             colorGradePass.enabled = false;
                         }
@@ -3803,8 +3882,14 @@
                 if (config.emotionAmbient !== undefined) {
                     Object.assign(_effectsConfig.emotionAmbient, config.emotionAmbient);
                 }
+                if (config.rimLight !== undefined) {
+                    // Rim light is handled separately (mesh overlays, not a pass)
+                    _rimLightConfig = { ..._rimLightConfig, ...config.rimLight };
+                    updateRimLightMeshes();
+                }
                 // Enable composer only if at least one pass is active
-                _effectsEnabled = bloomPass.enabled || colorGradePass.enabled;
+                _effectsEnabled = bloomPass.enabled || colorGradePass.enabled
+                    || outlinePass.enabled || godRaysPass.enabled;
                 console.log('[Viewer] Effects updated:', _effectsConfig, 'composer:', _effectsEnabled);
             }
 
@@ -4223,6 +4308,145 @@
                 _gradientBgMat.uniforms.uBottomColor.value.lerpColors(_gradientFrom.bottom, _gradientTo.bottom, ease);
             }
 
+            // ── Phase 12-P4: Emotion-Responsive Rim Lighting ────────
+            /**
+             * Rim glow system using additive Fresnel overlay meshes.
+             * For each VRM mesh, a second mesh is added with a Fresnel-only
+             * ShaderMaterial (additive blending, no depth write). This avoids
+             * onBeforeCompile compatibility issues with MToon materials.
+             */
+            const EMOTION_RIM_COLORS = {
+                neutral:  new THREE.Color(0xffffff),
+                happy:    new THREE.Color(0xffd700),
+                excited:  new THREE.Color(0xff8800),
+                sad:      new THREE.Color(0x4169e1),
+                angry:    new THREE.Color(0xff4500),
+                love:     new THREE.Color(0xff69b4),
+                flirty:   new THREE.Color(0xff69b4),
+                calm:     new THREE.Color(0x87ceeb),
+                proud:    new THREE.Color(0xffd700),
+                awe:      new THREE.Color(0xe0f6ff),
+                worried:  new THREE.Color(0x778899),
+            };
+
+            let _rimLightConfig = { enabled: false, intensity: 0.5, power: 2.0, autoEmotion: true };
+            let _rimMeshes = []; // { mesh, material } pairs
+            let _rimTargetColor = new THREE.Color(0xffffff);
+            let _rimCurrentColor = new THREE.Color(0xffffff);
+            let _rimColorProgress = 1.0;
+            const _RIM_COLOR_DURATION = 0.3;
+
+            /** Shared rim glow ShaderMaterial — Fresnel-only, additive blending. */
+            const _rimGlowMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    uRimColor: { value: _rimCurrentColor },
+                    uRimIntensity: { value: _rimLightConfig.intensity },
+                    uRimPower: { value: _rimLightConfig.power },
+                },
+                vertexShader: `
+                    varying vec3 vNormal;
+                    varying vec3 vViewDir;
+                    void main() {
+                        vNormal = normalize(normalMatrix * normal);
+                        vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+                        vViewDir = normalize(-mvPos.xyz);
+                        gl_Position = projectionMatrix * mvPos;
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 uRimColor;
+                    uniform float uRimIntensity;
+                    uniform float uRimPower;
+                    varying vec3 vNormal;
+                    varying vec3 vViewDir;
+                    void main() {
+                        float rimFactor = 1.0 - max(dot(vNormal, vViewDir), 0.0);
+                        rimFactor = pow(rimFactor, uRimPower) * uRimIntensity;
+                        gl_FragColor = vec4(uRimColor * rimFactor, rimFactor);
+                    }
+                `,
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending,
+                side: THREE.FrontSide,
+            });
+
+            /**
+             * Create rim glow overlay meshes for all meshes in the VRM scene.
+             * Called after VRM loads.
+             *
+             * @param {THREE.Object3D} vrmScene - The VRM model's scene
+             */
+            function createRimLightMeshes(vrmScene) {
+                removeRimLightMeshes();
+                if (!_rimLightConfig.enabled) return;
+                vrmScene.traverse((child) => {
+                    if (!child.isMesh || !child.geometry) return;
+                    const rimMesh = new THREE.Mesh(child.geometry, _rimGlowMaterial);
+                    rimMesh.name = child.name + '_rim';
+                    rimMesh.frustumCulled = false;
+                    // Bind to same skeleton for skinned meshes
+                    if (child.isSkinnedMesh) {
+                        rimMesh.isSkinnedMesh = true;
+                        rimMesh.skeleton = child.skeleton;
+                        rimMesh.bindMatrix = child.bindMatrix;
+                        rimMesh.bindMatrixInverse = child.bindMatrixInverse;
+                    }
+                    child.parent.add(rimMesh);
+                    _rimMeshes.push({ mesh: rimMesh, parent: child });
+                });
+                console.log('[Viewer] Rim light meshes created:', _rimMeshes.length);
+            }
+
+            /** Remove all rim glow overlay meshes. */
+            function removeRimLightMeshes() {
+                for (const { mesh } of _rimMeshes) {
+                    mesh.parent?.remove(mesh);
+                }
+                _rimMeshes = [];
+            }
+
+            /** Toggle rim light on/off and sync uniforms. */
+            function updateRimLightMeshes() {
+                if (_rimLightConfig.enabled) {
+                    _rimGlowMaterial.uniforms.uRimIntensity.value = _rimLightConfig.intensity ?? 0.5;
+                    _rimGlowMaterial.uniforms.uRimPower.value = _rimLightConfig.power ?? 2.0;
+                    // Create meshes if not yet created
+                    if (_rimMeshes.length === 0 && currentVrm?.scene) {
+                        createRimLightMeshes(currentVrm.scene);
+                    }
+                    for (const { mesh } of _rimMeshes) mesh.visible = true;
+                } else {
+                    for (const { mesh } of _rimMeshes) mesh.visible = false;
+                }
+            }
+
+            /**
+             * Begin lerping rim color toward the given emotion.
+             *
+             * @param {string} emotion - Emotion name
+             */
+            function applyEmotionRimLight(emotion) {
+                if (!_rimLightConfig.enabled || !_rimLightConfig.autoEmotion) return;
+                const target = EMOTION_RIM_COLORS[emotion] || EMOTION_RIM_COLORS.neutral;
+                _rimTargetColor.copy(target);
+                _rimColorProgress = 0;
+            }
+
+            /**
+             * Per-frame rim color lerp. Called from animate().
+             *
+             * @param {number} dt - Delta time in seconds
+             */
+            function updateRimLightEmotion(dt) {
+                if (_rimColorProgress >= 1.0) return;
+                _rimColorProgress = Math.min(1.0, _rimColorProgress + dt / _RIM_COLOR_DURATION);
+                const t = _rimColorProgress;
+                const ease = t * t * (3 - 2 * t);
+                _rimCurrentColor.lerpColors(_rimCurrentColor, _rimTargetColor, ease);
+                _rimGlowMaterial.uniforms.uRimColor.value.copy(_rimCurrentColor);
+            }
+
             /**
              * Capture the current viewport as a PNG data URL.
              *
@@ -4517,6 +4741,8 @@
                     updateEmotionColorGrade(delta);
                 }
                 updateEmotionGradient(delta);
+                updateGodRayLightPos(camera);
+                updateRimLightEmotion(delta);
 
                 // Phase 5: Update particle system
                 updateParticles(delta);
@@ -5006,6 +5232,11 @@
                             microTremorController = new MicroTremorController(vrm);
                             microExpressionController = new MicroExpressionController(vrm);
                             expressionController = new ExpressionController(vrm);
+
+                            // Phase 12-P4: Create rim light overlay meshes if enabled
+                            if (_rimLightConfig.enabled) {
+                                createRimLightMeshes(vrm.scene);
+                            }
 
                             // Legacy controllers disabled — replaced by AnimationDirector layers
                             headMovement = null;
@@ -5702,10 +5933,12 @@
                     _triggerAutoAnimation(e.data.emotion);
                     // Phase 5: emotion-reactive particles
                     triggerEmotionParticles(e.data.emotion);
-                    // Phase 12-P4: emotion-driven color grading + gradient + ambient particles
+                    // Phase 12-P4: emotion-driven visual effects
                     applyEmotionColorGrade(e.data.emotion);
                     applyEmotionGradient(e.data.emotion);
                     setEmotionAmbientParticles(e.data.emotion);
+                    applyEmotionGodRayTint(e.data.emotion);
+                    applyEmotionRimLight(e.data.emotion);
                     // B2: auto-reset to neutral after 8s so the expression doesn't freeze permanently
                     if (window._b2ResetTimer) clearTimeout(window._b2ResetTimer);
                     if (e.data.emotion && e.data.emotion !== 'neutral') {

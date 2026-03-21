@@ -77,6 +77,14 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
   const [emotionGradient, setEmotionGradient] = useState(false);
   const [emotionAmbient, setEmotionAmbient] = useState(false);
 
+  // ── Phase 12-P4: Outline, rim light, god rays ──
+  const [outlineEnabled, setOutlineEnabled] = useState(false);
+  const [outlineThickness, setOutlineThickness] = useState(1.5);
+  const [rimLightEnabled, setRimLightEnabled] = useState(false);
+  const [rimLightIntensity, setRimLightIntensity] = useState(0.5);
+  const [godRaysEnabled, setGodRaysEnabled] = useState(false);
+  const [godRaysIntensity, setGodRaysIntensity] = useState(0.4);
+
   // ── Camera / FOV state ──
   const [fov, setFov] = useState(50);
   const dispatchSetFOV = useViewerStore(s => s.dispatchSetFOV);
@@ -127,6 +135,21 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
   useEffect(() => {
     dispatchSetEffects({ emotionColorGrade: { enabled: emotionColorGrade } });
   }, [emotionColorGrade, dispatchSetEffects]);
+
+  // Phase 12-P4: Sync outline pass
+  useEffect(() => {
+    dispatchSetEffects({ animeOutline: { enabled: outlineEnabled, thickness: outlineThickness } });
+  }, [outlineEnabled, outlineThickness, dispatchSetEffects]);
+
+  // Phase 12-P4: Sync rim light
+  useEffect(() => {
+    dispatchSetEffects({ rimLight: { enabled: rimLightEnabled, intensity: rimLightIntensity, autoEmotion: true } });
+  }, [rimLightEnabled, rimLightIntensity, dispatchSetEffects]);
+
+  // Phase 12-P4: Sync god rays
+  useEffect(() => {
+    dispatchSetEffects({ godRays: { enabled: godRaysEnabled, intensity: godRaysIntensity } });
+  }, [godRaysEnabled, godRaysIntensity, dispatchSetEffects]);
 
   const iframeRefForGradient = useViewerStore(s => s.iframeRef);
   useEffect(() => {
@@ -221,7 +244,7 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
         {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <Sparkles size={13} style={{ color: 'var(--color-accent)' }} />
         Visual Effects
-        {(bloomEnabled || colorGradeEnabled || ambientType) && (
+        {(bloomEnabled || colorGradeEnabled || ambientType || outlineEnabled || rimLightEnabled || godRaysEnabled || emotionColorGrade || emotionGradient) && (
           <span style={{
             fontSize: '0.58rem',
             padding: '1px 5px',
@@ -342,6 +365,78 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
                 Emotion gradient background
               </span>
             </label>
+          </div>
+
+          {/* ── Anime Outline ── */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                Anime Outline
+              </span>
+              <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={outlineEnabled}
+                  onChange={e => setOutlineEnabled(e.target.checked)}
+                  style={{ accentColor: 'var(--color-accent)' }}
+                />
+                <span style={{ fontSize: '0.62rem', color: 'var(--color-text-tertiary)' }}>Enable</span>
+              </label>
+            </div>
+            {outlineEnabled && (
+              <div style={{ paddingLeft: '8px' }}>
+                <SliderRow label="Thickness" value={outlineThickness} min={0.5} max={3.0} step={0.1}
+                  onChange={setOutlineThickness} labelStyle={labelStyle} sliderStyle={sliderStyle} valueStyle={valueStyle} />
+              </div>
+            )}
+          </div>
+
+          {/* ── Rim Glow ── */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                Rim Glow
+              </span>
+              <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={rimLightEnabled}
+                  onChange={e => setRimLightEnabled(e.target.checked)}
+                  style={{ accentColor: 'var(--color-accent)' }}
+                />
+                <span style={{ fontSize: '0.62rem', color: 'var(--color-text-tertiary)' }}>Enable</span>
+              </label>
+            </div>
+            {rimLightEnabled && (
+              <div style={{ paddingLeft: '8px' }}>
+                <SliderRow label="Intensity" value={rimLightIntensity} min={0.1} max={1.5} step={0.05}
+                  onChange={setRimLightIntensity} labelStyle={labelStyle} sliderStyle={sliderStyle} valueStyle={valueStyle} />
+              </div>
+            )}
+          </div>
+
+          {/* ── God Rays ── */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                God Rays
+              </span>
+              <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={godRaysEnabled}
+                  onChange={e => setGodRaysEnabled(e.target.checked)}
+                  style={{ accentColor: 'var(--color-accent)' }}
+                />
+                <span style={{ fontSize: '0.62rem', color: 'var(--color-text-tertiary)' }}>Enable</span>
+              </label>
+            </div>
+            {godRaysEnabled && (
+              <div style={{ paddingLeft: '8px' }}>
+                <SliderRow label="Intensity" value={godRaysIntensity} min={0.1} max={1.0} step={0.05}
+                  onChange={setGodRaysIntensity} labelStyle={labelStyle} sliderStyle={sliderStyle} valueStyle={valueStyle} />
+              </div>
+            )}
           </div>
 
           {/* ── Particles ── */}

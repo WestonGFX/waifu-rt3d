@@ -49,7 +49,7 @@
 
 ## Next 3 Tasks (Priority Order)
 
-1. **Phase 12-P4** [MVP] — Anime shaders + gradient backgrounds + emotion particles in viewer.html
+1. **Phase 12-P4** [MVP] — **IN PROGRESS** — Anime shaders + gradient backgrounds + emotion particles in viewer.html. Plan: `.claude/plans/2026-03-20-phase-12-p4-anime-shaders.md`
 2. **Phase 12-P5** [MVP] — Sound design + lip sync in viewer.html + new frontend hook
 3. **Phase 11A** [MVP] — Environment poses + time-of-day lighting (needs Blender assets)
 

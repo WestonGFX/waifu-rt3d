@@ -21,9 +21,30 @@ This project uses a `.venv/` virtual environment built on **Homebrew Python 3.14
 
 Or just use the provided wrapper: `./run.sh` (starts server) · `./run.sh test` (runs tests).
 
+**Frontend dev:**
+
+| Task | Command |
+|------|---------|
+| Dev server (Sakura) | `cd frontends/sakura && npx vite --port 5175` |
+| TypeScript check | `cd frontends/sakura && npx tsc --project tsconfig.app.json --noEmit` |
+| Production build | `cd frontends/sakura && npx vite build` |
+
 ## Project Overview
 
-This project uses Python (FastAPI backend), JavaScript (frontend), CSS, and HTML. The main server file is `backend/server.py`. The frontend includes a 3D VRM viewer using Three.js (`frontends/neon/`). Always check for Python f-string backslash issues before committing.
+This project uses Python (FastAPI backend) + React/TypeScript frontends + a shared Three.js 3D viewer. Main server: `backend/server.py` (~13K lines). Primary frontend: `frontends/sakura/` (React 19 + Zustand + Framer Motion). 9 frontend directories exist but Sakura is the active one. The 3D viewer runs in an iframe (`frontends/shared/viewer/viewer.html`) controlled via postMessage from `viewerStore.ts`. Schema: v51 (`backend/preflight.py`). Always check for Python f-string backslash issues before committing.
+
+## Key Directories
+
+| Path | Purpose |
+|------|---------|
+| `backend/server.py` | FastAPI server (all API endpoints) |
+| `backend/preflight.py` | DB migrations (v3 → v51) |
+| `backend/llm/` | LLM adapters, context assembler, token counter |
+| `backend/voice/` | Full-duplex voice, audio utils |
+| `backend/spectator/` | Game companion (VLM frame analysis) |
+| `backend/mood/` | Emotion engine, time-of-day states |
+| `frontends/sakura/src/stores/` | 4 Zustand stores: app, chat, viewer, wizard |
+| `frontends/shared/viewer/viewer.html` | Three.js VRM viewer (iframe, postMessage API) |
 
 ## UI/CSS Changes
 
@@ -53,10 +74,6 @@ When fixing bugs, limit changes to the minimum necessary to resolve the issue. D
 
 TypeScript, JavaScript, Python, HTML/CSS, Three.js/VRM, Electron, Vite, React 19, Zustand, FastAPI, SQLite, Playwright. GPU: RTX 5080 16GB.
 
-## No-Plan-Mode Rule
-
-NEVER enter plan mode unless the user explicitly says "plan" or "design". If a plan file already exists, execute it — do not rewrite it. If no plan exists, implement directly from the request. Writing code is always the correct first action.
-
 ## Smoke Test Before Completion
 
 Before presenting work as done, run both checks:
@@ -73,6 +90,18 @@ Commit after each completed feature or sub-task. Do NOT batch multiple features 
 
 NEVER overwrite or replace plan files. Always READ the existing plan first, then APPEND new sections at the bottom. Completed phases should be marked done but never deleted — they serve as historical records.
 
+## Plan Hygiene
+
+- **Naming:** Plan files MUST be named `YYYY-MM-DD-<description>.md` (e.g. `2026-03-20-phase-12-p4-anime-shaders.md`). Never use auto-generated random names.
+- **Status tracking:** After completing a plan phase, proactively run `/checkpoint` to update `CURRENT_STATUS.md` and mark the phase `✅ DONE` in the master plan. Do NOT wait for the user to ask.
+- **Commit messages:** Include the plan phase reference: `feat(12-P4): emotion gradient backgrounds`. Use conventional commit prefixes (`feat`, `fix`, `refactor`, `docs`, `chore`).
+- **Verification:** Before claiming work is done, verify that status files (`CURRENT_STATUS.md`, master plan) reflect the current state. Stale status files cause context amnesia in future sessions.
+- **Insights:** When completing a feature, include key architectural decisions and non-obvious implementation details in the commit message body — not just "what" but "why".
+
 ## Hypothesis Limit
 
 When debugging, commit to ONE hypothesis and test it before trying another. Do NOT cycle through multiple theories without running code. If 3 hypotheses fail, STOP and present findings to the user as a table. Never explore a 4th hypothesis without user approval.
+
+## Research → Action Rule
+
+After completing ANY research task (competitor analysis, HuggingFace exploration, similar project analysis, library evaluation, web research), ALWAYS evaluate whether the findings are relevant to this project. If relevant, ask the user: "Should I create implementation specs from this research?" Then produce actionable plans with specific files, schema changes, API endpoints, and effort estimates — not just summaries. Use the `/research-to-action` skill. Research without actionable output is wasted effort.

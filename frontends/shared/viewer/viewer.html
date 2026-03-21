@@ -108,6 +108,7 @@
         let blinkController = null;
         let saccadeController = null;
         let microTremorController = null;
+        let microExpressionController = null;
         let headMovement = null;
         let expressionController = null;
         let gestureController = null;
@@ -2621,6 +2622,90 @@
         }
 
         // ══════════════════════════════════════════════════════════
+        // Micro-Expression Controller (Phase 12-P2)
+        // ══════════════════════════════════════════════════════════
+        // Random, subtle facial micro-expressions that fire occasionally.
+        // Eyebrow twitches, lip quivers, nose scrunches — the tiny
+        // involuntary movements that make a face look alive.
+
+        class MicroExpressionController {
+            constructor(vrm) {
+                this.vrm = vrm;
+                this._time = 0;
+                this._activeExpr = null;
+                this._exprProgress = 0;
+                this._exprDuration = 0;
+                this._nextCheckTime = 2 + Math.random() * 3;
+                this._emotionMod = 1.0; // emotion probability multiplier
+                // Micro-expression definitions: target blend shape, amplitude, duration
+                this._expressions = [
+                    { name: 'eyebrow_raise', targets: [{shape: 'surprised', amp: 0.15}], duration: 0.3, probability: 0.03 },
+                    { name: 'slight_smile', targets: [{shape: 'happy', amp: 0.12}], duration: 0.4, probability: 0.025 },
+                    { name: 'slight_frown', targets: [{shape: 'sad', amp: 0.1}], duration: 0.35, probability: 0.015 },
+                    { name: 'nose_scrunch', targets: [{shape: 'angry', amp: 0.08}], duration: 0.25, probability: 0.01 },
+                    { name: 'lip_part', targets: [{shape: 'aa', amp: 0.1}], duration: 0.2, probability: 0.02 },
+                ];
+            }
+
+            /** Adjust micro-expression frequency based on emotion state. */
+            setEmotion(emotion) {
+                const mods = {
+                    nervous: 2.5, excited: 2.0, happy: 1.3,
+                    calm: 0.5, tired: 0.3, neutral: 1.0, sad: 0.7,
+                };
+                this._emotionMod = mods[emotion] || 1.0;
+            }
+
+            update(deltaTime) {
+                if (!this.vrm) return;
+                const em = this.vrm.expressionManager || this.vrm.blendShapeProxy;
+                if (!em) return;
+
+                this._time += deltaTime;
+
+                // If a micro-expression is active, animate it
+                if (this._activeExpr) {
+                    this._exprProgress += deltaTime;
+                    const t = this._exprProgress / this._exprDuration;
+                    // Bell curve: ramp up then down
+                    const blend = t < 0.5
+                        ? Math.sin(t * Math.PI)     // 0→1 in first half
+                        : Math.sin(t * Math.PI);    // 1→0 in second half
+
+                    for (const target of this._activeExpr.targets) {
+                        try { em.setValue(target.shape, target.amp * blend); } catch {}
+                    }
+
+                    if (this._exprProgress >= this._exprDuration) {
+                        // Clean up — zero out the blend shapes we touched
+                        for (const target of this._activeExpr.targets) {
+                            try { em.setValue(target.shape, 0); } catch {}
+                        }
+                        this._activeExpr = null;
+                        this._exprProgress = 0;
+                        this._nextCheckTime = 1.5 + Math.random() * 3;
+                    }
+                    return;
+                }
+
+                // Check for new micro-expression trigger
+                this._nextCheckTime -= deltaTime;
+                if (this._nextCheckTime > 0) return;
+                this._nextCheckTime = 0.5 + Math.random() * 1.5;
+
+                // Roll dice for each possible expression
+                for (const expr of this._expressions) {
+                    if (Math.random() < expr.probability * this._emotionMod) {
+                        this._activeExpr = expr;
+                        this._exprProgress = 0;
+                        this._exprDuration = expr.duration;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
         // Idle Head Movement
         // ══════════════════════════════════════════════════════════
 
@@ -4040,6 +4125,7 @@
                         microTremorController.enabled = animationDirector?.state === 'idle';
                         microTremorController.update(delta);
                     }
+                    if (microExpressionController) microExpressionController.update(delta);
                     if (expressionController) expressionController.update(delta);
                 } else if (currentGlbMixer) {
                     // GLB mode: tick the AnimationMixer for embedded clip playback
@@ -4498,6 +4584,7 @@
                         blinkController = null;
                         saccadeController = null;
                         microTremorController = null;
+                        microExpressionController = null;
                         expressionController = null;
                         animationDirector = null;
                         window._vrm = null;
@@ -4539,6 +4626,7 @@
                             blinkController = new BlinkController(vrm);
                             saccadeController = new SaccadeController(vrm);
                             microTremorController = new MicroTremorController(vrm);
+                            microExpressionController = new MicroExpressionController(vrm);
                             expressionController = new ExpressionController(vrm);
 
                             // Legacy controllers disabled — replaced by AnimationDirector layers
@@ -5212,8 +5300,9 @@
                         const emotionLayer = animationDirector.getLayer('emotion');
                         if (emotionLayer) emotionLayer.setEmotion(e.data.emotion, e.data.intensity || 0.7);
                     }
-                    // Phase 12-P1: modulate blink rate by emotion
+                    // Phase 12-P1/P2: modulate blink + micro-expression rate by emotion
                     if (blinkController) blinkController.setEmotion(e.data.emotion || 'neutral');
+                    if (microExpressionController) microExpressionController.setEmotion(e.data.emotion || 'neutral');
                     _triggerAutoAnimation(e.data.emotion);
                     // Phase 5: emotion-reactive particles
                     triggerEmotionParticles(e.data.emotion);

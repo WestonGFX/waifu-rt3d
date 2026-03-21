@@ -12,6 +12,10 @@ const AMBIENT_TYPES = [
   { id: 'sakura', label: 'Sakura', emoji: '\u{1F338}' },
   { id: 'dust', label: 'Dust', emoji: '\u{2728}' },
   { id: 'snow', label: 'Snow', emoji: '\u{2744}\u{FE0F}' },
+  { id: 'rain', label: 'Rain', emoji: '\u{1F327}\u{FE0F}' },
+  { id: 'embers', label: 'Embers', emoji: '\u{1F525}' },
+  { id: 'firefly', label: 'Firefly', emoji: '\u{2728}' },
+  { id: 'confetti', label: 'Confetti', emoji: '\u{1F389}' },
 ] as const;
 
 /** Color grading presets for quick selection. */
@@ -68,6 +72,11 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
   const [ambientType, setAmbientType] = useState<string | null>(null);
   const [emotionParticles, setEmotionParticles] = useState(true);
 
+  // ── Phase 12-P4: Emotion-driven effect toggles ──
+  const [emotionColorGrade, setEmotionColorGrade] = useState(false);
+  const [emotionGradient, setEmotionGradient] = useState(false);
+  const [emotionAmbient, setEmotionAmbient] = useState(false);
+
   // ── Camera / FOV state ──
   const [fov, setFov] = useState(50);
   const dispatchSetFOV = useViewerStore(s => s.dispatchSetFOV);
@@ -113,6 +122,24 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
   useEffect(() => {
     dispatchSetEmotionParticles(emotionParticles);
   }, [emotionParticles, dispatchSetEmotionParticles]);
+
+  // Phase 12-P4: Sync emotion-driven effect toggles
+  useEffect(() => {
+    dispatchSetEffects({ emotionColorGrade: { enabled: emotionColorGrade } });
+  }, [emotionColorGrade, dispatchSetEffects]);
+
+  const iframeRefForGradient = useViewerStore(s => s.iframeRef);
+  useEffect(() => {
+    iframeRefForGradient?.contentWindow?.postMessage({
+      type: 'setEmotionGradient', payload: { enabled: emotionGradient },
+    }, window.location.origin);
+  }, [emotionGradient, iframeRefForGradient]);
+
+  useEffect(() => {
+    iframeRefForGradient?.contentWindow?.postMessage({
+      type: 'setEmotionAmbientParticles', payload: { enabled: emotionAmbient },
+    }, window.location.origin);
+  }, [emotionAmbient, iframeRefForGradient]);
 
   /**
    * Apply a color grading preset.
@@ -285,6 +312,36 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
                   onChange={setSaturation} labelStyle={labelStyle} sliderStyle={sliderStyle} valueStyle={valueStyle} />
               </div>
             )}
+            {/* Auto color grade by emotion */}
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              paddingLeft: '8px', cursor: 'pointer', marginTop: '4px',
+            }}>
+              <input
+                type="checkbox"
+                checked={emotionColorGrade}
+                onChange={e => setEmotionColorGrade(e.target.checked)}
+                style={{ accentColor: 'var(--color-accent)' }}
+              />
+              <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>
+                Auto color grade by emotion
+              </span>
+            </label>
+            {/* Emotion-driven gradient background */}
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              paddingLeft: '8px', cursor: 'pointer', marginTop: '2px',
+            }}>
+              <input
+                type="checkbox"
+                checked={emotionGradient}
+                onChange={e => setEmotionGradient(e.target.checked)}
+                style={{ accentColor: 'var(--color-accent)' }}
+              />
+              <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>
+                Emotion gradient background
+              </span>
+            </label>
           </div>
 
           {/* ── Particles ── */}
@@ -333,6 +390,21 @@ export function EffectsPanel({ isOpen }: EffectsPanelProps) {
               />
               <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>
                 Emotion-reactive particles (hearts on love, sparkles on happy, etc.)
+              </span>
+            </label>
+            {/* Emotion ambient — auto-switch ambient type by emotion */}
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              paddingLeft: '8px', cursor: 'pointer', marginTop: '2px',
+            }}>
+              <input
+                type="checkbox"
+                checked={emotionAmbient}
+                onChange={e => setEmotionAmbient(e.target.checked)}
+                style={{ accentColor: 'var(--color-accent)' }}
+              />
+              <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>
+                Emotion ambient (rain when sad, fireflies when calm, etc.)
               </span>
             </label>
           </div>

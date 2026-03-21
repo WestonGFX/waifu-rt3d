@@ -3642,7 +3642,71 @@
             const _effectsConfig = {
                 bloom: { enabled: false, strength: 0.3, radius: 0.4, threshold: 0.85 },
                 colorGrade: { enabled: false, brightness: 0, contrast: 0, saturation: 0 },
+                animeOutline: { enabled: false, thickness: 1.5, color: 0x000000, opacity: 0.85 },
+                emotionColorGrade: { enabled: false },
+                emotionGradient: { enabled: false },
+                emotionAmbient: { enabled: false },
             };
+
+            // ── Phase 12-P4: Emotion Color Grading ──────────────────────
+            /**
+             * Emotion-to-color-grade presets. When emotionColorGrade is enabled,
+             * the colorGradePass uniforms auto-lerp to these targets on each
+             * setExpression event. Values are deltas (0 = no change).
+             */
+            const EMOTION_COLOR_GRADES = {
+                neutral:   { brightness: 0,      contrast: 0,     saturation: 0     },
+                happy:     { brightness: 0.04,   contrast: 0.05,  saturation: 0.2   },
+                excited:   { brightness: 0.05,   contrast: 0.08,  saturation: 0.15  },
+                sad:       { brightness: -0.04,  contrast: 0.08,  saturation: -0.15 },
+                angry:     { brightness: -0.02,  contrast: 0.15,  saturation: 0.1   },
+                love:      { brightness: 0.03,   contrast: 0.0,   saturation: 0.25  },
+                flirty:    { brightness: 0.02,   contrast: 0.0,   saturation: 0.2   },
+                surprised: { brightness: 0.02,   contrast: 0.1,   saturation: 0.05  },
+                proud:     { brightness: 0.03,   contrast: 0.06,  saturation: 0.12  },
+                awe:       { brightness: 0.04,   contrast: 0.04,  saturation: 0.18  },
+                worried:   { brightness: -0.03,  contrast: 0.06,  saturation: -0.08 },
+            };
+            let _emotionGradeFrom = { brightness: 0, contrast: 0, saturation: 0 };
+            let _emotionGradeTo = { brightness: 0, contrast: 0, saturation: 0 };
+            let _emotionGradeProgress = 1.0; // 1.0 = arrived at target
+            const _EMOTION_GRADE_DURATION = 0.5; // seconds
+
+            /**
+             * Begin a smooth transition of the color grade toward the given emotion preset.
+             *
+             * @param {string} emotion - Emotion name (must exist in EMOTION_COLOR_GRADES)
+             */
+            function applyEmotionColorGrade(emotion) {
+                if (!_effectsConfig.emotionColorGrade.enabled) return;
+                const target = EMOTION_COLOR_GRADES[emotion] || EMOTION_COLOR_GRADES.neutral;
+                // Snapshot current values as the lerp origin
+                _emotionGradeFrom.brightness = colorGradePass.uniforms.brightness.value;
+                _emotionGradeFrom.contrast = colorGradePass.uniforms.contrast.value;
+                _emotionGradeFrom.saturation = colorGradePass.uniforms.saturation.value;
+                _emotionGradeTo = { ...target };
+                _emotionGradeProgress = 0;
+                // Auto-enable the pass so the effect is visible
+                colorGradePass.enabled = true;
+                _effectsEnabled = true;
+            }
+
+            /**
+             * Per-frame update for emotion-driven color grade lerp.
+             * Called from animate() when emotionColorGrade is enabled.
+             *
+             * @param {number} dt - Delta time in seconds
+             */
+            function updateEmotionColorGrade(dt) {
+                if (_emotionGradeProgress >= 1.0) return;
+                _emotionGradeProgress = Math.min(1.0, _emotionGradeProgress + dt / _EMOTION_GRADE_DURATION);
+                // smoothstep easing: t²(3 - 2t)
+                const t = _emotionGradeProgress;
+                const ease = t * t * (3 - 2 * t);
+                colorGradePass.uniforms.brightness.value = _emotionGradeFrom.brightness + (_emotionGradeTo.brightness - _emotionGradeFrom.brightness) * ease;
+                colorGradePass.uniforms.contrast.value = _emotionGradeFrom.contrast + (_emotionGradeTo.contrast - _emotionGradeFrom.contrast) * ease;
+                colorGradePass.uniforms.saturation.value = _emotionGradeFrom.saturation + (_emotionGradeTo.saturation - _emotionGradeFrom.saturation) * ease;
+            }
 
             // Build EffectComposer
             const composer = new EffectComposer(renderer);
@@ -3719,6 +3783,26 @@
                     colorGradePass.uniforms.contrast.value = _effectsConfig.colorGrade.contrast;
                     colorGradePass.uniforms.saturation.value = _effectsConfig.colorGrade.saturation;
                 }
+                if (config.emotionColorGrade !== undefined) {
+                    Object.assign(_effectsConfig.emotionColorGrade, config.emotionColorGrade);
+                    // When disabling, reset color grade to neutral
+                    if (!_effectsConfig.emotionColorGrade.enabled) {
+                        _emotionGradeProgress = 1.0;
+                        colorGradePass.uniforms.brightness.value = 0;
+                        colorGradePass.uniforms.contrast.value = 0;
+                        colorGradePass.uniforms.saturation.value = 0;
+                        // Only disable the pass if manual color grade is also off
+                        if (!_effectsConfig.colorGrade.enabled) {
+                            colorGradePass.enabled = false;
+                        }
+                    }
+                }
+                if (config.emotionGradient !== undefined) {
+                    Object.assign(_effectsConfig.emotionGradient, config.emotionGradient);
+                }
+                if (config.emotionAmbient !== undefined) {
+                    Object.assign(_effectsConfig.emotionAmbient, config.emotionAmbient);
+                }
                 // Enable composer only if at least one pass is active
                 _effectsEnabled = bloomPass.enabled || colorGradePass.enabled;
                 console.log('[Viewer] Effects updated:', _effectsConfig, 'composer:', _effectsEnabled);
@@ -3780,20 +3864,34 @@
 
                 // Color and shape by type
                 const typeConfigs = {
-                    heart:   { color: 0xff4488, scale: 0.06, lifetime: 2.0, speed: 0.3, gravity: -0.05 },
-                    sparkle: { color: 0xffd700, scale: 0.03, lifetime: 1.5, speed: 0.5, gravity: 0.0 },
-                    anger:   { color: 0xff2222, scale: 0.05, lifetime: 1.0, speed: 0.8, gravity: 0.0 },
-                    sakura:  { color: 0xffb7c5, scale: 0.04, lifetime: 5.0, speed: 0.15, gravity: -0.15 },
-                    dust:    { color: 0xdddddd, scale: 0.015, lifetime: 6.0, speed: 0.05, gravity: 0.0 },
-                    snow:    { color: 0xffffff, scale: 0.025, lifetime: 6.0, speed: 0.08, gravity: -0.1 },
+                    heart:    { color: 0xff4488, scale: 0.06,  lifetime: 2.0, speed: 0.3,  gravity: -0.05 },
+                    sparkle:  { color: 0xffd700, scale: 0.03,  lifetime: 1.5, speed: 0.5,  gravity: 0.0 },
+                    anger:    { color: 0xff2222, scale: 0.05,  lifetime: 1.0, speed: 0.8,  gravity: 0.0 },
+                    sakura:   { color: 0xffb7c5, scale: 0.04,  lifetime: 5.0, speed: 0.15, gravity: -0.15 },
+                    dust:     { color: 0xdddddd, scale: 0.015, lifetime: 6.0, speed: 0.05, gravity: 0.0 },
+                    snow:     { color: 0xffffff, scale: 0.025, lifetime: 6.0, speed: 0.08, gravity: -0.1 },
+                    // Phase 12-P4: New particle types
+                    rain:     { color: 0x88bbee, scale: 0.008, lifetime: 2.0, speed: 1.2,  gravity: -2.0, scaleY: 4.0 },
+                    embers:   { color: 0xff6622, scale: 0.02,  lifetime: 3.0, speed: 0.2,  gravity: 0.15, additive: true },
+                    firefly:  { color: 0xccff44, scale: 0.015, lifetime: 4.0, speed: 0.08, gravity: 0.0, pulse: true },
+                    confetti: { color: 0xff44ff, scale: 0.035, lifetime: 3.5, speed: 0.4,  gravity: -0.3, multicolor: true },
                 };
                 const cfg = typeConfigs[type] || typeConfigs.sparkle;
                 const color = opts.color ?? cfg.color;
 
                 for (let i = 0; i < count; i++) {
                     const mesh = new THREE.Mesh(particleGeom, particleMat.clone());
-                    mesh.material.color.set(color);
+                    // Multicolor: randomize hue for confetti-style variety
+                    if (cfg.multicolor) {
+                        mesh.material.color.setHSL(Math.random(), 0.8, 0.6);
+                    } else {
+                        mesh.material.color.set(color);
+                    }
                     mesh.material.opacity = 0.9;
+                    // Additive blending for glowing particles (embers, etc.)
+                    if (cfg.additive) {
+                        mesh.material.blending = THREE.AdditiveBlending;
+                    }
 
                     // Random offset from origin
                     mesh.position.set(
@@ -3803,7 +3901,12 @@
                     );
 
                     const scale = cfg.scale * (0.7 + Math.random() * 0.6);
-                    mesh.scale.setScalar(scale);
+                    // Elongated particles (rain streaks)
+                    if (cfg.scaleY) {
+                        mesh.scale.set(scale, scale * cfg.scaleY, scale);
+                    } else {
+                        mesh.scale.setScalar(scale);
+                    }
 
                     // Random velocity
                     const vx = (Math.random() - 0.5) * cfg.speed;
@@ -3818,6 +3921,8 @@
                         maxLifetime: cfg.lifetime,
                         gravity: cfg.gravity,
                         rotSpeed: (Math.random() - 0.5) * 3,
+                        pulse: cfg.pulse || false,
+                        age: 0,
                     });
                 }
             }
@@ -3853,11 +3958,17 @@
                     // Rotation
                     p.mesh.rotation.z += p.rotSpeed * dt;
 
+                    // Track age for pulsing effects
+                    p.age += dt;
+
                     // Fade out in last 30% of lifetime
                     const lifeFrac = p.lifetime / p.maxLifetime;
-                    p.mesh.material.opacity = lifeFrac < 0.3
-                        ? lifeFrac / 0.3 * 0.9
-                        : 0.9;
+                    let opacity = lifeFrac < 0.3 ? lifeFrac / 0.3 * 0.9 : 0.9;
+                    // Firefly pulsing: modulate opacity with sine wave
+                    if (p.pulse) {
+                        opacity *= 0.4 + 0.6 * Math.abs(Math.sin(p.age * 3.0));
+                    }
+                    p.mesh.material.opacity = opacity;
                 }
 
                 // Ambient spawning: continuously add particles if type is set
@@ -3919,6 +4030,39 @@
                 console.log('[Viewer] Ambient particles:', type);
             }
 
+            // ── Phase 12-P4: Emotion Ambient Particle Mapping ───────────
+            /**
+             * Maps emotions to ambient particle types for continuous atmosphere.
+             * When emotionAmbient is enabled, changing the expression also
+             * switches the ambient particle type.
+             */
+            const EMOTION_AMBIENT_MAP = {
+                happy:   'sparkle',
+                sad:     'rain',
+                angry:   'embers',
+                love:    'heart',
+                flirty:  'heart',
+                excited: 'confetti',
+                calm:    'firefly',
+                awe:     'sparkle',
+                proud:   'sparkle',
+                worried: 'dust',
+                neutral: null,
+            };
+
+            /**
+             * Switch ambient particles based on emotion state.
+             *
+             * @param {string} emotion - Current emotion name
+             */
+            function setEmotionAmbientParticles(emotion) {
+                if (!_effectsConfig.emotionAmbient.enabled) return;
+                const type = EMOTION_AMBIENT_MAP[emotion] ?? null;
+                if (type !== _ambientType) {
+                    setAmbientParticles(type);
+                }
+            }
+
             /**
              * Set the scene background.
              * @param {string} mode - 'color', 'image', 'video', 'gradient', or 'transparent'
@@ -3956,6 +4100,127 @@
                     renderer.setClearAlpha(1);
                     document.body.style.background = '#0a0b14';
                 }
+            }
+
+            // ── Phase 12-P4: Gradient Background Shader Plane ────────
+            /**
+             * Fullscreen gradient quad rendered behind the scene. Uses a custom
+             * ShaderMaterial with 3-stop color interpolation and optional animated
+             * wave distortion. renderOrder=-9999 ensures it's always behind everything.
+             *
+             * Why a shader quad instead of CSS gradient? The EffectComposer samples
+             * the framebuffer for bloom/god-rays — CSS gradients leave transparent
+             * pixels in the buffer, breaking post-processing compositing.
+             */
+            const _gradientBgGeom = new THREE.PlaneGeometry(2, 2);
+            const _gradientBgMat = new THREE.ShaderMaterial({
+                uniforms: {
+                    uTopColor:    { value: new THREE.Color(0x1a1a2e) },
+                    uBottomColor: { value: new THREE.Color(0x0f3460) },
+                    uMidColor:    { value: new THREE.Color(0x16213e) },
+                    uMidPoint:    { value: 0.5 },
+                    uTime:        { value: 0.0 },
+                    uAnimSpeed:   { value: 0.3 },
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = vec4(position.xy, 0.9999, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 uTopColor, uBottomColor, uMidColor;
+                    uniform float uMidPoint, uTime, uAnimSpeed;
+                    varying vec2 vUv;
+                    void main() {
+                        float t = vUv.y;
+                        // Subtle animated wave distortion
+                        if (uAnimSpeed > 0.0) {
+                            t += sin(vUv.x * 3.14159 + uTime * uAnimSpeed) * 0.03;
+                            t = clamp(t, 0.0, 1.0);
+                        }
+                        // 3-stop gradient: bottom → mid → top
+                        vec3 color = t < uMidPoint
+                            ? mix(uBottomColor, uMidColor, t / uMidPoint)
+                            : mix(uMidColor, uTopColor, (t - uMidPoint) / (1.0 - uMidPoint));
+                        gl_FragColor = vec4(color, 1.0);
+                    }
+                `,
+                depthWrite: false,
+                depthTest: false,
+            });
+            const _gradientBgMesh = new THREE.Mesh(_gradientBgGeom, _gradientBgMat);
+            _gradientBgMesh.renderOrder = -9999;
+            _gradientBgMesh.frustumCulled = false;
+            _gradientBgMesh.visible = false;
+            scene.add(_gradientBgMesh);
+
+            /** Emotion-driven gradient color presets (top / mid / bottom). */
+            const EMOTION_GRADIENTS = {
+                neutral:  { top: 0x1a1a2e, mid: 0x16213e, bottom: 0x0f3460 },
+                happy:    { top: 0xffe4b5, mid: 0xffca85, bottom: 0xffb6d9 },
+                excited:  { top: 0xffe066, mid: 0xff8c42, bottom: 0xc44dff },
+                sad:      { top: 0x4a7ba7, mid: 0x3a5a7a, bottom: 0x7d8b9e },
+                angry:    { top: 0xff6347, mid: 0xcc2200, bottom: 0x8b0000 },
+                love:     { top: 0xffb6d9, mid: 0xff89b5, bottom: 0xffc0cb },
+                flirty:   { top: 0xffc0cb, mid: 0xff69b4, bottom: 0xff89b5 },
+                calm:     { top: 0x87ceeb, mid: 0xa0d8ef, bottom: 0xe0f6ff },
+                proud:    { top: 0xffd700, mid: 0xdaa520, bottom: 0xb8860b },
+                awe:      { top: 0xe0f6ff, mid: 0xb0c4de, bottom: 0x6495ed },
+                worried:  { top: 0x696969, mid: 0x555555, bottom: 0x404040 },
+            };
+
+            // Lerp state for gradient color transitions
+            let _gradientFrom = { top: new THREE.Color(), mid: new THREE.Color(), bottom: new THREE.Color() };
+            let _gradientTo = { top: new THREE.Color(), mid: new THREE.Color(), bottom: new THREE.Color() };
+            let _gradientProgress = 1.0;
+            const _GRADIENT_DURATION = 0.8; // seconds
+
+            /**
+             * Begin a smooth transition of the gradient background to match the
+             * given emotion. Only active when emotionGradient is enabled.
+             *
+             * @param {string} emotion - Emotion name
+             */
+            function applyEmotionGradient(emotion) {
+                if (!_effectsConfig.emotionGradient.enabled) return;
+                const preset = EMOTION_GRADIENTS[emotion] || EMOTION_GRADIENTS.neutral;
+                // Snapshot current uniforms as lerp origin
+                _gradientFrom.top.copy(_gradientBgMat.uniforms.uTopColor.value);
+                _gradientFrom.mid.copy(_gradientBgMat.uniforms.uMidColor.value);
+                _gradientFrom.bottom.copy(_gradientBgMat.uniforms.uBottomColor.value);
+                _gradientTo.top.set(preset.top);
+                _gradientTo.mid.set(preset.mid);
+                _gradientTo.bottom.set(preset.bottom);
+                _gradientProgress = 0;
+                // Ensure the gradient plane is visible + scene is transparent
+                if (!_gradientBgMesh.visible) {
+                    _gradientBgMesh.visible = true;
+                    scene.background = null;
+                    renderer.setClearAlpha(0);
+                    document.body.style.background = '#000';
+                }
+            }
+
+            /**
+             * Per-frame update for gradient color lerp.
+             *
+             * @param {number} dt - Delta time in seconds
+             */
+            function updateEmotionGradient(dt) {
+                // Tick animated wave
+                if (_gradientBgMesh.visible) {
+                    _gradientBgMat.uniforms.uTime.value += dt;
+                }
+                // Lerp colors
+                if (_gradientProgress >= 1.0) return;
+                _gradientProgress = Math.min(1.0, _gradientProgress + dt / _GRADIENT_DURATION);
+                const t = _gradientProgress;
+                const ease = t * t * (3 - 2 * t);
+                _gradientBgMat.uniforms.uTopColor.value.lerpColors(_gradientFrom.top, _gradientTo.top, ease);
+                _gradientBgMat.uniforms.uMidColor.value.lerpColors(_gradientFrom.mid, _gradientTo.mid, ease);
+                _gradientBgMat.uniforms.uBottomColor.value.lerpColors(_gradientFrom.bottom, _gradientTo.bottom, ease);
             }
 
             /**
@@ -4246,6 +4511,12 @@
                     discoLights[1].color.setHSL((_discoTime * 0.5 + 0.33) % 1, 1, 0.5);
                     discoLights[2].color.setHSL((_discoTime * 0.5 + 0.67) % 1, 1, 0.5);
                 }
+
+                // Phase 12-P4: Emotion-driven effects per-frame updates
+                if (_effectsConfig.emotionColorGrade.enabled) {
+                    updateEmotionColorGrade(delta);
+                }
+                updateEmotionGradient(delta);
 
                 // Phase 5: Update particle system
                 updateParticles(delta);
@@ -5148,6 +5419,24 @@
                     return;
                 }
 
+                // ── Phase 12-P4: Emotion-Driven Visual Effects ────────────
+                if (type === 'setEmotionGradient') {
+                    _effectsConfig.emotionGradient.enabled = payload?.enabled !== false;
+                    if (!_effectsConfig.emotionGradient.enabled) {
+                        _gradientBgMesh.visible = false;
+                    }
+                    console.log('[Viewer] Emotion gradient:', _effectsConfig.emotionGradient.enabled);
+                    return;
+                }
+                if (type === 'setEmotionAmbientParticles') {
+                    _effectsConfig.emotionAmbient.enabled = payload?.enabled !== false;
+                    if (!_effectsConfig.emotionAmbient.enabled) {
+                        setAmbientParticles(null); // clear ambient when disabling
+                    }
+                    console.log('[Viewer] Emotion ambient:', _effectsConfig.emotionAmbient.enabled);
+                    return;
+                }
+
                 // ── Phase 6: IK & Animation Handlers ──────────────────────
                 if (type === 'setEyeGaze') {
                     if (animationDirector) {
@@ -5413,6 +5702,10 @@
                     _triggerAutoAnimation(e.data.emotion);
                     // Phase 5: emotion-reactive particles
                     triggerEmotionParticles(e.data.emotion);
+                    // Phase 12-P4: emotion-driven color grading + gradient + ambient particles
+                    applyEmotionColorGrade(e.data.emotion);
+                    applyEmotionGradient(e.data.emotion);
+                    setEmotionAmbientParticles(e.data.emotion);
                     // B2: auto-reset to neutral after 8s so the expression doesn't freeze permanently
                     if (window._b2ResetTimer) clearTimeout(window._b2ResetTimer);
                     if (e.data.emotion && e.data.emotion !== 'neutral') {

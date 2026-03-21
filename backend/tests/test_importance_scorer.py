@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from backend.llm.importance_scorer import score_message
+from backend.llm.importance_scorer import score_message, _keyword_overlap, _cosine_sim
 
 
 class TestScoreMessage:
@@ -106,3 +106,201 @@ class TestScoreMessage:
         score = score_message("I feel strongly about this topic.", "assistant",
                               emotion_intensity=0.7)
         assert score == 0.5
+
+    # ── Topic shift detection tests ────────────────────────────────────
+
+    def test_topic_shift_bonus(self):
+        """Switching to a completely different topic should add +0.2."""
+        score = score_message(
+            "What kind of music do you listen to?", "user",
+            prev_text="I had pasta for dinner last night and it was amazing.",
+            has_question=True,
+        )
+        # Base 0.5 + question 0.1 + topic shift 0.2 = 0.8
+        assert score == 0.8
+
+    def test_no_topic_shift_for_same_topic(self):
+        """Continuing the same topic should NOT trigger the topic shift bonus."""
+        score = score_message(
+            "I love pasta dinner amazing night.", "user",
+            prev_text="I had pasta for dinner last night and it was amazing.",
+        )
+        # Significant word overlap (pasta, dinner, amazing, night) → Jaccard >= 0.15
+        assert score == 0.5
+
+    def test_no_topic_shift_without_prev_text(self):
+        """Without prev_text, no topic shift bonus should be added."""
+        score = score_message(
+            "Something completely new and different!", "user",
+            prev_text="",
+        )
+        assert score == 0.5
+
+    # ── Callback reference detection tests ─────────────────────────────
+
+    def test_callback_reference_bonus(self):
+        """Messages referencing earlier conversation should get +0.15."""
+        score = score_message(
+            "Remember when I told you about my trip to Japan?", "user",
+        )
+        # Base 0.5 + callback 0.15 = 0.65
+        assert score == 0.65
+
+    def test_callback_like_i_said(self):
+        """'Like I said' pattern should trigger callback bonus."""
+        score = score_message(
+            "Like I said earlier, I prefer the blue one.", "user",
+        )
+        assert score == 0.65
+
+    def test_callback_you_mentioned(self):
+        """'You mentioned' pattern should trigger callback bonus."""
+        score = score_message(
+            "Like you mentioned, the weather is nice today.", "user",
+        )
+        assert score == 0.65
+
+    def test_callback_you_promised(self):
+        """'You promised' pattern should trigger callback bonus."""
+        score = score_message(
+            "But you promised you would help me with that!", "user",
+        )
+        assert score == 0.65
+
+    def test_no_callback_normal_message(self):
+        """Normal messages should not trigger the callback bonus."""
+        score = score_message(
+            "The weather is really nice today, don't you think?", "user",
+            has_question=True,
+        )
+        # Base 0.5 + question 0.1 = 0.6 (no callback)
+        assert score == 0.6
+
+    def test_combined_topic_shift_and_callback(self):
+        """Topic shift + callback reference should stack."""
+        score = score_message(
+            "Going back to what we discussed earlier about pizza...", "user",
+            prev_text="The stock market has been volatile this week.",
+        )
+        # Base 0.5 + topic shift 0.2 + callback 0.15 = 0.85
+        assert score == 0.85
+
+
+class TestKeywordOverlap:
+    """Unit tests for _keyword_overlap() helper."""
+
+    def test_identical_texts(self):
+        """Identical texts should have overlap of 1.0."""
+        assert _keyword_overlap("hello world foo", "hello world foo") == 1.0
+
+    def test_completely_different(self):
+        """Completely different topics should have overlap of 0.0."""
+        assert _keyword_overlap("pizza sushi ramen", "stocks bonds crypto") == 0.0
+
+    def test_partial_overlap(self):
+        """Partial overlap should return a value between 0 and 1."""
+        overlap = _keyword_overlap("pizza sushi", "pizza ramen")
+        assert 0.0 < overlap < 1.0
+
+    def test_both_empty(self):
+        """Both empty strings should return 1.0 (no false topic shift)."""
+        assert _keyword_overlap("", "") == 1.0
+
+    def test_stop_words_ignored(self):
+        """Stop words should not contribute to overlap."""
+        # "the" and "is" are stop words — only "cat" and "dog" matter
+        overlap = _keyword_overlap("the cat is here", "the dog is here")
+        # cat vs dog → 0/2 = 0.0 (if "here" is not a stop word)
+        assert overlap < 0.5
+
+    def test_none_handling(self):
+        """None inputs should not crash."""
+        assert _keyword_overlap(None, "hello world") == 0.0
+        assert _keyword_overlap("hello world", None) == 0.0
+        assert _keyword_overlap(None, None) == 1.0
+
+
+class TestSemanticTopicShift:
+    """Tests for embedding-based topic-shift detection in score_message()."""
+
+    def test_semantic_shift_with_low_similarity(self):
+        """Low cosine similarity between embeddings triggers topic shift bonus."""
+        # Orthogonal vectors → similarity = 0.0, which is < 0.5 threshold
+        score = score_message(
+            "What kind of music do you listen to?", "user",
+            text_embedding=[1.0, 0.0, 0.0],
+            prev_embedding=[0.0, 1.0, 0.0],
+        )
+        # Base 0.5 + topic shift 0.2 = 0.7
+        assert score == 0.7
+
+    def test_semantic_no_shift_with_high_similarity(self):
+        """High cosine similarity should NOT trigger topic shift."""
+        # Nearly identical vectors → high similarity
+        score = score_message(
+            "Tell me more about that topic.", "user",
+            text_embedding=[0.9, 0.1, 0.0],
+            prev_embedding=[0.85, 0.15, 0.0],
+        )
+        # Base 0.5 only — no topic shift
+        assert score == 0.5
+
+    def test_semantic_overrides_jaccard(self):
+        """When embeddings are provided, Jaccard overlap is not used."""
+        # Texts share no keywords (Jaccard would detect shift), but
+        # embeddings are identical (semantic = no shift)
+        score = score_message(
+            "Space exploration rockets NASA", "user",
+            prev_text="Pizza sushi ramen noodles",
+            text_embedding=[1.0, 0.0],
+            prev_embedding=[1.0, 0.0],
+        )
+        # Identical embeddings → cosine sim = 1.0 → no topic shift
+        assert score == 0.5
+
+    def test_falls_back_to_jaccard_without_embeddings(self):
+        """Without embeddings, Jaccard overlap is still used."""
+        score = score_message(
+            "What kind of music do you listen to?", "user",
+            prev_text="I had pasta for dinner last night and it was amazing.",
+            has_question=True,
+        )
+        # Base 0.5 + question 0.1 + Jaccard topic shift 0.2 = 0.8
+        assert score == 0.8
+
+    def test_partial_embeddings_fall_back(self):
+        """If only one embedding is provided, falls back to Jaccard."""
+        score = score_message(
+            "Space rockets NASA exploration", "user",
+            prev_text="Pizza sushi ramen noodles",
+            text_embedding=[1.0, 0.0],
+            prev_embedding=None,
+        )
+        # No prev_embedding → Jaccard path → topic shift detected
+        assert score == 0.7
+
+
+class TestCosineSim:
+    """Tests for the _cosine_sim() helper function."""
+
+    def test_identical_vectors(self):
+        """Identical vectors have similarity 1.0."""
+        assert abs(_cosine_sim([1.0, 0.0], [1.0, 0.0]) - 1.0) < 1e-6
+
+    def test_orthogonal_vectors(self):
+        """Orthogonal vectors have similarity 0.0."""
+        assert abs(_cosine_sim([1.0, 0.0], [0.0, 1.0])) < 1e-6
+
+    def test_opposite_vectors(self):
+        """Opposite vectors have similarity -1.0."""
+        assert abs(_cosine_sim([1.0, 0.0], [-1.0, 0.0]) - (-1.0)) < 1e-6
+
+    def test_empty_vectors(self):
+        """Empty vectors should return 1.0 (no false topic shift)."""
+        assert _cosine_sim([], [1.0, 0.0]) == 1.0
+        assert _cosine_sim([1.0, 0.0], []) == 1.0
+        assert _cosine_sim([], []) == 1.0
+
+    def test_zero_magnitude(self):
+        """Zero-magnitude vector should return 1.0."""
+        assert _cosine_sim([0.0, 0.0], [1.0, 0.0]) == 1.0

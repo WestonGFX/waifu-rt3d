@@ -165,12 +165,14 @@ async def lifespan(app: FastAPI):
             from backend.memory.tiered_memory import TieredMemoryManager
             _cfg_startup = load_config() or {}
             _mem_cfg = _cfg_startup.get("memory", {})
+            _embedding_provider = get_embedding_provider()
             _tiered = TieredMemoryManager(
                 db_path=str(STORAGE / "app.db"),
                 storage_path=str(STORAGE / "memory"),
                 decay_mode=_mem_cfg.get("decay_mode", "off"),
                 top_k=int(_mem_cfg.get("top_k", 5)),
                 salience_threshold=float(_mem_cfg.get("salience_threshold", 0.3)),
+                embedding_provider=_embedding_provider,
             )
             _tiered.init()
             vector_store = _tiered
@@ -414,7 +416,10 @@ async def _ensure_lms_model(requested_model: str) -> None:
 from backend.emotion.normalize import normalize_emotion
 
 # Feature A6: Lorebook / World Info — keyword-triggered context injection
-from backend.lore.matcher import match_lore
+from backend.lore.matcher import match_lore, match_lore_hybrid
+
+# Feature 15A: Embedding provider abstraction
+from backend.embeddings.provider import get_provider as get_embedding_provider
 
 # Feature A2: In-App Mini Games — all game engines
 from backend.games import trivia as trivia_engine
@@ -2168,9 +2173,11 @@ def _inject_lore_entries(
         return
 
     try:
-        matched = match_lore(conn, char_id, recent_text)
+        # Hybrid matching: keyword matches first, then semantic (embedding) matches
+        _lore_provider = get_embedding_provider() if vector_store else None
+        matched = match_lore_hybrid(conn, char_id, recent_text, provider=_lore_provider)
     except Exception as _lore_err:
-        logger.warning(f"[LoreA6] match_lore failed for char_id={char_id}: {_lore_err}")
+        logger.warning(f"[LoreA6] match_lore_hybrid failed for char_id={char_id}: {_lore_err}")
         return
 
     if not matched:

@@ -125,6 +125,8 @@
         let proceduralAnimator = null;
         let mouseTracker = null;
         let animationDirector = null;
+        /** Phase 17B: AnimationSequencer instance — emotion→gesture sequence orchestrator. */
+        let animationSequencer = null;
         // Tracks the last emotion that triggered an auto-gesture, preventing
         // repeat gestures when the same emotion fires on consecutive messages.
         let lastAutoGestureEmotion = null;
@@ -551,26 +553,43 @@
          * special handling (see AnimationDirector.update).
          */
         const STATE_LAYER_TABLE = {
-            idle:    new Set(['basePose', 'idle', 'emotion']),
-            talk:    new Set(['basePose', 'emotion', 'talk']),
-            gesture: new Set(['basePose', 'emotion', 'gesture']),
-            clip:    new Set([]),  // clip mixer runs separately
-            mocap:   new Set([]),  // mocap drives via lookAt overrides
+            idle:      new Set(['basePose', 'idle', 'emotion']),
+            talk:      new Set(['basePose', 'emotion', 'talk']),
+            gesture:   new Set(['basePose', 'emotion', 'gesture']),
+            clip:      new Set([]),  // clip mixer runs separately
+            mocap:     new Set([]),  // mocap drives via lookAt overrides
+            // Phase 17C: Three new states
+            sequence:  new Set(['basePose', 'emotion', 'gesture']),  // sequencer-driven multi-gesture chain
+            transition:new Set(['basePose', 'emotion']),              // dedicated cross-fade buffer state
+            emote:     new Set(['basePose', 'emotion', 'gesture']),  // short single-emotion burst
         };
 
         /** Crossfade duration (seconds) between states. */
         const STATE_TRANSITIONS = {
-            'idle→talk':     0.2,
-            'idle→gesture':  0.15,
-            'idle→clip':     0.3,
-            'idle→mocap':    0.2,
-            'talk→idle':     0.3,
-            'talk→gesture':  0.15,
-            'gesture→idle':  0.25,
-            'gesture→talk':  0.2,
-            'clip→idle':     0.3,
-            'clip→talk':     0.3,
-            'mocap→idle':    0.3,
+            'idle→talk':           0.2,
+            'idle→gesture':        0.15,
+            'idle→clip':           0.3,
+            'idle→mocap':          0.2,
+            'talk→idle':           0.3,
+            'talk→gesture':        0.15,
+            'gesture→idle':        0.25,
+            'gesture→talk':        0.2,
+            'clip→idle':           0.3,
+            'clip→talk':           0.3,
+            'mocap→idle':          0.3,
+            // Phase 17C: New state transitions
+            'idle→sequence':       0.2,
+            'sequence→idle':       0.3,
+            'sequence→talk':       0.2,
+            'talk→sequence':       0.2,
+            'idle→emote':          0.15,
+            'emote→idle':          0.2,
+            'emote→talk':          0.15,
+            'idle→transition':     0.25,
+            'transition→idle':     0.25,
+            'transition→talk':     0.2,
+            'transition→gesture':  0.2,
+            'transition→sequence': 0.2,
         };
 
         class AnimationDirector {
@@ -664,16 +683,29 @@
                 const talk = this.getLayer('talk');
 
                 // ── Auto-detect state from layer activity ──
-                // Priority: clip > gesture > talk > idle
+                // Priority (highest to lowest): clip > sequence > gesture > emote > talk > idle
+                // Phase 17C: sequence and emote states added.
+                //   sequence: driven by external AnimationSequencer (checked via global flag)
+                //   emote: short single-emotion burst (currently entered only via postMessage)
                 if (clip && clip.isPlaying && this._state !== 'clip') {
                     this.transitionTo('clip');
                 } else if (!clip?.isPlaying && this._state === 'clip') {
                     this.transitionTo('idle');
-                } else if (gesture && gesture.isPlaying && this._state === 'idle') {
-                    this.transitionTo('gesture');
+                } else if (gesture && gesture.isPlaying &&
+                           (this._state === 'idle' || this._state === 'sequence')) {
+                    // Enter 'sequence' when the gesture was triggered by the sequencer,
+                    // or 'gesture' for direct one-off triggers.
+                    // We check animationSequencer global to distinguish the two origins.
+                    const fromSequencer = typeof animationSequencer !== 'undefined'
+                        && animationSequencer?.isActive;
+                    this.transitionTo(fromSequencer ? 'sequence' : 'gesture');
                 } else if (!gesture?.isPlaying && this._state === 'gesture') {
                     this.transitionTo('idle');
-                } else if (talk && talk.active && this._state === 'idle') {
+                } else if (!gesture?.isPlaying && this._state === 'sequence' &&
+                           !(typeof animationSequencer !== 'undefined' && animationSequencer?.isActive)) {
+                    this.transitionTo('idle');
+                } else if (talk && talk.active &&
+                           (this._state === 'idle' || this._state === 'emote')) {
                     this.transitionTo('talk');
                 } else if (!talk?.active && this._state === 'talk') {
                     this.transitionTo('idle');
@@ -1039,6 +1071,150 @@
                             if (lFore) lFore.rotation.y -= blend * 0.55;
                         }
                     },
+                    // ── Phase 17A: Procedural Fidgets v2 (14 new animations) ──────────────
+                    {
+                        name: 'wrist_flex', duration: 1.5,
+                        apply(t, p, B) {
+                            // One hand flexes/extends wrist — idle self-awareness gesture.
+                            const rHand = B('rightHand');
+                            if (rHand) rHand.rotation.x = Math.sin(t * Math.PI * 2) * 0.2;
+                        }
+                    },
+                    {
+                        name: 'lean_back', duration: 3.0,
+                        apply(t, p, B) {
+                            // Subtle lean backward then return — idle postural adjustment.
+                            const spine = B('spine'), hips = B('hips');
+                            const ease = Math.sin(t * Math.PI);
+                            if (spine) spine.rotation.x = -ease * 0.04;
+                            if (hips) hips.position.z = -ease * 0.02;
+                        }
+                    },
+                    {
+                        name: 'head_shake', duration: 1.5,
+                        apply(t, p, B) {
+                            // Quick head shake (like "no") — amplitude decays so it doesn't loop.
+                            const head = B('head'), neck = B('neck');
+                            const decay = 1 - t;
+                            if (head) head.rotation.y = Math.sin(t * Math.PI * 4) * 0.08 * decay;
+                            if (neck) neck.rotation.y = Math.sin(t * Math.PI * 4) * 0.04 * decay;
+                        }
+                    },
+                    {
+                        name: 'arm_fold', duration: 3.0,
+                        requires: (p) => p.confidence > 0.5,
+                        apply(t, p, B) {
+                            // Cross arms — confident/defensive resting posture.
+                            const lArm = B('leftUpperArm'), rArm = B('rightUpperArm');
+                            const ease = t < 0.3 ? t / 0.3 : t > 0.7 ? (1 - t) / 0.3 : 1;
+                            if (lArm) { lArm.rotation.z += ease * 0.8; lArm.rotation.x += ease * 0.3; }
+                            if (rArm) { rArm.rotation.z -= ease * 0.8; rArm.rotation.x += ease * 0.3; }
+                        }
+                    },
+                    {
+                        name: 'collar_tug', duration: 1.8,
+                        requires: (p) => p.nervousness > 0.4,
+                        apply(t, p, B) {
+                            // Nervous collar/neckline tug — right hand reaches toward collar.
+                            const rArm = B('rightUpperArm'), rHand = B('rightHand');
+                            const ease = Math.sin(t * Math.PI);
+                            if (rArm) { rArm.rotation.z -= ease * 0.5; rArm.rotation.x += ease * 0.4; }
+                            if (rHand) rHand.rotation.x += ease * 0.3;
+                        }
+                    },
+                    {
+                        name: 'chin_rest', duration: 3.5,
+                        requires: (p) => p.confidence > 0.3,
+                        apply(t, p, B) {
+                            // Rest chin on one hand (thinking pose) — slow entry and exit.
+                            const rArm = B('rightUpperArm'), rHand = B('rightHand'), head = B('head');
+                            const ease = t < 0.2 ? t / 0.2 : t > 0.8 ? (1 - t) / 0.2 : 1;
+                            if (rArm) { rArm.rotation.z -= ease * 0.7; rArm.rotation.x += ease * 0.5; }
+                            if (rHand) rHand.rotation.x -= ease * 0.2;
+                            if (head) head.rotation.x += ease * 0.05;
+                        }
+                    },
+                    {
+                        name: 'knee_bounce', duration: 2.0,
+                        requires: (p) => p.energy > 0.5,
+                        apply(t, p, B) {
+                            // Rhythmic knee bounce — energetic sitting/standing restlessness.
+                            const hips = B('hips');
+                            const bounce = Math.abs(Math.sin(t * Math.PI * 6)) * 0.02;
+                            if (hips) hips.position.y += bounce;
+                        }
+                    },
+                    {
+                        name: 'hand_wave_small', duration: 1.0,
+                        requires: (p) => p.playfulness > 0.3,
+                        apply(t, p, B) {
+                            // Small cute wave — playful acknowledgment gesture.
+                            const rArm = B('rightUpperArm'), rHand = B('rightHand');
+                            const ease = Math.sin(t * Math.PI);
+                            if (rArm) rArm.rotation.z -= ease * 0.6;
+                            if (rHand) rHand.rotation.z += Math.sin(t * Math.PI * 4) * 0.2 * ease;
+                        }
+                    },
+                    {
+                        name: 'ear_tuck', duration: 1.5,
+                        requires: (p) => p.nervousness > 0.3,
+                        apply(t, p, B) {
+                            // Tuck hair behind ear — self-soothing nervous habit.
+                            const rArm = B('rightUpperArm'), rHand = B('rightHand');
+                            const ease = Math.sin(t * Math.PI);
+                            if (rArm) { rArm.rotation.z -= ease * 0.6; rArm.rotation.x += ease * 0.5; }
+                            if (rHand) rHand.rotation.z += ease * 0.2;
+                        }
+                    },
+                    {
+                        name: 'spine_twist', duration: 2.5,
+                        apply(t, p, B) {
+                            // Gentle spinal twist — full-body stretch in one direction.
+                            // Spine leads, chest follows, head counter-rotates for balance.
+                            const spine = B('spine'), chest = B('chest'), head = B('head');
+                            const twist = Math.sin(t * Math.PI) * 0.06;
+                            if (spine) spine.rotation.y += twist;
+                            if (chest) chest.rotation.y += twist * 0.5;
+                            if (head) head.rotation.y -= twist * 0.3; // counter-rotate
+                        }
+                    },
+                    {
+                        name: 'yawn_stretch', duration: 3.0,
+                        requires: (p) => p.energy < 0.3,
+                        apply(t, p, B) {
+                            // Big yawn with arm stretch — low energy/tiredness indicator.
+                            const lArm = B('leftUpperArm'), rArm = B('rightUpperArm');
+                            const chest = B('chest'), head = B('head');
+                            const ease = Math.sin(t * Math.PI);
+                            if (lArm) lArm.rotation.z += ease * 0.8;
+                            if (rArm) rArm.rotation.z -= ease * 0.8;
+                            if (chest) chest.rotation.x -= ease * 0.05;
+                            if (head) head.rotation.x -= ease * 0.1;
+                        }
+                    },
+                    {
+                        name: 'finger_drumming', duration: 2.0,
+                        requires: (p) => p.nervousness > 0.4,
+                        apply(t, p, B) {
+                            // Drumming fingers on implied surface — impatient or nervous habit.
+                            const rHand = B('rightHand');
+                            if (rHand) {
+                                rHand.rotation.x += Math.sin(t * Math.PI * 8) * 0.05;
+                                rHand.rotation.z += Math.sin(t * Math.PI * 8 + 1) * 0.03;
+                            }
+                        }
+                    },
+                    {
+                        name: 'hip_sway', duration: 3.0,
+                        requires: (p) => p.playfulness > 0.4,
+                        apply(t, p, B) {
+                            // Playful hip swaying — figure-8 hip movement with spine counter-rotation.
+                            const hips = B('hips'), spine = B('spine');
+                            const sway = Math.sin(t * Math.PI * 2) * 0.03;
+                            if (hips) { hips.rotation.y += sway; hips.position.x += sway * 0.5; }
+                            if (spine) spine.rotation.y -= sway * 0.3;
+                        }
+                    },
                 ];
             }
 
@@ -1350,6 +1526,24 @@
                 this._gestureSequence = sequence;
                 this._sequenceIndex = 0;
                 this.playGesture(sequence[0].gesture || sequence[0]);
+            }
+
+            /**
+             * Trigger a gesture by name — used by AnimationSequencer to drive
+             * gestures programmatically without constructing a full sequence object.
+             * Falls back silently if the gesture name is not in GESTURES.
+             *
+             * @param {string} name - Gesture name (key in GestureLayer.GESTURES)
+             */
+            triggerGesture(name) {
+                const gestureDef = GestureLayer.GESTURES[name];
+                if (!gestureDef) {
+                    console.warn(`[GestureLayer] triggerGesture: unknown gesture "${name}"`);
+                    return;
+                }
+                // Don't interrupt a running gesture — let the sequencer's timer handle spacing
+                if (this.isPlaying) return;
+                this.playGesture(name);
             }
 
             update(dt) {
@@ -2180,6 +2374,224 @@
                 if (this.mixer) {
                     this.mixer.update(dt);
                 }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Phase 17B: AnimationSequencer — emotion-driven sequence orchestrator
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Orchestrates multi-gesture animation sequences driven by emotion context.
+         *
+         * Sits above the layer system: it does NOT manipulate bones directly but
+         * calls GestureLayer.triggerGesture() at timed intervals, creating natural
+         * chains of procedural gestures that match the character's emotional state.
+         *
+         * Usage:
+         *   sequencer.triggerEmotion('happy', { energy: 0.8 })
+         *   // → selects 2-4 gestures, queues them with randomised gaps
+         *
+         * @example
+         *   const sequencer = new AnimationSequencer(director);
+         *   sequencer.triggerEmotion('excited', { timeOfDay: 'morning' });
+         */
+        class AnimationSequencer {
+            /**
+             * @param {AnimationDirector} director - The active AnimationDirector instance
+             */
+            constructor(director) {
+                this.director = director;
+                /** @type {Array<{gesture: string, gap: number}>} Pending gesture queue */
+                this.queue = [];
+                /** Index of the gesture currently being waited on. -1 = not started. */
+                this.currentIndex = -1;
+                /** Seconds remaining until the next gesture fires. */
+                this.timer = 0;
+                /** When false, update() is a no-op (disable without destroying state). */
+                this.enabled = true;
+                /** Last emotion that was triggered — for external inspection. */
+                this.lastEmotion = 'neutral';
+                /** Context used for the last trigger — for external inspection. */
+                this.lastContext = {};
+            }
+
+            /**
+             * Emotion → gesture pool mapping.
+             * Each key maps to a pool of procedural gesture names (GestureLayer.GESTURES keys)
+             * from which 2-4 are selected at trigger time.
+             *
+             * @type {Object<string, string[]>}
+             */
+            static EMOTION_SEQUENCES = {
+                happy:    ['bounce', 'peace_sign', 'hair_twirl', 'curtsy_bob'],
+                excited:  ['bounce', 'stretch', 'peace_sign', 'dance'],
+                sad:      ['deep_breath', 'touch_face', 'shoulder_roll'],
+                angry:    ['hand_on_hip', 'foot_tap', 'hand_clasp'],
+                shy:      ['touch_hair', 'fidget_hands', 'hand_behind_back', 'touch_face'],
+                thinking: ['head_tilt', 'look_around', 'hand_to_chest'],
+                love:     ['hand_to_chest', 'hair_twirl', 'curtsy_bob', 'bounce'],
+                neutral:  ['subtle_sway', 'weight_shift', 'shoulder_roll', 'look_around'],
+                surprised:['bounce', 'look_around', 'deep_breath'],
+                tired:    ['deep_breath', 'stretch', 'subtle_sway'],
+                nervous:  ['fidget_hands', 'touch_face', 'touch_hair', 'foot_tap'],
+                playful:  ['peace_sign', 'curtsy_bob', 'hair_twirl', 'bounce', 'dance'],
+                flirty:   ['hair_twirl', 'curtsy_bob', 'hip_cock', 'hand_on_hip'],
+            };
+
+            /**
+             * Transition compatibility graph — lists which gestures may follow a given one.
+             * A null value means any gesture can follow.
+             * Used to prevent jarring motion transitions in a sequence.
+             *
+             * @type {Object<string, string[]|null>}
+             */
+            static TRANSITION_GRAPH = {
+                bounce:      null,      // anything can follow bounce
+                dance:       ['bounce', 'curtsy_bob', 'peace_sign'],
+                wave:        null,
+                nod:         null,
+                head_tilt:   ['look_around', 'nod', 'touch_face'],
+                deep_breath: ['shoulder_roll', 'stretch', 'subtle_sway'],
+                stretch:     ['deep_breath', 'shoulder_roll', 'bounce'],
+            };
+
+            /**
+             * Select the best animation sequence for the given emotion and context.
+             *
+             * Applies context filters (time-of-day, energy level) to the emotion's
+             * gesture pool before randomly selecting 2-4 gestures.  Falls back to
+             * the full pool if filtering empties it.
+             *
+             * @param {string} emotion - Emotion name (key in EMOTION_SEQUENCES or 'neutral')
+             * @param {Object} [context={}] - Optional context modifiers
+             * @param {string} [context.timeOfDay] - 'morning'|'afternoon'|'evening'|'night'
+             * @param {number} [context.energy] - 0-1 energy level
+             * @returns {string[]} Ordered list of gesture names (2-4 items)
+             *
+             * @example
+             *   const seq = AnimationSequencer.prototype.selectSequence('happy', { energy: 0.9 });
+             *   // → ['bounce', 'dance', 'peace_sign']
+             */
+            selectSequence(emotion, context = {}) {
+                const pool = AnimationSequencer.EMOTION_SEQUENCES[emotion]
+                    || AnimationSequencer.EMOTION_SEQUENCES.neutral;
+
+                let candidates = [...pool];
+
+                // Evening/night: suppress high-energy animations for calmer feel
+                if (context.timeOfDay === 'evening' || context.timeOfDay === 'night') {
+                    candidates = candidates.filter(
+                        g => !['bounce', 'dance', 'foot_tap'].includes(g)
+                    );
+                    if (candidates.length === 0) candidates = [...pool]; // safety fallback
+                }
+
+                // High-energy context: add weight toward energetic gestures
+                if (context.energy > 0.7) {
+                    candidates.push('bounce', 'dance');
+                }
+
+                // Shuffle (Fisher-Yates for unbiased random)
+                for (let i = candidates.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+                }
+
+                // Select 2-4 gestures from the shuffled pool
+                const seqLen = 2 + Math.floor(Math.random() * 3);
+                return candidates.slice(0, Math.min(seqLen, candidates.length));
+            }
+
+            /**
+             * Build the internal queue from a list of gesture names.
+             *
+             * Each item stores the gesture name and a randomised inter-gesture gap
+             * (gapSeconds ± 0–1.0s) so consecutive animations feel natural.
+             *
+             * @param {string[]} gestures - Ordered list of gesture names
+             * @param {number} [gapSeconds=1.5] - Base gap between gestures in seconds
+             */
+            queueSequence(gestures, gapSeconds = 1.5) {
+                this.queue = gestures.map(g => ({
+                    gesture: g,
+                    gap: gapSeconds + Math.random() * 1.0,
+                }));
+                this.currentIndex = -1;
+                this.timer = 0;
+            }
+
+            /**
+             * Trigger a multi-gesture sequence for an emotion.
+             *
+             * Called from the postMessage handler (type: 'triggerSequence') or
+             * internally from _triggerAutoAnimation when sequencer integration is desired.
+             *
+             * @param {string} emotion - Emotion name
+             * @param {Object} [context={}] - Context for sequence selection
+             */
+            triggerEmotion(emotion, context = {}) {
+                if (!this.enabled) return;
+                this.lastEmotion = emotion;
+                this.lastContext = context;
+                const seq = this.selectSequence(emotion, context);
+                this.queueSequence(seq);
+                console.log(`[AnimationSequencer] ${emotion} → [${seq.join(', ')}]`);
+            }
+
+            /**
+             * Per-frame update — advances the queue by firing gestures at timed intervals.
+             *
+             * Called from the main animate() loop.  When the timer reaches zero, the
+             * next gesture in the queue is triggered via GestureLayer.triggerGesture().
+             * The timer is then reset to (gap + approximate gesture duration) so gestures
+             * don't overlap.
+             *
+             * @param {number} dt - Delta time in seconds
+             */
+            update(dt) {
+                if (!this.enabled || this.queue.length === 0) return;
+
+                // Sequence exhausted — clean up
+                if (this.currentIndex >= this.queue.length) {
+                    this.queue = [];
+                    this.currentIndex = -1;
+                    return;
+                }
+
+                this.timer -= dt;
+                if (this.timer <= 0) {
+                    this.currentIndex++;
+                    if (this.currentIndex < this.queue.length) {
+                        const item = this.queue[this.currentIndex];
+                        const gestureLayer = this.director.getLayer('gesture');
+                        if (gestureLayer && gestureLayer.triggerGesture) {
+                            gestureLayer.triggerGesture(item.gesture);
+                        }
+                        // Wait: inter-gesture gap + estimated gesture duration (~2s average)
+                        this.timer = item.gap + 2.0;
+                    }
+                }
+            }
+
+            /**
+             * Cancel the current sequence immediately.
+             * The gesture layer is NOT interrupted — any in-progress gesture completes.
+             */
+            cancel() {
+                this.queue = [];
+                this.currentIndex = -1;
+                this.timer = 0;
+            }
+
+            /**
+             * Returns true when a sequence is actively queued (not yet exhausted).
+             * Used by AnimationDirector to detect the 'sequence' state.
+             *
+             * @returns {boolean}
+             */
+            get isActive() {
+                return this.queue.length > 0 && this.currentIndex < this.queue.length;
             }
         }
 
@@ -5626,6 +6038,12 @@
                         // arm poses and causes visible oscillation.
                     }
 
+                    // Phase 17B: AnimationSequencer ticks independently after the director
+                    // so it can read the current gesture layer state without ordering issues.
+                    if (animationSequencer) {
+                        animationSequencer.update(delta);
+                    }
+
                     if (blinkController) blinkController.update(delta);
                     if (saccadeController) saccadeController.update(delta);
                     if (microTremorController) {
@@ -6186,6 +6604,10 @@
                             animationDirector.addLayer(new GestureLayer(vrm));
                             animationDirector.addLayer(new LookAtLayer(vrm, canvas));
                             animationDirector.addLayer(new ClipLayer(vrm, scene));
+
+                            // Phase 17B: AnimationSequencer sits above the layer system
+                            // and chains gestures via GestureLayer.triggerGesture().
+                            animationSequencer = new AnimationSequencer(animationDirector);
 
                             // Auto-frame camera based on model's actual height
                             const headBone = vrm.humanoid.getRawBoneNode('head');
@@ -6976,6 +7398,39 @@
                     if (animationDirector && payload) {
                         const gl = animationDirector.getLayer('gesture');
                         if (gl) gl.playSequence(payload);
+                    }
+                }
+                // ── Phase 17B: AnimationSequencer API ──────────────────────────
+                // triggerSequence: Start an emotion-driven multi-gesture sequence.
+                //   payload: { emotion: string, context?: { timeOfDay?, energy? } }
+                // cancelSequence: Cancel any queued gesture sequence.
+                // triggerEmote: Immediately enter 'emote' state (short emotion burst).
+                //   payload: { emotion: string }
+                else if (type === 'triggerSequence') {
+                    if (animationSequencer && payload?.emotion) {
+                        animationSequencer.triggerEmotion(
+                            payload.emotion,
+                            payload.context || {}
+                        );
+                    }
+                }
+                else if (type === 'cancelSequence') {
+                    if (animationSequencer) {
+                        animationSequencer.cancel();
+                    }
+                }
+                else if (type === 'triggerEmote') {
+                    // Enter 'emote' state for a short burst, then return to idle.
+                    // The actual expression/gesture is handled by the existing setEmotion path;
+                    // this only transitions the state machine so other layers stay active.
+                    if (animationDirector && payload?.emotion) {
+                        animationDirector.transitionTo('emote', 0.15);
+                        // Auto-return to idle after a short window (1.5s)
+                        setTimeout(() => {
+                            if (animationDirector?.state === 'emote') {
+                                animationDirector.transitionTo('idle', 0.2);
+                            }
+                        }, 1500);
                     }
                 }
                 // ── Clip Animation API (AnimationMixer) ──────────────

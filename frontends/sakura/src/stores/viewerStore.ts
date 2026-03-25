@@ -74,7 +74,11 @@ export interface ViewerCommand {
     | 'browseAnimations'
     // Phase 11A: Environment
     | 'setPose'
-    | 'setTimeOfDay';
+    | 'setTimeOfDay'
+    // Phase 17A: Animation sequencer
+    | 'triggerSequence'
+    | 'cancelSequence'
+    | 'getSequencerState';
   payload: Record<string, unknown>;
   _seq: number;
 }
@@ -248,6 +252,29 @@ interface ViewerState {
   dispatchSetPose: (pose: 'standing' | 'sitting_couch' | 'sitting_desk' | 'lying_bed') => void;
   /** Set time-of-day lighting (0-23 hour) or enable auto mode. */
   dispatchSetTimeOfDay: (opts: { hour?: number; auto?: boolean }) => void;
+
+  // Phase 17A: Animation sequencer
+  /**
+   * Trigger an emotion-driven animation sequence on the active renderer.
+   * The sequencer maps the emotion to a clip group, picks a clip based on
+   * context (timeOfDay, energy level), and plays it with appropriate
+   * crossfade transitions.
+   */
+  dispatchTriggerSequence: (
+    emotion: string,
+    context?: { timeOfDay?: string; energy?: number },
+  ) => void;
+  /**
+   * Cancel any in-progress animation sequence and return to the idle state.
+   * An optional fade duration can be sent via the payload.
+   */
+  dispatchCancelSequence: () => void;
+  /**
+   * Request the current sequencer state from the viewer (active clip,
+   * queue depth, last emotion, etc.).  The viewer replies via postMessage
+   * with kind 'sequencerState'.
+   */
+  dispatchGetSequencerState: () => void;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -940,6 +967,42 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
 
     if (state.mode === 'vrm') {
       postToIframe(state.iframeRef, { type: 'setTimeOfDay', payload: opts });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  // Phase 17A: Animation sequencer ────────────────────────────────────────────
+
+  dispatchTriggerSequence: (emotion, context) => {
+    const state = get();
+    const seq = state._seq + 1;
+    const payload: Record<string, unknown> = { emotion, ...context };
+    const cmd: ViewerCommand = { kind: 'triggerSequence', payload, _seq: seq };
+
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'triggerSequence', payload });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchCancelSequence: () => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'cancelSequence', payload: {}, _seq: seq };
+
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'cancelSequence', payload: {} });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchGetSequencerState: () => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'getSequencerState', payload: {}, _seq: seq };
+
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'getSequencerState', payload: {} });
     }
     set({ lastCommand: cmd, _seq: seq });
   },

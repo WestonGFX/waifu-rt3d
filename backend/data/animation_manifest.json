@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "total_clips": 36,
   "packs": [
     {
       "id": "sillytavern-vrm-assets",
@@ -165,6 +166,196 @@
           "category": "emotion",
           "emotions": ["angry"],
           "duration": 2.5,
+          "loop": false
+        }
+      ]
+    },
+    {
+      "id": "procedural-emotions",
+      "name": "Procedural Emotion Animations",
+      "source": "motion_server",
+      "license": "Generated",
+      "format": "keyframes",
+      "clips": [
+        {
+          "id": "proc-happy",
+          "name": "proc_happy",
+          "category": "emotion",
+          "emotion": "happy",
+          "duration": 3.0,
+          "loop": true
+        },
+        {
+          "id": "proc-sad",
+          "name": "proc_sad",
+          "category": "emotion",
+          "emotion": "sad",
+          "duration": 4.0,
+          "loop": true
+        },
+        {
+          "id": "proc-excited",
+          "name": "proc_excited",
+          "category": "emotion",
+          "emotion": "excited",
+          "duration": 2.5,
+          "loop": true
+        },
+        {
+          "id": "proc-angry",
+          "name": "proc_angry",
+          "category": "emotion",
+          "emotion": "angry",
+          "duration": 3.0,
+          "loop": true
+        },
+        {
+          "id": "proc-shy",
+          "name": "proc_shy",
+          "category": "emotion",
+          "emotion": "shy",
+          "duration": 3.5,
+          "loop": true
+        },
+        {
+          "id": "proc-thinking",
+          "name": "proc_thinking",
+          "category": "emotion",
+          "emotion": "thinking",
+          "duration": 4.0,
+          "loop": true
+        },
+        {
+          "id": "proc-love",
+          "name": "proc_love",
+          "category": "emotion",
+          "emotion": "love",
+          "duration": 3.0,
+          "loop": true
+        },
+        {
+          "id": "proc-nervous",
+          "name": "proc_nervous",
+          "category": "emotion",
+          "emotion": "nervous",
+          "duration": 3.0,
+          "loop": true
+        },
+        {
+          "id": "proc-tired",
+          "name": "proc_tired",
+          "category": "emotion",
+          "emotion": "tired",
+          "duration": 5.0,
+          "loop": true
+        },
+        {
+          "id": "proc-playful",
+          "name": "proc_playful",
+          "category": "emotion",
+          "emotion": "playful",
+          "duration": 2.5,
+          "loop": true
+        },
+        {
+          "id": "proc-surprised",
+          "name": "proc_surprised",
+          "category": "emotion",
+          "emotion": "surprised",
+          "duration": 2.0,
+          "loop": false
+        },
+        {
+          "id": "proc-flirty",
+          "name": "proc_flirty",
+          "category": "emotion",
+          "emotion": "flirty",
+          "duration": 3.0,
+          "loop": true
+        }
+      ]
+    },
+    {
+      "id": "vrm-expression-library",
+      "name": "VRM Expression Library",
+      "source": "community",
+      "license": "CC0",
+      "format": "vrma",
+      "base_url": "https://cdn.jsdelivr.net/gh/pixiv/three-vrm@dev/packages/three-vrm/examples/animations/",
+      "clips": [
+        {
+          "id": "vrm-idle-breathe",
+          "name": "vrm_idle_breathe",
+          "file": "idle_loop.vrma",
+          "category": "idle",
+          "duration": 4.0,
+          "loop": true
+        },
+        {
+          "id": "vrm-gesture-nod",
+          "name": "vrm_gesture_nod",
+          "file": "gesture_nod.vrma",
+          "category": "reaction",
+          "duration": 1.5,
+          "loop": false
+        },
+        {
+          "id": "vrm-gesture-shake",
+          "name": "vrm_gesture_shake",
+          "file": "gesture_shake_head.vrma",
+          "category": "reaction",
+          "duration": 1.5,
+          "loop": false
+        },
+        {
+          "id": "vrm-wave-hello",
+          "name": "vrm_wave_hello",
+          "file": "gesture_wave.vrma",
+          "category": "reaction",
+          "duration": 2.0,
+          "loop": false
+        }
+      ]
+    },
+    {
+      "id": "bandai-namco-lafan1",
+      "name": "Bandai Namco LaFAN1 MoCap",
+      "source": "https://github.com/ubisoft/ubisoft-laforge-animation-dataset",
+      "license": "CC BY-NC 4.0",
+      "format": "bvh",
+      "download_url": "https://github.com/ubisoft/ubisoft-laforge-animation-dataset/releases",
+      "note": "Requires BVH-to-GLB conversion. High-quality locomotion and transitions.",
+      "clips": [
+        {
+          "id": "lafan-walk",
+          "name": "lafan_walk",
+          "file": "walk1_subject1.bvh",
+          "category": "locomotion",
+          "duration": 5.0,
+          "loop": true
+        },
+        {
+          "id": "lafan-run",
+          "name": "lafan_run",
+          "file": "run1_subject1.bvh",
+          "category": "locomotion",
+          "duration": 3.0,
+          "loop": true
+        },
+        {
+          "id": "lafan-dance",
+          "name": "lafan_dance",
+          "file": "dance1_subject1.bvh",
+          "category": "emotion",
+          "duration": 8.0,
+          "loop": true
+        },
+        {
+          "id": "lafan-gesture",
+          "name": "lafan_gesture",
+          "file": "aiming1_subject1.bvh",
+          "category": "reaction",
+          "duration": 3.0,
           "loop": false
         }
       ]

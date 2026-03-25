@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v55)
+- Database schema migrations (v3 → v4 → … → v60)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -39,6 +39,8 @@ Migration Strategy:
     - v57 → v58: Content Gating System — content_gate_config (singleton),
                   persona_content_ceilings, intimacy_states, physical_states tables
     - v58 → v59: Legacy content_filter_level migration to content_gate_config
+    - v59 → v60: On-device learning tables — engagement_signals, preference_history,
+                  privacy_settings tables
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -3651,6 +3653,137 @@ def migrate_to_v59(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v60(con: sqlite3.Connection) -> bool:
+    """v59 → v60: On-device learning tables for Adaptive Intelligence Engine.
+
+    Creates three new tables that power per-user preference learning without
+    sending any data off-device:
+
+    - ``engagement_signals``: Lightweight per-turn metrics (message length,
+      emoji/question counts, sentiment score, topic drift, intimacy delta).
+      Written by the chat pipeline after every assistant turn and consumed by
+      the preference-learning loop to detect engagement patterns.
+
+    - ``preference_history``: Rolling preference snapshots with exponential
+      decay.  Each row captures a computed preference vector (response length,
+      formality, humor, empathy, depth, pacing, escalation, vocabulary) for a
+      given character at a point in time, together with the window size, decay
+      factor, and confidence level used to compute it.
+
+    - ``privacy_settings``: Singleton (id=1) opt-out registry.  Defaults to
+      all features enabled.  Users can flip individual toggles via the Privacy
+      settings panel without losing their historical data.
+
+    Returns:
+        True on success, False if schema is already at v60 or higher.
+
+    Raises:
+        Exception: If the migration fails (rolls back automatically).
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> con.execute("CREATE TABLE schema_version (version INTEGER)")
+        >>> con.execute("INSERT INTO schema_version VALUES (59)")
+        >>> migrate_to_v60(con)
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 60:
+        return False
+    try:
+        # ------------------------------------------------------------------ #
+        # engagement_signals — per-turn lightweight engagement metrics
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS engagement_signals (
+                id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id                 INTEGER NOT NULL,
+                session_id              INTEGER NOT NULL,
+                turn_number             INTEGER NOT NULL DEFAULT 0,
+                user_msg_length         INTEGER NOT NULL DEFAULT 0,
+                assistant_msg_length    INTEGER NOT NULL DEFAULT 0,
+                response_time_ms        INTEGER DEFAULT NULL,
+                emoji_count             INTEGER NOT NULL DEFAULT 0,
+                question_count          INTEGER NOT NULL DEFAULT 0,
+                exclamation_count       INTEGER NOT NULL DEFAULT 0,
+                sentiment_score         REAL    DEFAULT 0.0,
+                topic_drift             REAL    DEFAULT 0.0,
+                intimacy_delta          INTEGER DEFAULT 0,
+                created_at              TEXT    DEFAULT (datetime('now'))
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_engagement_char_session "
+            "ON engagement_signals(char_id, session_id)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_engagement_created "
+            "ON engagement_signals(created_at)"
+        )
+
+        # ------------------------------------------------------------------ #
+        # preference_history — rolling preference snapshots with exp. decay
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS preference_history (
+                id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id               INTEGER NOT NULL,
+                pref_response_length  REAL    DEFAULT 0.5,
+                pref_formality        REAL    DEFAULT 0.5,
+                pref_humor            REAL    DEFAULT 0.5,
+                pref_empathy          REAL    DEFAULT 0.5,
+                pref_depth            REAL    DEFAULT 0.5,
+                pref_pacing           REAL    DEFAULT 0.5,
+                pref_escalation       REAL    DEFAULT 0.5,
+                pref_vocabulary       REAL    DEFAULT 0.5,
+                window_size           INTEGER NOT NULL DEFAULT 20,
+                decay_factor          REAL    NOT NULL DEFAULT 0.95,
+                confidence            REAL    DEFAULT 0.0,
+                computed_at           TEXT    DEFAULT (datetime('now'))
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_pref_history_char "
+            "ON preference_history(char_id, computed_at)"
+        )
+
+        # ------------------------------------------------------------------ #
+        # privacy_settings — singleton opt-out registry (id must always be 1)
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS privacy_settings (
+                id                   INTEGER PRIMARY KEY DEFAULT 1
+                                         CHECK (id = 1),
+                signal_collection    INTEGER DEFAULT 1,
+                preference_learning  INTEGER DEFAULT 1,
+                behavior_adaptation  INTEGER DEFAULT 1,
+                topic_tracking       INTEGER DEFAULT 1,
+                intimacy_tracking    INTEGER DEFAULT 1,
+                updated_at           TEXT    DEFAULT (datetime('now'))
+            )
+            """
+        )
+        # Ensure the singleton row exists so reads never return NULL.
+        con.execute("INSERT OR IGNORE INTO privacy_settings (id) VALUES (1)")
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (60)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v60 migration complete "
+            "(engagement_signals, preference_history, privacy_settings)"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v60 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -4095,21 +4228,29 @@ def ensure_db():
             if migrate_to_v59(con):
                 version = 59
 
+        if version < 60:
+            logger.info("Upgrading database schema from v59 to v60...")
+            logger.info("  - Creating engagement_signals table")
+            logger.info("  - Creating preference_history table")
+            logger.info("  - Creating privacy_settings singleton table")
+            if migrate_to_v60(con):
+                version = 60
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 59:
-            raise RuntimeError(f"Database initialization failed: Expected v59, got v{final_version}")
+        if final_version < 60:
+            raise RuntimeError(f"Database initialization failed: Expected v60, got v{final_version}")
 
-        if final_version > 59:
-            logger.warning(f"Database is newer than application (v{final_version} > v59). Some features might be unused.")
+        if final_version > 60:
+            logger.warning(f"Database is newer than application (v{final_version} > v60). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v59 adds Content Gate legacy migration)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v60 adds on-device learning tables)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

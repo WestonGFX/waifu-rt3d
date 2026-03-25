@@ -465,6 +465,15 @@ from backend.content.gating import (
     verify_content_lock_password,
 )
 
+# Feature 19: On-device adaptive learning
+from backend.adaptive.signals import collect_turn_signals, save_signals
+from backend.adaptive.behavior import (
+    compute_behavior_modifiers,
+    build_behavior_prompt_block,
+    check_engagement_regression,
+    revert_adaptations,
+)
+
 # Feature A2: In-App Mini Games — all game engines
 from backend.games import trivia as trivia_engine
 from backend.games import twenty_questions as tq_engine
@@ -1725,6 +1734,186 @@ async def set_character_ceiling(char_id: int, req: Request):
         con.close()
 
 
+# ── Privacy Controls API (Phase 19D) ──────────────────────────────────
+
+@app.get("/api/privacy")
+def get_privacy_settings():
+    """Return all privacy opt-out toggles.
+
+    Returns:
+        {
+            "signal_collection": bool,
+            "preference_learning": bool,
+            "behavior_adaptation": bool,
+            "topic_tracking": bool,
+            "intimacy_tracking": bool
+        }
+    """
+    con = db()
+    try:
+        row = con.execute(
+            "SELECT signal_collection, preference_learning, behavior_adaptation, "
+            "topic_tracking, intimacy_tracking FROM privacy_settings WHERE id = 1"
+        ).fetchone()
+        if not row:
+            return {
+                "signal_collection": True,
+                "preference_learning": True,
+                "behavior_adaptation": True,
+                "topic_tracking": True,
+                "intimacy_tracking": True,
+            }
+        return {
+            "signal_collection": bool(row[0]),
+            "preference_learning": bool(row[1]),
+            "behavior_adaptation": bool(row[2]),
+            "topic_tracking": bool(row[3]),
+            "intimacy_tracking": bool(row[4]),
+        }
+    except Exception:
+        return {
+            "signal_collection": True,
+            "preference_learning": True,
+            "behavior_adaptation": True,
+            "topic_tracking": True,
+            "intimacy_tracking": True,
+        }
+    finally:
+        con.close()
+
+
+@app.put("/api/privacy")
+async def update_privacy_settings(req: Request):
+    """Update privacy opt-out toggles.
+
+    Args:
+        req: JSON body with any subset of boolean toggle keys
+             (signal_collection, preference_learning, behavior_adaptation,
+              topic_tracking, intimacy_tracking).
+
+    Returns:
+        {"ok": True, "settings": {<all toggles>}}
+    """
+    body = await req.json()
+    valid_keys = {
+        "signal_collection", "preference_learning", "behavior_adaptation",
+        "topic_tracking", "intimacy_tracking",
+    }
+    updates = {k: int(bool(v)) for k, v in body.items() if k in valid_keys}
+    if not updates:
+        raise HTTPException(400, "No valid privacy settings provided")
+
+    con = db()
+    try:
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        con.execute(
+            f"UPDATE privacy_settings SET {set_clause}, "
+            f"updated_at = datetime('now') WHERE id = 1",
+            tuple(updates.values()),
+        )
+        con.commit()
+        return {"ok": True, "settings": get_privacy_settings()}
+    finally:
+        con.close()
+
+
+@app.get("/api/privacy/export")
+def export_personalization_data():
+    """Export all personalization data for transparency.
+
+    Returns:
+        {
+            "engagement_signals": [...],
+            "preference_history": [...],
+            "privacy_settings": {...}
+        }
+    """
+    con = db()
+    con.row_factory = sqlite3.Row
+    try:
+        signals = []
+        try:
+            rows = con.execute(
+                "SELECT * FROM engagement_signals ORDER BY created_at DESC LIMIT 500"
+            ).fetchall()
+            signals = [dict(r) for r in rows]
+        except Exception:
+            pass
+
+        prefs = []
+        try:
+            rows = con.execute(
+                "SELECT * FROM preference_history ORDER BY computed_at DESC LIMIT 100"
+            ).fetchall()
+            prefs = [dict(r) for r in rows]
+        except Exception:
+            pass
+
+        privacy = {}
+        try:
+            row = con.execute(
+                "SELECT * FROM privacy_settings WHERE id = 1"
+            ).fetchone()
+            if row:
+                privacy = dict(row)
+        except Exception:
+            pass
+
+        return {
+            "engagement_signals": signals,
+            "preference_history": prefs,
+            "privacy_settings": privacy,
+        }
+    finally:
+        con.close()
+
+
+@app.post("/api/privacy/purge")
+async def purge_personalization_data():
+    """Delete ALL personalization data (signals, preferences, adaptations).
+
+    Returns:
+        {"ok": True, "deleted": {"engagement_signals": int, "preference_history": int}}
+    """
+    con = db()
+    deleted = {"engagement_signals": 0, "preference_history": 0}
+    try:
+        try:
+            cur = con.execute("SELECT COUNT(*) FROM engagement_signals")
+            deleted["engagement_signals"] = cur.fetchone()[0]
+            con.execute("DELETE FROM engagement_signals")
+        except Exception:
+            pass
+        try:
+            cur = con.execute("SELECT COUNT(*) FROM preference_history")
+            deleted["preference_history"] = cur.fetchone()[0]
+            con.execute("DELETE FROM preference_history")
+        except Exception:
+            pass
+        con.commit()
+        logger.info(f"[Privacy] Purged personalization data: {deleted}")
+        return {"ok": True, "deleted": deleted}
+    finally:
+        con.close()
+
+
+@app.get("/api/privacy/behavior-modifiers/{char_id}")
+def get_behavior_modifiers(char_id: int):
+    """Return the current computed behavior modifiers for a character.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        BehaviorModifier dict with biases, hints, and confidence.
+    """
+    con = db()
+    try:
+        return compute_behavior_modifiers(char_id, con)
+    finally:
+        con.close()
+
+
 @app.get("/api/frontend")
 async def get_frontend_info():
     """Return current frontend setting and available frontends.
@@ -2802,6 +2991,25 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         except Exception as _adapt_err:
             logger.debug(f"[Adaptive] profile injection skipped: {_adapt_err}")
 
+        # ── Feature 19: Behavior adaptation modifiers ──────────────────────
+        try:
+            _content_con = db()
+            _behavior_mods = compute_behavior_modifiers(char_id, _content_con)
+            _content_con.close()
+            if _behavior_mods.get("confidence", 0) > 0.1:
+                _behavior_block = build_behavior_prompt_block(_behavior_mods)
+                if _behavior_block:
+                    system_prompt += "\n\n" + _behavior_block
+                # Self-correcting: check for engagement regression
+                _reg_con = db()
+                _regression = check_engagement_regression(char_id, _reg_con)
+                if _regression:
+                    revert_adaptations(char_id, _reg_con)
+                    logger.info(f"[Adaptive] Reverted adaptations for char={char_id}: {_regression}")
+                _reg_con.close()
+        except Exception as _beh_err:
+            logger.debug(f"[Adaptive] Behavior modifiers skipped: {_beh_err}")
+
         # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, mood, emotion, filter)
         sections = _build_prompt_sections(
             cfg, system_prompt, char_id, session_id, cur,
@@ -2982,6 +3190,20 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             )
         except Exception as _intimacy_err:
             logger.debug(f"[ContentGating] Intimacy update skipped: {_intimacy_err}")
+
+        # ── Feature 19: Collect engagement signals per turn ────────────────
+        try:
+            _turn_signals = collect_turn_signals(
+                user_msg=text,
+                assistant_msg=clean_reply,
+                turn_number=con.execute(
+                    "SELECT COUNT(*) FROM messages WHERE session_id = ?",
+                    (session_id,),
+                ).fetchone()[0] // 2,
+            )
+            save_signals(char_id, session_id, _turn_signals, con)
+        except Exception as _sig_err:
+            logger.debug(f"[Adaptive] Signal collection skipped: {_sig_err}")
 
         if vector_store:
             vector_store.add_memory(session_id, char_id, "assistant", clean_reply)

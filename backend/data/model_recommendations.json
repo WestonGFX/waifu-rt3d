@@ -281,6 +281,48 @@
           }
         },
         {
+          "id": "fimbulvetr-11b-v2",
+          "hf_id": "Sao10K/Fimbulvetr-11B-v2",
+          "name": "Fimbulvetr 11B v2",
+          "architecture": "llama3",
+          "quant": "Q4_K_M",
+          "vram_gb": 7.0,
+          "capabilities": ["chat", "roleplay", "uncensored"],
+          "speed_estimate": "35-50 tok/s",
+          "quality_tier": "excellent",
+          "license": "CC-BY-NC-4.0",
+          "model_type": "rp-tuned",
+          "notes": "Gold standard for RP under 14B. Sao10K's finest. Q4_K_M ~7GB, Q6_K ~10.5GB.",
+          "content_rating": "uncensored",
+          "quality_ratings": {
+            "creative_writing": 9,
+            "character_voice": 8,
+            "instruction_following": 8,
+            "roleplay_immersion": 9
+          }
+        },
+        {
+          "id": "dreamgen-opus-v1.2-8b",
+          "hf_id": "dreamgen/opus-v1.2-llama-3-8b",
+          "name": "DreamGen Opus v1.2 8B",
+          "architecture": "llama3",
+          "quant": "Q4_K_M",
+          "vram_gb": 5.0,
+          "capabilities": ["chat", "roleplay", "uncensored"],
+          "speed_estimate": "45-65 tok/s",
+          "quality_tier": "very_good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Purpose-built for steerable RP. Scene direction tokens. Q4_K_M ~5GB.",
+          "content_rating": "uncensored",
+          "quality_ratings": {
+            "creative_writing": 8,
+            "character_voice": 8,
+            "instruction_following": 8,
+            "roleplay_immersion": 7
+          }
+        },
+        {
           "id": "qwen25-7b-uncensored",
           "hf_id": "Orion-zhen/Qwen2.5-7B-Instruct-Uncensored",
           "name": "Qwen 2.5 7B Uncensored",
@@ -558,6 +600,28 @@
             "character_voice": 9,
             "instruction_following": 6,
             "roleplay_immersion": 9
+          }
+        },
+        {
+          "id": "mn-violet-lotus-12b",
+          "hf_id": "MN-Violet-Lotus-12B",
+          "name": "MN Violet Lotus 12B",
+          "architecture": "mistral-nemo",
+          "quant": "Q4_K_M",
+          "vram_gb": 7.0,
+          "capabilities": ["chat", "roleplay", "uncensored", "emotional"],
+          "speed_estimate": "60-80 tok/s",
+          "quality_tier": "very_good",
+          "license": "Apache 2.0",
+          "model_type": "rp-tuned",
+          "notes": "Mistral Nemo base, 128K native context, high emotional intelligence. Q4_K_M ~7GB, Q5_K_M ~9GB.",
+          "content_rating": "uncensored",
+          "context_window": 131072,
+          "quality_ratings": {
+            "creative_writing": 8,
+            "character_voice": 8,
+            "instruction_following": 8,
+            "roleplay_immersion": 8
           }
         },
         {

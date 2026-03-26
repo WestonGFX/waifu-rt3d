@@ -1,16 +1,24 @@
 """Content ceiling resolution and permission checking.
 
 Provides provider-aware ceiling resolution (cloud providers are capped at
-"mature"), intimacy-to-rating mapping, and password hashing utilities for the
-content-lock feature.
+"mature"), bond-gated content unlocking, intimacy-to-rating mapping, and
+password hashing utilities for the content-lock feature.
 
 Ported from AnimeGirly's battle-tested TypeScript implementation.
+
+Bond-gated thresholds (configurable via ``BOND_CONTENT_THRESHOLDS``):
+    * general   (Level 1): always available (bond >= 0)
+    * edgy      (Level 2): bond >= 20
+    * mature    (Level 3): bond >= 50
+    * explicit  (Level 4): bond >= 80
 """
 
 from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
+import sqlite3
 
 from backend.content.types import (
     CEILING_MAX_INTIMACY,
@@ -18,6 +26,8 @@ from backend.content.types import (
     ContentGateConfig,
     ContentRatingLevel,
 )
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Cloud-provider constants
@@ -28,6 +38,33 @@ CLOUD_PROVIDERS: frozenset[str] = frozenset({"openai", "anthropic", "google"})
 # Cloud providers enforce a hard ceiling because we cannot guarantee that
 # explicit output won't violate their Terms of Service.
 CLOUD_PROVIDER_CEILING: ContentRatingLevel = "mature"
+
+# ---------------------------------------------------------------------------
+# Bond-gating thresholds
+# ---------------------------------------------------------------------------
+
+#: Minimum bond level required to access each content tier.
+#: Keyed by :data:`~backend.content.types.ContentRatingLevel` string.
+#: Adjust these constants to rebalance progression without touching logic.
+BOND_CONTENT_THRESHOLDS: dict[str, int] = {
+    "general": 0,
+    "edgy": 20,
+    "mature": 50,
+    "explicit": 80,
+}
+"""Bond level floor required to unlock each content rating tier.
+
+``"general"`` is always accessible (threshold 0).  Each higher tier
+requires a minimum bond level; if the user's bond falls below the
+threshold for their chosen ceiling, the ceiling is silently lowered to
+the highest tier their bond permits.
+
+Example:
+    >>> BOND_CONTENT_THRESHOLDS["edgy"]
+    20
+    >>> BOND_CONTENT_THRESHOLDS["explicit"]
+    80
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +236,116 @@ def is_content_allowed(
     return CONTENT_RATING_ORDER.index(required_level) <= CONTENT_RATING_ORDER.index(
         effective_ceiling
     )
+
+
+def bond_allowed_ceiling(bond_level: int) -> ContentRatingLevel:
+    """Return the highest content tier accessible at *bond_level*.
+
+    Iterates :data:`BOND_CONTENT_THRESHOLDS` from most permissive to most
+    restrictive and returns the highest tier whose threshold is satisfied.
+    Because ``"general"`` has a threshold of 0 the function always returns
+    at least ``"general"``.
+
+    Args:
+        bond_level: Current bond level for the character (0–100).
+
+    Returns:
+        The highest :data:`~backend.content.types.ContentRatingLevel` the
+        bond level permits.
+
+    Example:
+        >>> bond_allowed_ceiling(0)
+        'general'
+        >>> bond_allowed_ceiling(19)
+        'general'
+        >>> bond_allowed_ceiling(20)
+        'edgy'
+        >>> bond_allowed_ceiling(50)
+        'mature'
+        >>> bond_allowed_ceiling(80)
+        'explicit'
+        >>> bond_allowed_ceiling(100)
+        'explicit'
+    """
+    # Walk the ordering from most permissive (highest index) down so we can
+    # return the first tier whose threshold is satisfied.
+    for level_name in reversed(CONTENT_RATING_ORDER):
+        if bond_level >= BOND_CONTENT_THRESHOLDS[level_name]:
+            return level_name  # type: ignore[return-value]
+    # Unreachable: "general" always has threshold 0 and bond_level >= 0.
+    return "general"
+
+
+def get_bond_gated_level(
+    character_id: int,
+    user_content_level: ContentRatingLevel,
+    db_conn: sqlite3.Connection,
+) -> ContentRatingLevel:
+    """Return the effective content ceiling after applying the bond gate.
+
+    Looks up the current bond level for *character_id* and computes the
+    highest content tier permitted by that bond level via
+    :func:`bond_allowed_ceiling`.  The result is then the *minimum* of the
+    user's chosen ceiling and the bond-allowed ceiling so that bond gates
+    always take priority over manual settings.
+
+    If the ``character_relationships`` row is missing or the bond columns
+    are absent (e.g. pre-v56 schema), the function defaults to ``"general"``
+    so that a missing record never accidentally grants elevated access.
+
+    Args:
+        character_id: Primary key of the character to look up.
+        user_content_level: The content ceiling the user has manually
+            selected (e.g. ``"explicit"``).
+        db_conn: Open ``sqlite3.Connection``; a cursor is created internally
+            so the caller retains transaction control.
+
+    Returns:
+        The effective :data:`~backend.content.types.ContentRatingLevel`
+        after the bond gate is applied — always ``<= user_content_level``.
+
+    Example:
+        >>> # bond_level=30 → bond ceiling "edgy"; user wants "explicit"
+        >>> # result must be "edgy"
+        >>> level = get_bond_gated_level(1, "explicit", conn)
+        >>> level
+        'edgy'
+    """
+    try:
+        cur = db_conn.cursor()
+        cur.execute(
+            """
+            SELECT bond_level
+              FROM character_relationships
+             WHERE char_id = ?
+            """,
+            (character_id,),
+        )
+        row = cur.fetchone()
+    except sqlite3.OperationalError as exc:
+        logger.warning(
+            "get_bond_gated_level: could not query bond level for char_id=%d: %s",
+            character_id,
+            exc,
+        )
+        return "general"
+
+    if row is None:
+        # No relationship record yet — treat as bond level 0.
+        logger.debug(
+            "get_bond_gated_level: no relationship row for char_id=%d, defaulting to 'general'",
+            character_id,
+        )
+        return "general"
+
+    bond_level = int(row[0] or 0)
+    bond_ceiling = bond_allowed_ceiling(bond_level)
+
+    # Return the more restrictive of the two ceilings.
+    user_idx = CONTENT_RATING_ORDER.index(user_content_level)
+    bond_idx = CONTENT_RATING_ORDER.index(bond_ceiling)
+    effective_idx = min(user_idx, bond_idx)
+    return CONTENT_RATING_ORDER[effective_idx]  # type: ignore[return-value]
 
 
 def hash_content_lock_password(password: str) -> str:

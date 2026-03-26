@@ -3,7 +3,7 @@
 **Last updated:** 2026-03-25
 **Schema version:** v60
 **Tests:** 887 backend (pytest), tsc clean (frontend)
-**Total features:** 50 (36 complete, 8 post-MVP, 6 not started)
+**Total features:** 56 (49 complete, 7 post-MVP)
 
 ---
 
@@ -112,8 +112,8 @@
 | P-5 | Webcam Face/Hand Tracking | Medium | Phase 12 | 12-P6 | Real-time face tracking → VRM morph driver |
 | P-6 | Community Character Gallery | Low | Bond system | 13C | Public character sharing; needs auth + moderation |
 | P-7 | Extension API + Marketplace | Low | Phase 13C | 13D | Plugin API for third-party character/tool extensions |
-| P-8 | AI Model Ecosystem Analysis | Medium | Phase 20A | 16 | Deep HuggingFace/Ollama catalog survey; NEXT priority after workflow overhaul |
-| P-9 | README Updates + FEATURES.md | Medium | Phase 20A | 20B | Public-facing feature documentation refresh |
+| P-8 | AI Model Ecosystem Analysis | ✅ Done | Phase 20A | 16 | 5-category survey: animation, SER, RP models, physics, personalization; `docs/design/ai-model-ecosystem-analysis-2026-03-25.md` |
+| P-9 | README Updates + FEATURES.md | ✅ Done | Phase 20A | 20B | Public-facing `docs/FEATURES.md` + README updates |
 
 ---
 
@@ -126,8 +126,8 @@
 | B — Polish & Immersion | 14 | 14 | 0 |
 | C — Infrastructure | 8 | 8 | 0 |
 | Mini Games | 2 | 2 | 0 |
-| Post-MVP | 9 | 0 | 9 |
-| **Total** | **56** | **47** | **9** |
+| Post-MVP | 9 | 2 | 7 |
+| **Total** | **56** | **49** | **7** |
 
 ---
 

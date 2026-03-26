@@ -1,79 +1,52 @@
-# Resume: Waifu-RT3D — Post-Workflow Overhaul (Mar 25, 2026)
+# Resume: Waifu-RT3D — Post Sprint 1 (Mar 25, 2026)
 
-## WHO I AM
+## WHAT HAPPENED THIS SESSION
 
-I'm Chris. Sole developer of Waifu-RT3D, a commercial AI companion platform with 3D anime avatars + local LLM integration. AI-assisted implementation is ~12x faster than traditional estimates. Desktop-only app.
+### Phase 16: AI Model Ecosystem Analysis (2 commits)
+- Researched 5 categories: animation gen, SER, RP models, physics, personalization
+- Created `docs/design/ai-model-ecosystem-analysis-2026-03-25.md`
+- Created `docs/FEATURES.md` (public-facing feature summary)
 
-**3 dev machines:** Mac M2 Pro (24GB unified), Win RTX 5080 (16GB), Win RTX 3070 (8GB). M2 Pro is the GPU floor. 8-9B models run fast, 14B is too slow on M2 Pro.
+### Expanded Research Sprint (4 parallel agents)
+- 4 domains: NLP/dialogue, NSFW platforms (12 deep-dived), audio/voice, UX/engagement
+- **41 features discovered**, scored on 5 axes, assigned to 4 tiers (S/A/B/C)
+- Roadmap: `docs/plans/2026-03-25-expanded-feature-roadmap.md`
+- User adjustments: Tier B → C (except prompt compression + style steering), P5 memory manager → S
 
-## WHAT HAPPENED THIS SESSION (7 commits)
-
-### Workflow Overhaul (Waves 1-5)
-| Commit | What |
-|--------|------|
-| `80d3ca9` | Doc infrastructure: specs/, sessions/, decisions/, plan README + index |
-| `3c64ebc` | Convention guides (4 files) + FEATURE_MASTERLIST.md + COMPLETED_FEATURES.md |
-| `97e1cee` | Enhanced checkpoint skill + CLAUDE.md soul/research rules + CURRENT_STATUS/STATUS_HISTORY split |
-| `3ba43a8` | Renamed 21 plan files to YYYY-MM-DD format + updated index |
-| `603ae2a` | README update: schema v49→v60, tests 286→887, 8 new features/endpoints/tables |
-| `7678fb0` | Committed 24 plan files to docs/plans/ (git-tracked now) |
-
-### Earlier This Session (Phases 17-20A)
-| Commit | Phase | What |
-|--------|-------|------|
-| `7d394ce` | 18C-D | Content gating frontend UI + legacy migration (schema v59) |
-| `9fe3bf1` | 17 | Animation library + sequencer + state machine v2 |
-| `b03fcae` | 19 | On-device learning — signals, behavior, privacy (schema v60) |
-| `426f48f` | 20A | Model catalog (24 LLMs, 10 TTS, 6 STT) + workflow research |
-
-**Tests: 887 passing. Schema: v60. tsc clean.**
+### Sprint 1 Tier S Execution (5 parallel agents + 1 manual)
+- **9/9 Tier S features complete** (6 built, 3 discovered already implemented)
+- Tests: 887 → 1025 (+138)
+- 3 features were already done: P5 (MemoryPanel.tsx), P6 (DiaryPanel.tsx), V3 (AudioLipSync)
 
 ## WHAT TO DO NOW
 
-### Priority 1: Phase 16 — AI Model Ecosystem Analysis
-- NOT STARTED. Needs research + planning first.
-- Analyze current AI model landscape for companion apps
-- Evaluate local vs cloud tradeoffs, new model releases
+### Priority 1: Integration Wiring
+Wire these 5 modules into the chat pipeline (all have tests, none touch server.py yet):
 
-### Priority 2: docs/FEATURES.md
-- Public-facing feature summary (Phase 20B remainder)
-- Quick task — just a condensed version of FEATURE_MASTERLIST.md
+| Module | Wire Into | How |
+|--------|-----------|-----|
+| `SarcasmDetector` | Chat endpoint in server.py | Run on user message, inject hint into context if sarcastic |
+| `NostalgiaTrigger` | Chat endpoint in server.py | Call `maybe_trigger()` per assistant turn, prepend to system prompt |
+| `get_bond_gated_level()` | Content gating in server.py | Replace static content level check with bond-gated version |
+| `get_mode_config()` | Chat endpoint + session config | Add `interaction_mode` param, prepend system_prefix to character prompt |
+| `SpeechEmotionDetector` | `backend/voice/duplex.py` | After ASR produces audio, detect emotion, update MoodEngine |
 
-### Priority 3 (optional): Settings Cleanup
-- `.claude/settings.local.json` — 142 lines, could trim to ~30
-- Cosmetic, everything works fine
+### Priority 2: Sprint 2 — Retention Mechanics (~50h)
+- P9: Daily engagement hooks + streaks
+- P10: Character proactive disclosure
+- P11: Relationship state prompt injection (THE retention feature)
+- Full feature list in roadmap file
 
-## KEY FILES TO READ FIRST
+### Priority 3: Sprint 3 — Intelligence Pipeline (~30h)
+- N1: GLiNER NER, N2: Tiny toxicity, V1: Silero VAD, V2: DeepFilterNet, N5: Reranker
 
-1. `CURRENT_STATUS.md` — rolling window status (<50 lines)
-2. `docs/FEATURE_MASTERLIST.md` — 56 features across 6 tiers
-3. `docs/plans/PLAN_INDEX.md` — index of all plan files
-4. `docs/DOCUMENT_LIFECYCLE.md` — where everything lives
-5. `docs/STATUS_HISTORY.md` — full phase completion record + estimates
+## KEY FILES
+1. `CURRENT_STATUS.md` — rolling status
+2. `docs/plans/2026-03-25-expanded-feature-roadmap.md` — 41 features, 4 tiers, 6 sprints
+3. `docs/research/2026-03-25-*.md` — 6 research files
 
-## KEY RULES
-
-- **Resume = implement immediately.** Use `/go` to execute.
-- **Desktop-only app** — no mobile
-- **Use `.venv/bin/python`** for ALL Python commands
-- **Commit after each task** with phase reference
-- **Use TaskCreate** for visible progress tracking in Claude Code UI
-- **Convention guides are docs, NOT rules** — live in docs/conventions/, not .claude/rules/
-- **CURRENT_STATUS.md stays <50 lines** — overflow goes to STATUS_HISTORY.md
-- **Plan files are git-tracked** in docs/plans/ AND ~/.claude/plans/
-
-## ARCHITECTURE
-
-| Component | Stack | Key Files |
-|-----------|-------|-----------|
-| Backend | FastAPI, SQLite v60, Python 3.14 | `backend/server.py` (~13K lines) |
-| Frontend | React 19, Zustand, Vite | `frontends/sakura/src/` |
-| 3D Viewer | Three.js, VRM (iframe) | `frontends/shared/viewer/viewer.html` (~5.7K lines) |
-| Memory | sqlite-vec, EmbeddingProvider (MiniLM default) | `backend/memory/tiered_memory.py` |
-| Content | 4-level gating + intimacy tracking | `backend/content/` |
-| Adaptive | On-device learning + AI journal | `backend/adaptive/` |
-| Bond | 0→100 progression + gifts + stories | `backend/bond/` |
-| LLM | Smart fallback, 5 providers | `backend/llm/` |
-| Tests | 887 pytest, tsc clean | `backend/tests/` |
-
-**13 characters, 18 themes, schema v60, 887 tests.**
+## RULES
+- **Resume = implement immediately.** Use `/go`.
+- **Integration wiring is sequential** — only one agent on server.py at a time
+- **Use `.venv/bin/python`** for all Python commands
+- **1025 tests must stay passing**

@@ -27,6 +27,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+# Path to the bundled model catalog JSON
+_CATALOG_PATH = Path(__file__).parent.parent / "data" / "model_catalog.json"
+
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -614,3 +617,92 @@ def match_hardware_tier(hardware: dict, recommendations: dict) -> Optional[dict]
             return tier
 
     return None
+
+
+def get_model_recommendation(vram_gb: float, use_case: str) -> list[dict]:
+    """Recommend LLM models from the catalog that fit within a VRAM budget.
+
+    Loads the bundled ``backend/data/model_catalog.json``, filters to models
+    whose ``vram_gb`` requirement does not exceed ``vram_gb``, and sorts the
+    results by how well they match the requested ``use_case``.
+
+    Scoring logic (higher is better):
+    - +3 if ``use_case`` exactly matches one of the model's ``recommended_for`` tags
+    - +2 if any ``recommended_for`` tag starts with or contains the use_case word
+    - Among equal scores, larger models (more parameters) are preferred
+    - Ties are broken by VRAM headroom (more headroom = lower VRAM usage preferred)
+
+    Supported use_case values (non-exhaustive):
+        ``"roleplay"``, ``"anime"``, ``"companion"``, ``"coding"``,
+        ``"general"``, ``"creative-writing"``, ``"vision"``
+
+    Args:
+        vram_gb: Maximum GPU VRAM available in gigabytes (e.g. ``8.0``).
+        use_case: Desired use-case tag to optimise for.
+
+    Returns:
+        Up to 5 model dicts from the catalog, sorted best-first. Each dict
+        contains all fields from the catalog entry. Returns an empty list if
+        the catalog cannot be loaded or no models fit the constraint.
+
+    Raises:
+        Does not raise; errors are logged and an empty list is returned.
+
+    Example:
+        >>> recs = get_model_recommendation(8.0, "roleplay")
+        >>> recs[0]["name"]
+        'L3.1-8B-Stheno v3.4'
+    """
+    try:
+        with _CATALOG_PATH.open("r", encoding="utf-8") as fh:
+            catalog = json.load(fh)
+    except FileNotFoundError:
+        logger.warning("model_catalog.json not found at %s", _CATALOG_PATH)
+        return []
+    except json.JSONDecodeError as exc:
+        logger.error("Failed to parse model_catalog.json: %s", exc)
+        return []
+
+    llm_models: list[dict] = catalog.get("llm_models", [])
+
+    # 1. Filter by VRAM constraint
+    fitting = [m for m in llm_models if m.get("vram_gb", 9999) <= vram_gb]
+
+    # 2. Score by use_case match
+    use_case_lower = use_case.lower()
+
+    def _score(model: dict) -> tuple[int, float, float]:
+        """Return (match_score, param_weight, neg_vram) for sort key.
+
+        Higher match_score is better. Within equal scores, prefer larger
+        parameter counts (approximated from the ``parameters`` string).
+        Ties are broken by preferring models with lower VRAM usage
+        (more headroom relative to the budget).
+        """
+        recommended_for: list[str] = model.get("recommended_for", [])
+        score = 0
+        for tag in recommended_for:
+            tag_lower = tag.lower()
+            if tag_lower == use_case_lower:
+                score += 3
+            elif use_case_lower in tag_lower or tag_lower in use_case_lower:
+                score += 2
+
+        # Parse parameter count for secondary sort (e.g. "8B" → 8.0)
+        param_str: str = model.get("parameters", "0B")
+        try:
+            param_count = float(param_str.upper().rstrip("B").rstrip("M"))
+            if param_str.upper().endswith("M"):
+                param_count /= 1000.0
+        except ValueError:
+            param_count = 0.0
+
+        # Negative VRAM so that lower VRAM (more headroom) sorts last
+        # when scores are equal — we prefer tighter fits of quality models
+        neg_vram = -model.get("vram_gb", 0)
+
+        return (score, param_count, neg_vram)
+
+    fitting.sort(key=_score, reverse=True)
+
+    return fitting[:5]

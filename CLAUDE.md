@@ -1,5 +1,9 @@
 # Waifu-RT3D — Project Rules
 
+## Soul of the App
+
+Waifu-RT3D is an **emotional AI companion platform** — not a chatbot, not a game. Every feature serves one goal: making the user feel genuinely connected to their character. Design decisions favor warmth over efficiency, personality over throughput, and intimacy over scale. The characters remember, grow, and respond to the user's emotional state. This is a desktop-only, privacy-first experience where all data stays local.
+
 ## Critical Workflow Rules
 
 - **Resume = Implement immediately.** When the user says "continue" or asks to resume work, immediately start implementing code. Do NOT enter plan mode, create new plan files, or re-read the entire codebase. Check the most recent plan file and memory files, then begin coding within the first 2-3 tool calls.
@@ -31,14 +35,14 @@ Or just use the provided wrapper: `./run.sh` (starts server) · `./run.sh test` 
 
 ## Project Overview
 
-This project uses Python (FastAPI backend) + React/TypeScript frontends + a shared Three.js 3D viewer. Main server: `backend/server.py` (~13K lines). Primary frontend: `frontends/sakura/` (React 19 + Zustand + Framer Motion). 9 frontend directories exist but Sakura is the active one. The 3D viewer runs in an iframe (`frontends/shared/viewer/viewer.html`) controlled via postMessage from `viewerStore.ts`. Schema: v51 (`backend/preflight.py`). Always check for Python f-string backslash issues before committing.
+This project uses Python (FastAPI backend) + React/TypeScript frontends + a shared Three.js 3D viewer. Main server: `backend/server.py` (~13K lines). Primary frontend: `frontends/sakura/` (React 19 + Zustand + Framer Motion). 9 frontend directories exist but Sakura is the active one. The 3D viewer runs in an iframe (`frontends/shared/viewer/viewer.html`) controlled via postMessage from `viewerStore.ts`. Schema: v60 (`backend/preflight.py`). Always check for Python f-string backslash issues before committing.
 
 ## Key Directories
 
 | Path | Purpose |
 |------|---------|
 | `backend/server.py` | FastAPI server (all API endpoints) |
-| `backend/preflight.py` | DB migrations (v3 → v51) |
+| `backend/preflight.py` | DB migrations (v3 → v60) |
 | `backend/llm/` | LLM adapters, context assembler, token counter |
 | `backend/voice/` | Full-duplex voice, audio utils |
 | `backend/spectator/` | Game companion (VLM frame analysis) |
@@ -88,7 +92,15 @@ Commit after each completed feature or sub-task. Do NOT batch multiple features 
 
 ## Plan File Safety
 
-NEVER overwrite or replace plan files. Always READ the existing plan first, then APPEND new sections at the bottom. Completed phases should be marked done but never deleted — they serve as historical records.
+**What "never overwrite" means:** Never replace or erase existing plan content. When pivoting to a new direction, ADD the new plan below the existing content — do not rewrite or delete what came before. Old phases are a historical record. If a user asks "where was that plan?", the answer must still be in the file.
+
+**When the user asks to pivot or change direction:**
+1. READ the existing plan file first.
+2. APPEND a new section at the bottom for the new direction (with a date heading).
+3. Mark any superseded phases as `⏸ PAUSED` or `🔀 PIVOTED` — never delete them.
+4. If the pivot is large enough to warrant a separate file, create a new dated file AND add a cross-reference note in the master plan (`CURRENT_STATUS.md`) pointing to it.
+
+This way, nothing that was ever planned is lost — even if the user changed their mind later.
 
 ## Plan Hygiene
 
@@ -114,3 +126,30 @@ When debugging, commit to ONE hypothesis and test it before trying another. Do N
 ## Research → Action Rule
 
 After completing ANY research task (competitor analysis, HuggingFace exploration, similar project analysis, library evaluation, web research), ALWAYS evaluate whether the findings are relevant to this project. If relevant, ask the user: "Should I create implementation specs from this research?" Then produce actionable plans with specific files, schema changes, API endpoints, and effort estimates — not just summaries. Use the `/research-to-action` skill. Research without actionable output is wasted effort.
+
+## Research & Planning Persistence
+
+### Rule: Save ALL Research to Disk
+
+When Claude performs research (agent exploration, web searches, competitive analysis, architecture analysis, codebase deep-dives), the results MUST be saved to `docs/research/YYYY-MM-DD-topic.md` before the session ends.
+
+**Format:** Header (date, topic, why), Findings (organized by subtopic), Files Referenced, Recommendations, Raw Data (tables/inventories from agents).
+
+**Trigger:** After ANY of these occur:
+1. 2+ Explore agents dispatched on the same topic
+2. Web search with 3+ queries
+3. Competitive analysis of any kind
+4. Architecture or codebase deep-dive
+5. User asks "research X" or "analyze X" or "compare X"
+
+### Rule: Session Summaries
+
+At the end of any session with 3+ completed tasks, write a session summary to `docs/sessions/SESSION_YYYY-MM-DD.md`. Contents: what was done, decisions made, what's next, files changed, test counts.
+
+## Documentation Reference
+
+Convention guides live in `docs/conventions/` — consult them when working in unfamiliar areas:
+- `backend-and-api.md` — Python/FastAPI/SQLite patterns
+- `frontend-and-ui.md` — React/Zustand/theme system
+- `3d-viewer-and-animation.md` — Three.js/VRM/Live2D/viewer.html
+- `llm-and-voice.md` — LLM adapters, voice pipeline, TTS/STT

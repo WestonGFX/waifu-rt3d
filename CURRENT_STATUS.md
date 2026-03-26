@@ -11,9 +11,9 @@
 Workflow documentation overhaul — adopting best practices from AnimeGirly project.
 - Wave 1: Doc infrastructure + plan index ✅
 - Wave 2: Convention guides + feature masterlist ✅
-- Wave 3: Enhanced checkpoint + CLAUDE.md updates — IN PROGRESS
-- Wave 4: Rename plan files to dated format
-- Wave 5: Phase 20B — README + FEATURES.md
+- Wave 3: Enhanced checkpoint + CLAUDE.md + status split ✅
+- Wave 4: Rename 21 plan files to dated format ✅
+- Wave 5: Phase 20B — README update ✅
 
 ## Completed This Session (Mar 25)
 

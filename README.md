@@ -3,8 +3,8 @@
 > **AI Companion Platform** — 3D anime avatars with personality-driven animation, local/cloud LLM integration, 45-model catalog with hardware-aware recommendations, director mode, daily streaks, full-duplex voice conversation, 9-provider TTS, offline STT, agentic tool use, mini games, lorebook, tiered memory, character moods, 18 themes, cinematic mode, and OBS streaming overlays.
 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-286%20passed-brightgreen)](backend/tests/)
-[![Schema](https://img.shields.io/badge/DB%20schema-v49-purple)](#)
+[![Tests](https://img.shields.io/badge/tests-887%20passed-brightgreen)](backend/tests/)
+[![Schema](https://img.shields.io/badge/DB%20schema-v60-purple)](#)
 [![Themes](https://img.shields.io/badge/themes-18-ff69b4)](#themes)
 [![Frontends](https://img.shields.io/badge/frontends-Neon%20%7C%20Sakura%20%7C%20Nova-ff69b4)](#dual-frontend-architecture)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -473,8 +473,8 @@ Most local TTS engines (Kokoro, Chatterbox, XTTS) require running a separate ser
 ```
 waifu-rt3d/
 ├── backend/
-│   ├── server.py              # FastAPI server (main application, ~9000+ lines)
-│   ├── preflight.py           # DB migrations (schema v3 → v49)
+│   ├── server.py              # FastAPI server (main application, ~13K lines)
+│   ├── preflight.py           # DB migrations (schema v3 → v60)
 │   ├── llm/
 │   │   ├── registry.py        # LLM adapter factory
 │   │   ├── capability_detector.py  # Smart tool protocol detection + cache
@@ -527,13 +527,19 @@ waifu-rt3d/
 │   │   ├── mood_profiles.json # Time-of-day x personality → mood descriptors
 │   │   └── emotion_expressions.json # Emotion → VRM blend shape mappings
 │   ├── data/
-│   │   └── model_recommendations.json # 45-model curated RP/anime catalog
+│   │   ├── model_catalog.json      # 40-model curated catalog (24 LLM, 10 TTS, 6 STT)
+│   │   └── model_recommendations.json # Legacy 45-model RP/anime catalog
 │   ├── storage/
-│   │   ├── app.db             # SQLite database (schema v49)
+│   │   ├── app.db             # SQLite database (schema v60)
 │   │   ├── avatars/           # Uploaded VRM/GLB files
 │   │   ├── audio/             # Generated TTS audio cache
 │   │   └── images/            # AI-generated images
-│   └── tests/                 # 286 pytest tests
+│   ├── embeddings/            # Embedding provider abstraction (MiniLM + Gemma)
+│   ├── content/               # Content gating (types, ceiling, intimacy, prompts)
+│   ├── adaptive/              # Adaptive intelligence (reflector, tuner, journal)
+│   ├── bond/                  # Bond progression (levels, gifts, story scenes)
+│   ├── proactive/             # Proactive AI messages (scheduler, triggers)
+│   └── tests/                 # 887 pytest tests
 ├── frontends/
 │   ├── shared/                # Assets shared between frontends
 │   │   ├── viewer/            # Three.js VRM renderer + OBS overlay
@@ -572,7 +578,16 @@ waifu-rt3d/
 │   └── assets/                # App icons (icon.png, tray-icon.png)
 ├── setup.sh                   # Interactive installer (fresh + repair modes)
 └── docs/
-    ├── plans/                 # 15 design docs and implementation plans
+    ├── plans/                 # Plan index, resume prompt, naming convention
+    ├── conventions/           # Domain convention guides (backend, frontend, 3D, LLM)
+    ├── research/              # Dated research findings
+    ├── sessions/              # Session summaries
+    ├── specs/                 # Feature PRDs
+    ├── decisions/             # Architecture Decision Records
+    ├── FEATURE_MASTERLIST.md  # 56 features across 6 tiers
+    ├── COMPLETED_FEATURES.md  # Historical archive of all completed features
+    ├── STATUS_HISTORY.md      # Archived status snapshots
+    ├── DOCUMENT_LIFECYCLE.md  # Artifact map + directory structure
     ├── USER_GUIDE.md
     ├── LAUNCHER_GUIDE.md      # macOS .app + Electron launcher walkthrough
     ├── SETTINGS_REFERENCE.md  # All 75+ configuration keys
@@ -620,12 +635,20 @@ waifu-rt3d/
 | `GET` | `/api/hardware` | GPU/VRAM/platform detection |
 | `GET` | `/api/link/devices` | LM Studio Link device discovery |
 | `GET` | `/api/context-budget/{session_id}` | Token usage breakdown |
+| `GET/POST` | `/api/characters/{id}/bond` | Bond level, XP, gifts, story scenes |
+| `POST` | `/api/characters/{id}/bond/gift` | Give a gift to a character |
+| `GET` | `/api/characters/{id}/content-gate` | Content gating level + intimacy score |
+| `GET` | `/api/characters/{id}/journal` | Character's self-reflection journal |
+| `GET` | `/api/adaptive/signals` | On-device learning signal history |
+| `GET` | `/api/embeddings/providers` | Available embedding providers |
+| `GET` | `/api/models/catalog` | Full model catalog (LLM + TTS + STT) |
+| `GET` | `/api/models/recommend` | Hardware-aware model recommendations |
 | `WS` | `/ws/spectator` | Game companion screen analysis |
 | `WS` | `/ws/overlay` | OBS overlay WebSocket |
 
-### Database Schema (v49)
+### Database Schema (v60)
 
-The SQLite database (schema v49) auto-migrates on startup. Key tables:
+The SQLite database (schema v60) auto-migrates on startup. Key tables:
 - **sessions** — chat sessions with summary, archive, tags, and author's note
 - **messages** — chat history with emotion, branching (parent_id), token stats, pinning, reactions
 - **characters** — full character profiles (40+ columns including animation_profile, capability_profile, diary, voice config, mood settings, greeting config)
@@ -643,26 +666,44 @@ The SQLite database (schema v49) auto-migrates on startup. Key tables:
 - **format_rules** — per-character regex output formatting
 - **game_companion_sessions** — browser game spectator sessions
 - **game_companion_reactions** — AI reactions to game events
+- **embedding_cache** — cached embeddings for semantic search (MiniLM/Gemma)
+- **content_ratings** — content gating levels per character per session
+- **intimacy_scores** — per-turn intimacy tracking for content ceiling
+- **bond_levels** — 0→100 bond progression with story scene unlocks
+- **bond_gifts** — gift inventory and exchange history
+- **adaptive_signals** — on-device learning signals (user behavior patterns)
+- **adaptive_journal** — AI self-reflection journal entries
+- **animation_sequences** — stored animation clip sequences for the sequencer
 
 ---
 
 ## Running Tests
 
 ```bash
-# Run all 286 backend tests
-python -m pytest backend/tests/ -v
+# Run all 887 backend tests
+.venv/bin/python -m pytest backend/tests/ -v
 
 # Quick run (stop on first failure)
-python -m pytest backend/tests/ -x --tb=short
+.venv/bin/python -m pytest backend/tests/ -x --tb=short
 ```
 
-**286 backend tests** covering API endpoints, CRUD, agents, voice module, memory, spectator, link manager, context assembler, and more. Plus frontend component tests and 26 Playwright E2E tests.
+**887 backend tests** covering API endpoints, CRUD, agents, voice module, memory, spectator, link manager, context assembler, embeddings, content gating, adaptive intelligence, bond progression, animation sequencer, and more. Plus frontend component tests and 26 Playwright E2E tests.
 
 ---
 
 ## Roadmap
 
-### Recently Completed (v10.0.0)
+### Recently Completed (v11 — schema v60)
+- **Adaptive Intelligence Engine** — on-device learning signals, behavior adaptation, trust/mood updates, topic steering, AI self-reflection journal
+- **Bond Progression System** — 0→100 levels with story scene unlocks, gift exchange, relationship milestones
+- **Content Gating** — age-appropriate content ceiling, intimacy tracking per turn, frontend gate UI, legacy migration
+- **Embedding Provider Abstraction** — MiniLM + embeddinggemma support, semantic lore matching, topic-shift detection
+- **Animation Library Expansion** — 40+ animations, sequencer for multi-clip chains, state machine v2
+- **Model Catalog** — 40 curated models (24 LLM, 10 TTS, 6 STT) with VRAM/tier data and hardware-aware recommendations
+- **Proactive AI Messages** — scheduler-driven character-initiated messages based on time, mood, and context
+- **Character Journal + Memory Transparency** — characters write journals, users see what characters remember
+
+### Previously Completed (v10.0.0)
 - **Director Mode** — dual-layer OOC stage directions (cumulative + immediate notes)
 - **Daily Interaction Rewards** — streaks, XP, relationship tiers (Stranger to Soulmate)
 - **Output Format Rules** — per-character regex-based LLM output cleanup

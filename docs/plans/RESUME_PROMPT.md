@@ -1,4 +1,4 @@
-# Resume: Waifu-RT3D — Post-Phase 15+18 Session (Mar 21, 2026)
+# Resume: Waifu-RT3D — Post-Workflow Overhaul (Mar 25, 2026)
 
 ## WHO I AM
 
@@ -6,61 +6,50 @@ I'm Chris. Sole developer of Waifu-RT3D, a commercial AI companion platform with
 
 **3 dev machines:** Mac M2 Pro (24GB unified), Win RTX 5080 (16GB), Win RTX 3070 (8GB). M2 Pro is the GPU floor. 8-9B models run fast, 14B is too slow on M2 Pro.
 
-## WHAT HAPPENED THIS SESSION (6 commits)
+## WHAT HAPPENED THIS SESSION (7 commits)
 
-| Commit | Phase | What | Verified |
-|--------|-------|------|----------|
-| `7121ae0` | 15A-B | Embedding provider abstraction (MiniLM + Gemma) + semantic lore matching | Unit tests |
-| `fbec7d6` | 15C | Server integration + semantic topic-shift detection in importance scorer | Unit tests |
-| `4a93b2d` | 18A | Content gating system (types, ceiling, intimacy, prompts) — ported from AnimeGirly | Unit tests |
-| `9ab6605` | 18B | Wire content gating into chat pipeline + intimacy tracking per turn | Unit tests |
-| `3b1787d` | docs | Checkpoint — status files updated | — |
-| `ff64154` | new | Smart LLM endpoint fallback + stream post-processing hooks | **Browser E2E** |
+### Workflow Overhaul (Waves 1-5)
+| Commit | What |
+|--------|------|
+| `80d3ca9` | Doc infrastructure: specs/, sessions/, decisions/, plan README + index |
+| `3c64ebc` | Convention guides (4 files) + FEATURE_MASTERLIST.md + COMPLETED_FEATURES.md |
+| `97e1cee` | Enhanced checkpoint skill + CLAUDE.md soul/research rules + CURRENT_STATUS/STATUS_HISTORY split |
+| `3ba43a8` | Renamed 21 plan files to YYYY-MM-DD format + updated index |
+| `603ae2a` | README update: schema v49→v60, tests 286→887, 8 new features/endpoints/tables |
+| `7678fb0` | Committed 24 plan files to docs/plans/ (git-tracked now) |
 
-**Tests: 529 → 701 (+172). Schema: v56 → v58.**
+### Earlier This Session (Phases 17-20A)
+| Commit | Phase | What |
+|--------|-------|------|
+| `7d394ce` | 18C-D | Content gating frontend UI + legacy migration (schema v59) |
+| `9fe3bf1` | 17 | Animation library + sequencer + state machine v2 |
+| `b03fcae` | 19 | On-device learning — signals, behavior, privacy (schema v60) |
+| `426f48f` | 20A | Model catalog (24 LLMs, 10 TTS, 6 STT) + workflow research |
 
-### Browser-Verified E2E Results
-- Smart fallback auto-discovered qwen3:8b on Ollama when configured model was missing
-- Intimacy tracking: level=5, trend=rising after flirty message exchange
-- Physical actions captured from `*action*` markers in both user and AI messages
-- Bond XP accumulating (xp=2 after first exchange)
-- Emotion tags + gesture tags parsed and displayed correctly
-
-## NEW KEY MODULES
-
-| Module | Purpose |
-|--------|---------|
-| `backend/embeddings/provider.py` | EmbeddingProvider protocol, MiniLM + Gemma implementations, factory |
-| `backend/content/types.py` | ContentRatingLevel, IntimacyState, PhysicalState, ContentGateConfig |
-| `backend/content/gating.py` | resolve_effective_ceiling(), cloud provider caps, password utils |
-| `backend/content/intimacy.py` | 5 regex pattern groups, evaluate_intimacy_shift(), physical state tracking |
-| `backend/content/prompts.py` | 4 graduated prompt builders (directive, physical, sensory, gate) |
-| `backend/content/bridge.py` | DB load/save, legacy config mapping, get_content_blocks() |
-| `backend/llm/endpoint_fallback.py` | Smart LLM endpoint discovery with 60s cache, model preference |
+**Tests: 887 passing. Schema: v60. tsc clean.**
 
 ## WHAT TO DO NOW
 
-### Priority 1: Phase 18C-D — Content Gating Frontend
-- Settings UI: "Content & Privacy" panel with ceiling selector, age verification, password lock
-- Per-character ceiling overrides
-- Map legacy `content_filter_level` integer to new system
-- **Backend is done** — just needs frontend components
+### Priority 1: Phase 16 — AI Model Ecosystem Analysis
+- NOT STARTED. Needs research + planning first.
+- Analyze current AI model landscape for companion apps
+- Evaluate local vs cloud tradeoffs, new model releases
 
-### Priority 2: Phase 17 — Animation Library
-- Expand from 45 procedural animations to 200+
-- AnimationSequencer class for emotion-to-animation mapping
-- Multi-source: procedural v2, open-source packs (CMU MoCap, 100STYLE)
+### Priority 2: docs/FEATURES.md
+- Public-facing feature summary (Phase 20B remainder)
+- Quick task — just a condensed version of FEATURE_MASTERLIST.md
 
-### Priority 3: Phase 19 — On-device Learning
-- Continuous signal collection (per-turn, no LLM call)
-- Rolling preference learning (replace batch-50 gate)
+### Priority 3 (optional): Settings Cleanup
+- `.claude/settings.local.json` — 142 lines, could trim to ~30
+- Cosmetic, everything works fine
 
-## KNOWN ISSUES / CONTEXT
+## KEY FILES TO READ FIRST
 
-- **LLM config in app.json** still points to non-existent `dirty-muse-writer-v01-uncensored-erotica-nsfw-i1` — the fallback handles this but should update to `qwen3:8b` + `http://localhost:11434/v1`
-- **Content gating defaults** — `global_content_ceiling` in DB = `"general"`, but user's `content_filter_level: -1` maps to `"explicit"` via bridge. Both systems coexist.
-- **embeddinggemma** — provider built but not tested live. MLX local version doesn't work with sentence_transformers. Use HF model ID `google/embeddinggemma-300m` instead.
-- **Qwen3:8b** downloaded on Ollama. User prefers managing model downloads themselves via Ollama GUI.
+1. `CURRENT_STATUS.md` — rolling window status (<50 lines)
+2. `docs/FEATURE_MASTERLIST.md` — 56 features across 6 tiers
+3. `docs/plans/PLAN_INDEX.md` — index of all plan files
+4. `docs/DOCUMENT_LIFECYCLE.md` — where everything lives
+5. `docs/STATUS_HISTORY.md` — full phase completion record + estimates
 
 ## KEY RULES
 
@@ -68,20 +57,23 @@ I'm Chris. Sole developer of Waifu-RT3D, a commercial AI companion platform with
 - **Desktop-only app** — no mobile
 - **Use `.venv/bin/python`** for ALL Python commands
 - **Commit after each task** with phase reference
-- **Run `/checkpoint`** after completing phases
-- **8-9B models only** on M2 Pro (24GB unified, not 32GB)
-- **Content filter**: User wants fully unrestricted 18+ option with age gate
+- **Use TaskCreate** for visible progress tracking in Claude Code UI
+- **Convention guides are docs, NOT rules** — live in docs/conventions/, not .claude/rules/
+- **CURRENT_STATUS.md stays <50 lines** — overflow goes to STATUS_HISTORY.md
+- **Plan files are git-tracked** in docs/plans/ AND ~/.claude/plans/
 
 ## ARCHITECTURE
 
 | Component | Stack | Key Files |
 |-----------|-------|-----------|
-| Backend | FastAPI, SQLite v58, Python 3.14 | `backend/server.py` (~13K lines) |
+| Backend | FastAPI, SQLite v60, Python 3.14 | `backend/server.py` (~13K lines) |
 | Frontend | React 19, Zustand, Vite | `frontends/sakura/src/` |
-| 3D Viewer | Three.js, VRM (iframe) | `frontends/shared/viewer/viewer.html` (~7.3K lines) |
+| 3D Viewer | Three.js, VRM (iframe) | `frontends/shared/viewer/viewer.html` (~5.7K lines) |
 | Memory | sqlite-vec, EmbeddingProvider (MiniLM default) | `backend/memory/tiered_memory.py` |
-| Content | 4-level gating + intimacy tracking + prompt injection | `backend/content/` |
-| LLM | Smart fallback across Ollama/LM Studio/vLLM | `backend/llm/endpoint_fallback.py` |
-| Tests | 701 pytest, tsc clean | `backend/tests/` |
+| Content | 4-level gating + intimacy tracking | `backend/content/` |
+| Adaptive | On-device learning + AI journal | `backend/adaptive/` |
+| Bond | 0→100 progression + gifts + stories | `backend/bond/` |
+| LLM | Smart fallback, 5 providers | `backend/llm/` |
+| Tests | 887 pytest, tsc clean | `backend/tests/` |
 
-**13 characters, 18 themes, schema v58, 701 tests.**
+**13 characters, 18 themes, schema v60, 887 tests.**

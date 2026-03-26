@@ -38,7 +38,7 @@ Read `CURRENT_STATUS.md` and the most recent plan file.
 
 ### 4. Update Master Plan File
 
-Update `.claude/plans/replicated-foraging-nebula.md` (or current active plan):
+Update `.claude/plans/2026-03-19-master-plan-phases-1-20.md` (or current active plan):
 - Mark completed phases with `✅ DONE` prefix
 - Do NOT delete any content — only add status markers
 

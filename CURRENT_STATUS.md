@@ -1,12 +1,21 @@
 # Current Project Status
 
-**Last updated:** 2026-03-21 17:30 PDT
+**Last updated:** 2026-03-25 16:00 PDT
 **Branch:** master
 **Schema version:** v60
 **Tests:** 887 passing (backend pytest), tsc clean (frontend)
-**Plan file:** `/Users/chris/.claude/plans/cached-imagining-cocke.md` (Phases 14A-20)
+**Plan file:** `/Users/chris/.claude/plans/woolly-foraging-globe.md` (Workflow overhaul + Phase 20B)
 
-## Completed This Session — 4 commits
+## Completed This Session (Mar 25) — 5 commits
+
+| Commit | Phase | What |
+|--------|-------|------|
+| `7d394ce` | 18C-D | Content gating frontend UI + legacy migration (schema v59) |
+| `9fe3bf1` | 17 | Animation library expansion + sequencer + state machine v2 |
+| `b03fcae` | 19 | On-device learning — signals, behavior, privacy (schema v60) |
+| `426f48f` | 20A | Model catalog (24 LLMs, 10 TTS, 6 STT) + workflow research |
+
+## Completed Previous Sessions
 
 | Commit | Phase | What |
 |--------|-------|------|
@@ -54,11 +63,12 @@ See `git log` for full history. Key highlights: Phases 1-3, 6, 9A-E, 11A, 12-P1 
 | Phase 18A-B | ✅ DONE | Content gating backend (types + pipeline + intimacy) |
 | Phase 18C-D | ✅ DONE | Content gating frontend UI + legacy migration (schema v59) |
 | Phase 19 | ✅ DONE | On-device learning — signals, behavior, privacy (schema v60) |
-| Phase 20 | NOT STARTED | Model database + README updates |
+| Phase 20A | ✅ DONE | Model catalog (24 LLMs, 10 TTS, 6 STT) + model recommendations |
+| Phase 20B | NOT STARTED | README updates + FEATURES.md |
 
 ## Next 3 Tasks (Priority Order)
 
-1. **Phase 20** — Model database + README updates
+1. **Workflow Overhaul** — Domain rules, feature masterlist, enhanced checkpoint, research policy (plan: woolly-foraging-globe.md)
 2. **Phase 16** — AI model ecosystem analysis
 3. **Phase 4** — /plan skill + workflow polish (POST-MVP)
 

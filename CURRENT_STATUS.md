@@ -1,19 +1,23 @@
 # Current Project Status
 
-**Last updated:** 2026-03-27 15:45 PDT
+**Last updated:** 2026-03-27 16:30 PDT
 **Branch:** master
 **Schema version:** v60
 **Tests:** 1147+ passing (backend pytest), tsc clean (frontend)
 
 ## Active Work
 
-Sprints 1-4 complete. Awaiting Sprint 4 test results.
-Next: Sprint 5 Emotional Depth or P5 memory browser UI.
+Sprints 1-5 complete (all built, tested, wired). Session handoff ready.
+Next: P5 Memory Browser UI + P2 Context Assembly Viewer.
 
 ## Completed This Session (Mar 27)
 
 | Commit | What |
 |--------|------|
+| `210153e` | Sprint 5: 121 tests for emotional depth + utcnow fix |
+| `569d6c0` | Sprint 5: Wire 9 dream/capsule/quiz API endpoints |
+| `8a07d6f` | Sprint 5: 3 modules (dreams, time capsules, compatibility quiz) |
+| `58182f9` | Sprint 4: 118 tests for voice & immersion |
 | `d52b58f` | Sprint 4: Wire Moonshine ASR, scenarios, structured director |
 | `6eb3150` | Sprint 4: 3 modules (Moonshine ASR, scenario templates, structured director) |
 

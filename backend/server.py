@@ -2462,14 +2462,29 @@ def _build_prompt_sections(
     if _author_note_text and _author_note_position == "after_system":
         sections.append(_section("Author's Note", f"\n[Author's Note: {_author_note_text}]"))
 
-    # 1a-scene. Scene/Setting context — persistent location & atmosphere description
+    # 1a-scene. Scene/Setting context — scenario templates (P4) or raw scene_context
     try:
-        _scene_row = cur.execute(
-            "SELECT scene_context, scene_enabled FROM sessions WHERE id=?",
-            (session_id,)
-        ).fetchone()
-        if _scene_row and _scene_row[1] and _scene_row[0] and _scene_row[0].strip():
-            sections.append(_section("Scene", f"\n[Current Scene: {_scene_row[0].strip()}]"))
+        _scene_injected = False
+        _content_conn_scene = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_scene:
+            try:
+                from backend.scenario.templates import get_active_template, build_scenario_prompt
+                _active_scenario = get_active_template(char_id, session_id, _content_conn_scene)
+                if _active_scenario:
+                    _scenario_text = build_scenario_prompt(_active_scenario, char_name=char_name)
+                    if _scenario_text:
+                        sections.append(_section("Scene", f"\n{_scenario_text}"))
+                        _scene_injected = True
+            except Exception as _scn_err:
+                logger.debug("[Scenario] template lookup skipped: %s", _scn_err)
+        # Fallback to raw scene_context if no scenario template matched
+        if not _scene_injected:
+            _scene_row = cur.execute(
+                "SELECT scene_context, scene_enabled FROM sessions WHERE id=?",
+                (session_id,)
+            ).fetchone()
+            if _scene_row and _scene_row[1] and _scene_row[0] and _scene_row[0].strip():
+                sections.append(_section("Scene", f"\n[Current Scene: {_scene_row[0].strip()}]"))
     except Exception:
         pass
 
@@ -2488,6 +2503,18 @@ def _build_prompt_sections(
             ))
     except Exception:
         pass
+
+    # 1a-director-structured. P8: Structured director mode (pacing, style, involvement)
+    try:
+        _content_conn_dir = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_dir:
+            from backend.director.structured import load_director_state, build_director_prompt_block
+            _dir_state = load_director_state(session_id, _content_conn_dir)
+            _dir_block = build_director_prompt_block(_dir_state, char_name=char_name)
+            if _dir_block:
+                sections.append(_section("Director State", f"\n{_dir_block}"))
+    except Exception as _dir_err:
+        logger.debug("[Director] structured state skipped: %s", _dir_err)
 
     # 1c-user. User persona — explicit self-description from the user
     _user_persona = cfg.get("user_persona", "").strip()
@@ -2939,8 +2966,23 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 "INSERT INTO messages(session_id, role, text, char_id) VALUES (?,?,?,?)",
                 (session_id, "director", text, char_id))
         director_msg_id = cur.lastrowid
+        # P8: Parse structured director commands (pacing, style, transitions)
+        _director_cmd_type = None
+        try:
+            from backend.director.structured import (
+                parse_director_command, apply_command, load_director_state, save_director_state
+            )
+            _dcmd = parse_director_command(text)
+            if _dcmd:
+                _dstate = load_director_state(session_id, con)
+                _dstate = apply_command(_dstate, _dcmd)
+                save_director_state(session_id, _dstate, con)
+                _director_cmd_type = _dcmd.type
+        except Exception as _dcmd_err:
+            logger.debug("[Director] structured command parse skipped: %s", _dcmd_err)
         con.commit()
-        return {"ok": True, "type": "director_note", "message_id": director_msg_id}
+        return {"ok": True, "type": "director_note", "message_id": director_msg_id,
+                **({"command_type": _director_cmd_type} if _director_cmd_type else {})}
 
     cfg = load_config() or {}
     con = db()
@@ -4003,6 +4045,18 @@ async def chat_stream(req: Request):
                 "INSERT INTO messages(session_id, role, text, char_id) VALUES (?,?,?,?)",
                 (session_id, "director", text, char_id))
         director_msg_id = cur.lastrowid
+        # P8: Parse structured director commands (pacing, style, transitions)
+        try:
+            from backend.director.structured import (
+                parse_director_command, apply_command, load_director_state, save_director_state
+            )
+            _dcmd_s = parse_director_command(text)
+            if _dcmd_s:
+                _dstate_s = load_director_state(session_id, con)
+                _dstate_s = apply_command(_dstate_s, _dcmd_s)
+                save_director_state(session_id, _dstate_s, con)
+        except Exception:
+            pass
         con.commit()
         return JSONResponse({"ok": True, "type": "director_note", "message_id": director_msg_id})
 

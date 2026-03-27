@@ -412,6 +412,43 @@ def _get_nostalgia_trigger(char_id: int, db_path: str):
     return _nostalgia_triggers[char_id]
 
 
+# ── Sprint 3 module singletons ──────────────────────────────────────────
+_toxicity_detector = None
+
+
+def _get_toxicity_detector():
+    """Lazy-load the toxicity detector (DistilBERT or keyword fallback)."""
+    global _toxicity_detector
+    if _toxicity_detector is None:
+        from backend.nlp.toxicity_detector import ToxicityDetector
+        _toxicity_detector = ToxicityDetector()
+    return _toxicity_detector
+
+
+_ner_extractor = None
+
+
+def _get_ner_extractor():
+    """Lazy-load the GLiNER NER extractor (~166M params on first call)."""
+    global _ner_extractor
+    if _ner_extractor is None:
+        from backend.nlp.ner_extractor import NERExtractor
+        _ner_extractor = NERExtractor()
+    return _ner_extractor
+
+
+_memory_reranker = None
+
+
+def _get_memory_reranker():
+    """Lazy-load the cross-encoder memory reranker (~22M params)."""
+    global _memory_reranker
+    if _memory_reranker is None:
+        from backend.memory.reranker import MemoryReranker
+        _memory_reranker = MemoryReranker()
+    return _memory_reranker
+
+
 # Track the currently loaded LM Studio model to avoid loading duplicates.
 # When a per-character model override requests a different model, the old
 # one is unloaded first so only one LLM occupies VRAM at a time.
@@ -3074,6 +3111,40 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         except Exception as _beh_err:
             logger.debug(f"[Adaptive] Behavior modifiers skipped: {_beh_err}")
 
+        # ── Sprint 3: Toxicity detection ──────────────────────────────
+        if cfg.get("nlp", {}).get("toxicity_detection", True):
+            try:
+                _td = _get_toxicity_detector()
+                _tox_result = await asyncio.get_event_loop().run_in_executor(
+                    None, _td.detect, text
+                )
+                if _tox_result.is_toxic:
+                    logger.info("[Toxicity] Detected (conf=%.2f): %s", _tox_result.confidence, _tox_result.categories)
+            except Exception as _tox_err:
+                logger.debug("[Toxicity] detection skipped: %s", _tox_err)
+
+        # ── Sprint 3: NER entity extraction (async, supplements LLM facts) ──
+        if cfg.get("nlp", {}).get("ner_extraction", True):
+            try:
+                _ner = _get_ner_extractor()
+                _ner_facts = await asyncio.get_event_loop().run_in_executor(
+                    None, _ner.extract_for_knowledge_graph, text
+                )
+                if _ner_facts:
+                    for _nf in _ner_facts:
+                        try:
+                            cur.execute(
+                                "INSERT OR IGNORE INTO user_facts(character_id, category, fact_text, confidence) "
+                                "VALUES (?, ?, ?, ?)",
+                                (char_id, _nf["category"], _nf["fact_text"], _nf["confidence"]),
+                            )
+                        except Exception:
+                            pass
+                    con.commit()
+                    logger.debug("[NER] Extracted %d entities for char=%d", len(_ner_facts), char_id)
+            except Exception as _ner_err:
+                logger.debug("[NER] extraction skipped: %s", _ner_err)
+
         # ── Sprint 1: Sarcasm detection ───────────────────────────────
         _sarcasm_hint = None
         if cfg.get("nlp", {}).get("sarcasm_detection", True):
@@ -3148,6 +3219,14 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         memories = []
         if vector_store:
             memories = vector_store.query_memory(text, char_id=char_id)
+            # Sprint 3: Rerank memory results with cross-encoder for better relevance
+            if memories and cfg.get("memory", {}).get("reranker_enabled", True):
+                try:
+                    _rr = _get_memory_reranker()
+                    _reranked = _rr.rerank(text, memories, top_k=len(memories))
+                    memories = [r.metadata for r in _reranked]
+                except Exception as _rr_err:
+                    logger.debug("[Reranker] skipped: %s", _rr_err)
 
         # ── Context assembly: token-budget-aware message selection ──────
         # Replaces manual history fetching with the smart assembler that
@@ -4126,6 +4205,40 @@ async def chat_stream(req: Request):
     system_prompt, _skip_bible = _select_system_prompt(
         system_prompt, _stream_prompt_lite, cfg, _prompt_tier
     )
+
+    # ── Sprint 3: Toxicity detection (stream) ───────────────────────
+    if cfg.get("nlp", {}).get("toxicity_detection", True):
+        try:
+            _td_s = _get_toxicity_detector()
+            _tox_s = await asyncio.get_event_loop().run_in_executor(
+                None, _td_s.detect, text
+            )
+            if _tox_s.is_toxic:
+                logger.info("[Toxicity] Detected in stream (conf=%.2f)", _tox_s.confidence)
+        except Exception as _tox_err_s:
+            logger.debug("[Toxicity] detection skipped (stream): %s", _tox_err_s)
+
+    # ── Sprint 3: NER entity extraction (stream) ─────────────────────
+    if cfg.get("nlp", {}).get("ner_extraction", True):
+        try:
+            _ner_s = _get_ner_extractor()
+            _ner_facts_s = await asyncio.get_event_loop().run_in_executor(
+                None, _ner_s.extract_for_knowledge_graph, text
+            )
+            if _ner_facts_s:
+                for _nf_s in _ner_facts_s:
+                    try:
+                        cur.execute(
+                            "INSERT OR IGNORE INTO user_facts(character_id, category, fact_text, confidence) "
+                            "VALUES (?, ?, ?, ?)",
+                            (char_id, _nf_s["category"], _nf_s["fact_text"], _nf_s["confidence"]),
+                        )
+                    except Exception:
+                        pass
+                con.commit()
+                logger.debug("[NER] Extracted %d entities (stream) for char=%d", len(_ner_facts_s), char_id)
+        except Exception as _ner_err_s:
+            logger.debug("[NER] extraction skipped (stream): %s", _ner_err_s)
 
     # ── Sprint 1: Sarcasm detection ───────────────────────────────────
     _sarcasm_hint_s = None

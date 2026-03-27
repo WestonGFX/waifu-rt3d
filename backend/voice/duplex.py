@@ -134,6 +134,10 @@ class VoiceDuplexSession:
             0.001, 0.5,
         )
 
+        # Sprint 3: ML-based VAD and noise suppression (lazy-loaded)
+        self._silero_vad = None
+        self._noise_suppressor = None
+
     async def run(self) -> None:
         """
         Main event loop — receives WebSocket messages until disconnect.
@@ -195,17 +199,27 @@ class VoiceDuplexSession:
         if not pcm:
             return
 
-        energy = compute_rms_energy(pcm)
         now = time.monotonic()
 
-        # Determine the active VAD threshold based on state
-        threshold = (
-            SPEAKING_VAD_THRESHOLD
-            if self.state == SessionState.SPEAKING
-            else self.vad_threshold
-        )
+        # Sprint 3: ML-based VAD with energy fallback
+        is_speech = False
+        try:
+            if self._silero_vad is None:
+                from backend.voice.silero_vad import SileroVAD
+                self._silero_vad = SileroVAD(threshold=self.vad_threshold)
+            vad_result = self._silero_vad.detect(pcm)
+            is_speech = vad_result.is_speech
+        except Exception:
+            # Fallback to energy-based VAD
+            energy = compute_rms_energy(pcm)
+            threshold = (
+                SPEAKING_VAD_THRESHOLD
+                if self.state == SessionState.SPEAKING
+                else self.vad_threshold
+            )
+            is_speech = energy > threshold
 
-        if energy > threshold:
+        if is_speech:
             # Voice detected
             self._last_voice_time = now
 
@@ -277,12 +291,32 @@ class VoiceDuplexSession:
         """
         audio_bytes = bytes(self._audio_buffer)
         self._audio_buffer.clear()
+        # Reset VAD state for next utterance
+        if self._silero_vad:
+            try:
+                self._silero_vad.reset()
+            except Exception:
+                pass
 
         if len(audio_bytes) < MIN_UTTERANCE_BYTES:
             await self._set_state(SessionState.IDLE)
             return
 
         await self._set_state(SessionState.PROCESSING)
+
+        # ── Step 0.5: Noise suppression (Sprint 3) ───────────────────────────────
+        try:
+            if self._noise_suppressor is None:
+                from backend.voice.noise_suppressor import NoiseSuppressor
+                self._noise_suppressor = NoiseSuppressor()
+            _denoise = await asyncio.get_event_loop().run_in_executor(
+                None, self._noise_suppressor.process, audio_bytes
+            )
+            audio_bytes = _denoise.audio_bytes
+            if _denoise.noise_reduction_db > 3.0:
+                logger.debug("[Voice] Noise reduced by %.1f dB", _denoise.noise_reduction_db)
+        except Exception as _ns_err:
+            logger.debug("[Voice] Noise suppression skipped: %s", _ns_err)
 
         # ── Step 1: ASR ──────────────────────────────────────────────────────────
         transcript = await self._transcribe(audio_bytes)

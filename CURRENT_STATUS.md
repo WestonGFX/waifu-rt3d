@@ -1,36 +1,39 @@
 # Current Project Status
 
-**Last updated:** 2026-03-26 15:00 PDT
+**Last updated:** 2026-03-26 16:30 PDT
 **Branch:** master
 **Schema version:** v60
-**Tests:** 1065 passing (backend pytest), tsc clean (frontend)
+**Tests:** 1147 passing (backend pytest), tsc clean (frontend)
 
 ## Active Work
 
-Sprint 2 Retention Mechanics — P11 complete, P9/P10 already existed.
-Next: Sprint 3 Intelligence Pipeline or P5 memory browser UI.
+Sprint 1 wired, Sprint 2 complete, Sprint 3 complete.
+Next: Sprint 4 Voice & Immersion or P5 memory browser UI.
 
 ## Completed This Session (Mar 26)
 
 | Commit | What |
 |--------|------|
+| `bc8948b` | Sprint 3: Wire 5 intelligence modules into pipeline |
+| `ed76147` | Sprint 3: 82 tests for intelligence pipeline modules |
+| `5c19a5a` | Sprint 3: 5 modules (NER, toxicity, VAD, noise, reranker) |
+| `3fc82a5` | Status update |
 | `9bb7be8` | P11: Relationship state prompt injection (40 new tests) |
-| `fdbf970` | Wire 5 Sprint 1 modules into chat pipeline (bond gating, sarcasm, nostalgia, modes, SER) |
+| `fdbf970` | Wire 5 Sprint 1 modules into chat pipeline |
 
-## Sprint 2 Status
+## Sprint Summary
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| P9 — Daily engagement hooks | ✅ ALREADY DONE | `rewards/tracker.py` + `proactive/triggers.py` + scheduler wired |
-| P10 — Character proactive disclosure | ✅ ALREADY DONE | `proactive/generator.py` + full API endpoints wired |
-| P11 — Relationship state injection | ✅ DONE (this session) | `relationship/state_injector.py` — 40 tests |
-| P5 — Memory browser UI | 🔲 PENDING | Frontend-only task, backend memory APIs exist |
+| Sprint | Status | Key Deliverables |
+|--------|--------|-----------------|
+| Sprint 1 (Tier S) | ✅ COMPLETE + WIRED | Bond gating, sarcasm, nostalgia, modes, SER — all in pipeline |
+| Sprint 2 (Retention) | ✅ COMPLETE | P9/P10 already existed; P11 relationship state injector built + wired |
+| Sprint 3 (Intelligence) | ✅ COMPLETE + WIRED | NER, toxicity, Silero VAD, DeepFilterNet, cross-encoder reranker |
 
 ## Next 3 Tasks (Priority Order)
 
 1. **P5: Memory browser (view + delete)** — Frontend UI for viewing/managing character memories
-2. **Sprint 3: Intelligence pipeline** — N1 (NER), N2 (toxicity), V1 (Silero VAD), V2 (DeepFilterNet), N5 (reranker)
-3. **Sprint 4: Voice & Immersion** — V4 (voice cloning), V6 (faster ASR), P4 (scenario templates)
+2. **Sprint 4: Voice & Immersion** — V4 (voice cloning), V6 (faster ASR), P4 (scenario templates)
+3. **Sprint 5: Emotional Depth** — E2 (dream sequences), E3 (time capsules), E6 (compatibility quiz)
 
 ## Quick Reference
 

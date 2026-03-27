@@ -1,39 +1,46 @@
 # Current Project Status
 
-**Last updated:** 2026-03-26 16:30 PDT
+**Last updated:** 2026-03-27 15:45 PDT
 **Branch:** master
 **Schema version:** v60
-**Tests:** 1147 passing (backend pytest), tsc clean (frontend)
+**Tests:** 1147+ passing (backend pytest), tsc clean (frontend)
 
 ## Active Work
 
-Sprint 1 wired, Sprint 2 complete, Sprint 3 complete.
-Next: Sprint 4 Voice & Immersion or P5 memory browser UI.
+Sprints 1-4 complete. Awaiting Sprint 4 test results.
+Next: Sprint 5 Emotional Depth or P5 memory browser UI.
 
-## Completed This Session (Mar 26)
+## Completed This Session (Mar 27)
+
+| Commit | What |
+|--------|------|
+| `d52b58f` | Sprint 4: Wire Moonshine ASR, scenarios, structured director |
+| `6eb3150` | Sprint 4: 3 modules (Moonshine ASR, scenario templates, structured director) |
+
+## Completed Previous Session (Mar 26)
 
 | Commit | What |
 |--------|------|
 | `bc8948b` | Sprint 3: Wire 5 intelligence modules into pipeline |
 | `ed76147` | Sprint 3: 82 tests for intelligence pipeline modules |
 | `5c19a5a` | Sprint 3: 5 modules (NER, toxicity, VAD, noise, reranker) |
-| `3fc82a5` | Status update |
-| `9bb7be8` | P11: Relationship state prompt injection (40 new tests) |
-| `fdbf970` | Wire 5 Sprint 1 modules into chat pipeline |
+| `9bb7be8` | Sprint 2: P11 relationship state prompt injection (40 tests) |
+| `fdbf970` | Sprint 1: Wire 5 modules into chat pipeline |
 
 ## Sprint Summary
 
 | Sprint | Status | Key Deliverables |
 |--------|--------|-----------------|
-| Sprint 1 (Tier S) | ✅ COMPLETE + WIRED | Bond gating, sarcasm, nostalgia, modes, SER — all in pipeline |
-| Sprint 2 (Retention) | ✅ COMPLETE | P9/P10 already existed; P11 relationship state injector built + wired |
-| Sprint 3 (Intelligence) | ✅ COMPLETE + WIRED | NER, toxicity, Silero VAD, DeepFilterNet, cross-encoder reranker |
+| Sprint 1 (Tier S) | ✅ COMPLETE + WIRED | Bond gating, sarcasm, nostalgia, modes, SER |
+| Sprint 2 (Retention) | ✅ COMPLETE | P9/P10 pre-existing; P11 relationship state injector |
+| Sprint 3 (Intelligence) | ✅ COMPLETE + WIRED | NER, toxicity, Silero VAD, DeepFilterNet, reranker |
+| Sprint 4 (Voice & Immersion) | ✅ COMPLETE + WIRED | Chatterbox (pre-existing), Moonshine ASR, scenarios, director |
 
 ## Next 3 Tasks (Priority Order)
 
 1. **P5: Memory browser (view + delete)** — Frontend UI for viewing/managing character memories
-2. **Sprint 4: Voice & Immersion** — V4 (voice cloning), V6 (faster ASR), P4 (scenario templates)
-3. **Sprint 5: Emotional Depth** — E2 (dream sequences), E3 (time capsules), E6 (compatibility quiz)
+2. **Sprint 5: Emotional Depth** — E2 (dream sequences), E3 (time capsules), E6 (compatibility quiz)
+3. **Sprint 6: World Building** — P7 (scene cards), P2 (context viewer), E4 (daily fortune)
 
 ## Quick Reference
 

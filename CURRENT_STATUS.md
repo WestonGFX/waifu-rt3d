@@ -1,40 +1,36 @@
 # Current Project Status
 
-**Last updated:** 2026-03-25 21:45 PDT
+**Last updated:** 2026-03-26 15:00 PDT
 **Branch:** master
 **Schema version:** v60
-**Tests:** 1025 passing (backend pytest), tsc clean (frontend)
+**Tests:** 1065 passing (backend pytest), tsc clean (frontend)
 
 ## Active Work
 
-Sprint 1 Tier S — 9/9 features COMPLETE (6 built + 3 already existed).
-Next: integration wiring into server.py chat pipeline.
+Sprint 2 Retention Mechanics — P11 complete, P9/P10 already existed.
+Next: Sprint 3 Intelligence Pipeline or P5 memory browser UI.
 
-## Completed This Session (Mar 25)
+## Completed This Session (Mar 26)
 
 | Commit | What |
 |--------|------|
-| `3001a7d` | Sprint 1: 6 Tier-S features (bond gating, sarcasm, nostalgia, modes, SER, catalog) |
-| `1e9c7aa` | Expanded research (41 features) + prioritized roadmap |
-| `abbd184` | Phase 16: AI model ecosystem analysis + FEATURES.md |
+| `9bb7be8` | P11: Relationship state prompt injection (40 new tests) |
+| `fdbf970` | Wire 5 Sprint 1 modules into chat pipeline (bond gating, sarcasm, nostalgia, modes, SER) |
 
-## What's Built But Not Wired
+## Sprint 2 Status
 
-These modules exist with full tests but are NOT yet integrated into the chat pipeline:
-
-| Module | File | What It Does |
-|--------|------|-------------|
-| Bond gating | `backend/content/gating.py` | `get_bond_gated_level()` — needs call in chat endpoint |
-| Sarcasm detection | `backend/nlp/sarcasm_detector.py` | `SarcasmDetector.detect()` — inject hint into context |
-| Nostalgia triggers | `backend/memory/nostalgia.py` | `NostalgiaTrigger.maybe_trigger()` — inject memory prompt |
-| Interaction modes | `backend/llm/interaction_modes.py` | `get_mode_config()` — needs mode param + context prefix |
-| Speech emotion | `backend/voice/emotion_detector.py` | `SpeechEmotionDetector` — wire into duplex voice pipeline |
+| Feature | Status | Notes |
+|---------|--------|-------|
+| P9 — Daily engagement hooks | ✅ ALREADY DONE | `rewards/tracker.py` + `proactive/triggers.py` + scheduler wired |
+| P10 — Character proactive disclosure | ✅ ALREADY DONE | `proactive/generator.py` + full API endpoints wired |
+| P11 — Relationship state injection | ✅ DONE (this session) | `relationship/state_injector.py` — 40 tests |
+| P5 — Memory browser UI | 🔲 PENDING | Frontend-only task, backend memory APIs exist |
 
 ## Next 3 Tasks (Priority Order)
 
-1. **Integration wiring** — wire 5 new modules into server.py + context_assembler + duplex.py
-2. **Sprint 2: Retention mechanics** — P9 (engagement hooks), P10 (proactive disclosure), P11 (relationship state injection), P5 memory enhancements
-3. **Sprint 3: Intelligence pipeline** — N1 (NER), N2 (toxicity), V1 (Silero VAD), V2 (DeepFilterNet), N5 (reranker)
+1. **P5: Memory browser (view + delete)** — Frontend UI for viewing/managing character memories
+2. **Sprint 3: Intelligence pipeline** — N1 (NER), N2 (toxicity), V1 (Silero VAD), V2 (DeepFilterNet), N5 (reranker)
+3. **Sprint 4: Voice & Immersion** — V4 (voice cloning), V6 (faster ASR), P4 (scenario templates)
 
 ## Quick Reference
 

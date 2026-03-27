@@ -9969,6 +9969,217 @@ def get_emotion_timeline(session_id: int):
     }
 
 
+# ── Sprint 5: Emotional Depth APIs ─────────────────────────────────────────
+
+
+@app.get("/api/characters/{char_id}/dreams")
+def get_character_dreams(char_id: int, limit: int = 10):
+    """Get dream history for a character.
+
+    Args:
+        char_id: Character ID.
+        limit: Max dreams to return (default 10).
+
+    Returns:
+        {"ok": True, "dreams": [...], "undelivered": int}
+    """
+    conn = db()
+    try:
+        from backend.emotional.dreams import get_dream_history, get_undelivered_dreams
+        dreams = get_dream_history(char_id, conn, limit=limit)
+        undelivered = get_undelivered_dreams(char_id, conn)
+        return {
+            "ok": True,
+            "dreams": [
+                {"id": d.id, "dream_text": d.dream_text, "dream_mood": d.dream_mood,
+                 "delivered": d.delivered, "created_at": d.created_at,
+                 "delivered_at": d.delivered_at}
+                for d in dreams
+            ],
+            "undelivered": len(undelivered),
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+@app.post("/api/characters/{char_id}/dreams/deliver")
+async def deliver_character_dream(char_id: int):
+    """Deliver the next undelivered dream for a character.
+
+    Returns:
+        {"ok": True, "dream": {...}} or {"ok": True, "dream": null}
+    """
+    conn = db()
+    try:
+        from backend.emotional.dreams import get_undelivered_dreams, mark_dream_delivered
+        undelivered = get_undelivered_dreams(char_id, conn)
+        if not undelivered:
+            return {"ok": True, "dream": None}
+        dream = undelivered[0]
+        mark_dream_delivered(dream.id, conn)
+        return {
+            "ok": True,
+            "dream": {"id": dream.id, "dream_text": dream.dream_text,
+                       "dream_mood": dream.dream_mood, "created_at": dream.created_at},
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/capsules")
+def get_character_capsules(char_id: int):
+    """Get all time capsules for a character (pending + summary).
+
+    Returns:
+        {"ok": True, "pending": [...], "summary": {...}}
+    """
+    conn = db()
+    try:
+        from backend.emotional.capsules import get_pending_capsules, get_capsule_summary
+        pending = get_pending_capsules(char_id, conn)
+        summary = get_capsule_summary(char_id, conn)
+        return {
+            "ok": True,
+            "pending": [
+                {"id": c.id, "creator": c.creator, "deliver_at": c.deliver_at,
+                 "created_at": c.created_at}
+                for c in pending
+            ],
+            "summary": summary,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+@app.post("/api/characters/{char_id}/capsules")
+async def create_character_capsule(char_id: int, req: Request):
+    """Create a new time capsule.
+
+    Request body: {"message": str, "deliver_at": str, "creator": "user"|"character"}
+
+    Returns:
+        {"ok": True, "capsule_id": int}
+    """
+    body = await req.json()
+    message = body.get("message", "").strip()
+    deliver_at = body.get("deliver_at", "")
+    creator = body.get("creator", "user")
+    if not message or not deliver_at:
+        raise HTTPException(400, "message and deliver_at required")
+
+    conn = db()
+    try:
+        from backend.emotional.capsules import create_capsule
+        capsule = create_capsule(char_id, message, deliver_at, conn, creator=creator)
+        return {"ok": True, "capsule_id": capsule.id}
+    except ValueError as ve:
+        raise HTTPException(400, str(ve))
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/capsules/{capsule_id}")
+def delete_time_capsule(capsule_id: int):
+    """Delete an undelivered time capsule.
+
+    Returns:
+        {"ok": True, "deleted": bool}
+    """
+    conn = db()
+    try:
+        from backend.emotional.capsules import delete_capsule
+        deleted = delete_capsule(capsule_id, conn)
+        return {"ok": True, "deleted": deleted}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/quiz")
+def get_character_quiz(char_id: int, session_id: int = 0):
+    """Get quiz progress and next question for a character.
+
+    Returns:
+        {"ok": True, "next_question": {...}|null, "progress": {...},
+         "can_ask_this_session": bool}
+    """
+    conn = db()
+    try:
+        from backend.emotional.quiz import (
+            get_next_question, get_or_create_profile, can_ask_question_this_session,
+        )
+        profile = get_or_create_profile(char_id, conn)
+        next_q = get_next_question(char_id, conn)
+        can_ask = can_ask_question_this_session(char_id, session_id, conn) if session_id else True
+        answers = profile.quiz_answers if isinstance(profile.quiz_answers, dict) else {}
+        return {
+            "ok": True,
+            "next_question": {
+                "id": next_q.id, "text": next_q.text, "category": next_q.category,
+                "follow_up": next_q.follow_up
+            } if next_q else None,
+            "progress": {"answered": len(answers), "total": 20},
+            "can_ask_this_session": can_ask,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+@app.post("/api/characters/{char_id}/quiz/answer")
+async def record_quiz_answer(char_id: int, req: Request):
+    """Record a quiz answer.
+
+    Request body: {"question_id": str, "answer": str, "session_id": int}
+
+    Returns:
+        {"ok": True, "answers_so_far": int, "is_complete": bool}
+    """
+    body = await req.json()
+    question_id = body.get("question_id", "")
+    answer = body.get("answer", "").strip()
+    if not question_id or not answer:
+        raise HTTPException(400, "question_id and answer required")
+
+    conn = db()
+    try:
+        from backend.emotional.quiz import record_answer
+        result = record_answer(char_id, question_id, answer, conn)
+        return {"ok": True, **result}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/compatibility")
+def get_character_compatibility(char_id: int):
+    """Get the full compatibility card for a character.
+
+    Returns:
+        {"ok": True, "card": {...}} or {"ok": True, "card": null}
+    """
+    conn = db()
+    try:
+        from backend.emotional.quiz import get_compatibility_card
+        card = get_compatibility_card(char_id, conn)
+        return {"ok": True, "card": card}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+
+
 @app.get("/api/scan/live2d")
 def scan_live2d_models():
     """Recursively find all .model3.json files in live2d storage."""

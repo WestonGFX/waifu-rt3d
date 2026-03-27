@@ -35,12 +35,13 @@ Next: Sprint 5 Emotional Depth or P5 memory browser UI.
 | Sprint 2 (Retention) | ✅ COMPLETE | P9/P10 pre-existing; P11 relationship state injector |
 | Sprint 3 (Intelligence) | ✅ COMPLETE + WIRED | NER, toxicity, Silero VAD, DeepFilterNet, reranker |
 | Sprint 4 (Voice & Immersion) | ✅ COMPLETE + WIRED | Chatterbox (pre-existing), Moonshine ASR, scenarios, director |
+| Sprint 5 (Emotional Depth) | ✅ COMPLETE + WIRED | Dreams, time capsules, compatibility quiz — 9 API endpoints |
 
 ## Next 3 Tasks (Priority Order)
 
 1. **P5: Memory browser (view + delete)** — Frontend UI for viewing/managing character memories
-2. **Sprint 5: Emotional Depth** — E2 (dream sequences), E3 (time capsules), E6 (compatibility quiz)
-3. **Sprint 6: World Building** — P7 (scene cards), P2 (context viewer), E4 (daily fortune)
+2. **Sprint 6: World Building** — P7 (scene cards), P2 (context viewer), E4 (daily fortune)
+3. **Remaining Tier A** — R3 (QLoRA adapters), E5 (wellness check-ins), N3 (language detection)
 
 ## Quick Reference
 

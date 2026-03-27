@@ -29,7 +29,7 @@ import json
 import logging
 import sqlite3
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -371,7 +371,7 @@ def deliver_capsule(
         logger.debug("deliver_capsule: capsule_id=%d already delivered", capsule_id)
         return False
 
-    now_str = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     conn.execute(
         """
         UPDATE time_capsules

@@ -2520,6 +2520,19 @@ def _build_prompt_sections(
     except Exception:
         pass
 
+    # 1c-rel. P11: Relationship state prompt injection — aggregated bond/intimacy/streak context
+    try:
+        from backend.relationship.state_injector import build_relationship_state_block
+        _content_conn_rel = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_rel:
+            _rel_block = build_relationship_state_block(
+                char_id, session_id, _content_conn_rel, char_name=char_name
+            )
+            if _rel_block:
+                sections.append(_section("Relationship State", f"\n{_rel_block}"))
+    except Exception as _rel_err:
+        logger.debug("[RelationshipState] injection skipped: %s", _rel_err)
+
     # 1d. Games catalogue — let characters know what they can play with the user
     _games_text = (
         "\n\n[MINI-GAMES YOU CAN PLAY WITH THE USER]\n"

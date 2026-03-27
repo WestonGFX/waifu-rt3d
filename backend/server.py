@@ -388,6 +388,30 @@ model_manager = None
 vector_store = None
 tts_model_mgr = None
 
+# ── Sprint 1 module singletons ──────────────────────────────────────────
+_sarcasm_detector = None
+
+
+def _get_sarcasm_detector():
+    """Lazy-load the sarcasm detector (RoBERTa model, ~500 MB on first call)."""
+    global _sarcasm_detector
+    if _sarcasm_detector is None:
+        from backend.nlp.sarcasm_detector import SarcasmDetector
+        _sarcasm_detector = SarcasmDetector()
+    return _sarcasm_detector
+
+
+_nostalgia_triggers: dict = {}
+
+
+def _get_nostalgia_trigger(char_id: int, db_path: str):
+    """Get or create a per-character NostalgiaTrigger (tracks cooldown state)."""
+    if char_id not in _nostalgia_triggers:
+        from backend.memory.nostalgia import NostalgiaTrigger
+        _nostalgia_triggers[char_id] = NostalgiaTrigger(db_path=db_path)
+    return _nostalgia_triggers[char_id]
+
+
 # Track the currently loaded LM Studio model to avoid loading duplicates.
 # When a per-character model override requests a different model, the old
 # one is unloaded first so only one LLM occupies VRAM at a time.
@@ -2273,6 +2297,12 @@ def _build_prompt_sections(
     mood_enabled: bool = True,
     mood_intensity: float = 0.8,
     skip_bible: bool = False,
+    # ── Sprint 1 integration parameters ──
+    sarcasm_hint: str = None,
+    nostalgia_prompt: str = None,
+    mode_prefix: str = "",
+    mode_hint: str = "",
+    vocal_emotion_hint: str = "",
 ) -> list[dict]:
     """Build all system prompt injection sections with per-section token estimates.
 
@@ -2369,6 +2399,10 @@ def _build_prompt_sections(
     if system_prompt:
         sections.append(_section("System Prompt", system_prompt))
 
+    # 1-mode. Interaction mode prefix — frames response style (story/adventure)
+    if mode_prefix:
+        sections.append(_section("Interaction Mode", f"\n{mode_prefix}"))
+
     # 1-bible. Character Bible injection — load selected sections from markdown
     # Skipped when skip_bible=True (lite/auto tier with small context windows)
     if not skip_bible:
@@ -2461,6 +2495,14 @@ def _build_prompt_sections(
         except Exception as _mood_err:
             logger.warning(f"[MoodA4] Failed to generate mood prefix: {_mood_err}")
 
+    # 1b-sarcasm. Sarcasm detection hint — helps character respond to sarcastic tone
+    if sarcasm_hint:
+        sections.append(_section("Sarcasm Context", f"\n{sarcasm_hint}"))
+
+    # 1b-vocal. Vocal emotion hint — detected from user's speech tone (voice mode)
+    if vocal_emotion_hint:
+        sections.append(_section("Vocal Emotion", f"\n[{vocal_emotion_hint}]"))
+
     # 1c. Feature C3: User knowledge graph — inject top user facts
     try:
         _fact_rows = cur.execute(
@@ -2499,6 +2541,10 @@ def _build_prompt_sections(
     if diary:
         label = f"[YOUR DIARY — {diary_date}]" if diary_date else "[YOUR DIARY]"
         sections.append(_section("Diary Entry", f"\n\n{label}\n{diary}"))
+
+    # 2b. Nostalgia trigger — probabilistic injection of past memory references
+    if nostalgia_prompt:
+        sections.append(_section("Nostalgia", f"\n{nostalgia_prompt}"))
 
     # 3. Daily greeting (#54)
     _today = _dt_bps.now().strftime('%Y-%m-%d')
@@ -2615,6 +2661,10 @@ def _build_prompt_sections(
     rp_text = _get_rp_style_injection(rp_style)
     if rp_text:
         sections.append(_section("RP Style Guide", rp_text))
+
+    # 8c. Interaction mode response hint — late formatting reminder for story/adventure
+    if mode_hint:
+        sections.append(_section("Mode Response Hint", f"\n{mode_hint}"))
 
     # 9. Content gating (v58+) or legacy content filter fallback
     try:
@@ -2822,6 +2872,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
     char_id = int(body.get("char_id") or char_id or 1)
     client_message_id: Optional[str] = body.get("client_message_id")
     msg_role = body.get("role", "user")
+    interaction_mode = body.get("mode", "chat")
 
     # ── Director Mode: store director note without calling LLM ─────────
     if msg_role == "director":
@@ -3010,6 +3061,51 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         except Exception as _beh_err:
             logger.debug(f"[Adaptive] Behavior modifiers skipped: {_beh_err}")
 
+        # ── Sprint 1: Sarcasm detection ───────────────────────────────
+        _sarcasm_hint = None
+        if cfg.get("nlp", {}).get("sarcasm_detection", True):
+            try:
+                _sd = _get_sarcasm_detector()
+                _sarcasm_result = await asyncio.get_event_loop().run_in_executor(
+                    None, _sd.detect, text
+                )
+                if _sarcasm_result.is_sarcastic:
+                    _sarcasm_hint = _sarcasm_result.hint
+                    logger.debug("[Sarcasm] Detected (conf=%.2f): %s", _sarcasm_result.confidence, _sarcasm_hint)
+            except Exception as _sar_err:
+                logger.debug("[Sarcasm] detection skipped: %s", _sar_err)
+
+        # ── Sprint 1: Nostalgia triggers ──────────────────────────────
+        _nostalgia_prompt = None
+        if cfg.get("memory", {}).get("nostalgia_enabled", True):
+            try:
+                _msg_count_nost = cur.execute(
+                    "SELECT COUNT(*) FROM messages WHERE session_id=? AND is_active=1",
+                    (session_id,)
+                ).fetchone()[0]
+                _nt = _get_nostalgia_trigger(char_id, str(DB_PATH))
+                _nr = _nt.maybe_trigger(char_id, session_id, char_last_emotion, _msg_count_nost)
+                if _nr:
+                    _nostalgia_prompt = _nr.prompt
+                    logger.debug("[Nostalgia] Triggered for char=%d session=%d", char_id, session_id)
+            except Exception as _nost_err:
+                logger.debug("[Nostalgia] trigger skipped: %s", _nost_err)
+
+        # ── Sprint 1: Interaction modes ───────────────────────────────
+        _mode_prefix = ""
+        _mode_hint = ""
+        if interaction_mode != "chat":
+            try:
+                from backend.llm.interaction_modes import get_mode_config
+                _mode_cfg = get_mode_config(
+                    interaction_mode, char_name, cfg.get("user_name", "User")
+                )
+                _mode_prefix = _mode_cfg.system_prefix
+                _mode_hint = _mode_cfg.response_hint
+                logger.debug("[Modes] Activated mode '%s' for char=%s", interaction_mode, char_name)
+            except Exception as _mode_err:
+                logger.debug("[Modes] Mode '%s' skipped: %s", interaction_mode, _mode_err)
+
         # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, mood, emotion, filter)
         sections = _build_prompt_sections(
             cfg, system_prompt, char_id, session_id, cur,
@@ -3026,6 +3122,10 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             mood_enabled=_ns_mood_enabled,
             mood_intensity=_ns_mood_intensity,
             skip_bible=_skip_bible,
+            sarcasm_hint=_sarcasm_hint,
+            nostalgia_prompt=_nostalgia_prompt,
+            mode_prefix=_mode_prefix,
+            mode_hint=_mode_hint,
         )
         system_content = "".join(s["content"] for s in sections)
         # Check is_daily_first from sections (Daily Greeting section present = first of day)
@@ -3793,6 +3893,8 @@ async def chat_stream(req: Request):
     request_speech_rate = body.get("speech_rate")  # float or None
     # Per-request reply length override from adaptive pacing (#21)
     request_max_tokens = body.get("max_tokens")  # int | None
+    interaction_mode = body.get("mode", "chat")
+    vocal_emotion_hint = body.get("vocal_emotion_hint", "")
 
     # ── Director Mode: store director note without calling LLM ─────────
     if msg_role == "director":
@@ -4012,6 +4114,51 @@ async def chat_stream(req: Request):
         system_prompt, _stream_prompt_lite, cfg, _prompt_tier
     )
 
+    # ── Sprint 1: Sarcasm detection ───────────────────────────────────
+    _sarcasm_hint_s = None
+    if cfg.get("nlp", {}).get("sarcasm_detection", True):
+        try:
+            _sd_s = _get_sarcasm_detector()
+            _sarcasm_result_s = await asyncio.get_event_loop().run_in_executor(
+                None, _sd_s.detect, text
+            )
+            if _sarcasm_result_s.is_sarcastic:
+                _sarcasm_hint_s = _sarcasm_result_s.hint
+                logger.debug("[Sarcasm] Detected in stream (conf=%.2f)", _sarcasm_result_s.confidence)
+        except Exception as _sar_err_s:
+            logger.debug("[Sarcasm] detection skipped (stream): %s", _sar_err_s)
+
+    # ── Sprint 1: Nostalgia triggers ──────────────────────────────────
+    _nostalgia_prompt_s = None
+    if cfg.get("memory", {}).get("nostalgia_enabled", True):
+        try:
+            _msg_count_nost_s = cur.execute(
+                "SELECT COUNT(*) FROM messages WHERE session_id=? AND is_active=1",
+                (session_id,)
+            ).fetchone()[0]
+            _nt_s = _get_nostalgia_trigger(char_id, str(DB_PATH))
+            _nr_s = _nt_s.maybe_trigger(char_id, session_id, stream_char_last_emotion, _msg_count_nost_s)
+            if _nr_s:
+                _nostalgia_prompt_s = _nr_s.prompt
+                logger.debug("[Nostalgia] Triggered for char=%d (stream)", char_id)
+        except Exception as _nost_err_s:
+            logger.debug("[Nostalgia] trigger skipped (stream): %s", _nost_err_s)
+
+    # ── Sprint 1: Interaction modes ───────────────────────────────────
+    _mode_prefix_s = ""
+    _mode_hint_s = ""
+    if interaction_mode != "chat":
+        try:
+            from backend.llm.interaction_modes import get_mode_config
+            _mode_cfg_s = get_mode_config(
+                interaction_mode, stream_char_name, cfg.get("user_name", "User")
+            )
+            _mode_prefix_s = _mode_cfg_s.system_prefix
+            _mode_hint_s = _mode_cfg_s.response_hint
+            logger.debug("[Modes] Activated mode '%s' (stream)", interaction_mode)
+        except Exception as _mode_err_s:
+            logger.debug("[Modes] Mode '%s' skipped (stream): %s", interaction_mode, _mode_err_s)
+
     # Build prompt sections via shared helper (diary, greeting, anniversary, RAG, mood, vocab, emotion, filter)
     sections = _build_prompt_sections(
         cfg, system_prompt, char_id, session_id, cur,
@@ -4028,6 +4175,11 @@ async def chat_stream(req: Request):
         mood_enabled=_stream_mood_enabled,
         mood_intensity=_stream_mood_intensity,
         skip_bible=_skip_bible,
+        sarcasm_hint=_sarcasm_hint_s,
+        nostalgia_prompt=_nostalgia_prompt_s,
+        mode_prefix=_mode_prefix_s,
+        mode_hint=_mode_hint_s,
+        vocal_emotion_hint=vocal_emotion_hint,
     )
     system_content = "".join(s["content"] for s in sections)
     _is_daily_first = any(s["name"] == "Daily Greeting" for s in sections)

@@ -296,10 +296,33 @@ class VoiceDuplexSession:
             "role": "user",
         })
 
+        # ── Step 1b: Speech Emotion Recognition (SER) ────────────────────────────
+        _vocal_hint = ""
+        try:
+            if not hasattr(self, "_emotion_detector"):
+                self._emotion_detector = None
+            if self._emotion_detector is None:
+                from backend.voice.emotion_detector import SpeechEmotionDetector
+                self._emotion_detector = SpeechEmotionDetector()
+            if self._emotion_detector:
+                _ser = await asyncio.get_event_loop().run_in_executor(
+                    None, self._emotion_detector.detect_from_pcm, audio_bytes
+                )
+                if _ser.mood_hint:
+                    _vocal_hint = _ser.mood_hint
+                    await self._send_json({
+                        "type": "user_emotion",
+                        "emotion": _ser.emotion,
+                        "confidence": round(_ser.confidence, 2),
+                    })
+                    logger.debug("[Voice] SER: %s (%.2f)", _ser.emotion, _ser.confidence)
+        except Exception as _ser_err:
+            logger.debug("[Voice] SER skipped: %s", _ser_err)
+
         # ── Step 2: LLM + TTS via /api/chat/stream ──────────────────────────────
         self._interrupted = False
         self._speaking_task = asyncio.create_task(
-            self._stream_response(transcript)
+            self._stream_response(transcript, vocal_emotion_hint=_vocal_hint)
         )
 
         try:
@@ -354,7 +377,7 @@ class VoiceDuplexSession:
             })
             return None
 
-    async def _stream_response(self, user_text: str) -> None:
+    async def _stream_response(self, user_text: str, vocal_emotion_hint: str = "") -> None:
         """
         Send user text through the chat pipeline and stream TTS audio back.
 
@@ -365,6 +388,8 @@ class VoiceDuplexSession:
 
         Args:
             user_text: Transcribed user speech to send as a chat message.
+            vocal_emotion_hint: Optional mood hint from SER, forwarded to
+                the chat pipeline for LLM context injection.
         """
         await self._set_state(SessionState.SPEAKING)
 
@@ -382,6 +407,7 @@ class VoiceDuplexSession:
                     "session_id": self.session_id,
                     "character_id": self.char_id,
                     "speak": True,
+                    **({"vocal_emotion_hint": vocal_emotion_hint} if vocal_emotion_hint else {}),
                 },
                 headers={"Accept": "text/event-stream"},
             ) as resp:

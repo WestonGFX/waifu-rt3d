@@ -35,6 +35,7 @@ from typing import Any
 
 from backend.content.gating import (
     resolve_effective_ceiling,
+    get_bond_gated_level,
     is_cloud_provider,
 )
 from backend.content.intimacy import (
@@ -310,6 +311,9 @@ def get_content_blocks(
         legacy_level = cfg.get("content_filter_level", 0)
         effective_ceiling = _map_legacy_level(int(legacy_level))
 
+    # Bond gating: further constrain ceiling based on character bond level
+    effective_ceiling = get_bond_gated_level(char_id, effective_ceiling, conn)
+
     # Load intimacy state
     intimacy = _load_intimacy_state(conn, session_id, char_id)
 
@@ -387,6 +391,9 @@ def update_intimacy_after_turn(
     else:
         legacy_level = cfg.get("content_filter_level", 0)
         effective_ceiling = _map_legacy_level(int(legacy_level))
+
+    # Bond gating: further constrain ceiling based on character bond level
+    effective_ceiling = get_bond_gated_level(char_id, effective_ceiling, conn)
 
     # Load current states
     intimacy = _load_intimacy_state(conn, session_id, char_id)

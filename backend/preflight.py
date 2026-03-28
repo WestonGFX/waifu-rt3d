@@ -41,6 +41,8 @@ Migration Strategy:
     - v58 → v59: Legacy content_filter_level migration to content_gate_config
     - v59 → v60: On-device learning tables — engagement_signals, preference_history,
                   privacy_settings tables
+    - v60 → v61: NSFW Phase 1 — relationship_boundaries + private_vocabulary tables,
+                  writing_style column on sessions, sensory_profile column on characters
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -3784,6 +3786,127 @@ def migrate_to_v60(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v61(con: sqlite3.Connection) -> bool:
+    """v60 → v61: NSFW Phase 1 — boundaries, writing styles, sensory profiles, vocabulary.
+
+    Creates two new tables and adds two new columns:
+
+    - ``relationship_boundaries``: Per-character comfort-level boundaries that
+      become negative constraints in the LLM system prompt.  Hard boundaries are
+      system-level blocks; soft boundaries are suggestions the character avoids.
+
+    - ``private_vocabulary``: Pet names, inside jokes, code words, and shared
+      references that characters develop with the user over time.  Injected into
+      the LLM prompt so the character uses the relationship's private lexicon.
+
+    - ``sessions.writing_style``: Per-session writing style override (romantic,
+      literary, direct, suggestive).  NULL = use character default.
+
+    - ``characters.sensory_profile``: JSON blob storing per-character sensory
+      emphasis (primary/secondary senses, descriptors).  NULL = use built-in
+      constant profiles.
+
+    Returns:
+        True on success, False if schema is already at v61 or higher.
+
+    Raises:
+        Exception: If the migration fails (rolls back automatically).
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> con.execute("CREATE TABLE schema_version (version INTEGER)")
+        >>> con.execute("INSERT INTO schema_version VALUES (60)")
+        >>> migrate_to_v61(con)
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 61:
+        return False
+    try:
+        # ------------------------------------------------------------------ #
+        # relationship_boundaries — per-character comfort-level constraints
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS relationship_boundaries (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id         INTEGER NOT NULL,
+                boundary_type   TEXT    NOT NULL,
+                level           TEXT    NOT NULL DEFAULT 'soft',
+                description     TEXT    NOT NULL DEFAULT '',
+                set_via         TEXT    NOT NULL DEFAULT 'form',
+                created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+                updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(char_id, boundary_type)
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_boundaries_char "
+            "ON relationship_boundaries(char_id)"
+        )
+
+        # ------------------------------------------------------------------ #
+        # private_vocabulary — pet names, inside jokes, shared references
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS private_vocabulary (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id         INTEGER NOT NULL,
+                term            TEXT    NOT NULL,
+                category        TEXT    NOT NULL DEFAULT 'pet_name',
+                meaning         TEXT    NOT NULL DEFAULT '',
+                origin          TEXT    NOT NULL DEFAULT 'user',
+                context         TEXT    NOT NULL DEFAULT '',
+                first_used_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+                usage_count     INTEGER NOT NULL DEFAULT 1,
+                last_used_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+                is_active       INTEGER NOT NULL DEFAULT 1,
+                UNIQUE(char_id, term)
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vocabulary_char "
+            "ON private_vocabulary(char_id)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vocabulary_active "
+            "ON private_vocabulary(char_id, is_active)"
+        )
+
+        # ------------------------------------------------------------------ #
+        # sessions.writing_style — per-session writing style override
+        # ------------------------------------------------------------------ #
+        try:
+            con.execute("ALTER TABLE sessions ADD COLUMN writing_style TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # ------------------------------------------------------------------ #
+        # characters.sensory_profile — JSON sensory emphasis blob
+        # ------------------------------------------------------------------ #
+        try:
+            con.execute("ALTER TABLE characters ADD COLUMN sensory_profile TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Bump version
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (61)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v61 migration complete "
+            "(relationship_boundaries, private_vocabulary, sessions.writing_style, "
+            "characters.sensory_profile)"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v61 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -4236,21 +4359,30 @@ def ensure_db():
             if migrate_to_v60(con):
                 version = 60
 
+        if version < 61:
+            logger.info("Upgrading database schema from v60 to v61...")
+            logger.info("  - Creating relationship_boundaries table")
+            logger.info("  - Creating private_vocabulary table")
+            logger.info("  - Adding sessions.writing_style column")
+            logger.info("  - Adding characters.sensory_profile column")
+            if migrate_to_v61(con):
+                version = 61
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 60:
-            raise RuntimeError(f"Database initialization failed: Expected v60, got v{final_version}")
+        if final_version < 61:
+            raise RuntimeError(f"Database initialization failed: Expected v61, got v{final_version}")
 
-        if final_version > 60:
-            logger.warning(f"Database is newer than application (v{final_version} > v60). Some features might be unused.")
+        if final_version > 61:
+            logger.warning(f"Database is newer than application (v{final_version} > v61). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v60 adds on-device learning tables)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v61 adds NSFW Phase 1 tables)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

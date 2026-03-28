@@ -14,6 +14,9 @@ env/
 .env
 .env.local
 
+# ── Test Results ─────────────────────────────────────────────────────────────
+.test-results/
+
 # ── Logs & Debug Output ──────────────────────────────────────────────────────
 *.log
 debug.log
@@ -88,3 +91,18 @@ _BACKUP_ROOT/
 .git.zip
 .worktrees/
 .superpowers/
+
+# InsForge & AI agent skills
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf

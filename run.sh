@@ -307,11 +307,15 @@ HTMLEOF
         # 2. Server: localhost on a random port (links work, no Chrome warnings)
         printf "\n\e[36m📄 File:   %s/dashboard.html\e[0m\n" "$RESULTS_DIR"
 
-        DASH_PORT=$((RANDOM % 10000 + 50000))
         PIDFILE="$RESULTS_DIR/.dash.pid"
         if [[ -f "$PIDFILE" ]]; then
             kill "$(cat "$PIDFILE")" 2>/dev/null || true
         fi
+        # Pick a random port and verify it's free
+        DASH_PORT=$((RANDOM % 10000 + 50000))
+        while lsof -ti:$DASH_PORT &>/dev/null; do
+            DASH_PORT=$((RANDOM % 10000 + 50000))
+        done
         "$VENV_PYTHON" -m http.server $DASH_PORT --directory "$RESULTS_DIR" &>/dev/null &
         echo $! > "$PIDFILE"
         sleep 0.3

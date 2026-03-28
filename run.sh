@@ -53,7 +53,7 @@ case "$MODE" in
         printf "\e[36m╚══════════════════════════════════════════════════╝\e[0m\n\n"
         cd "$SCRIPT_DIR"
         FAIL=0
-        RESULTS_DIR="${SCRIPT_DIR}/.test-results"
+        RESULTS_DIR="${SCRIPT_DIR}/artifacts"
         mkdir -p "$RESULTS_DIR"
 
         # --- Backend pytest ---
@@ -302,18 +302,22 @@ case "$MODE" in
 </body>
 </html>
 HTMLEOF
-        # Serve dashboard on a local port (avoids file:// security warnings)
-        DASH_PORT=9999
-        # Kill any leftover dashboard server from a previous run
-        lsof -ti:$DASH_PORT 2>/dev/null | xargs kill 2>/dev/null || true
-        # Start a tiny HTTP server in the background
+        # Dashboard available two ways:
+        # 1. File: artifacts/dashboard.html (always there, open from Finder)
+        # 2. Server: localhost on a random port (links work, no Chrome warnings)
+        printf "\n\e[36m📄 File:   %s/dashboard.html\e[0m\n" "$RESULTS_DIR"
+
+        DASH_PORT=$((RANDOM % 10000 + 50000))
+        PIDFILE="$RESULTS_DIR/.dash.pid"
+        if [[ -f "$PIDFILE" ]]; then
+            kill "$(cat "$PIDFILE")" 2>/dev/null || true
+        fi
         "$VENV_PYTHON" -m http.server $DASH_PORT --directory "$RESULTS_DIR" &>/dev/null &
-        DASH_PID=$!
-        # Give it a moment to bind
+        echo $! > "$PIDFILE"
         sleep 0.3
         DASH_URL="http://localhost:${DASH_PORT}/dashboard.html"
-        printf "\n\e[36m📊 Dashboard: %s\e[0m\n" "$DASH_URL"
-        printf "\e[36m   (server PID %s on port %s — kill when done)\e[0m\n" "$DASH_PID" "$DASH_PORT"
+        printf "\e[36m🌐 Server: %s\e[0m\n" "$DASH_URL"
+
         if command -v open &>/dev/null; then
             open "$DASH_URL"
         elif command -v xdg-open &>/dev/null; then

@@ -106,65 +106,198 @@ case "$MODE" in
         fi
         printf "\e[36m└──────────────────────────────────────────────────┘\e[0m\n"
 
-        # --- Generate HTML dashboard ---
+        # --- Generate HTML dev dashboard ---
         NOW=$(date '+%Y-%m-%d %H:%M:%S')
+        SCHEMA_VER=$(grep -oE 'v[0-9]+' "$SCRIPT_DIR/CURRENT_STATUS.md" | head -1 || echo "v??")
+        GIT_BRANCH=$(git -C "$SCRIPT_DIR" branch --show-current 2>/dev/null || echo "?")
+        GIT_HASH=$(git -C "$SCRIPT_DIR" log --oneline -1 2>/dev/null || echo "?")
+        GIT_DIRTY=$(git -C "$SCRIPT_DIR" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+
         cat > "$RESULTS_DIR/dashboard.html" <<HTMLEOF
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Waifu-RT3D Test Dashboard</title>
+<title>Waifu-RT3D Dev Panel</title>
 <style>
-  :root { --bg: #0d1117; --card: #161b22; --border: #30363d; --green: #3fb950; --red: #f85149; --yellow: #d29922; --text: #e6edf3; --muted: #8b949e; }
+  :root { --bg: #0d1117; --card: #161b22; --border: #30363d; --green: #3fb950; --red: #f85149; --yellow: #d29922; --blue: #58a6ff; --purple: #bc8cff; --pink: #f778ba; --text: #e6edf3; --muted: #8b949e; --accent: #f778ba; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 2rem; }
-  h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
-  .subtitle { color: var(--muted); margin-bottom: 2rem; font-size: 0.875rem; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; max-width: 800px; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
-  .card h2 { font-size: 1rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
-  .badge { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 0; min-height: 100vh; }
+
+  /* Hero */
+  .hero { padding: 2.5rem 3rem 1.5rem; background: linear-gradient(135deg, #161b22 0%, #1a1025 50%, #161b22 100%); border-bottom: 1px solid var(--border); }
+  .hero h1 { font-size: 1.75rem; font-weight: 700; background: linear-gradient(90deg, var(--pink), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.25rem; }
+  .hero-sub { color: var(--muted); font-size: 0.85rem; }
+
+  /* Quick Actions */
+  .actions { display: flex; gap: 0.75rem; padding: 1.5rem 3rem; flex-wrap: wrap; }
+  .action-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.25rem; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 0.9rem; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.15s; }
+  .action-btn:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(247,120,186,0.15); }
+  .action-btn.primary { background: linear-gradient(135deg, #f778ba, #bc8cff); border-color: transparent; color: #fff; }
+  .action-btn.primary:hover { box-shadow: 0 4px 20px rgba(247,120,186,0.3); }
+  .action-btn .icon { font-size: 1.1rem; }
+
+  /* Content */
+  .content { padding: 1.5rem 3rem 3rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+  .card-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.5rem; }
+  .card-value { font-size: 1.5rem; font-weight: 700; }
+  .card-value.green { color: var(--green); }
+  .card-value.red { color: var(--red); }
+  .card-value.blue { color: var(--blue); }
+  .card-value.purple { color: var(--purple); }
+  .card-value.pink { color: var(--pink); }
+  .card-meta { color: var(--muted); font-size: 0.8rem; margin-top: 0.35rem; }
+
+  .badge { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
   .badge.pass { background: rgba(63,185,80,0.15); color: var(--green); }
   .badge.fail { background: rgba(248,81,73,0.15); color: var(--red); }
-  .stat { font-size: 2rem; font-weight: 700; }
-  .stat.green { color: var(--green); }
-  .stat.red { color: var(--red); }
-  .meta { color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem; }
-  pre { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-top: 1rem; overflow-x: auto; font-size: 0.8rem; max-height: 300px; overflow-y: auto; color: var(--muted); }
-  .full-width { grid-column: 1 / -1; }
-  .refresh-btn { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem; }
-  .refresh-btn:hover { border-color: var(--green); }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
+
+  /* Links section */
+  .links { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-bottom: 2rem; }
+  .link-card { display: flex; align-items: center; gap: 0.75rem; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 1rem; text-decoration: none; color: var(--text); transition: all 0.15s; }
+  .link-card:hover { border-color: var(--blue); background: rgba(88,166,255,0.05); }
+  .link-icon { font-size: 1.2rem; }
+  .link-label { font-size: 0.85rem; font-weight: 500; }
+  .link-desc { font-size: 0.7rem; color: var(--muted); }
+
+  /* Collapsible sections */
+  details { margin-bottom: 1rem; }
+  summary { cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--muted); padding: 0.5rem 0; user-select: none; }
+  summary:hover { color: var(--text); }
+  pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-top: 0.5rem; overflow-x: auto; font-size: 0.78rem; max-height: 300px; overflow-y: auto; color: var(--muted); line-height: 1.5; }
+
+  /* Section headers */
+  .section-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 0.75rem; font-weight: 600; }
+
+  /* Shortcuts table */
+  .shortcuts { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .shortcuts td { padding: 0.4rem 0.75rem; border-bottom: 1px solid var(--border); }
+  .shortcuts td:first-child { font-family: 'SF Mono', 'Fira Code', monospace; color: var(--blue); white-space: nowrap; font-size: 0.78rem; }
+  .shortcuts td:last-child { color: var(--muted); }
 </style>
 </head>
 <body>
-<div class="header">
-  <div>
-    <h1>Waifu-RT3D Test Dashboard</h1>
-    <div class="subtitle">Last run: ${NOW}</div>
-  </div>
-  <button class="refresh-btn" onclick="location.reload()">Refresh</button>
+
+<!-- HERO -->
+<div class="hero">
+  <h1>Waifu-RT3D</h1>
+  <div class="hero-sub">Dev Panel &middot; ${NOW}</div>
 </div>
-<div class="grid">
-  <div class="card">
-    <h2>Backend (pytest) <span class="badge $([ $PYTEST_RC -eq 0 ] && echo pass || echo fail)">$([ $PYTEST_RC -eq 0 ] && echo PASS || echo FAIL)</span></h2>
-    <div class="stat $([ $PYTEST_RC -eq 0 ] && echo green || echo red)">${PYTEST_COUNT}</div>
-    <div class="meta">${PYTEST_TIME}s runtime</div>
+
+<!-- QUICK ACTIONS -->
+<div class="actions">
+  <a class="action-btn primary" href="http://localhost:8080" target="_blank">
+    <span class="icon">&#9654;</span> Open App
+  </a>
+  <a class="action-btn" href="http://localhost:8080/sakura" target="_blank">
+    <span class="icon">&#127800;</span> Sakura UI
+  </a>
+  <a class="action-btn" href="http://localhost:5173" target="_blank">
+    <span class="icon">&#9889;</span> Dev Server
+  </a>
+  <a class="action-btn" href="http://localhost:8080/api/health" target="_blank">
+    <span class="icon">&#128154;</span> Health Check
+  </a>
+  <a class="action-btn" href="http://localhost:8080/viewer/viewer.html" target="_blank">
+    <span class="icon">&#127916;</span> 3D Viewer
+  </a>
+  <a class="action-btn" href="http://localhost:8080/neon" target="_blank">
+    <span class="icon">&#128302;</span> Neon UI
+  </a>
+</div>
+
+<div class="content">
+
+  <!-- STATUS CARDS -->
+  <div class="section-title">Status</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-label">Backend Tests</div>
+      <div class="card-value $([ $PYTEST_RC -eq 0 ] && echo green || echo red)">${PYTEST_COUNT} <span class="badge $([ $PYTEST_RC -eq 0 ] && echo pass || echo fail)">$([ $PYTEST_RC -eq 0 ] && echo PASS || echo FAIL)</span></div>
+      <div class="card-meta">${PYTEST_TIME}s runtime</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Frontend Types</div>
+      <div class="card-value $([ $TSC_RC -eq 0 ] && echo green || echo red)">$([ $TSC_RC -eq 0 ] && echo "Clean" || echo "${TSC_ERRORS} errors") <span class="badge $([ $TSC_RC -eq 0 ] && echo pass || echo fail)">$([ $TSC_RC -eq 0 ] && echo PASS || echo FAIL)</span></div>
+      <div class="card-meta">${TSC_TIME}s runtime</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Branch</div>
+      <div class="card-value blue">${GIT_BRANCH}</div>
+      <div class="card-meta">${GIT_HASH}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Schema</div>
+      <div class="card-value purple">${SCHEMA_VER}</div>
+      <div class="card-meta">${GIT_DIRTY} uncommitted files</div>
+    </div>
   </div>
-  <div class="card">
-    <h2>Frontend (tsc) <span class="badge $([ $TSC_RC -eq 0 ] && echo pass || echo fail)">$([ $TSC_RC -eq 0 ] && echo PASS || echo FAIL)</span></h2>
-    <div class="stat $([ $TSC_RC -eq 0 ] && echo green || echo red)">$([ $TSC_RC -eq 0 ] && echo "Clean" || echo "${TSC_ERRORS} errors")</div>
-    <div class="meta">${TSC_TIME}s runtime</div>
+
+  <!-- QUICK LINKS -->
+  <div class="section-title">Quick Links</div>
+  <div class="links">
+    <a class="link-card" href="http://localhost:8080/api/config" target="_blank">
+      <span class="link-icon">&#9881;</span>
+      <div><div class="link-label">App Config</div><div class="link-desc">View live configuration JSON</div></div>
+    </a>
+    <a class="link-card" href="http://localhost:8080/viewer/overlay.html" target="_blank">
+      <span class="link-icon">&#127909;</span>
+      <div><div class="link-label">OBS Overlay</div><div class="link-desc">Transparent streaming overlay</div></div>
+    </a>
+    <a class="link-card" href="http://localhost:8080/api/hardware" target="_blank">
+      <span class="link-icon">&#128187;</span>
+      <div><div class="link-label">Hardware Info</div><div class="link-desc">GPU, VRAM, platform detection</div></div>
+    </a>
+    <a class="link-card" href="http://localhost:8080/api/models/installed" target="_blank">
+      <span class="link-icon">&#129302;</span>
+      <div><div class="link-label">Installed Models</div><div class="link-desc">LM Studio / Ollama models</div></div>
+    </a>
   </div>
-  <div class="card full-width">
-    <h2>pytest output</h2>
+
+  <!-- KEYBOARD SHORTCUTS -->
+  <div class="section-title">Keyboard Shortcuts</div>
+  <div class="card" style="margin-bottom: 2rem;">
+    <table class="shortcuts">
+      <tr><td>Ctrl+,</td><td>Settings</td></tr>
+      <tr><td>Ctrl+M</td><td>Memory Browser</td></tr>
+      <tr><td>Alt+C</td><td>Context Viewer</td></tr>
+      <tr><td>Alt+Shift+B</td><td>Boundaries</td></tr>
+      <tr><td>Alt+Shift+V</td><td>Private Vocabulary</td></tr>
+      <tr><td>Alt+A</td><td>Analytics</td></tr>
+      <tr><td>Alt+G</td><td>Games</td></tr>
+      <tr><td>Alt+S</td><td>Session Summary</td></tr>
+      <tr><td>Ctrl+I</td><td>Cinematic Mode</td></tr>
+      <tr><td>Esc</td><td>Close Overlay</td></tr>
+      <tr><td>?</td><td>Show All Shortcuts</td></tr>
+    </table>
+  </div>
+
+  <!-- TERMINAL COMMANDS -->
+  <div class="section-title">Terminal Commands</div>
+  <div class="card" style="margin-bottom: 2rem;">
+    <table class="shortcuts">
+      <tr><td>./run.sh</td><td>Start backend server</td></tr>
+      <tr><td>./run.sh both</td><td>Start backend + frontend</td></tr>
+      <tr><td>./run.sh dev</td><td>Start with hot-reload</td></tr>
+      <tr><td>./run.sh check</td><td>Run all tests + open this page</td></tr>
+      <tr><td>./run.sh test</td><td>Backend tests only</td></tr>
+    </table>
+  </div>
+
+  <!-- TEST OUTPUT (collapsed) -->
+  <div class="section-title">Test Output</div>
+  <details>
+    <summary>pytest output (${PYTEST_COUNT}, ${PYTEST_TIME}s)</summary>
     <pre>$(cat "$RESULTS_DIR/pytest.txt" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')</pre>
-  </div>
-  <div class="card full-width">
-    <h2>tsc output</h2>
-    <pre>$(cat "$RESULTS_DIR/tsc.txt" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' || echo "(clean — no errors)")</pre>
-  </div>
+  </details>
+  <details>
+    <summary>tsc output ($([ $TSC_RC -eq 0 ] && echo "clean" || echo "${TSC_ERRORS} errors"), ${TSC_TIME}s)</summary>
+    <pre>$(cat "$RESULTS_DIR/tsc.txt" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')</pre>
+  </details>
+
 </div>
 </body>
 </html>

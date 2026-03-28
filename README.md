@@ -3,8 +3,8 @@
 > **AI Companion Platform** — 3D anime avatars with personality-driven animation, local/cloud LLM integration, 45-model catalog with hardware-aware recommendations, director mode, daily streaks, full-duplex voice conversation, 9-provider TTS, offline STT, agentic tool use, mini games, lorebook, tiered memory, character moods, 18 themes, cinematic mode, and OBS streaming overlays.
 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-887%20passed-brightgreen)](backend/tests/)
-[![Schema](https://img.shields.io/badge/DB%20schema-v60-purple)](#)
+[![Tests](https://img.shields.io/badge/tests-1532%20passed-brightgreen)](backend/tests/)
+[![Schema](https://img.shields.io/badge/DB%20schema-v61-purple)](#)
 [![Themes](https://img.shields.io/badge/themes-18-ff69b4)](#themes)
 [![Frontends](https://img.shields.io/badge/frontends-Neon%20%7C%20Sakura%20%7C%20Nova-ff69b4)](#dual-frontend-architecture)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -40,6 +40,10 @@ Waifu-RT3D is a **full-stack AI companion platform** where 3D anime characters c
 - **OBS Browser Source overlay** for streamers with transparent background and live subtitles
 - **Create-a-Waifu** full-page character creator with personality animation sliders
 - **Desktop pet mode** — floating transparent window with mini-chat overlay
+- **Relationship boundaries** — per-character comfort levels (hard/soft constraints) injected as negative rules into the LLM prompt, with in-character negotiation mode
+- **Writing style presets** — four distinct narrative voices (romantic, literary, direct, suggestive) with per-character defaults and per-session override
+- **Per-character sensory profiles** — 13 characters with unique sensory emphasis (Dae sees, Luna hears, Genki touches) that auto-activate with intimacy
+- **Private vocabulary & pet names** — organically-grown relationship language tracked and injected into prompts (pet names, inside jokes, code words)
 - **50+ Sakura companion features** — session summaries, context budget bar, mood board, branching visualizer, relationship web, character portfolio cards, session replay, ambient soundscapes, model arena, scenario library, global search, milestone celebrations, schedule editor, message reactions, analytics, waveform visualizer, data export, and more
 - **Remote GPU motion server** — auto-discovers and connects to an animation server over LAN for real-time GPU-accelerated motion
 - **Mobile PWA** — full Sakura UI as installable Progressive Web App with bottom tab navigation
@@ -395,6 +399,8 @@ The Sakura UI ships with 20+ companion feature panels accessible via keyboard sh
 | `alt+i` | Scenario Library | Browse and load pre-written scenario prompts |
 | `alt+b` | Mood Board Editor | Pin and annotate images to set visual context for conversations |
 | `alt+p` | Model Arena | Compare responses from two LLM configs side by side |
+| `alt+shift+b` | Boundaries Panel | View/edit per-character relationship comfort levels |
+| `alt+shift+v` | Private Vocabulary | View pet names, inside jokes, and shared language |
 | `alt+r` | Session Replay | Replay any previous session as a scrolling timeline |
 | `alt+o` | Character Portfolio | Card-based portfolio view of all characters with stats |
 | `alt+w` | Relationship Web | Visual graph of character affinity and trust scores |
@@ -474,7 +480,7 @@ Most local TTS engines (Kokoro, Chatterbox, XTTS) require running a separate ser
 waifu-rt3d/
 ├── backend/
 │   ├── server.py              # FastAPI server (main application, ~13K lines)
-│   ├── preflight.py           # DB migrations (schema v3 → v60)
+│   ├── preflight.py           # DB migrations (schema v3 → v61)
 │   ├── llm/
 │   │   ├── registry.py        # LLM adapter factory
 │   │   ├── capability_detector.py  # Smart tool protocol detection + cache
@@ -530,16 +536,17 @@ waifu-rt3d/
 │   │   ├── model_catalog.json      # 40-model curated catalog (24 LLM, 10 TTS, 6 STT)
 │   │   └── model_recommendations.json # Legacy 45-model RP/anime catalog
 │   ├── storage/
-│   │   ├── app.db             # SQLite database (schema v60)
+│   │   ├── app.db             # SQLite database (schema v61)
 │   │   ├── avatars/           # Uploaded VRM/GLB files
 │   │   ├── audio/             # Generated TTS audio cache
 │   │   └── images/            # AI-generated images
 │   ├── embeddings/            # Embedding provider abstraction (MiniLM + Gemma)
-│   ├── content/               # Content gating (types, ceiling, intimacy, prompts)
+│   ├── content/               # Content gating + NSFW Phase 1 (boundaries, writing styles, sensory profiles)
+│   ├── relationship/          # Relationship state injection + private vocabulary/pet names
 │   ├── adaptive/              # Adaptive intelligence (reflector, tuner, journal)
 │   ├── bond/                  # Bond progression (levels, gifts, story scenes)
 │   ├── proactive/             # Proactive AI messages (scheduler, triggers)
-│   └── tests/                 # 887 pytest tests
+│   └── tests/                 # 1532 pytest tests
 ├── frontends/
 │   ├── shared/                # Assets shared between frontends
 │   │   ├── viewer/            # Three.js VRM renderer + OBS overlay
@@ -562,7 +569,7 @@ waifu-rt3d/
 │   └── sakura/                # Chat-first consumer UI (React 19 + Vite)
 │       └── src/
 │           ├── views/         # ChatsView, ChatThread, CreateView, SettingsView
-│           ├── components/    # 30+ panels (DialogueBubble, GamePanel, LorePanel, …)
+│           ├── components/    # 35+ panels (DialogueBubble, GamePanel, LorePanel, BoundaryPanel, VocabularyPanel, WritingStylePicker, …)
 │           ├── hooks/         # useTheme, useViewer, useProactive, useAdaptivePacing
 │           ├── stores/        # Zustand (appStore, chatStore)
 │           ├── styles/        # 18 CSS themes (themes.css, base.css, components.css)
@@ -638,6 +645,11 @@ waifu-rt3d/
 | `GET/POST` | `/api/characters/{id}/bond` | Bond level, XP, gifts, story scenes |
 | `POST` | `/api/characters/{id}/bond/gift` | Give a gift to a character |
 | `GET` | `/api/characters/{id}/content-gate` | Content gating level + intimacy score |
+| `GET/PUT/DELETE` | `/api/characters/{id}/boundaries` | Relationship boundaries CRUD + export/import |
+| `GET` | `/api/writing-styles` | List writing style presets |
+| `PUT` | `/api/sessions/{id}/writing-style` | Set session writing style override |
+| `GET/PUT` | `/api/characters/{id}/sensory-profile` | Per-character sensory emphasis |
+| `GET/DELETE` | `/api/characters/{id}/vocabulary` | Private vocabulary & pet names |
 | `GET` | `/api/characters/{id}/journal` | Character's self-reflection journal |
 | `GET` | `/api/adaptive/signals` | On-device learning signal history |
 | `GET` | `/api/embeddings/providers` | Available embedding providers |
@@ -646,9 +658,9 @@ waifu-rt3d/
 | `WS` | `/ws/spectator` | Game companion screen analysis |
 | `WS` | `/ws/overlay` | OBS overlay WebSocket |
 
-### Database Schema (v60)
+### Database Schema (v61)
 
-The SQLite database (schema v60) auto-migrates on startup. Key tables:
+The SQLite database (schema v61) auto-migrates on startup. Key tables:
 - **sessions** — chat sessions with summary, archive, tags, and author's note
 - **messages** — chat history with emotion, branching (parent_id), token stats, pinning, reactions
 - **characters** — full character profiles (40+ columns including animation_profile, capability_profile, diary, voice config, mood settings, greeting config)
@@ -674,26 +686,41 @@ The SQLite database (schema v60) auto-migrates on startup. Key tables:
 - **adaptive_signals** — on-device learning signals (user behavior patterns)
 - **adaptive_journal** — AI self-reflection journal entries
 - **animation_sequences** — stored animation clip sequences for the sequencer
+- **relationship_boundaries** — per-character comfort-level constraints (hard/soft) for content gating
+- **private_vocabulary** — pet names, inside jokes, code words, shared references per character
 
 ---
 
 ## Running Tests
 
 ```bash
-# Run all 887 backend tests
+# One command — runs both backend pytest AND frontend tsc, opens HTML dashboard
+./run.sh check
+
+# Run just backend tests
 .venv/bin/python -m pytest backend/tests/ -v
 
 # Quick run (stop on first failure)
 .venv/bin/python -m pytest backend/tests/ -x --tb=short
 ```
 
-**887 backend tests** covering API endpoints, CRUD, agents, voice module, memory, spectator, link manager, context assembler, embeddings, content gating, adaptive intelligence, bond progression, animation sequencer, and more. Plus frontend component tests and 26 Playwright E2E tests.
+**1532 backend tests** covering API endpoints, CRUD, agents, voice module, memory, spectator, link manager, context assembler, embeddings, content gating, adaptive intelligence, bond progression, animation sequencer, boundaries, writing styles, sensory profiles, vocabulary, and more. Plus frontend component tests and 26 Playwright E2E tests.
 
 ---
 
 ## Roadmap
 
-### Recently Completed (v11 — schema v60)
+### Recently Completed (v12 — schema v61)
+- **NSFW Phase 1: Foundation Layer** — four features that compose into the intimate content system:
+  - **Relationship Boundaries (F40)** — per-character hard/soft comfort constraints, in-character negotiation prompts, export/import across characters
+  - **Writing Style Presets (F13)** — four narrative voices (romantic, literary, direct, suggestive) with per-character defaults for all 13 characters
+  - **Per-Character Sensory Profiles (F15)** — 13 unique profiles (Dae sees, Luna hears, Genki touches), intimacy-gated intensity scaling
+  - **Private Vocabulary & Pet Names (F30)** — organic relationship language tracking with frequency scaling and 5 character proposal templates
+- **Unified Memory Browser (P5)** — 4-tab panel replacing 3 separate overlays (Overview, About You, Memories, Journal)
+- **Context Assembly Viewer (P2)** — debug panel showing LLM prompt construction with per-section token counts
+- **One-Command Smoke Test** — `./run.sh check` runs backend + frontend checks with auto-opening HTML dashboard
+
+### Previously Completed (v11 — schema v60)
 - **Adaptive Intelligence Engine** — on-device learning signals, behavior adaptation, trust/mood updates, topic steering, AI self-reflection journal
 - **Bond Progression System** — 0→100 levels with story scene unlocks, gift exchange, relationship milestones
 - **Content Gating** — age-appropriate content ceiling, intimacy tracking per turn, frontend gate UI, legacy migration

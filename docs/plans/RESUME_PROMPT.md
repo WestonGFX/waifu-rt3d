@@ -1,52 +1,50 @@
-# Resume: Waifu-RT3D — Post Sprint 1 (Mar 25, 2026)
+# Resume: Waifu-RT3D — Post NSFW Phase 1 Implementation (Mar 28, 2026)
 
-## WHAT HAPPENED THIS SESSION
+## WHAT HAPPENED THIS SESSION (Session 3)
 
-### Phase 16: AI Model Ecosystem Analysis (2 commits)
-- Researched 5 categories: animation gen, SER, RP models, physics, personalization
-- Created `docs/design/ai-model-ecosystem-analysis-2026-03-25.md`
-- Created `docs/FEATURES.md` (public-facing feature summary)
+### NSFW Phase 1: Foundation Layer — COMPLETE
 
-### Expanded Research Sprint (4 parallel agents)
-- 4 domains: NLP/dialogue, NSFW platforms (12 deep-dived), audio/voice, UX/engagement
-- **41 features discovered**, scored on 5 axes, assigned to 4 tiers (S/A/B/C)
-- Roadmap: `docs/plans/2026-03-25-expanded-feature-roadmap.md`
-- User adjustments: Tier B → C (except prompt compression + style steering), P5 memory manager → S
+All 4 features fully shipped (backend + migration + API + context wiring + frontend):
 
-### Sprint 1 Tier S Execution (5 parallel agents + 1 manual)
-- **9/9 Tier S features complete** (6 built, 3 discovered already implemented)
-- Tests: 887 → 1025 (+138)
-- 3 features were already done: P5 (MemoryPanel.tsx), P6 (DiaryPanel.tsx), V3 (AudioLipSync)
+1. **F40 Boundaries** — `backend/content/boundaries.py` with BoundaryManager (hard/soft constraints, negotiation prompts, export/import). BoundaryPanel.tsx frontend.
+2. **F13 Writing Styles** — `backend/content/writing_styles.py` with 4 presets (romantic/literary/direct/suggestive), 13 character defaults. WritingStylePicker.tsx frontend.
+3. **F15 Sensory Profiles** — `backend/content/sensory_profiles.py` with 13 character-specific profiles (Dae=visual, Luna=sound, etc.), intimacy-gated activation.
+4. **F30 Private Vocabulary** — `backend/relationship/vocabulary.py` with VocabularyManager (pet names, jokes, references), frequency scaling. VocabularyPanel.tsx frontend.
 
-## WHAT TO DO NOW
+### Infrastructure
+- DB migration v60→v61 (2 tables: `relationship_boundaries`, `private_vocabulary` + 2 columns: `sessions.writing_style`, `characters.sensory_profile`)
+- 13 new API endpoints in server.py
+- All 4 features wired into `_build_prompt_sections()` in server.py with intimacy thresholds
+- `./run.sh check` — one-command smoke test with auto-opening HTML dashboard
+- Settings cleanup: local settings.json trimmed from 148 granular permissions to 0 (global wildcards cover all)
 
-### Priority 1: Integration Wiring
-Wire these 5 modules into the chat pipeline (all have tests, none touch server.py yet):
+### Stats
+- Tests: 1386 → 1532 (+146)
+- 12 new files created
+- 5 commits pushed to origin/master
+- Schema: v60 → v61
 
-| Module | Wire Into | How |
-|--------|-----------|-----|
-| `SarcasmDetector` | Chat endpoint in server.py | Run on user message, inject hint into context if sarcastic |
-| `NostalgiaTrigger` | Chat endpoint in server.py | Call `maybe_trigger()` per assistant turn, prepend to system prompt |
-| `get_bond_gated_level()` | Content gating in server.py | Replace static content level check with bond-gated version |
-| `get_mode_config()` | Chat endpoint + session config | Add `interaction_mode` param, prepend system_prefix to character prompt |
-| `SpeechEmotionDetector` | `backend/voice/duplex.py` | After ASR produces audio, detect emotion, update MoodEngine |
+## PREVIOUS SESSIONS
 
-### Priority 2: Sprint 2 — Retention Mechanics (~50h)
-- P9: Daily engagement hooks + streaks
-- P10: Character proactive disclosure
-- P11: Relationship state prompt injection (THE retention feature)
-- Full feature list in roadmap file
+### Session 2 (Mar 28)
+- P5: Unified Memory Browser — 4-tab panel replacing 3 separate overlays
+- P2: Context Assembly Viewer — debug panel showing LLM prompt construction
 
-### Priority 3: Sprint 3 — Intelligence Pipeline (~30h)
-- N1: GLiNER NER, N2: Tiny toxicity, V1: Silero VAD, V2: DeepFilterNet, N5: Reranker
+### Session 1 (Mar 27-28)
+- NSFW plan v2 (3,335 lines) — 48 features across 9 phases
+- NSFW plan v3 deep enhancement (6,006 lines) — vocabulary matrix, 13 character profiles, 8 new features, SQL schemas, API specs
 
-## KEY FILES
-1. `CURRENT_STATUS.md` — rolling status
-2. `docs/plans/2026-03-25-expanded-feature-roadmap.md` — 41 features, 4 tiers, 6 sprints
-3. `docs/research/2026-03-25-*.md` — 6 research files
+## WHAT'S NEXT
 
-## RULES
-- **Resume = implement immediately.** Use `/go`.
-- **Integration wiring is sequential** — only one agent on server.py at a time
-- **Use `.venv/bin/python`** for all Python commands
-- **1025 tests must stay passing**
+1. **NSFW Phase 2: State Machines & Intelligence** — F17 (Arousal State Machine), F16 (Intimacy Phases), F6 (Scene Pacing), F10 (Consent System). Read plan at `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` line ~2292.
+2. **Browser testing** — Test Phase 1 features in actual UI
+3. **Character enrichment** — Ayane milestone scene; 8 chars still need gold-level depth
+
+## KEY CONTEXT FOR NEXT SESSION
+
+- Branch: `master` (pushed to origin)
+- The 4 Phase 1 features are **prompt injection systems** — they add sections to `_build_prompt_sections()` gated by intimacy thresholds (boundaries=always, vocab≥20, style≥30, sensory≥40)
+- F15 Sensory is invisible to user — no config UI needed
+- WritingStylePicker is a standalone dropdown component (not yet wired into chat toolbar — integration needed in a future session)
+- Plan file: `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` (6,006 lines) is THE implementation reference
+- F18 Safe Word is explicitly deprioritized (user preference)

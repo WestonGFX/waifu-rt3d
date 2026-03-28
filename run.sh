@@ -302,12 +302,22 @@ case "$MODE" in
 </body>
 </html>
 HTMLEOF
-        printf "\n\e[36m📊 Dashboard: file://%s/dashboard.html\e[0m\n" "$RESULTS_DIR"
-        # Auto-open in browser on macOS
+        # Serve dashboard on a local port (avoids file:// security warnings)
+        DASH_PORT=9999
+        # Kill any leftover dashboard server from a previous run
+        lsof -ti:$DASH_PORT 2>/dev/null | xargs kill 2>/dev/null || true
+        # Start a tiny HTTP server in the background
+        "$VENV_PYTHON" -m http.server $DASH_PORT --directory "$RESULTS_DIR" &>/dev/null &
+        DASH_PID=$!
+        # Give it a moment to bind
+        sleep 0.3
+        DASH_URL="http://localhost:${DASH_PORT}/dashboard.html"
+        printf "\n\e[36m📊 Dashboard: %s\e[0m\n" "$DASH_URL"
+        printf "\e[36m   (server PID %s on port %s — kill when done)\e[0m\n" "$DASH_PID" "$DASH_PORT"
         if command -v open &>/dev/null; then
-            open "$RESULTS_DIR/dashboard.html"
+            open "$DASH_URL"
         elif command -v xdg-open &>/dev/null; then
-            xdg-open "$RESULTS_DIR/dashboard.html"
+            xdg-open "$DASH_URL"
         fi
 
         if [[ $FAIL -eq 0 ]]; then

@@ -2682,6 +2682,96 @@ def _build_prompt_sections(
     except Exception as _pvocab_err:
         logger.debug("[PrivateVocab] injection skipped: %s", _pvocab_err)
 
+    # 1c-arousal. F17: Arousal Engine — writing style modifiers based on arousal state
+    try:
+        from backend.content.arousal_engine import ArousalEngine
+        _arousal_intimacy = 0
+        try:
+            _aint_row = cur.execute(
+                "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                (char_id, session_id),
+            ).fetchone()
+            if _aint_row:
+                _arousal_intimacy = _aint_row[0]
+        except Exception:
+            pass
+        if _arousal_intimacy > 20:
+            _arousal_engine = ArousalEngine.for_character(char_id, char_name=char_name)
+            _arousal_prompt = _arousal_engine.build_arousal_prompt()
+            if _arousal_prompt:
+                sections.append(_section("Arousal State", f"\n{_arousal_prompt}"))
+    except Exception as _arousal_err:
+        logger.debug("[ArousalEngine] injection skipped: %s", _arousal_err)
+
+    # 1c-pacing. F6: Pacing Engine — phase-based intensity progression
+    try:
+        from backend.content.pacing import PacingEngine
+        _pacing_intimacy = 0
+        try:
+            _pint_row = cur.execute(
+                "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                (char_id, session_id),
+            ).fetchone()
+            if _pint_row:
+                _pacing_intimacy = _pint_row[0]
+        except Exception:
+            pass
+        if _pacing_intimacy > 20:
+            _content_ceiling = cfg.get("content_gate", {}).get("global_content_ceiling", "general")
+            _pacing_engine = PacingEngine.for_character(
+                char_id, char_name=char_name, content_ceiling=_content_ceiling
+            )
+            _pacing_prompt = _pacing_engine.get_phase_prompt()
+            if _pacing_prompt:
+                sections.append(_section("Scene Pacing", f"\n{_pacing_prompt}"))
+    except Exception as _pacing_err:
+        logger.debug("[PacingEngine] injection skipped: %s", _pacing_err)
+
+    # 1c-scene-phase. F16: Scene Phase — dramatic arc prompts
+    try:
+        from backend.content.scene_phases import ScenePhaseEngine
+        _scene_intimacy = 0
+        try:
+            _sint2_row = cur.execute(
+                "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                (char_id, session_id),
+            ).fetchone()
+            if _sint2_row:
+                _scene_intimacy = _sint2_row[0]
+        except Exception:
+            pass
+        if _scene_intimacy > 30:
+            _scene_engine = ScenePhaseEngine(char_id)
+            _scene_prompt = _scene_engine.get_phase_prompt()
+            if _scene_prompt:
+                sections.append(_section("Scene Phase", f"\n{_scene_prompt}"))
+    except Exception as _scene_err:
+        logger.debug("[ScenePhase] injection skipped: %s", _scene_err)
+
+    # 1c-consent. F10: Consent Choreography — style hint for the character
+    try:
+        from backend.content.consent import ConsentChoreographer, CHARACTER_CONSENT_STYLE
+        _consent_intimacy = 0
+        try:
+            _cint_row = cur.execute(
+                "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                (char_id, session_id),
+            ).fetchone()
+            if _cint_row:
+                _consent_intimacy = _cint_row[0]
+        except Exception:
+            pass
+        if _consent_intimacy > 40 and char_name in CHARACTER_CONSENT_STYLE:
+            _consent_style = CHARACTER_CONSENT_STYLE[char_name]
+            _consent_hint = (
+                f"[Consent Style: {_consent_style}]\n"
+                f"When checking in during intimate moments, use a {_consent_style} approach. "
+                f"Consent should feel natural and add to the intimacy, never clinical."
+            )
+            sections.append(_section("Consent Style", f"\n{_consent_hint}"))
+    except Exception as _consent_err:
+        logger.debug("[Consent] injection skipped: %s", _consent_err)
+
     # 1d. Games catalogue — let characters know what they can play with the user
     _games_text = (
         "\n\n[MINI-GAMES YOU CAN PLAY WITH THE USER]\n"

@@ -170,6 +170,12 @@ case "$MODE" in
 </html>
 HTMLEOF
         printf "\n\e[36m📊 Dashboard: file://%s/dashboard.html\e[0m\n" "$RESULTS_DIR"
+        # Auto-open in browser on macOS
+        if command -v open &>/dev/null; then
+            open "$RESULTS_DIR/dashboard.html"
+        elif command -v xdg-open &>/dev/null; then
+            xdg-open "$RESULTS_DIR/dashboard.html"
+        fi
 
         if [[ $FAIL -eq 0 ]]; then
             printf "\n\e[32m══════════════════════════════════════════════════\e[0m\n"

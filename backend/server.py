@@ -2597,6 +2597,91 @@ def _build_prompt_sections(
     except Exception as _rel_err:
         logger.debug("[RelationshipState] injection skipped: %s", _rel_err)
 
+    # 1c-bounds. F40: Boundaries — negative constraints (safety-critical, inject early)
+    try:
+        from backend.content.boundaries import BoundaryManager
+        _content_conn_bounds = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_bounds:
+            _bounds_mgr = BoundaryManager()
+            _bounds_prompt = _bounds_mgr.build_constraint_prompt(char_id, _content_conn_bounds)
+            if _bounds_prompt:
+                sections.append(_section("User Boundaries", f"\n{_bounds_prompt}"))
+    except Exception as _bounds_err:
+        logger.debug("[Boundaries] injection skipped: %s", _bounds_err)
+
+    # 1c-style. F13: Writing Style — narrative voice for intimate scenes
+    try:
+        from backend.content.writing_styles import get_writing_style, build_style_prompt
+        _content_conn_style = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_style:
+            # Load current intimacy level for threshold check
+            _intimacy_for_style = 0
+            try:
+                _int_row = cur.execute(
+                    "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                    (char_id, session_id),
+                ).fetchone()
+                if _int_row:
+                    _intimacy_for_style = _int_row[0]
+            except Exception:
+                pass
+            _style_preset = get_writing_style(
+                session_id, char_id, _content_conn_style, char_name=char_name
+            )
+            _style_text = build_style_prompt(_style_preset, _intimacy_for_style)
+            if _style_text:
+                sections.append(_section("Writing Style", f"\n{_style_text}"))
+    except Exception as _style_err:
+        logger.debug("[WritingStyle] injection skipped: %s", _style_err)
+
+    # 1c-sensory. F15: Sensory Profiles — per-character sensory emphasis
+    try:
+        from backend.content.sensory_profiles import get_sensory_profile as _get_sensory, build_character_sensory_prompt
+        _content_conn_sensory = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_sensory:
+            _sensory_intimacy = 0
+            try:
+                _sint_row = cur.execute(
+                    "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                    (char_id, session_id),
+                ).fetchone()
+                if _sint_row:
+                    _sensory_intimacy = _sint_row[0]
+            except Exception:
+                pass
+            _sensory_profile = _get_sensory(char_id, _content_conn_sensory, char_name=char_name)
+            if _sensory_profile:
+                _sensory_text = build_character_sensory_prompt(_sensory_profile, _sensory_intimacy)
+                if _sensory_text:
+                    sections.append(_section("Sensory Profile", f"\n{_sensory_text}"))
+    except Exception as _sensory_err:
+        logger.debug("[SensoryProfile] injection skipped: %s", _sensory_err)
+
+    # 1c-vocab-private. F30: Private Vocabulary — pet names, inside jokes
+    try:
+        from backend.relationship.vocabulary import VocabularyManager as _VocabMgr
+        _content_conn_vocab = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_vocab:
+            _vocab_intimacy = 0
+            try:
+                _vint_row = cur.execute(
+                    "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                    (char_id, session_id),
+                ).fetchone()
+                if _vint_row:
+                    _vocab_intimacy = _vint_row[0]
+            except Exception:
+                pass
+            _pvocab_mgr = _VocabMgr()
+            _user_name = cfg.get("user_name", "")
+            _pvocab_text = _pvocab_mgr.get_prompt_injection(
+                char_id, _vocab_intimacy, _content_conn_vocab, user_name=_user_name
+            )
+            if _pvocab_text:
+                sections.append(_section("Private Vocabulary", f"\n{_pvocab_text}"))
+    except Exception as _pvocab_err:
+        logger.debug("[PrivateVocab] injection skipped: %s", _pvocab_err)
+
     # 1d. Games catalogue — let characters know what they can play with the user
     _games_text = (
         "\n\n[MINI-GAMES YOU CAN PLAY WITH THE USER]\n"
@@ -15137,6 +15222,412 @@ def activate_profile(profile_id: int):
             f"(endpoint={profile['server_url']}, model={profile['model']})"
         )
         return {"ok": True, "profile": profile}
+    finally:
+        conn.close()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# NSFW Phase 1: Boundaries, Writing Styles, Sensory Profiles, Vocabulary
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+# ── F40: Boundaries ──────────────────────────────────────────────────────────
+
+
+@app.get("/api/characters/{char_id}/boundaries")
+def get_boundaries(char_id: int):
+    """List all boundaries for a character.
+
+    Returns:
+        {"ok": True, "boundaries": [...], "constraint_prompt": "..."}
+
+    Example:
+        >>> GET /api/characters/1/boundaries
+        {"ok": true, "boundaries": [...], "constraint_prompt": "ABSOLUTE RULE..."}
+    """
+    from backend.content.boundaries import BoundaryManager
+    conn = db()
+    try:
+        mgr = BoundaryManager()
+        boundaries = mgr.get_boundaries(char_id, conn)
+        prompt = mgr.build_constraint_prompt(char_id, conn)
+        return {
+            "ok": True,
+            "boundaries": [
+                {
+                    "id": b.id, "char_id": b.char_id,
+                    "boundary_type": b.boundary_type, "level": b.level,
+                    "description": b.description, "set_via": b.set_via,
+                    "created_at": b.created_at, "updated_at": b.updated_at,
+                }
+                for b in boundaries
+            ],
+            "constraint_prompt": prompt,
+        }
+    finally:
+        conn.close()
+
+
+@app.put("/api/characters/{char_id}/boundaries")
+def update_boundaries(char_id: int, request: Request):
+    """Batch update boundaries for a character.
+
+    Expects JSON body: {"boundaries": [{"boundary_type": "...", "level": "...", "description": "..."}]}
+
+    Args:
+        char_id: Character ID.
+        request: FastAPI request with JSON body.
+
+    Returns:
+        {"ok": True, "boundaries": [...]}
+
+    Example:
+        >>> PUT /api/characters/1/boundaries
+        >>> Body: {"boundaries": [{"boundary_type": "pacing", "level": "soft", "description": "Prefers slow-burn"}]}
+    """
+    import asyncio
+    from backend.content.boundaries import BoundaryManager
+    body = asyncio.get_event_loop().run_until_complete(request.json())
+    conn = db()
+    try:
+        mgr = BoundaryManager()
+        results = []
+        for b in body.get("boundaries", []):
+            boundary = mgr.set_boundary(
+                char_id,
+                b["boundary_type"],
+                b.get("level", "soft"),
+                b.get("description", ""),
+                b.get("set_via", "form"),
+                conn,
+            )
+            results.append({
+                "id": boundary.id, "char_id": boundary.char_id,
+                "boundary_type": boundary.boundary_type, "level": boundary.level,
+                "description": boundary.description, "set_via": boundary.set_via,
+            })
+        return {"ok": True, "boundaries": results}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/characters/{char_id}/boundaries/{boundary_type}")
+def delete_boundary(char_id: int, boundary_type: str):
+    """Remove a specific boundary.
+
+    Args:
+        char_id: Character ID.
+        boundary_type: One of the boundary type strings.
+
+    Returns:
+        {"ok": True}
+
+    Example:
+        >>> DELETE /api/characters/1/boundaries/pacing
+    """
+    from backend.content.boundaries import BoundaryManager
+    conn = db()
+    try:
+        mgr = BoundaryManager()
+        mgr.delete_boundary(char_id, boundary_type, conn)
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/boundaries/export")
+def export_boundaries(char_id: int):
+    """Export boundaries as JSON for reuse across characters.
+
+    Returns:
+        {"ok": True, "data": "[JSON string]"}
+
+    Example:
+        >>> GET /api/characters/1/boundaries/export
+    """
+    from backend.content.boundaries import BoundaryManager
+    conn = db()
+    try:
+        mgr = BoundaryManager()
+        data = mgr.export_boundaries(char_id, conn)
+        return {"ok": True, "data": data}
+    finally:
+        conn.close()
+
+
+@app.post("/api/characters/{char_id}/boundaries/import")
+def import_boundaries(char_id: int, request: Request):
+    """Import boundaries from JSON.
+
+    Expects JSON body: {"data": "[JSON string]"}
+
+    Returns:
+        {"ok": True, "imported": int}
+
+    Example:
+        >>> POST /api/characters/1/boundaries/import
+    """
+    import asyncio
+    from backend.content.boundaries import BoundaryManager
+    body = asyncio.get_event_loop().run_until_complete(request.json())
+    conn = db()
+    try:
+        mgr = BoundaryManager()
+        imported = mgr.import_boundaries(char_id, body.get("data", "[]"), conn)
+        return {"ok": True, "imported": len(imported)}
+    finally:
+        conn.close()
+
+
+# ── F13: Writing Styles ──────────────────────────────────────────────────────
+
+
+@app.get("/api/writing-styles")
+def list_writing_styles():
+    """List all available writing style presets.
+
+    Returns:
+        {"ok": True, "styles": [...]}
+
+    Example:
+        >>> GET /api/writing-styles
+        {"ok": true, "styles": [{"name": "romantic", "display_name": "Romantic", ...}, ...]}
+    """
+    from backend.content.writing_styles import list_presets
+    presets = list_presets()
+    return {
+        "ok": True,
+        "styles": [
+            {
+                "name": p.name,
+                "display_name": p.display_name,
+                "description": p.description,
+                "sample_line": p.sample_line,
+            }
+            for p in presets
+        ],
+    }
+
+
+@app.put("/api/sessions/{session_id}/writing-style")
+def set_session_writing_style(session_id: int, request: Request):
+    """Set the writing style override for a session.
+
+    Expects JSON body: {"style": "romantic"|"literary"|"direct"|"suggestive"|null}
+    Pass null to clear the override and use character default.
+
+    Args:
+        session_id: Session ID.
+        request: FastAPI request with JSON body.
+
+    Returns:
+        {"ok": True, "style": "romantic"}
+
+    Example:
+        >>> PUT /api/sessions/1/writing-style
+        >>> Body: {"style": "literary"}
+    """
+    import asyncio
+    body = asyncio.get_event_loop().run_until_complete(request.json())
+    style = body.get("style")
+    conn = db()
+    try:
+        conn.execute(
+            "UPDATE sessions SET writing_style = ? WHERE id = ?",
+            (style, session_id),
+        )
+        conn.commit()
+        return {"ok": True, "style": style}
+    finally:
+        conn.close()
+
+
+@app.put("/api/characters/{char_id}/default-writing-style")
+def set_character_default_writing_style(char_id: int, request: Request):
+    """Set the default writing style for a character.
+
+    Stores the style name in the character's ``personality_traits`` JSON
+    under the key ``"default_writing_style"``.
+
+    Args:
+        char_id: Character ID.
+        request: FastAPI request with JSON body.
+
+    Returns:
+        {"ok": True, "style": "literary"}
+
+    Example:
+        >>> PUT /api/characters/1/default-writing-style
+        >>> Body: {"style": "literary"}
+    """
+    import asyncio
+    body = asyncio.get_event_loop().run_until_complete(request.json())
+    style = body.get("style", "romantic")
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT personality_traits FROM characters WHERE id = ?", (char_id,)
+        ).fetchone()
+        traits = json.loads(row[0]) if row and row[0] else {}
+        traits["default_writing_style"] = style
+        conn.execute(
+            "UPDATE characters SET personality_traits = ? WHERE id = ?",
+            (json.dumps(traits), char_id),
+        )
+        conn.commit()
+        return {"ok": True, "style": style}
+    finally:
+        conn.close()
+
+
+# ── F15: Sensory Profiles ────────────────────────────────────────────────────
+
+
+@app.get("/api/characters/{char_id}/sensory-profile")
+def get_sensory_profile(char_id: int):
+    """Get the sensory profile for a character.
+
+    Returns the DB-stored profile if available, otherwise the built-in default.
+
+    Returns:
+        {"ok": True, "profile": {"primary": [...], "secondary": [...], "descriptors": "...", "sample": "..."}}
+
+    Example:
+        >>> GET /api/characters/1/sensory-profile
+    """
+    from backend.content.sensory_profiles import get_sensory_profile as _get_profile
+    conn = db()
+    try:
+        # Get char_name for fallback lookup
+        row = conn.execute(
+            "SELECT display_name FROM characters WHERE id = ?", (char_id,)
+        ).fetchone()
+        char_name = row[0] if row else ""
+        profile = _get_profile(char_id, conn, char_name=char_name)
+        if profile:
+            return {
+                "ok": True,
+                "profile": {
+                    "primary": profile.primary,
+                    "secondary": profile.secondary,
+                    "descriptors": profile.descriptors,
+                    "sample": profile.sample,
+                },
+            }
+        return {"ok": True, "profile": None}
+    finally:
+        conn.close()
+
+
+@app.put("/api/characters/{char_id}/sensory-profile")
+def update_sensory_profile(char_id: int, request: Request):
+    """Update the sensory profile for a character.
+
+    Expects JSON body: {"primary": [...], "secondary": [...], "descriptors": "...", "sample": "..."}
+
+    Args:
+        char_id: Character ID.
+        request: FastAPI request with JSON body.
+
+    Returns:
+        {"ok": True}
+
+    Example:
+        >>> PUT /api/characters/1/sensory-profile
+        >>> Body: {"primary": ["visual", "texture"], "secondary": ["touch"], "descriptors": "...", "sample": "..."}
+    """
+    import asyncio
+    body = asyncio.get_event_loop().run_until_complete(request.json())
+    conn = db()
+    try:
+        conn.execute(
+            "UPDATE characters SET sensory_profile = ? WHERE id = ?",
+            (json.dumps(body), char_id),
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+# ── F30: Private Vocabulary ──────────────────────────────────────────────────
+
+
+@app.get("/api/characters/{char_id}/vocabulary")
+def get_character_vocabulary(char_id: int):
+    """List all active vocabulary terms for a character.
+
+    Returns:
+        {"ok": True, "terms": [...], "stats": {...}}
+
+    Example:
+        >>> GET /api/characters/1/vocabulary
+    """
+    from backend.relationship.vocabulary import VocabularyManager
+    conn = db()
+    try:
+        mgr = VocabularyManager()
+        terms = mgr.get_vocabulary(char_id, conn)
+        stats = mgr.get_stats(char_id, conn)
+        return {
+            "ok": True,
+            "terms": [
+                {
+                    "id": t.id, "char_id": t.char_id, "term": t.term,
+                    "category": t.category, "meaning": t.meaning,
+                    "origin": t.origin, "context": t.context,
+                    "first_used_at": t.first_used_at,
+                    "usage_count": t.usage_count,
+                    "last_used_at": t.last_used_at,
+                }
+                for t in terms
+            ],
+            "stats": stats,
+        }
+    finally:
+        conn.close()
+
+
+@app.delete("/api/characters/{char_id}/vocabulary/{term_id}")
+def delete_vocabulary_term(char_id: int, term_id: int):
+    """Deactivate a vocabulary term (soft delete).
+
+    Args:
+        char_id: Character ID (used for route consistency).
+        term_id: Term ID to deactivate.
+
+    Returns:
+        {"ok": True}
+
+    Example:
+        >>> DELETE /api/characters/1/vocabulary/42
+    """
+    from backend.relationship.vocabulary import VocabularyManager
+    conn = db()
+    try:
+        mgr = VocabularyManager()
+        mgr.deactivate_term(term_id, conn)
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/vocabulary/stats")
+def get_vocabulary_stats(char_id: int):
+    """Get vocabulary usage statistics for a character.
+
+    Returns:
+        {"ok": True, "stats": {"total_terms": int, "pet_names_count": int, ...}}
+
+    Example:
+        >>> GET /api/characters/1/vocabulary/stats
+    """
+    from backend.relationship.vocabulary import VocabularyManager
+    conn = db()
+    try:
+        mgr = VocabularyManager()
+        stats = mgr.get_stats(char_id, conn)
+        return {"ok": True, "stats": stats}
     finally:
         conn.close()
 

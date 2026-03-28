@@ -311,9 +311,16 @@ HTMLEOF
         if [[ -f "$PIDFILE" ]]; then
             kill "$(cat "$PIDFILE")" 2>/dev/null || true
         fi
-        # Pick a random port and verify it's free
-        DASH_PORT=$((RANDOM % 10000 + 50000))
-        while lsof -ti:$DASH_PORT &>/dev/null; do
+        # Pick from 5 shuffled candidate ports, use first free one
+        DASH_PORT=0
+        for _candidate in $(echo "52738 54891 56324 58167 59042" | tr ' ' '\n' | sort -R); do
+            if ! lsof -ti:$_candidate &>/dev/null; then
+                DASH_PORT=$_candidate
+                break
+            fi
+        done
+        # Fallback: random if all 5 are taken
+        while [[ $DASH_PORT -eq 0 ]] || lsof -ti:$DASH_PORT &>/dev/null; do
             DASH_PORT=$((RANDOM % 10000 + 50000))
         done
         "$VENV_PYTHON" -m http.server $DASH_PORT --directory "$RESULTS_DIR" &>/dev/null &

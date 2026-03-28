@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain,
-  ChevronLeft, ChevronRight, Search, Wifi, WifiOff, Pencil, BookMarked, Gamepad2, HelpCircle, Wand2, BarChart2
+  ChevronLeft, ChevronRight, Search, Wifi, WifiOff, Pencil, BookMarked, Gamepad2, HelpCircle, Wand2, BarChart2, Cpu
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
@@ -341,6 +341,7 @@ export function Sidebar() {
             { action: () => openOverlay('lore'),           icon: BookMarked, label: 'Lorebook', short: 'Lore' },
             { action: () => openOverlay('games'),          icon: Gamepad2,   label: 'Games',    short: 'Games' },
             { action: () => openOverlay('analytics'),      icon: BarChart2,  label: 'Analytics', short: 'Stats' },
+            { action: () => openOverlay('contextviewer'), icon: Cpu,        label: 'Context',  short: 'Ctx' },
           ];
 
           return sidebarCollapsed ? (

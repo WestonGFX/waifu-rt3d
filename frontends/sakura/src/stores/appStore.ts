@@ -28,6 +28,7 @@ type Overlay =
   | 'modelbrowser'
   | 'photomode' | 'gallery'
   | 'memorybrowser'
+  | 'contextviewer'
   | null;
 
 /**

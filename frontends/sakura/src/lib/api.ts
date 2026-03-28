@@ -660,6 +660,25 @@ export const api = {
     }>(`/api/characters/${charId}/memory/overview`),
 
   /**
+   * Full prompt inspection for a session — returns every assembled section
+   * with content, token counts, summaries, and history stats.
+   *
+   * Used by the P2 Context Assembly Viewer for debugging what's sent to the LLM.
+   *
+   * @param sessionId - Session primary key.
+   * @param charId    - Optional character ID override.
+   * @returns Sections with full content, history stats, and summaries.
+   */
+  getPromptInspect: (sessionId: number, charId?: number) =>
+    get<{
+      ok: boolean;
+      sections: Array<{ name: string; content: string; tokens: number; chars: number }>;
+      history: { message_count: number; tokens: number };
+      summaries: Array<{ text: string; range: string; tokens: number }>;
+      token_counter: 'tiktoken' | 'heuristic';
+    }>(`/api/dev/prompt-inspect/${sessionId}${charId ? `?char_id=${charId}` : ''}`),
+
+  /**
    * Fetch the author's note for a session.
    *
    * @param sessionId - Session primary key.

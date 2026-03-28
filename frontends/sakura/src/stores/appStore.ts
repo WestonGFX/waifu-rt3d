@@ -27,6 +27,7 @@ type Overlay =
   | 'universes' | 'lore' | 'userknowledge' | 'games'
   | 'modelbrowser'
   | 'photomode' | 'gallery'
+  | 'memorybrowser'
   | null;
 
 /**

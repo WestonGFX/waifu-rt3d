@@ -642,6 +642,24 @@ export const api = {
     del<{ ok: boolean; deleted: number }>(`/api/characters/${charId}/user-facts/${factId}`),
 
   /**
+   * Comprehensive memory overview for a character.
+   *
+   * Combines user facts, journal entries, adaptive profile, and stats
+   * into a single response for the Memory Browser.
+   *
+   * @param charId - Character primary key.
+   * @returns Combined memory overview with facts, journal, profile, and stats.
+   */
+  getMemoryOverview: (charId: number) =>
+    get<{
+      ok: boolean;
+      user_facts: UserFact[];
+      journal_entries: Array<{ id: number; session_id: number; entry_text: string; created_at: string }>;
+      profile: Record<string, unknown> | null;
+      stats: { total_messages: number; total_facts: number; total_journal_entries: number; has_profile: boolean };
+    }>(`/api/characters/${charId}/memory/overview`),
+
+  /**
    * Fetch the author's note for a session.
    *
    * @param sessionId - Session primary key.

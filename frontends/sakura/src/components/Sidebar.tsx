@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain,
-  ChevronLeft, ChevronRight, Search, Wifi, WifiOff, Pencil, BookMarked, UserCircle, Gamepad2, HelpCircle, Wand2, BarChart2
+  ChevronLeft, ChevronRight, Search, Wifi, WifiOff, Pencil, BookMarked, Gamepad2, HelpCircle, Wand2, BarChart2
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
@@ -337,9 +337,8 @@ export function Sidebar() {
         {/* Toolbar items — shared between collapsed and expanded layouts */}
         {(() => {
           const TOOLS = [
-            { action: () => openOverlay('memory'),        icon: Brain,      label: 'Memory',   short: 'Memory' },
+            { action: () => openOverlay('memorybrowser'),   icon: Brain,      label: 'Memory',   short: 'Memory' },
             { action: () => openOverlay('lore'),           icon: BookMarked, label: 'Lorebook', short: 'Lore' },
-            { action: () => openOverlay('userknowledge'),  icon: UserCircle, label: 'About Me', short: 'About' },
             { action: () => openOverlay('games'),          icon: Gamepad2,   label: 'Games',    short: 'Games' },
             { action: () => openOverlay('analytics'),      icon: BarChart2,  label: 'Analytics', short: 'Stats' },
           ];

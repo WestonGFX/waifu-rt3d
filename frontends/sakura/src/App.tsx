@@ -20,6 +20,7 @@ import { CharacterRelationshipWeb } from './components/CharacterRelationshipWeb'
 import { UniversePanel } from './components/UniversePanel';
 import { LorePanel } from './components/LorePanel';
 import { UserKnowledgePanel } from './components/UserKnowledgePanel';
+import { MemoryBrowser } from './components/MemoryBrowser';
 import { GamePanel } from './components/GamePanel';
 import { ModelBrowser } from './components/ModelBrowser';
 import { PhotoModeOverlay } from './components/PhotoModeOverlay';
@@ -243,7 +244,7 @@ function MainApp() {
   const k = (desc: string, def: string) => customKeyBindings[desc] ?? def;
   const shortcuts = useMemo(() => [
     { key: k('Open settings',          'ctrl+,'),  action: () => openOverlay('settings'),       description: 'Open settings' },
-    { key: k('Open memory manager',    'ctrl+m'),  action: () => openOverlay('memory'),         description: 'Open memory manager' },
+    { key: k('Open memory browser',    'ctrl+m'),  action: () => openOverlay('memorybrowser'),  description: 'Open memory browser' },
     { key: k('Open vocabulary manager','alt+v'),   action: () => openOverlay('vocab'),          description: 'Open vocabulary manager' },
     { key: k('Conversation analytics', 'alt+a'),   action: () => openOverlay('analytics'),      description: 'Conversation analytics' },
     { key: k('Session summary',        'alt+s'),   action: () => openOverlay('summary'),        description: 'Session summary' },
@@ -342,6 +343,9 @@ function MainApp() {
 
       {/* Overlay drawers — Feature C3 User Knowledge Graph */}
       {activeOverlay === 'userknowledge' && <UserKnowledgePanel />}
+
+      {/* Overlay drawers — Feature P5 Unified Memory Browser */}
+      <MemoryBrowser />
 
       {/* Overlay drawers — Feature A2 Mini Games */}
       {activeOverlay === 'games' && activeCharacter && (

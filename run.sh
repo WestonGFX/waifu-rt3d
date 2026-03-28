@@ -46,6 +46,25 @@ case "$MODE" in
         exec "$VENV_PYTHON" -m pytest backend/tests/ -v --tb=short "${@:2}"
         ;;
 
+    dash|dashboard)
+        # Open the dashboard — start server if needed, no tests
+        RESULTS_DIR="${SCRIPT_DIR}/artifacts"
+        if [[ ! -f "$RESULTS_DIR/dashboard.html" ]]; then
+            printf "\e[31m[ERROR]\e[0m No dashboard yet. Run ./run.sh check first.\n"
+            exit 1
+        fi
+        DASH_PORT=3333
+        PIDFILE="$RESULTS_DIR/.dash.pid"
+        if [[ -f "$PIDFILE" ]]; then
+            kill "$(cat "$PIDFILE")" 2>/dev/null || true
+        fi
+        "$VENV_PYTHON" -m http.server $DASH_PORT --directory "$RESULTS_DIR" &>/dev/null &
+        echo $! > "$PIDFILE"
+        sleep 0.3
+        printf "\e[36m🌐 Dashboard:\e[0m\n   http://localhost:${DASH_PORT}/dashboard.html\n"
+        open "http://localhost:${DASH_PORT}/dashboard.html"
+        ;;
+
     check)
         # ── One-command smoke test: backend pytest + frontend tsc ──
         printf "\e[36m╔══════════════════════════════════════════════════╗\e[0m\n"
@@ -362,6 +381,7 @@ HTMLEOF
         printf "  ./run.sh              Start server (port 8080)\n"
         printf "  ./run.sh dev          Start with hot-reload\n"
         printf "  ./run.sh test         Run backend tests\n"
+        printf "  ./run.sh dash         Open the dev dashboard (no tests)\n"
         printf "  ./run.sh check        Run ALL checks (pytest + tsc) with dashboard\n"
         printf "  ./run.sh frontend     Start Sakura dev server (port 5173)\n"
         printf "  ./run.sh both         Start backend + Sakura concurrently\n"

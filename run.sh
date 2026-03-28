@@ -305,7 +305,7 @@ HTMLEOF
         # Dashboard available two ways:
         # 1. File: artifacts/dashboard.html (always there, open from Finder)
         # 2. Server: localhost on a random port (links work, no Chrome warnings)
-        printf "\n\e[36m📄 File:   %s/dashboard.html\e[0m\n" "$RESULTS_DIR"
+        printf "\n\e[36m📄 File:\e[0m\n   %s/dashboard.html\n" "$RESULTS_DIR"
 
         PIDFILE="$RESULTS_DIR/.dash.pid"
         if [[ -f "$PIDFILE" ]]; then
@@ -316,7 +316,7 @@ HTMLEOF
         echo $! > "$PIDFILE"
         sleep 0.3
         DASH_URL="http://localhost:${DASH_PORT}/dashboard.html"
-        printf "\e[36m🌐 Server: %s\e[0m\n" "$DASH_URL"
+        printf "\e[36m🌐 Server:\e[0m\n   %s\n" "$DASH_URL"
 
         if command -v open &>/dev/null; then
             open "$DASH_URL"

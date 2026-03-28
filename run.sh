@@ -311,7 +311,7 @@ HTMLEOF
         if [[ -f "$PIDFILE" ]]; then
             kill "$(cat "$PIDFILE")" 2>/dev/null || true
         fi
-        DASH_PORT=5555
+        DASH_PORT=3333
         "$VENV_PYTHON" -m http.server $DASH_PORT --directory "$RESULTS_DIR" &>/dev/null &
         echo $! > "$PIDFILE"
         sleep 0.3

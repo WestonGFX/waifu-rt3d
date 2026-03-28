@@ -29,6 +29,8 @@ type Overlay =
   | 'photomode' | 'gallery'
   | 'memorybrowser'
   | 'contextviewer'
+  | 'boundaries'
+  | 'vocabulary'
   | null;
 
 /**

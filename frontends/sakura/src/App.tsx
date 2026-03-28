@@ -22,6 +22,8 @@ import { LorePanel } from './components/LorePanel';
 import { UserKnowledgePanel } from './components/UserKnowledgePanel';
 import { MemoryBrowser } from './components/MemoryBrowser';
 import { ContextViewer } from './components/ContextViewer';
+import { BoundaryPanel } from './components/BoundaryPanel';
+import { VocabularyPanel } from './components/VocabularyPanel';
 import { GamePanel } from './components/GamePanel';
 import { ModelBrowser } from './components/ModelBrowser';
 import { PhotoModeOverlay } from './components/PhotoModeOverlay';
@@ -264,6 +266,8 @@ function MainApp() {
     { key: k('Character stats',        'alt+z'),   action: () => openOverlay('stats'),           description: 'Character stats' },
     { key: k('Universe builder',       'alt+u'),   action: () => openOverlay('universes'),       description: 'Universe builder' },
     { key: k('Context viewer',         'alt+c'),   action: () => openOverlay('contextviewer'),  description: 'Context viewer' },
+    { key: k('Boundaries',            'alt+b'),   action: () => openOverlay('boundaries'),    description: 'Boundaries' },
+    { key: k('Private vocabulary',    'alt+p'),   action: () => openOverlay('vocabulary'),    description: 'Private vocabulary' },
     { key: k('Toggle sidebar',         'ctrl+\\'), action: () => toggleSidebar(),               description: 'Toggle sidebar' },
     { key: k('Cinematic mode',         'ctrl+i'),  action: () => toggleCinematicMode(),         description: 'Cinematic mode' },
     { key: k('Show keyboard shortcuts','?'),       action: () => setShowHelp(h => !h),          description: 'Show keyboard shortcuts' },
@@ -351,6 +355,15 @@ function MainApp() {
 
       {/* Overlay drawers — Feature P2 Context Assembly Viewer */}
       <ContextViewer />
+
+      {/* Overlay drawers — Feature F40 Boundaries */}
+      <BoundaryPanel
+        isOpen={activeOverlay === 'boundaries'}
+        onClose={closeOverlay}
+      />
+
+      {/* Overlay drawers — Feature F30 Private Vocabulary */}
+      <VocabularyPanel />
 
       {/* Overlay drawers — Feature A2 Mini Games */}
       {activeOverlay === 'games' && activeCharacter && (

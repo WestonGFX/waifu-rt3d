@@ -69,7 +69,7 @@ class ClaudeAPIAdapter(LLMAdapter):
     # Internal helpers
     # ------------------------------------------------------------------ #
 
-    def _split_messages(self, messages: list) -> tuple[str, list]:
+    def _split_messages(self, messages: list, cache_breakpoints: list[int] | None = None) -> tuple:
         """Separate the system prompt and convert to Anthropic message format.
 
         The Anthropic API requires:
@@ -77,17 +77,25 @@ class ClaudeAPIAdapter(LLMAdapter):
         - Tool calls as ``tool_use`` content blocks on the assistant turn
         - Tool results as ``tool_result`` content blocks on a ``user`` turn
 
-        This method handles all three conversions from OpenAI format.
+        When ``cache_breakpoints`` are provided, the system prompt is returned
+        as a list of content blocks with ``cache_control`` on the last block
+        (for Anthropic prompt caching).
 
         Args:
             messages: OpenAI-style list including possible ``role=system``,
                 ``role=tool``, and ``tool_calls`` on assistant messages.
+            cache_breakpoints: Optional list of message indices that mark
+                cache boundaries.  When provided, system text is returned as
+                content blocks with ``cache_control: {"type": "ephemeral"}``.
 
         Returns:
-            ``(system_prompt_str, conversation_messages)``
+            ``(system_prompt, conversation_messages)`` where system_prompt is
+            either a string (no caching) or a list of content blocks (caching).
         """
         system_parts = []
         conversation = []
+        use_cache_blocks = bool(cache_breakpoints)
+
         for m in messages:
             role = m.get("role", "")
 
@@ -134,6 +142,16 @@ class ClaudeAPIAdapter(LLMAdapter):
 
             else:
                 conversation.append(m)
+
+        if use_cache_blocks and system_parts:
+            # Return as content block array with cache_control on the last block
+            blocks = []
+            for i, part in enumerate(system_parts):
+                block = {"type": "text", "text": part}
+                if i == len(system_parts) - 1:
+                    block["cache_control"] = {"type": "ephemeral"}
+                blocks.append(block)
+            return blocks, conversation
 
         return "\n\n".join(system_parts), conversation
 
@@ -266,7 +284,8 @@ class ClaudeAPIAdapter(LLMAdapter):
             model: Claude model name (e.g. ``"claude-sonnet-4-6"``).
             endpoint: Unused (Anthropic endpoint is fixed). Pass ``""`` or omit.
             api_key: Anthropic API key (required).
-            **kw: Optional ``temperature``, ``max_tokens``, ``timeout``.
+            **kw: Optional ``temperature``, ``max_tokens``, ``timeout``,
+                ``cache_breakpoints`` (list of int indices for prompt caching).
 
         Returns:
             ``{"ok": True, "reply": str, "raw": dict}`` on success,
@@ -275,7 +294,8 @@ class ClaudeAPIAdapter(LLMAdapter):
         if not api_key:
             return {"ok": False, "error": "Anthropic API key not configured. Add api_key to llm config.", "code": "ERR_NO_KEY"}
 
-        system_prompt, conversation = self._split_messages(messages)
+        cache_breakpoints = kw.pop("cache_breakpoints", None)
+        system_prompt, conversation = self._split_messages(messages, cache_breakpoints)
         max_tokens = kw.get("max_tokens") or 4096
 
         payload = {
@@ -287,10 +307,14 @@ class ClaudeAPIAdapter(LLMAdapter):
         if system_prompt:
             payload["system"] = system_prompt
 
+        headers = self._build_headers(api_key)
+        if cache_breakpoints:
+            headers["anthropic-beta"] = "prompt-caching-2024-07-31"
+
         try:
             r = requests.post(
                 _ANTHROPIC_URL,
-                headers=self._build_headers(api_key),
+                headers=headers,
                 json=payload,
                 timeout=kw.get("timeout", (10, 300)),
             )
@@ -339,7 +363,8 @@ class ClaudeAPIAdapter(LLMAdapter):
         if not api_key:
             raise RuntimeError("Anthropic API key not configured. Add api_key to llm config.")
 
-        system_prompt, conversation = self._split_messages(messages)
+        cache_breakpoints = kw.pop("cache_breakpoints", None)
+        system_prompt, conversation = self._split_messages(messages, cache_breakpoints)
         max_tokens = kw.get("max_tokens") or 4096
 
         payload = {
@@ -357,10 +382,14 @@ class ClaudeAPIAdapter(LLMAdapter):
         if tools:
             payload["tools"] = self._convert_tools_to_anthropic(tools)
 
+        headers = self._build_headers(api_key)
+        if cache_breakpoints:
+            headers["anthropic-beta"] = "prompt-caching-2024-07-31"
+
         try:
             resp = requests.post(
                 _ANTHROPIC_URL,
-                headers=self._build_headers(api_key),
+                headers=headers,
                 json=payload,
                 timeout=kw.get("timeout", (10, 300)),
                 stream=True,

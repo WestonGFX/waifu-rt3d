@@ -44,10 +44,12 @@ NSFW Phases 1-3 shipped. Phase 4 (Memory & Milestones) is next.
 2. **Frontend components for Phases 2-3** — Pacing mode picker, scenario template browser, power dynamic settings. Build UI before testing.
 3. **Adaptive Intelligence Engine** — #1 priority new feature. Context classifier, dynamic LLM param tuning, extended user model, over-personalization gate. Spec: `docs/plans/2026-03-29-adaptive-intelligence-spec.md` (Phase A: 23-34h, Phase B: 52-72h, Phase C: 54-76h).
 4. **Bond Progression System** — #1 retention driver. Quadratic XP curve, 5-tier unlocks, milestone celebrations, bond-gated dialogue shifts. Existing v56 schema to extend. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` (42-58h, 6 phases).
-5. **Spring Bones 3D** — Quick win: strip Mixamo spring bone tracks + delta time clamp (1.5h). Full: capsule colliders, per-character presets, tuning UI, emotion-reactive physics. Spec: `docs/plans/2026-03-29-spring-bones-spec.md` (16.5h, 5 phases).
-6. **Model Marketplace Expansion** — CC0 VRM catalog, drag-and-drop import, VRoid Hub API, license badges, Cubism Core auto-download. Builds on existing ModelBrowser. Spec: `docs/plans/2026-03-29-model-marketplace-spec.md` (25-32h, 6 phases).
-7. **Privacy-First Sync** — WAL checkpoint on shutdown, Syncthing + .stignore, restic encrypted backups. Spec: `docs/plans/2026-03-29-privacy-sync-spec.md` (~6h, 2 phases).
-8. **Full browser test sweep** — One big pass after all UI is built. Test list below.
+5. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. The "character feels alive" system. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h, 6 phases). Research: `docs/research/2026-03-29-humanoid-motion-research.md`.
+6. **Spring Bones 3D** — Quick win: strip Mixamo spring bone tracks + delta time clamp (1.5h). Full: capsule colliders, per-character presets, tuning UI, emotion-reactive physics. Spec: `docs/plans/2026-03-29-spring-bones-spec.md` (16.5h, 5 phases).
+7. **Jiggle Physics** — Breast/butt/thigh physics via VRM spring bones. 5 intensity tiers, per-character profiles, content-gated by NSFW mode. Spec: `docs/plans/2026-03-29-jiggle-physics-spec.md` (15-21h, 6 phases). Research: `docs/research/2026-03-29-jiggle-physics-research.md`.
+8. **Model Marketplace Expansion** — CC0 VRM catalog, drag-and-drop import, VRoid Hub API, license badges, Cubism Core auto-download. Builds on existing ModelBrowser. Spec: `docs/plans/2026-03-29-model-marketplace-spec.md` (25-32h, 6 phases).
+9. **Privacy-First Sync** — WAL checkpoint on shutdown, Syncthing + .stignore, restic encrypted backups. Spec: `docs/plans/2026-03-29-privacy-sync-spec.md` (~6h, 2 phases).
+10. **Full browser test sweep** — One big pass after all UI is built. Test list below.
 
 ### Browser Test Sweep Checklist
 
@@ -88,7 +90,9 @@ NSFW Phases 1-3 shipped. Phase 4 (Memory & Milestones) is next.
 | Spring bones spec | `docs/plans/2026-03-29-spring-bones-spec.md` |
 | Model marketplace spec | `docs/plans/2026-03-29-model-marketplace-spec.md` |
 | Privacy sync spec | `docs/plans/2026-03-29-privacy-sync-spec.md` |
-| Research docs | `docs/research/2026-03-29-*.md` (5 files) |
+| Humanoid motion spec | `docs/plans/2026-03-29-humanoid-motion-spec.md` |
+| Jiggle physics spec | `docs/plans/2026-03-29-jiggle-physics-spec.md` |
+| Research docs | `docs/research/2026-03-29-*.md` (7 files) |
 | Dev dashboard | `http://localhost:3333/dashboard.html` or `./run.sh dash` |
 | Quickstart cheatsheet | `docs/QUICKSTART.md` |
 | Convention guides | `docs/conventions/*.md` |

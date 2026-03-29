@@ -1,74 +1,54 @@
 # Current Project Status
 
-**Last updated:** 2026-03-28 10:30 PDT
+**Last updated:** 2026-03-29 00:15 PDT
 **Branch:** master
 **Schema version:** v61
-**Tests:** 1532 passing (backend pytest), tsc clean (frontend)
+**Tests:** 1757 passing (backend pytest), tsc clean (frontend)
 
 ## Active Work
 
-NSFW Phase 1 shipped. Phase 2 (State Machines & Intelligence) is next.
+NSFW Phases 1-3 shipped. Phase 4 (Memory & Milestones) is next.
 
 ## Completed This Session (Mar 28, session 3)
 
 | What | Details |
 |------|---------|
-| **NSFW Phase 1: F40 Boundaries** | BoundaryManager with hard/soft constraints, negotiation prompts, export/import. Commit `e1eeba1` |
-| **NSFW Phase 1: F13 Writing Styles** | 4 presets (romantic/literary/direct/suggestive), 13 character defaults, session override. Commit `e1eeba1` |
-| **NSFW Phase 1: F15 Sensory Profiles** | 13 character sensory profiles, intimacy-gated intensity scaling. Commit `e1eeba1` |
-| **NSFW Phase 1: F30 Pet Names** | VocabularyManager for pet names/jokes/references, frequency scaling, 5 proposal templates. Commit `e1eeba1` |
-| **DB Migration v60→v61** | relationship_boundaries + private_vocabulary tables, sessions.writing_style, characters.sensory_profile columns. Commit `e1eeba1` |
-| **API Endpoints (13 new)** | Boundaries CRUD, writing styles, sensory profiles, vocabulary — all wired into server.py. Commit `90c8ac6` |
-| **Context Assembler Wiring** | All 4 features inject into `_build_prompt_sections()` with intimacy thresholds. Commit `90c8ac6` |
-| **Frontend Components** | BoundaryPanel, WritingStylePicker, VocabularyPanel + App.tsx wiring. Commit `091bde9` |
-| **./run.sh check** | One-command smoke test (pytest + tsc) with auto-opening HTML dashboard. Commit `1e0940b` |
-| **README + docs update** | Badges, architecture, API table, schema, roadmap, shortcuts all updated |
+| **NSFW Phase 1: Foundation** | F40 Boundaries, F13 Writing Styles, F15 Sensory Profiles, F30 Pet Names — full stack (backend + migration v61 + API + context wiring + frontend) |
+| **NSFW Phase 2: State Machines** | F17 Arousal Engine, F6 Pacing Engine, F16 Scene Phases, F10 Consent — backend + context wiring |
+| **NSFW Phase 3: Scene Architecture** | F32 Power Dynamics, F38 Intimate Director, F8 NSFW Scenarios (19 templates), F25 Touch Protocol — backend + API + context wiring |
+| **Dev Tooling** | `./run.sh check` (one-command smoke test), `./run.sh dash` (open dashboard), dev panel on localhost:3333 |
+| **Favicon** | Pixel waifu favicon deployed to Sakura + Neon frontends |
+| **Settings cleanup** | Local settings.json trimmed from 148 → 0 permissions (global wildcards cover all) |
+| **QUICKSTART.md** | One-page dev cheatsheet at docs/QUICKSTART.md |
 
-## Completed Previous Session (Mar 28, session 2)
+## NSFW Mega-Sprint Progress
 
-| What | Details |
-|------|---------|
-| **P5: Memory Browser** | Unified 4-tab panel (Overview/About You/Memories/Journal) replacing 3 separate panels. Commit `9592dcf` |
-| **P2: Context Viewer** | Debug panel showing LLM prompt sections, token budget bar, collapsible content viewer. Commit `b4b2529` |
+| Phase | Status | Features | Tests Added |
+|-------|--------|----------|-------------|
+| **Phase 1: Foundation** | ✅ COMPLETE | F40 Boundaries, F13 Writing Styles, F15 Sensory, F30 Pet Names | +146 |
+| **Phase 2: State Machines** | ✅ COMPLETE | F17 Arousal, F6 Pacing, F16 Scene Phases, F10 Consent | +113 |
+| **Phase 3: Scene Architecture** | ✅ COMPLETE | F32 Power Dynamics, F38 Director, F8 Scenarios, F25 Touch | +112 |
+| **Phase 4: Memory & Milestones** | READY | F1 Milestones, F2 Intimate Memory, F5 Aftercare, F12 Pillow Talk | — |
+| **Phase 5+** | PLANNED | Audio/visual, gallery, advanced features | — |
 
-## NSFW Mega-Sprint Plan Status
+## Previous Sessions
 
-**Plan file:** `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` (6,006 lines)
-**Features:** 56 across 10 phases (~150 hours estimated)
-**Status:** Phase 1 COMPLETE — Phase 2 ready for implementation
-
-| Phase | Status | Features |
-|-------|--------|----------|
-| **Phase 1: Foundation** | ✅ COMPLETE | F40 Boundaries, F13 Writing Styles, F15 Sensory, F30 Pet Names |
-| **Phase 2: State Machines** | READY | F17 Arousal, F16 Intimacy Phases, F6 Pacing, F10 Consent |
-| **Phase 3: Scene** | PLANNED | F8 Scenarios, F32 Power, F38 Director, F25 Touch |
-| **Phase 4: Audio/Visual** | PLANNED | F4 Voice, F19 Blush, F27 Whisper, F23 Ambiance |
-| **Phase 5: Aftercare** | PLANNED | F5 Aftercare, F12 Pillow Talk, F43 Mood, F26 Scoring |
-| **Phase 6+** | PLANNED | Memory, milestones, gallery, and more |
-
-## Previous Work
-
-| Sprint | Status |
-|--------|--------|
-| Sprint 1 (Tier S) | ✅ COMPLETE + WIRED |
-| Sprint 2 (Retention) | ✅ COMPLETE |
-| Sprint 3 (Intelligence) | ✅ COMPLETE + WIRED |
-| Sprint 4 (Voice & Immersion) | ✅ COMPLETE + WIRED |
-| Sprint 5 (Emotional Depth) | ✅ COMPLETE + WIRED |
+| Session | What |
+|---------|------|
+| Mar 28 session 2 | P5 Memory Browser, P2 Context Viewer |
+| Mar 27-28 session 1 | NSFW plan v2 + v3 enhancement (6,006 lines) |
 
 ## Next 3 Tasks (Priority Order)
 
-1. **NSFW Phase 2 Implementation** — F17 Arousal State Machine, F16 Intimacy Phases, F6 Scene Pacing, F10 Consent System
-2. **Browser testing** — Test NSFW Phase 1 features + P5 Memory Browser + P2 Context Viewer in actual UI
-3. **Remaining character enrichment** — Ayane milestone scene; 8 chars at gold
+1. **NSFW Phase 4: Memory & Milestones** — F1 (First-Time Milestones), F2 (Intimate Memory), F5 (Aftercare Engine), F12 (Pillow Talk). Plan at `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` line ~3577.
+2. **Browser testing** — Test Phases 1-3 in actual UI (boundaries panel, writing style picker, vocabulary panel)
+3. **Frontend components for Phase 2-3** — Pacing mode picker, scenario template browser, power dynamic settings
 
 ## Quick Reference
 
 | Resource | Path |
 |----------|------|
 | NSFW plan (implementation ref) | `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` |
-| NSFW plan (original) | `docs/plans/2026-03-27-nsfw-mega-sprint.md` |
-| NSFW research | `docs/research/2026-03-27-nsfw-feature-catalog.md` |
-| Sprint 1 roadmap | `docs/plans/2026-03-25-expanded-feature-roadmap.md` |
-| Feature tracking | `docs/FEATURE_MASTERLIST.md` |
+| Dev dashboard | `http://localhost:3333/dashboard.html` or `./run.sh dash` |
+| Quickstart cheatsheet | `docs/QUICKSTART.md` |
 | Convention guides | `docs/conventions/*.md` |

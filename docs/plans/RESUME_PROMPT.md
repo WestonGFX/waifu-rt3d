@@ -1,50 +1,52 @@
-# Resume: Waifu-RT3D — Post NSFW Phase 1 Implementation (Mar 28, 2026)
+# Resume: Waifu-RT3D — Post NSFW Phases 1-3 (Mar 29, 2026)
 
-## WHAT HAPPENED THIS SESSION (Session 3)
+## WHAT HAPPENED (Session 3, Mar 28)
 
-### NSFW Phase 1: Foundation Layer — COMPLETE
+### NSFW Phases 1-3 — 12 features shipped
 
-All 4 features fully shipped (backend + migration + API + context wiring + frontend):
+**Phase 1: Foundation Layer** (full stack — backend + migration + API + frontend):
+- F40 Boundaries → `backend/content/boundaries.py` + BoundaryPanel.tsx
+- F13 Writing Styles → `backend/content/writing_styles.py` + WritingStylePicker.tsx
+- F15 Sensory Profiles → `backend/content/sensory_profiles.py` (invisible to user)
+- F30 Pet Names → `backend/relationship/vocabulary.py` + VocabularyPanel.tsx
+- Migration v60→v61: `relationship_boundaries`, `private_vocabulary` tables + 2 columns
 
-1. **F40 Boundaries** — `backend/content/boundaries.py` with BoundaryManager (hard/soft constraints, negotiation prompts, export/import). BoundaryPanel.tsx frontend.
-2. **F13 Writing Styles** — `backend/content/writing_styles.py` with 4 presets (romantic/literary/direct/suggestive), 13 character defaults. WritingStylePicker.tsx frontend.
-3. **F15 Sensory Profiles** — `backend/content/sensory_profiles.py` with 13 character-specific profiles (Dae=visual, Luna=sound, etc.), intimacy-gated activation.
-4. **F30 Private Vocabulary** — `backend/relationship/vocabulary.py` with VocabularyManager (pet names, jokes, references), frequency scaling. VocabularyPanel.tsx frontend.
+**Phase 2: State Machines** (backend + context wiring):
+- F17 Arousal Engine → `backend/content/arousal_engine.py` (0-10 state, 5 personalities)
+- F6 Pacing Engine → `backend/content/pacing.py` (6 phases, slow-burn/direct modes)
+- F16 Scene Phases → `backend/content/scene_phases.py` (dramatic arc, consent checkpoints)
+- F10 Consent → `backend/content/consent.py` (6 styles, discomfort detection)
 
-### Infrastructure
-- DB migration v60→v61 (2 tables: `relationship_boundaries`, `private_vocabulary` + 2 columns: `sessions.writing_style`, `characters.sensory_profile`)
-- 13 new API endpoints in server.py
-- All 4 features wired into `_build_prompt_sections()` in server.py with intimacy thresholds
-- `./run.sh check` — one-command smoke test with auto-opening HTML dashboard
-- Settings cleanup: local settings.json trimmed from 148 granular permissions to 0 (global wildcards cover all)
+**Phase 3: Scene Architecture** (backend + API + context wiring):
+- F32 Power Dynamics → `backend/content/power_dynamics.py` (dom/sub/switch)
+- F38 Intimate Director → `backend/content/intimate_director.py` (8 commands)
+- F8 NSFW Scenarios → `backend/content/intimate_scenarios.py` (6 universal + 13 character)
+- F25 Touch Protocol → `backend/content/touch_protocol.py` (10 regions, 13 styles)
+
+### Dev Tooling
+- `./run.sh check` — one-command smoke test (pytest + tsc), HTML dashboard
+- `./run.sh dash` — open dashboard without re-running tests
+- Dashboard served on `localhost:3333`
+- Pixel waifu favicon deployed to Sakura + Neon
 
 ### Stats
-- Tests: 1386 → 1532 (+146)
-- 12 new files created
-- 5 commits pushed to origin/master
+- Tests: 1386 → 1757 (+371)
+- 24 new files created
 - Schema: v60 → v61
-
-## PREVIOUS SESSIONS
-
-### Session 2 (Mar 28)
-- P5: Unified Memory Browser — 4-tab panel replacing 3 separate overlays
-- P2: Context Assembly Viewer — debug panel showing LLM prompt construction
-
-### Session 1 (Mar 27-28)
-- NSFW plan v2 (3,335 lines) — 48 features across 9 phases
-- NSFW plan v3 deep enhancement (6,006 lines) — vocabulary matrix, 13 character profiles, 8 new features, SQL schemas, API specs
+- All pushed to origin/master
 
 ## WHAT'S NEXT
 
-1. **NSFW Phase 2: State Machines & Intelligence** — F17 (Arousal State Machine), F16 (Intimacy Phases), F6 (Scene Pacing), F10 (Consent System). Read plan at `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` line ~2292.
-2. **Browser testing** — Test Phase 1 features in actual UI
-3. **Character enrichment** — Ayane milestone scene; 8 chars still need gold-level depth
+1. **NSFW Phase 4: Memory & Milestones** — F1 (First-Time Milestones), F2 (Intimate Memory), F5 (Aftercare Engine), F12 (Pillow Talk). Plan at line ~3577.
+2. **Frontend for Phases 2-3** — No frontend components were built for Phase 2-3 features (arousal, pacing, scenes, power dynamics, scenarios, touch). These are backend-only right now. Frontend work: PacingModePicker, ScenarioTemplateBrowser, PowerDynamicSettings.
+3. **Browser testing** — Test Phase 1 frontend panels (BoundaryPanel, WritingStylePicker, VocabularyPanel) in actual UI.
 
-## KEY CONTEXT FOR NEXT SESSION
+## KEY CONTEXT
 
-- Branch: `master` (pushed to origin)
-- The 4 Phase 1 features are **prompt injection systems** — they add sections to `_build_prompt_sections()` gated by intimacy thresholds (boundaries=always, vocab≥20, style≥30, sensory≥40)
-- F15 Sensory is invisible to user — no config UI needed
-- WritingStylePicker is a standalone dropdown component (not yet wired into chat toolbar — integration needed in a future session)
-- Plan file: `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` (6,006 lines) is THE implementation reference
+- All Phase 2-3 features are **prompt injection systems** wired into `_build_prompt_sections()` in server.py
+- Intimacy thresholds: boundaries=always, vocab≥20, style≥30, sensory≥40, arousal≥20, pacing≥20, scene≥30, consent≥40, power≥40, touch=always-on-user-text
+- Phase 2 engines (arousal, pacing, scene phases) are **session-scoped in-memory** — they inject baseline prompts but don't yet track state message-by-message. That wiring into the chat endpoint is a future task.
+- WritingStylePicker exists but isn't wired into the chat toolbar yet
 - F18 Safe Word is explicitly deprioritized (user preference)
+- Dashboard port is **3333** (hardcoded, bookmarkable)
+- Ghostty terminal: no right-click "Open URL" — use Cmd+click or `./run.sh dash`

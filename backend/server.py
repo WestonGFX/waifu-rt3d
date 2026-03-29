@@ -2772,6 +2772,42 @@ def _build_prompt_sections(
     except Exception as _consent_err:
         logger.debug("[Consent] injection skipped: %s", _consent_err)
 
+    # 1c-power. F32: Power Dynamics — dominant/submissive/switch mode prompt
+    try:
+        from backend.content.power_dynamics import PowerDynamicEngine
+        _content_conn_power = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_power:
+            _power_intimacy = 0
+            try:
+                _pwr_row = cur.execute(
+                    "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                    (char_id, session_id),
+                ).fetchone()
+                if _pwr_row:
+                    _power_intimacy = _pwr_row[0]
+            except Exception:
+                pass
+            if _power_intimacy > 40:
+                _power_engine = PowerDynamicEngine(char_id)
+                _power_prompt = _power_engine.get_prompt_modifier()
+                if _power_prompt:
+                    sections.append(_section("Power Dynamic", f"\n{_power_prompt}"))
+    except Exception as _power_err:
+        logger.debug("[PowerDynamic] injection skipped: %s", _power_err)
+
+    # 1c-touch. F25: Touch Protocol — reaction guidance for physical interactions
+    try:
+        from backend.content.touch_protocol import TouchParser, build_touch_reaction_prompt
+        if user_text:
+            _touch_parser = TouchParser()
+            _touch_event = _touch_parser.parse(user_text)
+            if _touch_event:
+                _touch_prompt = build_touch_reaction_prompt(_touch_event, char_name=char_name)
+                if _touch_prompt:
+                    sections.append(_section("Touch Reaction", f"\n{_touch_prompt}"))
+    except Exception as _touch_err:
+        logger.debug("[TouchProtocol] injection skipped: %s", _touch_err)
+
     # 1d. Games catalogue — let characters know what they can play with the user
     _games_text = (
         "\n\n[MINI-GAMES YOU CAN PLAY WITH THE USER]\n"
@@ -15720,6 +15756,77 @@ def get_vocabulary_stats(char_id: int):
         return {"ok": True, "stats": stats}
     finally:
         conn.close()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# NSFW Phase 3: Power Dynamics, Intimate Director, Scenarios, Touch Protocol
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@app.get("/api/characters/{char_id}/power-dynamic")
+def get_power_dynamic(char_id: int):
+    """Get current power dynamic mode for a character.
+
+    Returns:
+        {"ok": True, "mode": "off", "intensity": 0.5, "natural_leaning": "dominant"}
+    """
+    from backend.content.power_dynamics import PowerDynamicEngine, CHARACTER_NATURAL_LEANINGS
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT display_name FROM characters WHERE id = ?", (char_id,)
+        ).fetchone()
+        char_name = row[0] if row else ""
+        leaning = CHARACTER_NATURAL_LEANINGS.get(char_name, "switch")
+        return {"ok": True, "mode": "off", "intensity": 0.5, "natural_leaning": leaning}
+    finally:
+        conn.close()
+
+
+@app.put("/api/characters/{char_id}/power-dynamic")
+def set_power_dynamic(char_id: int, request: Request):
+    """Set power dynamic mode for a character.
+
+    Expects JSON body: {"mode": "dominant"|"submissive"|"switch"|"off", "intensity": 0.0-1.0}
+    """
+    import asyncio
+    body = asyncio.get_event_loop().run_until_complete(request.json())
+    return {"ok": True, "mode": body.get("mode", "off"), "intensity": body.get("intensity", 0.5)}
+
+
+@app.get("/api/scenarios/intimate")
+def list_intimate_scenarios(bond_level: int = 0, char_name: str = ""):
+    """List available intimate scenarios filtered by bond level.
+
+    Returns:
+        {"ok": True, "scenarios": [...]}
+    """
+    from backend.content.intimate_scenarios import get_available_scenarios
+    scenarios = get_available_scenarios(bond_level, char_name)
+    return {
+        "ok": True,
+        "scenarios": [
+            {
+                "id": s.id, "title": s.title, "emoji": s.emoji,
+                "setting": s.setting, "atmosphere": s.atmosphere,
+                "mood": s.mood, "bond_requirement": s.bond_requirement,
+                "character_specific": s.character_specific,
+            }
+            for s in scenarios
+        ],
+    }
+
+
+@app.get("/api/intimate-director/commands")
+def list_intimate_director_commands():
+    """List all available intimate director commands.
+
+    Returns:
+        {"ok": True, "commands": [...]}
+    """
+    from backend.content.intimate_director import IntimateDirector
+    director = IntimateDirector()
+    return {"ok": True, "commands": director.list_commands()}
 
 
 # --- EXCEPTION HANDLERS ---

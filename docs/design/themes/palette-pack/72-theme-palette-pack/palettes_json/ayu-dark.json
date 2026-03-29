@@ -1,0 +1,19 @@
+{
+  "name": "Ayu Dark",
+  "slug": "ayu-dark",
+  "mode": "dark",
+  "bg": "#0a0e14",
+  "fg": "#b3b1ad",
+  "cursor": "#e6b450",
+  "sel": "#273747",
+  "comment": "#626a73",
+  "black": "#01060e",
+  "red": "#ea6c73",
+  "green": "#91b362",
+  "yellow": "#f9af4f",
+  "blue": "#53bdfa",
+  "magenta": "#fae994",
+  "cyan": "#90e1c6",
+  "white": "#c7c7c7",
+  "accent": "#f07178"
+}

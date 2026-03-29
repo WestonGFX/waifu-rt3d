@@ -1,0 +1,19 @@
+{
+  "name": "GitHub Light",
+  "slug": "github-light",
+  "mode": "light",
+  "bg": "#ffffff",
+  "fg": "#24292f",
+  "cursor": "#0969da",
+  "sel": "#dbe9f9",
+  "comment": "#6e7781",
+  "black": "#57606a",
+  "red": "#cf222e",
+  "green": "#1a7f37",
+  "yellow": "#9a6700",
+  "blue": "#0969da",
+  "magenta": "#8250df",
+  "cyan": "#1b7c83",
+  "white": "#f6f8fa",
+  "accent": "#bf8700"
+}

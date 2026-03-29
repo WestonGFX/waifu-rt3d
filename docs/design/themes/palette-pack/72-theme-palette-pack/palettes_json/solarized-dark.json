@@ -1,0 +1,19 @@
+{
+  "name": "Solarized Dark",
+  "slug": "solarized-dark",
+  "mode": "dark",
+  "bg": "#002b36",
+  "fg": "#839496",
+  "cursor": "#93a1a1",
+  "sel": "#073642",
+  "comment": "#586e75",
+  "black": "#073642",
+  "red": "#dc322f",
+  "green": "#859900",
+  "yellow": "#b58900",
+  "blue": "#268bd2",
+  "magenta": "#d33682",
+  "cyan": "#2aa198",
+  "white": "#eee8d5",
+  "accent": "#cb4b16"
+}

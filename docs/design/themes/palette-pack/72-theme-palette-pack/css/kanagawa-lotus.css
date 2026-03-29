@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Kanagawa Lotus";
+  --theme-mode: light;
+  --bg: #f2ecbc;
+  --fg: #545464;
+  --cursor: #545464;
+  --selection: #d5cea3;
+  --comment: #8a8980;
+  --black: #1f1f28;
+  --red: #c84053;
+  --green: #6f894e;
+  --yellow: #77713f;
+  --blue: #4d699b;
+  --magenta: #b35b79;
+  --cyan: #597b75;
+  --white: #545464;
+  --accent: #4d699b;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

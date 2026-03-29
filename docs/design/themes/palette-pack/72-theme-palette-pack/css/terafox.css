@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Terafox";
+  --theme-mode: dark;
+  --bg: #152528;
+  --fg: #e6eaea;
+  --cursor: #e6eaea;
+  --selection: #274245;
+  --comment: #6b837f;
+  --black: #2f3239;
+  --red: #e85c51;
+  --green: #7aa4a1;
+  --yellow: #fda47f;
+  --blue: #5a93aa;
+  --magenta: #ad5c7c;
+  --cyan: #a1cdd8;
+  --white: #ebf0f0;
+  --accent: #5a93aa;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

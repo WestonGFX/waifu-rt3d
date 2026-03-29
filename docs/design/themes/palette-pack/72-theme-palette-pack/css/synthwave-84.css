@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Synthwave '84";
+  --theme-mode: dark;
+  --bg: #262335;
+  --fg: #f1f1f1;
+  --cursor: #f92aad;
+  --selection: #463465;
+  --comment: #848bbd;
+  --black: #2a2139;
+  --red: #f97e72;
+  --green: #72f1b8;
+  --yellow: #fede5d;
+  --blue: #36f9f6;
+  --magenta: #ff7edb;
+  --cyan: #36f9f6;
+  --white: #ffffff;
+  --accent: #ff8b39;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

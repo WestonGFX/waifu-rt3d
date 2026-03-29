@@ -1,0 +1,19 @@
+{
+  "name": "PaperColor Light",
+  "slug": "papercolor-light",
+  "mode": "light",
+  "bg": "#eeeeee",
+  "fg": "#444444",
+  "cursor": "#005f87",
+  "sel": "#d0d0d0",
+  "comment": "#878787",
+  "black": "#444444",
+  "red": "#af0000",
+  "green": "#008700",
+  "yellow": "#5f8700",
+  "blue": "#0087af",
+  "magenta": "#8787af",
+  "cyan": "#005f87",
+  "white": "#ffffff",
+  "accent": "#d75f00"
+}

@@ -1,0 +1,19 @@
+{
+  "name": "Moonfly",
+  "slug": "moonfly",
+  "mode": "dark",
+  "bg": "#080808",
+  "fg": "#bdbdbd",
+  "cursor": "#9e9e9e",
+  "sel": "#323437",
+  "comment": "#7e8294",
+  "black": "#323437",
+  "red": "#ff5454",
+  "green": "#8cc85f",
+  "yellow": "#e3c78a",
+  "blue": "#80a0ff",
+  "magenta": "#cf87e8",
+  "cyan": "#79dac8",
+  "white": "#c6c6c6",
+  "accent": "#80a0ff"
+}

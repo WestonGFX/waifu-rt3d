@@ -1,0 +1,19 @@
+{
+  "name": "Catppuccin Mocha",
+  "slug": "catppuccin-mocha",
+  "mode": "dark",
+  "bg": "#1e1e2e",
+  "fg": "#cdd6f4",
+  "cursor": "#f5e0dc",
+  "sel": "#45475a",
+  "comment": "#7f849c",
+  "black": "#45475a",
+  "red": "#f38ba8",
+  "green": "#a6e3a1",
+  "yellow": "#f9e2af",
+  "blue": "#89b4fa",
+  "magenta": "#cba6f7",
+  "cyan": "#94e2d5",
+  "white": "#bac2de",
+  "accent": "#f5c2e7"
+}

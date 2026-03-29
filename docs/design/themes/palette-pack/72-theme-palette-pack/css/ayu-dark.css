@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Ayu Dark";
+  --theme-mode: dark;
+  --bg: #0a0e14;
+  --fg: #b3b1ad;
+  --cursor: #e6b450;
+  --selection: #273747;
+  --comment: #626a73;
+  --black: #01060e;
+  --red: #ea6c73;
+  --green: #91b362;
+  --yellow: #f9af4f;
+  --blue: #53bdfa;
+  --magenta: #fae994;
+  --cyan: #90e1c6;
+  --white: #c7c7c7;
+  --accent: #f07178;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

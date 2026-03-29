@@ -1,0 +1,19 @@
+{
+  "name": "Jellybeans",
+  "slug": "jellybeans",
+  "mode": "dark",
+  "bg": "#151515",
+  "fg": "#dedede",
+  "cursor": "#ffa560",
+  "sel": "#253b76",
+  "comment": "#888888",
+  "black": "#121212",
+  "red": "#e27373",
+  "green": "#94b979",
+  "yellow": "#ffba7b",
+  "blue": "#97bedc",
+  "magenta": "#e1c0fa",
+  "cyan": "#00988e",
+  "white": "#dedede",
+  "accent": "#97bedc"
+}

@@ -1,0 +1,19 @@
+{
+  "name": "Dawnfox",
+  "slug": "dawnfox",
+  "mode": "light",
+  "bg": "#faf4ed",
+  "fg": "#575279",
+  "cursor": "#575279",
+  "sel": "#e5ded6",
+  "comment": "#9893a5",
+  "black": "#5f5695",
+  "red": "#b4637a",
+  "green": "#618774",
+  "yellow": "#ea9d34",
+  "blue": "#286983",
+  "magenta": "#907aa9",
+  "cyan": "#56949f",
+  "white": "#f2e9de",
+  "accent": "#286983"
+}

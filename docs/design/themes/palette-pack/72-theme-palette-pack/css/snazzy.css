@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Snazzy";
+  --theme-mode: dark;
+  --bg: #282a36;
+  --fg: #eff0eb;
+  --cursor: #e4e4e4;
+  --selection: #424450;
+  --comment: #78787e;
+  --black: #282a36;
+  --red: #ff5c57;
+  --green: #5af78e;
+  --yellow: #f3f99d;
+  --blue: #57c7ff;
+  --magenta: #ff6ac1;
+  --cyan: #9aedfe;
+  --white: #f1f1f0;
+  --accent: #57c7ff;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

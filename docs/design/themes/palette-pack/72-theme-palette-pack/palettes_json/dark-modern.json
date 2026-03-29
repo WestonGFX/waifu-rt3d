@@ -1,0 +1,19 @@
+{
+  "name": "Dark Modern",
+  "slug": "dark-modern",
+  "mode": "dark",
+  "bg": "#1f1f1f",
+  "fg": "#cccccc",
+  "cursor": "#aeafad",
+  "sel": "#264f78",
+  "comment": "#6a9955",
+  "black": "#1f1f1f",
+  "red": "#f44747",
+  "green": "#608b4e",
+  "yellow": "#dcdcaa",
+  "blue": "#569cd6",
+  "magenta": "#c586c0",
+  "cyan": "#4ec9b0",
+  "white": "#d4d4d4",
+  "accent": "#569cd6"
+}

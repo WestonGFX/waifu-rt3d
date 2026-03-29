@@ -1,0 +1,19 @@
+{
+  "name": "Tokyo Night Moon",
+  "slug": "tokyo-night-moon",
+  "mode": "dark",
+  "bg": "#222436",
+  "fg": "#c8d3f5",
+  "cursor": "#c8d3f5",
+  "sel": "#2f334d",
+  "comment": "#7a88cf",
+  "black": "#1b1d2b",
+  "red": "#ff757f",
+  "green": "#c3e88d",
+  "yellow": "#ffc777",
+  "blue": "#82aaff",
+  "magenta": "#c099ff",
+  "cyan": "#86e1fc",
+  "white": "#c8d3f5",
+  "accent": "#82aaff"
+}

@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Panda Syntax";
+  --theme-mode: dark;
+  --bg: #292a2b;
+  --fg: #e6e6e6;
+  --cursor: #ff75b5;
+  --selection: #3c3d3e;
+  --comment: #676b79;
+  --black: #292a2b;
+  --red: #ff2c6d;
+  --green: #19f9d8;
+  --yellow: #ffcc95;
+  --blue: #45a9f9;
+  --magenta: #ff75b5;
+  --cyan: #6fc1ff;
+  --white: #e6e6e6;
+  --accent: #45a9f9;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

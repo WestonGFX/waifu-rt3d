@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Everblush";
+  --theme-mode: dark;
+  --bg: #141b1e;
+  --fg: #dadada;
+  --cursor: #dadada;
+  --selection: #232a2d;
+  --comment: #7e8294;
+  --black: #232a2d;
+  --red: #e57474;
+  --green: #8ccf7e;
+  --yellow: #e5c76b;
+  --blue: #67b0e8;
+  --magenta: #c47fd5;
+  --cyan: #6cbfbf;
+  --white: #b3b9b8;
+  --accent: #67b0e8;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

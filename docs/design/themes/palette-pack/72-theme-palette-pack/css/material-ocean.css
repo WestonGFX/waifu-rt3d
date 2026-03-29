@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Material Ocean";
+  --theme-mode: dark;
+  --bg: #0f111a;
+  --fg: #8f93a2;
+  --cursor: #ffcc00;
+  --selection: #253340;
+  --comment: #464b5d;
+  --black: #000000;
+  --red: #ff5370;
+  --green: #c3e88d;
+  --yellow: #ffcb6b;
+  --blue: #82aaff;
+  --magenta: #c792ea;
+  --cyan: #89ddff;
+  --white: #ffffff;
+  --accent: #82aaff;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

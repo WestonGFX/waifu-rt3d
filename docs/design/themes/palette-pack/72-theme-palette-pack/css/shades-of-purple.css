@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Shades of Purple";
+  --theme-mode: dark;
+  --bg: #2d2b55;
+  --fg: #ffffff;
+  --cursor: #fad000;
+  --selection: #4d4b7a;
+  --comment: #b362ff;
+  --black: #1e1e3f;
+  --red: #ff628c;
+  --green: #a5ff90;
+  --yellow: #ffe88a;
+  --blue: #9effff;
+  --magenta: #ff9dff;
+  --cyan: #9effff;
+  --white: #ffffff;
+  --accent: #ffb054;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

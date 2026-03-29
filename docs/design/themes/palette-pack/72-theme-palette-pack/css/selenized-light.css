@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Selenized Light";
+  --theme-mode: light;
+  --bg: #fbf3db;
+  --fg: #53676d;
+  --cursor: #53676d;
+  --selection: #ece3cc;
+  --comment: #909995;
+  --black: #909995;
+  --red: #d2212d;
+  --green: #489100;
+  --yellow: #ad8900;
+  --blue: #0072d4;
+  --magenta: #ca4898;
+  --cyan: #009c8f;
+  --white: #fbf3db;
+  --accent: #0072d4;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

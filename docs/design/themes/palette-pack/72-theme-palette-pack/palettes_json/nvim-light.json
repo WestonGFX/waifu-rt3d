@@ -1,0 +1,19 @@
+{
+  "name": "Nvim Light",
+  "slug": "nvim-light",
+  "mode": "light",
+  "bg": "#ffffff",
+  "fg": "#181818",
+  "cursor": "#181818",
+  "sel": "#d7d7d7",
+  "comment": "#8a8a8a",
+  "black": "#181818",
+  "red": "#590008",
+  "green": "#005523",
+  "yellow": "#6b5300",
+  "blue": "#005078",
+  "magenta": "#470045",
+  "cyan": "#007373",
+  "white": "#fafafa",
+  "accent": "#005078"
+}

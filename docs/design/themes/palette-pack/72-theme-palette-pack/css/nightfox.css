@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Nightfox";
+  --theme-mode: dark;
+  --bg: #192330;
+  --fg: #cdcecf;
+  --cursor: #cdcecf;
+  --selection: #2b3b51;
+  --comment: #738091;
+  --black: #393b44;
+  --red: #c94f6d;
+  --green: #81b29a;
+  --yellow: #dbc074;
+  --blue: #719cd6;
+  --magenta: #9d79d6;
+  --cyan: #63cdcf;
+  --white: #dfdfe0;
+  --accent: #719cd6;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

@@ -1,0 +1,19 @@
+{
+  "name": "Ayu Mirage",
+  "slug": "ayu-mirage",
+  "mode": "dark",
+  "bg": "#1f2430",
+  "fg": "#cbccc6",
+  "cursor": "#ffcc66",
+  "sel": "#33415e",
+  "comment": "#5c6773",
+  "black": "#191e2a",
+  "red": "#f28779",
+  "green": "#bae67e",
+  "yellow": "#ffd580",
+  "blue": "#73d0ff",
+  "magenta": "#d4bfff",
+  "cyan": "#95e6cb",
+  "white": "#c7c7c7",
+  "accent": "#ffad66"
+}

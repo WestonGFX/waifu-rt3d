@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Palenight Contrast";
+  --theme-mode: dark;
+  --bg: #202331;
+  --fg: #bfc7d5;
+  --cursor: #ffcb6b;
+  --selection: #3a405a;
+  --comment: #676e95;
+  --black: #2a2f45;
+  --red: #f07178;
+  --green: #c3e88d;
+  --yellow: #ffcb6b;
+  --blue: #82aaff;
+  --magenta: #c792ea;
+  --cyan: #89ddff;
+  --white: #d9e1ee;
+  --accent: #f78c6c;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

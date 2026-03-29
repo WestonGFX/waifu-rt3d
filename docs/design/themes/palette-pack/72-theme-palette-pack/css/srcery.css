@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Srcery";
+  --theme-mode: dark;
+  --bg: #1c1b19;
+  --fg: #fce8c3;
+  --cursor: #fbb829;
+  --selection: #2c2b28;
+  --comment: #918175;
+  --black: #1c1b19;
+  --red: #ef2f27;
+  --green: #519f50;
+  --yellow: #fbb829;
+  --blue: #2c78bf;
+  --magenta: #e02c6d;
+  --cyan: #0aaeb3;
+  --white: #fce8c3;
+  --accent: #fbb829;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

@@ -1,0 +1,19 @@
+{
+  "name": "Material Ocean",
+  "slug": "material-ocean",
+  "mode": "dark",
+  "bg": "#0f111a",
+  "fg": "#8f93a2",
+  "cursor": "#ffcc00",
+  "sel": "#253340",
+  "comment": "#464b5d",
+  "black": "#000000",
+  "red": "#ff5370",
+  "green": "#c3e88d",
+  "yellow": "#ffcb6b",
+  "blue": "#82aaff",
+  "magenta": "#c792ea",
+  "cyan": "#89ddff",
+  "white": "#ffffff",
+  "accent": "#82aaff"
+}

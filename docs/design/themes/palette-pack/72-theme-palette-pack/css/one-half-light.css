@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "One Half Light";
+  --theme-mode: light;
+  --bg: #fafafa;
+  --fg: #383a42;
+  --cursor: #4078f2;
+  --selection: #d7d7d7;
+  --comment: #a0a1a7;
+  --black: #383a42;
+  --red: #e45649;
+  --green: #50a14f;
+  --yellow: #c18401;
+  --blue: #4078f2;
+  --magenta: #a626a4;
+  --cyan: #0184bc;
+  --white: #fafafa;
+  --accent: #4078f2;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

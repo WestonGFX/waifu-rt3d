@@ -1,0 +1,73 @@
+name,slug,mode,background,foreground,accent,comment,selection
+Ayu Dark,ayu-dark,dark,#0a0e14,#b3b1ad,#f07178,#626a73,#273747
+Ayu Light,ayu-light,light,#fafafa,#5c6166,#fa8d3e,#abb0b6,#e6e6e6
+Ayu Mirage,ayu-mirage,dark,#1f2430,#cbccc6,#ffad66,#5c6773,#33415e
+Carbonfox,carbonfox,dark,#161616,#f2f4f8,#ff7eb6,#6f6f6f,#2a2a2a
+Catppuccin Frappé,catppuccin-frappe,dark,#303446,#c6d0f5,#f4b8e4,#737994,#51576d
+Catppuccin Latte,catppuccin-latte,light,#eff1f5,#4c4f69,#ea76cb,#8c8fa1,#ccd0da
+Catppuccin Macchiato,catppuccin-macchiato,dark,#24273a,#cad3f5,#f5bde6,#8087a2,#494d64
+Catppuccin Mocha,catppuccin-mocha,dark,#1e1e2e,#cdd6f4,#f5c2e7,#7f849c,#45475a
+Dracula,dracula,dark,#282a36,#f8f8f2,#ffb86c,#6272a4,#44475a
+Everforest Dark,everforest-dark,dark,#2b3339,#d3c6aa,#e69875,#859289,#374145
+Everforest Light,everforest-light,light,#fdf6e3,#5c6a72,#f57d26,#939f91,#e6e2cc
+GitHub Dark,github-dark,dark,#0d1117,#c9d1d9,#ffa657,#8b949e,#264f78
+GitHub Light,github-light,light,#ffffff,#24292f,#bf8700,#6e7781,#dbe9f9
+Gruvbox Dark Hard,gruvbox-dark-hard,dark,#1d2021,#ebdbb2,#fe8019,#928374,#504945
+Gruvbox Material,gruvbox-material,dark,#282828,#d4be98,#e78a4e,#7c6f64,#3c3836
+Horizon,horizon,dark,#1c1e26,#e0e0e0,#f09383,#6f6f70,#2e303e
+Kanagawa Dragon,kanagawa-dragon,dark,#181616,#c5c9c5,#b6927b,#737c73,#2d4f67
+Material Palenight,material-palenight,dark,#292d3e,#a6accd,#f78c6c,#676e95,#444267
+Monokai Pro,monokai-pro,dark,#2d2a2e,#fcfcfa,#fc9867,#727072,#403e41
+Night Owl,night-owl,dark,#011627,#d6deeb,#addb67,#637777,#1d3b53
+Nord Light,nord-light,light,#eceff4,#2e3440,#d08770,#81a1c1,#d8dee9
+Nord,nord,dark,#2e3440,#d8dee9,#5e81ac,#616e88,#434c5e
+One Dark Pro,one-dark-pro,dark,#282c34,#abb2bf,#be5046,#5c6370,#3e4451
+One Light,one-light,light,#fafafa,#383a42,#986801,#a0a1a7,#e5e5e6
+Palenight Contrast,palenight-contrast,dark,#202331,#bfc7d5,#f78c6c,#676e95,#3a405a
+PaperColor Light,papercolor-light,light,#eeeeee,#444444,#d75f00,#878787,#d0d0d0
+Rosé Pine Dawn,rose-pine-dawn,light,#faf4ed,#575279,#ea9d34,#9893a5,#dfdad9
+Rosé Pine Moon,rose-pine-moon,dark,#232136,#e0def4,#56526e,#6e6a86,#393552
+Rosé Pine,rose-pine,dark,#191724,#e0def4,#524f67,#6e6a86,#403d52
+Shades of Purple,shades-of-purple,dark,#2d2b55,#ffffff,#ffb054,#b362ff,#4d4b7a
+Solarized Dark,solarized-dark,dark,#002b36,#839496,#cb4b16,#586e75,#073642
+Solarized Light,solarized-light,light,#fdf6e3,#657b83,#cb4b16,#93a1a1,#eee8d5
+Synthwave '84,synthwave-84,dark,#262335,#f1f1f1,#ff8b39,#848bbd,#463465
+Tokyo Night Storm,tokyo-night-storm,dark,#24283b,#c0caf5,#73daca,#565f89,#364a82
+Tokyo Night,tokyo-night,dark,#1a1b26,#c0caf5,#ff9e64,#565f89,#33467c
+Tomorrow Light,tomorrow-light,light,#ffffff,#4d4d4c,#f5871f,#8e908c,#d6d6d6
+Nightfox,nightfox,dark,#192330,#cdcecf,#719cd6,#738091,#2b3b51
+Dayfox,dayfox,light,#f6f2ee,#3d2b5a,#2848a9,#a1a6b3,#dfe3e8
+Dawnfox,dawnfox,light,#faf4ed,#575279,#286983,#9893a5,#e5ded6
+Duskfox,duskfox,dark,#232136,#e0def4,#c4a7e7,#6e6a86,#393552
+Terafox,terafox,dark,#152528,#e6eaea,#5a93aa,#6b837f,#274245
+Kanagawa Wave,kanagawa-wave,dark,#1f1f28,#dcd7ba,#7e9cd8,#727169,#2d4f67
+Kanagawa Lotus,kanagawa-lotus,light,#f2ecbc,#545464,#4d699b,#8a8980,#d5cea3
+Material Ocean,material-ocean,dark,#0f111a,#8f93a2,#82aaff,#464b5d,#253340
+Material Deep Ocean,material-deep-ocean,dark,#0f111a,#a6accd,#82aaff,#717cb4,#1f2233
+Material Oceanic,material-oceanic,dark,#263238,#b0bec5,#82aaff,#546e7a,#314549
+Moonfly,moonfly,dark,#080808,#bdbdbd,#80a0ff,#7e8294,#323437
+Nightfly,nightfly,dark,#011627,#acb4c2,#82aaff,#7c8f8f,#1d3b53
+Sonokai,sonokai,dark,#2c2e34,#e2e2e3,#76cce0,#7f8490,#3e4452
+Sonokai Andromeda,sonokai-andromeda,dark,#2b2d3a,#e1e3e4,#6dcae8,#7e8294,#3a3d4d
+Everblush,everblush,dark,#141b1e,#dadada,#67b0e8,#7e8294,#232a2d
+Flexoki Dark,flexoki-dark,dark,#100f0f,#cecdc3,#4385be,#878580,#282726
+Flexoki Light,flexoki-light,light,#fffcf0,#100f0f,#205ea6,#878580,#e6e4d9
+Poimandres,poimandres,dark,#1b1e28,#a6accd,#89ddff,#767c9d,#303340
+Vesper,vesper,dark,#101010,#b7b7b7,#aca1cf,#7d7d7d,#232323
+Oxocarbon Dark,oxocarbon-dark,dark,#161616,#dde1e6,#78a9ff,#6f6f6f,#393939
+Oxocarbon Light,oxocarbon-light,light,#f2f4f8,#161616,#0f62fe,#697077,#dde1e6
+One Half Dark,one-half-dark,dark,#282c34,#dcdfe4,#61afef,#7f848e,#3e4451
+One Half Light,one-half-light,light,#fafafa,#383a42,#4078f2,#a0a1a7,#d7d7d7
+Oceanic Next,oceanic-next,dark,#1b2b34,#d8dee9,#6699cc,#65737e,#4f5b66
+Cobalt2,cobalt2,dark,#193549,#ffffff,#ffc600,#0088ff,#234e70
+Jellybeans,jellybeans,dark,#151515,#dedede,#97bedc,#888888,#253b76
+Snazzy,snazzy,dark,#282a36,#eff0eb,#57c7ff,#78787e,#424450
+Panda Syntax,panda-syntax,dark,#292a2b,#e6e6e6,#45a9f9,#676b79,#3c3d3e
+Tokyo Night Moon,tokyo-night-moon,dark,#222436,#c8d3f5,#82aaff,#7a88cf,#2f334d
+Night Owl Light,night-owl-light,light,#fbfbfb,#403f53,#288ed7,#989fb1,#daedff
+Dark Modern,dark-modern,dark,#1f1f1f,#cccccc,#569cd6,#6a9955,#264f78
+Nvim Dark,nvim-dark,dark,#0f0f0f,#c0c0c0,#a6dbff,#707070,#2c2c2c
+Nvim Light,nvim-light,light,#ffffff,#181818,#005078,#8a8a8a,#d7d7d7
+Srcery,srcery,dark,#1c1b19,#fce8c3,#fbb829,#918175,#2c2b28
+Selenized Dark,selenized-dark,dark,#103c48,#adbcbc,#4695f7,#72898f,#184956
+Selenized Light,selenized-light,light,#fbf3db,#53676d,#0072d4,#909995,#ece3cc

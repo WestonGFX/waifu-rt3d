@@ -1,0 +1,19 @@
+{
+  "name": "Cobalt2",
+  "slug": "cobalt2",
+  "mode": "dark",
+  "bg": "#193549",
+  "fg": "#ffffff",
+  "cursor": "#ffc600",
+  "sel": "#234e70",
+  "comment": "#0088ff",
+  "black": "#000000",
+  "red": "#ff9d00",
+  "green": "#3ad900",
+  "yellow": "#ffc600",
+  "blue": "#0088ff",
+  "magenta": "#fb94ff",
+  "cyan": "#80fcff",
+  "white": "#ffffff",
+  "accent": "#ffc600"
+}

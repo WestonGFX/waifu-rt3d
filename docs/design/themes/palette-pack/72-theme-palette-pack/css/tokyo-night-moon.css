@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Tokyo Night Moon";
+  --theme-mode: dark;
+  --bg: #222436;
+  --fg: #c8d3f5;
+  --cursor: #c8d3f5;
+  --selection: #2f334d;
+  --comment: #7a88cf;
+  --black: #1b1d2b;
+  --red: #ff757f;
+  --green: #c3e88d;
+  --yellow: #ffc777;
+  --blue: #82aaff;
+  --magenta: #c099ff;
+  --cyan: #86e1fc;
+  --white: #c8d3f5;
+  --accent: #82aaff;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

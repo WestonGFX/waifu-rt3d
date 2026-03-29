@@ -1,0 +1,19 @@
+{
+  "name": "Kanagawa Dragon",
+  "slug": "kanagawa-dragon",
+  "mode": "dark",
+  "bg": "#181616",
+  "fg": "#c5c9c5",
+  "cursor": "#c8c093",
+  "sel": "#2d4f67",
+  "comment": "#737c73",
+  "black": "#0d0c0c",
+  "red": "#c4746e",
+  "green": "#8a9a7b",
+  "yellow": "#c4b28a",
+  "blue": "#8ba4b0",
+  "magenta": "#a292a3",
+  "cyan": "#8ea4a2",
+  "white": "#c8c093",
+  "accent": "#b6927b"
+}

@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Ayu Mirage";
+  --theme-mode: dark;
+  --bg: #1f2430;
+  --fg: #cbccc6;
+  --cursor: #ffcc66;
+  --selection: #33415e;
+  --comment: #5c6773;
+  --black: #191e2a;
+  --red: #f28779;
+  --green: #bae67e;
+  --yellow: #ffd580;
+  --blue: #73d0ff;
+  --magenta: #d4bfff;
+  --cyan: #95e6cb;
+  --white: #c7c7c7;
+  --accent: #ffad66;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

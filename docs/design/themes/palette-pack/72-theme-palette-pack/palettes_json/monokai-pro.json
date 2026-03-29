@@ -1,0 +1,19 @@
+{
+  "name": "Monokai Pro",
+  "slug": "monokai-pro",
+  "mode": "dark",
+  "bg": "#2d2a2e",
+  "fg": "#fcfcfa",
+  "cursor": "#fcfcfa",
+  "sel": "#403e41",
+  "comment": "#727072",
+  "black": "#403e41",
+  "red": "#ff6188",
+  "green": "#a9dc76",
+  "yellow": "#ffd866",
+  "blue": "#78dce8",
+  "magenta": "#ab9df2",
+  "cyan": "#78dce8",
+  "white": "#fcfcfa",
+  "accent": "#fc9867"
+}

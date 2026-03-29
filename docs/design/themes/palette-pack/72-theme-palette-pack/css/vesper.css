@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Vesper";
+  --theme-mode: dark;
+  --bg: #101010;
+  --fg: #b7b7b7;
+  --cursor: #a0a0a0;
+  --selection: #232323;
+  --comment: #7d7d7d;
+  --black: #1c1c1c;
+  --red: #f5a191;
+  --green: #90b99f;
+  --yellow: #e6b99d;
+  --blue: #aca1cf;
+  --magenta: #e29eca;
+  --cyan: #ea83a5;
+  --white: #c1c1c1;
+  --accent: #aca1cf;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

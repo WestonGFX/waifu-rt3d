@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Night Owl Light";
+  --theme-mode: light;
+  --bg: #fbfbfb;
+  --fg: #403f53;
+  --cursor: #7fdbca;
+  --selection: #daedff;
+  --comment: #989fb1;
+  --black: #403f53;
+  --red: #de3d82;
+  --green: #08916a;
+  --yellow: #daaa01;
+  --blue: #288ed7;
+  --magenta: #d6438a;
+  --cyan: #2aa298;
+  --white: #fbfbfb;
+  --accent: #288ed7;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

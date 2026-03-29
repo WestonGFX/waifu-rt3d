@@ -1,0 +1,19 @@
+{
+  "name": "Night Owl",
+  "slug": "night-owl",
+  "mode": "dark",
+  "bg": "#011627",
+  "fg": "#d6deeb",
+  "cursor": "#80a4c2",
+  "sel": "#1d3b53",
+  "comment": "#637777",
+  "black": "#01111d",
+  "red": "#ef5350",
+  "green": "#22da6e",
+  "yellow": "#c5e478",
+  "blue": "#82aaff",
+  "magenta": "#c792ea",
+  "cyan": "#21c7a8",
+  "white": "#ffffff",
+  "accent": "#addb67"
+}

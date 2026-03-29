@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Sonokai";
+  --theme-mode: dark;
+  --bg: #2c2e34;
+  --fg: #e2e2e3;
+  --cursor: #e2e2e3;
+  --selection: #3e4452;
+  --comment: #7f8490;
+  --black: #181a1c;
+  --red: #fc5d7c;
+  --green: #9ed072;
+  --yellow: #e7c664;
+  --blue: #76cce0;
+  --magenta: #b39df3;
+  --cyan: #f39660;
+  --white: #e2e2e3;
+  --accent: #76cce0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Tokyo Night";
+  --theme-mode: dark;
+  --bg: #1a1b26;
+  --fg: #c0caf5;
+  --cursor: #c0caf5;
+  --selection: #33467c;
+  --comment: #565f89;
+  --black: #414868;
+  --red: #f7768e;
+  --green: #9ece6a;
+  --yellow: #e0af68;
+  --blue: #7aa2f7;
+  --magenta: #bb9af7;
+  --cyan: #7dcfff;
+  --white: #c0caf5;
+  --accent: #ff9e64;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

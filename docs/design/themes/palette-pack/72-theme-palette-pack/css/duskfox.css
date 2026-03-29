@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Duskfox";
+  --theme-mode: dark;
+  --bg: #232136;
+  --fg: #e0def4;
+  --cursor: #e0def4;
+  --selection: #393552;
+  --comment: #6e6a86;
+  --black: #393552;
+  --red: #eb6f92;
+  --green: #a3be8c;
+  --yellow: #f6c177;
+  --blue: #569fba;
+  --magenta: #c4a7e7;
+  --cyan: #9ccfd8;
+  --white: #e0def4;
+  --accent: #c4a7e7;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

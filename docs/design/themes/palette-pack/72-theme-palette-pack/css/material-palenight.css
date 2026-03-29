@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Material Palenight";
+  --theme-mode: dark;
+  --bg: #292d3e;
+  --fg: #a6accd;
+  --cursor: #ffcc00;
+  --selection: #444267;
+  --comment: #676e95;
+  --black: #32374d;
+  --red: #f07178;
+  --green: #c3e88d;
+  --yellow: #ffcb6b;
+  --blue: #82aaff;
+  --magenta: #c792ea;
+  --cyan: #89ddff;
+  --white: #d0d4f0;
+  --accent: #f78c6c;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

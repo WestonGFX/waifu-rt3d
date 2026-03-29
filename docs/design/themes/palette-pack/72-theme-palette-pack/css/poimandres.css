@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Poimandres";
+  --theme-mode: dark;
+  --bg: #1b1e28;
+  --fg: #a6accd;
+  --cursor: #a6accd;
+  --selection: #303340;
+  --comment: #767c9d;
+  --black: #1b1e28;
+  --red: #d0679d;
+  --green: #5de4c7;
+  --yellow: #fffac2;
+  --blue: #89ddff;
+  --magenta: #fcc5e9;
+  --cyan: #add7ff;
+  --white: #ffffff;
+  --accent: #89ddff;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

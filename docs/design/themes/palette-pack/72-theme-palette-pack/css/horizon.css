@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Horizon";
+  --theme-mode: dark;
+  --bg: #1c1e26;
+  --fg: #e0e0e0;
+  --cursor: #fdf0ed;
+  --selection: #2e303e;
+  --comment: #6f6f70;
+  --black: #16161c;
+  --red: #e95678;
+  --green: #29d398;
+  --yellow: #fab795;
+  --blue: #26bbd9;
+  --magenta: #ee64ac;
+  --cyan: #59e1e3;
+  --white: #fdf0ed;
+  --accent: #f09383;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

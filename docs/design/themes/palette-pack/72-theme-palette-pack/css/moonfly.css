@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Moonfly";
+  --theme-mode: dark;
+  --bg: #080808;
+  --fg: #bdbdbd;
+  --cursor: #9e9e9e;
+  --selection: #323437;
+  --comment: #7e8294;
+  --black: #323437;
+  --red: #ff5454;
+  --green: #8cc85f;
+  --yellow: #e3c78a;
+  --blue: #80a0ff;
+  --magenta: #cf87e8;
+  --cyan: #79dac8;
+  --white: #c6c6c6;
+  --accent: #80a0ff;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

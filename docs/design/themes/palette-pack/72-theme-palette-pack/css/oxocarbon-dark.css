@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Oxocarbon Dark";
+  --theme-mode: dark;
+  --bg: #161616;
+  --fg: #dde1e6;
+  --cursor: #78a9ff;
+  --selection: #393939;
+  --comment: #6f6f6f;
+  --black: #262626;
+  --red: #ee5396;
+  --green: #42be65;
+  --yellow: #ffe97b;
+  --blue: #78a9ff;
+  --magenta: #be95ff;
+  --cyan: #33b1ff;
+  --white: #dde1e6;
+  --accent: #78a9ff;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Sonokai Andromeda";
+  --theme-mode: dark;
+  --bg: #2b2d3a;
+  --fg: #e1e3e4;
+  --cursor: #e1e3e4;
+  --selection: #3a3d4d;
+  --comment: #7e8294;
+  --black: #181a1c;
+  --red: #fb617e;
+  --green: #9ed06c;
+  --yellow: #edc763;
+  --blue: #6dcae8;
+  --magenta: #bb97ee;
+  --cyan: #f89860;
+  --white: #e1e3e4;
+  --accent: #6dcae8;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

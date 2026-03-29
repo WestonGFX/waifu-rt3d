@@ -1,0 +1,19 @@
+{
+  "name": "Shades of Purple",
+  "slug": "shades-of-purple",
+  "mode": "dark",
+  "bg": "#2d2b55",
+  "fg": "#ffffff",
+  "cursor": "#fad000",
+  "sel": "#4d4b7a",
+  "comment": "#b362ff",
+  "black": "#1e1e3f",
+  "red": "#ff628c",
+  "green": "#a5ff90",
+  "yellow": "#ffe88a",
+  "blue": "#9effff",
+  "magenta": "#ff9dff",
+  "cyan": "#9effff",
+  "white": "#ffffff",
+  "accent": "#ffb054"
+}

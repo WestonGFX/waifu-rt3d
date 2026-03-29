@@ -1,0 +1,19 @@
+{
+  "name": "Night Owl Light",
+  "slug": "night-owl-light",
+  "mode": "light",
+  "bg": "#fbfbfb",
+  "fg": "#403f53",
+  "cursor": "#7fdbca",
+  "sel": "#daedff",
+  "comment": "#989fb1",
+  "black": "#403f53",
+  "red": "#de3d82",
+  "green": "#08916a",
+  "yellow": "#daaa01",
+  "blue": "#288ed7",
+  "magenta": "#d6438a",
+  "cyan": "#2aa298",
+  "white": "#fbfbfb",
+  "accent": "#288ed7"
+}

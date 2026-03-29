@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Rosé Pine Moon";
+  --theme-mode: dark;
+  --bg: #232136;
+  --fg: #e0def4;
+  --cursor: #ea9a97;
+  --selection: #393552;
+  --comment: #6e6a86;
+  --black: #2a273f;
+  --red: #eb6f92;
+  --green: #3e8fb0;
+  --yellow: #f6c177;
+  --blue: #9ccfd8;
+  --magenta: #c4a7e7;
+  --cyan: #ea9a97;
+  --white: #e0def4;
+  --accent: #56526e;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

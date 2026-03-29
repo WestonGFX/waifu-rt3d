@@ -1,0 +1,19 @@
+{
+  "name": "Everblush",
+  "slug": "everblush",
+  "mode": "dark",
+  "bg": "#141b1e",
+  "fg": "#dadada",
+  "cursor": "#dadada",
+  "sel": "#232a2d",
+  "comment": "#7e8294",
+  "black": "#232a2d",
+  "red": "#e57474",
+  "green": "#8ccf7e",
+  "yellow": "#e5c76b",
+  "blue": "#67b0e8",
+  "magenta": "#c47fd5",
+  "cyan": "#6cbfbf",
+  "white": "#b3b9b8",
+  "accent": "#67b0e8"
+}

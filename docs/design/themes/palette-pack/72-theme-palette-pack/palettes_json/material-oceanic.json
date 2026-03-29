@@ -1,0 +1,19 @@
+{
+  "name": "Material Oceanic",
+  "slug": "material-oceanic",
+  "mode": "dark",
+  "bg": "#263238",
+  "fg": "#b0bec5",
+  "cursor": "#ffcc00",
+  "sel": "#314549",
+  "comment": "#546e7a",
+  "black": "#000000",
+  "red": "#ff5252",
+  "green": "#c3d82c",
+  "yellow": "#ffc000",
+  "blue": "#82aaff",
+  "magenta": "#c792ea",
+  "cyan": "#89ddff",
+  "white": "#ffffff",
+  "accent": "#82aaff"
+}

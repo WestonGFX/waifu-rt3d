@@ -1,0 +1,19 @@
+{
+  "name": "Selenized Dark",
+  "slug": "selenized-dark",
+  "mode": "dark",
+  "bg": "#103c48",
+  "fg": "#adbcbc",
+  "cursor": "#cad8d9",
+  "sel": "#184956",
+  "comment": "#72898f",
+  "black": "#184956",
+  "red": "#fa5750",
+  "green": "#75b938",
+  "yellow": "#dbb32d",
+  "blue": "#4695f7",
+  "magenta": "#f275be",
+  "cyan": "#41c7b9",
+  "white": "#adbcbc",
+  "accent": "#4695f7"
+}

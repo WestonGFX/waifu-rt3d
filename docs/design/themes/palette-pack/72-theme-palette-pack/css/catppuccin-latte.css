@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Catppuccin Latte";
+  --theme-mode: light;
+  --bg: #eff1f5;
+  --fg: #4c4f69;
+  --cursor: #dc8a78;
+  --selection: #ccd0da;
+  --comment: #8c8fa1;
+  --black: #acb0be;
+  --red: #d20f39;
+  --green: #40a02b;
+  --yellow: #df8e1d;
+  --blue: #1e66f5;
+  --magenta: #8839ef;
+  --cyan: #179299;
+  --white: #bcc0cc;
+  --accent: #ea76cb;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

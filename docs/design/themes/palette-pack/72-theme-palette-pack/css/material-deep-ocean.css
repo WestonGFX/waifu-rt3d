@@ -1,0 +1,25 @@
+:root {
+  --theme-name: "Material Deep Ocean";
+  --theme-mode: dark;
+  --bg: #0f111a;
+  --fg: #a6accd;
+  --cursor: #ffcc00;
+  --selection: #1f2233;
+  --comment: #717cb4;
+  --black: #000000;
+  --red: #e53935;
+  --green: #c3e88d;
+  --yellow: #ffb62c;
+  --blue: #82aaff;
+  --magenta: #c792ea;
+  --cyan: #89ddff;
+  --white: #ffffff;
+  --accent: #82aaff;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  caret-color: var(--cursor);
+  selection: var(--selection);
+}

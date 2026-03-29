@@ -100,6 +100,23 @@ export interface Character {
    * When null, all sections except 0 (card recap) and 10 (prompt pack) are used.
    */
   bible_sections?: number[] | null;
+  /**
+   * Proactive messaging: when true the scheduler is allowed to send unprompted
+   * messages for this character. Stored in the `proactive_enabled` column.
+   */
+  proactive_enabled?: boolean;
+  /**
+   * Proactive messaging: frequency preset controlling how often the scheduler
+   * enqueues messages. One of `'quiet'`, `'normal'`, or `'chatty'`.
+   * Stored in the `proactive_frequency` column.
+   */
+  proactive_frequency?: string;
+  /**
+   * Proactive messaging: active hour window expressed as `"start-end"`,
+   * e.g. `"9-22"`. Messages are only scheduled within this window.
+   * Stored in the `proactive_hours` column.
+   */
+  proactive_hours?: string;
   created_at?: string;
   updated_at?: string;
 }

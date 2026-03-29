@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAppStore } from '../stores/appStore';
 import type { ScheduledNotification } from '../stores/appStore';
+import { useChatStore } from '../stores/chatStore';
 
 /** How often (ms) to poll the backend for pending scheduled messages. */
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
@@ -52,9 +53,28 @@ export function useSchedulerPoller(): void {
         if (seenIds.current.has(msg.id)) continue;
         seenIds.current.add(msg.id);
 
-        // Skip if this notification is for the currently open character's chat
-        // (the proactive message will appear in the chat bubble instead)
-        if (activeCharacter?.id === msg.char_id) continue;
+        // For active character: inject directly into chat thread and persist to DB,
+        // then acknowledge — no toast notification needed since it's already visible.
+        if (activeCharacter?.id === msg.char_id) {
+          const { injectProactiveMessage, sessionId } = useChatStore.getState();
+          if (sessionId) {
+            injectProactiveMessage({ text: msg.text, serverMessageId: msg.id });
+            // Persist the proactive message into the active session via the backend endpoint
+            fetch(`/api/characters/${msg.char_id}/proactive/inject`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ session_id: sessionId }),
+            }).catch(() => {}); // fire-and-forget, non-critical
+          }
+          // Acknowledge delivery so the backend doesn't re-send on next poll
+          fetch('/api/scheduler/acknowledge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message_id: msg.id }),
+          }).catch(() => {}); // fire-and-forget, non-critical
+          seenIds.current.add(msg.id);
+          continue;
+        }
 
         const notification: ScheduledNotification = {
           id: `sched-${msg.id}-${Date.now()}`,

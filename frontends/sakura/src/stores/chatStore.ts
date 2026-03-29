@@ -24,6 +24,8 @@ interface ChatState {
   /** Send a director note — stored in DB but does NOT trigger LLM response. */
   sendDirectorNote: (text: string) => Promise<void>;
   abortMessage: () => void;
+  /** Inject a proactive message from the scheduler as an assistant message (no LLM call). */
+  injectProactiveMessage: (msg: { text: string; serverMessageId?: number }) => void;
   loadHistory: (sessionId: number) => Promise<void>;
   clear: () => void;
   /** Drive the VRM viewer's expression and mirror state into the store. */
@@ -110,6 +112,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   setContext: (sessionId, charId) => set({ sessionId, charId, messages: [] }),
 
   clear: () => set({ messages: [], draft: '', loading: false }),
+
+  injectProactiveMessage: (msg) => {
+    const proactiveMsg: ChatMessage = {
+      id: genId(),
+      role: 'assistant',
+      text: msg.text,
+      createdAt: Date.now(),
+      status: 'sent',
+      serverMessageId: msg.serverMessageId,
+    };
+    set((s) => ({ messages: [...s.messages, proactiveMsg] }));
+  },
 
   sendDirectorNote: async (text) => {
     const { sessionId, charId } = get();

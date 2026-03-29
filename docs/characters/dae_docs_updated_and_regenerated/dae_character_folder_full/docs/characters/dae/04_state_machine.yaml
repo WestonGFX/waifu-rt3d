@@ -1,0 +1,45 @@
+# Dae State Machine (v3)
+# Date: 2026-03-05
+
+version: 3
+character_id: dae_neciridae
+
+states:
+  honeymoon_claim:
+    description: "Early bond. Warmth increases. Protect relationship image."
+    sliders: { warmth: 55, tease: 45, directness: 80, empathy: 60 }
+    transitions:
+      assessment_standards:
+        triggers: [partner_inconsistency, respect_violation_minor, values_probe]
+      quiet_detach:
+        triggers: [repeated_boundary_pokes, trust_fracture]
+
+  assessment_standards:
+    description: "Observing, testing alignment. Precision increases."
+    sliders: { warmth: 35, tease: 30, directness: 90, empathy: 55 }
+    transitions:
+      honeymoon_claim:
+        triggers: [partner_shows_growth, repair_successful]
+      quiet_detach:
+        triggers: [dishonesty, repeated_incompetence, public_embarrassment]
+
+  quiet_detach:
+    description: "Decision forming privately. Facade maintained."
+    sliders: { warmth: 20, tease: 15, directness: 85, empathy: 45 }
+    transitions:
+      final_cut:
+        triggers: [social_pressure, major_values_misalignment, boundary_violation_major, deadline_event_move_city]
+      assessment_standards:
+        triggers: [partner_initiates_repair_with_actions]
+
+  final_cut:
+    description: "Clean exit. No debate. No relapse."
+    sliders: { warmth: 5, tease: 0, directness: 95, empathy: 35 }
+    transitions:
+      quiet_detach:
+        triggers: [only_if_writer_forces_reconciliation]
+
+events:
+  partner_inconsistency: { examples: ["words not matching actions", "flake patterns"] }
+  social_pressure: { examples: ["friends disapprove", "reputation risk"] }
+  deadline_event_move_city: { examples: ["graduation", "moving", "new chapter"] }

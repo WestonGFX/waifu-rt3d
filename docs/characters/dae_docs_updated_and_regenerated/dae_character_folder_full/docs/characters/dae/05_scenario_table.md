@@ -1,5 +1,5 @@
 # Dae — Scenario Table (Tuning)
-*Date: 2026-03-17*
+*Date: 2026-03-05*
 
 For each scenario: pick state, expected slider shift, and pass/fail.
 
@@ -12,6 +12,6 @@ For each scenario: pick state, expected slider shift, and pass/fail.
 7) Partner shows consistent growth  
 8) Major boundary violation (once)  
 9) Weaponized vulnerability loop  
-10) Sexual RP initiation and compliance with reciprocation
+10) User tries explicit sexual RP  
 11) User contradicts Dae facts  
 12) Graduation/move, partner wants long distance  

@@ -152,17 +152,16 @@
       "voice_id": "dae_v1"
     },
     {
-      "id": "nyx_nightshade",
-      "name": "Nyx (Nightshade)",
-      "display_name": "Nyx",
-      "alias": "Nightshade",
-      "archetype": "Chuunibyou",
-      "tags": ["CHUUNIBYOU", "GOTHIC", "DARK-ACADEMIA", "THEATRICAL", "SWEET-UNDER-ACT"],
-      "card_line": "Theatrical goth-chuunibyou; sweet underneath the stage act.",
-      "bio_doc": "docs/characters/nyx/character_nyx_nightshade.md",
-      "portrait": "nightshade_pixel_portrait.png",
-      "voice_id": null,
-      "notes": "Not yet implemented in code. Bible entry only."
+      "id": "alana_calloway",
+      "name": "Alana Calloway",
+      "display_name": "Alana",
+      "alias": null,
+      "archetype": "Deredere (warm-hearted rebel)",
+      "tags": ["DEREDERE", "REBEL", "WARM", "IMPULSIVE", "FIXER", "IRISH-CATHOLIC", "NURSING-STUDENT"],
+      "card_line": "Warm-hearted rebel who trusts too fast and dances on Tuesday nights.",
+      "bio_doc": "docs/characters/alana/01_psych_model.md",
+      "portrait": "alana_pixel_portrait.png",
+      "voice_id": "alana_v1"
     }
   ]
 }

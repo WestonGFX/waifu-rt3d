@@ -1,13 +1,13 @@
 # Current Project Status
 
-**Last updated:** 2026-03-29 09:06 PDT
+**Last updated:** 2026-03-30
 **Branch:** master
-**Schema version:** v61
-**Tests:** 1757 passing (backend pytest), tsc clean (frontend)
+**Schema version:** v62
+**Tests:** 1877 passing (backend pytest), tsc clean (frontend)
 
 ## Active Work
 
-NSFW Phases 1-3 shipped. Phase 4 (Memory & Milestones) is next.
+NSFW Phases 1-4 shipped. Phase 5 (Emotional Continuity) or frontend components next.
 
 ## Completed This Session (Mar 28, session 3)
 
@@ -28,20 +28,33 @@ NSFW Phases 1-3 shipped. Phase 4 (Memory & Milestones) is next.
 | **Phase 1: Foundation** | ✅ COMPLETE | F40 Boundaries, F13 Writing Styles, F15 Sensory, F30 Pet Names | +146 |
 | **Phase 2: State Machines** | ✅ COMPLETE | F17 Arousal, F6 Pacing, F16 Scene Phases, F10 Consent | +113 |
 | **Phase 3: Scene Architecture** | ✅ COMPLETE | F32 Power Dynamics, F38 Director, F8 Scenarios, F25 Touch | +112 |
-| **Phase 4: Memory & Milestones** | READY | F1 Milestones, F2 Intimate Memory, F5 Aftercare, F12 Pillow Talk | — |
-| **Phase 5+** | PLANNED | Audio/visual, gallery, advanced features | — |
+| **Phase 4: Memory & Milestones** | ✅ COMPLETE | F1 Milestones, F2 Intimate Memory, F5 Aftercare, F12 Pillow Talk | +120 |
+| **Phase 5: Emotional Continuity** | PLANNED | F3 Morning After, F34 Confessions, F43 Post-Scene Mood, F45 Midnight Mode, F11 Fantasy Journal, F39 Desires | — |
+| **Phase 6+** | PLANNED | Voice intimacy, audio stories, gallery, advanced features | — |
+
+## Completed This Session (Mar 30)
+
+| What | Details |
+|------|---------|
+| **NSFW Phase 4: Memory & Milestones** | F1 Milestone Tracker (11 types, regex detection, 13 character voices, anniversary schedule), F2 Intimate Memory (sensory anchors, context-matched recall, frequency limiting), F5 Aftercare Engine (6 personality variants, 5-phase dialogue, phrase banks), F12 Pillow Talk (9-topic taxonomy, whispered register, character prefs, sleepiness fade) |
+| **Schema v62** | 3 new tables: intimate_milestones, intimate_memories, post_scene_states |
+| **Context injection** | 4 new blocks in server.py (milestones, memory, aftercare, pillow talk) |
+| **API endpoints** | GET milestones, GET/DELETE intimate-memories, GET post-scene-status |
+| **Tests** | +120 new (1877 total), all passing, tsc clean |
+| **Workflow improvement** | New memory rule: plans MUST include Research & Documentation References section |
 
 ## Previous Sessions
 
 | Session | What |
 |---------|------|
+| Mar 29 session 3 | Research expansion (142k words, 26 part files), NSFW Phase 4 + Frontend UX research |
 | Mar 28 session 2 | P5 Memory Browser, P2 Context Viewer |
 | Mar 27-28 session 1 | NSFW plan v2 + v3 enhancement (6,006 lines) |
 
 ## Next Tasks (Priority Order)
 
-1. **NSFW Phase 4: Memory & Milestones** — F1 (First-Time Milestones), F2 (Intimate Memory), F5 (Aftercare Engine), F12 (Pillow Talk). Plan at `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` line ~3577.
-2. **Frontend components for Phases 2-3** — Pacing mode picker, scenario template browser, power dynamic settings. Build UI before testing.
+1. **NSFW Phase 5: Emotional Continuity** — F3 Morning After, F34 Confessions, F43 Post-Scene Mood, F45 Midnight Mode. Plan at `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` line ~3773.
+2. **Frontend components for Phases 1-4** — Pacing mode picker, scenario template browser, power dynamic settings, OurStoryTimeline, memory browser integration. Build UI before testing.
 3. **Adaptive Intelligence Engine** — #1 priority new feature. Context classifier, dynamic LLM param tuning, extended user model, over-personalization gate. Spec: `docs/plans/2026-03-29-adaptive-intelligence-spec.md` (Phase A: 23-34h, Phase B: 52-72h, Phase C: 54-76h).
 4. **Bond Progression System** — #1 retention driver. Quadratic XP curve, 5-tier unlocks, milestone celebrations, bond-gated dialogue shifts. Existing v56 schema to extend. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` (42-58h, 6 phases).
 5. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. The "character feels alive" system. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h, 6 phases). Research: `docs/research/2026-03-29-humanoid-motion-research.md`.

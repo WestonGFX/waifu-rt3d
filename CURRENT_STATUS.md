@@ -70,7 +70,16 @@ NSFW Phases 1-3 shipped. Phase 4 (Memory & Milestones) is next.
 | Settings modal (all tabs) | Modal | Every tab renders, saves, persists |
 | 18 themes switching | Global | All 9 light + 9 dark themes apply correctly |
 
-## Completed This Session (Mar 29, session 2)
+## Completed This Session (Mar 29, session 3)
+
+| What | Details |
+|------|---------|
+| **Research expansion** | All 8 research files expanded to 15-20k words each (~142k total). Split into 26 part files (<1000 lines each) for Claude Code compatibility. |
+| **New research (2 files)** | NSFW Phase 4 (milestones, intimate memory, aftercare, pillow talk) + NSFW Frontend UX (pacing picker, scenario browser, power dynamics, ambient effects, safety) |
+| **Workflow rule** | Research ↔ spec bidirectional linking enforced — saved to memory |
+| **Memory rule** | `_BACKUP_ROOT/` is sacred — never delete contents, only move files into it |
+
+## Completed Session (Mar 29, session 2)
 
 | What | Details |
 |------|---------|
@@ -92,7 +101,9 @@ NSFW Phases 1-3 shipped. Phase 4 (Memory & Milestones) is next.
 | Privacy sync spec | `docs/plans/2026-03-29-privacy-sync-spec.md` |
 | Humanoid motion spec | `docs/plans/2026-03-29-humanoid-motion-spec.md` |
 | Jiggle physics spec | `docs/plans/2026-03-29-jiggle-physics-spec.md` |
-| Research docs | `docs/research/2026-03-29-*.md` (7 files) |
+| Research docs | `docs/research/2026-03-29-*-part-*.md` (26 files, ~142k words) |
+| NSFW Phase 4 research | `docs/research/2026-03-29-nsfw-phase4-research-part-*.md` (3 parts) |
+| NSFW Frontend UX research | `docs/research/2026-03-29-nsfw-frontend-ux-research-part-*.md` (3 parts) |
 | Dev dashboard | `http://localhost:3333/dashboard.html` or `./run.sh dash` |
 | Quickstart cheatsheet | `docs/QUICKSTART.md` |
 | Convention guides | `docs/conventions/*.md` |

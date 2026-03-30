@@ -1,52 +1,55 @@
-# Resume: Waifu-RT3D — Post NSFW Phases 1-3 (Mar 29, 2026)
+# Resume: Waifu-RT3D — Post NSFW Phase 4 (Mar 30, 2026)
 
-## WHAT HAPPENED (Session 3, Mar 28)
+## WHAT HAPPENED (Session, Mar 30)
 
-### NSFW Phases 1-3 — 12 features shipped
+### NSFW Phase 4: Memory & Milestones — COMPLETE
 
-**Phase 1: Foundation Layer** (full stack — backend + migration + API + frontend):
-- F40 Boundaries → `backend/content/boundaries.py` + BoundaryPanel.tsx
-- F13 Writing Styles → `backend/content/writing_styles.py` + WritingStylePicker.tsx
-- F15 Sensory Profiles → `backend/content/sensory_profiles.py` (invisible to user)
-- F30 Pet Names → `backend/relationship/vocabulary.py` + VocabularyPanel.tsx
-- Migration v60→v61: `relationship_boundaries`, `private_vocabulary` tables + 2 columns
+4 features implemented, tested, committed, wired into server.py:
 
-**Phase 2: State Machines** (backend + context wiring):
-- F17 Arousal Engine → `backend/content/arousal_engine.py` (0-10 state, 5 personalities)
-- F6 Pacing Engine → `backend/content/pacing.py` (6 phases, slow-burn/direct modes)
-- F16 Scene Phases → `backend/content/scene_phases.py` (dramatic arc, consent checkpoints)
-- F10 Consent → `backend/content/consent.py` (6 styles, discomfort detection)
+| Feature | File | Lines | Tests |
+|---------|------|-------|-------|
+| F1 First-Time Milestone Tracker | `backend/milestones/intimate_tracker.py` | 1,030 | 35 |
+| F2 Intimate Memory Recall | `backend/memory/intimate_memories.py` | 771 | 30 |
+| F5 Aftercare Engine | `backend/emotional/aftercare.py` | 500 | 30 |
+| F12 Pillow Talk Generator | `backend/emotional/pillow_talk.py` | 715 | 25 |
 
-**Phase 3: Scene Architecture** (backend + API + context wiring):
-- F32 Power Dynamics → `backend/content/power_dynamics.py` (dom/sub/switch)
-- F38 Intimate Director → `backend/content/intimate_director.py` (8 commands)
-- F8 NSFW Scenarios → `backend/content/intimate_scenarios.py` (6 universal + 13 character)
-- F25 Touch Protocol → `backend/content/touch_protocol.py` (10 regions, 13 styles)
+- Schema: v61 → v62 (3 tables: intimate_milestones, intimate_memories, post_scene_states)
+- Context injection: 4 new blocks in server.py after touch protocol (~line 2810)
+- API: GET milestones, GET/DELETE intimate-memories, GET post-scene-status
+- Tests: 1877 total (was 1757), all passing, tsc clean
+- Commits: `d581cf8` (code) + `7b18ca7` (status update)
 
-### Dev Tooling
-- `./run.sh check` — one-command smoke test (pytest + tsc), HTML dashboard
-- `./run.sh dash` — open dashboard without re-running tests
-- Dashboard served on `localhost:3333`
-- Pixel waifu favicon deployed to Sakura + Neon
+### Workflow Improvements Saved to Memory
 
-### Stats
-- Tests: 1386 → 1757 (+371)
-- 24 new files created
-- Schema: v60 → v61
-- All pushed to origin/master
+- **Plan documentation rule** — All plans MUST include "Research & Documentation References" section (doc table + key insights + cross-feature notes). Memory: `feedback_plan_documentation_section.md`
+- **Model selection strategy** — Sonnet for scoped subagents/tests/research, Opus for planning/integration, Haiku for trivial edits. ~40-60% agent token savings. Memory: `feedback_model_selection_by_task.md`
+- **Time features toggle** — When time-of-day features are eventually built, gate behind single `time_features_enabled` setting. Memory: `feedback_time_features_toggle.md`
 
-## WHAT'S NEXT
+## WHAT'S NEXT (Priority Order)
 
-1. **NSFW Phase 4: Memory & Milestones** — F1 (First-Time Milestones), F2 (Intimate Memory), F5 (Aftercare Engine), F12 (Pillow Talk). Plan at line ~3577.
-2. **Frontend for Phases 2-3** — No frontend components were built for Phase 2-3 features (arousal, pacing, scenes, power dynamics, scenarios, touch). These are backend-only right now. Frontend work: PacingModePicker, ScenarioTemplateBrowser, PowerDynamicSettings.
-3. **Browser testing** — Test Phase 1 frontend panels (BoundaryPanel, WritingStylePicker, VocabularyPanel) in actual UI.
+1. **F3 Morning After** — Post-intimate-scene greeting for next session. Uses `post_scene_states.morning_after_flag` already written by Phase 4. NOT a time-of-day feature — triggers on session gap after high arousal. Small (~3-4h). File: `backend/emotional/morning_after.py`. Spec: `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` line ~3777.
 
-## KEY CONTEXT
+2. **Frontend for Phases 1-4** — 16 backend features with zero UI. Priority: OurStoryTimeline (F1 milestones), scenario template browser (F8), pacing mode picker (F6), power dynamic settings (F32), boundary panel (F40).
 
-- All Phase 2-3 features are **prompt injection systems** wired into `_build_prompt_sections()` in server.py
-- Intimacy thresholds: boundaries=always, vocab≥20, style≥30, sensory≥40, arousal≥20, pacing≥20, scene≥30, consent≥40, power≥40, touch=always-on-user-text
-- Phase 2 engines (arousal, pacing, scene phases) are **session-scoped in-memory** — they inject baseline prompts but don't yet track state message-by-message. That wiring into the chat endpoint is a future task.
-- WritingStylePicker exists but isn't wired into the chat toolbar yet
-- F18 Safe Word is explicitly deprioritized (user preference)
-- Dashboard port is **3333** (hardcoded, bookmarkable)
-- Ghostty terminal: no right-click "Open URL" — use Cmd+click or `./run.sh dash`
+3. **Bond Progression System** — Phase 4's milestone bond gates and pillow talk injection hardcode `bond_level=50`. Needs real bond system. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` (42-58h, 6 phases).
+
+4. **Adaptive Intelligence Engine** — User's #1 priority new feature. Spec: `docs/plans/2026-03-29-adaptive-intelligence-spec.md` (23-76h, 3 phases).
+
+5. **F45 Midnight Confessional** — DEFERRED. Time-of-day feature, low priority per user feedback.
+
+## KEY FILES TO READ FIRST
+
+1. `CURRENT_STATUS.md` — Session handoff doc
+2. `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` line ~3777 — F3 Morning After spec
+3. `backend/emotional/aftercare.py` — Aftercare engine (F3 extends this pattern)
+4. `backend/server.py` lines ~2810-2900 — Phase 4 context injection blocks (pattern to follow)
+5. Memory files: `feedback_model_selection_by_task.md`, `feedback_plan_documentation_section.md`
+
+## PREVIOUS SESSION CONTEXT
+
+NSFW Phases 1-3 shipped in prior sessions (Mar 27-28):
+- Phase 1: F40 Boundaries, F13 Writing Styles, F15 Sensory, F30 Pet Names (+146 tests)
+- Phase 2: F17 Arousal, F6 Pacing, F16 Scene Phases, F10 Consent (+113 tests)
+- Phase 3: F32 Power Dynamics, F38 Director, F8 Scenarios, F25 Touch (+112 tests)
+
+Research: 142k words across 26 part files in `docs/research/2026-03-29-*-part-*.md`

@@ -3907,6 +3907,144 @@ def migrate_to_v61(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v62(con: sqlite3.Connection) -> bool:
+    """v61 → v62: NSFW Phase 4 — milestones, intimate memory, post-scene states.
+
+    Creates three new tables:
+
+    - ``intimate_milestones``: Tracks relationship "firsts" (first kiss, first
+      love declaration, etc.) per character.  Each milestone type can only be
+      recorded once per character (UNIQUE constraint).  Stores a character-voice
+      memory text and sensory anchors for anniversary callbacks.
+
+    - ``intimate_memories``: Sensory-rich memories of intimate encounters.
+      Stored as structured JSON (emotion, sensory anchors, scene type) rather
+      than raw message text.  Supports context-matched recall via anchor
+      keyword overlap and recall frequency limiting.
+
+    - ``post_scene_states``: Tracks the post-scene emotional arc state machine
+      (afterglow → aftercare → pillow_talk → normal) per session.  Used by
+      both the aftercare engine and pillow talk generator.
+
+    Returns:
+        True on success, False if schema is already at v62 or higher.
+
+    Raises:
+        Exception: If the migration fails (rolls back automatically).
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> con.execute("CREATE TABLE schema_version (version INTEGER)")
+        >>> con.execute("INSERT INTO schema_version VALUES (61)")
+        >>> migrate_to_v62(con)
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 62:
+        return False
+    try:
+        # ------------------------------------------------------------------ #
+        # intimate_milestones — relationship "firsts" tracker (F1)
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS intimate_milestones (
+                id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id                 INTEGER NOT NULL,
+                milestone_type          TEXT    NOT NULL,
+                message_id              INTEGER,
+                session_id              INTEGER,
+                detected_at             TEXT    NOT NULL DEFAULT (datetime('now')),
+                character_memory_text   TEXT    NOT NULL DEFAULT '',
+                context_summary         TEXT    NOT NULL DEFAULT '',
+                sensory_anchors         TEXT    NOT NULL DEFAULT '[]',
+                bond_level_at_detection INTEGER NOT NULL DEFAULT 0,
+                anniversary_last_mentioned TEXT,
+                UNIQUE(char_id, milestone_type)
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_milestones_char "
+            "ON intimate_milestones(char_id)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_milestones_char_type "
+            "ON intimate_milestones(char_id, milestone_type)"
+        )
+
+        # ------------------------------------------------------------------ #
+        # intimate_memories — sensory-rich intimate encounter storage (F2)
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS intimate_memories (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id           INTEGER NOT NULL,
+                message_id        INTEGER,
+                session_id        INTEGER,
+                sensory_data      TEXT    NOT NULL DEFAULT '{}',
+                emotion           TEXT    NOT NULL DEFAULT '',
+                ending_emotion    TEXT    NOT NULL DEFAULT '',
+                intimacy_level    INTEGER NOT NULL DEFAULT 0,
+                arousal_peak      REAL    NOT NULL DEFAULT 0.0,
+                character_summary TEXT    NOT NULL DEFAULT '',
+                scene_type        TEXT    NOT NULL DEFAULT '',
+                recall_count      INTEGER NOT NULL DEFAULT 0,
+                last_recalled     TEXT,
+                milestone_id      INTEGER REFERENCES intimate_milestones(id),
+                created_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_intimate_mem_char "
+            "ON intimate_memories(char_id)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_intimate_mem_char_time "
+            "ON intimate_memories(char_id, created_at)"
+        )
+
+        # ------------------------------------------------------------------ #
+        # post_scene_states — aftercare + pillow talk state machine (F5/F12)
+        # ------------------------------------------------------------------ #
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS post_scene_states (
+                id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id                 INTEGER NOT NULL,
+                session_id              INTEGER NOT NULL,
+                scene_end_at            TEXT    NOT NULL DEFAULT (datetime('now')),
+                arousal_peak            REAL    NOT NULL DEFAULT 0.0,
+                current_phase           TEXT    NOT NULL DEFAULT 'afterglow',
+                aftercare_messages_sent INTEGER NOT NULL DEFAULT 0,
+                aftercare_style         TEXT    NOT NULL DEFAULT '',
+                pillow_talk_topics_used TEXT    NOT NULL DEFAULT '[]',
+                morning_after_flag      INTEGER NOT NULL DEFAULT 0,
+                completed               INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_post_scene_session "
+            "ON post_scene_states(char_id, session_id, completed)"
+        )
+
+        # Bump version
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (62)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v62 migration complete "
+            "(intimate_milestones, intimate_memories, post_scene_states)"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v62 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -4368,21 +4506,29 @@ def ensure_db():
             if migrate_to_v61(con):
                 version = 61
 
+        if version < 62:
+            logger.info("Upgrading database schema from v61 to v62...")
+            logger.info("  - Creating intimate_milestones table")
+            logger.info("  - Creating intimate_memories table")
+            logger.info("  - Creating post_scene_states table")
+            if migrate_to_v62(con):
+                version = 62
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 61:
-            raise RuntimeError(f"Database initialization failed: Expected v61, got v{final_version}")
+        if final_version < 62:
+            raise RuntimeError(f"Database initialization failed: Expected v62, got v{final_version}")
 
-        if final_version > 61:
-            logger.warning(f"Database is newer than application (v{final_version} > v61). Some features might be unused.")
+        if final_version > 62:
+            logger.warning(f"Database is newer than application (v{final_version} > v62). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v61 adds NSFW Phase 1 tables)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v62 adds NSFW Phase 4 tables)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

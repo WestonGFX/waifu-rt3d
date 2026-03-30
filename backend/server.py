@@ -2808,6 +2808,102 @@ def _build_prompt_sections(
     except Exception as _touch_err:
         logger.debug("[TouchProtocol] injection skipped: %s", _touch_err)
 
+    # 1c-milestones. F1: Intimate Milestones — relationship firsts + anniversary hints
+    try:
+        from backend.milestones.intimate_tracker import MilestoneStore, build_milestone_prompt, build_anniversary_hint
+        _content_conn_ms = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_ms:
+            _ms_store = MilestoneStore()
+            _milestones = _ms_store.get_timeline(char_id, _content_conn_ms)
+            if _milestones:
+                _ms_prompt = build_milestone_prompt(_milestones)
+                if _ms_prompt:
+                    sections.append(_section("Milestones", f"\n{_ms_prompt}"))
+            # Anniversary check
+            _anniversaries = _ms_store.get_pending_anniversaries(char_id, _content_conn_ms)
+            for _ann_ms, _ann_interval in _anniversaries:
+                _ann_hint = build_anniversary_hint(_ann_ms, _ann_interval)
+                if _ann_hint:
+                    sections.append(_section("Anniversary", f"\n{_ann_hint}"))
+    except Exception as _ms_err:
+        logger.debug("[Milestones] injection skipped: %s", _ms_err)
+
+    # 1c-intimate-memory. F2: Intimate Memory — sensory-matched past recall
+    try:
+        from backend.memory.intimate_memories import IntimateMemoryStore
+        _content_conn_im = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_im and user_text:
+            _im_intimacy = 0
+            try:
+                _im_row = cur.execute(
+                    "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                    (char_id, session_id),
+                ).fetchone()
+                if _im_row:
+                    _im_intimacy = _im_row[0]
+            except Exception:
+                pass
+            if _im_intimacy > 50:
+                _im_store = IntimateMemoryStore()
+                _recalled = _im_store.recall(char_id, user_text, _content_conn_im, limit=2)
+                if _recalled:
+                    _im_prompt = _im_store.build_prompt(_recalled)
+                    if _im_prompt:
+                        sections.append(_section("Intimate Memory", f"\n{_im_prompt}"))
+    except Exception as _im_err:
+        logger.debug("[IntimateMemory] injection skipped: %s", _im_err)
+
+    # 1c-aftercare. F5: Aftercare — post-scene nurturing prompt
+    try:
+        from backend.emotional.aftercare import AftercareEngine
+        _content_conn_ac = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_ac:
+            _ps_row = cur.execute(
+                "SELECT arousal_peak, current_phase, aftercare_messages_sent "
+                "FROM post_scene_states WHERE char_id=? AND session_id=? AND completed=0 "
+                "ORDER BY id DESC LIMIT 1",
+                (char_id, session_id),
+            ).fetchone()
+            if _ps_row and _ps_row[1] in ("afterglow", "aftercare"):
+                _ac_engine = AftercareEngine()
+                _ac_prompt = _ac_engine.get_prompt(char_name, _ps_row[2], _ps_row[0])
+                if _ac_prompt:
+                    sections.append(_section("Aftercare", f"\n{_ac_prompt}"))
+    except Exception as _ac_err:
+        logger.debug("[Aftercare] injection skipped: %s", _ac_err)
+
+    # 1c-pillow-talk. F12: Pillow Talk — post-aftercare vulnerable conversation
+    try:
+        from backend.emotional.pillow_talk import PillowTalkEngine
+        _content_conn_pt = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_pt:
+            _ps_row_pt = cur.execute(
+                "SELECT current_phase, pillow_talk_topics_used "
+                "FROM post_scene_states WHERE char_id=? AND session_id=? AND completed=0 "
+                "ORDER BY id DESC LIMIT 1",
+                (char_id, session_id),
+            ).fetchone()
+            if _ps_row_pt and _ps_row_pt[0] == "pillow_talk":
+                _pt_engine = PillowTalkEngine()
+                _topics_used = json.loads(_ps_row_pt[1]) if _ps_row_pt[1] else []
+                _pt_intimacy = 0
+                try:
+                    _pti_row = cur.execute(
+                        "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                        (char_id, session_id),
+                    ).fetchone()
+                    if _pti_row:
+                        _pt_intimacy = _pti_row[0]
+                except Exception:
+                    pass
+                _pt_prompt = _pt_engine.get_prompt(
+                    char_name, _pt_intimacy, 50, _topics_used
+                )
+                if _pt_prompt:
+                    sections.append(_section("Pillow Talk", f"\n{_pt_prompt}"))
+    except Exception as _pt_err:
+        logger.debug("[PillowTalk] injection skipped: %s", _pt_err)
+
     # 1d. Games catalogue — let characters know what they can play with the user
     _games_text = (
         "\n\n[MINI-GAMES YOU CAN PLAY WITH THE USER]\n"
@@ -15827,6 +15923,145 @@ def list_intimate_director_commands():
     from backend.content.intimate_director import IntimateDirector
     director = IntimateDirector()
     return {"ok": True, "commands": director.list_commands()}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# NSFW Phase 4: Milestones, Intimate Memory, Aftercare, Pillow Talk
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@app.get("/api/characters/{char_id}/milestones")
+def get_character_milestones(char_id: int):
+    """Return milestone timeline for a character.
+
+    Returns all recorded milestones ordered by detection date, plus a list
+    of all possible milestone types with their bond requirements so the
+    frontend can render locked/unlocked states.
+
+    Returns:
+        {"ok": True, "milestones": [...], "all_types": {...}}
+    """
+    from backend.milestones.intimate_tracker import MilestoneStore, MILESTONE_TYPES
+    conn = db()
+    try:
+        store = MilestoneStore()
+        timeline = store.get_timeline(char_id, conn)
+        return {
+            "ok": True,
+            "milestones": timeline,
+            "all_types": {k: v["bond_min"] for k, v in MILESTONE_TYPES.items()},
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/intimate-memories")
+def get_character_intimate_memories(char_id: int):
+    """Return intimate memories for a character (structured summaries only).
+
+    Never returns raw scene data — only character_summary, emotion, sensory
+    anchors, scene_type, and metadata. Used by the memory browser panel.
+
+    Returns:
+        {"ok": True, "memories": [...]}
+    """
+    from backend.memory.intimate_memories import IntimateMemoryStore
+    conn = db()
+    try:
+        store = IntimateMemoryStore()
+        memories = store.get_all(char_id, conn)
+        return {
+            "ok": True,
+            "memories": [
+                {
+                    "id": m.id,
+                    "emotion": m.emotion,
+                    "ending_emotion": m.ending_emotion,
+                    "character_summary": m.character_summary,
+                    "scene_type": m.scene_type,
+                    "sensory_anchors": (
+                        json.loads(m.sensory_data).get("sensory_anchors", [])
+                        if isinstance(m.sensory_data, str) else
+                        m.sensory_data.get("sensory_anchors", [])
+                    ),
+                    "recall_count": m.recall_count,
+                    "created_at": m.created_at,
+                }
+                for m in memories
+            ],
+        }
+    finally:
+        conn.close()
+
+
+@app.delete("/api/characters/{char_id}/intimate-memories/{memory_id}")
+def delete_character_intimate_memory(char_id: int, memory_id: int):
+    """Hard delete a specific intimate memory.
+
+    Returns:
+        {"ok": True, "deleted": True} or {"ok": True, "deleted": False}
+    """
+    from backend.memory.intimate_memories import IntimateMemoryStore
+    conn = db()
+    try:
+        store = IntimateMemoryStore()
+        deleted = store.delete(memory_id, conn)
+        return {"ok": True, "deleted": deleted}
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/post-scene-status")
+def get_post_scene_status(char_id: int, session_id: int = 0):
+    """Return current post-scene state for a character in a session.
+
+    Returns the active (non-completed) post-scene state if one exists,
+    including current phase, aftercare progress, and pillow talk topics used.
+
+    Args:
+        char_id: Character database ID.
+        session_id: Session ID to check (0 = latest).
+
+    Returns:
+        {"ok": True, "active": True/False, "state": {...}} or
+        {"ok": True, "active": False}
+    """
+    conn = db()
+    try:
+        if session_id == 0:
+            row = conn.execute(
+                "SELECT id, current_phase, aftercare_messages_sent, arousal_peak, "
+                "aftercare_style, pillow_talk_topics_used, morning_after_flag, completed "
+                "FROM post_scene_states WHERE char_id=? AND completed=0 "
+                "ORDER BY id DESC LIMIT 1",
+                (char_id,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT id, current_phase, aftercare_messages_sent, arousal_peak, "
+                "aftercare_style, pillow_talk_topics_used, morning_after_flag, completed "
+                "FROM post_scene_states WHERE char_id=? AND session_id=? AND completed=0 "
+                "ORDER BY id DESC LIMIT 1",
+                (char_id, session_id),
+            ).fetchone()
+        if not row:
+            return {"ok": True, "active": False}
+        return {
+            "ok": True,
+            "active": True,
+            "state": {
+                "id": row[0],
+                "current_phase": row[1],
+                "aftercare_messages_sent": row[2],
+                "arousal_peak": row[3],
+                "aftercare_style": row[4],
+                "pillow_talk_topics_used": json.loads(row[5]) if row[5] else [],
+                "morning_after_flag": bool(row[6]),
+                "completed": bool(row[7]),
+            },
+        }
+    finally:
+        conn.close()
 
 
 # --- EXCEPTION HANDLERS ---

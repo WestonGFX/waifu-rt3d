@@ -3,11 +3,11 @@
 **Last updated:** 2026-03-30
 **Branch:** master
 **Schema version:** v63
-**Tests:** 2003 passing (backend pytest), tsc clean (frontend)
+**Tests:** 2073 passing (backend pytest), tsc clean (frontend)
 
 ## Active Work
 
-NSFW Phases 1-5 shipped. Phase 6 (Voice & Audio) or frontend components next.
+NSFW Phases 1-6 shipped. Phase 7 (Visual & Image Gen) or frontend components next.
 
 ## Completed This Session (Mar 28, session 3)
 
@@ -30,17 +30,16 @@ NSFW Phases 1-5 shipped. Phase 6 (Voice & Audio) or frontend components next.
 | **Phase 3: Scene Architecture** | ✅ COMPLETE | F32 Power Dynamics, F38 Director, F8 Scenarios, F25 Touch | +112 |
 | **Phase 4: Memory & Milestones** | ✅ COMPLETE | F1 Milestones, F2 Intimate Memory, F5 Aftercare, F12 Pillow Talk | +120 |
 | **Phase 5: Emotional Continuity** | ✅ COMPLETE | F3 Morning After, F34 Confessions, F43 Post-Scene Mood, F45 Midnight Mode, F11 Fantasy Journal, F39 Desires | +126 |
-| **Phase 6+** | PLANNED | Voice intimacy, audio stories, gallery, advanced features | — |
+| **Phase 6: Voice & Audio** | ✅ COMPLETE | F4 Voice Intimacy, F33 Audio Stories, F36 Quickfire, F46 Love Letters | +70 |
+| **Phase 7+** | PLANNED | Visual/image gen, intimate gallery, NSFW portraits, arousal visuals | — |
 
 ## Completed This Session (Mar 30, session 2)
 
 | What | Details |
 |------|---------|
-| **NSFW Phase 5: Emotional Continuity** | F3 Morning After (5 personality variants, 24h window, bond XP bonus), F34 Confessions (12 chars × 3 seeds, soulmate-tier one-time reveals), F45 Midnight Mode (11PM-4AM, 4 personality categories), F39 Desires (12 chars × 4 desires, bond-gated 30/50/70/90), F43 Post-Scene Mood (sentiment classifier with word-boundary fix), F11 Fantasy Journal (bond-gated gen/visibility, frequency cap) |
-| **Schema v63** | 2 new tables: character_desires, post_scene_moods + character_journals.entry_type column |
-| **Context injection** | 6 new blocks in server.py (midnight, confessions, desires, post-scene mood, morning after, fantasy journal) |
-| **API endpoints** | GET desires, GET fantasy-journal, GET post-scene-moods |
-| **Tests** | +126 new (2003 total), all passing, tsc clean |
+| **NSFW Phase 5: Emotional Continuity** | F3 Morning After, F34 Confessions, F45 Midnight Mode, F39 Desires, F43 Post-Scene Mood, F11 Fantasy Journal — schema v63, 6 context blocks, 3 API endpoints |
+| **NSFW Phase 6: Voice & Audio** | F4 Voice Intimacy (12 char profiles, 3-message ramp, TTS overrides), F33 Audio Stories (3 story types, bond≥50), F36 Quickfire (80 token cap, 5 texting styles), F46 Love Letters (3 depth levels, 30-day cap) — 2 context blocks, 2 API endpoints |
+| **Tests** | +196 new (2073 total), all passing, tsc clean |
 | **Bug fix** | Sentiment classifier word-boundary matching (prevented "no" false positive inside "now") |
 
 ## Completed This Session (Mar 30, session 1)
@@ -64,8 +63,8 @@ NSFW Phases 1-5 shipped. Phase 6 (Voice & Audio) or frontend components next.
 
 ## Next Tasks (Priority Order)
 
-1. **NSFW Phase 6: Voice & Audio** — F4 Voice Intimacy Mode, F33 Erotic Audio Narration, F36 Quickfire Mode, F46 Love Letters. Plan at `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` line ~3962.
-2. **Frontend components for Phases 1-5** — Pacing mode picker, scenario template browser, power dynamic settings, OurStoryTimeline, desire tree UI, fantasy journal display, morning-after indicators. Build UI before testing.
+1. **NSFW Phase 7: Visual & Image Gen** — F29 Contextual Intimate Image Gen, F42 Intimate Photo Gallery, F28 NSFW Expression Portraits, F19 Blush & Arousal Visuals. Plan at `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` line ~4100.
+2. **Frontend components for Phases 1-6** — Pacing mode picker, scenario template browser, power dynamic settings, OurStoryTimeline, desire tree UI, fantasy journal display, morning-after indicators, voice intimacy controls, quickfire toggle, love letter card, audio story player. Build UI before testing.
 3. **Adaptive Intelligence Engine** — #1 priority new feature. Context classifier, dynamic LLM param tuning, extended user model, over-personalization gate. Spec: `docs/plans/2026-03-29-adaptive-intelligence-spec.md` (Phase A: 23-34h, Phase B: 52-72h, Phase C: 54-76h).
 4. **Bond Progression System** — #1 retention driver. Quadratic XP curve, 5-tier unlocks, milestone celebrations, bond-gated dialogue shifts. Existing v56 schema to extend. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` (42-58h, 6 phases).
 5. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. The "character feels alive" system. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h, 6 phases). Research: `docs/research/2026-03-29-humanoid-motion-research.md`.

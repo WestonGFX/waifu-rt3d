@@ -2,12 +2,12 @@
 
 **Last updated:** 2026-03-30
 **Branch:** master
-**Schema version:** v62
-**Tests:** 1877 passing (backend pytest), tsc clean (frontend)
+**Schema version:** v63
+**Tests:** 2003 passing (backend pytest), tsc clean (frontend)
 
 ## Active Work
 
-NSFW Phases 1-4 shipped. Phase 5 (Emotional Continuity) or frontend components next.
+NSFW Phases 1-5 shipped. Phase 6 (Voice & Audio) or frontend components next.
 
 ## Completed This Session (Mar 28, session 3)
 
@@ -29,10 +29,21 @@ NSFW Phases 1-4 shipped. Phase 5 (Emotional Continuity) or frontend components n
 | **Phase 2: State Machines** | ✅ COMPLETE | F17 Arousal, F6 Pacing, F16 Scene Phases, F10 Consent | +113 |
 | **Phase 3: Scene Architecture** | ✅ COMPLETE | F32 Power Dynamics, F38 Director, F8 Scenarios, F25 Touch | +112 |
 | **Phase 4: Memory & Milestones** | ✅ COMPLETE | F1 Milestones, F2 Intimate Memory, F5 Aftercare, F12 Pillow Talk | +120 |
-| **Phase 5: Emotional Continuity** | PLANNED | F3 Morning After, F34 Confessions, F43 Post-Scene Mood, F45 Midnight Mode, F11 Fantasy Journal, F39 Desires | — |
+| **Phase 5: Emotional Continuity** | ✅ COMPLETE | F3 Morning After, F34 Confessions, F43 Post-Scene Mood, F45 Midnight Mode, F11 Fantasy Journal, F39 Desires | +126 |
 | **Phase 6+** | PLANNED | Voice intimacy, audio stories, gallery, advanced features | — |
 
-## Completed This Session (Mar 30)
+## Completed This Session (Mar 30, session 2)
+
+| What | Details |
+|------|---------|
+| **NSFW Phase 5: Emotional Continuity** | F3 Morning After (5 personality variants, 24h window, bond XP bonus), F34 Confessions (12 chars × 3 seeds, soulmate-tier one-time reveals), F45 Midnight Mode (11PM-4AM, 4 personality categories), F39 Desires (12 chars × 4 desires, bond-gated 30/50/70/90), F43 Post-Scene Mood (sentiment classifier with word-boundary fix), F11 Fantasy Journal (bond-gated gen/visibility, frequency cap) |
+| **Schema v63** | 2 new tables: character_desires, post_scene_moods + character_journals.entry_type column |
+| **Context injection** | 6 new blocks in server.py (midnight, confessions, desires, post-scene mood, morning after, fantasy journal) |
+| **API endpoints** | GET desires, GET fantasy-journal, GET post-scene-moods |
+| **Tests** | +126 new (2003 total), all passing, tsc clean |
+| **Bug fix** | Sentiment classifier word-boundary matching (prevented "no" false positive inside "now") |
+
+## Completed This Session (Mar 30, session 1)
 
 | What | Details |
 |------|---------|
@@ -53,8 +64,8 @@ NSFW Phases 1-4 shipped. Phase 5 (Emotional Continuity) or frontend components n
 
 ## Next Tasks (Priority Order)
 
-1. **NSFW Phase 5: Emotional Continuity** — F3 Morning After, F34 Confessions, F43 Post-Scene Mood, F45 Midnight Mode. Plan at `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` line ~3773.
-2. **Frontend components for Phases 1-4** — Pacing mode picker, scenario template browser, power dynamic settings, OurStoryTimeline, memory browser integration. Build UI before testing.
+1. **NSFW Phase 6: Voice & Audio** — F4 Voice Intimacy Mode, F33 Erotic Audio Narration, F36 Quickfire Mode, F46 Love Letters. Plan at `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` line ~3962.
+2. **Frontend components for Phases 1-5** — Pacing mode picker, scenario template browser, power dynamic settings, OurStoryTimeline, desire tree UI, fantasy journal display, morning-after indicators. Build UI before testing.
 3. **Adaptive Intelligence Engine** — #1 priority new feature. Context classifier, dynamic LLM param tuning, extended user model, over-personalization gate. Spec: `docs/plans/2026-03-29-adaptive-intelligence-spec.md` (Phase A: 23-34h, Phase B: 52-72h, Phase C: 54-76h).
 4. **Bond Progression System** — #1 retention driver. Quadratic XP curve, 5-tier unlocks, milestone celebrations, bond-gated dialogue shifts. Existing v56 schema to extend. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` (42-58h, 6 phases).
 5. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. The "character feels alive" system. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h, 6 phases). Research: `docs/research/2026-03-29-humanoid-motion-research.md`.

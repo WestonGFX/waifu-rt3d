@@ -4152,6 +4152,93 @@ def migrate_to_v63(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v64(con: sqlite3.Connection) -> bool:
+    """v63 → v64: NSFW Phase 7+8 — gallery, shared fantasies.
+
+    Creates two new tables:
+
+    - ``intimate_gallery``: AI-generated intimate image storage with
+      favorites, mood tagging, and content lock support (F42).
+
+    - ``shared_fantasies``: Collaborative user/character fantasy building
+      with alternating contributions and play-out capability (F47).
+
+    Returns:
+        True on success, False if schema is already at v64 or higher.
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> con.execute("CREATE TABLE schema_version (version INTEGER)")
+        <...>
+        >>> con.execute("INSERT INTO schema_version VALUES (63)")
+        <...>
+        >>> migrate_to_v64(con)
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 64:
+        return False
+
+    try:
+        # F42: Intimate Photo Gallery
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS intimate_gallery (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id         INTEGER NOT NULL,
+                image_path      TEXT    NOT NULL,
+                prompt_used     TEXT    NOT NULL DEFAULT '',
+                scene_context   TEXT    NOT NULL DEFAULT '',
+                mood            TEXT    NOT NULL DEFAULT 'romantic',
+                intimacy_level  INTEGER NOT NULL DEFAULT 0,
+                is_favorite     INTEGER NOT NULL DEFAULT 0,
+                created_at      TEXT    DEFAULT (datetime('now'))
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_gallery_char "
+            "ON intimate_gallery(char_id, created_at DESC)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_gallery_mood "
+            "ON intimate_gallery(char_id, mood)"
+        )
+
+        # F47: Shared Fantasy Builder
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS shared_fantasies (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id         INTEGER NOT NULL,
+                title           TEXT    NOT NULL DEFAULT '',
+                description     TEXT    NOT NULL DEFAULT '',
+                contributions   TEXT    NOT NULL DEFAULT '[]',
+                status          TEXT    NOT NULL DEFAULT 'building',
+                created_at      TEXT    DEFAULT (datetime('now')),
+                played_at       TEXT
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_fantasies_char "
+            "ON shared_fantasies(char_id, status)"
+        )
+
+        # Bump version
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (64)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v64 migration complete "
+            "(intimate_gallery, shared_fantasies)"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v64 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -4629,21 +4716,28 @@ def ensure_db():
             if migrate_to_v63(con):
                 version = 63
 
+        if version < 64:
+            logger.info("Upgrading database schema from v63 to v64...")
+            logger.info("  - Creating intimate_gallery table")
+            logger.info("  - Creating shared_fantasies table")
+            if migrate_to_v64(con):
+                version = 64
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 63:
-            raise RuntimeError(f"Database initialization failed: Expected v63, got v{final_version}")
+        if final_version < 64:
+            raise RuntimeError(f"Database initialization failed: Expected v64, got v{final_version}")
 
-        if final_version > 63:
-            logger.warning(f"Database is newer than application (v{final_version} > v63). Some features might be unused.")
+        if final_version > 64:
+            logger.warning(f"Database is newer than application (v{final_version} > v64). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v63 adds NSFW Phase 5 tables)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v64 adds NSFW Phase 7+8 tables)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

@@ -3078,6 +3078,92 @@ def _build_prompt_sections(
     except Exception as _qf_err:
         logger.debug("[Quickfire] injection skipped: %s", _qf_err)
 
+    # 1c-whisper. F27: Whisper Mode — intimate whisper delivery
+    try:
+        from backend.content.whisper_mode import WhisperEngine
+        _wh_engine = WhisperEngine()
+        _wh_intimacy = 0
+        _wh_arousal = 0.0
+        try:
+            _wh_row = cur.execute(
+                "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                (char_id, session_id),
+            ).fetchone()
+            if _wh_row:
+                _wh_intimacy = _wh_row[0]
+        except Exception:
+            pass
+        try:
+            _wha_row = cur.execute(
+                "SELECT arousal_peak FROM post_scene_states WHERE char_id=? AND session_id=? "
+                "AND completed=0 ORDER BY id DESC LIMIT 1",
+                (char_id, session_id),
+            ).fetchone()
+            if _wha_row:
+                _wh_arousal = _wha_row[0]
+        except Exception:
+            pass
+        if _wh_engine.should_auto_trigger(_wh_intimacy, _wh_arousal):
+            _wh_prompt = _wh_engine.get_prompt(char_name)
+            sections.append(_section("Whisper Mode", f"\n{_wh_prompt}"))
+    except Exception as _wh_err:
+        logger.debug("[WhisperMode] injection skipped: %s", _wh_err)
+
+    # 1c-body. F41: Body Appreciation Language — character-specific physical vocabulary
+    try:
+        from backend.content.body_language import BodyAppreciationEngine
+        _ba_engine = BodyAppreciationEngine()
+        _ba_ceiling = "mild"
+        try:
+            _ba_row = cur.execute(
+                "SELECT content_ceiling FROM nsfw_boundaries WHERE char_id=?",
+                (char_id,),
+            ).fetchone()
+            if _ba_row:
+                _ba_ceiling = _ba_row[0]
+        except Exception:
+            pass
+        _ba_prompt = _ba_engine.get_prompt(char_name, _ba_ceiling)
+        sections.append(_section("Body Appreciation", f"\n{_ba_prompt}"))
+    except Exception as _ba_err:
+        logger.debug("[BodyAppreciation] injection skipped: %s", _ba_err)
+
+    # 1c-erogenous. F44: Erogenous Map — zone-sensitivity reactions
+    try:
+        from backend.content.erogenous_map import ErogenousMapEngine
+        _er_engine = ErogenousMapEngine()
+        _er_zones = _er_engine.detect_zone_mention(user_text)
+        if _er_zones:
+            _er_prompt = _er_engine.get_prompt(char_name, _er_zones)
+            if _er_prompt:
+                sections.append(_section("Touch Reaction", f"\n{_er_prompt}"))
+    except Exception as _er_err:
+        logger.debug("[ErogenousMap] injection skipped: %s", _er_err)
+
+    # 1c-jealousy. F31: Jealousy — opt-in emotional complexity
+    try:
+        from backend.emotional.jealousy import JealousyEngine
+        _jl_engine = JealousyEngine()
+        _jl_enabled = False
+        _jl_intensity = "subtle"
+        try:
+            _jl_row = cur.execute(
+                "SELECT jealousy_enabled, jealousy_intensity FROM nsfw_boundaries WHERE char_id=?",
+                (char_id,),
+            ).fetchone()
+            if _jl_row:
+                _jl_enabled = bool(_jl_row[0])
+                _jl_intensity = _jl_row[1] or "subtle"
+        except Exception:
+            pass
+        if _jl_engine.is_enabled(_jl_enabled):
+            _jl_trigger = _jl_engine.detect_trigger(user_text)
+            if _jl_trigger:
+                _jl_prompt = _jl_engine.get_prompt(char_name, _jl_intensity, _jl_trigger)
+                sections.append(_section("Jealousy", f"\n{_jl_prompt}"))
+    except Exception as _jl_err:
+        logger.debug("[Jealousy] injection skipped: %s", _jl_err)
+
     # 1d. Games catalogue — let characters know what they can play with the user
     _games_text = (
         "\n\n[MINI-GAMES YOU CAN PLAY WITH THE USER]\n"
@@ -16534,6 +16620,149 @@ def generate_love_letter(char_id: int):
                 "depth_level": depth,
                 "prompt": prompt,
             },
+        }
+    finally:
+        conn.close()
+
+
+# --- NSFW Phase 7+8 API Endpoints ---
+
+
+@app.get("/api/characters/{char_id}/gallery")
+def get_character_gallery(char_id: int, limit: int = 50, mood: str = None, favorites: bool = False):
+    """Return intimate gallery images for a character.
+
+    Args:
+        char_id: Character database ID.
+        limit: Max images to return.
+        mood: Optional mood filter.
+        favorites: If True, only return favorites.
+
+    Returns:
+        {"ok": True, "images": [...], "stats": {...}}
+    """
+    from backend.image_gen.gallery import GalleryManager
+
+    conn = db()
+    try:
+        mgr = GalleryManager()
+        images = mgr.get_gallery(char_id, conn, category=mood, favorites_only=favorites, limit=limit)
+        stats = mgr.get_gallery_stats(char_id, conn)
+        return {"ok": True, "images": images, "stats": stats}
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/persona-types")
+def get_persona_types(char_id: int):
+    """Return available fantasy persona types.
+
+    Args:
+        char_id: Character database ID.
+
+    Returns:
+        {"ok": True, "types": [...], "eligible": bool}
+    """
+    from backend.content.fantasy_personas import FantasyPersonaEngine
+
+    conn = db()
+    try:
+        cur = conn.cursor()
+        bond_level = 0
+        try:
+            bond_row = cur.execute("SELECT bond_level FROM bond_levels WHERE char_id=?", (char_id,)).fetchone()
+            if bond_row:
+                bond_level = bond_row[0]
+        except Exception:
+            pass
+
+        engine = FantasyPersonaEngine()
+        return {
+            "ok": True,
+            "types": engine.get_persona_types(),
+            "eligible": engine.should_allow(bond_level),
+            "bond_level": bond_level,
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/shared-fantasies")
+def get_shared_fantasies(char_id: int):
+    """Return shared fantasies for a character.
+
+    Args:
+        char_id: Character database ID.
+
+    Returns:
+        {"ok": True, "fantasies": [...]}
+    """
+    conn = db()
+    try:
+        cur = conn.cursor()
+        fantasies = []
+        try:
+            rows = cur.execute(
+                "SELECT id, title, description, contributions, status, created_at, played_at "
+                "FROM shared_fantasies WHERE char_id=? ORDER BY id DESC",
+                (char_id,),
+            ).fetchall()
+            import json as _json
+            fantasies = [
+                {
+                    "id": r[0], "title": r[1], "description": r[2],
+                    "contributions": _json.loads(r[3]) if r[3] else [],
+                    "status": r[4], "created_at": r[5], "played_at": r[6],
+                }
+                for r in rows
+            ]
+        except Exception:
+            pass
+        return {"ok": True, "fantasies": fantasies}
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/intimate-quiz/progress")
+def get_intimate_quiz_progress(char_id: int):
+    """Return intimate quiz progress for a character.
+
+    Args:
+        char_id: Character database ID.
+
+    Returns:
+        {"ok": True, "progress": {...}, "eligible": bool}
+    """
+    from backend.emotional.intimate_quiz import IntimateQuizEngine
+
+    conn = db()
+    try:
+        cur = conn.cursor()
+        bond_level = 0
+        try:
+            bond_row = cur.execute("SELECT bond_level FROM bond_levels WHERE char_id=?", (char_id,)).fetchone()
+            if bond_row:
+                bond_level = bond_row[0]
+        except Exception:
+            pass
+
+        # Get answered question IDs from quiz_answers table if it exists
+        answered_ids: list[str] = []
+        try:
+            rows = cur.execute(
+                "SELECT question_id FROM intimate_quiz_answers WHERE char_id=?",
+                (char_id,),
+            ).fetchall()
+            answered_ids = [r[0] for r in rows]
+        except Exception:
+            pass
+
+        engine = IntimateQuizEngine()
+        return {
+            "ok": True,
+            "progress": engine.get_progress(answered_ids),
+            "eligible": engine.should_allow(bond_level),
+            "categories": engine.get_categories(),
         }
     finally:
         conn.close()

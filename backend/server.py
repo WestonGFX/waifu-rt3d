@@ -3027,6 +3027,57 @@ def _build_prompt_sections(
     except Exception as _psm_err:
         logger.debug("[PostSceneMood] injection skipped: %s", _psm_err)
 
+    # 1c-voice-intimacy. F4: Voice Intimacy Mode — breathy/soft voice during intimate scenes
+    try:
+        from backend.voice.intimacy_mode import VoiceIntimacyMode
+        _vi_intimacy = 0
+        _vi_arousal = 0.0
+        try:
+            _vi_row = cur.execute(
+                "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                (char_id, session_id),
+            ).fetchone()
+            if _vi_row:
+                _vi_intimacy = _vi_row[0]
+        except Exception:
+            pass
+        try:
+            _vi_ar_row = cur.execute(
+                "SELECT arousal_peak FROM post_scene_states WHERE char_id=? AND session_id=? "
+                "AND completed=0 ORDER BY id DESC LIMIT 1",
+                (char_id, session_id),
+            ).fetchone()
+            if _vi_ar_row:
+                _vi_arousal = _vi_ar_row[0]
+        except Exception:
+            pass
+        _vi_engine = VoiceIntimacyMode()
+        _vi_prompt = _vi_engine.get_prompt(char_name, _vi_intimacy, _vi_arousal, 1)
+        if _vi_prompt:
+            sections.append(_section("Voice Intimacy", f"\n{_vi_prompt}"))
+    except Exception as _vi_err:
+        logger.debug("[VoiceIntimacy] injection skipped: %s", _vi_err)
+
+    # 1c-quickfire. F36: Quickfire Mode — short rapid-fire texting mode
+    try:
+        from backend.content.quickfire import QuickfireEngine
+        _qf_mode = ""
+        try:
+            _qf_row = cur.execute(
+                "SELECT mode FROM session_modes WHERE session_id=?",
+                (session_id,),
+            ).fetchone()
+            if _qf_row:
+                _qf_mode = _qf_row[0]
+        except Exception:
+            pass
+        _qf_engine = QuickfireEngine()
+        if _qf_engine.is_active(_qf_mode):
+            _qf_prompt = _qf_engine.get_prompt(char_name)
+            sections.append(_section("Quickfire Mode", f"\n{_qf_prompt}"))
+    except Exception as _qf_err:
+        logger.debug("[Quickfire] injection skipped: %s", _qf_err)
+
     # 1d. Games catalogue — let characters know what they can play with the user
     _games_text = (
         "\n\n[MINI-GAMES YOU CAN PLAY WITH THE USER]\n"
@@ -16390,6 +16441,100 @@ def get_character_post_scene_moods(char_id: int, limit: int = 20):
         except Exception:
             pass
         return {"ok": True, "moods": moods}
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/audio-story-types")
+def get_audio_story_types(char_id: int):
+    """Return available audio story types and eligibility for a character.
+
+    Args:
+        char_id: Character database ID.
+
+    Returns:
+        {"ok": True, "types": [...], "eligible": bool, "bond_level": int}
+    """
+    from backend.voice.audio_stories import AudioStoryEngine
+
+    conn = db()
+    try:
+        cur = conn.cursor()
+        bond_level = 0
+        try:
+            bond_row = cur.execute(
+                "SELECT bond_level FROM bond_levels WHERE char_id=?", (char_id,)
+            ).fetchone()
+            if bond_row:
+                bond_level = bond_row[0]
+        except Exception:
+            pass
+
+        engine = AudioStoryEngine()
+        return {
+            "ok": True,
+            "types": engine.get_story_types(),
+            "eligible": engine.should_allow(bond_level),
+            "bond_level": bond_level,
+            "tts_params": engine.get_tts_params(),
+        }
+    finally:
+        conn.close()
+
+
+@app.post("/api/characters/{char_id}/love-letter")
+def generate_love_letter(char_id: int):
+    """Generate a love letter from a character.
+
+    Bond-gated: requires bond >= 40.  Monthly frequency cap.
+
+    Args:
+        char_id: Character database ID.
+
+    Returns:
+        {"ok": True, "letter": {...}} or {"ok": False, "error": str}
+    """
+    from backend.emotional.love_letters import LoveLetterEngine
+
+    conn = db()
+    try:
+        cur = conn.cursor()
+        # Get character name
+        char_row = cur.execute(
+            "SELECT name FROM characters WHERE id=?", (char_id,)
+        ).fetchone()
+        char_name = char_row[0] if char_row else f"Character {char_id}"
+
+        # Get bond level
+        bond_level = 0
+        try:
+            bond_row = cur.execute(
+                "SELECT bond_level FROM bond_levels WHERE char_id=?", (char_id,)
+            ).fetchone()
+            if bond_row:
+                bond_level = bond_row[0]
+        except Exception:
+            pass
+
+        engine = LoveLetterEngine()
+        if not engine.should_allow(bond_level):
+            return {
+                "ok": False,
+                "error": f"Bond level {bond_level} is below minimum ({engine.should_allow.__doc__ or 40})",
+            }
+
+        depth = engine.get_depth_level(bond_level)
+        prompt = engine.get_prompt(char_name, bond_level)
+
+        return {
+            "ok": True,
+            "letter": {
+                "char_name": char_name,
+                "bond_level": bond_level,
+                "depth_level": depth,
+                "prompt": prompt,
+            },
+        }
     finally:
         conn.close()
 

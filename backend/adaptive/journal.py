@@ -8,9 +8,18 @@ Triggered: When a session ends (or on next session start) if ≥5 messages
 were exchanged. Uses the local LLM to generate entries in the character's
 voice, based on recent conversation + user facts.
 
+**Fantasy Journals (F11):**
+
+Characters also write private diary entries about intimate fantasies
+involving the user.  These use the same ``character_journals`` table with
+``entry_type = 'fantasy'``.  Bond-gated: generated at bond ≥ 50, visible
+to the user at bond ≥ 80.  Frequency-capped: max 1 fantasy entry per 3
+regular entries.  Content intensity matches the effective content ceiling.
+
 Schema dependencies:
-    - ``character_journals`` (id, char_id, session_id, entry_text, created_at)
-      — created on first use if absent.
+    - ``character_journals`` (id, char_id, session_id, entry_text, created_at,
+      entry_type) — created on first use if absent.  ``entry_type`` defaults
+      to ``'reflection'``; fantasy entries use ``'fantasy'``.
     - ``messages`` (id, session_id, char_id, role, content/text, ts)
     - ``characters`` (id, name, system_prompt)
     - ``user_facts`` (id, char_id / character_id, fact_text)
@@ -338,7 +347,8 @@ def _ensure_table(con: sqlite3.Connection) -> None:
     """Create the ``character_journals`` table and index if they do not exist.
 
     Called at the start of :func:`generate_journal_entry` so the table is
-    always available before any write operation.
+    always available before any write operation.  Also adds the ``entry_type``
+    column (F11 Fantasy Journals) to existing tables via ALTER TABLE.
 
     Args:
         con: Active SQLite connection with write access.
@@ -350,13 +360,25 @@ def _ensure_table(con: sqlite3.Connection) -> None:
             char_id     INTEGER NOT NULL,
             session_id  INTEGER,
             entry_text  TEXT    NOT NULL,
+            entry_type  TEXT    NOT NULL DEFAULT 'reflection',
             created_at  TEXT    DEFAULT (datetime('now'))
         )
         """
     )
+    # Add entry_type column to existing tables (idempotent)
+    try:
+        con.execute(
+            "ALTER TABLE character_journals ADD COLUMN entry_type TEXT NOT NULL DEFAULT 'reflection'"
+        )
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     con.execute(
         "CREATE INDEX IF NOT EXISTS idx_journals_char "
         "ON character_journals (char_id, created_at DESC)"
+    )
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_journals_type "
+        "ON character_journals (char_id, entry_type)"
     )
     con.commit()
 
@@ -625,11 +647,450 @@ def get_journal_entries(
         >>> get_journal_entries(1, con.cursor(), limit=5)
         []
     """
+    # Try with entry_type column first, fall back to legacy schema
+    for query in (
+        """SELECT id, session_id, entry_text, created_at, entry_type
+           FROM character_journals
+           WHERE char_id = ?
+           ORDER BY id DESC
+           LIMIT ?""",
+        """SELECT id, session_id, entry_text, created_at
+           FROM character_journals
+           WHERE char_id = ?
+           ORDER BY id DESC
+           LIMIT ?""",
+    ):
+        try:
+            rows = cur.execute(query, (char_id, limit)).fetchall()
+            has_type = len(rows[0]) > 4 if rows else "entry_type" in query
+            return [
+                {
+                    "id": row[0],
+                    "session_id": row[1],
+                    "entry_text": row[2],
+                    "created_at": row[3],
+                    "entry_type": row[4] if has_type and len(row) > 4 else "reflection",
+                }
+                for row in rows
+            ]
+        except sqlite3.OperationalError:
+            continue
+        except Exception as exc:
+            logger.debug("get_journal_entries failed (non-fatal): %s", exc)
+            return []
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Fantasy Journal (F11) — bond-gated intimate diary entries
+# ---------------------------------------------------------------------------
+
+#: Minimum bond level at which fantasy journal entries can be *generated*.
+FANTASY_GENERATION_BOND: int = 50
+
+#: Minimum bond level at which fantasy entries become *visible* to the user.
+FANTASY_VISIBILITY_BOND: int = 80
+
+#: Maximum ratio of fantasy entries to total entries (1 fantasy per N regular).
+FANTASY_FREQUENCY_RATIO: int = 3
+
+#: Template prompt for generating fantasy journal entries.
+FANTASY_JOURNAL_PROMPT_TEMPLATE: str = (
+    "Write a private diary entry from {char_name}'s perspective.\n"
+    "This entry is about an intimate fantasy {char_name} has about the user.\n\n"
+    "Guidelines:\n"
+    "- Written in {char_name}'s authentic voice and personality\n"
+    "- References real relationship details (shared memories, pet names, inside jokes)\n"
+    "- Content intensity matches: {content_ceiling}\n"
+    "- Feels like a genuine private thought, not performance\n"
+    "- Include the character's emotional reaction to their own fantasy\n"
+    "- 150-250 words\n\n"
+    "The character should sound like they're writing this for themselves, "
+    "not for the user to read.\n\n"
+    "Known relationship context:\n{relationship_context}\n\n"
+    "--- YOUR PRIVATE DIARY ENTRY ---\n"
+    "Write the entry now. No headers, no labels, no markdown:\n"
+)
+
+
+def should_generate_fantasy(
+    char_id: int,
+    bond_level: int,
+    cur: sqlite3.Cursor,
+) -> bool:
+    """Decide whether a fantasy journal entry should be generated.
+
+    Returns ``True`` only when ALL of the following are met:
+
+    1. Bond level is at or above :data:`FANTASY_GENERATION_BOND` (50).
+    2. The frequency cap is not exceeded: at most 1 fantasy entry per
+       :data:`FANTASY_FREQUENCY_RATIO` (3) regular entries.
+
+    Args:
+        char_id: ID of the character.
+        bond_level: Current bond level for the character (0–100).
+        cur: Active SQLite cursor (read-only access required).
+
+    Returns:
+        ``True`` if a fantasy entry should be generated, ``False`` otherwise.
+
+    Example:
+        >>> import sqlite3
+        >>> con = sqlite3.connect(":memory:")
+        >>> should_generate_fantasy(1, 40, con.cursor())
+        False
+        >>> should_generate_fantasy(1, 60, con.cursor())
+        False
+    """
+    if bond_level < FANTASY_GENERATION_BOND:
+        return False
+
+    try:
+        # Count existing entries by type
+        regular_count = 0
+        fantasy_count = 0
+        try:
+            row = cur.execute(
+                "SELECT COUNT(*) FROM character_journals "
+                "WHERE char_id = ? AND entry_type = 'reflection'",
+                (char_id,),
+            ).fetchone()
+            regular_count = row[0] if row else 0
+        except sqlite3.OperationalError:
+            return False
+
+        try:
+            row = cur.execute(
+                "SELECT COUNT(*) FROM character_journals "
+                "WHERE char_id = ? AND entry_type = 'fantasy'",
+                (char_id,),
+            ).fetchone()
+            fantasy_count = row[0] if row else 0
+        except sqlite3.OperationalError:
+            fantasy_count = 0
+
+        # Frequency cap: 1 fantasy per FANTASY_FREQUENCY_RATIO regular entries
+        max_allowed = regular_count // FANTASY_FREQUENCY_RATIO
+        if fantasy_count >= max_allowed:
+            logger.debug(
+                "should_generate_fantasy: frequency cap reached for char_id=%d "
+                "(fantasy=%d, regular=%d, max=%d)",
+                char_id,
+                fantasy_count,
+                regular_count,
+                max_allowed,
+            )
+            return False
+
+        return True
+    except Exception as exc:
+        logger.debug("should_generate_fantasy error (non-fatal): %s", exc)
+        return False
+
+
+def build_fantasy_journal_prompt(
+    char_name: str,
+    system_prompt: str,
+    relationship_context: str,
+    content_ceiling: str = "suggestive",
+) -> str:
+    """Build the LLM prompt for generating a fantasy journal entry.
+
+    The prompt instructs the LLM to write a private diary entry in the
+    character's authentic voice, referencing real relationship details and
+    matching the specified content intensity level.
+
+    Args:
+        char_name: Character display name (e.g. ``"Dae"``).
+        system_prompt: The character's personality prompt, truncated to
+            600 chars for token budget.
+        relationship_context: Formatted string of relationship details —
+            pet names, shared memories, known facts about the user.
+        content_ceiling: Content intensity level from the NSFW boundaries
+            system.  One of ``"mild"``, ``"suggestive"``, ``"explicit"``,
+            ``"extreme"``.  Defaults to ``"suggestive"``.
+
+    Returns:
+        A ready-to-send prompt string for the LLM.
+
+    Example:
+        >>> prompt = build_fantasy_journal_prompt("Dae", "You are Dae.", "They like art.", "mild")
+        >>> "Dae" in prompt
+        True
+        >>> "fantasy" in prompt.lower()
+        True
+    """
+    sys_excerpt = system_prompt[:600].strip()
+    if len(system_prompt) > 600:
+        sys_excerpt += "..."
+
+    # Build the character context header
+    preamble = (
+        f"You are {char_name}. Here is your personality:\n"
+        f"{sys_excerpt}\n\n"
+    )
+
+    body = FANTASY_JOURNAL_PROMPT_TEMPLATE.format(
+        char_name=char_name,
+        content_ceiling=content_ceiling,
+        relationship_context=relationship_context or "(no specific details yet)",
+    )
+
+    return preamble + body
+
+
+def generate_fantasy_entry(
+    char_id: int,
+    bond_level: int,
+    db_path: str,
+    llm_config: dict,
+    content_ceiling: str = "suggestive",
+) -> dict | None:
+    """Generate and persist a fantasy journal entry for a character.
+
+    Orchestrates the full fantasy journal pipeline:
+
+    1. Verifies the character qualifies via :func:`should_generate_fantasy`.
+    2. Loads the character's name, system prompt, and relationship context.
+    3. Builds a fantasy prompt via :func:`build_fantasy_journal_prompt`.
+    4. Calls the local LLM (``max_tokens=400``) to generate the entry.
+    5. Falls back to ``None`` (no fallback templates for fantasy — they must
+       be LLM-generated to be authentic).
+    6. Writes the entry with ``entry_type='fantasy'`` to ``character_journals``.
+
+    Args:
+        char_id: ID of the character writing the fantasy entry.
+        bond_level: Current bond level for the character (0–100).
+        db_path: Absolute path to the SQLite database file.
+        llm_config: Full application config dict (same structure as
+            ``load_config()``).
+        content_ceiling: Content intensity level (``"mild"``, ``"suggestive"``,
+            ``"explicit"``, ``"extreme"``).
+
+    Returns:
+        A dict representing the stored entry::
+
+            {
+                "id": int,
+                "char_id": int,
+                "session_id": None,
+                "entry_text": str,
+                "entry_type": "fantasy",
+                "created_at": str,
+            }
+
+        Returns ``None`` when the character doesn't qualify, the LLM call
+        fails, or the character record cannot be found.
+
+    Example:
+        >>> entry = generate_fantasy_entry(1, 60, "/data/app.db", {})
+        >>> entry is None or entry["entry_type"] == "fantasy"
+        True
+    """
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        _ensure_table(con)
+        cur = con.cursor()
+
+        if not should_generate_fantasy(char_id, bond_level, cur):
+            logger.debug(
+                "generate_fantasy_entry: skipping char_id=%d bond=%d",
+                char_id,
+                bond_level,
+            )
+            return None
+
+        # Load character info
+        char_row = cur.execute(
+            "SELECT name, system_prompt FROM characters WHERE id = ?",
+            (char_id,),
+        ).fetchone()
+        if char_row is None:
+            logger.warning(
+                "generate_fantasy_entry: char_id=%d not found", char_id
+            )
+            return None
+
+        char_name: str = char_row["name"] or f"Character {char_id}"
+        system_prompt: str = char_row["system_prompt"] or f"You are {char_name}."
+
+        # Build relationship context from user_facts + pet names
+        relationship_parts: list[str] = []
+        for col in ("char_id", "character_id"):
+            try:
+                fact_rows = cur.execute(
+                    f"SELECT fact_text FROM user_facts WHERE {col} = ? "
+                    "ORDER BY id DESC LIMIT 10",
+                    (char_id,),
+                ).fetchall()
+                relationship_parts = [r["fact_text"] for r in fact_rows]
+                break
+            except sqlite3.OperationalError:
+                continue
+
+        # Try to get pet names from private_vocabulary
+        try:
+            vocab_rows = cur.execute(
+                "SELECT term, meaning FROM private_vocabulary "
+                "WHERE char_id = ? LIMIT 5",
+                (char_id,),
+            ).fetchall()
+            for v in vocab_rows:
+                relationship_parts.append(
+                    f"Pet name: '{v['term']}' — {v['meaning']}"
+                )
+        except sqlite3.OperationalError:
+            pass
+
+        relationship_context = "\n".join(
+            f"- {p}" for p in relationship_parts
+        ) if relationship_parts else "(no specific details yet)"
+
+    finally:
+        con.close()
+
+    # --- LLM call ---
+    prompt = build_fantasy_journal_prompt(
+        char_name, system_prompt, relationship_context, content_ceiling
+    )
+    entry_text: str = ""
+
+    try:
+        from backend.llm.registry import get_client  # noqa: PLC0415
+
+        adapter = get_client(llm_config)
+        llm_cfg = llm_config.get("llm", {})
+        model: str = llm_cfg.get("model", "")
+        endpoint: str = llm_cfg.get("endpoint", "http://localhost:1234")
+        api_key: str = llm_cfg.get("api_key", "")
+
+        prompt_messages = [
+            {
+                "role": "system",
+                "content": (
+                    f"You are {char_name}. Write only the diary entry — "
+                    "no headers, no labels, no markdown. This is your private journal."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ]
+
+        result = adapter.chat(
+            prompt_messages,
+            model=model,
+            endpoint=endpoint,
+            api_key=api_key,
+            max_tokens=400,
+            temperature=0.9,
+        )
+
+        if result.get("ok") and result.get("reply"):
+            entry_text = result["reply"].strip()
+
+    except Exception as exc:
+        logger.warning(
+            "generate_fantasy_entry: LLM call failed for char_id=%d (%s)",
+            char_id,
+            exc,
+        )
+
+    # No fallback for fantasy entries — they must be LLM-generated
+    if not entry_text:
+        logger.debug(
+            "generate_fantasy_entry: no LLM output for char_id=%d — skipping",
+            char_id,
+        )
+        return None
+
+    # --- Persist ---
+    con2 = sqlite3.connect(db_path)
+    con2.row_factory = sqlite3.Row
+    try:
+        _ensure_table(con2)
+        cur2 = con2.cursor()
+        cur2.execute(
+            """INSERT INTO character_journals
+               (char_id, session_id, entry_text, entry_type)
+               VALUES (?, NULL, ?, 'fantasy')""",
+            (char_id, entry_text),
+        )
+        con2.commit()
+
+        row = cur2.execute(
+            """SELECT id, char_id, session_id, entry_text, entry_type, created_at
+               FROM character_journals WHERE id = last_insert_rowid()"""
+        ).fetchone()
+
+        if row is None:
+            return None
+
+        result_dict: dict = {
+            "id": row["id"],
+            "char_id": row["char_id"],
+            "session_id": row["session_id"],
+            "entry_text": row["entry_text"],
+            "entry_type": row["entry_type"],
+            "created_at": row["created_at"],
+        }
+        logger.info(
+            "generate_fantasy_entry: stored fantasy id=%d for char_id=%d",
+            result_dict["id"],
+            char_id,
+        )
+        return result_dict
+
+    finally:
+        con2.close()
+
+
+def get_fantasy_entries(
+    char_id: int,
+    bond_level: int,
+    cur: sqlite3.Cursor,
+    limit: int = 10,
+) -> list[dict]:
+    """Return visible fantasy journal entries for a character.
+
+    Fantasy entries are only visible when the bond level is at or above
+    :data:`FANTASY_VISIBILITY_BOND` (80).  Returns an empty list if the
+    bond is too low, even if entries exist in the database.
+
+    Args:
+        char_id: ID of the character whose fantasy entries to retrieve.
+        bond_level: Current bond level.  Must be ≥ 80 to see entries.
+        cur: Active SQLite cursor (read-only access required).
+        limit: Maximum number of entries to return.  Defaults to 10.
+
+    Returns:
+        List of dicts, each containing::
+
+            {
+                "id": int,
+                "entry_text": str,
+                "entry_type": "fantasy",
+                "created_at": str,
+            }
+
+        Returns an empty list when bond is too low, the table doesn't
+        exist, or no fantasy entries exist.
+
+    Example:
+        >>> import sqlite3
+        >>> con = sqlite3.connect(":memory:")
+        >>> get_fantasy_entries(1, 90, con.cursor())
+        []
+        >>> get_fantasy_entries(1, 70, con.cursor())
+        []
+    """
+    if bond_level < FANTASY_VISIBILITY_BOND:
+        return []
+
     try:
         rows = cur.execute(
-            """SELECT id, session_id, entry_text, created_at
+            """SELECT id, entry_text, entry_type, created_at
                FROM character_journals
-               WHERE char_id = ?
+               WHERE char_id = ? AND entry_type = 'fantasy'
                ORDER BY id DESC
                LIMIT ?""",
             (char_id, limit),
@@ -637,15 +1098,14 @@ def get_journal_entries(
         return [
             {
                 "id": row[0],
-                "session_id": row[1],
-                "entry_text": row[2],
+                "entry_text": row[1],
+                "entry_type": row[2],
                 "created_at": row[3],
             }
             for row in rows
         ]
     except sqlite3.OperationalError:
-        # Table doesn't exist yet — return empty list silently
         return []
     except Exception as exc:
-        logger.debug("get_journal_entries failed (non-fatal): %s", exc)
+        logger.debug("get_fantasy_entries failed (non-fatal): %s", exc)
         return []

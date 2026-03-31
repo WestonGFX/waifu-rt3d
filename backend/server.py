@@ -2904,6 +2904,129 @@ def _build_prompt_sections(
     except Exception as _pt_err:
         logger.debug("[PillowTalk] injection skipped: %s", _pt_err)
 
+    # 1c-midnight. F45: Midnight Confessional Mode — late-night vulnerability
+    try:
+        from backend.emotional.midnight import MidnightEngine
+        import datetime as _dt_midnight
+        _midnight_hour = _dt_midnight.datetime.now().hour
+        _midnight_engine = MidnightEngine()
+        _midnight_prompt = _midnight_engine.get_prompt(char_name, _midnight_hour)
+        if _midnight_prompt:
+            sections.append(_section("Midnight Mode", f"\n{_midnight_prompt}"))
+    except Exception as _mid_err:
+        logger.debug("[MidnightMode] injection skipped: %s", _mid_err)
+
+    # 1c-confessions. F34: Forbidden Confessions — soulmate-tier one-time reveals
+    try:
+        from backend.emotional.confessions import ConfessionEngine
+        _content_conn_cf = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_cf:
+            # Get bond level
+            _cf_bond = 0
+            try:
+                _cf_bond_row = cur.execute(
+                    "SELECT bond_level FROM bond_levels WHERE char_id=?",
+                    (char_id,),
+                ).fetchone()
+                if _cf_bond_row:
+                    _cf_bond = _cf_bond_row[0]
+            except Exception:
+                pass
+            if _cf_bond >= 91:
+                _cf_engine = ConfessionEngine()
+                # Get already-revealed confession IDs
+                _cf_revealed = []
+                try:
+                    _cf_rows = cur.execute(
+                        "SELECT desire_id FROM character_desires WHERE char_id=? AND unlocked=1",
+                        (char_id,),
+                    ).fetchall()
+                    _cf_revealed = [r[0] for r in _cf_rows]
+                except Exception:
+                    pass
+                _cf_intimacy = 0
+                try:
+                    _cfi_row = cur.execute(
+                        "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                        (char_id, session_id),
+                    ).fetchone()
+                    if _cfi_row:
+                        _cf_intimacy = _cfi_row[0]
+                except Exception:
+                    pass
+                _cf_next = _cf_engine.get_next_confession(char_name, _cf_bond, _cf_revealed)
+                if _cf_next and _cf_engine.should_trigger(_cf_bond, _cf_intimacy, False, True):
+                    _cf_prompt = _cf_engine.build_confession_prompt(
+                        char_name, _cf_next["seed"], _cf_bond, _cf_intimacy
+                    )
+                    sections.append(_section("Confession", f"\n{_cf_prompt}"))
+    except Exception as _cf_err:
+        logger.debug("[Confessions] injection skipped: %s", _cf_err)
+
+    # 1c-desires. F39: Secret Desires — bond-gated vulnerability reveals
+    try:
+        from backend.emotional.desires import DesireEngine
+        _content_conn_ds = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_ds:
+            _ds_bond = 0
+            try:
+                _ds_bond_row = cur.execute(
+                    "SELECT bond_level FROM bond_levels WHERE char_id=?",
+                    (char_id,),
+                ).fetchone()
+                if _ds_bond_row:
+                    _ds_bond = _ds_bond_row[0]
+            except Exception:
+                pass
+            if _ds_bond >= 30:
+                _ds_engine = DesireEngine()
+                _ds_revealed = []
+                try:
+                    _ds_rows = cur.execute(
+                        "SELECT desire_id FROM character_desires WHERE char_id=? AND unlocked=1",
+                        (char_id,),
+                    ).fetchall()
+                    _ds_revealed = [r[0] for r in _ds_rows]
+                except Exception:
+                    pass
+                _ds_intimacy = 0
+                try:
+                    _dsi_row = cur.execute(
+                        "SELECT level FROM intimacy_states WHERE char_id=? AND session_id=?",
+                        (char_id, session_id),
+                    ).fetchone()
+                    if _dsi_row:
+                        _ds_intimacy = _dsi_row[0]
+                except Exception:
+                    pass
+                _ds_next = _ds_engine.get_next_desire(char_name, _ds_bond, _ds_revealed)
+                if _ds_next and _ds_engine.should_trigger(_ds_bond, _ds_intimacy, True):
+                    _ds_prompt = _ds_engine.build_reveal_prompt(
+                        char_name, _ds_next, _ds_bond
+                    )
+                    sections.append(_section("Desire Reveal", f"\n{_ds_prompt}"))
+    except Exception as _ds_err:
+        logger.debug("[Desires] injection skipped: %s", _ds_err)
+
+    # 1c-post-scene. F43: Post-Scene Mood — emotional check-in after intimate scenes
+    try:
+        from backend.adaptive.post_scene import PostSceneMoodEngine
+        _content_conn_ps = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_ps:
+            _ps_row_mood = cur.execute(
+                "SELECT arousal_peak, current_phase "
+                "FROM post_scene_states WHERE char_id=? AND session_id=? AND completed=0 "
+                "ORDER BY id DESC LIMIT 1",
+                (char_id, session_id),
+            ).fetchone()
+            if _ps_row_mood and _ps_row_mood[1] == "afterglow":
+                _psm_engine = PostSceneMoodEngine()
+                _psm_prompt = _psm_engine.get_prompt(char_name, _ps_row_mood[0])
+                if _psm_prompt:
+                    sections.append(_section("Post-Scene Check-in", f"\n{_psm_prompt}"))
+    except Exception as _psm_err:
+        logger.debug("[PostSceneMood] injection skipped: %s", _psm_err)
+
     # 1d. Games catalogue — let characters know what they can play with the user
     _games_text = (
         "\n\n[MINI-GAMES YOU CAN PLAY WITH THE USER]\n"
@@ -2943,6 +3066,47 @@ def _build_prompt_sections(
             f"Start the conversation naturally, acknowledging the new day.]"
         )
         sections.append(_section("Daily Greeting", greeting_text))
+
+    # 3b. F3: Morning After — special greeting after intimate session
+    if is_daily_first:
+        try:
+            from backend.emotional.morning_after import MorningAfterEngine
+            _content_conn_ma = cur.connection if hasattr(cur, "connection") else None
+            if _content_conn_ma:
+                # Check for recent intimate session with morning_after_flag
+                _ma_row = cur.execute(
+                    "SELECT arousal_peak, scene_end_at, morning_after_flag "
+                    "FROM post_scene_states WHERE char_id=? AND morning_after_flag=1 "
+                    "ORDER BY id DESC LIMIT 1",
+                    (char_id,),
+                ).fetchone()
+                if _ma_row:
+                    _ma_peak = _ma_row[0]
+                    _ma_scene_end = _ma_row[1]
+                    # Calculate hours since scene
+                    _ma_hours = 24.0  # Default to boundary
+                    try:
+                        _ma_end_dt = _dt_bps.strptime(_ma_scene_end, "%Y-%m-%d %H:%M:%S")
+                        _ma_delta = _dt_bps.now() - _ma_end_dt
+                        _ma_hours = _ma_delta.total_seconds() / 3600.0
+                    except Exception:
+                        pass
+                    _ma_intimacy = 0
+                    try:
+                        _mai_row = cur.execute(
+                            "SELECT level FROM intimacy_states WHERE char_id=? ORDER BY id DESC LIMIT 1",
+                            (char_id,),
+                        ).fetchone()
+                        if _mai_row:
+                            _ma_intimacy = _mai_row[0]
+                    except Exception:
+                        pass
+                    _ma_engine = MorningAfterEngine()
+                    _ma_prompt = _ma_engine.get_prompt(char_name, _ma_peak, _ma_intimacy, _ma_hours)
+                    if _ma_prompt:
+                        sections.append(_section("Morning After", f"\n{_ma_prompt}"))
+        except Exception as _ma_err:
+            logger.debug("[MorningAfter] injection skipped: %s", _ma_err)
 
     # 4. Anniversary milestones (#109)
     if first_chat_date:
@@ -16060,6 +16224,172 @@ def get_post_scene_status(char_id: int, session_id: int = 0):
                 "completed": bool(row[7]),
             },
         }
+    finally:
+        conn.close()
+
+
+# --- NSFW Phase 5 API Endpoints ---
+
+
+@app.get("/api/characters/{char_id}/desires")
+def get_character_desires(char_id: int):
+    """Return the desire unlock tree for a character.
+
+    Shows all desires with locked/unlocked status.  Locked desires show
+    title and bond_required only.  Unlocked desires include full description
+    and reveal narrative.
+
+    Args:
+        char_id: Character database ID.
+
+    Returns:
+        {"ok": True, "desires": [...], "status": {...}}
+    """
+    from backend.emotional.desires import DesireEngine
+
+    conn = db()
+    try:
+        cur = conn.cursor()
+        # Get character name
+        char_row = cur.execute(
+            "SELECT name FROM characters WHERE id=?", (char_id,)
+        ).fetchone()
+        char_name = char_row[0] if char_row else f"Character {char_id}"
+
+        # Get bond level
+        bond_level = 0
+        try:
+            bond_row = cur.execute(
+                "SELECT bond_level FROM bond_levels WHERE char_id=?", (char_id,)
+            ).fetchone()
+            if bond_row:
+                bond_level = bond_row[0]
+        except Exception:
+            pass
+
+        # Get revealed desire IDs
+        revealed_ids: list[str] = []
+        try:
+            rows = cur.execute(
+                "SELECT desire_id FROM character_desires WHERE char_id=? AND unlocked=1",
+                (char_id,),
+            ).fetchall()
+            revealed_ids = [r[0] for r in rows]
+        except Exception:
+            pass
+
+        engine = DesireEngine()
+        tree = engine.get_desire_tree(char_name)
+        status = engine.get_tree_status(char_name, bond_level, revealed_ids)
+
+        # Build response — hide details for locked/unrevealed desires
+        desire_list = []
+        for d in tree:
+            entry = {
+                "desire_id": d["desire_id"],
+                "title": d["title"],
+                "bond_required": d["bond_required"],
+                "unlocked": bond_level >= d["bond_required"],
+                "revealed": d["desire_id"] in revealed_ids,
+            }
+            if entry["revealed"]:
+                entry["description"] = d["description"]
+                # Get stored narrative if available
+                try:
+                    nar_row = cur.execute(
+                        "SELECT reveal_narrative FROM character_desires "
+                        "WHERE char_id=? AND desire_id=?",
+                        (char_id, d["desire_id"]),
+                    ).fetchone()
+                    if nar_row:
+                        entry["reveal_narrative"] = nar_row[0]
+                except Exception:
+                    pass
+            desire_list.append(entry)
+
+        return {"ok": True, "desires": desire_list, "status": status}
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/fantasy-journal")
+def get_character_fantasy_journal(char_id: int, limit: int = 10):
+    """Return visible fantasy journal entries for a character.
+
+    Fantasy entries are only visible when bond >= 80.
+
+    Args:
+        char_id: Character database ID.
+        limit: Max entries to return (default 10).
+
+    Returns:
+        {"ok": True, "entries": [...], "visible": bool}
+    """
+    from backend.adaptive.journal import get_fantasy_entries
+
+    conn = db()
+    try:
+        cur = conn.cursor()
+        # Get bond level
+        bond_level = 0
+        try:
+            bond_row = cur.execute(
+                "SELECT bond_level FROM bond_levels WHERE char_id=?", (char_id,)
+            ).fetchone()
+            if bond_row:
+                bond_level = bond_row[0]
+        except Exception:
+            pass
+
+        entries = get_fantasy_entries(char_id, bond_level, cur, limit=limit)
+        return {
+            "ok": True,
+            "entries": entries,
+            "visible": bond_level >= 80,
+            "bond_level": bond_level,
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/post-scene-moods")
+def get_character_post_scene_moods(char_id: int, limit: int = 20):
+    """Return post-scene mood history for a character.
+
+    Args:
+        char_id: Character database ID.
+        limit: Max entries to return (default 20).
+
+    Returns:
+        {"ok": True, "moods": [...]}
+    """
+    conn = db()
+    try:
+        cur = conn.cursor()
+        moods = []
+        try:
+            rows = cur.execute(
+                "SELECT id, session_id, scene_end_time, user_sentiment, "
+                "arousal_peak, notes, created_at "
+                "FROM post_scene_moods WHERE char_id=? "
+                "ORDER BY id DESC LIMIT ?",
+                (char_id, limit),
+            ).fetchall()
+            moods = [
+                {
+                    "id": r[0],
+                    "session_id": r[1],
+                    "scene_end_time": r[2],
+                    "user_sentiment": r[3],
+                    "arousal_peak": r[4],
+                    "notes": r[5],
+                    "created_at": r[6],
+                }
+                for r in rows
+            ]
+        except Exception:
+            pass
+        return {"ok": True, "moods": moods}
     finally:
         conn.close()
 

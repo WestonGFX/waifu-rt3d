@@ -4045,6 +4045,113 @@ def migrate_to_v62(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v63(con: sqlite3.Connection) -> bool:
+    """v62 → v63: NSFW Phase 5 — desires unlock tree, post-scene moods, journal types.
+
+    Creates two new tables and extends character_journals:
+
+    - ``character_desires``: Bond-gated desire/fantasy reveals per character.
+      Each desire unlocks once at a specific bond level and is stored permanently.
+      Used by the DesireEngine (F39) for progressive vulnerability reveals.
+
+    - ``post_scene_moods``: Tracks the user's emotional response after intimate
+      scenes.  Stores sentiment classification and arousal peak for the
+      preference discovery feedback loop (F43).
+
+    Also adds ``entry_type`` column to ``character_journals`` for F11 Fantasy
+    Journal support (``'reflection'`` default, ``'fantasy'`` for bond-gated
+    intimate diary entries).
+
+    Returns:
+        True on success, False if schema is already at v63 or higher.
+
+    Raises:
+        Exception: If the migration fails (rolls back automatically).
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> con.execute("CREATE TABLE schema_version (version INTEGER)")
+        <...>
+        >>> con.execute("INSERT INTO schema_version VALUES (62)")
+        <...>
+        >>> migrate_to_v63(con)
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 63:
+        return False
+
+    try:
+        # F39: Secret Desires Unlock Tree
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS character_desires (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id         INTEGER NOT NULL,
+                desire_id       TEXT    NOT NULL,
+                title           TEXT    NOT NULL DEFAULT '',
+                description     TEXT    NOT NULL DEFAULT '',
+                bond_required   INTEGER NOT NULL DEFAULT 0,
+                unlocked        INTEGER NOT NULL DEFAULT 0,
+                unlocked_at     TEXT,
+                reveal_narrative TEXT   NOT NULL DEFAULT '',
+                created_at      TEXT    DEFAULT (datetime('now')),
+                UNIQUE(char_id, desire_id)
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_desires_char "
+            "ON character_desires(char_id, bond_required)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_desires_unlocked "
+            "ON character_desires(char_id, unlocked)"
+        )
+
+        # F43: Post-Scene Mood Tracker
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS post_scene_moods (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id      INTEGER,
+                char_id         INTEGER NOT NULL,
+                scene_end_time  TEXT    NOT NULL DEFAULT (datetime('now')),
+                user_sentiment  TEXT    NOT NULL DEFAULT 'neutral',
+                arousal_peak    REAL    NOT NULL DEFAULT 0.0,
+                notes           TEXT    NOT NULL DEFAULT '',
+                created_at      TEXT    DEFAULT (datetime('now'))
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_post_moods_char "
+            "ON post_scene_moods(char_id, created_at DESC)"
+        )
+
+        # F11: Add entry_type to character_journals (if table exists)
+        try:
+            con.execute(
+                "ALTER TABLE character_journals "
+                "ADD COLUMN entry_type TEXT NOT NULL DEFAULT 'reflection'"
+            )
+        except sqlite3.OperationalError:
+            pass  # Column already exists or table not yet created
+
+        # Bump version
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (63)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v63 migration complete "
+            "(character_desires, post_scene_moods, journal entry_type)"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v63 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -4514,21 +4621,29 @@ def ensure_db():
             if migrate_to_v62(con):
                 version = 62
 
+        if version < 63:
+            logger.info("Upgrading database schema from v62 to v63...")
+            logger.info("  - Creating character_desires table")
+            logger.info("  - Creating post_scene_moods table")
+            logger.info("  - Adding character_journals.entry_type column")
+            if migrate_to_v63(con):
+                version = 63
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 62:
-            raise RuntimeError(f"Database initialization failed: Expected v62, got v{final_version}")
+        if final_version < 63:
+            raise RuntimeError(f"Database initialization failed: Expected v63, got v{final_version}")
 
-        if final_version > 62:
-            logger.warning(f"Database is newer than application (v{final_version} > v62). Some features might be unused.")
+        if final_version > 63:
+            logger.warning(f"Database is newer than application (v{final_version} > v63). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v62 adds NSFW Phase 4 tables)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v63 adds NSFW Phase 5 tables)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

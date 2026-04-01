@@ -1,13 +1,23 @@
 # Current Project Status
 
-**Last updated:** 2026-03-30
+**Last updated:** 2026-03-31 20:52 PDT
 **Branch:** master
-**Schema version:** v63
+**Schema version:** v64
 **Tests:** 2195 passing (backend pytest), tsc clean (frontend)
 
 ## Active Work
 
-**ALL 10 NSFW backend phases COMPLETE.** 48 features implemented across 40+ modules. Frontend components needed for all phases.
+**NSFW Frontend Sprint in progress.** 12 of ~20 needed UI components built and wired. Remaining: chat toolbar chips (whisper/quickfire modes), ambient atmosphere CSS, temperature meter, persona picker overlay.
+
+## Completed This Session (Mar 31, session 4)
+
+| What | Details |
+|------|---------|
+| **12 NSFW frontend components** | NsfwSettingsTab, IntimateScenarioBrowser, DesireTree, FantasyJournal, MilestoneTimeline, IntimateMemoryBrowser, SceneBookmarks, IntimateGallery, LoveLetterModal, AudioStoryPlayer, IntimateQuizPanel, SharedFantasyBuilder |
+| **Settings: Intimacy tab** | New tab in SettingsView with power dynamics, jealousy, spontaneity, time features |
+| **App integration** | 11 new overlay types in appStore, all components rendered in App.tsx |
+| **Keyboard shortcuts** | Alt+Shift+K (bookmarks), Alt+Shift+M (milestones), Alt+Shift+D (desires) |
+| **Lines added** | 6,434 lines across 15 files |
 
 ## Completed This Session (Mar 28, session 3)
 
@@ -69,7 +79,7 @@
 
 ## Next Tasks (Priority Order)
 
-1. **Frontend components for ALL NSFW phases** — All 48 backend features need UI. Priority: settings panels (boundaries, jealousy, spontaneity), chat enhancements (quickfire, whisper, bookmarks), overlays (gallery, desire tree, fantasy builder, persona picker), dev panels (dual track, scene scoring).
+1. **Remaining NSFW frontend** — 12/~20 components done. Still needed: chat toolbar chips (WhisperMode F27, QuickFireToggle F36), TemperatureMeter (F21 chat header widget), AmbientAtmosphere (F23 CSS warmth), PersonaPickerOverlay (F37), SceneReplayViewer (F35). Plus: P9+P10 context injection into server.py.
 2. **Server.py context injection for P9+P10** — Wire remaining features (clothing, negotiation, dual track, spontaneity, physical tells, recovery, soundscapes, desire arcs) into _build_prompt_sections.
 3. **Adaptive Intelligence Engine** — #1 priority new feature. Context classifier, dynamic LLM param tuning, extended user model, over-personalization gate. Spec: `docs/plans/2026-03-29-adaptive-intelligence-spec.md` (Phase A: 23-34h, Phase B: 52-72h, Phase C: 54-76h).
 4. **Bond Progression System** — #1 retention driver. Quadratic XP curve, 5-tier unlocks, milestone celebrations, bond-gated dialogue shifts. Existing v56 schema to extend. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` (42-58h, 6 phases).

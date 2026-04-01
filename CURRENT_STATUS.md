@@ -3,11 +3,11 @@
 **Last updated:** 2026-03-30
 **Branch:** master
 **Schema version:** v63
-**Tests:** 2144 passing (backend pytest), tsc clean (frontend)
+**Tests:** 2195 passing (backend pytest), tsc clean (frontend)
 
 ## Active Work
 
-NSFW Phases 1-8 shipped. Phase 9 (Polish & Extras) or frontend components next.
+**ALL 10 NSFW backend phases COMPLETE.** 48 features implemented across 40+ modules. Frontend components needed for all phases.
 
 ## Completed This Session (Mar 28, session 3)
 
@@ -33,7 +33,8 @@ NSFW Phases 1-8 shipped. Phase 9 (Polish & Extras) or frontend components next.
 | **Phase 6: Voice & Audio** | ✅ COMPLETE | F4 Voice Intimacy, F33 Audio Stories, F36 Quickfire, F46 Love Letters | +70 |
 | **Phase 7: Visual & Image Gen** | ✅ COMPLETE | F29 Image Gen, F42 Gallery, F28 NSFW Portraits, F19 Arousal Visuals, F27 Whisper Mode | +34 |
 | **Phase 8: Deep Personalization** | ✅ COMPLETE | F35 Scene Replay, F37 Fantasy Personas, F47 Shared Fantasy, F31 Jealousy, F41 Body Language, F44 Erogenous Map, F22 Intimate Quiz | +37 |
-| **Phase 9** | PLANNED | Clothing system, preference discovery, multi-session arcs, advanced features | — |
+| **Phase 9: Polish & Extras** | ✅ COMPLETE | F24 Clothing, F26 Scene Scoring, F20 Bookmarks, F48 Playlist | +14 |
+| **Phase 10: Advanced Features** | ✅ COMPLETE | F49 Dual Track, F50 Negotiation, F51 Recovery, F52 Spontaneity, F53 Soundscapes, F54 Physical Tells, F55 Desire Arcs, F56 Mini-Games | +37 |
 
 ## Completed This Session (Mar 30, session 2)
 
@@ -43,7 +44,9 @@ NSFW Phases 1-8 shipped. Phase 9 (Polish & Extras) or frontend components next.
 | **NSFW Phase 6: Voice & Audio** | F4 Voice Intimacy, F33 Audio Stories, F36 Quickfire, F46 Love Letters |
 | **NSFW Phase 7: Visual & Image Gen** | F29 Image Gen, F42 Gallery, F28 NSFW Portraits, F19 Arousal Visuals, F27 Whisper Mode — schema v64 |
 | **NSFW Phase 8: Deep Personalization** | F35 Scene Replay, F37 Fantasy Personas, F47 Shared Fantasy, F31 Jealousy, F41 Body Language, F44 Erogenous Map, F22 Intimate Quiz |
-| **Tests** | +267 new (2144 total), all passing, tsc clean |
+| **NSFW Phase 9: Polish** | F24 Clothing, F26 Scene Scoring, F20 Bookmarks, F48 Playlist |
+| **NSFW Phase 10: Advanced** | F49 Dual Track, F50 Negotiation, F51 Recovery, F52 Spontaneity, F53 Soundscapes, F54 Physical Tells, F55 Desire Arcs, F56 Mini-Games |
+| **Tests** | +318 new (2195 total), all passing, tsc clean |
 
 ## Completed This Session (Mar 30, session 1)
 
@@ -66,8 +69,8 @@ NSFW Phases 1-8 shipped. Phase 9 (Polish & Extras) or frontend components next.
 
 ## Next Tasks (Priority Order)
 
-1. **NSFW Phase 9: Polish & Extras** — F24 Clothing System, F7 Preference Discovery, F26 Progressive Reveal, etc. Plan at `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` line ~4380.
-2. **Frontend components for Phases 1-8** — All NSFW backend features need UI. Pacing picker, scenario browser, power dynamics, desire tree, fantasy journal, morning-after, voice intimacy, quickfire toggle, love letter card, audio story player, gallery viewer, persona picker, jealousy settings, whisper mode toggle. Build UI before testing.
+1. **Frontend components for ALL NSFW phases** — All 48 backend features need UI. Priority: settings panels (boundaries, jealousy, spontaneity), chat enhancements (quickfire, whisper, bookmarks), overlays (gallery, desire tree, fantasy builder, persona picker), dev panels (dual track, scene scoring).
+2. **Server.py context injection for P9+P10** — Wire remaining features (clothing, negotiation, dual track, spontaneity, physical tells, recovery, soundscapes, desire arcs) into _build_prompt_sections.
 3. **Adaptive Intelligence Engine** — #1 priority new feature. Context classifier, dynamic LLM param tuning, extended user model, over-personalization gate. Spec: `docs/plans/2026-03-29-adaptive-intelligence-spec.md` (Phase A: 23-34h, Phase B: 52-72h, Phase C: 54-76h).
 4. **Bond Progression System** — #1 retention driver. Quadratic XP curve, 5-tier unlocks, milestone celebrations, bond-gated dialogue shifts. Existing v56 schema to extend. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` (42-58h, 6 phases).
 5. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. The "character feels alive" system. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h, 6 phases). Research: `docs/research/2026-03-29-humanoid-motion-research.md`.

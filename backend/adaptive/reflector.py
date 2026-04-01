@@ -600,6 +600,25 @@ async def run_reflection(
         # Saturates to 1.0 at 300 chars.
         updated_prefs["pref_response_length"] = min(1.0, avg_len / 300.0)
 
+    # --- AIE A3: Compute extended user model metrics (no LLM) ---
+    try:
+        from backend.adaptive.user_model import compute_extended_metrics
+        from backend.adaptive.signals import get_recent_signals
+        _ext_con = sqlite3.connect(db_path)
+        _ext_signals = get_recent_signals(char_id, _ext_con, limit=50)
+        _ext_con.close()
+        _ext_metrics = compute_extended_metrics(messages, _ext_signals)
+        updated_prefs.update({
+            k: v for k, v in _ext_metrics.items() if v is not None
+        })
+        logger.debug(
+            "run_reflection: extended metrics for char_id=%d: %s",
+            char_id, {k: round(v, 3) if isinstance(v, float) else v
+                      for k, v in _ext_metrics.items() if v is not None},
+        )
+    except Exception as _ext_err:
+        logger.debug("run_reflection: extended metrics skipped: %s", _ext_err)
+
     # --- Persist updated profile back to DB ---
     def _write_profile() -> dict:
         con2 = sqlite3.connect(db_path)

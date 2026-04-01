@@ -231,6 +231,15 @@ def collect_turn_signals(
         # the embedding model.  Keeping this as a hook for future wiring.
         topic_drift = 0.0
 
+    # AIE A1: Classify conversation context using rule-based heuristics
+    try:
+        from backend.adaptive.context_classifier import classify_context
+        detected_context = classify_context(
+            user_msg, sentiment_score, emoji_count, question_count,
+        )
+    except Exception:
+        detected_context = "casual_chat"
+
     return {
         "user_msg_length": len(user_msg),
         "assistant_msg_length": len(assistant_msg),
@@ -242,6 +251,7 @@ def collect_turn_signals(
         "topic_drift": topic_drift,
         "intimacy_delta": intimacy_delta,
         "turn_number": turn_number,
+        "detected_context": detected_context,
     }
 
 
@@ -322,29 +332,47 @@ def save_signals(
         # Table doesn't exist yet — proceed with the insert (opt-in by default).
         logger.debug("save_signals: privacy_settings table not found — proceeding")
 
+    _base_params = (
+        char_id,
+        session_id,
+        signals.get("turn_number"),
+        signals.get("user_msg_length"),
+        signals.get("assistant_msg_length"),
+        signals.get("response_time_ms"),
+        signals.get("emoji_count"),
+        signals.get("question_count"),
+        signals.get("exclamation_count"),
+        signals.get("sentiment_score"),
+        signals.get("topic_drift"),
+        signals.get("intimacy_delta"),
+    )
+    _base_sql = """INSERT INTO engagement_signals (
+        char_id, session_id, turn_number,
+        user_msg_length, assistant_msg_length, response_time_ms,
+        emoji_count, question_count, exclamation_count,
+        sentiment_score, topic_drift, intimacy_delta
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+
     try:
-        conn.execute(
-            """INSERT INTO engagement_signals (
-                char_id, session_id, turn_number,
-                user_msg_length, assistant_msg_length, response_time_ms,
-                emoji_count, question_count, exclamation_count,
-                sentiment_score, topic_drift, intimacy_delta
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                char_id,
-                session_id,
-                signals.get("turn_number"),
-                signals.get("user_msg_length"),
-                signals.get("assistant_msg_length"),
-                signals.get("response_time_ms"),
-                signals.get("emoji_count"),
-                signals.get("question_count"),
-                signals.get("exclamation_count"),
-                signals.get("sentiment_score"),
-                signals.get("topic_drift"),
-                signals.get("intimacy_delta"),
-            ),
-        )
+        # AIE A1: Try including detected_context column (v65+), fall back to base
+        _detected_ctx = signals.get("detected_context")
+        if _detected_ctx:
+            try:
+                conn.execute(
+                    """INSERT INTO engagement_signals (
+                        char_id, session_id, turn_number,
+                        user_msg_length, assistant_msg_length, response_time_ms,
+                        emoji_count, question_count, exclamation_count,
+                        sentiment_score, topic_drift, intimacy_delta,
+                        detected_context
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    _base_params + (_detected_ctx,),
+                )
+            except sqlite3.OperationalError:
+                # Column doesn't exist yet (pre-v65) — fall back to base insert
+                conn.execute(_base_sql, _base_params)
+        else:
+            conn.execute(_base_sql, _base_params)
         conn.commit()
     except sqlite3.OperationalError as exc:
         # Table not yet created by migration — log and skip gracefully.

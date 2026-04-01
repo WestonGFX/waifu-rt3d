@@ -314,15 +314,16 @@ class TestAssembleContext:
         sections = _make_sections()
         cfg = {"context_limit": 131072}
 
-        # Mock vector store with a search method
+        # Mock vector store with a search method — memories relate to user query
         class MockVectorStore:
-            def search(self, query, char_id=None, top_k=5):
+            def search(self, query, char_id=None, top_k=8):
                 return [
-                    {"text": "User mentioned they love sushi", "dist": 0.3},
-                    {"text": "User's birthday is March 15", "dist": 0.5},
+                    {"text": "User mentioned they love sushi and food", "dist": 0.3},
+                    {"text": "User enjoys eating at restaurants for food", "dist": 0.5},
                 ]
 
-        ctx = assemble_context(1, 1, "Hi", sections, cfg, con.cursor(),
+        ctx = assemble_context(1, 1, "What food should we eat tonight?",
+                               sections, cfg, con.cursor(),
                                vector_store=MockVectorStore())
 
         assert ctx.semantic_memories_included == 2

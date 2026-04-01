@@ -216,7 +216,24 @@ def assemble_context(
     semantic_messages: list[dict] = []
     if vector_store and user_text:
         try:
-            hits = vector_store.search(user_text, char_id=char_id, top_k=5)
+            hits = vector_store.search(user_text, char_id=char_id, top_k=8)
+            # AIE A4: Filter through personalization gate before injection
+            try:
+                from backend.adaptive.personalization_gate import filter_memories_for_context
+                _gate_msgs = [{"role": "user", "content": user_text}]
+                _gate_msgs.extend(hi_messages[-4:])
+                _gate_candidates = [
+                    {"text": h.get("text", ""), "importance": h.get("score", 0.5), "id": i}
+                    for i, h in enumerate(hits)
+                ]
+                _gate_passed = filter_memories_for_context(
+                    _gate_candidates, _gate_msgs, max_memories=5,
+                )
+                _passed_texts = {m["text"] for m in _gate_passed}
+                hits = [h for h in hits if h.get("text", "") in _passed_texts]
+            except Exception:
+                hits = hits[:5]  # Fallback: just cap at 5
+
             for hit in hits:
                 hit_text = hit.get("text", "")
                 msg_cost = count_tokens(hit_text) + 4

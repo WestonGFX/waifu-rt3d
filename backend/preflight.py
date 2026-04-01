@@ -4239,6 +4239,95 @@ def migrate_to_v64(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v65(con: sqlite3.Connection) -> bool:
+    """v64 → v65: AIE Phase A — Extended User Model + context signals.
+
+    Extends ``user_profiles`` with communication style, emotional pattern,
+    and interaction pattern columns for the Adaptive Intelligence Engine.
+
+    Also adds ``detected_context`` column to ``engagement_signals`` for
+    historical context classification tracking.
+
+    Returns:
+        True on success, False if schema is already at v65 or higher.
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> con.execute("CREATE TABLE schema_version (version INTEGER)")
+        <...>
+        >>> con.execute("INSERT INTO schema_version VALUES (64)")
+        <...>
+        >>> migrate_to_v65(con)
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 65:
+        return False
+
+    try:
+        # Communication style columns
+        for col, col_type, default in [
+            ("avg_message_length", "REAL", "NULL"),
+            ("vocabulary_complexity", "REAL", "NULL"),
+            ("emoji_frequency", "REAL", "NULL"),
+            ("question_rate", "REAL", "NULL"),
+        ]:
+            try:
+                con.execute(
+                    f"ALTER TABLE user_profiles ADD COLUMN {col} {col_type} DEFAULT {default}"
+                )
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+        # Emotional pattern columns
+        for col, col_type, default in [
+            ("emotional_volatility", "REAL", "NULL"),
+            ("comfort_seeking_freq", "REAL", "NULL"),
+            ("peak_engagement_hour", "INTEGER", "NULL"),
+            ("mood_correlation_map", "TEXT", "NULL"),
+        ]:
+            try:
+                con.execute(
+                    f"ALTER TABLE user_profiles ADD COLUMN {col} {col_type} DEFAULT {default}"
+                )
+            except sqlite3.OperationalError:
+                pass
+
+        # Interaction pattern columns
+        for col, col_type, default in [
+            ("avg_session_length", "REAL", "NULL"),
+            ("session_frequency", "REAL", "NULL"),
+            ("initiative_ratio", "REAL", "NULL"),
+        ]:
+            try:
+                con.execute(
+                    f"ALTER TABLE user_profiles ADD COLUMN {col} {col_type} DEFAULT {default}"
+                )
+            except sqlite3.OperationalError:
+                pass
+
+        # Add detected_context to engagement_signals
+        try:
+            con.execute(
+                "ALTER TABLE engagement_signals ADD COLUMN detected_context TEXT DEFAULT NULL"
+            )
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Bump version
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (65)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v65 migration complete "
+            "(AIE extended user model + detected_context)"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v65 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -4723,14 +4812,21 @@ def ensure_db():
             if migrate_to_v64(con):
                 version = 64
 
+        if version < 65:
+            logger.info("Upgrading database schema from v64 to v65...")
+            logger.info("  - AIE: Extended user model columns")
+            logger.info("  - AIE: detected_context in engagement_signals")
+            if migrate_to_v65(con):
+                version = 65
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 64:
-            raise RuntimeError(f"Database initialization failed: Expected v64, got v{final_version}")
+        if final_version < 65:
+            raise RuntimeError(f"Database initialization failed: Expected v65, got v{final_version}")
 
-        if final_version > 64:
-            logger.warning(f"Database is newer than application (v{final_version} > v64). Some features might be unused.")
+        if final_version > 65:
+            logger.warning(f"Database is newer than application (v{final_version} > v65). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.

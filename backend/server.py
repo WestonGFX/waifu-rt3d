@@ -527,13 +527,23 @@ from backend.content.gating import (
 )
 
 # Feature 19: On-device adaptive learning
-from backend.adaptive.signals import collect_turn_signals, save_signals
+from backend.adaptive.signals import (
+    collect_turn_signals,
+    save_signals,
+    get_recent_signals,
+    compute_rolling_averages,
+    compute_sentiment,
+)
 from backend.adaptive.behavior import (
     compute_behavior_modifiers,
     build_behavior_prompt_block,
     check_engagement_regression,
     revert_adaptations,
 )
+
+# AIE Phase A: Context classifier + dynamic param tuner
+from backend.adaptive.context_classifier import classify_context
+from backend.adaptive.param_tuner import get_tuned_params
 
 # Feature A2: In-App Mini Games — all game engines
 from backend.games import trivia as trivia_engine
@@ -4045,6 +4055,36 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         # ── Feature A6: Lorebook / World Info injection (non-streaming) ──
         _inject_lore_entries(messages, con, char_id, hist)
 
+        # ── AIE A1+A2: Context-aware dynamic LLM parameters ────────────
+        _aie_temperature = cfg.get("temperature", 0.7)
+        _aie_repeat_penalty = cfg.get("repeat_penalty")
+        _aie_dynamic_enabled = cfg.get("adaptive", {}).get("dynamic_params", {}).get("enabled", True)
+        if _aie_dynamic_enabled:
+            try:
+                _aie_sentiment = compute_sentiment(text)
+                _aie_emoji = len(re.findall(r"[\U0001F300-\U0001FFFF\u2600-\u27BF]", text))
+                _aie_questions = text.count("?")
+                _aie_context = classify_context(text, _aie_sentiment, _aie_emoji, _aie_questions)
+                _aie_signals_con = db()
+                _aie_recent = get_recent_signals(char_id, _aie_signals_con, limit=10)
+                _aie_signals_con.close()
+                _aie_rolling = compute_rolling_averages(_aie_recent)
+                _aie_trend = _aie_rolling.get("sentiment_score", 0.0)
+                _aie_params = get_tuned_params(
+                    _aie_context,
+                    char_temperature=cfg.get("temperature"),
+                    engagement_trend=_aie_trend,
+                )
+                _aie_temperature = _aie_params["temperature"]
+                _aie_repeat_penalty = _aie_params.get("repetition_penalty", _aie_repeat_penalty)
+                logger.debug(
+                    "[AIE] context=%s temp=%.2f repeat=%.2f trend=%.2f",
+                    _aie_context, _aie_temperature,
+                    _aie_repeat_penalty or 0.0, _aie_trend,
+                )
+            except Exception as _aie_err:
+                logger.debug(f"[AIE] Dynamic params skipped: {_aie_err}")
+
         try:
             from backend.llm.registry import get_client
             adapter = get_client(cfg)
@@ -4061,9 +4101,9 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 llm_model_name,
                 cfg["llm"]["endpoint"],
                 cfg["llm"]["api_key"],
-                temperature=cfg.get("temperature", 0.7),
+                temperature=_aie_temperature,
                 max_tokens=_cap_max_tokens_ns,  # Phase 9: per-character output limit
-                repeat_penalty=cfg.get("repeat_penalty"),
+                repeat_penalty=_aie_repeat_penalty,
                 frequency_penalty=cfg.get("frequency_penalty"),
                 extra_body=extra_body,
                 cache_breakpoints=_cache_bp,
@@ -5175,6 +5215,36 @@ async def chat_stream(req: Request):
         thinking_enabled = False  # Character explicitly disables thinking mode
     stream_extra_body = _build_thinking_extra_body(routed_model, thinking_enabled)
 
+    # ── AIE A1+A2: Context-aware dynamic LLM parameters (streaming) ──
+    _aie_s_temperature = cfg.get("temperature", 0.7)
+    _aie_s_repeat_penalty = cfg.get("repeat_penalty")
+    _aie_s_dynamic_enabled = cfg.get("adaptive", {}).get("dynamic_params", {}).get("enabled", True)
+    if _aie_s_dynamic_enabled:
+        try:
+            _aie_s_sentiment = compute_sentiment(text)
+            _aie_s_emoji = len(re.findall(r"[\U0001F300-\U0001FFFF\u2600-\u27BF]", text))
+            _aie_s_questions = text.count("?")
+            _aie_s_context = classify_context(text, _aie_s_sentiment, _aie_s_emoji, _aie_s_questions)
+            _aie_s_signals_con = db()
+            _aie_s_recent = get_recent_signals(char_id, _aie_s_signals_con, limit=10)
+            _aie_s_signals_con.close()
+            _aie_s_rolling = compute_rolling_averages(_aie_s_recent)
+            _aie_s_trend = _aie_s_rolling.get("sentiment_score", 0.0)
+            _aie_s_params = get_tuned_params(
+                _aie_s_context,
+                char_temperature=cfg.get("temperature"),
+                engagement_trend=_aie_s_trend,
+            )
+            _aie_s_temperature = _aie_s_params["temperature"]
+            _aie_s_repeat_penalty = _aie_s_params.get("repetition_penalty", _aie_s_repeat_penalty)
+            logger.debug(
+                "[AIE-stream] context=%s temp=%.2f repeat=%.2f trend=%.2f",
+                _aie_s_context, _aie_s_temperature,
+                _aie_s_repeat_penalty or 0.0, _aie_s_trend,
+            )
+        except Exception as _aie_s_err:
+            logger.debug(f"[AIE-stream] Dynamic params skipped: {_aie_s_err}")
+
     # Input token count from assembler (accurate tiktoken or chars//4 fallback)
     est_input_tokens = assembled_s.token_count
 
@@ -5218,9 +5288,9 @@ async def chat_stream(req: Request):
                 async for event in _agent_runner.run_stream(
                     llm_messages, adapter, cfg, _agent_tools,
                     context=_agent_context,
-                    temperature=cfg.get("temperature", 0.7),
+                    temperature=_aie_s_temperature,
                     max_tokens=int(request_max_tokens) if request_max_tokens is not None else _cap_max_tokens,
-                    repeat_penalty=cfg.get("repeat_penalty"),
+                    repeat_penalty=_aie_s_repeat_penalty,
                     frequency_penalty=cfg.get("frequency_penalty"),
                     extra_body=stream_extra_body,
                 ):
@@ -5415,9 +5485,9 @@ async def chat_stream(req: Request):
                     routed_model,
                     cfg["llm"]["endpoint"],
                     cfg["llm"]["api_key"],
-                    temperature=cfg.get("temperature", 0.7),
+                    temperature=_aie_s_temperature,
                     max_tokens=_cap_max_tokens,  # Phase 9: per-character output limit (-1 = unlimited)
-                    repeat_penalty=cfg.get("repeat_penalty"),
+                    repeat_penalty=_aie_s_repeat_penalty,
                     frequency_penalty=cfg.get("frequency_penalty"),
                     extra_body=stream_extra_body,
                     cache_breakpoints=_stream_cache_bp,

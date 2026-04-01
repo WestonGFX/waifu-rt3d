@@ -1063,6 +1063,21 @@ export function ChatThread() {
               </div>
             )}
 
+            {/* F27 + F36: Intimate mode toggles — secondary row, only in RP modes.
+                Kept out of the main composer row to preserve textarea width. */}
+            {rpStyle !== 'none' && (
+              <div className="flex items-center gap-1 mb-1.5">
+                <WhisperModeToggle
+                  active={whisperMode}
+                  onToggle={() => setWhisperMode(!whisperMode)}
+                />
+                <QuickFireToggle
+                  active={quickFireMode}
+                  onToggle={() => setQuickFireMode(!quickFireMode)}
+                />
+              </div>
+            )}
+
             {/* Composer row */}
             <div className="flex items-end gap-2">
               {/* Scenario Library trigger */}
@@ -1126,18 +1141,6 @@ export function ChatThread() {
 
               {/* F21: Temperature meter — driven by arousal engine, hidden when 0 */}
               <TemperatureMeter temperature={0} />
-
-              {/* F27: Whisper mode toggle */}
-              <WhisperModeToggle
-                active={whisperMode}
-                onToggle={() => setWhisperMode(!whisperMode)}
-              />
-
-              {/* F36: QuickFire mode toggle */}
-              <QuickFireToggle
-                active={quickFireMode}
-                onToggle={() => setQuickFireMode(!quickFireMode)}
-              />
 
               {/* Reply length badge — cycles through brief/normal/detailed/auto on click */}
               <button

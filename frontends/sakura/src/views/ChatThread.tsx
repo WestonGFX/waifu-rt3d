@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles } from 'lucide-react';
+import { WhisperModeToggle, QuickFireToggle } from '../components/ChatModeToggles';
+import { TemperatureMeter } from '../components/TemperatureMeter';
 import { VNTextBox } from '../components/VNTextBox';
 import { VNPortrait } from '../components/VNPortrait';
 import { useAppStore } from '../stores/appStore';
@@ -141,6 +143,8 @@ export function ChatThread() {
 
   // ── Feature D: Gesture picker state ────────────────────────────────────
   const [gesturePickerOpen, setGesturePickerOpen] = useState(false);
+  const [whisperMode, setWhisperMode] = useState(false);
+  const [quickFireMode, setQuickFireMode] = useState(false);
 
   // ── Feature A1: Full-duplex voice conversation mode ─────────────────────
   const [fullDuplexVoice, setFullDuplexVoice] = useState(false);
@@ -1119,6 +1123,21 @@ export function ChatThread() {
               >
                 <Clapperboard size={16} />
               </button>
+
+              {/* F21: Temperature meter — driven by arousal engine, hidden when 0 */}
+              <TemperatureMeter temperature={0} />
+
+              {/* F27: Whisper mode toggle */}
+              <WhisperModeToggle
+                active={whisperMode}
+                onToggle={() => setWhisperMode(!whisperMode)}
+              />
+
+              {/* F36: QuickFire mode toggle */}
+              <QuickFireToggle
+                active={quickFireMode}
+                onToggle={() => setQuickFireMode(!quickFireMode)}
+              />
 
               {/* Reply length badge — cycles through brief/normal/detailed/auto on click */}
               <button

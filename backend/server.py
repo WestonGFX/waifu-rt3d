@@ -3164,6 +3164,138 @@ def _build_prompt_sections(
     except Exception as _jl_err:
         logger.debug("[Jealousy] injection skipped: %s", _jl_err)
 
+    # ── P9+P10 context injection ────────────────────────────────────
+
+    # 1c-clothing. F24: Clothing Interaction — track clothing state
+    try:
+        from backend.content.clothing import ClothingEngine
+        _cl_engine = ClothingEngine()
+        _cl_state = _cl_engine.detect_clothing_change(user_text)
+        if _cl_state:
+            _cl_prompt = _cl_engine.get_clothing_prompt(char_name, _cl_state)
+            if _cl_prompt:
+                sections.append(_section("Clothing", f"\n{_cl_prompt}"))
+    except Exception as _cl_err:
+        logger.debug("[Clothing] injection skipped: %s", _cl_err)
+
+    # 1c-dual-track. F49: Dual Track — emotional vs physical intensity balance
+    try:
+        from backend.content.dual_track import DualTrackEngine
+        _dt_engine = DualTrackEngine()
+        _dt_signals = _dt_engine.classify_signals(user_text)
+        _dt_emotional = int(_dt_signals.get("emotional", 0) * 100)
+        _dt_physical = int(_dt_signals.get("physical", 0) * 100)
+        if _dt_emotional > 20 or _dt_physical > 20:
+            _dt_prompt = _dt_engine.get_track_prompt(_dt_emotional, _dt_physical)
+            if _dt_prompt:
+                sections.append(_section("Dual Track", f"\n{_dt_prompt}"))
+    except Exception as _dt_err:
+        logger.debug("[DualTrack] injection skipped: %s", _dt_err)
+
+    # 1c-negotiation. F50: Scene Negotiation — intensity adjustment mid-scene
+    try:
+        from backend.content.negotiation import SceneNegotiator
+        _ng_engine = SceneNegotiator()
+        _ng_adj = _ng_engine.detect_adjustment(user_text)
+        if _ng_adj:
+            _ng_prompt = _ng_engine.get_prompt(char_name, _ng_adj)
+            if _ng_prompt:
+                sections.append(_section("Negotiation", f"\n{_ng_prompt}"))
+    except Exception as _ng_err:
+        logger.debug("[Negotiation] injection skipped: %s", _ng_err)
+
+    # 1c-spontaneity. F52: Spontaneity — character initiation mode
+    try:
+        from backend.content.spontaneity import SpontaneityEngine
+        _sp_engine = SpontaneityEngine()
+        _sp_mode = "user_only"
+        try:
+            _sp_cfg = _content_conn_scene.cursor().execute(
+                "SELECT value FROM app_config WHERE key='intimacy.spontaneity_level'"
+            ).fetchone()
+            if _sp_cfg and _sp_cfg[0]:
+                _sp_mode_map = {"off": "user_only", "subtle": "character_hints",
+                                "moderate": "character_initiates", "bold": "character_initiates"}
+                _sp_mode = _sp_mode_map.get(_sp_cfg[0], "user_only")
+        except Exception:
+            pass
+        if _sp_mode != "user_only":
+            _sp_prompt = _sp_engine.get_prompt(_sp_mode)
+            if _sp_prompt:
+                sections.append(_section("Spontaneity", f"\n{_sp_prompt}"))
+    except Exception as _sp_err:
+        logger.debug("[Spontaneity] injection skipped: %s", _sp_err)
+
+    # 1c-physical-tells. F54: Physical Tells — arousal-driven body language
+    try:
+        from backend.content.physical_tells import PhysicalTellsEngine
+        _pt_engine = PhysicalTellsEngine()
+        _pt_arousal = 0.0
+        try:
+            _pt_row = cur.execute(
+                "SELECT arousal_level FROM arousal_states WHERE char_id=?",
+                (char_id,),
+            ).fetchone()
+            if _pt_row:
+                _pt_arousal = float(_pt_row[0])
+        except Exception:
+            pass
+        if _pt_arousal > 2.0:
+            _pt_prompt = _pt_engine.get_prompt(char_name, _pt_arousal)
+            if _pt_prompt:
+                sections.append(_section("Physical Tells", f"\n{_pt_prompt}"))
+    except Exception as _pt_err:
+        logger.debug("[PhysicalTells] injection skipped: %s", _pt_err)
+
+    # 1c-recovery. F51: Recovery — post-conflict emotional arc
+    try:
+        from backend.emotional.recovery import RecoveryEngine
+        _rc_engine = RecoveryEngine()
+        _rc_stage = None
+        try:
+            _rc_row = cur.execute(
+                "SELECT conflict_messages_since FROM recovery_states WHERE char_id=?",
+                (char_id,),
+            ).fetchone()
+            if _rc_row and _rc_row[0] is not None:
+                _rc_stage = _rc_engine.get_recovery_stage(_rc_row[0])
+        except Exception:
+            pass
+        if _rc_stage:
+            _rc_prompt = _rc_engine.get_prompt(char_name, _rc_stage)
+            if _rc_prompt:
+                sections.append(_section("Recovery", f"\n{_rc_prompt}"))
+    except Exception as _rc_err:
+        logger.debug("[Recovery] injection skipped: %s", _rc_err)
+
+    # 1c-desire-arcs. F55: Desire Arcs — multi-session romantic arcs
+    try:
+        from backend.emotional.desire_arcs import DesireArcEngine
+        _da_engine = DesireArcEngine()
+        _da_bond = 0
+        try:
+            _da_bond_row = cur.execute(
+                "SELECT bond_level FROM bond_levels WHERE char_id=?", (char_id,)
+            ).fetchone()
+            if _da_bond_row:
+                _da_bond = _da_bond_row[0]
+        except Exception:
+            pass
+        if _da_engine.should_allow(_da_bond):
+            try:
+                _da_row = cur.execute(
+                    "SELECT arc_type, current_stage FROM desire_arc_states WHERE char_id=?",
+                    (char_id,),
+                ).fetchone()
+                if _da_row and _da_row[0]:
+                    _da_prompt = _da_engine.get_arc_prompt(char_name, _da_row[0], _da_row[1] or 1)
+                    if _da_prompt:
+                        sections.append(_section("Desire Arc", f"\n{_da_prompt}"))
+            except Exception:
+                pass
+    except Exception as _da_err:
+        logger.debug("[DesireArcs] injection skipped: %s", _da_err)
+
     # 1d. Games catalogue — let characters know what they can play with the user
     _games_text = (
         "\n\n[MINI-GAMES YOU CAN PLAY WITH THE USER]\n"

@@ -35,6 +35,8 @@ import { LoveLetterModal } from './components/LoveLetterModal';
 import { AudioStoryPlayer } from './components/AudioStoryPlayer';
 import { IntimateQuizPanel } from './components/IntimateQuizPanel';
 import { SharedFantasyBuilder } from './components/SharedFantasyBuilder';
+import { PersonaPicker } from './components/PersonaPicker';
+import { SceneReplayViewer } from './components/SceneReplayViewer';
 import { GamePanel } from './components/GamePanel';
 import { ModelBrowser } from './components/ModelBrowser';
 import { PhotoModeOverlay } from './components/PhotoModeOverlay';
@@ -482,6 +484,25 @@ function MainApp() {
           onClose={closeOverlay}
           characterId={activeCharacter.id}
           characterName={activeCharacter.name}
+        />
+      )}
+
+      {/* F37: Fantasy Persona Picker */}
+      {activeOverlay === 'personapicker' && activeCharacter && (
+        <PersonaPicker
+          isOpen
+          onClose={closeOverlay}
+          characterId={activeCharacter.id}
+          characterName={activeCharacter.name}
+        />
+      )}
+
+      {/* F35: Scene Replay Viewer */}
+      {activeOverlay === 'scenereplay' && (
+        <SceneReplayViewer
+          isOpen
+          onClose={closeOverlay}
+          replay={null}
         />
       )}
 

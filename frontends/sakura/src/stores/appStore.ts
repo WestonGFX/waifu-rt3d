@@ -35,6 +35,7 @@ type Overlay =
   | 'milestones' | 'intimatememories' | 'bookmarks'
   | 'intimategallery' | 'loveletter' | 'audiostories'
   | 'intimatequiz' | 'sharedfantasies'
+  | 'personapicker' | 'scenereplay'
   | null;
 
 /**

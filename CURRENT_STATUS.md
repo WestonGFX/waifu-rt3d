@@ -1,13 +1,26 @@
 # Current Project Status
 
-**Last updated:** 2026-03-31 20:52 PDT
+**Last updated:** 2026-04-01 04:15 PDT
 **Branch:** master
-**Schema version:** v64
-**Tests:** 2195 passing (backend pytest), tsc clean (frontend)
+**Schema version:** v65
+**Tests:** 2360 passing (backend pytest), tsc clean (frontend)
 
 ## Active Work
 
-**NSFW Frontend Sprint COMPLETE.** 18 UI components + 1 hook + P9/P10 context injection. All NSFW features now have both backend AND frontend.
+**Adaptive Intelligence Engine Phase A COMPLETE.** 4 new modules + schema v65 + 165 tests. Next: AIE Phase B or QA testing.
+
+## Completed This Session (Apr 1, session 5)
+
+| What | Details |
+|------|---------|
+| **A1: Context Classifier** | Rule-based 7-type conversation classification (emotional_support, casual_chat, creative_roleplay, deep_philosophical, playful_flirty, factual_qa, comfort_reassurance) + confidence scoring |
+| **A2: Dynamic Param Tuner** | Context-aware LLM sampling params replace static temperature. Engagement drift, character blending, safe ranges |
+| **A3: Extended User Model** | 11 new user_profiles columns (communication style, emotional patterns, interaction patterns) + v65 migration |
+| **A4: Personalization Gate** | 3-gate memory filter (relevance, repetition, appropriateness) with 9 sensitivity categories. Wired into context_assembler RAG path |
+| **Integration** | All 4 modules wired into server.py (streaming + non-streaming), signals.py, reflector.py, context_assembler.py |
+| **Tests** | +165 new (2360 total): 40 classifier, 38 tuner, 44 user model, 43 gate |
+| **QA Questionnaire** | `docs/testing/qa-questionnaire.html` — guided walkthrough, auto-save, Markdown export |
+| **Lines added** | ~4,200 across 15 files |
 
 ## Completed This Session (Mar 31, session 4)
 
@@ -83,16 +96,15 @@
 
 ## Next Tasks (Priority Order)
 
-1. **NSFW Frontend COMPLETE** — All 18 components + 1 hook built, wired, and passing. Ready for browser testing.
-2. **Server.py context injection for P9+P10** — Wire remaining features (clothing, negotiation, dual track, spontaneity, physical tells, recovery, soundscapes, desire arcs) into _build_prompt_sections.
-3. **Adaptive Intelligence Engine** — #1 priority new feature. Context classifier, dynamic LLM param tuning, extended user model, over-personalization gate. Spec: `docs/plans/2026-03-29-adaptive-intelligence-spec.md` (Phase A: 23-34h, Phase B: 52-72h, Phase C: 54-76h).
-4. **Bond Progression System** — #1 retention driver. Quadratic XP curve, 5-tier unlocks, milestone celebrations, bond-gated dialogue shifts. Existing v56 schema to extend. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` (42-58h, 6 phases).
-5. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. The "character feels alive" system. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h, 6 phases). Research: `docs/research/2026-03-29-humanoid-motion-research.md`.
-6. **Spring Bones 3D** — Quick win: strip Mixamo spring bone tracks + delta time clamp (1.5h). Full: capsule colliders, per-character presets, tuning UI, emotion-reactive physics. Spec: `docs/plans/2026-03-29-spring-bones-spec.md` (16.5h, 5 phases).
-7. **Jiggle Physics** — Breast/butt/thigh physics via VRM spring bones. 5 intensity tiers, per-character profiles, content-gated by NSFW mode. Spec: `docs/plans/2026-03-29-jiggle-physics-spec.md` (15-21h, 6 phases). Research: `docs/research/2026-03-29-jiggle-physics-research.md`.
-8. **Model Marketplace Expansion** — CC0 VRM catalog, drag-and-drop import, VRoid Hub API, license badges, Cubism Core auto-download. Builds on existing ModelBrowser. Spec: `docs/plans/2026-03-29-model-marketplace-spec.md` (25-32h, 6 phases).
-9. **Privacy-First Sync** — WAL checkpoint on shutdown, Syncthing + .stignore, restic encrypted backups. Spec: `docs/plans/2026-03-29-privacy-sync-spec.md` (~6h, 2 phases).
-10. **Full browser test sweep** — One big pass after all UI is built. Test list below.
+1. **AIE Phase B: Deep Learning** — Multi-session trends, Ebbinghaus memory decay, memory→behavior pipeline, self-critique loop, topic graph (v66), relationship milestones. Spec: `docs/plans/2026-03-29-adaptive-intelligence-spec.md` (Phase B: 50-68h).
+2. **QA Browser Testing** — Run `docs/testing/qa-questionnaire.html` alongside the app. Fix any issues found.
+3. **Bond Progression System** — #1 retention driver. Quadratic XP curve, 5-tier unlocks, milestone celebrations, bond-gated dialogue shifts. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` (42-58h, 6 phases).
+4. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h, 6 phases).
+5. **Spring Bones 3D** — Quick win: strip Mixamo spring bone tracks + delta time clamp (1.5h). Spec: `docs/plans/2026-03-29-spring-bones-spec.md` (16.5h, 5 phases).
+6. **Jiggle Physics** — VRM spring bones physics. Spec: `docs/plans/2026-03-29-jiggle-physics-spec.md` (15-21h, 6 phases).
+7. **Model Marketplace Expansion** — Spec: `docs/plans/2026-03-29-model-marketplace-spec.md` (25-32h, 6 phases).
+8. **Privacy-First Sync** — Spec: `docs/plans/2026-03-29-privacy-sync-spec.md` (~6h, 2 phases).
+9. **AIE Phase C: Advanced** — LoRA training pipeline, DSPy prompt optimization. Heavy, independent. Spec: same file (Phase C: 54-76h).
 
 ### Browser Test Sweep Checklist
 

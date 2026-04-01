@@ -31,6 +31,10 @@ type Overlay =
   | 'contextviewer'
   | 'boundaries'
   | 'vocabulary'
+  | 'intimatescenarios' | 'desiretree' | 'fantasyjournal'
+  | 'milestones' | 'intimatememories' | 'bookmarks'
+  | 'intimategallery' | 'loveletter' | 'audiostories'
+  | 'intimatequiz' | 'sharedfantasies'
   | null;
 
 /**

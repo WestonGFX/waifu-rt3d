@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Brain, Volume2, Palette, Shield, Image, Settings, Package, User, Monitor,
   Eye, Wrench, Lightbulb, Cpu, RefreshCw, CheckCircle, HelpCircle, ExternalLink, Wand2,
-  ChevronDown, ChevronRight, Upload, Lock
+  ChevronDown, ChevronRight, Upload, Lock, Heart
 } from 'lucide-react';
 import type { ModelCapabilities } from '../lib/api';
 import type { LayoutMode, ReplyLengthMode } from '../stores/appStore';
@@ -20,6 +20,7 @@ import { ExpressionPortraitGrid } from '../components/ExpressionPortraitGrid';
 import { LinkStatusPanel } from '../components/LinkStatusPanel';
 import { useToastStore } from '../components/ToastQueue';
 import { FormatRulesEditor } from '../components/FormatRulesEditor';
+import { NsfwSettingsTab } from '../components/NsfwSettingsTab';
 
 /* ─── Helper: deep-get nested config key like "llm.model" ──────────── */
 function cfgGet(config: Record<string, unknown>, key: string, fallback: unknown = ''): unknown {
@@ -61,7 +62,7 @@ const cardStyle: React.CSSProperties = {
 };
 
 /* ─── Tab definitions ──────────────────────────────────────────────── */
-type SettingsTab = 'general' | 'character' | 'brain' | 'voice' | 'safety' | 'aiart' | 'system' | 'tts_models' | 'lm_models';
+type SettingsTab = 'general' | 'character' | 'brain' | 'voice' | 'safety' | 'intimacy' | 'aiart' | 'system' | 'tts_models' | 'lm_models';
 
 interface TabDef {
   id: SettingsTab;
@@ -75,6 +76,7 @@ const TABS: TabDef[] = [
   { id: 'brain', label: 'Brain', icon: <Brain size={15} /> },
   { id: 'voice', label: 'Voice', icon: <Volume2 size={15} /> },
   { id: 'safety', label: 'Safety', icon: <Shield size={15} /> },
+  { id: 'intimacy', label: 'Intimacy', icon: <Heart size={15} /> },
   { id: 'aiart', label: 'AI Art', icon: <Image size={15} /> },
   { id: 'system', label: 'System', icon: <Settings size={15} /> },
   { id: 'tts_models', label: 'TTS Models', icon: <Package size={15} /> },
@@ -251,6 +253,9 @@ export function SettingsView() {
         )}
         {activeTab === 'safety' && (
           <SafetyTab config={config} save={save} cfg={cfg} />
+        )}
+        {activeTab === 'intimacy' && (
+          <NsfwSettingsTab config={config} save={save} cfg={cfg} />
         )}
         {activeTab === 'aiart' && (
           <AIArtTab config={config} save={save} cfg={cfg} />

@@ -24,6 +24,17 @@ import { MemoryBrowser } from './components/MemoryBrowser';
 import { ContextViewer } from './components/ContextViewer';
 import { BoundaryPanel } from './components/BoundaryPanel';
 import { VocabularyPanel } from './components/VocabularyPanel';
+import { IntimateScenarioBrowser } from './components/IntimateScenarioBrowser';
+import { DesireTree } from './components/DesireTree';
+import { FantasyJournal } from './components/FantasyJournal';
+import { MilestoneTimeline } from './components/MilestoneTimeline';
+import { IntimateMemoryBrowser } from './components/IntimateMemoryBrowser';
+import { SceneBookmarks } from './components/SceneBookmarks';
+import { IntimateGallery } from './components/IntimateGallery';
+import { LoveLetterModal } from './components/LoveLetterModal';
+import { AudioStoryPlayer } from './components/AudioStoryPlayer';
+import { IntimateQuizPanel } from './components/IntimateQuizPanel';
+import { SharedFantasyBuilder } from './components/SharedFantasyBuilder';
 import { GamePanel } from './components/GamePanel';
 import { ModelBrowser } from './components/ModelBrowser';
 import { PhotoModeOverlay } from './components/PhotoModeOverlay';
@@ -268,6 +279,9 @@ function MainApp() {
     { key: k('Context viewer',         'alt+c'),   action: () => openOverlay('contextviewer'),  description: 'Context viewer' },
     { key: k('Boundaries',            'alt+shift+b'), action: () => openOverlay('boundaries'),  description: 'Boundaries' },
     { key: k('Private vocabulary',    'alt+shift+v'), action: () => openOverlay('vocabulary'),  description: 'Private vocabulary' },
+    { key: k('Bookmarks',            'alt+shift+k'), action: () => openOverlay('bookmarks'),   description: 'Scene bookmarks' },
+    { key: k('Milestones',           'alt+shift+m'), action: () => openOverlay('milestones'),  description: 'Milestones timeline' },
+    { key: k('Desire tree',          'alt+shift+d'), action: () => openOverlay('desiretree'),  description: 'Desire tree' },
     { key: k('Toggle sidebar',         'ctrl+\\'), action: () => toggleSidebar(),               description: 'Toggle sidebar' },
     { key: k('Cinematic mode',         'ctrl+i'),  action: () => toggleCinematicMode(),         description: 'Cinematic mode' },
     { key: k('Show keyboard shortcuts','?'),       action: () => setShowHelp(h => !h),          description: 'Show keyboard shortcuts' },
@@ -364,6 +378,112 @@ function MainApp() {
 
       {/* Overlay drawers — Feature F30 Private Vocabulary */}
       <VocabularyPanel />
+
+      {/* ── NSFW Phase Overlays ──────────────────────────────────── */}
+
+      {/* F8: Intimate Scenario Browser */}
+      <IntimateScenarioBrowser
+        isOpen={activeOverlay === 'intimatescenarios'}
+        onClose={closeOverlay}
+      />
+
+      {/* F39: Secret Desire Tree */}
+      {activeOverlay === 'desiretree' && activeCharacter && (
+        <DesireTree
+          isOpen
+          onClose={closeOverlay}
+          characterId={activeCharacter.id}
+          characterName={activeCharacter.name}
+        />
+      )}
+
+      {/* F11: Fantasy Journal */}
+      {activeOverlay === 'fantasyjournal' && activeCharacter && (
+        <FantasyJournal
+          isOpen
+          onClose={closeOverlay}
+          characterId={activeCharacter.id}
+          characterName={activeCharacter.name}
+        />
+      )}
+
+      {/* F1: Milestone Timeline */}
+      {activeOverlay === 'milestones' && activeCharacter && (
+        <MilestoneTimeline
+          isOpen
+          onClose={closeOverlay}
+          characterId={activeCharacter.id}
+          characterName={activeCharacter.name}
+        />
+      )}
+
+      {/* F2: Intimate Memory Browser */}
+      {activeOverlay === 'intimatememories' && activeCharacter && (
+        <IntimateMemoryBrowser
+          isOpen
+          onClose={closeOverlay}
+          characterId={activeCharacter.id}
+          characterName={activeCharacter.name}
+        />
+      )}
+
+      {/* F20: Scene Bookmarks */}
+      <SceneBookmarks
+        isOpen={activeOverlay === 'bookmarks'}
+        onClose={closeOverlay}
+        characterId={activeCharacter?.id}
+        characterName={activeCharacter?.name}
+      />
+
+      {/* F42: Intimate Photo Gallery */}
+      {activeOverlay === 'intimategallery' && activeCharacter && (
+        <IntimateGallery
+          isOpen
+          onClose={closeOverlay}
+          characterId={activeCharacter.id}
+          characterName={activeCharacter.name}
+        />
+      )}
+
+      {/* F46: Love Letter Modal */}
+      {activeOverlay === 'loveletter' && activeCharacter && (
+        <LoveLetterModal
+          isOpen
+          onClose={closeOverlay}
+          characterId={activeCharacter.id}
+          characterName={activeCharacter.name}
+        />
+      )}
+
+      {/* F33: Audio Story Player */}
+      {activeOverlay === 'audiostories' && activeCharacter && (
+        <AudioStoryPlayer
+          isOpen
+          onClose={closeOverlay}
+          characterId={activeCharacter.id}
+          characterName={activeCharacter.name}
+        />
+      )}
+
+      {/* F22: Intimate Quiz Progress */}
+      {activeOverlay === 'intimatequiz' && activeCharacter && (
+        <IntimateQuizPanel
+          isOpen
+          onClose={closeOverlay}
+          characterId={activeCharacter.id}
+          characterName={activeCharacter.name}
+        />
+      )}
+
+      {/* F47: Shared Fantasy Builder */}
+      {activeOverlay === 'sharedfantasies' && activeCharacter && (
+        <SharedFantasyBuilder
+          isOpen
+          onClose={closeOverlay}
+          characterId={activeCharacter.id}
+          characterName={activeCharacter.name}
+        />
+      )}
 
       {/* Overlay drawers — Feature A2 Mini Games */}
       {activeOverlay === 'games' && activeCharacter && (

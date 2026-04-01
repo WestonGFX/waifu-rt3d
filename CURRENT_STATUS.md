@@ -7,7 +7,7 @@
 
 ## Active Work
 
-**NSFW Frontend Sprint nearly complete.** 15 UI components built + P9/P10 context injection done. Remaining: ambient atmosphere CSS (F23), persona picker overlay (F37), scene replay viewer (F35).
+**NSFW Frontend Sprint COMPLETE.** 18 UI components + 1 hook + P9/P10 context injection. All NSFW features now have both backend AND frontend.
 
 ## Completed This Session (Mar 31, session 4)
 
@@ -20,6 +20,8 @@
 | **Lines added** | 6,434 lines across 15 files |
 | **Chat toolbar** | WhisperModeToggle (F27), QuickFireToggle (F36), TemperatureMeter (F21) |
 | **P9+P10 context injection** | 7 blocks wired into server.py: Clothing, Dual Track, Negotiation, Spontaneity, Physical Tells, Recovery, Desire Arcs |
+| **Final 3 components** | useAmbientAtmosphere hook (F23), PersonaPicker (F37), SceneReplayViewer (F35) |
+| **Total** | 18 components + 1 hook, 13 overlay types, ~7,500 lines added |
 
 ## Completed This Session (Mar 28, session 3)
 
@@ -81,7 +83,7 @@
 
 ## Next Tasks (Priority Order)
 
-1. **Remaining NSFW frontend** — 15/~18 components done. Still needed: AmbientAtmosphere (F23 CSS warmth), PersonaPickerOverlay (F37), SceneReplayViewer (F35).
+1. **NSFW Frontend COMPLETE** — All 18 components + 1 hook built, wired, and passing. Ready for browser testing.
 2. **Server.py context injection for P9+P10** — Wire remaining features (clothing, negotiation, dual track, spontaneity, physical tells, recovery, soundscapes, desire arcs) into _build_prompt_sections.
 3. **Adaptive Intelligence Engine** — #1 priority new feature. Context classifier, dynamic LLM param tuning, extended user model, over-personalization gate. Spec: `docs/plans/2026-03-29-adaptive-intelligence-spec.md` (Phase A: 23-34h, Phase B: 52-72h, Phase C: 54-76h).
 4. **Bond Progression System** — #1 retention driver. Quadratic XP curve, 5-tier unlocks, milestone celebrations, bond-gated dialogue shifts. Existing v56 schema to extend. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` (42-58h, 6 phases).

@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Waifu-RT3D — QA Questionnaire</title>
+<style>
+  /* ─── Reset & Variables ────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:          #0c0c10;
+    --surface:     #131318;
+    --surface2:    #1c1c24;
+    --surface3:    #23232d;
+    --border:      #2a2a38;
+    --border2:     #363648;
+    --text:        #e2e2ee;
+    --text2:       #9898b0;
+    --text3:       #5a5a72;
+    --accent:      #a78bfa;
+    --accent-dim:  #6d4fc7;
+    --green:       #4ade80;
+    --green-dim:   #166534;
+    --yellow:      #fbbf24;
+    --yellow-dim:  #78350f;
+    --red:         #f87171;
+    --red-dim:     #7f1d1d;
+    --blue:        #60a5fa;
+    --pink:        #f472b6;
+    --mono:        'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Menlo', 'Consolas', monospace;
+    --sans:        -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --radius:      8px;
+    --radius-lg:   12px;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    min-height: 100vh;
+  }
+
+  /* ─── Sticky Header ────────────────────────────────────────────────── */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 200;
+    background: rgba(12, 12, 16, 0.94);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .header-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    white-space: nowrap;
+    letter-spacing: -0.02em;
+  }
+
+  .header-title span {
+    color: var(--text2);
+    font-weight: 400;
+  }
+
+  .progress-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .progress-track {
+    flex: 1;
+    height: 5px;
+    background: var(--surface3);
+    border-radius: 3px;
+    overflow: hidden;
+    max-width: 360px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-dim), var(--accent), var(--pink));
+    border-radius: 3px;
+    transition: width 0.35s ease;
+    width: 0%;
+  }
+
+  .progress-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    white-space: nowrap;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .btn:hover {
+    background: var(--surface3);
+    border-color: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  .btn-accent {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .btn-accent:hover {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .btn-danger {
+    border-color: #7f1d1d;
+    color: var(--red);
+  }
+
+  .btn-danger:hover {
+    background: #7f1d1d;
+    border-color: var(--red);
+    color: #fff;
+  }
+
+  /* ─── Sticky Nav ────────────────────────────────────────────────────── */
+  .nav {
+    position: sticky;
+    top: 49px;
+    z-index: 190;
+    background: rgba(12, 12, 16, 0.90);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 24px;
+    display: flex;
+    gap: 3px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav::-webkit-scrollbar { display: none; }
+
+  .nav-link {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    color: var(--text3);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+  }
+
+  .nav-link:hover {
+    color: var(--text);
+    background: var(--surface2);
+    border-color: var(--border2);
+  }
+
+  .nav-link.active {
+    color: var(--accent);
+    background: rgba(167, 139, 250, 0.12);
+    border-color: var(--accent-dim);
+  }
+
+  /* ─── Main Layout ───────────────────────────────────────────────────── */
+  .main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 28px 24px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* ─── Section Card ──────────────────────────────────────────────────── */
+  .section-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .section-card:hover { border-color: var(--border2); }
+
+  .section-card.verdict-ship   { border-left: 3px solid var(--green); }
+  .section-card.verdict-tweaks { border-left: 3px solid var(--yellow); }
+  .section-card.verdict-rethink{ border-left: 3px solid var(--red); }
+
+  /* ─── Section Header ────────────────────────────────────────────────── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+  }
+
+  .section-header:hover { background: var(--surface2); }
+
+  .section-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    min-width: 22px;
+  }
+
+  .section-title {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .section-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .section-stats {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+  }
+
+  .section-stats.has-checks { color: var(--accent); }
+
+  .verdict-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--border2);
+    color: var(--text3);
+  }
+
+  .verdict-badge.ship    { background: rgba(74, 222, 128, 0.12); border-color: var(--green-dim); color: var(--green); }
+  .verdict-badge.tweaks  { background: rgba(251, 191, 36, 0.12); border-color: var(--yellow-dim); color: var(--yellow); }
+  .verdict-badge.rethink { background: rgba(248, 113, 113, 0.12); border-color: var(--red-dim); color: var(--red); }
+
+  .chevron {
+    font-size: 12px;
+    color: var(--text3);
+    transition: transform 0.25s ease;
+    flex-shrink: 0;
+  }
+
+  .section-card.open .chevron { transform: rotate(90deg); }
+
+  /* ─── Section Body ──────────────────────────────────────────────────── */
+  .section-body {
+    display: none;
+    padding: 0 18px 18px;
+    border-top: 1px solid var(--border);
+  }
+
+  .section-card.open .section-body { display: block; }
+
+  /* ─── Check List ────────────────────────────────────────────────────── */
+  .checklist {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 14px;
+  }
+
+  .check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background 0.12s;
+    border: 1px solid transparent;
+  }
+
+  .check-item:hover { background: var(--surface2); }
+
+  .check-item.checked {
+    background: rgba(74, 222, 128, 0.06);
+    border-color: rgba(74, 222, 128, 0.15);
+  }
+
+  .check-item.failed {
+    background: rgba(248, 113, 113, 0.06);
+    border-color: rgba(248, 113, 113, 0.15);
+  }
+
+  .check-box {
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--border2);
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    transition: all 0.15s;
+  }
+
+  .check-item.checked .check-box {
+    background: var(--green);
+    border-color: var(--green);
+    color: #000;
+  }
+
+  .check-item.failed .check-box {
+    background: var(--red);
+    border-color: var(--red);
+    color: #fff;
+  }
+
+  .check-label {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .check-item.checked .check-label { color: var(--text2); text-decoration: line-through; }
+  .check-item.failed  .check-label { color: var(--red); }
+
+  .check-toggle-fail {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text3);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s;
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+
+  .check-item:hover .check-toggle-fail { opacity: 1; }
+
+  .check-item.failed .check-toggle-fail {
+    opacity: 1;
+    color: var(--red);
+    border-color: var(--red-dim);
+  }
+
+  /* ─── Rating Stars ──────────────────────────────────────────────────── */
+  .rating-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .rating-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    width: 80px;
+  }
+
+  .stars {
+    display: flex;
+    gap: 4px;
+  }
+
+  .star {
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    color: var(--border2);
+    transition: color 0.1s, transform 0.1s;
+    user-select: none;
+  }
+
+  .star:hover,
+  .star.lit { color: var(--yellow); }
+
+  .star:hover { transform: scale(1.2); }
+
+  .star.lit:hover { transform: scale(1.1); }
+
+  .rating-value {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    min-width: 30px;
+  }
+
+  /* ─── Verdict Buttons ────────────────────────────────────────────────── */
+  .verdict-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 12px;
+  }
+
+  .verdict-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    width: 80px;
+  }
+
+  .verdict-btns {
+    display: flex;
+    gap: 6px;
+  }
+
+  .verdict-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 13px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .verdict-btn:hover { border-color: var(--border2); background: var(--surface3); }
+
+  .verdict-btn[data-verdict="ship"].active    { background: rgba(74,222,128,0.15); border-color: var(--green); color: var(--green); }
+  .verdict-btn[data-verdict="tweaks"].active  { background: rgba(251,191,36,0.15); border-color: var(--yellow); color: var(--yellow); }
+  .verdict-btn[data-verdict="rethink"].active { background: rgba(248,113,113,0.15); border-color: var(--red); color: var(--red); }
+
+  /* ─── Feedback Textarea ─────────────────────────────────────────────── */
+  .feedback-row {
+    margin-top: 12px;
+  }
+
+  .feedback-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .feedback-textarea {
+    width: 100%;
+    min-height: 72px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 10px 12px;
+    resize: vertical;
+    transition: border-color 0.15s;
+    line-height: 1.55;
+  }
+
+  .feedback-textarea:focus {
+    outline: none;
+    border-color: var(--accent-dim);
+  }
+
+  .feedback-textarea::placeholder { color: var(--text3); }
+
+  /* ─── Toast ─────────────────────────────────────────────────────────── */
+  .toast {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    z-index: 999;
+    background: var(--surface3);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    padding: 12px 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    transform: translateY(80px);
+    opacity: 0;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    pointer-events: none;
+    max-width: 320px;
+  }
+
+  .toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  .toast.success { border-left: 3px solid var(--green); }
+  .toast.error   { border-left: 3px solid var(--red); }
+  .toast.info    { border-left: 3px solid var(--accent); }
+
+  /* ─── Export Modal ──────────────────────────────────────────────────── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 900;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    width: 100%;
+    max-width: 700px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--text3);
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .modal-close:hover { color: var(--text); background: var(--surface2); }
+
+  .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+  }
+
+  .export-output {
+    width: 100%;
+    min-height: 300px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 14px;
+    resize: none;
+    line-height: 1.6;
+  }
+
+  .export-output:focus { outline: none; border-color: var(--accent-dim); }
+
+  .modal-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ─── Scrollbar ─────────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+  /* ─── Info Bar ──────────────────────────────────────────────────────── */
+  .info-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 18px;
+    background: rgba(167, 139, 250, 0.06);
+    border-bottom: 1px solid rgba(167, 139, 250, 0.15);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    flex-wrap: wrap;
+    gap: 8px 20px;
+  }
+
+  .info-bar a { color: var(--accent); text-decoration: none; }
+  .info-bar a:hover { text-decoration: underline; }
+
+  .info-dot { color: var(--text3); }
+</style>
+</head>
+<body>
+
+<!-- ─── Header ──────────────────────────────────────────────────────────── -->
+<header class="header">
+  <div class="header-title">waifu-rt3d <span>/ qa</span></div>
+  <div class="progress-wrap">
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <span class="progress-label" id="progressLabel">0 / 0</span>
+  </div>
+  <div class="header-actions">
+    <button class="btn" onclick="expandAll()">expand all</button>
+    <button class="btn" onclick="collapseAll()">collapse all</button>
+    <button class="btn btn-accent" onclick="openExport()">export md</button>
+    <button class="btn btn-danger" onclick="clearAll()">reset</button>
+  </div>
+</header>
+
+<!-- ─── Quick Nav ─────────────────────────────────────────────────────────── -->
+<nav class="nav" id="sectionNav"></nav>
+
+<!-- ─── Info Bar ─────────────────────────────────────────────────────────── -->
+<div class="info-bar">
+  <span>App: <a href="http://localhost:5175/sakura/" target="_blank">localhost:5175/sakura/</a></span>
+  <span class="info-dot">·</span>
+  <span>API: <a href="http://localhost:8080/docs" target="_blank">localhost:8080/docs</a></span>
+  <span class="info-dot">·</span>
+  <span id="savedAt">auto-saves on every change</span>
+</div>
+
+<!-- ─── Main ──────────────────────────────────────────────────────────────── -->
+<main class="main" id="mainContent"></main>
+
+<!-- ─── Export Modal ──────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">markdown export</span>
+      <button class="modal-close" onclick="closeExport()">✕</button>
+    </div>
+    <div class="modal-body">
+      <textarea class="export-output" id="exportOutput" readonly></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeExport()">close</button>
+      <button class="btn btn-accent" onclick="copyExport()">copy to clipboard</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Toast ──────────────────────────────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   DATA — Feature sections and their test cases
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const SECTIONS = [
+  {
+    id: "chat-core",
+    title: "Chat Core",
+    cases: [
+      "Messages send and receive",
+      "Streaming responses render incrementally",
+      "Message history loads on character switch",
+      "Markdown renders in messages (bold, italic, code blocks)",
+      "Quick-reply chips show/hide per setting",
+    ]
+  },
+  {
+    id: "character-mgmt",
+    title: "Character Management",
+    cases: [
+      "Character list loads in sidebar",
+      "Character switching works",
+      "Character avatar displays",
+      "Character creation wizard works",
+      "Character deletion works",
+    ]
+  },
+  {
+    id: "settings-modal",
+    title: "Settings Modal",
+    cases: [
+      "All tabs render (General, LLM, Voice, Appearance, etc.)",
+      "Settings persist after page reload",
+      "Theme switching works (test 3+ themes)",
+      "Advanced/Developer tier toggle reveals extra options",
+      "Compact mode changes layout density",
+    ]
+  },
+  {
+    id: "3d-viewer",
+    title: "3D Viewer",
+    cases: [
+      "VRM model loads and renders",
+      "Idle animation plays",
+      "Expressions change with emotions",
+      "Model panel toggle works",
+      "Camera controls (orbit, zoom)",
+    ]
+  },
+  {
+    id: "voice-pipeline",
+    title: "Voice Pipeline",
+    cases: [
+      "VoiceOrb appears and is clickable",
+      "Recording starts on click",
+      "Audio plays back from TTS",
+      "Barge-in interrupts playback",
+      "Voice settings UI works",
+    ]
+  },
+  {
+    id: "nsfw-p1-3",
+    title: "NSFW Phase 1–3 (Foundation)",
+    cases: [
+      "Boundaries panel opens from settings",
+      "Writing style picker renders",
+      "Sensory vocabulary panel",
+      "Pet names configuration",
+      "Pacing mode picker",
+      "Scenario template browser",
+      "Power dynamics settings",
+    ]
+  },
+  {
+    id: "nsfw-p4-6",
+    title: "NSFW Phase 4–6 (Memory + Emotion + Voice)",
+    cases: [
+      "Milestone timeline overlay opens (Alt+Shift+M)",
+      "Intimate memory browser overlay opens",
+      "Fantasy journal overlay opens",
+      "Desire tree overlay opens",
+      "Love letter modal",
+      "Audio story player",
+    ]
+  },
+  {
+    id: "nsfw-p7-10",
+    title: "NSFW Phase 7–10 (Visual + Personalization + Advanced)",
+    cases: [
+      "Intimate gallery overlay opens",
+      "Scene bookmarks overlay (Alt+Shift+K)",
+      "Intimate quiz panel",
+      "Shared fantasy builder",
+      "Persona picker overlay",
+      "Scene replay viewer",
+      "Whisper mode toggle in chat toolbar",
+      "QuickFire toggle in chat toolbar",
+      "Temperature meter in chat toolbar",
+    ]
+  },
+  {
+    id: "overlays-panels",
+    title: "Overlays & Panels",
+    cases: [
+      "Memory browser overlay",
+      "Context viewer overlay (dev mode)",
+      "Stats overlay",
+      "Timeline overlay",
+      "Analytics overlay",
+      "Model browser overlay",
+    ]
+  },
+  {
+    id: "keyboard-shortcuts",
+    title: "Keyboard Shortcuts",
+    cases: [
+      "Escape closes overlays",
+      "Alt+Shift+K opens bookmarks",
+      "Alt+Shift+M opens milestones",
+      "Alt+Shift+D opens desires",
+      "Ctrl/Cmd+Enter sends message",
+      "Custom key bindings work",
+    ]
+  },
+  {
+    id: "themes-appearance",
+    title: "Themes & Appearance",
+    cases: [
+      "All 9 light themes render correctly",
+      "All 9 dark themes render correctly",
+      "Custom theme CSS variables apply",
+      "Theme persists across page reload",
+      "No broken colors or invisible text in any theme",
+    ]
+  },
+  {
+    id: "layout-modes",
+    title: "Layout Modes",
+    cases: [
+      "Chat-first layout",
+      "Model-first layout",
+      "Split layout",
+      "Cinematic mode (B1)",
+      "Visual Novel mode (B3)",
+      "Sidebar collapse/expand",
+    ]
+  },
+];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const STORAGE_KEY = "qa-results";
+
+/** @type {Record<string, {checks: Record<string, 'pass'|'fail'|null>, rating: number, verdict: string, notes: string}>} */
+let state = {};
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) state = JSON.parse(raw);
+  } catch (e) {
+    state = {};
+  }
+  // Ensure every section has a default record
+  SECTIONS.forEach(s => {
+    if (!state[s.id]) {
+      state[s.id] = { checks: {}, rating: 0, verdict: "", notes: "" };
+    }
+  });
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const now = new Date();
+    const t = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const el = document.getElementById("savedAt");
+    if (el) el.textContent = "last saved " + t;
+  } catch (e) {
+    showToast("Failed to save to localStorage", "error");
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PROGRESS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function getProgress() {
+  let total = 0;
+  let done  = 0;
+  SECTIONS.forEach(s => {
+    s.cases.forEach(c => {
+      total++;
+      const v = state[s.id]?.checks?.[c];
+      if (v === "pass" || v === "fail") done++;
+    });
+  });
+  return { total, done };
+}
+
+function updateProgress() {
+  const { total, done } = getProgress();
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const fill = document.getElementById("progressFill");
+  const label = document.getElementById("progressLabel");
+  if (fill)  fill.style.width  = pct + "%";
+  if (label) label.textContent = done + " / " + total + "  (" + pct + "%)";
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RENDER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function getSectionStats(sectionId, cases) {
+  const s = state[sectionId];
+  let pass = 0, fail = 0, total = cases.length;
+  cases.forEach(c => {
+    const v = s?.checks?.[c];
+    if (v === "pass") pass++;
+    if (v === "fail") fail++;
+  });
+  return { pass, fail, total };
+}
+
+function getVerdictLabel(verdict) {
+  if (verdict === "ship")    return "Ship it";
+  if (verdict === "tweaks")  return "Needs tweaks";
+  if (verdict === "rethink") return "Rethink";
+  return "";
+}
+
+function buildSection(s, idx) {
+  const sec   = state[s.id];
+  const stats = getSectionStats(s.id, s.cases);
+  const isDone = stats.pass + stats.fail === stats.total;
+
+  // Check items HTML
+  const checkItems = s.cases.map(c => {
+    const v = sec.checks[c] || null;
+    const checked = v === "pass" ? "checked" : "";
+    const failed  = v === "fail" ? "failed"  : "";
+    const icon    = v === "pass" ? "✓" : (v === "fail" ? "✕" : "");
+    const failBtnLabel = v === "fail" ? "unfail" : "mark fail";
+    return `<li class="check-item ${checked} ${failed}" onclick="toggleCheck('${s.id}','${escAttr(c)}',event)" data-case="${escAttr(c)}">
+      <span class="check-box">${icon}</span>
+      <span class="check-label">${escHtml(c)}</span>
+      <button class="check-toggle-fail" onclick="toggleFail('${s.id}','${escAttr(c)}',event)">${failBtnLabel}</button>
+    </li>`;
+  }).join("");
+
+  // Stars HTML
+  const rating = sec.rating || 0;
+  const stars  = [1,2,3,4,5].map(n =>
+    `<span class="star ${n <= rating ? "lit" : ""}" data-n="${n}" onclick="setRating('${s.id}',${n},event)" onmouseover="hoverStars('${s.id}',${n})" onmouseout="unhoverStars('${s.id}')">${n <= rating ? "★" : "☆"}</span>`
+  ).join("");
+
+  // Verdict buttons
+  const verdictBtns = [
+    { v: "ship",    label: "Ship it" },
+    { v: "tweaks",  label: "Needs tweaks" },
+    { v: "rethink", label: "Rethink" },
+  ].map(b =>
+    `<button class="verdict-btn ${sec.verdict === b.v ? "active" : ""}" data-verdict="${b.v}" onclick="setVerdict('${s.id}','${b.v}',event)">${b.label}</button>`
+  ).join("");
+
+  // Verdict badge in header
+  const vbadge = sec.verdict
+    ? `<span class="verdict-badge ${sec.verdict}">${getVerdictLabel(sec.verdict)}</span>`
+    : "";
+
+  // Stats
+  const statsClass = (stats.pass + stats.fail > 0) ? "has-checks" : "";
+  const statsText = isDone
+    ? `${stats.pass}✓ ${stats.fail}✗`
+    : `${stats.pass + stats.fail}/${stats.total}`;
+
+  // Open state
+  const openClass = (sec._open) ? "open" : "";
+
+  // Card verdict class
+  const cardVerdictClass = sec.verdict ? `verdict-${sec.verdict}` : "";
+
+  return `<div class="section-card ${openClass} ${cardVerdictClass}" id="card-${s.id}">
+    <div class="section-header" onclick="toggleSection('${s.id}')">
+      <span class="section-num">${String(idx+1).padStart(2,"0")}</span>
+      <span class="section-title">${escHtml(s.title)}</span>
+      <div class="section-meta">
+        <span class="section-stats ${statsClass}">${statsText}</span>
+        ${vbadge}
+        <span class="chevron">›</span>
+      </div>
+    </div>
+    <div class="section-body">
+      <ul class="checklist">${checkItems}</ul>
+      <div class="rating-row">
+        <span class="rating-label">quality</span>
+        <div class="stars" id="stars-${s.id}">${stars}</div>
+        <span class="rating-value" id="rval-${s.id}">${rating > 0 ? rating + "/5" : "—"}</span>
+      </div>
+      <div class="verdict-row">
+        <span class="verdict-label">verdict</span>
+        <div class="verdict-btns">${verdictBtns}</div>
+      </div>
+      <div class="feedback-row">
+        <label class="feedback-label" for="notes-${s.id}">notes</label>
+        <textarea class="feedback-textarea" id="notes-${s.id}" placeholder="Optional notes about this section..."
+          oninput="setNotes('${s.id}',this.value)">${escHtml(sec.notes || "")}</textarea>
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildNav() {
+  const nav = document.getElementById("sectionNav");
+  if (!nav) return;
+  nav.innerHTML = SECTIONS.map(s =>
+    `<a class="nav-link" href="#card-${s.id}" id="nav-${s.id}">${escHtml(s.title)}</a>`
+  ).join("");
+}
+
+function render() {
+  const main = document.getElementById("mainContent");
+  if (!main) return;
+  main.innerHTML = SECTIONS.map((s, i) => buildSection(s, i)).join("");
+  buildNav();
+  updateProgress();
+}
+
+function rerenderSection(sectionId) {
+  const idx   = SECTIONS.findIndex(s => s.id === sectionId);
+  const s     = SECTIONS[idx];
+  const card  = document.getElementById("card-" + sectionId);
+  if (!s || !card) return;
+  const newHtml = buildSection(s, idx);
+  const tmp     = document.createElement("div");
+  tmp.innerHTML = newHtml;
+  const newCard = tmp.firstElementChild;
+  card.replaceWith(newCard);
+  updateProgress();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   INTERACTIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Toggle a section open/closed.
+ * @param {string} id - Section id
+ */
+function toggleSection(id) {
+  state[id]._open = !state[id]._open;
+  const card = document.getElementById("card-" + id);
+  if (card) card.classList.toggle("open", state[id]._open);
+}
+
+/**
+ * Toggle a test case between pass (checked) and unchecked.
+ * Right-click or the "mark fail" button sets it to fail instead.
+ * @param {string} sectionId
+ * @param {string} caseKey
+ * @param {MouseEvent} event
+ */
+function toggleCheck(sectionId, caseKey, event) {
+  // Ignore if clicking the fail button
+  if (event.target.classList.contains("check-toggle-fail")) return;
+  const cur = state[sectionId].checks[caseKey] || null;
+  state[sectionId].checks[caseKey] = (cur === "pass") ? null : "pass";
+  saveState();
+  rerenderSection(sectionId);
+}
+
+/**
+ * Toggle a test case between fail and unchecked.
+ * @param {string} sectionId
+ * @param {string} caseKey
+ * @param {MouseEvent} event
+ */
+function toggleFail(sectionId, caseKey, event) {
+  event.stopPropagation();
+  const cur = state[sectionId].checks[caseKey] || null;
+  state[sectionId].checks[caseKey] = (cur === "fail") ? null : "fail";
+  saveState();
+  rerenderSection(sectionId);
+}
+
+/**
+ * Set star rating for a section.
+ * @param {string} sectionId
+ * @param {number} n - Rating 1–5
+ * @param {MouseEvent} event
+ */
+function setRating(sectionId, n, event) {
+  event.stopPropagation();
+  state[sectionId].rating = (state[sectionId].rating === n) ? 0 : n;
+  saveState();
+  rerenderSection(sectionId);
+}
+
+/**
+ * Preview star hover state.
+ * @param {string} sectionId
+ * @param {number} n
+ */
+function hoverStars(sectionId, n) {
+  const container = document.getElementById("stars-" + sectionId);
+  if (!container) return;
+  container.querySelectorAll(".star").forEach((el, i) => {
+    el.textContent = (i < n) ? "★" : "☆";
+    el.classList.toggle("lit", i < n);
+  });
+}
+
+/**
+ * Restore stars to saved state on mouseout.
+ * @param {string} sectionId
+ */
+function unhoverStars(sectionId) {
+  const rating    = state[sectionId].rating || 0;
+  const container = document.getElementById("stars-" + sectionId);
+  if (!container) return;
+  container.querySelectorAll(".star").forEach((el, i) => {
+    el.textContent = (i < rating) ? "★" : "☆";
+    el.classList.toggle("lit", i < rating);
+  });
+}
+
+/**
+ * Set verdict for a section and update card styling.
+ * @param {string} sectionId
+ * @param {string} verdict - 'ship' | 'tweaks' | 'rethink'
+ * @param {MouseEvent} event
+ */
+function setVerdict(sectionId, verdict, event) {
+  event.stopPropagation();
+  state[sectionId].verdict = (state[sectionId].verdict === verdict) ? "" : verdict;
+  saveState();
+  rerenderSection(sectionId);
+}
+
+/**
+ * Update notes for a section (debounced save).
+ * @param {string} sectionId
+ * @param {string} value
+ */
+let _notesTimer = null;
+function setNotes(sectionId, value) {
+  state[sectionId].notes = value;
+  clearTimeout(_notesTimer);
+  _notesTimer = setTimeout(() => { saveState(); }, 400);
+}
+
+/** Expand all sections. */
+function expandAll() {
+  SECTIONS.forEach(s => { state[s.id]._open = true; });
+  document.querySelectorAll(".section-card").forEach(c => c.classList.add("open"));
+}
+
+/** Collapse all sections. */
+function collapseAll() {
+  SECTIONS.forEach(s => { state[s.id]._open = false; });
+  document.querySelectorAll(".section-card").forEach(c => c.classList.remove("open"));
+}
+
+/** Clear all saved state after confirmation. */
+function clearAll() {
+  if (!confirm("Reset all QA results? This cannot be undone.")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  loadState();
+  render();
+  showToast("All results cleared.", "info");
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EXPORT
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Build a Markdown summary of all QA results. */
+function buildMarkdown() {
+  const date = new Date().toLocaleDateString("en-US", {
+    year: "numeric", month: "long", day: "numeric"
+  });
+
+  const lines = [`# QA Test Results — ${date}`, ""];
+
+  SECTIONS.forEach(s => {
+    const sec    = state[s.id];
+    const rating = sec.rating || 0;
+    const stars  = "⭐".repeat(rating) + (rating < 5 ? "☆".repeat(5 - rating) : "");
+    const vLabel = getVerdictLabel(sec.verdict) || "No verdict";
+
+    lines.push(`## ${s.title} — ${stars} — ${vLabel}`);
+
+    s.cases.forEach(c => {
+      const v = sec.checks[c] || null;
+      const mark = v === "pass" ? "x" : (v === "fail" ? "!" : " ");
+      const prefix = v === "fail" ? "~~" : "";
+      const suffix = v === "fail" ? "~~ ❌" : "";
+      lines.push(`- [${mark}] ${prefix}${c}${suffix}`);
+    });
+
+    if (sec.notes && sec.notes.trim()) {
+      lines.push("");
+      lines.push(`**Notes:** ${sec.notes.trim()}`);
+    }
+
+    lines.push("");
+  });
+
+  // Summary table
+  lines.push("---");
+  lines.push("## Summary");
+  lines.push("");
+  lines.push("| Section | Pass | Fail | Unchecked | Stars | Verdict |");
+  lines.push("|---------|------|------|-----------|-------|---------|");
+
+  SECTIONS.forEach(s => {
+    const sec  = state[s.id];
+    let pass = 0, fail = 0, empty = 0;
+    s.cases.forEach(c => {
+      const v = sec.checks[c] || null;
+      if (v === "pass")  pass++;
+      else if (v === "fail") fail++;
+      else empty++;
+    });
+    const stars = sec.rating ? "⭐".repeat(sec.rating) : "—";
+    const vl    = getVerdictLabel(sec.verdict) || "—";
+    lines.push(`| ${s.title} | ${pass} | ${fail} | ${empty} | ${stars} | ${vl} |`);
+  });
+
+  return lines.join("\n");
+}
+
+function openExport() {
+  const md = buildMarkdown();
+  const ta = document.getElementById("exportOutput");
+  if (ta) ta.value = md;
+  const overlay = document.getElementById("exportModal");
+  if (overlay) overlay.classList.add("open");
+}
+
+function closeExport() {
+  const overlay = document.getElementById("exportModal");
+  if (overlay) overlay.classList.remove("open");
+}
+
+async function copyExport() {
+  const ta = document.getElementById("exportOutput");
+  if (!ta) return;
+  try {
+    await navigator.clipboard.writeText(ta.value);
+    showToast("Copied to clipboard.", "success");
+  } catch (e) {
+    // Fallback for non-HTTPS
+    ta.select();
+    document.execCommand("copy");
+    showToast("Copied (fallback).", "success");
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+let _toastTimer = null;
+
+/**
+ * Show a temporary toast notification.
+ * @param {string} msg - The message text
+ * @param {'success'|'error'|'info'} type
+ */
+function showToast(msg, type = "info") {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  el.textContent = msg;
+  el.className   = "toast " + type + " show";
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => {
+    el.classList.remove("show");
+  }, 2800);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Escape HTML special chars. */
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Escape attribute value (for data-* / onclick string args). */
+function escAttr(s) {
+  return String(s)
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/"/g, "&quot;");
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   KEYBOARD SHORTCUTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    const overlay = document.getElementById("exportModal");
+    if (overlay && overlay.classList.contains("open")) closeExport();
+  }
+});
+
+// Close modal on backdrop click
+document.getElementById("exportModal").addEventListener("click", e => {
+  if (e.target === e.currentTarget) closeExport();
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+loadState();
+render();
+</script>
+</body>
+</html>

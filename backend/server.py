@@ -9145,9 +9145,8 @@ def get_character_analytics(char_id: int):
                 WHERE char_id = ? AND is_active = 1
                 GROUP BY session_id
             ) sub ON sub.session_id = s.id
-            WHERE s.character_id = ?
             """,
-            (char_id, char_id),
+            (char_id,),
         ).fetchone()
 
         total_sessions = depth_row[0] if depth_row else 0
@@ -16454,6 +16453,81 @@ def get_character_milestones(char_id: int):
             "milestones": timeline,
             "all_types": {k: v["bond_min"] for k, v in MILESTONE_TYPES.items()},
         }
+    finally:
+        conn.close()
+
+
+@app.get("/api/characters/{char_id}/timeline")
+def get_character_timeline(char_id: int):
+    """Return a unified relationship timeline aggregating milestones, diary entries,
+    and affinity tier unlocks into a single chronological feed.
+
+    Each event has: date (ISO), label, type ('milestone'|'affinity_unlock'|'diary'),
+    and detail (human-readable description).
+
+    Returns:
+        {"ok": True, "timeline": [{"date": "...", "label": "...", "type": "...", "detail": "..."}, ...]}
+    """
+    conn = db()
+    try:
+        events: list[dict] = []
+
+        # 1) Milestones from intimate_milestones table
+        try:
+            rows = conn.execute(
+                "SELECT milestone_type, detected_at, details FROM intimate_milestones "
+                "WHERE char_id = ? ORDER BY detected_at DESC",
+                (char_id,),
+            ).fetchall()
+            for r in rows:
+                events.append({
+                    "date": r[1][:10] if r[1] else "",
+                    "label": (r[0] or "").replace("_", " ").title(),
+                    "type": "milestone",
+                    "detail": r[2] or "",
+                })
+        except Exception:
+            pass  # Table may not exist in older schemas
+
+        # 2) Diary entries from character_diary table
+        try:
+            rows = conn.execute(
+                "SELECT entry_date, title, content FROM character_diary "
+                "WHERE char_id = ? ORDER BY entry_date DESC",
+                (char_id,),
+            ).fetchall()
+            for r in rows:
+                events.append({
+                    "date": r[0] or "",
+                    "label": r[1] or "Diary Entry",
+                    "type": "diary",
+                    "detail": (r[2] or "")[:200],
+                })
+        except Exception:
+            pass
+
+        # 3) Affinity tier unlocks — derive from relationship table
+        try:
+            row = conn.execute(
+                "SELECT affinity, tier, created_ts FROM relationships WHERE char_id = ?",
+                (char_id,),
+            ).fetchone()
+            if row:
+                tier = row[1] or "Stranger"
+                ts = row[2] or ""
+                events.append({
+                    "date": ts[:10] if ts else "",
+                    "label": f"Reached {tier} tier",
+                    "type": "affinity_unlock",
+                    "detail": f"Affinity level: {row[0]}%",
+                })
+        except Exception:
+            pass
+
+        # Sort by date descending
+        events.sort(key=lambda e: e.get("date", ""), reverse=True)
+
+        return {"ok": True, "timeline": events}
     finally:
         conn.close()
 

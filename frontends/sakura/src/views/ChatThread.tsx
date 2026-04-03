@@ -1078,8 +1078,10 @@ export function ChatThread() {
               </div>
             )}
 
-            {/* Composer row */}
-            <div className="flex items-end gap-2">
+            {/* Composer toolbar + input area */}
+            <div className="flex flex-col gap-1 w-full min-w-0">
+            {/* Toolbar row — icon buttons + badges */}
+            <div className="flex items-center gap-1 flex-wrap">
               {/* Scenario Library trigger */}
               <button
                 onClick={() => openOverlay('scenarios')}
@@ -1198,6 +1200,9 @@ export function ChatThread() {
                 <span style={{ fontSize: 9, fontWeight: 600, lineHeight: 1.2 }}>{rpLabel}</span>
               </button>
 
+            </div>
+            {/* Input row — textarea + voice + send */}
+            <div className="flex items-end gap-2 w-full min-w-0">
               {/* Text input */}
               <textarea
                 ref={textareaRef}
@@ -1225,6 +1230,7 @@ export function ChatThread() {
                     : '1px solid var(--color-border)',
                   color: 'var(--color-text-primary)',
                   overflowY: 'hidden',
+                  minWidth: 0,
                 }}
               />
 
@@ -1333,6 +1339,7 @@ export function ChatThread() {
                   <Send size={16} />
                 </button>
               )}
+            </div>
             </div>
           </div>
         </div>

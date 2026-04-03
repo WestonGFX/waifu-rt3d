@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain,
   ChevronLeft, ChevronRight, Search, Wifi, WifiOff, Pencil, BookMarked, Gamepad2, HelpCircle, Wand2, BarChart2, Cpu
@@ -406,8 +406,28 @@ export function Sidebar() {
  */
 function HelpDropdown() {
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { openSettingsTab } = useAppStore();
   const { openWizard } = useWizardStore();
+
+  // Close on Escape or click outside
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') { setOpen(false); e.stopPropagation(); }
+    }
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [open]);
 
   const items = [
     {
@@ -429,7 +449,7 @@ function HelpDropdown() {
   ];
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
         onClick={() => setOpen(!open)}
         className="sidebar-tool-btn flex items-center justify-center p-2 rounded-lg transition-colors"
@@ -442,9 +462,7 @@ function HelpDropdown() {
 
       {open && (
         <>
-          {/* Backdrop to close on click outside */}
-          <div className="fixed inset-0 z-[89]" onClick={() => setOpen(false)} />
-          {/* Dropdown (opens upward) */}
+          {/* Dropdown (opens upward) — click-outside handled by useEffect */}
           <div
             className="absolute bottom-full left-0 mb-1.5 z-[90] min-w-[160px] py-1 rounded-lg"
             style={{

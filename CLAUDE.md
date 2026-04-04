@@ -10,6 +10,12 @@ Waifu-RT3D is an **emotional AI companion platform** — not a chatbot, not a ga
 
 - **Bias heavily toward ACTION over PLANNING.** If a plan file already exists, do not rewrite it — execute it. Only create a new plan if explicitly asked. When in doubt, write code.
 
+## Working Style
+
+- **Be decisive.** When the user gives a directive, execute it broadly. Prefer action over clarification. Do not ask 3 questions when 1 will do. If the intent is 80% clear, act on it and course-correct if needed.
+- **Go deep, not shallow.** When writing plans, memory notes, research docs, or implementation specs, make them comprehensive with full context, research references, and detailed reasoning. Never produce sparse summaries unless the user explicitly asks for brevity.
+- **State constraints upfront.** Before starting complex multi-file tasks, explicitly list the architecture constraints, protected paths, and anti-patterns relevant to the work — don't discover them mid-implementation.
+
 ## Python / Venv
 
 This project uses a `.venv/` virtual environment built on **Homebrew Python 3.14**.
@@ -60,6 +66,15 @@ After implementing UI/CSS changes, always test by reading the affected component
 
 List potential side effects before committing.
 
+## Known Sensitive Areas
+
+These areas have regressed 10+ times across sessions. Extra care required:
+
+- **Avatar aspect ratio & grounding** — Changes to viewer.html camera, VRM model positioning, or canvas sizing MUST be visually verified. Never assume "the math is right" — render and check.
+- **Column resize / layout reflow** — Panel toggles, divider changes, and width calculations break frequently. Test collapsed AND expanded states.
+- **Theme color inheritance** — 18 themes (9 light / 9 dark). Any hardcoded color or `var()` change must be checked against at least 1 light and 1 dark theme.
+- **No surprise UI elements** — Never add visible UI elements (pull tabs, dividers, floating buttons, badges) without explicit user approval. These have been reverted 3+ times.
+
 ## Documentation Triggers
 
 Update **README.md** when any of the following occur:
@@ -78,13 +93,15 @@ When fixing bugs, limit changes to the minimum necessary to resolve the issue. D
 
 TypeScript, JavaScript, Python, HTML/CSS, Three.js/VRM, Electron, Vite, React 19, Zustand, FastAPI, SQLite, Playwright. Multi-machine dev: Mac M2 Pro (32GB), Windows RTX 5080 (16GB VRAM), Windows RTX 3070 (8GB VRAM). M2 Pro is the GPU floor for rendering targets.
 
-## Smoke Test Before Completion
+## Smoke Test & Phase Gates
 
 Before presenting work as done, run both checks:
 1. `.venv/bin/python -m pytest backend/tests/ -q --tb=line`
 2. `cd frontends/sakura && npx tsc --project tsconfig.app.json --noEmit`
 
 Fix any failures before reporting completion. Do NOT claim "all tests pass" without actually running them.
+
+**Phase gates:** When implementing multi-phase plans (3+ phases), run the full test suite between phases. Do not proceed to Phase N+1 with failing tests from Phase N. Compounding regressions across phases is the #1 source of painful multi-round fix cycles.
 
 ## Commit Checkpoints
 
@@ -101,6 +118,13 @@ Commit after each completed feature or sub-task. Do NOT batch multiple features 
 4. If the pivot is large enough to warrant a separate file, create a new dated file AND add a cross-reference note in the master plan (`CURRENT_STATUS.md`) pointing to it.
 
 This way, nothing that was ever planned is lost — even if the user changed their mind later.
+
+## Protected Paths
+
+- **`_BACKUP_ROOT/`** — Read-only archive. NEVER modify, delete, or move files inside this directory. Only MOVE files INTO it. This is sacred — violations have caused data loss.
+- **`app.db`** — Never edit directly. All schema changes go through `preflight.py` migrations.
+- **`.env` files** — Never commit, never overwrite without confirmation.
+- **Existing plan/research files** — Never overwrite. Always append or create new dated versions. (See Plan File Safety above.)
 
 ## Plan Hygiene
 

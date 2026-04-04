@@ -63,6 +63,27 @@ Before dispatching parallel agents, verify NO two agents touch the same file:
 
 ## Phase 3: Agent Dispatch
 
+### Model Routing — Match Claude Model to Task Complexity
+
+Specialized agents (senior-dev, ux-architect, qa-hunter, etc.) keep their roles, personas, and custom instructions unchanged. The `model` parameter on the Agent tool call controls which Claude model **powers** that agent for a specific task.
+
+**Same agent, different engine depending on the task:**
+
+| Task Complexity | Model | Prompt Style | Example |
+|----------------|-------|-------------|---------|
+| **Clear spec** — exact files, patterns, line numbers given | `model: "sonnet"` | Prescriptive | `senior-dev`: "Create `backend/gallery/manager.py` with these 3 functions, follow the pattern in `backend/mood/engine.py`" |
+| **Guided** — goals + constraints, agent finds approach | `model: "sonnet"` | Goal-oriented | `ux-architect`: "Add a collapse toggle to the right panel in ChatPanel, persist to appStore" |
+| **Ambiguous** — agent must explore, decide, and build | Default (Opus) | High-autonomy | `senior-dev`: "Refactor context_assembler to support dynamic section priorities" |
+| **Research** — reading, summarizing, analyzing | `model: "sonnet"` | What to find + where | `codebase-analyst`: "Map all files that import appStore and what they use from it" |
+| **Trivial** — number changes, 2-line fixes | `model: "haiku"` | Exact diff | `senior-dev`: "Change `0.4` to `0.32` on line 71 of chatStore.ts" |
+
+**Decision flow per dispatched agent:**
+1. Can I describe the exact change (line numbers, old→new)? → **Haiku**
+2. Can I describe the goal + files + pattern to follow? → **Sonnet**
+3. Does the agent need to explore, reason about tradeoffs, or touch large shared files? → **Opus** (default)
+
+**Integration wiring** (server.py, App.tsx, stores) is always done by self (orchestrator at Opus) — never delegated, regardless of model.
+
 ### Dispatch up to 8 agents in a single message
 
 For each agent, provide in the prompt:
@@ -71,6 +92,24 @@ For each agent, provide in the prompt:
 3. **Pattern**: "Follow the pattern in [existing file]"
 4. **Verify**: "Run pytest + tsc when done"
 5. **Boundaries**: "Do NOT modify files outside [scope]"
+6. **Model**: Set `model: "sonnet"` for scoped tasks (default for subagents)
+
+### File Ownership Declaration (MANDATORY for parallel dispatch)
+
+Every parallel agent prompt MUST include an ownership block:
+
+```
+OWNS: [files this agent may create or modify — exclusive]
+READS: [files this agent may read but NOT modify]
+```
+
+Before dispatching, verify:
+- No file appears in OWNS for more than one agent
+- Shared integration files (server.py, App.tsx, stores) are listed as READS only
+- After all agents complete, handle SHARED files yourself sequentially
+
+If you cannot cleanly partition file ownership, reduce parallelism — run
+conflicting agents sequentially instead.
 
 ### Dispatch Playbook
 
@@ -122,6 +161,22 @@ After each agent batch:
 2. `cd frontends/sakura && npx tsc --project tsconfig.app.json --noEmit` — must be clean
 3. If both pass → commit (one commit per logical unit, not per agent)
 4. If either fails → fix before continuing
+
+### Self-Healing Mode (default behavior)
+
+When tests fail after an agent batch:
+1. Read the failing test output carefully
+2. Diagnose the root cause (don't guess — read the code)
+3. Fix the issue yourself (don't re-dispatch an agent for small fixes)
+4. Re-run tests
+5. Repeat up to 3 times per failure
+
+If 3 consecutive fix attempts fail on the same issue:
+- Write a diagnosis to a `BLOCKED.md` note (file path, error, what was tried)
+- Skip the failing area and continue with independent tasks
+- Report the blocker at the next milestone
+
+**Never ask the user for help with test failures** unless explicitly stuck after 3 attempts (the hypothesis limit applies here too).
 
 ## Phase 5: Integration (Always Sequential)
 

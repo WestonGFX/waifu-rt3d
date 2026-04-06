@@ -3,7 +3,8 @@
     "defaultMode": "auto"
   },
   "enabledMcpjsonServers": [
-    "insforge"
+    "insforge",
+    "sqlite"
   ],
   "outputStyle": "Explanatory",
   "hooks": {

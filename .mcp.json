@@ -10,6 +10,22 @@
         "API_KEY": "ik_df4dbe92616f5a35ead193bd03173cd1",
         "API_BASE_URL": "https://pxsi7w8r.us-east.insforge.app"
       }
+    },
+    "sqlite": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-sqlite",
+        "--db-path",
+        "backend/storage/app.db",
+        "--read-only"
+      ]
+    },
+    "waifu-rt3d-api": {
+      "command": ".venv/bin/python",
+      "args": [
+        "-m",
+        "backend.mcp_bridge"
+      ]
     }
   }
 }

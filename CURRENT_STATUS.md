@@ -1,13 +1,55 @@
 # Current Project Status
 
-**Last updated:** 2026-04-02 PDT (session 6)
+**Last updated:** 2026-04-06 16:00 PDT
 **Branch:** master
-**Schema version:** v65
-**Tests:** 2360 passing (backend pytest), tsc clean (frontend)
+**Schema version:** v66
+**Tests:** 2474 passing (backend pytest), tsc clean (frontend)
+**Automation:** 11 agents, 24 skills, 6 rules, 8 hooks, 3 MCP servers
 
 ## Active Work
 
-**QA Bug Fix Sprint in progress.** Phases 1-7 tested, 4 of 6 P0/P1 bugs fixed. Next: restart server, continue QA Phases 8-16, then AIE Phase B.
+**AIE Phase B complete.** Next: QA Phases 8-16, then AIE Phase C (future).
+
+## Completed This Session (Apr 6, session 9 — AIE Phase B)
+
+| What | Details |
+|------|---------|
+| **B1: Trend Analyzer** | `backend/adaptive/trend_analyzer.py` — EMA + linear regression over preference_history, engagement pattern detection |
+| **B2: Memory Decay** | `backend/memory/decay.py` — Ebbinghaus forgetting curve, recall reinforcement, decay passes |
+| **B3: Memory→Behavior** | `backend/adaptive/memory_behavior.py` — 4-channel behavioral derivation (emotional, priming, references, continuity) |
+| **B4: Self-Critique** | `backend/adaptive/self_critique.py` — LLM self-review on engagement regression |
+| **B5: Topic Graph** | `backend/adaptive/topic_graph.py` — TF-IDF extraction, sentiment tracking, emerging detection |
+| **B6: Milestones** | `backend/adaptive/milestones.py` — 10-type relationship milestone detection |
+| **Schema v66** | Memory decay columns + topic_tracking table + relationship_milestones table |
+| **Integration** | B1+B6→reflector, B2→tiered_memory, B3→context_assembler, B4→reflector, B5→signals |
+| **5 API endpoints** | GET trends, POST decay-pass, GET topics, GET milestones, POST self-critique |
+| **Tests** | +114 new (2474 total): 20 trend, 20 decay, 19 topic, 17 milestone, 15 behavior, 23 critique |
+
+## Completed This Session (Apr 6, session 8 — Release Testing & Automation Deep Dive)
+
+| What | Details |
+|------|---------|
+| **/release-test skill** | Browser acceptance testing via Chrome computer-use. 5 user personas, 3 tiers (--major/--minor/--quick) |
+| **Automation analysis** | 31 recommendations across 6 categories from 3-agent parallel research (30+ web sources) |
+| **4 new hooks** | SessionStart context inject, Stop desktop notification, _BACKUP_ROOT hard-block, Biome TS/TSX format |
+| **FastMCP API bridge** | `backend/mcp_bridge.py` — 12 API endpoints as native MCP tools |
+| **SQLite MCP** | Read-only direct DB access via mcp-server-sqlite |
+| **3 new skills** | /vrm-animation, /new-component, /diff-impact |
+| **2 new agents** | frontend-tester (Vitest/RTL), theme-auditor (CSS variable audit) |
+| **2 new rules** | preflight-migrations (chain safety), testing-conventions (7 patterns) |
+| **Biome config** | `frontends/sakura/biome.json` — TS/TSX auto-format on every edit |
+
+## Completed This Session (Apr 4, session 7 — Claude Code setup)
+
+| What | Details |
+|------|---------|
+| **14 Claude Code improvements** | Applied all recommendations from /insights report (57 sessions, 611h analyzed) |
+| **New skills (3)** | `/handoff` (session save), `/pre-session` (health check), `/qa-sweep` (parallel QA) |
+| **New agent** | `perf-reviewer` — Three.js/VRM + Python + React performance review |
+| **New hooks** | Pre-commit blocking (pytest + tsc), path-scoped rules (4 files) |
+| **CLAUDE.md sections (4)** | Working Style, Known Sensitive Areas, Phase Gate Testing, Protected Paths |
+| **/go upgrades** | Model routing (Haiku/Sonnet/Opus), OWNS/READS file ownership, self-healing test loop |
+| **/research-to-action** | TDD test scaffolding + autonomous implementation pipeline |
 
 ## Completed This Session (Apr 1, session 5)
 
@@ -96,7 +138,7 @@
 
 ## Next Tasks (Priority Order)
 
-1. **AIE Phase B: Deep Learning** — Multi-session trends, Ebbinghaus memory decay, memory→behavior pipeline, self-critique loop, topic graph (v66), relationship milestones. Spec: `docs/plans/2026-03-29-adaptive-intelligence-spec.md` (Phase B: 50-68h).
+1. ~~**AIE Phase B: Deep Learning**~~ ✅ DONE — 6 modules, v66, 114 tests. Commit `02529cd`.
 2. **QA Browser Testing** — Run `docs/testing/qa-questionnaire.html` alongside the app. Fix any issues found.
 3. **Bond Progression System** — #1 retention driver. Quadratic XP curve, 5-tier unlocks, milestone celebrations, bond-gated dialogue shifts. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` (42-58h, 6 phases).
 4. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h, 6 phases).

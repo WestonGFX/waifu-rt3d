@@ -103,6 +103,33 @@ Fix any failures before reporting completion. Do NOT claim "all tests pass" with
 
 **Phase gates:** When implementing multi-phase plans (3+ phases), run the full test suite between phases. Do not proceed to Phase N+1 with failing tests from Phase N. Compounding regressions across phases is the #1 source of painful multi-round fix cycles.
 
+## Release Testing
+
+The testing pyramid for this project has three tiers. The bottom two (pytest + tsc) run on every commit via the pre-commit hook. The top tier — browser acceptance testing — is reserved for releases.
+
+| Tier | Trigger | Skill | Duration |
+|------|---------|-------|----------|
+| **Smoke** | Every commit (automatic) | Pre-commit hook | ~20s |
+| **Regression** | Minor version, small feature PRs | `/release-test --minor` | 10-15 min |
+| **Full Release** | Major version, large milestone completion | `/release-test --major` | 30-60 min |
+
+**When to suggest `/release-test`:**
+- User says "release", "ship", "deploy", "version bump", "cut a release", "ready to ship"
+- Final phase of a major plan is marked complete (3+ phases)
+- Before running `npx vite build --mode production` or Electron packaging
+- Before creating a git tag (`git tag v*`)
+
+**When to use `--minor` vs `--major`:**
+- `--major`: New features, schema migrations, UI overhauls, 100+ lines changed in frontend
+- `--minor`: Bug fixes, config changes, backend-only changes, <100 lines changed in frontend
+- `--quick`: Refactors with no user-facing changes, dependency updates
+
+**Rules:**
+- All automated tests (pytest + tsc) MUST pass before browser testing begins
+- Critical and Major issues from `/release-test` MUST be fixed before release
+- The release test report (`docs/testing/release-test-*.md`) serves as release documentation
+- Do NOT run `/release-test --major` as part of normal development — it's expensive
+
 ## Commit Checkpoints
 
 Commit after each completed feature or sub-task. Do NOT batch multiple features into one commit. Small, atomic commits prevent work loss on interruption and make rollback easier.

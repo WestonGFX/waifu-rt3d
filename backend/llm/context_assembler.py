@@ -248,6 +248,59 @@ def assemble_context(
         except Exception:
             pass  # RAG unavailable — degrade gracefully
 
+    # ── 4c½. AIE B3: Memory-driven behavior block ─────────────────
+    memory_behavior_text = ""
+    if semantic_messages:
+        try:
+            from backend.adaptive.memory_behavior import (  # noqa: PLC0415
+                derive_behavior_from_memories,
+                build_memory_behavior_block,
+            )
+            # Reconstruct memory dicts for the behavior pipeline
+            _behavior_mems = [
+                {"text": m["content"].removeprefix("[Memory] "),
+                 "tier": 2, "salience": 0.5, "role": "system",
+                 "created_at": ""}
+                for m in semantic_messages
+            ]
+            # Load user profile for preference-aware priming
+            _profile_row = None
+            try:
+                _profile_row = cur.execute(
+                    "SELECT * FROM user_profiles WHERE char_id = ?",
+                    (char_id,),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                pass
+            _user_profile = (
+                dict(zip([d[0] for d in cur.description], _profile_row))
+                if _profile_row and cur.description else {}
+            )
+            # Detect context type from latest engagement signal
+            _ctx_type = "casual_chat"
+            try:
+                _ctx_row = cur.execute(
+                    "SELECT detected_context FROM engagement_signals "
+                    "WHERE char_id = ? ORDER BY id DESC LIMIT 1",
+                    (char_id,),
+                ).fetchone()
+                if _ctx_row and _ctx_row[0]:
+                    _ctx_type = _ctx_row[0]
+            except sqlite3.OperationalError:
+                pass
+            _behavior = derive_behavior_from_memories(
+                _behavior_mems, _user_profile, _ctx_type,
+            )
+            memory_behavior_text = build_memory_behavior_block(_behavior)
+            if memory_behavior_text:
+                mb_cost = count_tokens(memory_behavior_text) + 4
+                if mb_cost <= available:
+                    available -= mb_cost
+                else:
+                    memory_behavior_text = ""  # Drop if budget exhausted
+        except Exception:
+            pass  # B3 not available — degrade gracefully
+
     # ── 4d. Game memory (lowest priority — injected last, dropped first) ──
     game_memory_text = ""
     try:
@@ -326,6 +379,10 @@ def assemble_context(
     # Semantic RAG memories
     if semantic_messages:
         assembled.extend(semantic_messages)
+
+    # AIE B3: Memory-driven behavior instructions
+    if memory_behavior_text:
+        assembled.append({"role": "system", "content": memory_behavior_text})
 
     # Game memory (low priority — appears before recent chat for context)
     if game_memory_text:

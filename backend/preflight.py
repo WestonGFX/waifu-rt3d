@@ -4328,6 +4328,105 @@ def migrate_to_v65(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v66(con: sqlite3.Connection) -> bool:
+    """v65 → v66: AIE Phase B — Memory decay, topic graph, relationship milestones.
+
+    Adds Ebbinghaus memory decay columns to ``memories`` table, creates
+    ``topic_tracking`` table for interest tracking with sentiment, and
+    creates ``relationship_milestones`` table for detecting meaningful
+    relationship events.
+
+    Args:
+        con: Active SQLite connection.
+
+    Returns:
+        True on success, False if schema is already at v66 or higher.
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> con.execute("CREATE TABLE schema_version (version INTEGER)")
+        <...>
+        >>> con.execute("INSERT INTO schema_version VALUES (65)")
+        <...>
+        >>> migrate_to_v66(con)
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 66:
+        return False
+
+    try:
+        # --- Memory decay columns on memories table ---
+        for col, col_type, default in [
+            ("importance", "REAL", "0.5"),
+            ("recall_count", "INTEGER", "0"),
+            ("last_recalled_at", "TEXT", "NULL"),
+            ("decay_score", "REAL", "1.0"),
+        ]:
+            try:
+                con.execute(
+                    f"ALTER TABLE memories ADD COLUMN {col} {col_type} DEFAULT {default}"
+                )
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+        # Index for efficient decay-based retrieval
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_memories_decay ON memories(decay_score)"
+        )
+
+        # --- Topic tracking table ---
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS topic_tracking (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id         INTEGER NOT NULL,
+                topic           TEXT NOT NULL,
+                mention_count   INTEGER DEFAULT 1,
+                total_sentiment REAL DEFAULT 0.0,
+                avg_sentiment   REAL DEFAULT 0.0,
+                first_seen_at   TEXT DEFAULT (datetime('now')),
+                last_seen_at    TEXT DEFAULT (datetime('now')),
+                is_emerging     INTEGER DEFAULT 0,
+                UNIQUE(char_id, topic)
+            )
+        """)
+
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_topic_tracking_char "
+            "ON topic_tracking(char_id, mention_count DESC)"
+        )
+
+        # --- Relationship milestones table ---
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS relationship_milestones (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id     INTEGER NOT NULL,
+                milestone   TEXT NOT NULL,
+                description TEXT,
+                detected_at TEXT DEFAULT (datetime('now')),
+                UNIQUE(char_id, milestone)
+            )
+        """)
+
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_milestones_char "
+            "ON relationship_milestones(char_id, detected_at DESC)"
+        )
+
+        # Bump version
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (66)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v66 migration complete "
+            "(memory decay + topic tracking + relationship milestones)"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v66 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -4819,21 +4918,29 @@ def ensure_db():
             if migrate_to_v65(con):
                 version = 65
 
+        if version < 66:
+            logger.info("Upgrading database schema from v65 to v66...")
+            logger.info("  - AIE-B: Memory decay columns on memories")
+            logger.info("  - AIE-B: topic_tracking table")
+            logger.info("  - AIE-B: relationship_milestones table")
+            if migrate_to_v66(con):
+                version = 66
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 65:
-            raise RuntimeError(f"Database initialization failed: Expected v65, got v{final_version}")
+        if final_version < 66:
+            raise RuntimeError(f"Database initialization failed: Expected v66, got v{final_version}")
 
-        if final_version > 65:
-            logger.warning(f"Database is newer than application (v{final_version} > v65). Some features might be unused.")
+        if final_version > 66:
+            logger.warning(f"Database is newer than application (v{final_version} > v66). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v64 adds NSFW Phase 7+8 tables)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v66 adds AIE Phase B tables)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

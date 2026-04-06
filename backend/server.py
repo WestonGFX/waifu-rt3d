@@ -1985,6 +1985,159 @@ def get_behavior_modifiers(char_id: int):
         con.close()
 
 
+# --- AIE Phase B: Adaptive Intelligence Engine — Deep Learning endpoints ---
+
+
+@app.get("/api/adaptive/trends/{char_id}")
+def get_preference_trends(char_id: int, days: int = 14):
+    """Return preference trend analysis for a character.
+
+    Computes direction (rising/falling/stable), velocity, and confidence
+    for each preference dimension over the specified window.
+
+    Args:
+        char_id: Character ID.
+        days: Lookback window in days (default 14).
+
+    Returns:
+        Dict mapping preference dimension to trend info, plus a
+        natural-language summary.
+    """
+    from backend.adaptive.trend_analyzer import (
+        compute_preference_trends,
+        detect_engagement_pattern,
+        generate_trend_summary,
+    )
+
+    con = db()
+    try:
+        trends = compute_preference_trends(char_id, con, window_days=days)
+        engagement = detect_engagement_pattern(char_id, con)
+        summary = generate_trend_summary(trends)
+        return {
+            "trends": trends,
+            "engagement_pattern": engagement,
+            "summary": summary,
+        }
+    finally:
+        con.close()
+
+
+@app.post("/api/memory/decay-pass")
+def trigger_decay_pass(prune_threshold: float = 0.05):
+    """Run a full Ebbinghaus memory decay pass.
+
+    Updates decay scores for all memories and archives those below
+    the prune threshold.
+
+    Args:
+        prune_threshold: Memories with retention below this are archived.
+
+    Returns:
+        Dict with updated and pruned counts.
+    """
+    from backend.memory.decay import run_decay_pass
+
+    con = db()
+    try:
+        result = run_decay_pass(con, prune_threshold=prune_threshold)
+        return result
+    finally:
+        con.close()
+
+
+@app.get("/api/adaptive/topics/{char_id}")
+def get_tracked_topics(char_id: int, limit: int = 20):
+    """Return tracked topics with sentiment and emerging flags.
+
+    Args:
+        char_id: Character ID.
+        limit: Maximum topics to return (default 20).
+
+    Returns:
+        Dict with topics list, emerging topics, and affinities.
+    """
+    from backend.adaptive.topic_graph import (
+        get_emerging_topics,
+        get_topic_affinities,
+        build_topic_context_block,
+    )
+
+    con = db()
+    try:
+        con.row_factory = sqlite3.Row
+        # All topics
+        rows = con.execute(
+            "SELECT topic, mention_count, avg_sentiment, is_emerging, "
+            "first_seen_at, last_seen_at FROM topic_tracking "
+            "WHERE char_id = ? ORDER BY mention_count DESC LIMIT ?",
+            (char_id, limit),
+        ).fetchall()
+        topics = [dict(r) for r in rows]
+
+        emerging = get_emerging_topics(char_id, con, limit=5)
+        affinities = get_topic_affinities(char_id, con)
+        context_block = build_topic_context_block(char_id, con)
+
+        return {
+            "topics": topics,
+            "emerging": emerging,
+            "affinities": affinities,
+            "context_block": context_block,
+        }
+    except sqlite3.OperationalError:
+        return {"topics": [], "emerging": [], "affinities": {}, "context_block": ""}
+    finally:
+        con.close()
+
+
+@app.get("/api/adaptive/milestones/{char_id}")
+def get_relationship_milestones(char_id: int):
+    """Return all achieved relationship milestones for a character.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        Dict with milestones list and context block.
+    """
+    from backend.adaptive.milestones import get_milestones, build_milestone_context
+
+    con = db()
+    try:
+        milestones = get_milestones(char_id, con)
+        context = build_milestone_context(char_id, con)
+        return {
+            "milestones": milestones,
+            "context_block": context,
+        }
+    finally:
+        con.close()
+
+
+@app.post("/api/adaptive/self-critique/{char_id}")
+async def trigger_self_critique(char_id: int):
+    """Manually trigger a self-critique pass for a character.
+
+    Runs only if engagement regression is detected. Returns the
+    critique result with improvements, strengths, and applied
+    style adjustments.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        Critique result dict or {"skipped": true} if no regression.
+    """
+    from backend.adaptive.self_critique import run_self_critique
+
+    cfg = load_config()
+    result = await run_self_critique(char_id, str(DB_PATH), cfg)
+    if result is None:
+        return {"skipped": True, "reason": "No engagement regression detected"}
+    return result
+
+
 @app.get("/api/frontend")
 async def get_frontend_info():
     """Return current frontend setting and available frontends.

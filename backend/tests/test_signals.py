@@ -106,6 +106,7 @@ class TestCollectTurnSignals:
             "intimacy_delta",
             "turn_number",
             "detected_context",
+            "_user_msg_text",
         }
         result = collect_turn_signals(
             user_msg="Hello there",

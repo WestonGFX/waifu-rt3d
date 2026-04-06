@@ -252,6 +252,8 @@ def collect_turn_signals(
         "intimacy_delta": intimacy_delta,
         "turn_number": turn_number,
         "detected_context": detected_context,
+        # AIE B5: Raw text for topic extraction in save_signals (not persisted)
+        "_user_msg_text": user_msg,
     }
 
 
@@ -352,6 +354,19 @@ def save_signals(
         emoji_count, question_count, exclamation_count,
         sentiment_score, topic_drift, intimacy_delta
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+
+    # AIE B5: Extract and track topics from user message
+    try:
+        from backend.adaptive.topic_graph import (  # noqa: PLC0415
+            extract_topics,
+            update_topic_tracking,
+        )
+        _topics = extract_topics(signals.get("_user_msg_text", ""))
+        if _topics:
+            _sentiment = signals.get("sentiment_score", 0.0)
+            update_topic_tracking(char_id, _topics, _sentiment, conn)
+    except Exception as _topic_err:
+        logger.debug("save_signals: topic tracking skipped: %s", _topic_err)
 
     try:
         # AIE A1: Try including detected_context column (v65+), fall back to base

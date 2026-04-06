@@ -684,4 +684,67 @@ async def run_reflection(
         char_id,
         (reflection_memo[:80] + "...") if len(reflection_memo) > 80 else reflection_memo,
     )
+
+    # --- AIE B1: Multi-session trend analysis (runs after reflection) ---
+    try:
+        from backend.adaptive.trend_analyzer import (  # noqa: PLC0415
+            compute_preference_trends,
+            generate_trend_summary,
+        )
+
+        def _run_trend_analysis() -> str:
+            con_t = sqlite3.connect(db_path)
+            try:
+                trends = compute_preference_trends(char_id, con_t, window_days=14)
+                return generate_trend_summary(trends)
+            finally:
+                con_t.close()
+
+        trend_summary = await loop.run_in_executor(None, _run_trend_analysis)
+        if trend_summary:
+            result["trend_summary"] = trend_summary
+            logger.debug(
+                "run_reflection: trend summary for char_id=%d: %s",
+                char_id, trend_summary[:100],
+            )
+    except Exception as _trend_err:
+        logger.debug("run_reflection: trend analysis skipped: %s", _trend_err)
+
+    # --- AIE B6: Check relationship milestones after reflection ---
+    try:
+        from backend.adaptive.milestones import check_milestones  # noqa: PLC0415
+
+        def _check_milestones() -> list:
+            con_m = sqlite3.connect(db_path)
+            try:
+                return check_milestones(char_id, con_m)
+            finally:
+                con_m.close()
+
+        new_milestones = await loop.run_in_executor(None, _check_milestones)
+        if new_milestones:
+            result["new_milestones"] = new_milestones
+            logger.info(
+                "run_reflection: %d new milestones for char_id=%d: %s",
+                len(new_milestones), char_id,
+                [m["milestone"] for m in new_milestones],
+            )
+    except Exception as _ms_err:
+        logger.debug("run_reflection: milestone check skipped: %s", _ms_err)
+
+    # --- AIE B4: Self-critique when engagement is declining ---
+    try:
+        from backend.adaptive.self_critique import run_self_critique  # noqa: PLC0415
+
+        critique_result = await run_self_critique(char_id, db_path, llm_config)
+        if critique_result:
+            result["self_critique"] = critique_result
+            logger.info(
+                "run_reflection: self-critique for char_id=%d — %d improvements found",
+                char_id,
+                len(critique_result.get("improvements", [])),
+            )
+    except Exception as _crit_err:
+        logger.debug("run_reflection: self-critique skipped: %s", _crit_err)
+
     return result

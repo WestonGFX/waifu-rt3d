@@ -308,6 +308,9 @@ class TieredMemoryManager:
                         "timestamp": None,
                     })
 
+                # AIE B2: Apply Ebbinghaus decay re-ranking
+                results = _apply_decay_reranking(results, con)
+
                 # Apply per-tier limits to prevent old T3 memories dominating
                 if not tier_filter:
                     results = _apply_tier_limits(results, k)
@@ -615,6 +618,70 @@ class TieredMemoryManager:
 # ---------------------------------------------------------------------------
 # Internal helper
 # ---------------------------------------------------------------------------
+
+def _apply_decay_reranking(
+    results: list[dict], con: sqlite3.Connection,
+) -> list[dict]:
+    """Re-rank search results using Ebbinghaus retention scoring.
+
+    Blends vector similarity (60%) with memory retention (40%) to produce
+    a composite ranking.  Older, unreinforced memories naturally fade,
+    while frequently recalled memories stay prominent.
+
+    Also calls ``reinforce_memory`` for each result so that retrieved
+    memories resist future decay.
+
+    Args:
+        results: Memory dicts with ``id``, ``dist``, ``created_at`` keys.
+        con: Open SQLite connection for decay column reads.
+
+    Returns:
+        Same list with ``dist`` values adjusted by retention.
+    """
+    try:
+        from backend.memory.decay import compute_retention, reinforce_memory
+
+        now = time.time()
+        for mem in results:
+            mid = int(mem["id"])
+            # Read decay columns (v66+)
+            try:
+                row = con.execute(
+                    "SELECT importance, recall_count, created_at "
+                    "FROM memories WHERE id = ?",
+                    (mid,),
+                ).fetchone()
+                if row:
+                    importance = row[0] if row[0] is not None else 0.5
+                    recall_count = row[1] if row[1] is not None else 0
+                    created_str = row[2]
+                    # Parse created_at to compute days elapsed
+                    days = 0.0
+                    if created_str:
+                        try:
+                            from datetime import datetime
+                            dt = datetime.fromisoformat(created_str)
+                            days = (now - dt.timestamp()) / 86400.0
+                        except Exception:
+                            days = 1.0
+                    retention = compute_retention(importance, days, recall_count)
+                    # Blend: similarity score (60%) + retention (40%)
+                    # Lower dist = better, so we subtract retention bonus
+                    similarity = max(0.0, 1.0 - mem["dist"])
+                    blended = similarity * 0.6 + retention * 0.4
+                    mem["dist"] = max(0.0, 1.0 - blended)
+                    mem["distance"] = mem["dist"]
+                    mem["retention"] = retention
+
+                    # Reinforce: this memory was retrieved
+                    reinforce_memory(mid, con)
+            except sqlite3.OperationalError:
+                pass  # Decay columns not yet available (pre-v66)
+    except ImportError:
+        pass  # decay module not available
+
+    return results
+
 
 def _apply_tier_limits(results: list[dict], total_k: int) -> list[dict]:
     """Apply per-tier result quotas to prevent any single tier from dominating.

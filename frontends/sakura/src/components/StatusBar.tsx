@@ -380,7 +380,7 @@ export function StatusBar({
         })()}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="char-name-display truncate" style={{ color: 'var(--color-text-primary)', fontSize: '1rem' }}>
+            <span className="char-name-display truncate" title={character.name} style={{ color: 'var(--color-text-primary)', fontSize: '1rem' }}>
               {character.name}
             </span>
             <span

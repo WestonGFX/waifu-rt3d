@@ -267,6 +267,19 @@ export function GlobalSearchPanel() {
     }
   }, [open]);
 
+  // Close panel on Escape key.
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        closeOverlay();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, closeOverlay]);
+
   // Reset state when panel closes.
   useEffect(() => {
     if (!open) {

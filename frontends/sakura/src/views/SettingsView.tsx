@@ -4443,15 +4443,16 @@ function AIArtTab({ save, cfg }: TabProps) {
  */
 function PerformanceStatsSection() {
   const [motionStats, setMotionStats] = useState<{
-    connected: boolean;
+    remote_connected: boolean;
     remote_url: string | null;
-    backend_name: string | null;
-    requests_total: number;
-    requests_ok: number;
-    avg_latency_ms: number | null;
-    last_latency_ms: number | null;
+    remote_backend: string | null;
+    remote_requests_ok: number;
+    remote_requests_failed: number;
+    remote_latency_ms: number | null;
     remote_avg_latency_ms: number | null;
-    remote_p95_latency_ms: number | null;
+    remote_server_stats: Record<string, unknown> | null;
+    local_backend: string;
+    models_dir: string;
   } | null>(null);
   const [viewFps, setViewFps] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -4521,14 +4522,14 @@ function PerformanceStatsSection() {
             <div style={statRow}>
               <span style={labelStyle}>Animation Backend</span>
               <span style={{ ...valStyle, color: 'var(--color-text-primary)' }}>
-                {motionStats?.connected && motionStats.remote_url
-                  ? `Remote GPU (${motionStats.backend_name ?? 'procedural'})`
-                  : motionStats?.backend_name ?? 'procedural'}
+                {motionStats?.remote_connected && motionStats.remote_url
+                  ? `Remote GPU (${motionStats.remote_backend ?? 'procedural'})`
+                  : motionStats?.local_backend ?? 'procedural'}
               </span>
             </div>
 
             {/* Remote URL (if connected) */}
-            {motionStats?.connected && motionStats.remote_url && (
+            {motionStats?.remote_connected && motionStats.remote_url && (
               <div style={statRow}>
                 <span style={labelStyle}>GPU Server</span>
                 <span style={{ ...valStyle, fontSize: '0.7rem', color: 'var(--color-success, #39c96e)', fontFamily: 'var(--font-mono, monospace)' }}>
@@ -4537,28 +4538,30 @@ function PerformanceStatsSection() {
               </div>
             )}
 
-            {/* Avg latency (local proxy) */}
+            {/* Avg latency (remote) */}
             <div style={statRow}>
               <span style={labelStyle}>Avg Animation Latency</span>
-              <span style={{ ...valStyle, color: latencyColor(motionStats?.avg_latency_ms ?? null) }}>
-                {motionStats?.avg_latency_ms != null ? `${motionStats.avg_latency_ms} ms` : '—'}
+              <span style={{ ...valStyle, color: latencyColor(motionStats?.remote_avg_latency_ms ?? null) }}>
+                {motionStats?.remote_avg_latency_ms != null ? `${motionStats.remote_avg_latency_ms} ms` : '—'}
               </span>
             </div>
 
-            {/* Last latency */}
+            {/* Last latency (remote) */}
             <div style={statRow}>
               <span style={labelStyle}>Last Animation Latency</span>
-              <span style={{ ...valStyle, color: latencyColor(motionStats?.last_latency_ms ?? null) }}>
-                {motionStats?.last_latency_ms != null ? `${motionStats.last_latency_ms} ms` : '—'}
+              <span style={{ ...valStyle, color: latencyColor(motionStats?.remote_latency_ms ?? null) }}>
+                {motionStats?.remote_latency_ms != null ? `${motionStats.remote_latency_ms} ms` : '—'}
               </span>
             </div>
 
-            {/* Remote server p95 (shown only when connected) */}
-            {motionStats?.connected && (
+            {/* Remote server stats (shown only when connected) */}
+            {motionStats?.remote_connected && motionStats.remote_server_stats && (
               <div style={statRow}>
-                <span style={labelStyle}>GPU Server p95 Latency</span>
-                <span style={{ ...valStyle, color: latencyColor(motionStats?.remote_p95_latency_ms ?? null) }}>
-                  {motionStats?.remote_p95_latency_ms != null ? `${motionStats.remote_p95_latency_ms} ms` : '—'}
+                <span style={labelStyle}>GPU Server Uptime</span>
+                <span style={{ ...valStyle, color: 'var(--color-text-primary)' }}>
+                  {(motionStats.remote_server_stats as Record<string, unknown>).uptime_s != null
+                    ? `${Math.round(Number((motionStats.remote_server_stats as Record<string, unknown>).uptime_s) / 60)}m`
+                    : '—'}
                 </span>
               </div>
             )}
@@ -4568,7 +4571,7 @@ function PerformanceStatsSection() {
               <span style={labelStyle}>Animation Requests</span>
               <span style={{ ...valStyle, color: 'var(--color-text-primary)' }}>
                 {motionStats
-                  ? `${motionStats.requests_ok} / ${motionStats.requests_total} ok`
+                  ? `${motionStats.remote_requests_ok} / ${motionStats.remote_requests_ok + motionStats.remote_requests_failed} ok`
                   : '—'}
               </span>
             </div>

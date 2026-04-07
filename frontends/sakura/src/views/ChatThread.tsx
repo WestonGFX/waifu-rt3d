@@ -538,6 +538,31 @@ export function ChatThread() {
     if (sessionId) loadHistory(sessionId);
   }, [sessionId, loadHistory]);
 
+  // ── Message actions: delete + edit ─────────────────────────────────────
+  const handleDeleteMessage = useCallback(async (messageId: string) => {
+    const msg = messages.find(m => m.id === messageId);
+    if (!msg?.serverMessageId) return;
+    try {
+      await api.deleteMessage(msg.serverMessageId);
+      useChatStore.setState(s => ({ messages: s.messages.filter(m => m.id !== messageId) }));
+    } catch (err) {
+      console.error('[DeleteMessage] failed:', err);
+    }
+  }, [messages]);
+
+  const handleEditMessage = useCallback(async (messageId: string, newText: string) => {
+    const msg = messages.find(m => m.id === messageId);
+    if (!msg?.serverMessageId) return;
+    try {
+      await api.editMessage(msg.serverMessageId, newText);
+      useChatStore.setState(s => ({
+        messages: s.messages.map(m => m.id === messageId ? { ...m, text: newText } : m),
+      }));
+    } catch (err) {
+      console.error('[EditMessage] failed:', err);
+    }
+  }, [messages]);
+
   // ── Search filter ────────────────────────────────────────────────────────
   const visibleMessages = useMemo(() => {
     if (!searchQuery.trim()) return messages;
@@ -819,6 +844,8 @@ export function ChatThread() {
                 onChoiceSelect={handleChoiceSelect}
                 onRegenerate={handleRegenerate}
                 onBranchSwitch={handleBranchSwitch}
+                onDelete={handleDeleteMessage}
+                onEdit={msg.role === 'user' ? handleEditMessage : undefined}
               />
             </div>
           ))}

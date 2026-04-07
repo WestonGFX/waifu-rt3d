@@ -202,6 +202,14 @@ export const api = {
     get<{ messages: Array<{ id: number; role: string; content: string; created_at: string }> }>(
       `/api/sessions/${sessionId}/messages`
     ),
+  /** Edit the text of an existing message. */
+  editMessage: (messageId: number, text: string) =>
+    put<{ ok: boolean; id: number }>(`/api/messages/${messageId}`, { text }),
+
+  /** Delete a message by ID. */
+  deleteMessage: (messageId: number) =>
+    del<{ ok: boolean; id: number }>(`/api/messages/${messageId}`),
+
   // Feature #10: Pin or unpin a message
   pinMessage: (messageId: number, pinned: boolean) =>
     put<{ ok: boolean }>(`/api/messages/${messageId}/pin`, { pinned }),
@@ -305,16 +313,16 @@ export const api = {
    */
   getMotionStats: () =>
     get<{
-      connected: boolean;
+      remote_connected: boolean;
       remote_url: string | null;
-      backend_name: string | null;
-      requests_total: number;
-      requests_ok: number;
-      requests_failed: number;
-      avg_latency_ms: number | null;
-      last_latency_ms: number | null;
+      remote_backend: string | null;
+      remote_requests_ok: number;
+      remote_requests_failed: number;
+      remote_latency_ms: number | null;
       remote_avg_latency_ms: number | null;
-      remote_p95_latency_ms: number | null;
+      remote_server_stats: Record<string, unknown> | null;
+      local_backend: string;
+      models_dir: string;
     }>('/api/motion/stats'),
 
   // Files

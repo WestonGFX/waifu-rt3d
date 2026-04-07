@@ -6629,6 +6629,38 @@ async def edit_message(message_id: int, req: Request):
     return {"ok": True, "id": message_id}
 
 
+@app.delete("/api/messages/{message_id}")
+async def delete_message(message_id: int):
+    """Delete a single message by ID.
+
+    Permanently removes the message from the database. If the message
+    has child branches, those are also deleted (CASCADE).
+
+    Args:
+        message_id: ID of the message to delete.
+
+    Returns:
+        dict: {"ok": True, "id": message_id}
+
+    Raises:
+        HTTPException 404: If the message does not exist.
+    """
+    conn = db()
+    try:
+        row = conn.execute("SELECT id FROM messages WHERE id=?", (message_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Message not found")
+        conn.execute("DELETE FROM messages WHERE id=?", (message_id,))
+        conn.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Delete failed: {e}")
+    finally:
+        conn.close()
+    return {"ok": True, "id": message_id}
+
+
 @app.post("/api/messages/{message_id}/regenerate")
 async def regenerate_message(message_id: int, req: Request):
     """Regenerate an AI response, creating a new branch.

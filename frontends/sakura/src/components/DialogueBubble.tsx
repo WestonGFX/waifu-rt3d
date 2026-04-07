@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Volume2, Pin, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Volume2, Pin, ChevronLeft, ChevronRight, RefreshCw, Copy, Trash2, Pencil, Check, X } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
 import { api } from '../lib/api';
@@ -91,6 +91,10 @@ interface DialogueBubbleProps {
   onRegenerate?: (serverMessageId: number) => void;
   /** T0-3: called when user navigates to a different branch. */
   onBranchSwitch?: (newMessageId: number, newText: string, newEmotion?: string) => void;
+  /** Called when the user deletes a message. Receives the local message ID. */
+  onDelete?: (messageId: string) => void;
+  /** Called when the user edits a message. Receives local ID and new text. */
+  onEdit?: (messageId: string, newText: string) => void;
 }
 
 /** Highlight occurrences of `query` inside `text` using <mark> spans. */
@@ -181,9 +185,13 @@ function MarkdownText({ text, query }: { text: string; query: string }) {
  * PUT /api/messages/{serverMessageId}/pin and tracks pinned state locally.
  * Pinned messages show a filled Pin indicator in the top-right corner.
  */
-export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onBranchSwitch }: DialogueBubbleProps) {
+export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onBranchSwitch, onDelete, onEdit }: DialogueBubbleProps) {
   const [pinned, setPinned] = useState(message.pinned ?? false);
   const [hovered, setHovered] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(message.text);
+  const editRef = useRef<HTMLTextAreaElement>(null);
 
   // T0-3: Branch navigation state
   const [branchTotal, setBranchTotal] = useState(1);
@@ -252,6 +260,45 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
       setPinned(!next); // revert
     }
   };
+
+  /** Copy message text to clipboard. */
+  const handleCopy = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(message.text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard not available */ }
+  }, [message.text]);
+
+  /** Enter edit mode — pre-fill textarea with current text. */
+  const handleEditStart = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditText(message.text);
+    setEditing(true);
+    setTimeout(() => editRef.current?.focus(), 50);
+  }, [message.text]);
+
+  /** Confirm edit — call parent callback with new text. */
+  const handleEditConfirm = useCallback(() => {
+    const trimmed = editText.trim();
+    if (trimmed && trimmed !== message.text && onEdit) {
+      onEdit(message.id, trimmed);
+    }
+    setEditing(false);
+  }, [editText, message.text, message.id, onEdit]);
+
+  /** Cancel edit — revert to original text. */
+  const handleEditCancel = useCallback(() => {
+    setEditText(message.text);
+    setEditing(false);
+  }, [message.text]);
+
+  /** Delete message — call parent callback. */
+  const handleDelete = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDelete) onDelete(message.id);
+  }, [message.id, onDelete]);
 
   // Director Mode messages: centered amber/gold cards with clapperboard icon
   if (message.role === 'director') {
@@ -331,7 +378,59 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               <Pin size={9} />
             </button>
           )}
-          <HighlightedText text={message.text} query={searchQuery} />
+          {editing ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 200 }}>
+              <textarea
+                ref={editRef}
+                value={editText}
+                onChange={e => setEditText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditConfirm(); } if (e.key === 'Escape') handleEditCancel(); }}
+                style={{
+                  width: '100%', minHeight: 60, resize: 'vertical',
+                  fontSize: '0.875rem', padding: '6px 8px', borderRadius: 6,
+                  border: '1px solid var(--color-accent)',
+                  backgroundColor: 'var(--color-background)',
+                  color: 'var(--color-text-primary)',
+                  outline: 'none',
+                }}
+              />
+              <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                <button onClick={handleEditCancel} title="Cancel" style={{ padding: '2px 6px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer' }}>
+                  <X size={12} />
+                </button>
+                <button onClick={handleEditConfirm} title="Save" style={{ padding: '2px 6px', borderRadius: 4, border: '1px solid var(--color-accent)', background: 'var(--color-accent-soft)', color: 'var(--color-accent)', cursor: 'pointer' }}>
+                  <Check size={12} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <HighlightedText text={message.text} query={searchQuery} />
+          )}
+          {/* Action buttons — visible on hover */}
+          {hovered && !editing && (
+            <div
+              className="absolute -bottom-3 right-2 flex items-center gap-0.5 px-1 py-0.5 rounded-md"
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              }}
+            >
+              <button onClick={handleCopy} title={copied ? 'Copied!' : 'Copy'} style={{ padding: 3, borderRadius: 3, border: 'none', background: 'transparent', color: copied ? 'var(--color-success)' : 'var(--color-text-tertiary)', cursor: 'pointer' }}>
+                {copied ? <Check size={11} /> : <Copy size={11} />}
+              </button>
+              {onEdit && (
+                <button onClick={handleEditStart} title="Edit" style={{ padding: 3, borderRadius: 3, border: 'none', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer' }}>
+                  <Pencil size={11} />
+                </button>
+              )}
+              {onDelete && (
+                <button onClick={handleDelete} title="Delete" style={{ padding: 3, borderRadius: 3, border: 'none', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer' }}>
+                  <Trash2 size={11} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -499,14 +598,14 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
 
         <MessageMeta message={message} />
 
-        {/* T0-3: Branch navigation — arrows + regenerate on hover */}
-        {hovered && message.serverMessageId != null && message.status === 'sent' && (
+        {/* Action bar — branch nav + copy/delete/regenerate on hover */}
+        {hovered && message.status === 'sent' && (
           <div
             className="flex items-center gap-1.5 mt-2 pt-1.5"
             style={{ borderTop: '1px solid var(--color-border-subtle)', fontSize: '0.7rem' }}
             onMouseEnter={fetchBranches}
           >
-            {branchTotal > 1 && (
+            {branchTotal > 1 && message.serverMessageId != null && (
               <>
                 <button
                   onClick={() => handleBranchNav(-1)}
@@ -531,16 +630,36 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
                 </button>
               </>
             )}
-            {onRegenerate && (
+            <div className="flex items-center gap-0.5 ml-auto">
               <button
-                onClick={() => onRegenerate(message.serverMessageId!)}
-                className="p-0.5 rounded transition-colors ml-auto"
-                style={{ color: 'var(--color-text-tertiary)' }}
-                title="Regenerate response"
+                onClick={handleCopy}
+                className="p-0.5 rounded transition-colors"
+                style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-tertiary)' }}
+                title={copied ? 'Copied!' : 'Copy text'}
               >
-                <RefreshCw size={11} />
+                {copied ? <Check size={11} /> : <Copy size={11} />}
               </button>
-            )}
+              {onDelete && (
+                <button
+                  onClick={handleDelete}
+                  className="p-0.5 rounded transition-colors"
+                  style={{ color: 'var(--color-text-tertiary)' }}
+                  title="Delete message"
+                >
+                  <Trash2 size={11} />
+                </button>
+              )}
+              {onRegenerate && message.serverMessageId != null && (
+                <button
+                  onClick={() => onRegenerate(message.serverMessageId!)}
+                  className="p-0.5 rounded transition-colors"
+                  style={{ color: 'var(--color-text-tertiary)' }}
+                  title="Regenerate response"
+                >
+                  <RefreshCw size={11} />
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

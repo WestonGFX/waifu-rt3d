@@ -179,6 +179,29 @@ interface AppState {
   showQuickChips: boolean;
   setShowQuickChips: (v: boolean) => void;
 
+  // Bond progression state (polled after each message exchange)
+  bondLevel: number;
+  bondXp: number;
+  bondXpToNext: number;
+  bondTier: string;
+  bondNextUnlock: { level: number; label: string } | null;
+  /** Pending level-up celebration data, consumed by LevelUpCelebration overlay */
+  pendingLevelUp: {
+    newLevel: number;
+    tier: string;
+    previousTier: string;
+    unlocks: Array<{ type: string; label: string }>;
+  } | null;
+  setBondState: (state: {
+    bondLevel: number;
+    bondXp: number;
+    bondXpToNext: number;
+    bondTier: string;
+    bondNextUnlock?: { level: number; label: string } | null;
+  }) => void;
+  setPendingLevelUp: (data: AppState['pendingLevelUp']) => void;
+  clearPendingLevelUp: () => void;
+
   // Legacy compat (kept for components that still reference these)
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -350,6 +373,23 @@ export const useAppStore = create<AppState>()(
       // Quick-reply chips
       showQuickChips: true,
       setShowQuickChips: (v) => set({ showQuickChips: v }),
+
+      // Bond progression
+      bondLevel: 0,
+      bondXp: 0,
+      bondXpToNext: 150,
+      bondTier: 'stranger',
+      bondNextUnlock: null,
+      pendingLevelUp: null,
+      setBondState: (state) => set({
+        bondLevel: state.bondLevel,
+        bondXp: state.bondXp,
+        bondXpToNext: state.bondXpToNext,
+        bondTier: state.bondTier,
+        bondNextUnlock: state.bondNextUnlock ?? null,
+      }),
+      setPendingLevelUp: (data) => set({ pendingLevelUp: data }),
+      clearPendingLevelUp: () => set({ pendingLevelUp: null }),
 
       // Legacy compat — maps to new layout for components still using old API
       activeTab: 'chats',

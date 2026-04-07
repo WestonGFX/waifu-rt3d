@@ -398,6 +398,24 @@ export const api = {
   // Stats (LLM status, uptime, etc.)
   getStats: () => get<Record<string, unknown>>('/api/stats'),
 
+  // Bond progression
+  getBondLevel: (charId: number) =>
+    get<{ ok: boolean; bond: { bond_level: number; bond_xp: number; xp_to_next: number; tier: string; relationship_mode: string } }>(
+      `/api/characters/${charId}/bond`
+    ),
+  getBondUnlocks: (charId: number) =>
+    get<{ ok: boolean; bond_level: number; tier: string; unlocked: Array<{ type: string; key: string; label: string; level: number }>; next_unlock: { type: string; key: string; label: string; level: number } | null }>(
+      `/api/characters/${charId}/bond/unlocks`
+    ),
+  getBondMilestones: (charId: number) =>
+    get<{ ok: boolean; milestones: Array<{ id: number; milestone_type: string; milestone_key: string; bond_level: number; achieved_at: string; viewed: number }> }>(
+      `/api/characters/${charId}/bond/milestones`
+    ),
+  getBondXpHistory: (charId: number, limit = 50) =>
+    get<{ ok: boolean; events: Array<{ id: number; xp_amount: number; action: string; multiplier: number; source_detail: string | null; created_at: string }> }>(
+      `/api/characters/${charId}/bond/xp-history?limit=${limit}`
+    ),
+
   // Relationship
   getRelationship: (charId: number) =>
     get<{ ok: boolean; relationship: { affinity: number; mood: number; trust: number; interactions: number; last_updated: number | null } }>(

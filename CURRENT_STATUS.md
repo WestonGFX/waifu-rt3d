@@ -1,14 +1,28 @@
 # Current Project Status
 
-**Last updated:** 2026-04-06 16:00 PDT
+**Last updated:** 2026-04-07 01:50 PDT
 **Branch:** master
-**Schema version:** v66
-**Tests:** 2474 passing (backend pytest), tsc clean (frontend)
+**Schema version:** v67
+**Tests:** 2556 passing (backend pytest), tsc clean (frontend)
 **Automation:** 11 agents, 24 skills, 6 rules, 8 hooks, 3 MCP servers
 
 ## Active Work
 
-**AIE Phase B complete.** Next: QA Phases 8-16, then AIE Phase C (future).
+**Bond Progression Phases 1-2 complete.** Next: Phase 3 (dialogue gates), then Phase 4 (timeline UI).
+
+## Completed This Session (Apr 7, session 10 — QA Fixes + Bond Phases 1-2)
+
+| What | Details |
+|------|---------|
+| **QA Bug Fixes (4)** | I3: message copy/edit/delete actions, I8: GlobalSearch Escape, I9: motion stats fields, I10: name tooltip |
+| **Bond Phase 1: XP Engine** | `backend/bond/xp_engine.py` — depth multiplier (1.0-2.5x), interest match, session/daily bonuses |
+| **Bond Phase 1: Progression** | Quadratic XP curve (growth=0.3, ~361k total), 5-tier model (stranger/acquaintance/friend/close_friend/soulmate) |
+| **Bond Phase 1: Unlocks** | `backend/bond/unlocks.py` — 46-entry UNLOCK_TABLE, 9 unlock types across 100 levels |
+| **Bond Phase 1: Milestones** | `backend/bond/milestones.py` — record/query milestones, XP event logging |
+| **Schema v67** | bond_xp_events + bond_milestones tables, daily/session tracking columns |
+| **3 API endpoints** | GET milestones, GET unlocks, GET xp-history |
+| **Bond Phase 2: UI** | BondProgressBar, LevelUpCelebration, useBondProgress hook, tier badge in StatusBar |
+| **Tests** | +82 new (2556 total): XP engine, unlocks, milestones, progression curve |
 
 ## Completed This Session (Apr 6, session 9 — AIE Phase B)
 
@@ -139,8 +153,10 @@
 ## Next Tasks (Priority Order)
 
 1. ~~**AIE Phase B: Deep Learning**~~ ✅ DONE — 6 modules, v66, 114 tests. Commit `02529cd`.
-2. **QA Browser Testing** — Run `docs/testing/qa-questionnaire.html` alongside the app. Fix any issues found.
-3. **Bond Progression System** — #1 retention driver. Quadratic XP curve, 5-tier unlocks, milestone celebrations, bond-gated dialogue shifts. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` (42-58h, 6 phases).
+2. ~~**Bond Progression Phases 1-2**~~ ✅ DONE — XP engine, unlocks, milestones, v67, BondProgressBar, LevelUpCelebration, 82 tests. Commits `0c64708`→`cdae599`.
+3. **Bond Phase 3: Dialogue Style Shifts** — Bond-gated system prompt injection per tier. `backend/bond/dialogue_gates.py` + per-character templates → `context_assembler.py`. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` Phase 3.
+4. **Bond Phase 4: Milestone Timeline + Story Viewer** — Frontend: BondTimeline, BondStoryViewer, BondPanel. Spec: same file Phase 4.
+5. **QA Browser Testing** — Run `docs/testing/qa-questionnaire.html` alongside the app. Phases 8-16 remaining.
 4. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h, 6 phases).
 5. **Spring Bones 3D** — Quick win: strip Mixamo spring bone tracks + delta time clamp (1.5h). Spec: `docs/plans/2026-03-29-spring-bones-spec.md` (16.5h, 5 phases).
 6. **Jiggle Physics** — VRM spring bones physics. Spec: `docs/plans/2026-03-29-jiggle-physics-spec.md` (15-21h, 6 phases).

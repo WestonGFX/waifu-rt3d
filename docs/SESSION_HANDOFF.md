@@ -1,88 +1,91 @@
-# Session Handoff — 2026-04-06
+# Session Handoff — 2026-04-07
 
 ## Branch: master
-## Test Status: 2474 passed, 0 failed | TSC: clean
+## Test Status: 2556 passed, 0 failed | TSC: clean
 
-## Completed This Session (session 9 — AIE Phase B)
+## Completed This Session (session 10 — QA Fixes + Bond Progression Phases 1-2)
 
-### AIE Phase B: Deep Learning Pipeline — ALL 6 MODULES
-- **B1 Trend Analyzer** — `backend/adaptive/trend_analyzer.py`: EMA + linear regression over preference_history, engagement pattern detection, regression detection
-- **B2 Memory Decay** — `backend/memory/decay.py`: Ebbinghaus forgetting curve (R = importance × e^(-λt) × recall_bonus), batch decay passes, recall reinforcement
-- **B3 Memory→Behavior** — `backend/adaptive/memory_behavior.py`: 4-channel behavioral derivation (emotional coloring, style priming, proactive references, relationship continuity)
-- **B4 Self-Critique** — `backend/adaptive/self_critique.py`: LLM self-review triggered on >15% engagement regression, auto-nudges pref_* values
-- **B5 Topic Graph** — `backend/adaptive/topic_graph.py`: TF-IDF topic extraction per message, sentiment tracking, emerging topic detection
-- **B6 Milestones** — `backend/adaptive/milestones.py`: 10-type relationship milestone detection (first_conversation, loyalty_50, emotional_trust, etc.)
+### QA Bug Fixes (4 issues from browser testing sweep)
+- **I3 (MAJOR)**: Added copy/edit/delete action buttons to DialogueBubble on hover
+  - User messages: copy, inline edit (textarea), delete
+  - Assistant messages: copy, delete alongside existing branch/regenerate controls
+  - Backend: new `DELETE /api/messages/{id}` endpoint
+  - Frontend: `api.editMessage()` and `api.deleteMessage()` wired through ChatThread
+- **I8 (MODERATE)**: GlobalSearchPanel now closes on Escape key (document keydown listener)
+- **I9 (MINOR)**: Fixed "Animation Requests: undefined / undefined ok" in Settings System tab
+  - Root cause: frontend type mismatched API response fields (`connected` vs `remote_connected`, etc.)
+- **I10 (MINOR)**: Added title tooltip to truncated character name in StatusBar header
 
-### Schema v66 Migration
-- Memory decay columns on `memories` table: importance, recall_count, last_recalled_at, decay_score
-- New `topic_tracking` table (char_id, topic, mention_count, avg_sentiment, is_emerging)
-- New `relationship_milestones` table (char_id, milestone, description, detected_at)
+### Bond Progression Phase 1: Enhanced XP Engine (backend)
+- **XP Engine** (`backend/bond/xp_engine.py`): depth multiplier (1.0-2.5x based on message length, emotional keywords, disclosure patterns), interest match detection (1.5x), session bonus (50 XP after 10+ msgs), daily first bonus (25 XP)
+- **Progression** (`backend/bond/progression.py`): quadratic XP curve (`150 + level^2 * 0.3 + level * 50`), ~361k total XP 0→100 (~6-8 weeks). 5-tier model: stranger(0-4)/acquaintance(5-14)/friend(15-34)/close_friend(35-64)/soulmate(65-100)
+- **Unlocks** (`backend/bond/unlocks.py`): 46-entry UNLOCK_TABLE spanning levels 0-100 with 9 unlock types (base, dialogue, voiceline, expression, story, ceremony, scene, feature, cosmetic)
+- **Milestones** (`backend/bond/milestones.py`): record/query milestones, XP event logging, check_and_record_unlocks integrates with UNLOCK_TABLE
+- **Schema v67**: `bond_xp_events` table, `bond_milestones` table, daily/session tracking columns on `character_relationships`
+- **3 API endpoints**: GET milestones, GET unlocks, GET xp-history
+- **82 new tests** (`backend/tests/test_bond_phase1.py`)
 
-### Integration Wiring
-- B1+B6 → `reflector.py` (post-reflection trend analysis + milestone check)
-- B2 → `tiered_memory.py` (decay-aware re-ranking + recall reinforcement on retrieval)
-- B3 → `context_assembler.py` (memory-behavior block injected after RAG memories)
-- B4 → `reflector.py` (self-critique after trends, gated by engagement regression)
-- B5 → `signals.py` (per-turn topic extraction via _user_msg_text passthrough)
+### Bond Progression Phase 2: UI Components (frontend)
+- **BondProgressBar** (`BondProgressBar.tsx`): animated XP bar with tier-colored fill, level badge, next-unlock preview, "+N XP" delta popup (Framer Motion spring)
+- **LevelUpCelebration** (`LevelUpCelebration.tsx`): full-screen overlay with level glow, tier transition arrow, staggered unlock reveals, sparkle canvas, auto-dismiss 10s
+- **useBondProgress hook** (`useBondProgress.ts`): polls bond API after message exchanges, detects level-ups, queues celebrations via appStore
+- **Store integration**: `appStore` bond state slice (bondLevel, bondXp, bondTier, pendingLevelUp)
+- **StatusBar wiring**: tier badge (Lv{N}) colored by tier + BondProgressBar below relationship bars
+- **App.tsx wiring**: LevelUpCelebration renders when pendingLevelUp is set
+- **api.ts**: getBondLevel, getBondUnlocks, getBondMilestones, getBondXpHistory
 
-### 5 New API Endpoints
-- `GET /api/adaptive/trends/{char_id}` — preference trends + engagement patterns
-- `POST /api/memory/decay-pass` — trigger Ebbinghaus decay pass
-- `GET /api/adaptive/topics/{char_id}` — tracked topics + emerging + affinities
-- `GET /api/adaptive/milestones/{char_id}` — relationship milestones
-- `POST /api/adaptive/self-critique/{char_id}` — manual self-critique trigger
-
-### Tests: +114 new (2474 total)
-- 20 trend_analyzer, 20 decay, 19 topic_graph, 17 milestones, 15 memory_behavior, 23 self_critique
+### XP Curve Balance Fix
+- QA agent found growth=1.0 produced ~591k total (6-8 months to max), not spec target
+- Changed to growth=0.3 → ~361k total (6-8 weeks daily use as spec intended)
 
 ## Work In Progress
-- None — all Phase B items committed
+- None — all items committed
 
 ## Known Issues / Bugs
-- Pre-existing: Live2D runtime broken, embedding model issue (see MEMORY.md)
-- Pre-existing: QA issues I3, I7, I8, I9, I10 unfixed (from session 6 QA sweep)
+- Pre-existing: Live2D runtime broken, embedding model issue
+- Pre-existing: QA issues I6 (content-gate 404 — needs server restart), I7 (console errors)
+- QA agent noted: `_DEPTH_MULT_MAX = 2.5` is unreachable (max achievable is 2.3) — cosmetic, non-blocking
 
 ## Files Modified
 ```
-Session commits: 02529cd, d3ec6eb
-19 files changed, 5633 insertions (feat commit)
-1 file changed, 47 insertions (docs commit)
+Session commits: 0c64708, 95ebfdd, 604a478, 4b08ff0, cdae599
 
-New files (6 modules):
-  backend/adaptive/trend_analyzer.py
-  backend/adaptive/topic_graph.py
-  backend/adaptive/milestones.py
-  backend/adaptive/memory_behavior.py
-  backend/adaptive/self_critique.py
-  backend/memory/decay.py
+New files (7):
+  backend/bond/xp_engine.py
+  backend/bond/unlocks.py
+  backend/bond/milestones.py
+  backend/tests/test_bond_phase1.py
+  frontends/sakura/src/components/BondProgressBar.tsx
+  frontends/sakura/src/components/LevelUpCelebration.tsx
+  frontends/sakura/src/hooks/useBondProgress.ts
 
-New files (6 test files):
-  backend/tests/test_trend_analyzer.py
-  backend/tests/test_decay.py
-  backend/tests/test_topic_graph.py
-  backend/tests/test_milestones.py
-  backend/tests/test_memory_behavior.py
-  backend/tests/test_self_critique.py
+Modified (backend):
+  backend/bond/progression.py (quadratic curve + 5-tier boundaries)
+  backend/preflight.py (v67 migration)
+  backend/server.py (DELETE message endpoint, enhanced XP wiring, 3 bond endpoints)
+  backend/tests/test_bond.py (updated for new tier boundaries + XP values)
 
-Modified (integration):
-  backend/adaptive/reflector.py (+B1 trends, +B4 self-critique, +B6 milestones)
-  backend/adaptive/signals.py (+B5 topic extraction, +_user_msg_text key)
-  backend/llm/context_assembler.py (+B3 memory-behavior block)
-  backend/memory/tiered_memory.py (+B2 decay re-ranking + reinforcement)
-  backend/preflight.py (+v66 migration)
-  backend/server.py (+5 API endpoints)
-  backend/tests/test_signals.py (updated expected keys)
+Modified (frontend):
+  frontends/sakura/src/components/DialogueBubble.tsx (copy/edit/delete actions)
+  frontends/sakura/src/components/GlobalSearchPanel.tsx (Escape handler)
+  frontends/sakura/src/components/StatusBar.tsx (tier badge + BondProgressBar)
+  frontends/sakura/src/views/ChatThread.tsx (message actions + useBondProgress hook)
+  frontends/sakura/src/views/SettingsView.tsx (motion stats field fix)
+  frontends/sakura/src/stores/appStore.ts (bond state slice)
+  frontends/sakura/src/lib/api.ts (bond API methods + message edit/delete)
+  frontends/sakura/src/App.tsx (LevelUpCelebration overlay)
 ```
 
 ## Next Session Priorities
-1. **QA Phases 8-16** — Continue browser testing: keyboard shortcuts, themes, layout modes, mini-games, 3D viewer, voice, character management, window resize, console audit
-2. **Bond Progression System** — #1 retention driver. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` (42-58h, 6 phases)
-3. **Try `/release-test --quick`** — Verify the new release testing skill works with Chrome MCP
-4. **P5: Memory Browser UI** — React component for viewing/editing character memories
+1. **Bond Phase 3: Dialogue Style Shifts** — Bond-gated system prompt injection per tier. Create `backend/bond/dialogue_gates.py` + per-character template files. Wire into `context_assembler.py`. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` Phase 3 section.
+2. **Bond Phase 4: Milestone Timeline + Story Viewer** — Frontend components: BondTimeline, BondStoryViewer, BondPanel. Spec: same file Phase 4.
+3. **QA Phases 8-16** — Continue browser testing remaining feature areas
+4. **Try `/release-test --quick`** — Verify release testing skill works with Chrome MCP
 
 ## Context for Next Session
 - Server IS running (confirmed healthy at session start — 3 services connected)
-- Frontend dev server status unknown — may need: `cd frontends/sakura && npx vite --port 5175`
-- AIE Phase B is fully integrated — all 6 modules wired into the hot paths (signals, reflection, memory search, context assembly)
-- Phase C (LoRA training, DSPy optimization) is future work — requires external deps and Phase B validation first
-- AIE spec file: `docs/plans/2026-03-29-adaptive-intelligence-spec.md` — Phase B section starts at line 510
+- Schema is now v67 — bond_xp_events + bond_milestones tables added
+- Bond progression fully wired into both streaming and non-streaming chat paths
+- Bond UI components exist but haven't been browser-tested yet — suggest visual verification
+- The existing MilestoneCelebration (affinity-based) still exists alongside new LevelUpCelebration (bond-based) — Phase 2 spec says to rewrite it, but that's deferred
+- Bond spec file: `docs/plans/2026-03-29-bond-progression-spec.md` — Phase 3 starts at line 432

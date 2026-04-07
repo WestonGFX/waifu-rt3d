@@ -5,14 +5,14 @@ bond-story unlock gating.  All functions accept an open
 ``sqlite3.Cursor`` so callers control transaction boundaries.
 
 Bond level formula (quadratic, revised in v67):
-    XP required for level N → (N+1):  ``150 + N² + 50*N``
+    XP required for level N → (N+1):  ``150 + N²×0.3 + 50*N``
     - Level 0 → 1:   150 XP  (first conversation)
-    - Level 4 → 5:   366 XP  (day 4-5)
-    - Level 14 → 15: 1,046 XP (week 2)
-    - Level 34 → 35: 2,906 XP (week 4)
-    - Level 64 → 65: 7,346 XP (month 2)
-    - Level 99 → 100: 14,951 XP
-    - Total 0 → 100: ~340,000 XP (~6-8 weeks daily use)
+    - Level 4 → 5:   354 XP  (day 4-5)
+    - Level 14 → 15: 908 XP  (week 2)
+    - Level 34 → 35: 2,196 XP (week 4)
+    - Level 64 → 65: 4,578 XP (month 2)
+    - Level 99 → 100: 8,040 XP
+    - Total 0 → 100: ~361,000 XP (~6-8 weeks daily use)
 
 Tiers (5-tier model, revised in v67):
     0–4    stranger
@@ -87,6 +87,7 @@ def _xp_required_for_level(level: int) -> int:
     Uses a quadratic curve: ``base + level² * growth + level * linear_growth``.
     Early levels are achievable in a single session while the final stretch
     requires weeks of sustained engagement (~6-8 weeks for daily users).
+    Total XP 0→100: ~361,000.
 
     Args:
         level: Current bond level (0–99).  Returns 0 for level 100 (max).
@@ -98,14 +99,14 @@ def _xp_required_for_level(level: int) -> int:
         >>> _xp_required_for_level(0)
         150
         >>> _xp_required_for_level(14)
-        1046
+        908
         >>> _xp_required_for_level(64)
-        7346
+        4578
     """
     if level >= _MAX_LEVEL:
         return 0
     base = 150
-    growth = 1.0
+    growth = 0.3
     linear = 50
     return int(base + (level ** 2) * growth + level * linear)
 

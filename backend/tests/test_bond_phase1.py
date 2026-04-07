@@ -680,27 +680,17 @@ class TestProgressionCurve:
             )
 
     def test_total_xp_0_to_100_in_expected_range(self) -> None:
-        """Total XP from level 0 to 100 is in the range 500k-650k.
-
-        The docstring in progression.py claims ~340k but the actual formula
-        150 + N^2 + 50*N with growth=1.0 (not 0.1 as might be implied by the
-        ~340k target) sums to ~590,850.  This test documents the actual value.
-        """
+        """Total XP from level 0 to 100 is in the range 300k-400k (~6-8 weeks daily)."""
         total = sum(_xp_required_for_level(lvl) for lvl in range(100))
-        assert 500_000 <= total <= 650_000, f"Total XP {total:,} outside expected range"
+        assert 300_000 <= total <= 400_000, f"Total XP {total:,} outside expected range"
 
     def test_level_14_formula_value(self) -> None:
-        """Level 14 → 15 matches the documented example: 150 + 14^2 + 50*14 = 1046."""
-        assert _xp_required_for_level(14) == 1046
+        """Level 14 → 15: 150 + 14²×0.3 + 50×14 = 150 + 58.8 + 700 = 908."""
+        assert _xp_required_for_level(14) == 908
 
     def test_level_64_formula_value(self) -> None:
-        """Level 64 → 65 formula: 150 + 64^2 + 50*64 = 7446.
-
-        The docstring in progression.py claims 7346, but the actual
-        formula with growth=1.0 gives 150 + 4096 + 3200 = 7446.
-        This test documents the actual computed value.
-        """
-        assert _xp_required_for_level(64) == 7446
+        """Level 64 → 65: 150 + 64²×0.3 + 50×64 = 150 + 1228.8 + 3200 = 4578."""
+        assert _xp_required_for_level(64) == 4578
 
     # -- get_tier_name --
 

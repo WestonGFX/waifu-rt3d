@@ -5,6 +5,25 @@ import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
 import { RELEASE_NOTES } from '../data/changelog';
 import { StreakBadge } from './StreakBadge';
+import { BondProgressBar } from './BondProgressBar';
+
+/** Map bond tier keys to badge colors. */
+const TIER_BADGE_COLORS: Record<string, string> = {
+  stranger: 'var(--color-text-tertiary)',
+  acquaintance: '#60a5fa',
+  friend: '#34d399',
+  close_friend: '#a78bfa',
+  soulmate: '#fbbf24',
+};
+
+/** Map bond tier keys to display labels. */
+const TIER_BADGE_LABELS: Record<string, string> = {
+  stranger: 'Stranger',
+  acquaintance: 'Acquaintance',
+  friend: 'Friend',
+  close_friend: 'Close Friend',
+  soulmate: 'Soulmate',
+};
 
 /** Current app version, sourced from the latest changelog entry. */
 const APP_VERSION = RELEASE_NOTES[0]?.version ?? '0.0.0';
@@ -253,7 +272,7 @@ export function StatusBar({
   messageCount?: number;
   sessionId?: number | null;
 }) {
-  const { toggleModelPanel, modelPanelOpen, openOverlay, settingsTier, setSettingsTier, soundscapeOpen, toggleSoundscape } = useAppStore();
+  const { toggleModelPanel, modelPanelOpen, openOverlay, settingsTier, setSettingsTier, soundscapeOpen, toggleSoundscape, bondLevel, bondXp, bondXpToNext, bondTier, bondNextUnlock } = useAppStore();
   const [idlePhrase, setIdlePhrase] = useState(IDLE_PHRASES[0]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -411,11 +430,38 @@ export function StatusBar({
             <AuthorNoteBadge sessionId={sessionId} />
             {/* Feature T1-8: Daily interaction streak badge */}
             <StreakBadge charId={character.id} messageCount={messageCount} />
+            {/* Bond tier badge */}
+            {bondLevel > 0 && (
+              <span
+                className="flex-shrink-0"
+                title={`Bond Level ${bondLevel} — ${TIER_BADGE_LABELS[bondTier] ?? bondTier}`}
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  padding: '1px 5px',
+                  borderRadius: 6,
+                  color: TIER_BADGE_COLORS[bondTier] ?? 'var(--color-text-tertiary)',
+                  backgroundColor: `color-mix(in srgb, ${TIER_BADGE_COLORS[bondTier] ?? 'var(--color-text-tertiary)'} 12%, transparent)`,
+                  letterSpacing: '0.04em',
+                  lineHeight: 1.5,
+                }}
+              >
+                Lv{bondLevel}
+              </span>
+            )}
           </div>
           <p className="text-xs truncate" style={{ color: 'var(--color-text-tertiary)' }}>
             {idlePhrase}
           </p>
           <RelationshipBar charId={character.id} messageCount={messageCount} />
+          {/* Bond XP progress bar — compact inline version */}
+          <BondProgressBar
+            bondLevel={bondLevel}
+            bondXp={bondXp}
+            xpToNext={bondXpToNext}
+            tier={bondTier}
+            nextUnlock={bondNextUnlock}
+          />
         </div>
 
         {onOpenSessions && (

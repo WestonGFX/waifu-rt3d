@@ -43,6 +43,7 @@ import { PhotoModeOverlay } from './components/PhotoModeOverlay';
 import { GalleryOverlay } from './components/GalleryOverlay';
 import { CinematicOverlay } from './components/CinematicOverlay';
 import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
+import { LevelUpCelebration } from './components/LevelUpCelebration';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { ShortcutHelpModal } from './components/ShortcutHelpModal';
 // Feature tips disabled — import kept for potential re-enablement
@@ -132,6 +133,7 @@ function MainApp() {
     customKeyBindings, customTheme,
     cinematicMode, toggleCinematicMode,
     devMode,
+    pendingLevelUp, clearPendingLevelUp,
   } = useAppStore();
 
   // Wizard store integration — hydrate from config and manage wizard lifecycle
@@ -545,6 +547,18 @@ function MainApp() {
         charName={charNameForCelebration}
         onClose={clearCelebration}
       />
+
+      {/* Bond level-up celebration */}
+      {pendingLevelUp && (
+        <LevelUpCelebration
+          newLevel={pendingLevelUp.newLevel}
+          characterName={activeCharacter?.name ?? ''}
+          tier={pendingLevelUp.tier}
+          previousTier={pendingLevelUp.previousTier}
+          unlocks={pendingLevelUp.unlocks}
+          onDismiss={clearPendingLevelUp}
+        />
+      )}
 
       <ShortcutHelpModal open={showHelp} shortcuts={shortcuts} onClose={() => setShowHelp(false)} />
 

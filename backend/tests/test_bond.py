@@ -188,7 +188,7 @@ class TestBondLevel:
 
         assert state["bond_level"] == 25
         assert state["bond_xp"] == 75
-        # Level 25 is in [11, 31) = 'friend' bracket (close_friend starts at 31)
+        # Level 25 is in [15, 35) = 'friend' bracket (close_friend starts at 35)
         assert state["tier"] == "friend"
 
     def test_get_bond_level_dict_has_expected_keys(self, db):
@@ -202,34 +202,34 @@ class TestBondLevel:
             assert key in state, f"Missing key '{key}' in get_bond_level result"
 
     def test_tier_stranger(self):
-        """Level 5 maps to tier 'stranger' (bracket [0, 11))."""
+        """Level 3 maps to tier 'stranger' (bracket [0, 5))."""
         from backend.bond.progression import get_tier_name
 
-        assert get_tier_name(5) == "stranger"
+        assert get_tier_name(3) == "stranger"
+
+    def test_tier_acquaintance(self):
+        """Level 10 maps to tier 'acquaintance' (bracket [5, 15))."""
+        from backend.bond.progression import get_tier_name
+
+        assert get_tier_name(10) == "acquaintance"
 
     def test_tier_friend(self):
-        """Level 15 maps to tier 'friend' (bracket [11, 31))."""
+        """Level 20 maps to tier 'friend' (bracket [15, 35))."""
         from backend.bond.progression import get_tier_name
 
-        assert get_tier_name(15) == "friend"
+        assert get_tier_name(20) == "friend"
 
     def test_tier_close_friend(self):
-        """Level 45 maps to tier 'close_friend' (bracket [31, 61))."""
+        """Level 50 maps to tier 'close_friend' (bracket [35, 65))."""
         from backend.bond.progression import get_tier_name
 
-        assert get_tier_name(45) == "close_friend"
-
-    def test_tier_best_friend(self):
-        """Level 75 maps to tier 'best_friend' (bracket [61, 91))."""
-        from backend.bond.progression import get_tier_name
-
-        assert get_tier_name(75) == "best_friend"
+        assert get_tier_name(50) == "close_friend"
 
     def test_tier_soulmate(self):
-        """Level 95 maps to tier 'soulmate' (bracket [91, ∞))."""
+        """Level 75 maps to tier 'soulmate' (bracket [65, ∞))."""
         from backend.bond.progression import get_tier_name
 
-        assert get_tier_name(95) == "soulmate"
+        assert get_tier_name(75) == "soulmate"
 
     def test_tier_boundary_zero(self):
         """Level 0 is 'stranger'."""
@@ -244,16 +244,16 @@ class TestBondLevel:
         assert get_tier_name(100) == "soulmate"
 
     def test_tier_boundary_friend_start(self):
-        """Level 11 is the first 'friend' tier level."""
+        """Level 15 is the first 'friend' tier level."""
         from backend.bond.progression import get_tier_name
 
-        assert get_tier_name(11) == "friend"
+        assert get_tier_name(15) == "friend"
 
     def test_tier_boundary_below_friend(self):
-        """Level 10 is still 'stranger' (friend starts at 11)."""
+        """Level 14 is still 'acquaintance' (friend starts at 15)."""
         from backend.bond.progression import get_tier_name
 
-        assert get_tier_name(10) == "stranger"
+        assert get_tier_name(14) == "acquaintance"
 
 
 # ── TestBondXP ──────────────────────────────────────────────────────────────
@@ -409,68 +409,59 @@ class TestBondXP:
 class TestXPForAction:
     """Tests for get_xp_for_action() — action XP award table."""
 
-    def test_message_xp_in_range(self):
-        """'message' at level 0 returns XP within [2, 6]."""
+    def test_message_base_xp(self):
+        """'message' returns flat base XP of 5."""
         from backend.bond.progression import get_xp_for_action
 
-        xp = get_xp_for_action("message", bond_level=0)
-        assert 2 <= xp <= 6
+        assert get_xp_for_action("message") == 5
 
-    def test_message_xp_at_high_level_capped(self):
-        """'message' at level 100 does not exceed the cap of 6."""
+    def test_session_bonus_xp(self):
+        """'session_bonus' returns 50 XP."""
         from backend.bond.progression import get_xp_for_action
 
-        xp = get_xp_for_action("message", bond_level=100)
-        assert xp <= 6
+        assert get_xp_for_action("session_bonus") == 50
 
-    def test_favorite_gift_xp_in_range(self):
-        """'gift_favorite' at level 0 returns XP within [15, 25]."""
+    def test_daily_first_xp(self):
+        """'daily_first' returns 25 XP."""
         from backend.bond.progression import get_xp_for_action
 
-        xp = get_xp_for_action("gift_favorite", bond_level=0)
-        assert 15 <= xp <= 25
+        assert get_xp_for_action("daily_first") == 25
 
-    def test_normal_gift_xp_in_range(self):
-        """'gift_normal' at level 0 returns XP within [5, 10]."""
+    def test_favorite_gift_xp(self):
+        """'gift_favorite' returns 20 XP."""
         from backend.bond.progression import get_xp_for_action
 
-        xp = get_xp_for_action("gift_normal", bond_level=0)
-        assert 5 <= xp <= 10
+        assert get_xp_for_action("gift_favorite") == 20
 
-    def test_daily_login_always_three(self):
-        """'daily_login' always returns exactly 3 XP regardless of level."""
+    def test_normal_gift_xp(self):
+        """'gift_normal' returns 8 XP."""
         from backend.bond.progression import get_xp_for_action
 
-        assert get_xp_for_action("daily_login", bond_level=0) == 3
-        assert get_xp_for_action("daily_login", bond_level=50) == 3
-        assert get_xp_for_action("daily_login", bond_level=99) == 3
+        assert get_xp_for_action("gift_normal") == 8
 
     def test_unknown_action_returns_zero(self):
         """Unrecognised action string returns 0 XP."""
         from backend.bond.progression import get_xp_for_action
 
-        assert get_xp_for_action("teleport_to_moon", bond_level=0) == 0
+        assert get_xp_for_action("teleport_to_moon") == 0
 
     def test_empty_string_action_returns_zero(self):
         """Empty string action key returns 0 XP."""
         from backend.bond.progression import get_xp_for_action
 
-        assert get_xp_for_action("", bond_level=0) == 0
+        assert get_xp_for_action("") == 0
 
     def test_gift_disliked_xp(self):
-        """'gift_disliked' returns 1 XP (always, no level scaling)."""
+        """'gift_disliked' returns 2 XP (flat, no level scaling)."""
         from backend.bond.progression import get_xp_for_action
 
-        assert get_xp_for_action("gift_disliked", bond_level=0) == 1
-        assert get_xp_for_action("gift_disliked", bond_level=99) == 1
+        assert get_xp_for_action("gift_disliked") == 2
 
-    def test_xp_for_action_scales_with_level(self):
-        """'message' XP at level 50 is >= XP at level 0."""
+    def test_voice_chat_xp(self):
+        """'voice_chat' returns 8 XP."""
         from backend.bond.progression import get_xp_for_action
 
-        low = get_xp_for_action("message", bond_level=0)
-        high = get_xp_for_action("message", bond_level=50)
-        assert high >= low
+        assert get_xp_for_action("voice_chat") == 8
 
 
 # ── TestGifts ───────────────────────────────────────────────────────────────
@@ -531,7 +522,7 @@ class TestGifts:
         assert history_count == 1
 
     def test_give_favorite_gift_bonus_xp(self, db):
-        """Giving a favourite gift awards XP in the [15, 25] range."""
+        """Giving a favourite gift awards exactly 20 XP (flat)."""
         from backend.bond.gifts import give_gift
 
         cur = db.cursor()
@@ -539,10 +530,10 @@ class TestGifts:
         result = give_gift(char_id=1, gift_id=1, cur=cur)
         db.commit()
 
-        assert 15 <= result["xp_earned"] <= 25
+        assert result["xp_earned"] == 20
 
     def test_give_normal_gift_xp(self, db):
-        """Giving a normal gift awards XP in the [5, 10] range."""
+        """Giving a normal gift awards exactly 8 XP (flat)."""
         from backend.bond.gifts import give_gift
 
         cur = db.cursor()
@@ -550,10 +541,10 @@ class TestGifts:
         result = give_gift(char_id=1, gift_id=2, cur=cur)
         db.commit()
 
-        assert 5 <= result["xp_earned"] <= 10
+        assert result["xp_earned"] == 8
 
     def test_give_disliked_gift_minimal_xp(self, db):
-        """Giving a gift with gift_category='disliked' awards 1 XP."""
+        """Giving a gift with gift_category='disliked' awards 2 XP."""
         from backend.bond.gifts import give_gift
 
         cur = db.cursor()
@@ -561,7 +552,7 @@ class TestGifts:
         result = give_gift(char_id=1, gift_id=3, cur=cur)
         db.commit()
 
-        assert result["xp_earned"] == 1
+        assert result["xp_earned"] == 2
 
     def test_give_gift_not_found_raises(self, db):
         """give_gift raises ValueError when gift_id does not exist."""

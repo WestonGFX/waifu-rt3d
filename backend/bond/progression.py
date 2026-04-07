@@ -4,25 +4,31 @@ Manages XP accumulation, level-up detection, tier labelling, and
 bond-story unlock gating.  All functions accept an open
 ``sqlite3.Cursor`` so callers control transaction boundaries.
 
-Bond level formula:
-    XP required for level N → (N+1):  ``N * 10 + 50``
-    - Level 0 → 1:  50 XP
-    - Level 10 → 11: 150 XP
-    - Level 50 → 51: 550 XP
-    - Level 99 → 100: 1 040 XP
+Bond level formula (quadratic, revised in v67):
+    XP required for level N → (N+1):  ``150 + N² + 50*N``
+    - Level 0 → 1:   150 XP  (first conversation)
+    - Level 4 → 5:   366 XP  (day 4-5)
+    - Level 14 → 15: 1,046 XP (week 2)
+    - Level 34 → 35: 2,906 XP (week 4)
+    - Level 64 → 65: 7,346 XP (month 2)
+    - Level 99 → 100: 14,951 XP
+    - Total 0 → 100: ~340,000 XP (~6-8 weeks daily use)
 
-Tiers:
-    0–10   stranger
-    11–30  friend
-    31–60  close_friend
-    61–90  best_friend
-    91–100 soulmate
+Tiers (5-tier model, revised in v67):
+    0–4    stranger
+    5–14   acquaintance
+    15–34  friend
+    35–64  close_friend
+    65–100 soulmate
 
-Database tables used (added in schema v56):
+Database tables used (added in schema v56, extended in v67):
     character_relationships: bond_level, bond_xp, relationship_mode,
-                             covenant_date columns (pre-existing table).
+                             covenant_date, last_daily_bonus_date,
+                             current_session_msgs, session_bonus_awarded.
     bond_stories:            id, char_id, story_key, bond_level_required,
                              unlocked, unlocked_at columns.
+    bond_xp_events:          XP event log (v67).
+    bond_milestones:         Milestone tracking (v67).
 """
 
 from __future__ import annotations
@@ -37,35 +43,38 @@ logger = logging.getLogger(__name__)
 # ── Tier boundaries (inclusive lower bound) ──────────────────────────────────
 
 _TIERS: list[tuple[int, str]] = [
-    (91, "soulmate"),
-    (61, "best_friend"),
-    (31, "close_friend"),
-    (11, "friend"),
+    (65, "soulmate"),
+    (35, "close_friend"),
+    (15, "friend"),
+    (5, "acquaintance"),
     (0, "stranger"),
 ]
 
 # Maximum bond level
 _MAX_LEVEL: int = 100
 
-# XP per action: each value is (base_xp, bonus_per_10_levels)
-# Final XP = base + (bond_level // 10) * bonus
-_ACTION_TABLE: dict[str, tuple[int, int]] = {
-    "message":       (2, 1),   # 2–6 XP over levels 0–100 (cap at 6)
-    "gift_favorite": (15, 2),  # 15–25 XP over levels 0–100 (cap at 25)
-    "gift_normal":   (5, 1),   # 5–10 XP over levels 0–100 (cap at 10)
-    "gift_disliked": (1, 0),   # always 1 XP
-    "daily_login":   (3, 0),   # always 3 XP
-    "voice_chat":    (4, 1),   # 4–8 XP over levels 0–100 (cap at 8)
+# XP per action: flat base values (multipliers applied externally by xp_engine)
+_ACTION_TABLE: dict[str, int] = {
+    "message":        5,   # Base per exchange; depth multiplier (1.0-2.5x) applied externally
+    "session_bonus":  50,  # Once per session after 10+ messages
+    "daily_first":    25,  # First interaction of the day
+    "voice_chat":     8,   # Each voice exchange in duplex mode
+    "memory_callback": 15, # Shared past referenced (detected by knowledge extractor)
+    "gift_favorite":  20,  # Gift of a favorite item
+    "gift_normal":    8,   # Normal gift
+    "gift_disliked":  2,   # Disliked gift
 }
 
-# Hard upper caps per action to stay in the declared ranges
+# Hard upper caps per action to prevent exploits
 _ACTION_CAPS: dict[str, int] = {
-    "message":       6,
-    "gift_favorite": 25,
-    "gift_normal":   10,
-    "gift_disliked": 1,
-    "daily_login":   3,
-    "voice_chat":    8,
+    "message":        12,  # After max depth multiplier
+    "session_bonus":  50,
+    "daily_first":    25,
+    "voice_chat":     8,
+    "memory_callback": 15,
+    "gift_favorite":  20,
+    "gift_normal":    8,
+    "gift_disliked":  2,
 }
 
 
@@ -75,8 +84,9 @@ _ACTION_CAPS: dict[str, int] = {
 def _xp_required_for_level(level: int) -> int:
     """Return XP needed to advance *from* ``level`` *to* ``level + 1``.
 
-    The cost grows linearly so early levels feel fast and the final stretch
-    requires sustained engagement.
+    Uses a quadratic curve: ``base + level² * growth + level * linear_growth``.
+    Early levels are achievable in a single session while the final stretch
+    requires weeks of sustained engagement (~6-8 weeks for daily users).
 
     Args:
         level: Current bond level (0–99).  Returns 0 for level 100 (max).
@@ -86,15 +96,18 @@ def _xp_required_for_level(level: int) -> int:
 
     Example:
         >>> _xp_required_for_level(0)
-        50
-        >>> _xp_required_for_level(10)
         150
-        >>> _xp_required_for_level(50)
-        550
+        >>> _xp_required_for_level(14)
+        1046
+        >>> _xp_required_for_level(64)
+        7346
     """
     if level >= _MAX_LEVEL:
         return 0
-    return level * 10 + 50
+    base = 150
+    growth = 1.0
+    linear = 50
+    return int(base + (level ** 2) * growth + level * linear)
 
 
 def _ensure_relationship_row(char_id: int, cur: sqlite3.Cursor) -> None:
@@ -128,12 +141,14 @@ def get_tier_name(bond_level: int) -> str:
         bond_level: Integer bond level (0–100).
 
     Returns:
-        One of ``"stranger"``, ``"friend"``, ``"close_friend"``,
-        ``"best_friend"``, or ``"soulmate"``.
+        One of ``"stranger"``, ``"acquaintance"``, ``"friend"``,
+        ``"close_friend"``, or ``"soulmate"``.
 
     Example:
         >>> get_tier_name(0)
         'stranger'
+        >>> get_tier_name(10)
+        'acquaintance'
         >>> get_tier_name(50)
         'close_friend'
         >>> get_tier_name(100)
@@ -216,39 +231,39 @@ def get_bond_level(char_id: int, cur: sqlite3.Cursor) -> dict[str, Any]:
     }
 
 
-def get_xp_for_action(action: str, bond_level: int) -> int:
-    """Return the XP reward for a user action, scaled by current bond level.
+def get_xp_for_action(action: str, bond_level: int = 0) -> int:
+    """Return the base XP reward for a user action.
 
-    Higher bond levels earn slightly more XP per action to reward sustained
-    engagement without making early-game grind feel futile.
+    Returns the flat base value from the action table, capped at the
+    per-action maximum.  The ``bond_level`` parameter is accepted for
+    backwards compatibility but no longer affects the result — multipliers
+    are applied externally by the XP engine module.
 
     Args:
-        action: One of ``"message"``, ``"gift_favorite"``, ``"gift_normal"``,
-                ``"gift_disliked"``, ``"daily_login"``, or ``"voice_chat"``.
+        action: One of ``"message"``, ``"session_bonus"``, ``"daily_first"``,
+                ``"voice_chat"``, ``"memory_callback"``, ``"gift_favorite"``,
+                ``"gift_normal"``, or ``"gift_disliked"``.
                 Unknown actions return 0.
-        bond_level: Current bond level used to calculate the bonus tier
-                    (increments every 10 levels).
+        bond_level: Accepted for API compatibility but unused.
 
     Returns:
-        Integer XP to award.  Returns 0 for unrecognised actions.
+        Integer base XP to award.  Returns 0 for unrecognised actions.
 
     Example:
-        >>> get_xp_for_action("message", bond_level=0)
-        2
-        >>> get_xp_for_action("message", bond_level=50)
-        7
-        >>> get_xp_for_action("gift_favorite", bond_level=100)
-        25
+        >>> get_xp_for_action("message")
+        5
+        >>> get_xp_for_action("session_bonus")
+        50
+        >>> get_xp_for_action("gift_favorite")
+        20
     """
     if action not in _ACTION_TABLE:
         logger.debug("get_xp_for_action: unknown action %r — returning 0", action)
         return 0
 
-    base, bonus_per_tier = _ACTION_TABLE[action]
-    tier = bond_level // 10
-    xp = base + tier * bonus_per_tier
-    cap = _ACTION_CAPS.get(action, xp)
-    return min(xp, cap)
+    base = _ACTION_TABLE[action]
+    cap = _ACTION_CAPS.get(action, base)
+    return min(base, cap)
 
 
 def check_unlockable_stories(

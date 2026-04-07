@@ -4427,6 +4427,103 @@ def migrate_to_v66(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v67(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v66 to v67.
+
+    Adds: Bond Progression Phase 1 tables — XP event log, bond milestones,
+    and daily/session tracking columns on character_relationships.
+
+    Tables created:
+        ``bond_xp_events`` — Detailed log of every XP award with action,
+            multiplier, and source detail for analytics.
+        ``bond_milestones`` — Tracks level-ups, tier transitions, story
+            unlocks, and expression unlocks with achievement timestamps.
+
+    Columns added to ``character_relationships``:
+        ``last_daily_bonus_date`` — ISO date of last daily first-interaction bonus.
+        ``current_session_msgs`` — Message count in current session (for session bonus).
+        ``session_bonus_awarded`` — Whether session bonus already awarded this session.
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> con.execute("CREATE TABLE schema_version (version INTEGER)")
+        <...>
+        >>> con.execute("INSERT INTO schema_version VALUES (66)")
+        <...>
+        >>> migrate_to_v67(con)
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 67:
+        logger.info("Schema already at v%d, skipping v67 migration.", cur_ver)
+        return True
+
+    try:
+        # --- Bond XP events table ---
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS bond_xp_events (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id       INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                xp_amount     INTEGER NOT NULL,
+                action        TEXT NOT NULL,
+                multiplier    REAL DEFAULT 1.0,
+                source_detail TEXT,
+                created_at    TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_bond_xp_events_char "
+            "ON bond_xp_events(char_id)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_bond_xp_events_char_date "
+            "ON bond_xp_events(char_id, created_at)"
+        )
+
+        # --- Bond milestones table ---
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS bond_milestones (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id         INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                milestone_type  TEXT NOT NULL,
+                milestone_key   TEXT NOT NULL,
+                bond_level      INTEGER NOT NULL,
+                achieved_at     TEXT DEFAULT (datetime('now')),
+                viewed          INTEGER DEFAULT 0,
+                UNIQUE(char_id, milestone_key)
+            )
+        """)
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_bond_milestones_char "
+            "ON bond_milestones(char_id)"
+        )
+
+        # --- Daily/session tracking columns on character_relationships ---
+        # Use try/except for each ALTER since columns may already exist
+        for col_sql in [
+            "ALTER TABLE character_relationships ADD COLUMN last_daily_bonus_date TEXT",
+            "ALTER TABLE character_relationships ADD COLUMN current_session_msgs INTEGER DEFAULT 0",
+            "ALTER TABLE character_relationships ADD COLUMN session_bonus_awarded INTEGER DEFAULT 0",
+        ]:
+            try:
+                con.execute(col_sql)
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+        # Bump version
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (67)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v67 migration complete "
+            "(bond_xp_events + bond_milestones + daily/session tracking)"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v67 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -4926,21 +5023,29 @@ def ensure_db():
             if migrate_to_v66(con):
                 version = 66
 
+        if version < 67:
+            logger.info("Upgrading database schema from v66 to v67...")
+            logger.info("  - Bond: bond_xp_events table")
+            logger.info("  - Bond: bond_milestones table")
+            logger.info("  - Bond: daily/session tracking columns")
+            if migrate_to_v67(con):
+                version = 67
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 66:
-            raise RuntimeError(f"Database initialization failed: Expected v66, got v{final_version}")
+        if final_version < 67:
+            raise RuntimeError(f"Database initialization failed: Expected v67, got v{final_version}")
 
-        if final_version > 66:
-            logger.warning(f"Database is newer than application (v{final_version} > v66). Some features might be unused.")
+        if final_version > 67:
+            logger.warning(f"Database is newer than application (v{final_version} > v67). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v66 adds AIE Phase B tables)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v67 adds Bond Progression tables)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

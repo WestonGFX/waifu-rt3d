@@ -4336,15 +4336,62 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         except Exception as _eng_err:
             logger.debug(f"[Adaptive] engagement scoring skipped: {_eng_err}")
 
-        # ── Bond Progression: earn XP for each message exchange ──────────
+        # ── Bond Progression: earn XP with depth multiplier + bonuses ─────
         try:
             from backend.bond.progression import add_bond_xp, get_xp_for_action, get_bond_level
+            from backend.bond.xp_engine import calculate_message_xp, check_daily_bonus, check_session_bonus
+            from backend.bond.milestones import check_and_record_unlocks, record_xp_event
+
             _bond_info = get_bond_level(char_id, cur)
-            _msg_xp = get_xp_for_action("message", _bond_info.get("bond_level", 0))
+            _old_level = _bond_info.get("bond_level", 0)
+
+            # Message XP with depth multiplier
+            _msg_xp, _depth_mult, _ = calculate_message_xp(text, clean_reply, [])
             _bond_result = add_bond_xp(char_id, cur, _msg_xp, source="message")
+            record_xp_event(char_id, _msg_xp, "message", _depth_mult, f"depth:{_depth_mult:.1f}x", cur)
+
+            # Daily first-interaction bonus
+            _daily_row = cur.execute(
+                "SELECT last_daily_bonus_date FROM character_relationships WHERE char_id=?",
+                (char_id,)
+            ).fetchone()
+            _last_daily = _daily_row[0] if _daily_row else None
+            if check_daily_bonus(_last_daily):
+                _daily_xp = get_xp_for_action("daily_first")
+                add_bond_xp(char_id, cur, _daily_xp, source="daily_first")
+                record_xp_event(char_id, _daily_xp, "daily_first", 1.0, None, cur)
+                from datetime import date as _date_cls
+                cur.execute(
+                    "UPDATE character_relationships SET last_daily_bonus_date=? WHERE char_id=?",
+                    (_date_cls.today().isoformat(), char_id)
+                )
+
+            # Session message count + bonus
+            cur.execute(
+                "UPDATE character_relationships SET current_session_msgs = COALESCE(current_session_msgs, 0) + 1 WHERE char_id=?",
+                (char_id,)
+            )
+            _sess_row = cur.execute(
+                "SELECT current_session_msgs, session_bonus_awarded FROM character_relationships WHERE char_id=?",
+                (char_id,)
+            ).fetchone()
+            if _sess_row and check_session_bonus(_sess_row[0] or 0, bool(_sess_row[1])):
+                _sess_xp = get_xp_for_action("session_bonus")
+                add_bond_xp(char_id, cur, _sess_xp, source="session_bonus")
+                record_xp_event(char_id, _sess_xp, "session_bonus", 1.0, None, cur)
+                cur.execute(
+                    "UPDATE character_relationships SET session_bonus_awarded=1 WHERE char_id=?",
+                    (char_id,)
+                )
+
             con.commit()
-            if _bond_result.get("leveled_up"):
-                logger.info(f"[Bond] char={char_id} leveled up to {_bond_result['new_level']}")
+
+            # Check for milestone unlocks on level-up
+            _new_level = _bond_result.get("new_level", _old_level)
+            if _bond_result.get("leveled_up") and _new_level > _old_level:
+                _milestones = check_and_record_unlocks(char_id, _old_level, _new_level, cur)
+                con.commit()
+                logger.info(f"[Bond] char={char_id} leveled up to {_new_level} (milestones: {len(_milestones)})")
             if _bond_result.get("unlocked_stories"):
                 logger.info(f"[Bond] char={char_id} unlocked stories: {_bond_result['unlocked_stories']}")
         except Exception as _bond_err:
@@ -5817,16 +5864,61 @@ async def chat_stream(req: Request):
                 if vector_store and not incognito:
                     vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
 
-                # ── Bond Progression: earn XP for each message exchange ──
+                # ── Bond Progression: earn XP with depth multiplier + bonuses ──
                 if not incognito:
                     try:
                         from backend.bond.progression import add_bond_xp, get_xp_for_action, get_bond_level
+                        from backend.bond.xp_engine import calculate_message_xp, check_daily_bonus, check_session_bonus
+                        from backend.bond.milestones import check_and_record_unlocks, record_xp_event
+
                         _bond_info_s = get_bond_level(char_id, cur)
-                        _msg_xp_s = get_xp_for_action("message", _bond_info_s.get("bond_level", 0))
+                        _old_level_s = _bond_info_s.get("bond_level", 0)
+
+                        # Message XP with depth multiplier
+                        _msg_xp_s, _depth_s, _ = calculate_message_xp(text, clean_reply, [])
                         _bond_res_s = add_bond_xp(char_id, cur, _msg_xp_s, source="message")
+                        record_xp_event(char_id, _msg_xp_s, "message", _depth_s, f"depth:{_depth_s:.1f}x", cur)
+
+                        # Daily first-interaction bonus
+                        _d_row_s = cur.execute(
+                            "SELECT last_daily_bonus_date FROM character_relationships WHERE char_id=?",
+                            (char_id,)
+                        ).fetchone()
+                        if check_daily_bonus(_d_row_s[0] if _d_row_s else None):
+                            _d_xp_s = get_xp_for_action("daily_first")
+                            add_bond_xp(char_id, cur, _d_xp_s, source="daily_first")
+                            record_xp_event(char_id, _d_xp_s, "daily_first", 1.0, None, cur)
+                            from datetime import date as _date_cls_s
+                            cur.execute(
+                                "UPDATE character_relationships SET last_daily_bonus_date=? WHERE char_id=?",
+                                (_date_cls_s.today().isoformat(), char_id)
+                            )
+
+                        # Session bonus
+                        cur.execute(
+                            "UPDATE character_relationships SET current_session_msgs = COALESCE(current_session_msgs, 0) + 1 WHERE char_id=?",
+                            (char_id,)
+                        )
+                        _sr_s = cur.execute(
+                            "SELECT current_session_msgs, session_bonus_awarded FROM character_relationships WHERE char_id=?",
+                            (char_id,)
+                        ).fetchone()
+                        if _sr_s and check_session_bonus(_sr_s[0] or 0, bool(_sr_s[1])):
+                            _sx_s = get_xp_for_action("session_bonus")
+                            add_bond_xp(char_id, cur, _sx_s, source="session_bonus")
+                            record_xp_event(char_id, _sx_s, "session_bonus", 1.0, None, cur)
+                            cur.execute(
+                                "UPDATE character_relationships SET session_bonus_awarded=1 WHERE char_id=?",
+                                (char_id,)
+                            )
+
                         con.commit()
-                        if _bond_res_s.get("leveled_up"):
-                            logger.info(f"[Bond] char={char_id} leveled up to {_bond_res_s['new_level']}")
+
+                        _new_level_s = _bond_res_s.get("new_level", _old_level_s)
+                        if _bond_res_s.get("leveled_up") and _new_level_s > _old_level_s:
+                            _ms_s = check_and_record_unlocks(char_id, _old_level_s, _new_level_s, cur)
+                            con.commit()
+                            logger.info(f"[Bond] char={char_id} leveled up to {_new_level_s} (milestones: {len(_ms_s)})")
                     except Exception as _bond_err_s:
                         logger.debug(f"[Bond] XP tracking skipped (stream): {_bond_err_s}")
 
@@ -8833,6 +8925,90 @@ def get_character_gift_history(char_id: int):
     except Exception as e:
         logger.warning(f"[Bond] get_gift_history failed: {e}")
         return {"ok": True, "history": []}
+
+
+# ── Bond Progression Phase 1: Milestones, Unlocks, XP History ────────────────
+
+@app.get("/api/characters/{char_id}/bond/milestones")
+def get_bond_milestones_endpoint(char_id: int):
+    """List all bond milestones for a character.
+
+    Returns achieved milestones (level-ups, tier transitions, story unlocks,
+    expression unlocks) sorted by bond level ascending.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        {"ok": True, "milestones": [{id, milestone_type, milestone_key,
+         bond_level, achieved_at, viewed}, ...]}
+    """
+    conn = db()
+    try:
+        from backend.bond.milestones import get_milestones
+        ms = get_milestones(char_id, conn.cursor())
+        return {"ok": True, "milestones": ms}
+    except Exception as e:
+        logger.warning(f"[Bond] get_milestones failed: {e}")
+        return {"ok": True, "milestones": []}
+
+
+@app.get("/api/characters/{char_id}/bond/unlocks")
+def get_bond_unlocks_endpoint(char_id: int):
+    """Get current unlocked features and next unlock preview for a character.
+
+    Uses the bond level from character_relationships to look up the unlock
+    table and return all features the user has earned, plus a preview of
+    what comes next.
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        {"ok": True, "bond_level": int, "tier": str,
+         "unlocked": [...], "next_unlock": {...} | null}
+    """
+    conn = db()
+    try:
+        from backend.bond.progression import get_bond_level
+        from backend.bond.unlocks import get_unlocked_features, get_next_unlock
+        bond = get_bond_level(char_id, conn.cursor())
+        level = bond.get("bond_level", 0)
+        return {
+            "ok": True,
+            "bond_level": level,
+            "tier": bond.get("tier", "stranger"),
+            "unlocked": get_unlocked_features(level),
+            "next_unlock": get_next_unlock(level),
+        }
+    except Exception as e:
+        logger.warning(f"[Bond] get_unlocks failed: {e}")
+        return {"ok": True, "bond_level": 0, "tier": "stranger", "unlocked": [], "next_unlock": None}
+
+
+@app.get("/api/characters/{char_id}/bond/xp-history")
+def get_bond_xp_history_endpoint(char_id: int, limit: int = 50):
+    """Get recent XP events for a character.
+
+    Returns a paginated list of XP awards with action type, multiplier,
+    and source detail for analytics and debugging.
+
+    Args:
+        char_id: Character ID.
+        limit: Maximum number of events to return (default 50).
+
+    Returns:
+        {"ok": True, "events": [{id, xp_amount, action, multiplier,
+         source_detail, created_at}, ...]}
+    """
+    conn = db()
+    try:
+        from backend.bond.milestones import get_xp_history
+        events = get_xp_history(char_id, conn.cursor(), limit=min(limit, 200))
+        return {"ok": True, "events": events}
+    except Exception as e:
+        logger.warning(f"[Bond] get_xp_history failed: {e}")
+        return {"ok": True, "events": []}
 
 
 # ── Character Diary (#57) ─────────────────────────────────────────────────────

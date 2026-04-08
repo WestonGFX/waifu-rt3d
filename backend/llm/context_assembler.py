@@ -72,6 +72,7 @@ def assemble_context(
     vector_store=None,
     cache_hints: bool = False,
     scene_context: str | None = None,
+    post_history_instructions: str | None = None,
 ) -> AssembledContext:
     """Assemble a token-budget-aware context for an LLM chat request.
 
@@ -103,6 +104,10 @@ def assemble_context(
             (e.g. ``"You're both sitting on the couch together, relaxing"``).
             Injected at lowest priority so the LLM can adapt dialogue to the
             physical setting.  Dropped silently if the budget is exhausted.
+        post_history_instructions: CHARA v2 ``post_history_instructions``
+            text (also known as "jailbreak" or "author's note").  Injected
+            as a system message after the chat history but before the current
+            user message — the standard SillyTavern injection position.
 
     Returns:
         ``AssembledContext`` with assembled messages and metadata.
@@ -394,6 +399,16 @@ def assemble_context(
 
     # Recent history
     assembled.extend(recent_messages)
+
+    # Post-history instructions (CHARA v2) — injected after chat history,
+    # before the current user message.  This is the standard position for
+    # "jailbreak" / "author's note" text in SillyTavern-compatible cards.
+    if post_history_instructions and post_history_instructions.strip():
+        _phi = post_history_instructions.strip()
+        _phi_tokens = count_tokens(_phi)
+        if _phi_tokens <= available:
+            assembled.append({"role": "system", "content": f"[Post-History Instructions]\n{_phi}"})
+            available -= _phi_tokens
 
     # Current user message (skip when caller already inserted it into DB)
     if not skip_user_append and user_text:

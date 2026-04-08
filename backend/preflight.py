@@ -4524,6 +4524,78 @@ def migrate_to_v67(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v68(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v67 to v68.
+
+    Adds: CHARA Card V2 compliance columns on the ``characters`` table so that
+    imported/exported character cards preserve all standard V2 fields without
+    data loss.
+
+    Columns added to ``characters``:
+        ``scenario`` — Scene/setting description injected at the start of
+            every conversation (CHARA v2 ``scenario`` field).
+        ``chara_description`` — Character bio/lore separate from the
+            behavioural ``system_prompt`` (CHARA v2 ``description`` field).
+        ``alternate_greetings`` — JSON array of alternative opening messages
+            (CHARA v2 ``alternate_greetings`` field).
+        ``mes_example`` — Example dialogue exchanges that guide LLM tone
+            (CHARA v2 ``mes_example`` field).
+        ``post_history_instructions`` — Text injected after chat history,
+            before the current user message (CHARA v2
+            ``post_history_instructions`` / jailbreak field).
+        ``chara_tags`` — JSON array of tag strings for character discovery
+            and filtering (CHARA v2 ``tags`` field).
+        ``creator_notes`` — Author notes from the card creator (CHARA v2
+            ``creator_notes`` field).
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> con.execute("CREATE TABLE schema_version (version INTEGER)")
+        <...>
+        >>> con.execute("INSERT INTO schema_version VALUES (67)")
+        <...>
+        >>> con.execute("CREATE TABLE characters (id INTEGER PRIMARY KEY)")
+        <...>
+        >>> migrate_to_v68(con)
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 68:
+        logger.info("Schema already at v%d, skipping v68 migration.", cur_ver)
+        return True
+
+    try:
+        # Add CHARA V2 columns — use try/except for each ALTER since
+        # columns may already exist from a partial prior run.
+        for col_sql in [
+            "ALTER TABLE characters ADD COLUMN scenario TEXT DEFAULT NULL",
+            "ALTER TABLE characters ADD COLUMN chara_description TEXT DEFAULT NULL",
+            "ALTER TABLE characters ADD COLUMN alternate_greetings TEXT DEFAULT '[]'",
+            "ALTER TABLE characters ADD COLUMN mes_example TEXT DEFAULT NULL",
+            "ALTER TABLE characters ADD COLUMN post_history_instructions TEXT DEFAULT NULL",
+            "ALTER TABLE characters ADD COLUMN chara_tags TEXT DEFAULT '[]'",
+            "ALTER TABLE characters ADD COLUMN creator_notes TEXT DEFAULT NULL",
+        ]:
+            try:
+                con.execute(col_sql)
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+        # Bump version
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (68)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v68 migration complete "
+            "(CHARA V2 columns: scenario, chara_description, alternate_greetings, "
+            "mes_example, post_history_instructions, chara_tags, creator_notes)"
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Schema v68 migration failed: {e}")
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -5031,21 +5103,29 @@ def ensure_db():
             if migrate_to_v67(con):
                 version = 67
 
+        if version < 68:
+            logger.info("Upgrading database schema from v67 to v68...")
+            logger.info("  - CHARA V2: scenario, chara_description columns")
+            logger.info("  - CHARA V2: alternate_greetings, mes_example columns")
+            logger.info("  - CHARA V2: post_history_instructions, chara_tags, creator_notes")
+            if migrate_to_v68(con):
+                version = 68
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 67:
-            raise RuntimeError(f"Database initialization failed: Expected v67, got v{final_version}")
+        if final_version < 68:
+            raise RuntimeError(f"Database initialization failed: Expected v68, got v{final_version}")
 
-        if final_version > 67:
-            logger.warning(f"Database is newer than application (v{final_version} > v67). Some features might be unused.")
+        if final_version > 68:
+            logger.warning(f"Database is newer than application (v{final_version} > v68). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v67 adds Bond Progression tables)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v68 adds CHARA V2 columns)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

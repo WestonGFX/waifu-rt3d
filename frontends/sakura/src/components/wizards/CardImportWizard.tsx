@@ -26,13 +26,24 @@ function StepUpload({ onNext, setWizardData }: WizardStepProps) {
         const text = await file.text();
         const data = JSON.parse(text);
         const charData = data.data || data;
+        // Extract all CHARA v2 fields individually so they can be
+        // persisted in their own DB columns (v68+) without data loss.
+        const altGreetings = Array.isArray(charData.alternate_greetings)
+          ? charData.alternate_greetings : [];
+        const tags = Array.isArray(charData.tags) ? charData.tags : [];
         setWizardData({
           importedCard: {
             name: charData.name || charData.char_name || 'Imported Character',
-            system_prompt: charData.description || charData.personality || '',
+            system_prompt: charData.system_prompt || '',
             greeting_message: charData.first_mes || charData.greeting || '',
             scenario: charData.scenario || '',
+            chara_description: charData.description || '',
+            personality_traits: charData.personality || charData.description || '',
             mes_example: charData.mes_example || '',
+            post_history_instructions: charData.post_history_instructions || '',
+            alternate_greetings: altGreetings,
+            creator_notes: charData.creator_notes || '',
+            chara_tags: tags,
           },
           fileName: file.name,
         });
@@ -128,11 +139,25 @@ function StepReview({ onNext, wizardData }: WizardStepProps) {
   const handleCreate = async () => {
     setCreating(true);
     try {
+      // Pass all available CHARA V2 fields (v68+) — the backend import
+      // endpoint handles each field individually, avoiding data loss.
       const charData: Record<string, unknown> = {
         name: name.trim(),
-        system_prompt: card.system_prompt || card.description || '',
-        greeting_message: card.greeting_message || card.first_mes || '',
+        system_prompt: card.system_prompt || '',
+        greeting_text: card.greeting_message || card.first_mes || '',
+        personality_traits: card.personality_traits || card.chara_description || '',
+        scenario: card.scenario || undefined,
+        chara_description: card.chara_description || undefined,
+        mes_example: card.mes_example || undefined,
+        post_history_instructions: card.post_history_instructions || undefined,
+        alternate_greetings: card.alternate_greetings || undefined,
+        creator_notes: card.creator_notes || undefined,
+        chara_tags: card.chara_tags || undefined,
       };
+      // Remove undefined values so the backend doesn't insert empty strings
+      for (const key of Object.keys(charData)) {
+        if (charData[key] === undefined) delete charData[key];
+      }
       const created = await api.createCharacter(charData);
       await loadCharacters();
       selectCharacter(created);
@@ -172,10 +197,32 @@ function StepReview({ onNext, wizardData }: WizardStepProps) {
       )}
 
       {card.greeting_message && (
-        <div className="mb-5">
+        <div className="mb-3">
           <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-text-tertiary)' }}>Greeting</label>
           <div className="text-[11px] p-2 rounded-lg" style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border-subtle)', color: 'var(--color-text-secondary)' }}>
             {(card.greeting_message || '').slice(0, 200)}{(card.greeting_message || '').length > 200 ? '...' : ''}
+          </div>
+        </div>
+      )}
+
+      {card.scenario && (
+        <div className="mb-3">
+          <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-text-tertiary)' }}>Scenario</label>
+          <div className="text-[11px] p-2 rounded-lg" style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border-subtle)', color: 'var(--color-text-secondary)' }}>
+            {(card.scenario || '').slice(0, 200)}{(card.scenario || '').length > 200 ? '...' : ''}
+          </div>
+        </div>
+      )}
+
+      {card.chara_tags && typeof card.chara_tags === 'string' ? null : Array.isArray(card.chara_tags) && card.chara_tags.length > 0 && (
+        <div className="mb-5">
+          <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-text-tertiary)' }}>Tags</label>
+          <div className="flex gap-1 flex-wrap">
+            {(card.chara_tags as string[]).slice(0, 10).map((tag: string, i: number) => (
+              <span key={i} className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}>
+                {tag}
+              </span>
+            ))}
           </div>
         </div>
       )}

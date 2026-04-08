@@ -2625,6 +2625,18 @@ def _build_prompt_sections(
     if _author_note_text and _author_note_position == "after_system":
         sections.append(_section("Author's Note", f"\n[Author's Note: {_author_note_text}]"))
 
+    # 1a-chara-scenario. CHARA V2 scenario — character-level setting description
+    # This is the base scene context from the character card. Session-level scene
+    # templates (below) take precedence if active.
+    try:
+        _chara_scenario_row = cur.execute(
+            "SELECT scenario FROM characters WHERE id=?", (char_id,)
+        ).fetchone()
+        if _chara_scenario_row and _chara_scenario_row[0] and _chara_scenario_row[0].strip():
+            sections.append(_section("Character Scenario", f"\n[Scenario: {_chara_scenario_row[0].strip()}]"))
+    except Exception:
+        pass
+
     # 1a-scene. Scene/Setting context — scenario templates (P4) or raw scene_context
     try:
         _scene_injected = False
@@ -4181,6 +4193,18 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         max_history = cfg.get("llm", {}).get("history_limit",
                       cfg.get("history_limit", 0)) or 30
         _is_claude_ns = cfg.get("llm", {}).get("provider", "") == "claude"
+
+        # Fetch CHARA V2 post_history_instructions (v68+)
+        _phi_text_ns = None
+        try:
+            _phi_row_ns = cur.execute(
+                "SELECT post_history_instructions FROM characters WHERE id=?",
+                (char_id,),
+            ).fetchone()
+            _phi_text_ns = (_phi_row_ns[0] or "").strip() if _phi_row_ns and _phi_row_ns[0] else None
+        except Exception:
+            pass
+
         assembled_ns = _assemble_ctx_ns(
             session_id=session_id, char_id=char_id, user_text=text,
             sections=sections, cfg=cfg, cur=cur,
@@ -4189,6 +4213,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             skip_user_append=True,  # user msg already inserted into DB above
             vector_store=vector_store,
             cache_hints=_is_claude_ns,
+            post_history_instructions=_phi_text_ns,
         )
         messages = assembled_ns.messages
         # Derive hist for lorebook keyword scanning (non-system messages)
@@ -4878,12 +4903,24 @@ async def chat_multi(req: Request):
                                 "tokens": _ct_multi(_sys_multi), "chars": len(_sys_multi)}]
             max_history = cfg.get("llm", {}).get("history_limit",
                           cfg.get("history_limit", 0)) or 30
+            # Fetch CHARA V2 post_history_instructions (v68+)
+            _phi_text_m = None
+            try:
+                _phi_row_m = cur.execute(
+                    "SELECT post_history_instructions FROM characters WHERE id=?",
+                    (char_id,),
+                ).fetchone()
+                _phi_text_m = (_phi_row_m[0] or "").strip() if _phi_row_m and _phi_row_m[0] else None
+            except Exception:
+                pass
+
             assembled_m = _assemble_ctx_m(
                 session_id=session_id, char_id=char_id, user_text=text,
                 sections=_sections_multi, cfg=cfg, cur=cur,
                 max_history=max_history,
                 skip_user_append=True,  # user msg already inserted above
                 vector_store=vector_store,
+                post_history_instructions=_phi_text_m,
             )
             llm_messages = assembled_m.messages
 
@@ -5373,6 +5410,19 @@ async def chat_stream(req: Request):
     max_history = cfg.get("llm", {}).get("history_limit",
                   cfg.get("history_limit", 0)) or 30
     _is_claude_s = cfg.get("llm", {}).get("provider", "") == "claude"
+
+    # Fetch CHARA V2 post_history_instructions for this character (v68+)
+    # Wrapped in try/except for pre-v68 databases that lack the column.
+    _phi_text = None
+    try:
+        _phi_row = cur.execute(
+            "SELECT post_history_instructions FROM characters WHERE id=?",
+            (char_id,),
+        ).fetchone()
+        _phi_text = (_phi_row[0] or "").strip() if _phi_row and _phi_row[0] else None
+    except Exception:
+        pass
+
     assembled_s = _assemble_ctx_s(
         session_id=session_id, char_id=char_id, user_text=text,
         sections=sections, cfg=cfg, cur=cur,
@@ -5381,6 +5431,7 @@ async def chat_stream(req: Request):
         skip_user_append=True,  # user msg already inserted into DB above
         vector_store=vector_store,
         cache_hints=_is_claude_s,
+        post_history_instructions=_phi_text,
     )
     llm_messages = assembled_s.messages
     # Derive hist for lorebook keyword scanning (non-system messages)
@@ -7552,21 +7603,38 @@ def list_characters():
                    tts_pitch, tts_rate, vocab_categories, animation_profile, emotion_voice_overrides,
                    mood_enabled, mood_intensity, emotion_portraits_mode,
                    bible_path, bible_enabled, bible_sections, system_prompt_lite,
-                   proactive_enabled, proactive_frequency, proactive_hours
+                   proactive_enabled, proactive_frequency, proactive_hours,
+                   scenario, chara_description, alternate_greetings, mes_example,
+                   post_history_instructions, chara_tags, creator_notes
             FROM characters
             ORDER BY id ASC
         """)
     except Exception:
-        # Fallback for pre-v7 schema
+        # Fallback for pre-v68 schema (41 columns, without the new CHARA V2 fields)
         try:
             cur.execute("""
                 SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider,
-                       personality_traits, live2d_model, model_type, avatar_2d_url, vrm_model_url
+                       personality_traits, live2d_model, model_type, avatar_2d_url, vrm_model_url,
+                       greeting_text, greeting_animation, background_url, background_mode, voice_sample_path,
+                       llm_endpoint, llm_model, llm_temperature, last_emotion, voice_config,
+                       expr_portraits, first_chat_date, diary, diary_date, capability_profile,
+                       tts_pitch, tts_rate, vocab_categories, animation_profile, emotion_voice_overrides,
+                       mood_enabled, mood_intensity, emotion_portraits_mode,
+                       bible_path, bible_enabled, bible_sections, system_prompt_lite,
+                       proactive_enabled, proactive_frequency, proactive_hours
                 FROM characters ORDER BY id ASC
             """)
         except Exception:
-            conn.close()
-            return {"characters": [{"id": 1, "name": "Default", "system_prompt": "You are a helpful AI.", "avatar_url": ""}]}
+            # Fallback for pre-v7 schema
+            try:
+                cur.execute("""
+                    SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider,
+                           personality_traits, live2d_model, model_type, avatar_2d_url, vrm_model_url
+                    FROM characters ORDER BY id ASC
+                """)
+            except Exception:
+                conn.close()
+                return {"characters": [{"id": 1, "name": "Default", "system_prompt": "You are a helpful AI.", "avatar_url": ""}]}
 
     characters = []
     for row in cur.fetchall():
@@ -7624,6 +7692,14 @@ def list_characters():
             "proactive_enabled": bool(row[38]) if len(row) > 38 and row[38] is not None else False,
             "proactive_frequency": row[39] if len(row) > 39 else "normal",
             "proactive_hours": row[40] if len(row) > 40 else "9-22",
+            # v68: CHARA V2 individual fields
+            "scenario": row[41] if len(row) > 41 else None,
+            "chara_description": row[42] if len(row) > 42 else None,
+            "alternate_greetings": json.loads(row[43]) if len(row) > 43 and row[43] else [],
+            "mes_example": row[44] if len(row) > 44 else None,
+            "post_history_instructions": row[45] if len(row) > 45 else None,
+            "chara_tags": json.loads(row[46]) if len(row) > 46 and row[46] else [],
+            "creator_notes": row[47] if len(row) > 47 else None,
         }
         characters.append(char)
     conn.close()
@@ -7813,8 +7889,13 @@ async def update_character(character_id: int, req: Request):
         "bible_path",  # v36: character bible markdown file path
         "bible_enabled",  # v36: toggle bible injection into system prompt
         "bible_sections",  # v36: JSON list of section numbers to inject
+        # v68: CHARA V2 individual fields
+        "scenario", "chara_description", "mes_example",
+        "post_history_instructions", "creator_notes",
+        "alternate_greetings", "chara_tags",
     ]
-    _json_fields = {"capability_profile", "voice_config", "vocab_categories", "animation_profile", "emotion_voice_overrides", "bible_sections"}
+    _json_fields = {"capability_profile", "voice_config", "vocab_categories", "animation_profile",
+                    "emotion_voice_overrides", "bible_sections", "alternate_greetings", "chara_tags"}
     for field in fields:
         if field in body:
             updates.append(f"{field}=?")
@@ -7990,9 +8071,13 @@ async def import_character(req: Request):
             'vocab_categories', 'llm_endpoint', 'llm_model', 'llm_temperature',
             'voice_config', 'capability_profile', 'animation_profile',
             'emotion_voice_overrides',  # Feature H: per-emotion TTS voice override map
+            # CHARA V2 fields (v68+)
+            'scenario', 'chara_description', 'alternate_greetings', 'mes_example',
+            'post_history_instructions', 'chara_tags', 'creator_notes',
         ]
         # JSON-encode dict/list fields before INSERT
-        for jf in ('voice_config', 'capability_profile', 'vocab_categories', 'animation_profile', 'emotion_voice_overrides'):
+        for jf in ('voice_config', 'capability_profile', 'vocab_categories', 'animation_profile',
+                    'emotion_voice_overrides', 'alternate_greetings', 'chara_tags'):
             if jf in body and isinstance(body[jf], (dict, list)):
                 body[jf] = json.dumps(body[jf])
         fields = []
@@ -8092,6 +8177,29 @@ async def import_chara_card(file: UploadFile = File(...)):
             fields.append("avatar_url")
             values.append(avatar_url)
 
+        # CHARA V2 individual fields (v68+) — preserve each field separately
+        if card_data.get("scenario"):
+            fields.append("scenario")
+            values.append(card_data["scenario"])
+        if card_data.get("chara_description"):
+            fields.append("chara_description")
+            values.append(card_data["chara_description"])
+        if card_data.get("mes_example"):
+            fields.append("mes_example")
+            values.append(card_data["mes_example"])
+        if card_data.get("post_history_instructions"):
+            fields.append("post_history_instructions")
+            values.append(card_data["post_history_instructions"])
+        if card_data.get("creator_notes"):
+            fields.append("creator_notes")
+            values.append(card_data["creator_notes"])
+        if card_data.get("alternate_greetings"):
+            fields.append("alternate_greetings")
+            values.append(json.dumps(card_data["alternate_greetings"]))
+        if card_data.get("chara_tags"):
+            fields.append("chara_tags")
+            values.append(json.dumps(card_data["chara_tags"]))
+
         placeholders = ",".join(["?"] * len(fields))
         field_names = ",".join(fields)
         cur.execute(f"INSERT INTO characters ({field_names}) VALUES ({placeholders})", values)
@@ -8135,7 +8243,9 @@ async def export_chara_card(character_id: int):
     cur = conn.cursor()
     try:
         row = cur.execute(
-            """SELECT name, system_prompt, personality_traits, greeting_text, avatar_url
+            """SELECT name, system_prompt, personality_traits, greeting_text, avatar_url,
+                      scenario, chara_description, alternate_greetings, mes_example,
+                      post_history_instructions, chara_tags, creator_notes, backstory
                FROM characters WHERE id = ?""",
             (character_id,),
         ).fetchone()
@@ -8145,7 +8255,9 @@ async def export_chara_card(character_id: int):
     if not row:
         raise HTTPException(404, "Character not found")
 
-    name, system_prompt, background, greeting_message, avatar_url = row
+    (name, system_prompt, personality_traits, greeting_text, avatar_url,
+     scenario, chara_description, alternate_greetings, mes_example,
+     post_history_instructions, chara_tags, creator_notes, backstory) = row
 
     # Load avatar bytes from disk if the URL maps to a local file
     avatar_bytes: bytes | None = None
@@ -8160,12 +8272,19 @@ async def export_chara_card(character_id: int):
 
     char_data = {
         "name": name or "Character",
-        "background": background or "",
+        "background": personality_traits or "",
+        "personality_traits": personality_traits or "",
         "system_prompt": system_prompt or "",
-        "greeting_message": greeting_message or "",
-        "backstory": "",
-        "creator_notes": "",
-        "tags": [],
+        "greeting_message": greeting_text or "",
+        "backstory": backstory or "",
+        "creator_notes": creator_notes or "",
+        "chara_tags": chara_tags or "[]",
+        # V2 individual fields (v68+)
+        "scenario": scenario or "",
+        "chara_description": chara_description or "",
+        "alternate_greetings": alternate_greetings or "[]",
+        "mes_example": mes_example or "",
+        "post_history_instructions": post_history_instructions or "",
     }
 
     try:

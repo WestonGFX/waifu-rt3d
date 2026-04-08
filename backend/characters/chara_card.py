@@ -11,14 +11,19 @@ This module provides two classes:
 - :class:`CharaCardWriter`: Embeds character data into a PNG image as a
   CHARA v2 tEXt chunk.
 
-CHARA v2 field mapping:
-    name        → characters.name
-    description + personality + scenario → characters.background (joined)
-    first_mes   → characters.greeting_message
-    system_prompt → characters.system_prompt
-    mes_example → appended to characters.backstory
-    creator_notes → characters.creator_notes (metadata)
-    tags        → characters.tags (metadata)
+CHARA v2 field mapping (v68+ schema — individual fields preserved):
+    name                     → characters.name
+    description              → characters.chara_description
+    personality              → (joined into characters.background for compat)
+    scenario                 → characters.scenario
+    first_mes                → characters.greeting_text
+    alternate_greetings      → characters.alternate_greetings (JSON array)
+    mes_example              → characters.mes_example
+    system_prompt            → characters.system_prompt
+    post_history_instructions → characters.post_history_instructions
+    creator_notes            → characters.creator_notes
+    tags                     → characters.chara_tags (JSON array)
+    description+personality+scenario → characters.background (legacy joined)
 """
 
 from __future__ import annotations
@@ -57,9 +62,11 @@ class CharaCardReader:
             png_path: Absolute path to the PNG card file.
 
         Returns:
-            Dict with keys: ``name``, ``background``, ``system_prompt``,
-            ``greeting_message``, ``backstory``, ``creator_notes``, ``tags``,
-            ``raw_chara`` (the full CHARA v2 payload).
+            Dict with keys: ``name``, ``background`` (legacy joined),
+            ``chara_description``, ``scenario``, ``alternate_greetings``,
+            ``mes_example``, ``post_history_instructions``, ``system_prompt``,
+            ``greeting_message``, ``backstory`` (legacy), ``creator_notes``,
+            ``chara_tags``, ``tags`` (alias), ``raw_chara``.
 
         Raises:
             ValueError: If no CHARA payload is found in the PNG.
@@ -134,31 +141,47 @@ class CharaCardReader:
         Handles both v2 (``spec: 'chara_card_v2'``) and v1 formats by
         looking for ``data`` sub-dict first, then falling back to top-level.
 
+        Since v68, individual CHARA v2 fields are preserved in their own DB
+        columns (``scenario``, ``chara_description``, ``alternate_greetings``,
+        etc.).  The legacy ``background`` field is still populated for backward
+        compatibility by joining description + personality + scenario.
+
         Args:
             card: Parsed CHARA JSON.
 
         Returns:
-            Normalised dict ready for database insertion.
+            Normalised dict ready for database insertion.  Contains both
+            individual V2 fields and the legacy ``background`` join.
         """
         # v2 spec wraps everything in 'data'
         data: dict = card.get("data", card)
 
         name = str(data.get("name", "Imported Character")).strip()
 
-        # Combine description + personality + scenario into background
-        parts = [
-            data.get("description", ""),
-            data.get("personality", ""),
-            data.get("scenario", ""),
-        ]
-        background = "\n\n".join(p for p in parts if p and p.strip())
+        # Individual V2 fields (v68+)
+        chara_description = str(data.get("description", "") or "").strip()
+        personality = str(data.get("personality", "") or "").strip()
+        scenario = str(data.get("scenario", "") or "").strip()
+
+        # Legacy combined field — kept for backward compat with code that
+        # reads personality_traits from the joined background string.
+        parts = [chara_description, personality, scenario]
+        background = "\n\n".join(p for p in parts if p)
 
         system_prompt = str(data.get("system_prompt", "") or "").strip()
         greeting_message = str(data.get("first_mes", "") or "").strip()
 
-        # Example messages → stored as backstory note
+        # Example messages — stored in both mes_example (new) and backstory (legacy)
         mes_example = str(data.get("mes_example", "") or "").strip()
         backstory = mes_example if mes_example else ""
+
+        # Post-history instructions (jailbreak / author's note)
+        post_history_instructions = str(data.get("post_history_instructions", "") or "").strip()
+
+        # Alternate greetings — array of alternative opening messages
+        alternate_greetings = data.get("alternate_greetings", [])
+        if not isinstance(alternate_greetings, list):
+            alternate_greetings = []
 
         creator_notes = str(data.get("creator_notes", "") or "").strip()
         tags = data.get("tags", [])
@@ -167,11 +190,20 @@ class CharaCardReader:
 
         return {
             "name": name,
+            # Legacy combined field
             "background": background,
+            # Individual V2 fields (v68+)
+            "chara_description": chara_description,
+            "scenario": scenario,
+            "alternate_greetings": alternate_greetings,
+            "mes_example": mes_example,
+            "post_history_instructions": post_history_instructions,
+            "creator_notes": creator_notes,
+            "chara_tags": tags,
+            # Legacy aliases
             "system_prompt": system_prompt,
             "greeting_message": greeting_message,
             "backstory": backstory,
-            "creator_notes": creator_notes,
             "tags": tags,
             "raw_chara": card,
         }
@@ -253,20 +285,72 @@ class CharaCardWriter:
     def _build_payload(char_data: dict[str, Any]) -> dict[str, Any]:
         """Build a CHARA v2 JSON payload from character data.
 
+        Since v68, individual V2 fields (``chara_description``, ``scenario``,
+        ``alternate_greetings``, ``mes_example``, ``post_history_instructions``)
+        are stored separately.  The writer prefers these dedicated columns and
+        falls back to the legacy combined fields (``background``, ``backstory``)
+        for backward compatibility with pre-v68 databases.
+
         Args:
-            char_data: Dict with keys name, background, system_prompt,
-                greeting_message, backstory, creator_notes, tags.
+            char_data: Dict with character fields from the DB row.  Supports
+                both new individual keys and legacy combined keys.
 
         Returns:
-            CHARA v2 compliant dict.
+            CHARA v2 compliant dict ready for JSON serialisation.
         """
         name = str(char_data.get("name", "Character") or "Character").strip()
-        background = str(char_data.get("background", "") or "").strip()
         system_prompt = str(char_data.get("system_prompt", "") or "").strip()
-        greeting = str(char_data.get("greeting_message", "") or "").strip()
-        backstory = str(char_data.get("backstory", "") or "").strip()
+
+        # Prefer individual V2 fields; fall back to legacy combined fields
+        description = str(
+            char_data.get("chara_description")
+            or char_data.get("background", "")
+            or ""
+        ).strip()
+
+        personality = str(char_data.get("personality_traits", "") or "").strip()
+        # If personality_traits looks like a JSON array, convert to prose
+        if personality.startswith("["):
+            try:
+                traits = json.loads(personality)
+                if isinstance(traits, list):
+                    personality = ", ".join(str(t) for t in traits)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        scenario = str(char_data.get("scenario", "") or "").strip()
+
+        greeting = str(
+            char_data.get("greeting_message")
+            or char_data.get("greeting_text", "")
+            or ""
+        ).strip()
+
+        mes_example = str(
+            char_data.get("mes_example")
+            or char_data.get("backstory", "")
+            or ""
+        ).strip()
+
+        post_history = str(char_data.get("post_history_instructions", "") or "").strip()
+
+        alternate_greetings = char_data.get("alternate_greetings", [])
+        if isinstance(alternate_greetings, str):
+            try:
+                alternate_greetings = json.loads(alternate_greetings)
+            except (json.JSONDecodeError, TypeError):
+                alternate_greetings = []
+        if not isinstance(alternate_greetings, list):
+            alternate_greetings = []
+
         creator_notes = str(char_data.get("creator_notes", "") or "").strip()
-        tags = char_data.get("tags", [])
+
+        tags = char_data.get("chara_tags") or char_data.get("tags", [])
+        if isinstance(tags, str):
+            try:
+                tags = json.loads(tags)
+            except (json.JSONDecodeError, TypeError):
+                tags = []
         if not isinstance(tags, list):
             tags = []
 
@@ -275,15 +359,16 @@ class CharaCardWriter:
             "spec_version": "2.0",
             "data": {
                 "name": name,
-                "description": background,
-                "personality": "",
-                "scenario": "",
+                "description": description,
+                "personality": personality,
+                "scenario": scenario,
                 "first_mes": greeting,
-                "mes_example": backstory,
+                "alternate_greetings": alternate_greetings,
+                "mes_example": mes_example,
                 "system_prompt": system_prompt,
                 "creator_notes": creator_notes,
                 "tags": tags,
-                "post_history_instructions": "",
+                "post_history_instructions": post_history,
                 "character_book": None,
             },
         }

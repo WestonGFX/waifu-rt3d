@@ -97,6 +97,66 @@ function generateChips(text: string, charName: string): string[] {
   return ["That's interesting! Go on…", "I hadn't thought of it that way", `What else is on your mind, ${charName}?`];
 }
 
+/**
+ * Generate 3 AI-powered quick-reply chips via the LLM generation proxy.
+ *
+ * Calls `/api/llm/generate` with a focused prompt and parses the JSON array
+ * response. Returns `null` on any failure (timeout, parse error, network)
+ * so the caller can fall back to heuristic chips.
+ *
+ * @param replyText - Last assistant message text.
+ * @param charName  - Character name for context.
+ * @param userName  - User display name for personalisation.
+ * @param signal    - AbortSignal to cancel the request early.
+ * @returns Array of 3 suggestion strings, or null on failure.
+ */
+async function generateChipsLLM(
+  replyText: string,
+  charName: string,
+  userName: string,
+  signal?: AbortSignal,
+): Promise<string[] | null> {
+  try {
+    // Race the LLM call against a 6-second timeout so slow models
+    // don't block the chip UI indefinitely.
+    const timeout = new Promise<never>((_, reject) => {
+      const id = setTimeout(() => reject(new Error('chip-llm-timeout')), 6000);
+      signal?.addEventListener('abort', () => { clearTimeout(id); reject(new Error('aborted')); });
+    });
+
+    const result = await Promise.race([
+      api.generateQuickReplies(replyText, charName, userName),
+      timeout,
+    ]);
+
+    if (signal?.aborted) return null;
+
+    const text = result.text.trim();
+
+    // Try direct JSON parse first, then extract array from prose fallback
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed) && parsed.length >= 3) {
+        return parsed.slice(0, 3).map((s: unknown) => String(s).slice(0, 80));
+      }
+    } catch {
+      // LLM may have wrapped the array in markdown or prose — extract it
+      const match = text.match(/\[.*\]/s);
+      if (match) {
+        const extracted = JSON.parse(match[0]);
+        if (Array.isArray(extracted) && extracted.length >= 3) {
+          return extracted.slice(0, 3).map((s: unknown) => String(s).slice(0, 80));
+        }
+      }
+    }
+
+    return null;
+  } catch {
+    // Network error, timeout, abort — all silently return null
+    return null;
+  }
+}
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 /**
@@ -128,6 +188,10 @@ export function ChatThread() {
   // Chips are hidden until a short delay after AI response (less jarring than immediate pop-in)
   const [chipsVisible, setChipsVisible] = useState(false);
   const chipsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks in-flight LLM chip generation so we can abort on cleanup
+  const llmChipsAbortRef = useRef<AbortController | null>(null);
+  // True while the async LLM upgrade is in-flight (heuristic chips show at reduced opacity)
+  const [llmChipsLoading, setLlmChipsLoading] = useState(false);
 
   // ── Task 2: Diary state ─────────────────────────────────────────────────
   const [diaryText, setDiaryText] = useState<string | null>(null);
@@ -321,22 +385,52 @@ export function ChatThread() {
   // Bond progression: poll after each message exchange
   useBondProgress(activeCharacter?.id ?? null, messages.length);
 
-  // ── Feature C: Generate quick-reply chips whenever the AI finishes ───────
+  // ── Feature C: Two-phase quick-reply chips (heuristic → LLM upgrade) ────
+  //
+  // Phase 1 (sync):  Show regex-based heuristic chips after 1.5 s delay.
+  // Phase 2 (async): Fire an LLM call in the background. When it resolves,
+  //                  silently swap in the AI-generated chips if the user
+  //                  hasn't started typing. If the LLM fails or times out
+  //                  (6 s), the heuristic chips remain — no error shown.
   useEffect(() => {
-    // Clear any pending chip-reveal timer on each effect run
+    // Clean up timers and in-flight LLM requests from the previous run
     if (chipsTimerRef.current) { clearTimeout(chipsTimerRef.current); chipsTimerRef.current = null; }
+    if (llmChipsAbortRef.current) { llmChipsAbortRef.current.abort(); llmChipsAbortRef.current = null; }
+    setLlmChipsLoading(false);
 
     if (!loading) {
       const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
       if (lastAssistant?.text && activeCharacter && showQuickChips) {
-        const chips = generateChips(lastAssistant.text, activeCharacter.name);
-        setQuickChips(chips);
+        // Phase 1: Immediate heuristic chips (zero latency)
+        const heuristicChips = generateChips(lastAssistant.text, activeCharacter.name);
+        setQuickChips(heuristicChips);
         setChipsVisible(false);
-        // Delay reveal by 1.5 s so they don't pop in immediately after the AI finishes
+
         chipsTimerRef.current = setTimeout(() => {
           setChipsVisible(true);
           chipsTimerRef.current = null;
         }, 1500);
+
+        // Phase 2: Async LLM upgrade — fire and forget
+        const abort = new AbortController();
+        llmChipsAbortRef.current = abort;
+        setLlmChipsLoading(true);
+
+        const userName = String(config?.user_name ?? config?.user_persona ?? '').split(/\s/)[0];
+        generateChipsLLM(lastAssistant.text, activeCharacter.name, userName, abort.signal)
+          .then(llmChips => {
+            if (abort.signal.aborted) return;
+            setLlmChipsLoading(false);
+            if (!llmChips) return; // Parse failed — keep heuristic chips
+
+            // Only swap if the user hasn't started typing
+            if (!useChatStore.getState().draft) {
+              setQuickChips(llmChips);
+            }
+          })
+          .catch(() => {
+            if (!abort.signal.aborted) setLlmChipsLoading(false);
+          });
       } else {
         setQuickChips([]);
         setChipsVisible(false);
@@ -345,6 +439,11 @@ export function ChatThread() {
       setQuickChips([]);
       setChipsVisible(false);
     }
+
+    // Cleanup: abort in-flight LLM request when effect re-runs or component unmounts
+    return () => {
+      if (llmChipsAbortRef.current) { llmChipsAbortRef.current.abort(); llmChipsAbortRef.current = null; }
+    };
   // messages and activeCharacter.id are intentionally included so chips
   // regenerate correctly after a character switch mid-session.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -986,9 +1085,19 @@ export function ChatThread() {
           }}
         >
           <div className="max-w-3xl mx-auto">
-            {/* Quick-reply chips — appear after AI response, hidden while typing or loading */}
+            {/* Quick-reply chips — appear after AI response, hidden while typing or loading.
+                While the async LLM upgrade is in-flight, chips render at reduced opacity
+                with a subtle pulse to hint that better suggestions are incoming. */}
             {quickChips.length > 0 && chipsVisible && !draft && !loading && (
-              <div className="flex gap-2 mb-2 flex-wrap justify-center" role="group" aria-label="Quick reply suggestions">
+              <div
+                className="flex gap-2 mb-2 flex-wrap justify-center"
+                role="group"
+                aria-label="Quick reply suggestions"
+                style={{
+                  opacity: llmChipsLoading ? 0.65 : 1,
+                  transition: 'opacity 0.3s ease',
+                }}
+              >
                 {quickChips.map((chip, i) => (
                   <button
                     key={i}
@@ -1002,10 +1111,11 @@ export function ChatThread() {
                     className="px-3 py-1.5 text-xs rounded-full transition-all duration-150"
                     style={{
                       backgroundColor: 'var(--color-surface)',
-                      border: '1px solid var(--color-border)',
+                      border: `1px solid ${llmChipsLoading ? 'var(--color-accent)' : 'var(--color-border)'}`,
                       color: 'var(--color-text-secondary)',
                       cursor: 'pointer',
                       whiteSpace: 'nowrap',
+                      animation: llmChipsLoading ? 'pulse 1.5s ease-in-out infinite' : 'none',
                     }}
                   >
                     {chip}

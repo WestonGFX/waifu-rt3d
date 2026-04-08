@@ -165,6 +165,12 @@ textarea:focus {
   30%           { opacity: 1;    transform: translateY(-4px); }
 }
 
+/* ── Quick-reply chip loading pulse (while LLM upgrade is in-flight) ──── */
+@keyframes pulse {
+  0%, 100% { opacity: 0.65; }
+  50%      { opacity: 1; }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    Mini Games — Feature A2
    ═══════════════════════════════════════════════════════════════════════ */

@@ -259,8 +259,10 @@ class TestXPEngine:
 
     def test_daily_bonus_false_for_today(self) -> None:
         """Bonus already granted today means it should not be re-granted."""
-        today = date.today().isoformat()
-        assert check_daily_bonus(today) is False
+        # Use UTC date to match check_daily_bonus() which compares against
+        # datetime.now(timezone.utc).date(), not local date.today().
+        today_utc = datetime.now(timezone.utc).date().isoformat()
+        assert check_daily_bonus(today_utc) is False
 
     def test_daily_bonus_true_for_unparseable_date(self) -> None:
         """Malformed date string is treated as never-awarded (don't block user)."""

@@ -1,14 +1,23 @@
 # Current Project Status
 
-**Last updated:** 2026-04-07 01:50 PDT
+**Last updated:** 2026-04-07 17:30 PDT
 **Branch:** master
-**Schema version:** v67
-**Tests:** 2556 passing (backend pytest), tsc clean (frontend)
+**Schema version:** v68
+**Tests:** 2571 passing (backend pytest), tsc clean (frontend)
 **Automation:** 11 agents, 24 skills, 6 rules, 8 hooks, 3 MCP servers
 
 ## Active Work
 
-**Bond Progression Phases 1-2 complete.** Next: Phase 3 (dialogue gates), then Phase 4 (timeline UI).
+**AI Quick Replies + CHARA V2 compliance complete.** Next priorities: message swipe/regeneration (highest-impact gap), P2 character scenarios, Bond Phase 3 (dialogue gates).
+
+## Completed This Session (Apr 7, session 11 — Quick Replies + CHARA V2 + Competitor Research)
+
+| What | Details |
+|------|---------|
+| **P0: AI Quick Replies** | Two-phase heuristic→LLM chip system in ChatThread.tsx. 11 vitest tests. No backend changes. |
+| **P1: CHARA V2 Compliance** | Schema v68 (7 new columns). Lossless import/export of all V2 fields. Scenario + post_history_instructions context injection. 15 pytest tests. |
+| **P3: Competitor Gap Analysis** | 577-line research doc. 60+ features, 30+ platforms. Top gaps: message swipe, visual content, memory UI. |
+| **Bug Fix** | test_bond_phase1 UTC date flake fixed |
 
 ## Completed This Session (Apr 7, session 10 — QA Fixes + Bond Phases 1-2)
 

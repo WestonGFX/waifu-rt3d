@@ -171,10 +171,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const data = await api.getMessages(sessionId);
     const messages: ChatMessage[] = data.messages.map((m) => ({
       id: String(m.id),
+      serverMessageId: m.id,
       role: m.role as ChatMessage['role'],
-      text: m.content,
-      createdAt: new Date(m.created_at).getTime(),
-      status: 'sent'
+      text: m.text ?? '',
+      createdAt: m.ts ? new Date(m.ts).getTime() : Date.now(),
+      status: 'sent',
+      emotion: m.emotion ?? undefined,
+      pinned: m.pinned === 1,
     }));
     set({ messages });
   },

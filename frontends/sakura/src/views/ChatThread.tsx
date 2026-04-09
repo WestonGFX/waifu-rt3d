@@ -624,22 +624,72 @@ export function ChatThread() {
   }, [sendMessage, incognito, effectiveMaxTokens]);
 
   // ── T0-3: Regenerate + branch switch ────────────────────────────────────
+  const [regeneratingMsgId, setRegeneratingMsgId] = useState<number | null>(null);
+
   const handleRegenerate = useCallback(async (serverMessageId: number) => {
+    setRegeneratingMsgId(serverMessageId);
     try {
       const res = await api.regenerateMessage(serverMessageId);
-      if (res.ok) {
-        // Reload history to pick up the new branch
-        if (sessionId) await loadHistory(sessionId);
+      if (res.ok && res.new_message) {
+        // Update the message in-place: replace old text/emotion, update serverMessageId
+        const { messages: currentMsgs } = useChatStore.getState();
+        const updated = currentMsgs.map(m => {
+          if (m.serverMessageId === serverMessageId) {
+            return {
+              ...m,
+              text: res.new_message.text,
+              emotion: res.new_message.emotion ?? m.emotion,
+              serverMessageId: res.new_message.id,
+            };
+          }
+          return m;
+        });
+        useChatStore.setState({ messages: updated });
       }
     } catch (err) {
       console.error('[Regenerate] failed:', err);
+    } finally {
+      setRegeneratingMsgId(null);
     }
-  }, [sessionId, loadHistory]);
+  }, []);
 
-  const handleBranchSwitch = useCallback((_newMsgId: number, _newText: string, _newEmotion?: string) => {
-    // Reload history to reflect the activated branch
-    if (sessionId) loadHistory(sessionId);
-  }, [sessionId, loadHistory]);
+  const handleBranchSwitch = useCallback(async (newMsgId: number, newText: string, newEmotion?: string) => {
+    // Update message in-place instead of full history reload
+    const { messages: currentMsgs } = useChatStore.getState();
+    let lastAssistantIdx = -1;
+    for (let i = currentMsgs.length - 1; i >= 0; i--) {
+      if (currentMsgs[i].role === 'assistant') { lastAssistantIdx = i; break; }
+    }
+    if (lastAssistantIdx >= 0) {
+      const updated = [...currentMsgs];
+      updated[lastAssistantIdx] = {
+        ...updated[lastAssistantIdx],
+        text: newText,
+        emotion: newEmotion ?? updated[lastAssistantIdx].emotion,
+        serverMessageId: newMsgId,
+      };
+      useChatStore.setState({ messages: updated });
+    }
+  }, []);
+
+  // Ctrl+Shift+R shortcut to regenerate last assistant message
+  useEffect(() => {
+    const handle = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+        e.preventDefault();
+        if (regeneratingMsgId) return;
+        const msgs = useChatStore.getState().messages;
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          if (msgs[i].role === 'assistant' && msgs[i].serverMessageId) {
+            handleRegenerate(msgs[i].serverMessageId!);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', handle);
+    return () => window.removeEventListener('keydown', handle);
+  }, [handleRegenerate, regeneratingMsgId]);
 
   // ── Message actions: delete + edit ─────────────────────────────────────
   const handleDeleteMessage = useCallback(async (messageId: string) => {
@@ -933,25 +983,37 @@ export function ChatThread() {
             </div>
           )}
 
-          {visibleMessages.map((msg) => (
-            <div
-              key={msg.id}
-              className="group relative"
-            >
-              <DialogueBubble
-                message={msg}
-                character={activeCharacter}
-                onPlayAudio={() => playAudio(msg)}
-                isPlaying={playingAudioId === msg.id}
-                searchQuery={searchQuery}
-                onChoiceSelect={handleChoiceSelect}
-                onRegenerate={handleRegenerate}
-                onBranchSwitch={handleBranchSwitch}
-                onDelete={handleDeleteMessage}
-                onEdit={msg.role === 'user' ? handleEditMessage : undefined}
-              />
-            </div>
-          ))}
+          {(() => {
+            // Pre-compute last assistant index for the loop
+            let lastAssistantVisIdx = -1;
+            for (let i = visibleMessages.length - 1; i >= 0; i--) {
+              if (visibleMessages[i].role === 'assistant') { lastAssistantVisIdx = i; break; }
+            }
+            return visibleMessages.map((msg, idx) => {
+            const isLastAssistant = msg.role === 'assistant' && idx === lastAssistantVisIdx;
+            return (
+              <div
+                key={msg.id}
+                className="group relative"
+              >
+                <DialogueBubble
+                  message={msg}
+                  character={activeCharacter}
+                  onPlayAudio={() => playAudio(msg)}
+                  isPlaying={playingAudioId === msg.id}
+                  searchQuery={searchQuery}
+                  onChoiceSelect={handleChoiceSelect}
+                  onRegenerate={handleRegenerate}
+                  onBranchSwitch={handleBranchSwitch}
+                  onDelete={handleDeleteMessage}
+                  onEdit={msg.role === 'user' ? handleEditMessage : undefined}
+                  isLastAssistant={isLastAssistant}
+                  isRegenerating={regeneratingMsgId === msg.serverMessageId}
+                />
+              </div>
+            );
+          });
+          })()}
 
           {/* Typing indicator — shown while AI is generating */}
           {loading && <TypingIndicator name={activeCharacter.name} />}

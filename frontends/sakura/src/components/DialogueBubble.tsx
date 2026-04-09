@@ -95,6 +95,10 @@ interface DialogueBubbleProps {
   onDelete?: (messageId: string) => void;
   /** Called when the user edits a message. Receives local ID and new text. */
   onEdit?: (messageId: string, newText: string) => void;
+  /** Whether this is the last assistant message — shows always-visible regen button. */
+  isLastAssistant?: boolean;
+  /** Whether this message is currently being regenerated — shows spinner. */
+  isRegenerating?: boolean;
 }
 
 /** Highlight occurrences of `query` inside `text` using <mark> spans. */
@@ -185,7 +189,7 @@ function MarkdownText({ text, query }: { text: string; query: string }) {
  * PUT /api/messages/{serverMessageId}/pin and tracks pinned state locally.
  * Pinned messages show a filled Pin indicator in the top-right corner.
  */
-export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onBranchSwitch, onDelete, onEdit }: DialogueBubbleProps) {
+export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onBranchSwitch, onDelete, onEdit, isLastAssistant = false, isRegenerating = false }: DialogueBubbleProps) {
   const [pinned, setPinned] = useState(message.pinned ?? false);
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -199,7 +203,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
   const [branchIds, setBranchIds] = useState<number[]>([]);
   const branchFetched = useRef(false);
 
-  // Fetch branch info on first hover for assistant messages with serverMessageId
+  // Eagerly fetch branch info on mount for assistant messages with serverMessageId
   const fetchBranches = useCallback(async () => {
     if (branchFetched.current || !message.serverMessageId || message.role !== 'assistant') return;
     branchFetched.current = true;
@@ -210,6 +214,13 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
       setBranchIds(data.branches.map(b => b.id));
     } catch { /* silent */ }
   }, [message.serverMessageId, message.role]);
+
+  // Fetch branches eagerly on mount (not just on hover)
+  useEffect(() => {
+    if (message.role === 'assistant' && message.serverMessageId) {
+      fetchBranches();
+    }
+  }, [message.serverMessageId, message.role, fetchBranches]);
 
   const handleBranchNav = useCallback(async (direction: -1 | 1) => {
     const newIdx = branchIndex + direction;
@@ -598,12 +609,11 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
 
         <MessageMeta message={message} />
 
-        {/* Action bar — branch nav + copy/delete/regenerate on hover */}
-        {hovered && message.status === 'sent' && (
+        {/* Branch nav strip — always visible when branches exist or this is the last assistant message */}
+        {message.status === 'sent' && message.role === 'assistant' && (branchTotal > 1 || isLastAssistant) && (
           <div
             className="flex items-center gap-1.5 mt-2 pt-1.5"
             style={{ borderTop: '1px solid var(--color-border-subtle)', fontSize: '0.7rem' }}
-            onMouseEnter={fetchBranches}
           >
             {branchTotal > 1 && message.serverMessageId != null && (
               <>
@@ -612,7 +622,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
                   disabled={branchIndex <= 0}
                   className="p-0.5 rounded transition-colors disabled:opacity-30"
                   style={{ color: 'var(--color-text-tertiary)' }}
-                  title="Previous version"
+                  title="Previous version (Left arrow)"
                 >
                   <ChevronLeft size={12} />
                 </button>
@@ -624,42 +634,52 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
                   disabled={branchIndex >= branchTotal - 1}
                   className="p-0.5 rounded transition-colors disabled:opacity-30"
                   style={{ color: 'var(--color-text-tertiary)' }}
-                  title="Next version"
+                  title="Next version (Right arrow)"
                 >
                   <ChevronRight size={12} />
                 </button>
               </>
             )}
             <div className="flex items-center gap-0.5 ml-auto">
-              <button
-                onClick={handleCopy}
-                className="p-0.5 rounded transition-colors"
-                style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-tertiary)' }}
-                title={copied ? 'Copied!' : 'Copy text'}
-              >
-                {copied ? <Check size={11} /> : <Copy size={11} />}
-              </button>
-              {onDelete && (
-                <button
-                  onClick={handleDelete}
-                  className="p-0.5 rounded transition-colors"
-                  style={{ color: 'var(--color-text-tertiary)' }}
-                  title="Delete message"
-                >
-                  <Trash2 size={11} />
-                </button>
-              )}
               {onRegenerate && message.serverMessageId != null && (
                 <button
                   onClick={() => onRegenerate(message.serverMessageId!)}
-                  className="p-0.5 rounded transition-colors"
-                  style={{ color: 'var(--color-text-tertiary)' }}
-                  title="Regenerate response"
+                  disabled={isRegenerating}
+                  className="p-0.5 rounded transition-colors disabled:opacity-50"
+                  style={{ color: isRegenerating ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }}
+                  title="Regenerate response (Ctrl+Shift+R)"
                 >
-                  <RefreshCw size={11} />
+                  <RefreshCw size={11} className={isRegenerating ? 'animate-spin' : ''} />
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Secondary action bar — copy/delete on hover */}
+        {hovered && message.status === 'sent' && (
+          <div
+            className="flex items-center gap-0.5 mt-1"
+            style={{ fontSize: '0.7rem' }}
+          >
+            <button
+              onClick={handleCopy}
+              className="p-0.5 rounded transition-colors"
+              style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-tertiary)' }}
+              title={copied ? 'Copied!' : 'Copy text'}
+            >
+              {copied ? <Check size={11} /> : <Copy size={11} />}
+            </button>
+            {onDelete && (
+              <button
+                onClick={handleDelete}
+                className="p-0.5 rounded transition-colors"
+                style={{ color: 'var(--color-text-tertiary)' }}
+                title="Delete message"
+              >
+                <Trash2 size={11} />
+              </button>
+            )}
           </div>
         )}
       </div>

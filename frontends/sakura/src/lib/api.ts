@@ -199,7 +199,7 @@ export const api = {
     patch<{ ok: boolean; tags: string[] }>(`/api/sessions/${id}/tags`, { tags }),
   deleteSession: (id: number) => del<{ ok: boolean; deleted_messages: number }>(`/api/sessions/${id}`),
   getMessages: (sessionId: number) =>
-    get<{ messages: Array<{ id: number; role: string; content: string; created_at: string }> }>(
+    get<{ messages: Array<{ id: number; role: string; text: string; ts: string; emotion?: string; parent_id?: number | null; is_active?: number; pinned?: number }> }>(
       `/api/sessions/${sessionId}/messages`
     ),
   /** Edit the text of an existing message. */
@@ -222,7 +222,7 @@ export const api = {
 
   /** Regenerate an assistant message, creating a new branch. */
   regenerateMessage: (messageId: number) =>
-    post<{ ok: boolean; new_message_id: number; reply: string; emotion?: string }>(
+    post<{ ok: boolean; new_message: { id: number; text: string; emotion?: string; gesture?: string } }>(
       `/api/messages/${messageId}/regenerate`, {}
     ),
 

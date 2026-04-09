@@ -415,6 +415,14 @@ export const api = {
     get<{ ok: boolean; events: Array<{ id: number; xp_amount: number; action: string; multiplier: number; source_detail: string | null; created_at: string }> }>(
       `/api/characters/${charId}/bond/xp-history?limit=${limit}`
     ),
+  /** Get all bond stories for a character (locked + unlocked). */
+  getBondStories: (charId: number) =>
+    get<{ ok: boolean; stories: Array<{ id: number; title: string; bond_level_required: number; scene_text?: string; scene_type?: string; unlocked: boolean; viewed: boolean }> }>(
+      `/api/characters/${charId}/bond/stories`
+    ),
+  /** Mark a bond story as viewed. */
+  markBondStoryViewed: (charId: number, storyId: number) =>
+    post<{ ok: boolean }>(`/api/characters/${charId}/bond/stories/${storyId}/view`, {}),
 
   // Relationship
   getRelationship: (charId: number) =>

@@ -36,6 +36,7 @@ type Overlay =
   | 'intimategallery' | 'loveletter' | 'audiostories'
   | 'intimatequiz' | 'sharedfantasies'
   | 'personapicker' | 'scenereplay'
+  | 'bondpanel' | 'bondstory'
   | null;
 
 /**
@@ -185,6 +186,8 @@ interface AppState {
   bondXpToNext: number;
   bondTier: string;
   bondNextUnlock: { level: number; label: string } | null;
+  /** ID of the bond story currently being viewed in the BondStoryViewer overlay. */
+  bondStoryId: number | null;
   /** Pending level-up celebration data, consumed by LevelUpCelebration overlay */
   pendingLevelUp: {
     newLevel: number;
@@ -381,6 +384,7 @@ export const useAppStore = create<AppState>()(
       bondTier: 'stranger',
       bondNextUnlock: null,
       pendingLevelUp: null,
+      bondStoryId: null,
       setBondState: (state) => set({
         bondLevel: state.bondLevel,
         bondXp: state.bondXp,

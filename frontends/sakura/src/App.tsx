@@ -37,6 +37,8 @@ import { IntimateQuizPanel } from './components/IntimateQuizPanel';
 import { SharedFantasyBuilder } from './components/SharedFantasyBuilder';
 import { PersonaPicker } from './components/PersonaPicker';
 import { SceneReplayViewer } from './components/SceneReplayViewer';
+import { BondPanel } from './components/BondPanel';
+import { BondStoryViewer } from './components/BondStoryViewer';
 import { GamePanel } from './components/GamePanel';
 import { ModelBrowser } from './components/ModelBrowser';
 import { PhotoModeOverlay } from './components/PhotoModeOverlay';
@@ -286,6 +288,7 @@ function MainApp() {
     { key: k('Bookmarks',            'alt+shift+k'), action: () => openOverlay('bookmarks'),   description: 'Scene bookmarks' },
     { key: k('Milestones',           'alt+shift+m'), action: () => openOverlay('milestones'),  description: 'Milestones timeline' },
     { key: k('Desire tree',          'alt+shift+d'), action: () => openOverlay('desiretree'),  description: 'Desire tree' },
+    { key: k('Bond panel',            'alt+shift+h'), action: () => openOverlay('bondpanel'),  description: 'Bond panel' },
     { key: k('Toggle sidebar',         'ctrl+\\'), action: () => toggleSidebar(),               description: 'Toggle sidebar' },
     { key: k('Cinematic mode',         'ctrl+i'),  action: () => toggleCinematicMode(),         description: 'Cinematic mode' },
     { key: k('Show keyboard shortcuts','?'),       action: () => setShowHelp(h => !h),          description: 'Show keyboard shortcuts' },
@@ -505,6 +508,22 @@ function MainApp() {
           isOpen
           onClose={closeOverlay}
           replay={null}
+        />
+      )}
+
+      {/* Bond Panel overlay */}
+      {activeOverlay === 'bondpanel' && (
+        <BondPanel onClose={closeOverlay} />
+      )}
+
+      {/* Bond Story Viewer overlay */}
+      {activeOverlay === 'bondstory' && activeCharacter && (
+        <BondStoryViewer
+          storyId={useAppStore.getState().bondStoryId ?? 0}
+          charId={activeCharacter.id}
+          charName={activeCharacter.name}
+          charAvatarUrl={activeCharacter.avatar_url}
+          onClose={closeOverlay}
         />
       )}
 

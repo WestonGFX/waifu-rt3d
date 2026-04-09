@@ -2734,6 +2734,16 @@ def _build_prompt_sections(
         except Exception as _mood_err:
             logger.warning(f"[MoodA4] Failed to generate mood prefix: {_mood_err}")
 
+    # 1a-bond. Bond Phase 3: tier-gated dialogue style directive
+    if char_name:
+        try:
+            from backend.bond.dialogue_gates import get_bond_context_section
+            _bond_ctx = get_bond_context_section(char_id, char_name, cur)
+            if _bond_ctx:
+                sections.append(_section("Bond Context", _bond_ctx))
+        except Exception as _bond_err:
+            logger.debug("[BondP3] Failed to inject bond context: %s", _bond_err)
+
     # 1b-sarcasm. Sarcasm detection hint — helps character respond to sarcastic tone
     if sarcasm_hint:
         sections.append(_section("Sarcasm Context", f"\n{sarcasm_hint}"))

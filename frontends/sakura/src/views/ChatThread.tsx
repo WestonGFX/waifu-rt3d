@@ -12,6 +12,7 @@ import { useProactive } from '../hooks/useProactive';
 import { useVoiceMode } from '../hooks/useVoiceMode';
 import { useAutoBackground } from '../hooks/useAutoBackground';
 import { useBondProgress } from '../hooks/useBondProgress';
+import { useMemorialScene } from '../hooks/useMemorialScene';
 import { useAdaptivePacing } from '../hooks/useAdaptivePacing';
 import { useCharacterAudio } from '../hooks/useCharacterAudio';
 import { api } from '../lib/api';
@@ -384,6 +385,9 @@ export function ChatThread() {
 
   // Bond progression: poll after each message exchange
   useBondProgress(activeCharacter?.id ?? null, messages.length);
+
+  // Memorial scene: check for pending cinematic after level-ups
+  useMemorialScene(activeCharacter?.id ?? null);
 
   // ── Feature C: Two-phase quick-reply chips (heuristic → LLM upgrade) ────
   //

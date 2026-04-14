@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
-import { Terminal, X, Trash2, Network, Radio, Gauge, Search, FileJson } from 'lucide-react';
+import { Terminal, X, Trash2, Network, Radio, Gauge, Search, FileJson, Heart } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
+import { api } from '../lib/api';
 import { PromptInspector } from './PromptInspector';
 import { RawConfigEditor } from './RawConfigEditor';
 
@@ -150,7 +151,7 @@ const EVENT_BADGE_COLORS: Record<EventEntry['type'], string> = {
   info: '#6b7280',
 };
 
-type Tab = 'requests' | 'events' | 'performance' | 'prompt' | 'config';
+type Tab = 'requests' | 'events' | 'performance' | 'prompt' | 'config' | 'bond';
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -226,6 +227,7 @@ export function DevConsole() {
     { key: 'performance', label: 'Performance', icon: <Gauge size={13} /> },
     { key: 'prompt', label: 'Prompt', icon: <Search size={13} /> },
     { key: 'config', label: 'Config', icon: <FileJson size={13} /> },
+    { key: 'bond', label: 'Bond', icon: <Heart size={13} /> },
   ];
 
   return (
@@ -336,6 +338,7 @@ export function DevConsole() {
         {activeTab === 'performance' && <PerformanceTab />}
         {activeTab === 'prompt' && <PromptInspector sessionId={useChatStore.getState().sessionId} />}
         {activeTab === 'config' && <RawConfigEditor />}
+        {activeTab === 'bond' && <BondTab />}
       </div>
     </div>
   );
@@ -569,6 +572,256 @@ function PerformanceTab() {
           <span style={{ ...valueStyle, color: 'var(--color-text-secondary)' }}>
             Not available (Chrome only)
           </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Bond Analytics Tab ────────────────────────────────────────────────────
+
+/** Analytics payload returned by GET /api/characters/:id/bond/analytics */
+interface BondAnalytics {
+  ok: boolean;
+  total_xp_earned: number;
+  days_active: number;
+  avg_xp_per_day: number;
+  est_days_to_soulmate: number | null;
+  source_breakdown: Record<string, number>;
+}
+
+/** A single XP history event from GET /api/characters/:id/bond/xp-history */
+interface XpEvent {
+  ts: string;
+  xp: number;
+  source: string;
+  meta: Record<string, unknown>;
+}
+
+/**
+ * Renders a single horizontal bar representing a source-breakdown percentage.
+ *
+ * Uses block-character "▓" and "░" to create an ASCII progress bar, keeping
+ * the display theme-safe and monospace-friendly.
+ *
+ * @param label   - Source label (e.g. "messages")
+ * @param ratio   - 0–1 fraction of total XP from this source
+ */
+function SourceBar({ label, ratio }: { label: string; ratio: number }) {
+  const BAR_WIDTH = 20;
+  const filled = Math.round(ratio * BAR_WIDTH);
+  const empty = BAR_WIDTH - filled;
+  const bar = '▓'.repeat(filled) + '░'.repeat(empty);
+  const pct = `${Math.round(ratio * 100)}%`;
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '120px 1fr 36px',
+        gap: 8,
+        padding: '2px 4px',
+        alignItems: 'center',
+        borderBottom: '1px solid var(--color-border)',
+      }}
+    >
+      <span style={{ color: 'var(--color-text-secondary)', textTransform: 'capitalize' }}>
+        {label.replace(/_/g, ' ')}
+      </span>
+      <span style={{ color: 'var(--color-accent)', letterSpacing: '-0.5px', fontFamily: 'monospace' }}>
+        {bar}
+      </span>
+      <span style={{ color: 'var(--color-text)', fontWeight: 600, textAlign: 'right' }}>
+        {pct}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Bond analytics tab for DevConsole.
+ *
+ * Displays:
+ * - Character selector (uses app store character list)
+ * - Summary row: level, total XP, days active, avg XP/day, est. days to soulmate
+ * - Source breakdown as ASCII bars (▓░)
+ * - Last 20 XP history events
+ */
+function BondTab() {
+  const characters = useAppStore(s => s.characters);
+  const activeCharacter = useAppStore(s => s.activeCharacter);
+  const bondLevel = useAppStore(s => s.bondLevel);
+  const bondXp = useAppStore(s => s.bondXp);
+  const bondTier = useAppStore(s => s.bondTier);
+
+  const [selectedCharId, setSelectedCharId] = useState<number>(activeCharacter?.id ?? 0);
+  const [analytics, setAnalytics] = useState<BondAnalytics | null>(null);
+  const [events, setEvents] = useState<XpEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Sync selector to active character when it changes
+  useEffect(() => {
+    if (activeCharacter?.id) setSelectedCharId(activeCharacter.id);
+  }, [activeCharacter?.id]);
+
+  // Fetch analytics + recent events on character change
+  useEffect(() => {
+    if (!selectedCharId) return;
+    setLoading(true);
+    setError(null);
+
+    Promise.all([
+      api.getBondAnalytics(selectedCharId),
+      api.getBondXpHistoryPaged(selectedCharId, 20, 0),
+    ])
+      .then(([analyticsRes, historyRes]) => {
+        setAnalytics(analyticsRes);
+        setEvents(historyRes.events ?? []);
+      })
+      .catch((err: unknown) => {
+        setError(String(err));
+      })
+      .finally(() => setLoading(false));
+  }, [selectedCharId]);
+
+  const statStyle: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '3px 12px',
+    borderBottom: '1px solid var(--color-border)',
+  };
+  const labelStyle: React.CSSProperties = { color: 'var(--color-text-secondary)' };
+  const valueStyle: React.CSSProperties = { fontWeight: 600 };
+
+  // Compute sorted source entries for bar chart
+  const sourceEntries = analytics
+    ? Object.entries(analytics.source_breakdown).sort(([, a], [, b]) => b - a)
+    : [];
+  const totalSourceXp = sourceEntries.reduce((s, [, v]) => s + v, 0);
+
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', padding: '4px 0' }}>
+      {/* Character selector */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px 6px', borderBottom: '1px solid var(--color-border)' }}>
+        <span style={{ ...labelStyle }}>Character</span>
+        <select
+          value={selectedCharId}
+          onChange={e => setSelectedCharId(Number(e.target.value))}
+          style={{
+            background: 'var(--color-surface)',
+            color: 'var(--color-text)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 4,
+            padding: '1px 6px',
+            fontSize: 11,
+          }}
+        >
+          {characters.map(c => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        {loading && (
+          <span style={{ color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>Loading…</span>
+        )}
+        {error && (
+          <span style={{ color: '#ef4444' }}>Error: {error}</span>
+        )}
+      </div>
+
+      {/* Live bond state from store (selected char only when it's active) */}
+      {selectedCharId === activeCharacter?.id && (
+        <>
+          <div style={statStyle}>
+            <span style={labelStyle}>Level (live)</span>
+            <span style={valueStyle}>{bondLevel} — {bondTier}</span>
+          </div>
+          <div style={statStyle}>
+            <span style={labelStyle}>XP (live)</span>
+            <span style={valueStyle}>{bondXp}</span>
+          </div>
+        </>
+      )}
+
+      {/* Analytics summary */}
+      {analytics && (
+        <>
+          <div style={statStyle}>
+            <span style={labelStyle}>Total XP earned</span>
+            <span style={valueStyle}>{analytics.total_xp_earned.toLocaleString()}</span>
+          </div>
+          <div style={statStyle}>
+            <span style={labelStyle}>Days active</span>
+            <span style={valueStyle}>{analytics.days_active}</span>
+          </div>
+          <div style={statStyle}>
+            <span style={labelStyle}>Avg XP / day</span>
+            <span style={valueStyle}>{analytics.avg_xp_per_day.toFixed(1)}</span>
+          </div>
+          <div style={statStyle}>
+            <span style={labelStyle}>Est. days to soulmate</span>
+            <span style={valueStyle}>
+              {analytics.est_days_to_soulmate !== null
+                ? analytics.est_days_to_soulmate === 0
+                  ? 'Reached!'
+                  : `~${analytics.est_days_to_soulmate}d`
+                : 'N/A'}
+            </span>
+          </div>
+
+          {/* Source breakdown */}
+          {sourceEntries.length > 0 && (
+            <div style={{ marginTop: 4 }}>
+              <div style={{ padding: '3px 12px 2px', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                XP Sources
+              </div>
+              {sourceEntries.map(([label, xp]) => (
+                <SourceBar
+                  key={label}
+                  label={label}
+                  ratio={totalSourceXp > 0 ? xp / totalSourceXp : 0}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Recent XP events */}
+      {events.length > 0 && (
+        <div style={{ marginTop: 4 }}>
+          <div style={{ padding: '3px 12px 2px', color: 'var(--color-text-secondary)', fontWeight: 600, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Recent Events (last 20)
+          </div>
+          {events.map((evt, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '90px 40px 1fr',
+                gap: 8,
+                padding: '2px 4px 2px 12px',
+                borderBottom: '1px solid var(--color-border)',
+                alignItems: 'center',
+              }}
+            >
+              <span style={{ color: 'var(--color-text-secondary)' }}>
+                {new Date(evt.ts).toLocaleTimeString('en-US', { hour12: false })}
+              </span>
+              <span style={{ color: 'var(--color-accent)', fontWeight: 600 }}>
+                +{evt.xp}
+              </span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'capitalize' }}>
+                {evt.source.replace(/_/g, ' ')}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && !analytics && !error && (
+        <div style={{ padding: 16, color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>
+          Select a character to view bond analytics.
         </div>
       )}
     </div>

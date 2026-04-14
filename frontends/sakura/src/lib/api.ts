@@ -424,6 +424,88 @@ export const api = {
   markBondStoryViewed: (charId: number, storyId: number) =>
     post<{ ok: boolean }>(`/api/characters/${charId}/bond/stories/${storyId}/view`, {}),
 
+  /**
+   * Fetch the pending memorial scene for a character at the given bond level.
+   *
+   * Returns a cinematic scene with setting, beat list, culmination text and
+   * a keepsake item to reveal when the scene completes. Returns null when no
+   * scene is pending at that level.
+   *
+   * @param charId - Character ID
+   * @param level  - Bond level to check for a pending scene
+   */
+  getMemorialScene: (charId: number, level: number) =>
+    get<{
+      ok: boolean;
+      scene: {
+        id: string;
+        setting: string;
+        beats: string[];
+        culmination: string;
+        keepsake: string;
+      } | null;
+    }>(`/api/characters/${charId}/bond/memorial-scene?level=${level}`),
+
+  /**
+   * Mark a memorial scene as completed so it won't be shown again.
+   *
+   * @param charId  - Character ID
+   * @param sceneId - Scene ID returned by getMemorialScene
+   */
+  completeMemorialScene: (charId: number, sceneId: string) =>
+    post<{ ok: boolean }>(`/api/characters/${charId}/bond/memorial-scene/complete`, { scene_id: sceneId }),
+
+  /**
+   * Fetch the first-memory scene for a character (special scene at bond level 1).
+   *
+   * @param charId - Character ID
+   */
+  getFirstMemory: (charId: number) =>
+    get<{
+      ok: boolean;
+      scene: {
+        id: string;
+        setting: string;
+        beats: string[];
+        culmination: string;
+        keepsake: string;
+      } | null;
+    }>(`/api/characters/${charId}/bond/first-memory`),
+
+  /**
+   * Fetch bond analytics for a character — XP totals, activity stats, and
+   * source breakdown showing what activities earned the most XP.
+   *
+   * @param charId - Character ID
+   */
+  getBondAnalytics: (charId: number) =>
+    get<{
+      ok: boolean;
+      total_xp_earned: number;
+      days_active: number;
+      avg_xp_per_day: number;
+      est_days_to_soulmate: number | null;
+      source_breakdown: Record<string, number>;
+    }>(`/api/characters/${charId}/bond/analytics`),
+
+  /**
+   * Fetch paginated XP history events for a character.
+   *
+   * @param charId - Character ID
+   * @param limit  - Max number of events to return (default 50)
+   * @param offset - Pagination offset (default 0)
+   */
+  getBondXpHistoryPaged: (charId: number, limit = 50, offset = 0) =>
+    get<{
+      ok: boolean;
+      events: Array<{
+        ts: string;
+        xp: number;
+        source: string;
+        meta: Record<string, unknown>;
+      }>;
+    }>(`/api/characters/${charId}/bond/xp-history?limit=${limit}&offset=${offset}`),
+
   // Relationship
   getRelationship: (charId: number) =>
     get<{ ok: boolean; relationship: { affinity: number; mood: number; trust: number; interactions: number; last_updated: number | null } }>(

@@ -39,6 +39,7 @@ import { PersonaPicker } from './components/PersonaPicker';
 import { SceneReplayViewer } from './components/SceneReplayViewer';
 import { BondPanel } from './components/BondPanel';
 import { BondStoryViewer } from './components/BondStoryViewer';
+import { MemorialScene } from './components/MemorialScene';
 import { ScenarioPicker } from './components/ScenarioPicker';
 import { GamePanel } from './components/GamePanel';
 import { ModelBrowser } from './components/ModelBrowser';
@@ -137,6 +138,7 @@ function MainApp() {
     cinematicMode, toggleCinematicMode,
     devMode,
     pendingLevelUp, clearPendingLevelUp,
+    pendingMemorialScene, clearPendingMemorialScene,
   } = useAppStore();
 
   // Wizard store integration — hydrate from config and manage wizard lifecycle
@@ -515,6 +517,18 @@ function MainApp() {
       {/* Bond Panel overlay */}
       {activeOverlay === 'bondpanel' && (
         <BondPanel onClose={closeOverlay} />
+      )}
+
+      {/* Memorial Scene overlay — full-screen cinematic, shown after level-ups */}
+      {activeOverlay === 'memorialscene' && pendingMemorialScene && activeCharacter && (
+        <MemorialScene
+          charId={activeCharacter.id}
+          scene={pendingMemorialScene}
+          onClose={() => {
+            clearPendingMemorialScene();
+            closeOverlay();
+          }}
+        />
       )}
 
       {/* Bond Story Viewer overlay */}

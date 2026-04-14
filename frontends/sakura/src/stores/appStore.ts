@@ -37,6 +37,7 @@ type Overlay =
   | 'intimatequiz' | 'sharedfantasies'
   | 'personapicker' | 'scenereplay'
   | 'bondpanel' | 'bondstory'
+  | 'memorialscene'
   | 'scenariopicker'
   | null;
 
@@ -205,6 +206,20 @@ interface AppState {
   }) => void;
   setPendingLevelUp: (data: AppState['pendingLevelUp']) => void;
   clearPendingLevelUp: () => void;
+
+  /**
+   * Pending memorial scene data, consumed by the MemorialScene overlay.
+   * Set by useMemorialScene when the backend returns a pending scene.
+   * Cleared after the overlay is dismissed via clearPendingMemorialScene().
+   */
+  pendingMemorialScene: {
+    id: string;
+    setting: string;
+    beats: string[];
+    culmination: string;
+    keepsake: string;
+  } | null;
+  clearPendingMemorialScene: () => void;
 
   // Legacy compat (kept for components that still reference these)
   activeTab: string;
@@ -395,6 +410,9 @@ export const useAppStore = create<AppState>()(
       }),
       setPendingLevelUp: (data) => set({ pendingLevelUp: data }),
       clearPendingLevelUp: () => set({ pendingLevelUp: null }),
+
+      pendingMemorialScene: null,
+      clearPendingMemorialScene: () => set({ pendingMemorialScene: null }),
 
       // Legacy compat — maps to new layout for components still using old API
       activeTab: 'chats',

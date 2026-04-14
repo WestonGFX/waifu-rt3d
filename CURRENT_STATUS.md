@@ -1,14 +1,22 @@
 # Current Project Status
 
-**Last updated:** 2026-04-14 (per-character scenarios — session 12)
+**Last updated:** 2026-04-14 (bond progression all phases — session 13)
 **Branch:** master
-**Schema version:** v69
-**Tests:** 2650 passing (backend pytest + vitest), tsc clean (frontend)
+**Schema version:** v70
+**Tests:** 2678 backend (pytest) + 160 frontend (vitest) passing, tsc clean
 **Automation:** 11 agents, 24 skills, 6 rules, 8 hooks, 3 MCP servers
 
 ## Active Work
 
-**Per-Character Scenarios complete.** Next priorities: message swipe/regeneration (highest-impact competitor gap), Bond Phase 3 (dialogue gates).
+**Bond Progression all 6 phases complete.** Next priorities: Memory Browser UI (backend ready, needs React UI), Visual Content in Chat (image gen pipeline exists).
+
+## Completed This Session (Apr 14, session 13 — Bond Phases 5+6)
+
+| What | Details |
+|------|---------|
+| **Bond Phase 5: Memorial Scenes** | 39 tier-transition vignettes (13 chars × 3 tier boundaries: acquaintance→friend, friend→close_friend, close_friend→soulmate). `bond_scenes_seen` table (schema v70). 5 backend endpoints: `GET memorial-scene`, `POST memorial-scene/complete`, `GET first-memory`, plus existing analytics. `MemorialScene.tsx` overlay + `useMemorialScene` hook (frontend). 5 new API methods in `api.ts`. `appStore` overlay registration. |
+| **Bond Phase 6: Analytics** | `GET /api/characters/{id}/bond/analytics` — XP source breakdown, session counts, tier history. DevConsole Bond analytics tab showing per-source XP chart and tier progress. |
+| **Tests** | +32 new (2678 backend total, 160 frontend total): 22 pytest (`test_bond_phase5.py` + `test_bond_analytics.py`) + 10 vitest (`MemorialScene` component + `useMemorialScene`). |
 
 ## Completed This Session (Apr 14, session 12 — Per-Character Scenarios)
 
@@ -171,17 +179,18 @@
 
 1. ~~**AIE Phase B: Deep Learning**~~ ✅ DONE — 6 modules, v66, 114 tests. Commit `02529cd`.
 2. ~~**Bond Progression Phases 1-2**~~ ✅ DONE — XP engine, unlocks, milestones, v67, BondProgressBar, LevelUpCelebration, 82 tests. Commits `0c64708`→`cdae599`.
-3. ~~**Per-Character Scenarios (P2)**~~ ✅ DONE — 65 builtin templates, ScenarioPicker UI, v69, 46 tests.
-4. **Message Swipe/Regeneration** — #1 competitor gap. Frontend wiring exists. ~4hrs estimated.
-5. **Bond Phase 3: Dialogue Style Shifts** — Bond-gated system prompt injection per tier. `backend/bond/dialogue_gates.py` + per-character templates → `context_assembler.py`. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` Phase 3.
-6. **Bond Phase 4: Milestone Timeline + Story Viewer** — Frontend: BondTimeline, BondStoryViewer, BondPanel. Spec: same file Phase 4.
-5. **QA Browser Testing** — Run `docs/testing/qa-questionnaire.html` alongside the app. Phases 8-16 remaining.
-4. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h, 6 phases).
-5. **Spring Bones 3D** — Quick win: strip Mixamo spring bone tracks + delta time clamp (1.5h). Spec: `docs/plans/2026-03-29-spring-bones-spec.md` (16.5h, 5 phases).
-6. **Jiggle Physics** — VRM spring bones physics. Spec: `docs/plans/2026-03-29-jiggle-physics-spec.md` (15-21h, 6 phases).
-7. **Model Marketplace Expansion** — Spec: `docs/plans/2026-03-29-model-marketplace-spec.md` (25-32h, 6 phases).
-8. **Privacy-First Sync** — Spec: `docs/plans/2026-03-29-privacy-sync-spec.md` (~6h, 2 phases).
-9. **AIE Phase C: Advanced** — LoRA training pipeline, DSPy prompt optimization. Heavy, independent. Spec: same file (Phase C: 54-76h).
+3. ~~**Bond Progression Phases 3+4**~~ ✅ DONE — dialogue gates, BondPanel/BondTimeline/BondStoryViewer. Commit `af56509`.
+4. ~~**Bond Progression Phases 5+6**~~ ✅ DONE — 39 memorial scenes, analytics endpoint + DevConsole tab, schema v70, 32 tests. Commits `c87531a`, `25c551a`, `7323998`.
+5. ~~**Per-Character Scenarios (P2)**~~ ✅ DONE — 65 builtin templates, ScenarioPicker UI, v69, 46 tests.
+6. **Memory Browser UI (P5)** — React component for viewing/editing character memories. Backend API already exists. High-impact, low-cost frontend build.
+7. **Visual Content in Chat** — "Character sends you a picture" UX flow. Image gen pipeline exists in backend. ~4-6hrs estimated.
+8. **QA Browser Testing** — Run `docs/testing/qa-questionnaire.html` alongside the app. Phases 8-16 remaining.
+9. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h, 6 phases).
+10. **Spring Bones 3D** — Quick win: strip Mixamo spring bone tracks + delta time clamp (1.5h). Spec: `docs/plans/2026-03-29-spring-bones-spec.md` (16.5h, 5 phases).
+11. **Jiggle Physics** — VRM spring bones physics. Spec: `docs/plans/2026-03-29-jiggle-physics-spec.md` (15-21h, 6 phases).
+12. **Model Marketplace Expansion** — Spec: `docs/plans/2026-03-29-model-marketplace-spec.md` (25-32h, 6 phases).
+13. **Privacy-First Sync** — Spec: `docs/plans/2026-03-29-privacy-sync-spec.md` (~6h, 2 phases).
+14. **AIE Phase C: Advanced** — LoRA training pipeline, DSPy prompt optimization. Heavy, independent. Spec: same file (Phase C: 54-76h).
 
 ### Browser Test Sweep Checklist
 

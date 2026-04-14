@@ -756,3 +756,20 @@ Special auto-generated scene that:
 - [ ] XP event log shows correct source breakdown
 - [ ] No bond decay under any circumstances
 - [ ] Characters never guilt-trip on departure at any tier
+
+---
+
+## ✅ COMPLETION LOG
+
+All 6 phases shipped. Bond Progression System is complete as of 2026-04-14.
+
+| Phase | Description | Commit SHA | Date | Tests Added |
+|-------|-------------|------------|------|-------------|
+| **Phase 1** | Enhanced XP engine — quadratic curve, depth multiplier (1.0–2.5×), session/daily bonuses, interest match, memory callback. Schema v67 (`bond_xp_events`, `bond_milestones`). 3 API endpoints. | `0c64708`→`cdae599` | 2026-04-07 | +82 |
+| **Phase 2** | Bond Bar UI — `BondProgressBar`, `LevelUpCelebration`, `useBondProgress` hook, tier badge in StatusBar. | `cdae599` | 2026-04-07 | included above |
+| **Phase 3** | Dialogue-gated system prompt injection — `backend/bond/dialogue_gates.py`, per-tier style directives injected into context assembler. | `1104a7d` | 2026-04-14 | included in P4 |
+| **Phase 4** | Milestone Timeline + Story Viewer — `BondPanel`, `BondTimeline`, `BondStoryViewer`, `BondStoryCard` frontend components. | `af56509` | 2026-04-14 | +36 |
+| **Phase 5** | Memorial Scenes — 39 tier-transition vignettes (13 chars × 3 tier boundaries). Schema v70 (`bond_scenes_seen`). `MemorialScene.tsx` overlay + `useMemorialScene` hook. 5 backend endpoints (`GET memorial-scene`, `POST memorial-scene/complete`, `GET first-memory`, `GET xp-history`, `GET bond`). | `c87531a`, `7323998` | 2026-04-14 | +22 backend, +16 frontend |
+| **Phase 6** | XP Event Log + Analytics — `GET /api/characters/{id}/bond/analytics` (XP source breakdown, session counts, tier history). DevConsole Bond analytics tab. | `25c551a`, `7323998` | 2026-04-14 | +10 backend |
+
+**Final totals:** 150+ tests added across all 6 phases. Schema advanced from v56 baseline through v67 → v70. All design decisions from the spec were honoured (no decay, no guilt-trip, quadratic curve, 5 tiers, every level unlocks something).

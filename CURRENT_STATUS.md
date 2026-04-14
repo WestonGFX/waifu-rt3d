@@ -1,14 +1,22 @@
 # Current Project Status
 
-**Last updated:** 2026-04-14 (per-character scenarios backend)
+**Last updated:** 2026-04-14 (per-character scenarios — session 12)
 **Branch:** master
 **Schema version:** v69
-**Tests:** 2650 passing (backend pytest), tsc clean (frontend)
+**Tests:** 2650 passing (backend pytest + vitest), tsc clean (frontend)
 **Automation:** 11 agents, 24 skills, 6 rules, 8 hooks, 3 MCP servers
 
 ## Active Work
 
-**AI Quick Replies + CHARA V2 compliance complete.** Next priorities: message swipe/regeneration (highest-impact gap), P2 character scenarios, Bond Phase 3 (dialogue gates).
+**Per-Character Scenarios complete.** Next priorities: message swipe/regeneration (highest-impact competitor gap), Bond Phase 3 (dialogue gates).
+
+## Completed This Session (Apr 14, session 12 — Per-Character Scenarios)
+
+| What | Details |
+|------|---------|
+| **Per-Character Scenario Templates** | schema v69 migration seeds 65 builtin templates (13 chars × 5). 6 REST endpoints under `/api/scenarios/templates`: list, active, create, update, delete (403 on builtins), activate (id=0 deactivates). |
+| **ScenarioPicker UI** | `ScenarioPicker.tsx` (497 lines) — modal with mood-grouped list, activate/random/create-custom. `useScenarios.ts` hook (186 lines). Sparkles button in ChatThread composer toolbar opens overlay. 7 new API methods in `api.ts`. |
+| **Tests** | +46 new (2650 total): 29 backend (`test_scenario_templates_api.py`) + 17 vitest frontend. |
 
 ## Completed This Session (Apr 7, session 11 — Quick Replies + CHARA V2 + Competitor Research)
 
@@ -163,8 +171,10 @@
 
 1. ~~**AIE Phase B: Deep Learning**~~ ✅ DONE — 6 modules, v66, 114 tests. Commit `02529cd`.
 2. ~~**Bond Progression Phases 1-2**~~ ✅ DONE — XP engine, unlocks, milestones, v67, BondProgressBar, LevelUpCelebration, 82 tests. Commits `0c64708`→`cdae599`.
-3. **Bond Phase 3: Dialogue Style Shifts** — Bond-gated system prompt injection per tier. `backend/bond/dialogue_gates.py` + per-character templates → `context_assembler.py`. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` Phase 3.
-4. **Bond Phase 4: Milestone Timeline + Story Viewer** — Frontend: BondTimeline, BondStoryViewer, BondPanel. Spec: same file Phase 4.
+3. ~~**Per-Character Scenarios (P2)**~~ ✅ DONE — 65 builtin templates, ScenarioPicker UI, v69, 46 tests.
+4. **Message Swipe/Regeneration** — #1 competitor gap. Frontend wiring exists. ~4hrs estimated.
+5. **Bond Phase 3: Dialogue Style Shifts** — Bond-gated system prompt injection per tier. `backend/bond/dialogue_gates.py` + per-character templates → `context_assembler.py`. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` Phase 3.
+6. **Bond Phase 4: Milestone Timeline + Story Viewer** — Frontend: BondTimeline, BondStoryViewer, BondPanel. Spec: same file Phase 4.
 5. **QA Browser Testing** — Run `docs/testing/qa-questionnaire.html` alongside the app. Phases 8-16 remaining.
 4. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h, 6 phases).
 5. **Spring Bones 3D** — Quick win: strip Mixamo spring bone tracks + delta time clamp (1.5h). Spec: `docs/plans/2026-03-29-spring-bones-spec.md` (16.5h, 5 phases).

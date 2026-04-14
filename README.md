@@ -3,8 +3,8 @@
 > **AI Companion Platform** — 3D anime avatars with personality-driven animation, local/cloud LLM integration, 45-model catalog with hardware-aware recommendations, director mode, daily streaks, full-duplex voice conversation, 9-provider TTS, offline STT, agentic tool use, mini games, lorebook, tiered memory, character moods, 18 themes, cinematic mode, and OBS streaming overlays.
 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-1532%20passed-brightgreen)](backend/tests/)
-[![Schema](https://img.shields.io/badge/DB%20schema-v61-purple)](#)
+[![Tests](https://img.shields.io/badge/tests-2650%20passed-brightgreen)](backend/tests/)
+[![Schema](https://img.shields.io/badge/DB%20schema-v69-purple)](#)
 [![Themes](https://img.shields.io/badge/themes-18-ff69b4)](#themes)
 [![Frontends](https://img.shields.io/badge/frontends-Neon%20%7C%20Sakura%20%7C%20Nova-ff69b4)](#dual-frontend-architecture)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -657,10 +657,16 @@ waifu-rt3d/
 | `GET` | `/api/models/recommend` | Hardware-aware model recommendations |
 | `WS` | `/ws/spectator` | Game companion screen analysis |
 | `WS` | `/ws/overlay` | OBS overlay WebSocket |
+| `GET` | `/api/scenarios/templates` | List all scenario templates (builtin + custom) |
+| `GET` | `/api/scenarios/templates/active` | Get the currently active scenario template |
+| `POST` | `/api/scenarios/templates` | Create a custom scenario template |
+| `PUT` | `/api/scenarios/templates/{id}` | Update a scenario template (custom only) |
+| `DELETE` | `/api/scenarios/templates/{id}` | Delete a custom template (403 on builtins) |
+| `POST` | `/api/scenarios/templates/activate` | Activate a scenario template (id=0 to deactivate) |
 
-### Database Schema (v61)
+### Database Schema (v69)
 
-The SQLite database (schema v61) auto-migrates on startup. Key tables:
+The SQLite database (schema v69) auto-migrates on startup. Key tables:
 - **sessions** — chat sessions with summary, archive, tags, and author's note
 - **messages** — chat history with emotion, branching (parent_id), token stats, pinning, reactions
 - **characters** — full character profiles (40+ columns including animation_profile, capability_profile, diary, voice config, mood settings, greeting config)
@@ -688,6 +694,7 @@ The SQLite database (schema v61) auto-migrates on startup. Key tables:
 - **animation_sequences** — stored animation clip sequences for the sequencer
 - **relationship_boundaries** — per-character comfort-level constraints (hard/soft) for content gating
 - **private_vocabulary** — pet names, inside jokes, code words, shared references per character
+- **scenario_templates** — 65 builtin + custom scenario templates (13 chars × 5, mood-tagged, activation state)
 
 ---
 
@@ -704,13 +711,19 @@ The SQLite database (schema v61) auto-migrates on startup. Key tables:
 .venv/bin/python -m pytest backend/tests/ -x --tb=short
 ```
 
-**1532 backend tests** covering API endpoints, CRUD, agents, voice module, memory, spectator, link manager, context assembler, embeddings, content gating, adaptive intelligence, bond progression, animation sequencer, boundaries, writing styles, sensory profiles, vocabulary, and more. Plus frontend component tests and 26 Playwright E2E tests.
+**2650 backend + frontend tests** covering API endpoints, CRUD, agents, voice module, memory, spectator, link manager, context assembler, embeddings, content gating, adaptive intelligence, bond progression, animation sequencer, boundaries, writing styles, sensory profiles, vocabulary, scenario templates, and more. Plus 26 Playwright E2E tests.
 
 ---
 
 ## Roadmap
 
-### Recently Completed (v12 — schema v61)
+### Recently Completed (v13 — schema v69)
+- **Per-Character Scenario Templates** — 65 builtin scenarios (13 characters × 5 moods), custom template creation, mood-grouped ScenarioPicker UI with random and activate controls, 6 REST endpoints, 46 new tests (29 backend + 17 frontend)
+- **Bond Progression Phases 3+4** — dialogue-gated system prompt injection per bond tier, BondPanel/BondTimeline/BondStoryViewer frontend components
+- **AI Quick Replies + CHARA V2 Compliance** — two-phase heuristic→LLM chip system, schema v68 with lossless SillyTavern card import/export
+- **Message Swipe / Regeneration** — branch navigation with always-visible controls, Ctrl+Shift+R, in-place updates
+
+### Previously Completed (v12 — schema v61)
 - **NSFW Phase 1: Foundation Layer** — four features that compose into the intimate content system:
   - **Relationship Boundaries (F40)** — per-character hard/soft comfort constraints, in-character negotiation prompts, export/import across characters
   - **Writing Style Presets (F13)** — four narrative voices (romantic, literary, direct, suggestive) with per-character defaults for all 13 characters

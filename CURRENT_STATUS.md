@@ -1,9 +1,9 @@
 # Current Project Status
 
-**Last updated:** 2026-04-07 17:30 PDT
+**Last updated:** 2026-04-14 (per-character scenarios backend)
 **Branch:** master
-**Schema version:** v68
-**Tests:** 2571 passing (backend pytest), tsc clean (frontend)
+**Schema version:** v69
+**Tests:** 2650 passing (backend pytest), tsc clean (frontend)
 **Automation:** 11 agents, 24 skills, 6 rules, 8 hooks, 3 MCP servers
 
 ## Active Work

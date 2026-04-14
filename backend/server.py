@@ -17534,6 +17534,320 @@ def get_intimate_quiz_progress(char_id: int):
         conn.close()
 
 
+# --- Scenario Templates ---
+
+class _ScenarioCreateBody(BaseModel):
+    """Request body for POST /api/scenarios/templates.
+
+    Attributes:
+        char_id: Character the new template belongs to.
+        title: Short human-readable label (max ~80 chars).
+        description: Full scene description injected into the LLM prompt.
+        setting: Location type — "indoor", "outdoor", "transit", or "virtual".
+        time_of_day: Time constraint — "morning", "afternoon", "evening",
+            "night", or "any".
+        mood: Emotional tone — "cozy", "tense", "romantic", "playful",
+            "melancholy", or "energetic".
+        is_default: When ``True`` this template becomes the character's
+            default scenario for new sessions.
+    """
+
+    char_id: int
+    title: str
+    description: str
+    setting: str = "indoor"
+    time_of_day: str = "any"
+    mood: str = "cozy"
+    is_default: bool = False
+
+
+class _ScenarioUpdateBody(BaseModel):
+    """Request body for PUT /api/scenarios/templates/{template_id}.
+
+    All fields are optional — only the keys supplied are modified.
+
+    Attributes:
+        title: Updated short label.
+        description: Updated scene description.
+        setting: Updated location type.
+        time_of_day: Updated time constraint.
+        mood: Updated emotional tone.
+        is_default: Promote to character default when ``True``.
+    """
+
+    title: Optional[str] = None
+    description: Optional[str] = None
+    setting: Optional[str] = None
+    time_of_day: Optional[str] = None
+    mood: Optional[str] = None
+    is_default: Optional[bool] = None
+
+
+class _ScenarioActivateBody(BaseModel):
+    """Request body for POST /api/scenarios/templates/activate.
+
+    Attributes:
+        template_id: ID of the template to activate for the session.
+            Pass ``0`` to deactivate the current scenario.
+        session_id: Target session ID.
+    """
+
+    template_id: int
+    session_id: int
+
+
+@app.get("/api/scenarios/templates")
+def list_scenario_templates(char_id: int):
+    """Return all scenario templates for a character, default-first.
+
+    Args:
+        char_id: Character whose templates to list.
+
+    Returns:
+        {"ok": True, "templates": [ScenarioTemplate, ...]}
+
+    Raises:
+        HTTPException 400: If char_id is missing or invalid.
+    """
+    from backend.scenario.templates import get_templates
+
+    if char_id <= 0:
+        raise HTTPException(status_code=400, detail="char_id must be a positive integer")
+
+    conn = db()
+    try:
+        templates = get_templates(char_id, conn)
+        return {
+            "ok": True,
+            "templates": [
+                {
+                    "id": t.id,
+                    "char_id": t.char_id,
+                    "title": t.title,
+                    "description": t.description,
+                    "setting": t.setting,
+                    "time_of_day": t.time_of_day,
+                    "mood": t.mood,
+                    "is_default": t.is_default,
+                    "is_builtin": t.is_builtin,
+                    "created_at": t.created_at,
+                }
+                for t in templates
+            ],
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/api/scenarios/templates/active")
+def get_active_scenario_template(char_id: int, session_id: int):
+    """Return the currently active scenario template for a session.
+
+    Resolution order:
+        1. Session-level override (``sessions.scene_context`` when
+           ``scene_enabled = 1``).
+        2. Character default template (``is_default = 1``).
+        3. ``None`` — ``template`` key will be ``null``.
+
+    Args:
+        char_id: Character ID.
+        session_id: Current session ID.
+
+    Returns:
+        {"ok": True, "template": {...} | null}
+    """
+    from backend.scenario.templates import get_active_template
+
+    conn = db()
+    try:
+        template = get_active_template(char_id, session_id, conn)
+        return {
+            "ok": True,
+            "template": (
+                {
+                    "id": template.id,
+                    "char_id": template.char_id,
+                    "title": template.title,
+                    "description": template.description,
+                    "setting": template.setting,
+                    "time_of_day": template.time_of_day,
+                    "mood": template.mood,
+                    "is_default": template.is_default,
+                    "is_builtin": template.is_builtin,
+                    "created_at": template.created_at,
+                }
+                if template
+                else None
+            ),
+        }
+    finally:
+        conn.close()
+
+
+@app.post("/api/scenarios/templates")
+def create_scenario_template(body: _ScenarioCreateBody):
+    """Create a new scenario template for a character.
+
+    If ``is_default=True`` the existing default for that character is
+    unset first — only one default per character is maintained.
+
+    Args:
+        body: Validated request body — see ``_ScenarioCreateBody``.
+
+    Returns:
+        {"ok": True, "template": {...}}
+
+    Raises:
+        HTTPException 400: If title/description are empty or char_id invalid.
+        HTTPException 422: Pydantic validation failure.
+    """
+    from backend.scenario.templates import create_template
+
+    conn = db()
+    try:
+        template = create_template(
+            char_id=body.char_id,
+            title=body.title,
+            description=body.description,
+            conn=conn,
+            setting=body.setting,
+            time_of_day=body.time_of_day,
+            mood=body.mood,
+            is_default=body.is_default,
+            is_builtin=False,
+        )
+        return {
+            "ok": True,
+            "template": {
+                "id": template.id,
+                "char_id": template.char_id,
+                "title": template.title,
+                "description": template.description,
+                "setting": template.setting,
+                "time_of_day": template.time_of_day,
+                "mood": template.mood,
+                "is_default": template.is_default,
+                "is_builtin": template.is_builtin,
+                "created_at": template.created_at,
+            },
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        conn.close()
+
+
+@app.put("/api/scenarios/templates/{template_id}")
+def update_scenario_template(template_id: int, body: _ScenarioUpdateBody):
+    """Update fields on an existing scenario template.
+
+    Only the fields present in the request body are modified.  Built-in
+    templates may be updated (e.g. to change the default flag) but cannot
+    be deleted — see the DELETE endpoint for the block policy.
+
+    Args:
+        template_id: Primary key of the template to update.
+        body: Partial update body — see ``_ScenarioUpdateBody``.
+
+    Returns:
+        {"ok": True}
+
+    Raises:
+        HTTPException 404: If no template with that ID exists.
+    """
+    from backend.scenario.templates import update_template
+
+    conn = db()
+    try:
+        kwargs = {
+            k: v
+            for k, v in body.model_dump().items()
+            if v is not None
+        }
+        updated = update_template(template_id, conn, **kwargs)
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/scenarios/templates/{template_id}")
+def delete_scenario_template(template_id: int):
+    """Delete a user-created scenario template.
+
+    Built-in templates (``is_builtin = 1``) cannot be deleted and will
+    return a 403 response.
+
+    Args:
+        template_id: Primary key of the template to remove.
+
+    Returns:
+        {"ok": True}
+
+    Raises:
+        HTTPException 403: If the template is a built-in shipped template.
+        HTTPException 404: If no template with that ID exists.
+    """
+    from backend.scenario.templates import get_template, delete_template
+
+    conn = db()
+    try:
+        template = get_template(template_id, conn)
+        if template is None:
+            raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
+        if template.is_builtin:
+            raise HTTPException(
+                status_code=403,
+                detail="Built-in scenario templates cannot be deleted",
+            )
+        delete_template(template_id, conn)
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@app.post("/api/scenarios/templates/activate")
+def activate_scenario_template(body: _ScenarioActivateBody):
+    """Activate (or deactivate) a scenario template for a session.
+
+    Writes the template ID to ``sessions.scene_context`` and sets
+    ``scene_enabled = 1``.  Pass ``template_id = 0`` to deactivate.
+
+    Args:
+        body: Activate body — see ``_ScenarioActivateBody``.
+
+    Returns:
+        {"ok": True, "activated": bool}
+
+    Raises:
+        HTTPException 404: If the template ID is non-zero but not found.
+        HTTPException 404: If the session does not exist.
+    """
+    from backend.scenario.templates import activate_template, get_template
+
+    conn = db()
+    try:
+        # Validate template exists (skip for deactivate shortcut)
+        if body.template_id != 0:
+            template = get_template(body.template_id, conn)
+            if template is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Template {body.template_id} not found",
+                )
+
+        activated = activate_template(body.template_id, body.session_id, conn)
+        if not activated and body.template_id != 0:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Session {body.session_id} not found",
+            )
+        return {"ok": True, "activated": activated}
+    finally:
+        conn.close()
+
+
 # --- EXCEPTION HANDLERS ---
 @app.exception_handler(Exception)
 async def generic_exception_handler(request, exc):

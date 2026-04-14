@@ -4596,6 +4596,367 @@ def migrate_to_v68(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v69(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v68 to v69.
+
+    Adds: Seeds 65 built-in scenario templates (13 characters × 5 each) into
+    the ``scenario_templates`` table.  The table is created first via
+    ``_ensure_table`` from ``backend.scenario.templates`` so the migration is
+    idempotent even on a fresh database that has never seen the module before.
+
+    Every INSERT uses ``INSERT OR IGNORE`` keyed on ``(char_id, title)`` so
+    re-running the migration is safe.
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> con.execute("CREATE TABLE schema_version (version INTEGER)")
+        <...>
+        >>> con.execute("INSERT INTO schema_version VALUES (68)")
+        <...>
+        >>> migrate_to_v69(con)
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 69:
+        logger.info("Schema already at v%d, skipping v69 migration.", cur_ver)
+        return True
+
+    try:
+        # Ensure the scenario_templates table exists (the module self-heals).
+        from backend.scenario.templates import _ensure_table
+        _ensure_table(con)
+
+        # Character IDs as they exist in the shipped DB (Brittney/ID 15 excluded).
+        # Format: (char_id, title, description, setting, time_of_day, mood, is_default)
+        _BUILTIN_TEMPLATES: list[tuple[int, str, str, str, str, str, int]] = [
+            # ── 1 · Rin (Akane) ────────────────────────────────────────────
+            (1, "Cherry Blossom Walk",
+             "Rin walks beside you under a canopy of pale-pink petals drifting in the breeze. "
+             "The path is empty except for the two of you, and she keeps stealing glances your way.",
+             "outdoor", "afternoon", "romantic", 1),
+            (1, "Late-Night Study Session",
+             "Rin has draped herself across the opposite end of the kotatsu with a textbook, "
+             "pretending to study. The apartment is warm and quiet.",
+             "indoor", "night", "cozy", 0),
+            (1, "Rainy Rooftop",
+             "A sudden shower traps you both under the narrow overhang of the school rooftop. "
+             "Rin is quietly watching the rain sheet off the edge.",
+             "outdoor", "evening", "melancholy", 0),
+            (1, "Convenience Store Run",
+             "It's 11 PM and Rin drags you to the nearest konbini for onigiri and canned coffee. "
+             "The fluorescent lights make everything feel a little unreal.",
+             "indoor", "night", "playful", 0),
+            (1, "Kendo Practice",
+             "Rin is wrapping her wrists after practice, bamboo sword leaning against the gym wall. "
+             "The dojo smells of cedar and sweat, and she's in an oddly talkative mood.",
+             "indoor", "afternoon", "energetic", 0),
+
+            # ── 2 · Tsundere (Raine) ───────────────────────────────────────
+            (2, "Rival Study Group",
+             "Raine drops a stack of flash cards on the table and insists this is purely "
+             "strategic, not friendly. The library closes in two hours.",
+             "indoor", "evening", "tense", 1),
+            (2, "Accidental Umbrella Share",
+             "One umbrella, two people, and a downpour that shows no sign of stopping. "
+             "Raine is standing as far to the edge as she physically can.",
+             "outdoor", "evening", "romantic", 0),
+            (2, "Winter Festival",
+             "The lantern light catches the frost on Raine's breath as she pretends not to "
+             "be excited about the shooting-gallery stall.",
+             "outdoor", "evening", "playful", 0),
+            (2, "Rooftop Lunch",
+             "Raine has claimed the roof garden bench with a bento she insists she made "
+             "for herself — then produced two sets of chopsticks.",
+             "outdoor", "afternoon", "cozy", 0),
+            (2, "Karaoke Room Showdown",
+             "Raine challenged you to a song duel in a private karaoke booth and is now "
+             "deeply regretting picking a duet track.",
+             "indoor", "night", "energetic", 0),
+
+            # ── 3 · Ayane (Yuki) ───────────────────────────────────────────
+            (3, "Greenhouse Morning",
+             "Ayane tends her herb garden in the campus greenhouse while morning light "
+             "filters through steamed glass. She hums something soft and half-remembered.",
+             "indoor", "morning", "cozy", 1),
+            (3, "Night Market",
+             "Lanterns sway above rows of street food stalls. Ayane keeps stopping to "
+             "press samples into your hands with barely contained excitement.",
+             "outdoor", "night", "playful", 0),
+            (3, "Seaside Picnic",
+             "A checkered blanket, paper cups of barley tea, and a sea breeze "
+             "that keeps rearranging Ayane's hair.",
+             "outdoor", "afternoon", "romantic", 0),
+            (3, "Pottery Workshop",
+             "Ayane's hands are already clay-grey up to the elbows. She scoots to make "
+             "room at the wheel, promising she'll show you the trick to centering.",
+             "indoor", "afternoon", "cozy", 0),
+            (3, "Twilight Jog",
+             "Ayane sets a pace designed to keep conversation possible and keeps checking "
+             "over her shoulder to make sure you haven't fallen behind.",
+             "outdoor", "evening", "energetic", 0),
+
+            # ── 4 · Genki (Kitsune) ────────────────────────────────────────
+            (4, "Autumn Forest Trail",
+             "Kitsune bounds ahead on a leaf-strewn mountain path, ears flicking at every "
+             "rustling sound. The air smells of pine resin and turned earth.",
+             "outdoor", "morning", "energetic", 1),
+            (4, "Shrine Festival Night",
+             "Paper lanterns float above the festival grounds. Kitsune has already won "
+             "three goldfish and is eyeing the ring toss.",
+             "outdoor", "evening", "playful", 0),
+            (4, "Cozy Den",
+             "Kitsune has built a fort of blankets and cushions and declared it a "
+             "'hibernation zone'. She pats the space beside her.",
+             "indoor", "night", "cozy", 0),
+            (4, "Hot Springs",
+             "A mountain ryokan, heavy snowfall outside, and Kitsune inexplicably at ease "
+             "in the outdoor bath watching the flakes melt on the water.",
+             "outdoor", "evening", "romantic", 0),
+            (4, "Morning Run",
+             "Kitsune shows up at your door at 6 AM with two pairs of running shoes and "
+             "zero apology for the early hour.",
+             "outdoor", "morning", "energetic", 0),
+
+            # ── 5 · Hana (Momoka) ──────────────────────────────────────────
+            (5, "Flower Shop After Hours",
+             "Hana stays late to re-arrange a display and you've ended up helping. "
+             "The shop is locked, petals on the floor, and she's quietly happy.",
+             "indoor", "evening", "cozy", 1),
+            (5, "Park Bench Lunch",
+             "Hana spread out a furoshiki cloth on the bench and unpacked enough food "
+             "for four people, insisting she always over-prepares.",
+             "outdoor", "afternoon", "playful", 0),
+            (5, "Garden Center Outing",
+             "Hana narrates every plant with the focused joy of a tour guide, pausing "
+             "to hold seedlings up to the light.",
+             "outdoor", "morning", "energetic", 0),
+            (5, "Rainy Window",
+             "Hana sits by the café window watching rain-drops race down the glass, "
+             "hands wrapped around a mug of chamomile.",
+             "indoor", "afternoon", "melancholy", 0),
+            (5, "Stargazing Meadow",
+             "A hiking blanket, a sky full of stars, and Hana quietly naming "
+             "constellations she learned from a childhood atlas.",
+             "outdoor", "night", "romantic", 0),
+
+            # ── 6 · Sable (Kuroha) ─────────────────────────────────────────
+            (6, "Underground Record Shop",
+             "Sable flips through vinyl with practiced efficiency, occasionally passing "
+             "you a record sleeve without comment — it's an invitation.",
+             "indoor", "afternoon", "cozy", 1),
+            (6, "Midnight Walk",
+             "The city is quieter after midnight. Sable walks a half-step ahead, "
+             "hood up, speaking more freely in the dark.",
+             "outdoor", "night", "melancholy", 0),
+            (6, "Art Gallery Closing Time",
+             "You're the last two visitors in the gallery. Sable stops in front of a "
+             "canvas and says nothing for a long time.",
+             "indoor", "evening", "tense", 0),
+            (6, "Rooftop at Dawn",
+             "Sable found a roof with a view of the whole city and timed it "
+             "for the exact shade of blue before sunrise.",
+             "outdoor", "morning", "romantic", 0),
+            (6, "Basement Studio",
+             "Sable's mixing desk glows amber in the dark. She hands you headphones "
+             "without preamble — she wants to know if you can hear what she heard.",
+             "indoor", "night", "energetic", 0),
+
+            # ── 8 · Shiori (Nana) ──────────────────────────────────────────
+            (8, "Library Stacks",
+             "Shiori leads you deep into the archive shelves where the books are "
+             "too old to have barcodes. She pulls one out and opens it to a map.",
+             "indoor", "afternoon", "cozy", 1),
+            (8, "Autumn Lecture Hall",
+             "An empty lecture hall after class, golden light slanting through tall "
+             "windows. Shiori uses the whiteboard to explain something she's been "
+             "thinking about all week.",
+             "indoor", "afternoon", "energetic", 0),
+            (8, "Canal Walk at Dusk",
+             "Old bridges and amber reflections. Shiori recites a poem under her breath "
+             "and then acts like she didn't.",
+             "outdoor", "evening", "romantic", 0),
+            (8, "Rainy Archive",
+             "A research trip turns into shelter from a storm. Shiori spreads documents "
+             "across a reading table and settles in as if she planned this.",
+             "indoor", "afternoon", "melancholy", 0),
+            (8, "Tea Ceremony Room",
+             "Shiori moves through the preparation with careful, practiced stillness. "
+             "The silence feels inhabited rather than empty.",
+             "indoor", "morning", "cozy", 0),
+
+            # ── 9 · Mika (Mikazuki) ────────────────────────────────────────
+            (9, "Crescent Moon Rooftop",
+             "Mika has dragged a telescope up six flights of stairs and is adjusting the "
+             "eyepiece, moon low and huge on the horizon.",
+             "outdoor", "night", "romantic", 1),
+            (9, "Midnight Convenience Store",
+             "Mika treats every late-night konbini run as a minor expedition. She's "
+             "deliberating over two flavours of pocky with complete seriousness.",
+             "indoor", "night", "playful", 0),
+            (9, "Quiet Planetarium",
+             "The projector hums. Stars wheel across the domed ceiling. Mika sits with "
+             "her knees pulled up and her face turned upward.",
+             "indoor", "evening", "cozy", 0),
+            (9, "Dawn Departure",
+             "Mika woke you to catch the 4 AM sky. There's a thermos of bitter coffee "
+             "and the birds haven't started yet.",
+             "outdoor", "morning", "melancholy", 0),
+            (9, "Meteor Shower Hillside",
+             "A blanket on cool grass, counting streaks of light. Mika makes a wish on "
+             "every one and won't tell you what they are.",
+             "outdoor", "night", "romantic", 0),
+
+            # ── 10 · Kaede (Suzuha) ────────────────────────────────────────
+            (10, "After-School Workshop",
+             "Kaede spreads circuit boards and soldering tools across the club table "
+             "with the focused calm of someone who thinks better with her hands.",
+             "indoor", "afternoon", "energetic", 1),
+            (10, "Train Ride Home",
+             "A late express that's nearly empty. Kaede sits across from you watching "
+             "city lights blur past the window.",
+             "transit", "evening", "cozy", 0),
+            (10, "Tech Market Sunday",
+             "Kaede has a hand-drawn map of stalls she wants to hit. She moves fast "
+             "but always doubles back to check you're keeping up.",
+             "outdoor", "morning", "playful", 0),
+            (10, "Power Outage",
+             "The lights went out mid-project. Kaede has a headlamp, a backup battery, "
+             "and a plan. The candles were your idea.",
+             "indoor", "night", "tense", 0),
+            (10, "Hilltop Picnic",
+             "Kaede picked a hill with a view of the antenna towers she helped install. "
+             "She brought sandwiches and wants to explain how the transmitters work.",
+             "outdoor", "afternoon", "cozy", 0),
+
+            # ── 11 · Luna (Tsukimi) ────────────────────────────────────────
+            (11, "Moon-Viewing Platform",
+             "Luna sits on an engawa with a cup of cold amazake, watching the moon "
+             "rise above the tree line. She's been here for an hour already.",
+             "outdoor", "night", "cozy", 1),
+            (11, "Rabbit Café",
+             "Luna is entirely focused on a small lop-ear that has decided she is "
+             "furniture. She hasn't moved in twenty minutes.",
+             "indoor", "afternoon", "playful", 0),
+            (11, "Night Ferry",
+             "The ferry is near-empty. Luna stands at the stern rail watching the "
+             "city recede, hair whipping in the sea wind.",
+             "transit", "night", "melancholy", 0),
+            (11, "Paper Lantern Festival",
+             "Hundreds of lanterns rising over the river. Luna watches one drift "
+             "until it's just a warm speck among the stars.",
+             "outdoor", "evening", "romantic", 0),
+            (11, "Early Morning Temple",
+             "Luna arrived before the incense was lit. She sits in the empty courtyard, "
+             "perfectly still, eyes half-closed.",
+             "outdoor", "morning", "cozy", 0),
+
+            # ── 12 · Yuki (Shirayuki) ─────────────────────────────────────
+            (12, "First Snow",
+             "Yuki steps into fresh snowfall and turns her face upward with a "
+             "startled, delighted expression — as if she expected it to be colder.",
+             "outdoor", "morning", "playful", 1),
+            (12, "Ice Rink",
+             "Yuki is a confident skater and takes visible pleasure in circling back "
+             "to help when you wobble.",
+             "indoor", "afternoon", "energetic", 0),
+            (12, "Snow Day Cooking",
+             "A blizzard outside. Yuki is making hot pot and narrating every step "
+             "for reasons that slowly become clear: she's teaching you.",
+             "indoor", "afternoon", "cozy", 0),
+            (12, "Frozen Lake at Sunset",
+             "The ice holds a mirror image of a crimson sky. Yuki kneels to press "
+             "her palm against the surface, listening.",
+             "outdoor", "evening", "romantic", 0),
+            (12, "Winter Cabin",
+             "A remote rental, a wood-burning stove, and Yuki reading by firelight "
+             "while snow seals every window.",
+             "indoor", "night", "cozy", 0),
+
+            # ── 13 · Dae (Neciridae) ──────────────────────────────────────
+            (13, "Late Night Studio",
+             "Dae is painting at her easel by lamplight, lo-fi playing softly "
+             "from a battered speaker on the shelf. She glances up when you enter "
+             "but doesn't stop.",
+             "indoor", "night", "cozy", 1),
+            (13, "Ink & Rain",
+             "A sudden downpour traps you inside a museum gallery. Dae moves "
+             "slowly from print to print, reading each one like a page.",
+             "indoor", "afternoon", "melancholy", 0),
+            (13, "Open Studio Night",
+             "The collective's studio is loud and warm with visitors. Dae steers "
+             "you toward the corner she's claimed and explains the piece she's "
+             "been working on for three months.",
+             "indoor", "evening", "energetic", 0),
+            (13, "Rooftop at Blue Hour",
+             "Dae brings a sketchbook to the roof every dusk. She hands you a "
+             "pencil without asking — there's a blank page open.",
+             "outdoor", "evening", "romantic", 0),
+            (13, "Empty Theatre",
+             "A borrowed key, a darkened auditorium, and Dae sitting in the front "
+             "row watching nothing. She says it's the best acoustic space she's "
+             "ever found for thinking.",
+             "indoor", "night", "tense", 0),
+
+            # ── 14 · Alana Calloway ────────────────────────────────────────
+            (14, "Downtown Coffee Shop",
+             "Alana has commandeered a corner table with her laptop, a legal pad, "
+             "and enough espresso for two. She waves you over like she's been "
+             "expecting you.",
+             "indoor", "morning", "energetic", 1),
+            (14, "Rooftop Gym",
+             "The building's rooftop fitness deck at golden hour. Alana finishes "
+             "a set and tosses you a water bottle without breaking stride.",
+             "outdoor", "afternoon", "energetic", 0),
+            (14, "Late Office",
+             "The floor is empty except for Alana's desk lamp cutting a pool of "
+             "light through the dark. She's been here since seven and the city "
+             "below is starting to glow.",
+             "indoor", "night", "tense", 0),
+            (14, "Weekend Farmers Market",
+             "Alana navigates the stalls with the same efficiency she brings to "
+             "everything, but she slows down at the cheese counter.",
+             "outdoor", "morning", "playful", 0),
+            (14, "Rainy Evening Bar",
+             "A neighbourhood bar she knows by name. Alana orders two drinks and "
+             "settles in like she has nowhere else to be for once.",
+             "indoor", "evening", "cozy", 0),
+        ]
+
+        # Bulk-insert using INSERT OR IGNORE so reruns are safe.
+        # We key on (char_id, title) — the combination is unique per character.
+        # NOTE: The scenario_templates table has no UNIQUE constraint on
+        # (char_id, title) by default, so we use a SELECT-before-INSERT guard
+        # instead to keep _ensure_table unchanged.
+        for (
+            char_id, title, description, setting, time_of_day, mood, is_default
+        ) in _BUILTIN_TEMPLATES:
+            existing = con.execute(
+                "SELECT id FROM scenario_templates WHERE char_id = ? AND title = ?",
+                (char_id, title),
+            ).fetchone()
+            if existing:
+                continue
+            con.execute(
+                "INSERT INTO scenario_templates "
+                "(char_id, title, description, setting, time_of_day, mood, "
+                " is_default, is_builtin) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
+                (char_id, title, description, setting, time_of_day, mood, is_default),
+            )
+
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (69)")
+        con.commit()
+        logger.info(
+            "\u2705 Schema v69 migration complete "
+            "(65 built-in scenario templates seeded across 13 characters)"
+        )
+        return True
+    except Exception as e:
+        logger.error("Schema v69 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -5111,21 +5472,27 @@ def ensure_db():
             if migrate_to_v68(con):
                 version = 68
 
+        if version < 69:
+            logger.info("Upgrading database schema from v68 to v69...")
+            logger.info("  - Scenario templates: 65 built-in templates seeded (13 chars x 5)")
+            if migrate_to_v69(con):
+                version = 69
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 68:
-            raise RuntimeError(f"Database initialization failed: Expected v68, got v{final_version}")
+        if final_version < 69:
+            raise RuntimeError(f"Database initialization failed: Expected v69, got v{final_version}")
 
-        if final_version > 68:
-            logger.warning(f"Database is newer than application (v{final_version} > v68). Some features might be unused.")
+        if final_version > 69:
+            logger.warning(f"Database is newer than application (v{final_version} > v69). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v68 adds CHARA V2 columns)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v69 seeds per-character scenario templates)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

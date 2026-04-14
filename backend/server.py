@@ -9140,6 +9140,228 @@ def get_bond_xp_history_endpoint(char_id: int, limit: int = 50):
         return {"ok": True, "events": []}
 
 
+# ── Bond Phase 5: Memorial Scenes ────────────────────────────────────────────
+
+
+class _MemorialCompleteRequest(BaseModel):
+    """Request body for POST /bond/memorial-scene/complete."""
+
+    scene_id: str
+
+
+@app.get("/api/characters/{char_id}/bond/memorial-scene")
+def get_bond_memorial_scene_endpoint(char_id: int, level: int = 0):
+    """Return the pending memorial scene for a character at a given bond level.
+
+    Memorial scenes are one-time tier-transition vignettes that trigger at
+    levels 15, 35, and 65 (Acquaintance→Friend, Friend→Close Friend,
+    Close Friend→Soulmate).  Returns ``null`` when no scene is pending (either
+    the level is not a transition threshold or the scene was already seen).
+
+    Args:
+        char_id: Character primary key.
+        level: Current bond level to check.  Typically the level the character
+            just reached.  Defaults to 0 (no scene returned).
+
+    Returns:
+        ``{"ok": True, "scene": {...}}`` where scene fields are
+        ``scene_id``, ``char_name``, ``level``, ``tier_label``, ``setting``,
+        ``beats``, ``culmination``, ``keepsake``, ``char_id``, or
+        ``{"ok": True, "scene": null}`` when no scene is pending.
+    """
+    conn = db()
+    try:
+        from backend.bond.memorial_scenes import get_pending_scene
+        row = conn.execute(
+            "SELECT name FROM characters WHERE id = ?", (char_id,)
+        ).fetchone()
+        char_name = row[0] if row else None
+        scene = get_pending_scene(char_id, level, conn, char_name=char_name)
+        return {"ok": True, "scene": scene}
+    except Exception as e:
+        logger.warning(f"[Bond] get_memorial_scene failed: {e}")
+        return {"ok": True, "scene": None}
+
+
+@app.post("/api/characters/{char_id}/bond/memorial-scene/complete")
+def complete_bond_memorial_scene_endpoint(
+    char_id: int, req: _MemorialCompleteRequest
+):
+    """Mark a memorial scene as completed for a character.
+
+    Records the completion in ``bond_scenes_seen`` so the scene is not
+    surfaced again.  Idempotent — calling twice for the same scene returns
+    ``{"ok": True, "already_seen": True}`` on the second call.
+
+    Args:
+        char_id: Character primary key.
+        req: Request body containing ``scene_id`` (str).
+
+    Returns:
+        ``{"ok": True, "recorded": bool, "already_seen": bool}``
+    """
+    conn = db()
+    try:
+        from backend.bond.memorial_scenes import mark_scene_completed
+        recorded = mark_scene_completed(char_id, req.scene_id, conn)
+        return {"ok": True, "recorded": recorded, "already_seen": not recorded}
+    except Exception as e:
+        logger.warning(f"[Bond] complete_memorial_scene failed: {e}")
+        return {"ok": False, "error": str(e)}
+
+
+@app.get("/api/characters/{char_id}/bond/first-memory")
+def get_bond_first_memory_endpoint(char_id: int):
+    """Generate and return the 'Our First Memory' scene for a character.
+
+    This scene is unlocked at bond level 34 and is auto-generated from the
+    character's earliest five messages.  The scene structure is always returned
+    (with stub beats if no LLM is configured); the frontend renders it as an
+    interactive vignette.
+
+    The scene is NOT automatically marked completed — the frontend must call
+    POST /bond/memorial-scene/complete with scene_id = "first_memory_{char_id}".
+
+    Args:
+        char_id: Character primary key.
+
+    Returns:
+        ``{"ok": True, "scene": {scene_id, char_id, level, tier_label,
+        setting, beats, culmination, keepsake, source_messages, generated}}``
+    """
+    conn = db()
+    try:
+        from backend.bond.memorial_scenes import generate_first_memory_scene
+        scene = generate_first_memory_scene(char_id, conn, llm_caller=None)
+        return {"ok": True, "scene": scene}
+    except Exception as e:
+        logger.warning(f"[Bond] get_first_memory failed: {e}")
+        return {"ok": False, "error": str(e)}
+
+
+# ── Bond Phase 6: Analytics ───────────────────────────────────────────────────
+
+
+@app.get("/api/characters/{char_id}/bond/analytics")
+def get_bond_analytics_endpoint(char_id: int):
+    """Return aggregated bond XP analytics for a character.
+
+    Computes statistics from the ``bond_xp_events`` table and the character's
+    current bond state, including source breakdowns over the last 7 days and
+    a forward projection to Soulmate level (65).
+
+    Projection uses the average XP per active day over the last 14 days.
+    Returns ``null`` for ``est_days_to_soulmate`` when the character is already
+    at Soulmate tier (level ≥ 65) or when no recent activity exists.
+
+    Args:
+        char_id: Character primary key.
+
+    Returns:
+        ``{"ok": True, "analytics": {total_xp_earned, days_active,
+        avg_xp_per_day, est_days_to_soulmate, source_breakdown}}``
+        where ``source_breakdown`` is a dict mapping action slug to percentage
+        of total XP earned in the last 7 days.
+    """
+    conn = db()
+    try:
+        from backend.bond.progression import get_bond_level
+
+        bond = get_bond_level(char_id, conn.cursor())
+        current_level: int = bond.get("bond_level", 0)
+        current_xp: int = bond.get("bond_xp", 0)
+
+        # ── Total XP ever earned ──────────────────────────────────────────
+        row = conn.execute(
+            "SELECT COALESCE(SUM(xp_amount), 0) FROM bond_xp_events WHERE char_id = ?",
+            (char_id,),
+        ).fetchone()
+        total_xp_earned: int = int(row[0]) if row else 0
+
+        # ── Days active (distinct calendar days with any XP event) ────────
+        row = conn.execute(
+            """
+            SELECT COUNT(DISTINCT date(created_at))
+              FROM bond_xp_events
+             WHERE char_id = ?
+            """,
+            (char_id,),
+        ).fetchone()
+        days_active: int = int(row[0]) if row else 0
+
+        # ── Avg XP per active day (last 14 days of activity) ─────────────
+        rows = conn.execute(
+            """
+            SELECT date(created_at) AS day, SUM(xp_amount) AS day_xp
+              FROM bond_xp_events
+             WHERE char_id = ?
+               AND created_at >= datetime('now', '-14 days')
+             GROUP BY day
+            """,
+            (char_id,),
+        ).fetchall()
+        recent_day_totals = [r[1] for r in rows if r[1] is not None]
+        avg_xp_per_day: float = (
+            sum(recent_day_totals) / len(recent_day_totals)
+            if recent_day_totals
+            else 0.0
+        )
+
+        # ── Days to Soulmate projection ───────────────────────────────────
+        est_days_to_soulmate: int | None = None
+        if current_level < 65 and avg_xp_per_day > 0:
+            from backend.bond.progression import _xp_required_for_level  # type: ignore[attr-defined]
+
+            # Sum XP required from current level through level 64.
+            xp_remaining: int = -current_xp  # subtract already-earned XP at this level
+            for lvl in range(current_level, 65):
+                xp_remaining += _xp_required_for_level(lvl)
+            xp_remaining = max(0, xp_remaining)
+            est_days_to_soulmate = max(1, round(xp_remaining / avg_xp_per_day))
+
+        # ── Source breakdown (last 7 days) ────────────────────────────────
+        rows = conn.execute(
+            """
+            SELECT action, SUM(xp_amount) AS total
+              FROM bond_xp_events
+             WHERE char_id = ?
+               AND created_at >= datetime('now', '-7 days')
+             GROUP BY action
+             ORDER BY total DESC
+            """,
+            (char_id,),
+        ).fetchall()
+        period_total = sum(r[1] for r in rows if r[1]) or 1  # avoid div-by-zero
+        source_breakdown: dict[str, float] = {
+            r[0]: round(100.0 * r[1] / period_total, 1)
+            for r in rows
+            if r[1]
+        }
+
+        return {
+            "ok": True,
+            "analytics": {
+                "total_xp_earned": total_xp_earned,
+                "days_active": days_active,
+                "avg_xp_per_day": round(avg_xp_per_day, 1),
+                "est_days_to_soulmate": est_days_to_soulmate,
+                "source_breakdown": source_breakdown,
+            },
+        }
+    except Exception as e:
+        logger.warning(f"[Bond] get_analytics failed: {e}")
+        return {
+            "ok": True,
+            "analytics": {
+                "total_xp_earned": 0,
+                "days_active": 0,
+                "avg_xp_per_day": 0.0,
+                "est_days_to_soulmate": None,
+                "source_breakdown": {},
+            },
+        }
+
+
 # ── Character Diary (#57) ─────────────────────────────────────────────────────
 
 @app.get("/api/characters/{char_id}/diary")

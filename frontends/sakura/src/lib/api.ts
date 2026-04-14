@@ -1180,7 +1180,7 @@ export const api = {
    */
   deactivateScenarioTemplate: (sessionId: number) =>
     post<{ ok: boolean; activated: boolean }>('/api/scenarios/templates/activate', {
-      template_id: null,
+      template_id: 0,
       session_id: sessionId,
     }),
 };

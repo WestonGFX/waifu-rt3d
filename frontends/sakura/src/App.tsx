@@ -39,6 +39,7 @@ import { PersonaPicker } from './components/PersonaPicker';
 import { SceneReplayViewer } from './components/SceneReplayViewer';
 import { BondPanel } from './components/BondPanel';
 import { BondStoryViewer } from './components/BondStoryViewer';
+import { ScenarioPicker } from './components/ScenarioPicker';
 import { GamePanel } from './components/GamePanel';
 import { ModelBrowser } from './components/ModelBrowser';
 import { PhotoModeOverlay } from './components/PhotoModeOverlay';
@@ -524,6 +525,16 @@ function MainApp() {
           charName={activeCharacter.name}
           charAvatarUrl={activeCharacter.avatar_url}
           onClose={closeOverlay}
+        />
+      )}
+
+      {/* Scenario Picker overlay — per-character scene templates */}
+      {activeOverlay === 'scenariopicker' && activeCharacter && sessionId && (
+        <ScenarioPicker
+          open
+          onClose={closeOverlay}
+          charId={activeCharacter.id}
+          sessionId={sessionId}
         />
       )}
 

@@ -1059,4 +1059,128 @@ export const api = {
    */
   setCharacterCeiling: (charId: number, ceiling: string | null) =>
     put<{ ok: boolean; char_id: number; ceiling: string | null }>(`/api/content-gate/character/${charId}`, { ceiling }),
+
+  // ── Per-Character Scenario Templates ────────────────────────────────────────
+
+  /**
+   * List all scenario templates for a character (built-in + custom).
+   *
+   * @param charId - Character primary key.
+   * @returns Array of scenario template objects.
+   */
+  getScenarioTemplates: (charId: number) =>
+    get<{
+      ok: boolean;
+      templates: Array<{
+        id: number;
+        char_id: number;
+        title: string;
+        description: string;
+        setting: string | null;
+        time_of_day: string | null;
+        mood: string | null;
+        is_default: boolean;
+        is_builtin: boolean;
+        created_at: string;
+      }>;
+    }>(`/api/scenarios/templates?char_id=${charId}`),
+
+  /**
+   * Get the currently active scenario template for a session, if any.
+   *
+   * @param charId - Character primary key.
+   * @param sessionId - Session primary key.
+   * @returns The active template or null.
+   */
+  getActiveScenarioTemplate: (charId: number, sessionId: number) =>
+    get<{
+      ok: boolean;
+      template: {
+        id: number;
+        char_id: number;
+        title: string;
+        description: string;
+        setting: string | null;
+        time_of_day: string | null;
+        mood: string | null;
+        is_default: boolean;
+        is_builtin: boolean;
+        created_at: string;
+      } | null;
+    }>(`/api/scenarios/templates/active?char_id=${charId}&session_id=${sessionId}`),
+
+  /**
+   * Create a new custom scenario template.
+   *
+   * @param payload - Template fields including charId and required title/description.
+   * @returns The newly created template.
+   */
+  createScenarioTemplate: (payload: {
+    char_id: number;
+    title: string;
+    description: string;
+    setting?: string;
+    time_of_day?: string;
+    mood?: string;
+    is_default?: boolean;
+  }) =>
+    post<{
+      ok: boolean;
+      template: {
+        id: number;
+        char_id: number;
+        title: string;
+        description: string;
+        setting: string | null;
+        time_of_day: string | null;
+        mood: string | null;
+        is_default: boolean;
+        is_builtin: boolean;
+        created_at: string;
+      };
+    }>('/api/scenarios/templates', payload),
+
+  /**
+   * Update fields on an existing scenario template.
+   *
+   * @param id - Template primary key.
+   * @param fields - Partial fields to update.
+   * @returns Whether the update was applied.
+   */
+  updateScenarioTemplate: (id: number, fields: Record<string, unknown>) =>
+    put<{ ok: boolean; updated: boolean }>(`/api/scenarios/templates/${id}`, fields),
+
+  /**
+   * Delete a custom scenario template.
+   *
+   * @param id - Template primary key.
+   * @returns Whether the deletion was applied.
+   */
+  deleteScenarioTemplate: (id: number) =>
+    del<{ ok: boolean; deleted: boolean }>(`/api/scenarios/templates/${id}`),
+
+  /**
+   * Activate a scenario template for the current session.
+   *
+   * @param templateId - Template primary key to activate.
+   * @param sessionId - Session primary key to associate.
+   * @returns Whether activation succeeded.
+   */
+  activateScenarioTemplate: (templateId: number, sessionId: number) =>
+    post<{ ok: boolean; activated: boolean }>('/api/scenarios/templates/activate', {
+      template_id: templateId,
+      session_id: sessionId,
+    }),
+
+  /**
+   * Deactivate (clear) the active scenario template for a session.
+   *
+   * @param sessionId - Session primary key.
+   * @returns Whether deactivation succeeded.
+   */
+  deactivateScenarioTemplate: (sessionId: number) =>
+    post<{ ok: boolean; activated: boolean }>('/api/scenarios/templates/activate', {
+      template_id: null,
+      session_id: sessionId,
+    }),
 };

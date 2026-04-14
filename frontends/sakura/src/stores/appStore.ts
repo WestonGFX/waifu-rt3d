@@ -37,6 +37,7 @@ type Overlay =
   | 'intimatequiz' | 'sharedfantasies'
   | 'personapicker' | 'scenereplay'
   | 'bondpanel' | 'bondstory'
+  | 'scenariopicker'
   | null;
 
 /**

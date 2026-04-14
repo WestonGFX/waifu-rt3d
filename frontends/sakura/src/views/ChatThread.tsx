@@ -1296,6 +1296,17 @@ export function ChatThread() {
                 <BookOpen size={16} />
               </button>
 
+              {/* Per-character scenario picker */}
+              <button
+                onClick={() => openOverlay('scenariopicker')}
+                title="Scenario picker — set scene context for this session"
+                aria-label="Open scenario picker"
+                className="p-2 rounded-lg transition-all duration-150 flex-shrink-0 text-base leading-none"
+                style={{ color: 'var(--color-text-tertiary)' }}
+              >
+                <Sparkles size={16} />
+              </button>
+
               {/* Feature B3: Visual Novel reader mode toggle */}
               <button
                 onClick={toggleVnMode}

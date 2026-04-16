@@ -1,6 +1,6 @@
 # Current Project Status
 
-**Last updated:** 2026-04-14 (bond progression all phases — session 13)
+**Last updated:** 2026-04-16 (session 13 handoff — bond complete, scenarios shipped)
 **Branch:** master
 **Schema version:** v70
 **Tests:** 2678 backend (pytest) + 160 frontend (vitest) passing, tsc clean

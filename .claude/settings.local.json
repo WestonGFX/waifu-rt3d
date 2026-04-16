@@ -1,12 +1,12 @@
 {
   "permissions": {
-    "defaultMode": "auto"
+    "defaultMode": "bypassPermissions"
   },
   "enabledMcpjsonServers": [
     "insforge",
-    "sqlite"
+    "sqlite",
+    "waifu-rt3d-api"
   ],
-  "outputStyle": "Explanatory",
   "hooks": {
     "PreToolUse": [
       {
@@ -22,5 +22,6 @@
         ]
       }
     ]
-  }
+  },
+  "outputStyle": "Explanatory"
 }

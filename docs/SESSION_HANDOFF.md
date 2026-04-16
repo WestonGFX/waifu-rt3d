@@ -1,73 +1,68 @@
-# Session Handoff — 2026-04-07 (session 11)
+# Session Handoff — 2026-04-16
 
 ## Branch: master
-## Test Status: 2571 passed, 0 failed | TSC: clean
-## Schema: v68
+## Test Status: 2678 backend passed, 0 failed | TSC: clean | Frontend: 160 passed, 4 pre-existing failures (unrelated)
 
-## Completed This Session
+## Completed This Session (sessions 12-13, merged)
 
-### P0: AI Quick Reply Suggestions (commit f8b2551)
-- Two-phase optimistic chip system: instant heuristic chips → async LLM upgrade
-- `api.ts`: `generateQuickReplies()` wrapper using `/api/llm/generate` (120 max tokens)
-- `ChatThread.tsx`: `generateChipsLLM()` helper with 6s timeout, JSON parse fallback, AbortController cleanup
-- Modified chip useEffect for two-phase generation with `llmChipsAbortRef` + `llmChipsLoading` state
-- `components.css`: `@keyframes pulse` for loading indicator
-- 11 new vitest tests in `quickChips.llm.test.ts`
-- No backend changes needed — reuses existing `/api/llm/generate` endpoint
+### Per-Character Scenarios — shipped
+- `migrate_to_v69` — 65 builtin scenario templates (13 chars × 5) via SELECT-before-INSERT idempotent guard
+- 6 new REST endpoints under `/api/scenarios/templates` (GET list/active, POST create/activate, PUT, DELETE with 403-on-builtin)
+- `ScenarioPicker.tsx` (497 lines, mood-grouped list, random, create-custom) + `useScenarios.ts` hook + 7 new API methods
+- Sparkles button in ChatThread composer toolbar opens picker overlay
+- Cross-boundary fix: deactivate uses `template_id=0` not `null`
+- +46 tests (29 backend + 17 frontend)
+- Commits: `e25aa7a`, `bd7e3dc`, `54e77af`, `0836dfb`
 
-### P1: CHARA Card V2 Compliance (commit 956a6a8)
-- Schema v67 → v68: 7 new columns on `characters` table (scenario, chara_description, alternate_greetings, mes_example, post_history_instructions, chara_tags, creator_notes)
-- `chara_card.py`: Reader preserves all V2 fields individually + legacy `background` join; Writer exports scenario/personality/alternate_greetings instead of empty strings
-- `server.py`: Updated list_characters (indices 41-47), import/export/update endpoints, 3-tier SELECT fallback, defensive post_history_instructions queries
-- `context_assembler.py`: `post_history_instructions` injection after chat history (SillyTavern standard position)
-- `server.py`: Character-level scenario injection in `_build_prompt_sections()`
-- `CardImportWizard.tsx`: JSON import extracts all V2 fields, handleCreate passes them to backend, review UI shows scenario + tags
-- 15 new pytest tests in `test_chara_card_v2.py`
+### Bond Phases 5 + 6 — shipped (Bond system ALL 6 PHASES DONE)
+- `backend/bond/memorial_scenes.py` — 39 tier-transition vignettes (13 chars × 3 tiers at L15/L35/L65), `bond_scenes_seen` table (schema v70)
+- Phase 5 endpoints: `GET /api/characters/{id}/bond/memorial-scene?level=N`, `POST /memorial-scene/complete`, `GET /first-memory`
+- Phase 6 endpoint: `GET /api/characters/{id}/bond/analytics` (totals, days-active, source-breakdown, est-days-to-soulmate)
+- `MemorialScene.tsx` (273 lines, framer fade overlay, beat-by-beat dialogue, postMessage expression hooks)
+- `useMemorialScene.ts` hook — polls for pending scene after level changes
+- `DevConsole.tsx` — added Bond tab with analytics summary + ASCII source bars + recent XP events
+- +48 tests (22 + 10 + 16)
+- Commits: `c87531a`, `25c551a`, `7323998`, `6ff7c30`
 
-### P3: Competitor Gap Analysis (commit 4ee0688)
-- 577-line research doc at `docs/research/2026-04-07-competitor-gap-analysis.md`
-- 60+ features across 12 categories, 30+ platforms researched
-- Top gaps: message swipe/regeneration, visual content in chat, memory transparency UI
-- Confirmed our strong position: local-first + 3D viewer + bond system is unique
-
-### Bug Fix
-- Fixed time-dependent test flake in `test_bond_phase1.py` (UTC vs local date mismatch)
+### Environment + Tooling Updates
+- Caveman plugin installed via `JuliusBrussee/caveman` marketplace (invoke `/caveman` for token-saver mode)
+- Global + project `defaultMode: bypassPermissions`
+- Global env: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, `_BRIEF=1`, `_CRON=1`, `_REMOTE_TRIGGER=1`
+- Ghostty config: cursor `bar`→`underline` + blink, `shell-integration-features = no-cursor` (prevents shell override)
 
 ## Work In Progress
-- None — all work committed and pushed
+None. All sprint work committed.
 
-## Known Issues / Bugs
-- Pre-existing: `SettingsView.exportImport.test.tsx` (3 failures) — `api.getFormatRules` not mocked
-- Pre-existing: `OnboardingWizard.test.tsx` (1 failure) — same mock issue
-- Live2D runtime still broken (Cubism SDK fails to load)
-- Embedding model issue (MLX format produces garbage)
+## Known Issues / Bugs (pre-existing, not from this session)
+- `frontends/sakura/src/test/OnboardingWizard.test.tsx` × 1 failure ("Get started" advance step)
+- `frontends/sakura/src/test/SettingsView.exportImport.test.tsx` × 3 failures (export blob, import createCharacter, import missing fields)
+- `.codex/` untracked directory — decide to ignore or archive
+- `backend/storage/app.db` dirty (runtime state, expected)
 
-## Files Modified
-```
-frontends/sakura/src/lib/api.ts                    — generateQuickReplies method
-frontends/sakura/src/views/ChatThread.tsx           — two-phase chip system
-frontends/sakura/src/styles/components.css          — pulse keyframe
-frontends/sakura/src/test/quickChips.llm.test.ts    — 11 new tests
-frontends/sakura/src/components/wizards/CardImportWizard.tsx — V2 field handling
-backend/preflight.py                               — migrate_to_v68
-backend/characters/chara_card.py                    — V2 reader/writer fixes
-backend/server.py                                  — V2 endpoints + context injection
-backend/llm/context_assembler.py                   — post_history_instructions
-backend/tests/test_chara_card_v2.py                — 15 new tests
-backend/tests/test_bond_phase1.py                  — UTC date fix
-docs/research/2026-04-07-competitor-gap-analysis.md — 577-line research
-```
+## Files Modified (to commit at end of handoff)
+- `.claude/settings.local.json` — `defaultMode: bypassPermissions`, added `waifu-rt3d-api` MCP server entry
+- `docs/plans/RESUME_PROMPT.md` — rewritten for session 14 boot
+- `frontends/sakura/package.json` + `package-lock.json` — `@biomejs/biome 2.4.10` dev dep
+- Not committing: `backend/config/app.json`, `backend/storage/app.db` (runtime), `.codex/` (untracked)
 
-## Next Session Priorities
-1. **Message Swipe/Regeneration** — Highest-impact gap from competitor research. Feature E frontend wiring exists. ~4hrs estimated.
-2. **P2: Per-Character Scenarios** — Content authoring (65 scenarios for 13 characters) + scenario picker UI
-3. **Bond Phase 3: Dialogue Gates** — Bond-gated system prompt injection per tier. Spec: `docs/plans/2026-03-29-bond-progression-spec.md` Phase 3
-4. **Memory Browser UI (P5)** — React component for viewing/editing character memories. Backend ready.
-5. **Visual Content in Chat** — "Character sends you a picture" UX flow. Image gen pipeline exists.
+## Next Session Priorities (execute via Agent Team — `TeamCreate`)
+
+### 1. Memory Browser UI (P5) — ~4hr
+Backend ready in `backend/memory/tiered_memory.py`. New React component to list/filter/edit/delete
+character memories by tier (short/medium/long), search, confidence adjustment.
+
+### 2. Visual Content in Chat — ~6hr
+"Character sends you a picture" UX. Image gen pipeline already exists.
+Needs: chat message type for inline image, intent recognition for "send me a pic"
+requests, optional photo attachment from character's gallery.
+
+### 3. Pre-existing test cleanup (low priority)
+Fix the 4 OnboardingWizard + SettingsView.exportImport failures.
 
 ## Context for Next Session
-- Plan file: `.claude/plans/nested-crafting-ullman.md` — P0+P1 done, P2-P4 remain
-- Competitor research: `docs/research/2026-04-07-competitor-gap-analysis.md` — read Section 5 (Roadmap) for sprint ordering
-- Feature E (choices inside DialogueBubble) is fully wired but never activated — good foundation for message swipe
-- The `list_characters` endpoint now has 48-column positional indexing (row[0]-row[47]) — be careful adding more columns
-- 4 pre-existing frontend test failures (mock gap for `api.getFormatRules`) — not blocking
+- **Agent Teams enabled** — env flag set globally. Open with `/dashboard` then `TeamCreate` to spawn 2-3 teammates working on Memory Browser + Visual Content simultaneously.
+- **Schema v70** is the new floor. Next migration = v71.
+- **2678 backend tests** is the new baseline.
+- **Bond is complete** — don't propose more bond phases. If user wants retention work next, pitch Memory Browser or Visual Content first.
+- **Caveman mode** was active this session — can `/caveman` toggle or say "stop caveman".
+- **Explanatory output style** active via `outputStyle: "Explanatory"` in project local — agent output includes `★ Insight` blocks.

@@ -16,6 +16,33 @@ Waifu-RT3D is an **emotional AI companion platform** — not a chatbot, not a ga
 - **Go deep, not shallow.** When writing plans, memory notes, research docs, or implementation specs, make them comprehensive with full context, research references, and detailed reasoning. Never produce sparse summaries unless the user explicitly asks for brevity.
 - **State constraints upfront.** Before starting complex multi-file tasks, explicitly list the architecture constraints, protected paths, and anti-patterns relevant to the work — don't discover them mid-implementation.
 
+## Verification Before Claiming Success
+
+Never report a task as complete without verification matching the work type. Saying "the command ran" ≠ "the thing works." Saying "I updated the file" ≠ "I verified the change." Every "done" claim must cite concrete evidence.
+
+| Work type | Required verification |
+|---|---|
+| Server started | `curl` the endpoint AND check the process is alive (not just "ran the command") |
+| Tests pass | Actually run them and paste the tail of the output. Cite the number. |
+| Native modules (better-sqlite3, onnxruntime, etc.) | Rebuild + import-check after any Node/Python version bump |
+| UI feature | Open in browser and exercise the golden path. If Chrome tools unavailable, SAY SO — don't claim success. |
+| API endpoint | `curl` it with a realistic payload; confirm status code AND response shape |
+| DB migration | Run `preflight.py` + verify `schema_version` bumped + `pytest backend/tests/test_preflight.py` passes |
+| Hook installed | Trigger the hook path and confirm the side effect (don't just write the file) |
+
+**Failure modes this prevents:**
+- ABI mismatch masked because the server never actually booted after native module change
+- Auth 401 masked because the test fixture was updated but the curl probe was skipped
+- Hook configured but never fires because the matcher regex was wrong
+
+## Agent Dispatch Policy
+
+- For plans with 3+ independent features or file trees, dispatch parallel sub-agents (use `/sprint` or `/go` with parallel waves).
+- Always spawn a dedicated QA agent (`qa-hunter`) for numeric constants, balance values, and boundary conditions (XP curves, tier thresholds, token budgets).
+- Cross-boundary contracts (API types, Pydantic ↔ TypeScript) MUST be defined in one place and consumed by all agents — see the `contract-broker` pattern (coming in session 15).
+- When one agent's output feeds another's input, the upstream agent MUST print the exact contract (interface, schema, or field list) at the top of its report. The downstream agent quotes that contract before writing code — never invents field names.
+- Single-file sequential work does NOT need agent dispatch. Use agents only when parallelism genuinely accelerates (e.g., backend + frontend + docs simultaneously).
+
 ## Python / Venv
 
 This project uses a `.venv/` virtual environment built on **Homebrew Python 3.14**.
@@ -74,6 +101,8 @@ These areas have regressed 10+ times across sessions. Extra care required:
 - **Column resize / layout reflow** — Panel toggles, divider changes, and width calculations break frequently. Test collapsed AND expanded states.
 - **Theme color inheritance** — 18 themes (9 light / 9 dark). Any hardcoded color or `var()` change must be checked against at least 1 light and 1 dark theme.
 - **No surprise UI elements** — Never add visible UI elements (pull tabs, dividers, floating buttons, badges) without explicit user approval. These have been reverted 3+ times.
+- **Test mock drift when context providers expand** — When new context providers (SettingsContext, CharacterProvider, etc.) get added, every test file that mounts a consumer breaks silently. Update all affected test files in the same commit that adds the provider. Check `frontends/sakura/src/test/` for every file importing from the provider path.
+- **Pydantic ↔ TypeScript type drift** — Adding API fields on the backend without updating `frontends/sakura/src/lib/api.ts` produces runtime-only failures that TSC won't catch (because the old narrower type is still valid). Search `api.ts` + adjacent tests when touching any FastAPI response model. The type system will not save you here.
 
 ## Documentation Triggers
 

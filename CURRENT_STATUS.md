@@ -1,14 +1,29 @@
 # Current Project Status
 
-**Last updated:** 2026-04-16 (session 13 handoff — bond complete, scenarios shipped)
+**Last updated:** 2026-04-18
 **Branch:** master
 **Schema version:** v70
 **Tests:** 2678 backend (pytest) + 160 frontend (vitest) passing, tsc clean
-**Automation:** 11 agents, 24 skills, 6 rules, 8 hooks, 3 MCP servers
+**Automation:** 12 agents, 25 skills, 6 rules, 8 hooks, 3 MCP servers
 
 ## Active Work
 
-**Bond Progression all 6 phases complete.** Next priorities: Memory Browser UI (backend ready, needs React UI), Visual Content in Chat (image gen pipeline exists).
+**Bond Progression all 6 phases complete.** Session 14 harness upgrades landed (verification gates, Agent Dispatch Policy, `/verify-servers`, `/go` phase gates, `/qa-sweep` chunked mode, `regression-guard` agent). Next priorities unchanged: Memory Browser UI (backend ready, needs React UI), Visual Content in Chat (image gen pipeline exists).
+
+## Completed This Session (Apr 18, session 14 — Harness Upgrades, Tier 1+2)
+
+Meta-work on the dev workflow itself per `~/.claude/plans/tranquil-percolating-spring.md`. Repo-local-only per user scope preference — no global `~/.claude/` changes.
+
+| What | Details |
+|------|---------|
+| **14.1 CLAUDE.md verification gates** | Added `## Verification Before Claiming Success` (work-type → required evidence table: curl + pytest tail + migration validation + hook trigger) and `## Agent Dispatch Policy` (when to parallelize, qa-hunter for boundary conditions, contract-broker preview). Expanded `## Known Sensitive Areas` with context-provider mock drift + Pydantic↔TS type drift. Commit `0b08397`. |
+| **14.2 Biome hook upgrade** | Existing `.claude/settings.json` PostToolUse hook swapped `biome format --write` → `biome check --write` (format + safe-autofix lint rules in one npx spawn). Minimal-surface change. Repo-local, no commit. |
+| **14.3 /verify-servers skill** | New `.claude/skills/verify-servers/SKILL.md` — probes backend 8080, sakura 5175, dashboard 3333, viewer iframe. Curl + body-content sanity + log scan for ABI/ImportError/segfault keywords. Closes the "server bound port but handler silently 500s" verification gap. Repo-local. |
+| **14.4 /go phase gates** | `.claude/skills/go/SKILL.md` gained `Phase-End Gates` section: test-subset tail paste, `/verify-servers` when phase starts a service, one-line plan status append (never rewrite), advisory mid-session / MANDATORY at session-end "done" claim. Session-end checklist added. Repo-local. |
+| **14.5 /qa-sweep chunked mode** | `.claude/skills/qa-sweep/SKILL.md` appended `Chunked Mode — /qa-sweep --chunked`: batches of 50 cases, per-batch commit to `docs/testing/qa-findings-YYYY-MM-DD.md`, P0/P1/P2 categorization, P0-only auto-fix with explicit user approval. Prevents the 400-case context-exhaustion scenario. Repo-local. |
+| **14.6 regression-guard agent** | New `.claude/agents/regression-guard.md` — scans `git log --grep='fix'` for patterns fixed 2+ times, writes locked-in tests citing commit hashes, commits one test per trap. Seed keywords: avatar aspect, column resize, row_factory, SettingsContext, XP curve, theme hardcodes, VRM bones, token budget, voice duplex. Repo-local. |
+| **14.7 verification** | pytest 2678 passed (baseline preserved), tsc clean, vitest 160 passed + 4 pre-existing failures unchanged (OnboardingWizard × 1, SettingsView.exportImport × 3). |
+| **New feedback memory** | `feedback_batch_work_prefer_momentum.md`, `feedback_no_global_config_changes.md`, `feedback_scope_definitions.md` — capture lessons from this session's scope-confusion pivot so future sessions don't repeat it. |
 
 ## Completed This Session (Apr 14, session 13 — Bond Phases 5+6)
 

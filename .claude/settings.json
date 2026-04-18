@@ -50,8 +50,8 @@
           },
           {
             "type": "command",
-            "command": "for f in $CLAUDE_EDITED_FILES; do if [[ \"$f\" == *.ts || \"$f\" == *.tsx ]]; then cd frontends/sakura && npx @biomejs/biome format --write \"../../$f\" 2>/dev/null; fi; done",
-            "description": "Auto-format TypeScript files with Biome after edit"
+            "command": "for f in $CLAUDE_EDITED_FILES; do if [[ \"$f\" == *.ts || \"$f\" == *.tsx ]]; then cd frontends/sakura && npx @biomejs/biome check --write \"../../$f\" 2>/dev/null; fi; done",
+            "description": "Auto-format + safe-autofix TypeScript files with Biome (format + lint) after edit"
           }
         ]
       }

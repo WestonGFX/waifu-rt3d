@@ -70,8 +70,62 @@ Regression Hotspots Touched:
 Overall: {ALL GREEN / HAS ISSUES}
 ```
 
+## Chunked Mode — `/qa-sweep --chunked`
+
+Use this for long Playwright/browser-based QA runs that would exhaust context as a single sweep. Background lesson: the 400-case sweep session blew past the compaction threshold and lost state mid-run. Chunking keeps each batch self-contained.
+
+### When to use chunked mode
+
+- Running `docs/testing/qa-questionnaire.html` scenarios end-to-end (50+ cases)
+- Pre-release regression testing with Chrome/Playwright tools
+- Any sweep expected to exceed 50 individual test assertions
+
+Not for the quick sanity check above — use the default mode for that.
+
+### Chunked execution loop
+
+1. **Load test scenarios** — read `docs/testing/test-scenarios.md` (or the QA questionnaire JSON). If missing, stop and ask the user to generate scenarios first — do NOT invent scenarios on the fly.
+
+2. **Partition into batches of 50** cases. Batches are self-contained; a batch must never depend on state from a prior batch.
+
+3. **Per-batch loop:**
+   - Run the 50 cases (Playwright, Chrome tools, or curl probes as appropriate)
+   - Categorize each failure: **P0** (blocks shipping — crash, data loss, auth failure), **P1** (broken feature, visible bug), **P2** (polish — copy, alignment, minor UX)
+   - Append findings to `docs/testing/qa-findings-YYYY-MM-DD.md` using the schema below
+   - Commit that file with message `test(qa-sweep): batch N findings (P0:x P1:y P2:z)`
+   - Clear local state/context from the batch (close tabs, drop in-memory refs) before starting the next batch
+
+4. **Final summary** — after all batches complete, append a summary table at the bottom of the findings doc:
+   | Batch | P0 | P1 | P2 | Cases | Notes |
+   |---|---|---|---|---|---|
+   | 1 | 0 | 2 | 5 | 50 | All auth cases pass |
+   | ... | ... | ... | ... | ... | ... |
+   | **Total** | **1** | **7** | **23** | **400** | See per-batch notes |
+
+### Findings doc schema
+
+```markdown
+## Batch N (cases X–Y, YYYY-MM-DD HH:MM)
+
+### P0 — blocks shipping
+- **[case-id]** Title. Expected: ... Actual: ... Repro: ... File: path:line
+  - Screenshot: docs/testing/screenshots/case-id.png (if browser-tooled)
+
+### P1 — broken feature
+- ...
+
+### P2 — polish
+- ...
+```
+
+### Auto-fix policy
+
+- **P0 only, and only after user approval.** Present the P0 list after a batch; if the user green-lights, fix, re-run the case, confirm pass, continue to next batch.
+- **P1 and P2 are never auto-fixed.** They land as a followup task list in `docs/plans/` at session end.
+
 ## Rules
-- Do NOT fix anything. Report only.
+- Do NOT fix anything. Report only. (Exception: chunked mode P0 auto-fix with explicit user approval.)
 - Do NOT run the full build — too slow for a sweep.
 - If ALL automated checks pass AND no hotspots touched: report "All green."
 - If hotspots are touched: recommend manual visual verification of those areas.
+- In chunked mode: NEVER proceed past a batch without committing its findings file. The commit is the safety net if context runs out mid-sweep.

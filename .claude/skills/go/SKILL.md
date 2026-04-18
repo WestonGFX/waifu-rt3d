@@ -178,6 +178,23 @@ If 3 consecutive fix attempts fail on the same issue:
 
 **Never ask the user for help with test failures** unless explicitly stuck after 3 attempts (the hypothesis limit applies here too).
 
+### Phase-End Gates (advisory mid-session, MANDATORY before session-end "done" claim)
+
+Before advancing from one numbered plan phase to the next, run these gates. Gates are **advisory** during same-session iteration (don't block flow on every small edit) but **MANDATORY** before any session-end claim of "this phase is done."
+
+1. **Relevant test subset** — run pytest + tsc on the slice that phase touched. Paste the tail of the output with pass/fail counts. "It probably passes" is not evidence.
+2. **Service liveness** — if the phase started or restarted a dev service, invoke `/verify-servers` and confirm its probe table shows OK for every expected service. Catches the "server bound the port but handler is 500-ing silently" class of bug that has bitten us before (ABI mismatch session, auth 401 session).
+3. **Plan status line** — append ONE line to the bottom of the plan file (never rewrite existing content, never reorder phases). Format: `- YYYY-MM-DD Phase N: ✓ <short note>` on success, `- YYYY-MM-DD Phase N: ✗ <reason>` on failure. Next session inherits a breadcrumb trail without re-reading the whole plan.
+4. **Gate failure handling** — if ANY gate fails, STOP. Produce a failure table (gate name, expected, actual, probable cause) and wait for user direction. Do NOT loop into a 4th-hypothesis spiral (see Hypothesis Limit in project CLAUDE.md).
+
+**Why gates are advisory mid-session:** Running a full test sweep after every small edit wastes context and time when you're still iterating within a single feature. But the session-end "done" claim is a contract with the user — violating it erodes trust. So gates harden from advisory to mandatory at the session boundary.
+
+**Session-end checklist (before any /handoff or /checkpoint):**
+- [ ] Full `pytest backend/tests/ -q` pass, tail cited
+- [ ] Full `tsc --noEmit` clean, 0 errors cited
+- [ ] `/verify-servers` OK for every service the session started
+- [ ] Plan file has status line for each phase attempted
+
 ## Phase 5: Integration (Always Sequential)
 
 Integration tasks touch shared files — NEVER parallelize these:

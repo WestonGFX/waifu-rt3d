@@ -1,14 +1,38 @@
 # Current Project Status
 
-**Last updated:** 2026-04-18
+**Last updated:** 2026-04-20 PDT
 **Branch:** master
 **Schema version:** v70
 **Tests:** 2678 backend (pytest) + 160 frontend (vitest) passing, tsc clean
-**Automation:** 12 agents, 25 skills, 6 rules, 8 hooks, 3 MCP servers
+**Automation:** 12 agents, 22 skills, 6 rules, 8 hooks, 3 MCP servers
 
 ## Active Work
 
-**Bond Progression all 6 phases complete.** Session 14 harness upgrades landed (verification gates, Agent Dispatch Policy, `/verify-servers`, `/go` phase gates, `/qa-sweep` chunked mode, `regression-guard` agent). Next priorities unchanged: Memory Browser UI (backend ready, needs React UI), Visual Content in Chat (image gen pipeline exists).
+**Bond Progression all 6 phases complete.** Session 14 harness upgrades landed. **Session 15 (this session) = CC hygiene/cleanup sweep** — config mode flipped to `auto`, NO_FLICKER env wired, global safety-flag bypass dropped, skill redundancy collapsed (`/dashboard`, `/sprint`, `/review` → folded/renamed), orchestrator phantom agent deleted, /handoff refactored as /checkpoint thin wrapper, statusline math corrected (was reading cumulative tokens — now uses `current_usage`), Suggestion Triggers section added + Preference Forks meta-rule added globally, AnimeGirly cleanup mirrored same patterns. **Next priorities unchanged:** Memory Browser UI (backend ready, needs React UI — consider prototyping in Claude Design), Visual Content in Chat (image gen pipeline exists).
+
+## Completed This Session (Apr 19–20, session 15 — CC Harness Hygiene Sweep)
+
+Meta-work only — no product code or tests touched. Mirror-applied to AnimeGirly.
+
+| What | Details |
+|------|---------|
+| **Permission mode** | `.claude/settings.local.json` `bypassPermissions` → `auto`. Dropped `skipDangerousModePermissionPrompt` from `~/.claude/settings.json` (the dangerous one). |
+| **Env flag** | Added `CLAUDE_CODE_NO_FLICKER=1` to `.claude/settings.json` env block. Restart CC to activate. |
+| **Skill deletions** | `/dashboard` (subset of `/pre-session`), `/sprint` (→ `/go --preset=sprint`), `/review` renamed → `/ui-review` (disambiguate from `/audit`). |
+| **Skill refactor** | `/handoff` rewritten as thin wrapper around `/checkpoint` — names shared status-sync steps instead of duplicating them. |
+| **Skill flag** | `/go` gained `--preset=sprint` (absorbed old /sprint); `/go` agent roster table updated to include `frontend-tester` + `advisor` + `regression-guard`, orchestrator row removed. |
+| **Agent deletion** | `orchestrator.md` — phantom role (main Claude IS the orchestrator during /go). |
+| **Agent demotion** | `production-readiness-auditor.md` moved from `~/.claude/agents/` → `.claude/agents/` (repo-local). |
+| **Agent descriptions** | `advisor` vs `prd-writer` boundary clarified (light vs formal PRDs); `qa-hunter` scoped to backend-only (vs `frontend-tester`). |
+| **Repo CLAUDE.md** | New "Suggestion Triggers" section — risk-signal mode for `/qa-sweep` + `/verify-servers` with 4 alternative modes documented inline for easy swap. |
+| **Global ~/.claude/CLAUDE.md** | New "Preference Forks — Offer Options, Don't Pick Silently" rule — extends AskUserQuestion with preference/aesthetic/layout fork coverage. |
+| **Global new-repo ritual** | Wrote `~/.claude/docs/new-repo-setup.md` — manual decision-tree reference for future repos. NOT auto-applied. |
+| **Statusline** | Fixed cumulative-vs-current-tokens bug ([CC issue #13783](https://github.com/anthropics/claude-code/issues/13783)) — bar now pulls from `current_usage` sum so visual matches `/context` output. Added `SEP_PAD` tunable, dynamic model-suffix shortening (`(1M context)` → `(1m)`), balanced separator spacing. |
+| **AGENTS.md** | Full rewrite — 12 agents, orchestrator removed, role boundaries spelled out, `/go --preset=sprint` + `--mode=roadmap` documented. |
+| **AnimeGirly mirror** | Same cleanups: deleted `/dashboard`, `/implement-feature`, orchestrator; `/go` got `--mode=roadmap`; advisor/prd-writer clarified; regression-guard agent ported; Suggestion Triggers section appended (AG-tailored — Dexie version, helper/, provider registry, avatar pipeline). |
+| **New feedback memory** | `feedback_no_qa_sweep_in_go.md`, `feedback_new_repo_setup_manual.md`, `feedback_tool_per_repo_no_mixing.md` (ClipFlow = Codex-only, no Claude Code), `project_statusline_review_due.md` (2026-05-19 rebuild reminder). |
+| **Evaluated but deferred** | `/ultrareview` (3 free Max runs — save for real product code, not meta sessions); Claude Design (web/GUI only — user to try on Memory Browser UI next). |
+| **Verification** | pytest 2678 passed ✓ / tsc clean ✓ — no product-code or test changes this session, all green baseline preserved. |
 
 ## Completed This Session (Apr 18, session 14 — Harness Upgrades, Tier 1+2)
 

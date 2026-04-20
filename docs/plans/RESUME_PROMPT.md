@@ -52,7 +52,7 @@ Not blocking. Worth a short pass after the parallel features.
 - Ghostty cursor: `underline` + blink (was `bar`); shell-integration cursor disabled to lock it
 
 ## Boot sequence
-1. `/dashboard` — verify clean state
+1. `/pre-session` — verify clean state (replaced former `/dashboard` — merged into `/pre-session` on 2026-04-19)
 2. `TeamCreate` to spawn 2-3 teammates
 3. Memory Browser + Visual Content in parallel
 4. `/checkpoint` after each ships

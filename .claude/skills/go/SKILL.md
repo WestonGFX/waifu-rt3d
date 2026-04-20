@@ -12,6 +12,7 @@ Resume work from plan files or MEMORY.md and execute tasks using specialized age
 - `--single` or `--single <task-id>`: Implement ONLY one task, then STOP.
 - `--dry`: Show what would be done without executing. Lists planned agent dispatches.
 - `--sprint`: Maximum parallelism — dispatch up to 8 agents for all independent work.
+- `--preset=sprint`: 3-agent parallel preset — backend + frontend + docs. Use when the task has clean backend/frontend split and needs synchronized delivery. Backend agent owns `backend/`, frontend agent owns `frontends/sakura/src/`, docs agent runs after both complete. Each commits independently. (Absorbed from the former standalone `/sprint` skill.)
 
 ## Expert Roster
 
@@ -23,9 +24,12 @@ Read the agent profiles in `.claude/agents/` for full details. Summary:
 | `senior-dev` | Python + React implementation | Backend modules, API endpoints, frontend components |
 | `ux-architect` | UI/UX components | Overlays, panels, theme-aware styling |
 | `schema-architect` | Database layer | SQLite migrations, preflight.py, data modeling |
-| `qa-hunter` | Testing & validation | pytest tests, edge cases, regression checks |
-| `prd-writer` | Feature specification | PRDs in Why/How dual-audience format |
-| `orchestrator` | Multi-agent coordination | Complex features needing decomposition |
+| `qa-hunter` | Backend testing & validation | pytest tests, edge cases, regression checks |
+| `frontend-tester` | Frontend testing | Vitest + RTL tests for Sakura components/stores/hooks |
+| `prd-writer` | Formal feature specification | PRDs in Why/How dual-audience format |
+| `advisor` | Strategy + quick PRDs | Design critique, risk flagging, lightweight PRDs |
+
+Note: Main-session Claude (this agent) IS the orchestrator during /go execution. No separate orchestrator agent — coordination, integration, and wave-ordering happen in-session. Agent dispatches are leaf workers, not coordinators.
 
 ## Phase 1: Context Gathering (Max 3 Tool Calls)
 
@@ -238,8 +242,10 @@ Next: Integration wiring into server.py + App.tsx
 - **NEVER rewrite plan files.** Read them, execute them.
 - **NEVER ask "should I continue?"** Just keep going.
 - **NEVER dispatch agents that touch the same file in parallel.**
+- **NEVER invoke `/qa-sweep` inside `/go`.** pytest + tsc after each wave is sufficient. User explicitly vetoed mid-flow full sweeps — friction too high for their workflow.
 - **ALWAYS read the plan file first.** It's the source of truth.
 - **ALWAYS run pytest + tsc before committing.**
+- **ALWAYS run `/checkpoint` between waves** (not between tasks). One checkpoint per completed wave keeps `CURRENT_STATUS.md` fresh for mid-session crash recovery without inflating token cost.
 - **ALWAYS do integration wiring yourself** (server.py, App.tsx, stores).
 - **MAX 8 parallel agents** per dispatch.
 - **Prefer 4-5 focused agents over 8 vague ones.** Quality > quantity.

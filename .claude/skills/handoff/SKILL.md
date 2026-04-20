@@ -1,42 +1,48 @@
 ---
 name: handoff
 description: >
-  End-of-session duties: write summary to disk, update CURRENT_STATUS.md,
-  update handoff memory. Fast alternative to /checkpoint — focused on context
-  preservation for the next session. Trigger when user says "wrap up",
-  "I'm done", "handoff", "save state", or runs /handoff.
+  End-of-session context save. Writes SESSION_HANDOFF.md (ephemeral, overwritten
+  each session) and invokes the status-sync subset of /checkpoint. Thin wrapper
+  around /checkpoint — use /handoff for fast exit, /checkpoint for full milestone
+  ritual. Trigger when user says "wrap up", "I'm done", "handoff", "save state",
+  or runs /handoff.
 user_invocable: true
 ---
 
 # Session Handoff — Fast Context Save
 
-Quick, focused end-of-session state save. Produces a SESSION_HANDOFF.md
-that lets the next session cold-start in under 60 seconds.
+Fast end-of-session state save. Produces a `docs/SESSION_HANDOFF.md` that lets
+the next session cold-start in under 60 seconds. Shares status-sync logic with
+`/checkpoint` — see that skill for the full milestone ritual.
 
-Use `/checkpoint` for full documentation. Use `/handoff` for fast exit.
+**When to use which:**
+- `/handoff` — End of session. You want to stop working soon. ~6 steps, ~1 min.
+- `/checkpoint` — Mid-session milestone. Full archive sync: FEATURE_MASTERLIST, COMPLETED_FEATURES, RESUME_PROMPT, session summary, plan-phase markers. ~11 steps, ~3 min.
 
-## Step 1: Gather State (parallel, single message)
+## Step 1 — Gather State (parallel, single message)
 
 Run ALL of these in parallel:
-1. `cd frontends/sakura && npx tsc --project tsconfig.app.json --noEmit 2>&1 | tail -5` — type check status
-2. `.venv/bin/python -m pytest backend/tests/ -q --tb=line 2>&1 | tail -5` — test count and status
-3. `git status && git log --oneline -10` — branch state
-4. `git diff --stat` — uncommitted changes summary
 
-Hold all results in working memory for the next steps.
+1. `cd frontends/sakura && npx tsc --project tsconfig.app.json --noEmit 2>&1 | tail -5`
+2. `.venv/bin/python -m pytest backend/tests/ -q --tb=line 2>&1 | tail -5`
+3. `git status && git log --oneline -10`
+4. `git diff --stat`
 
-## Step 2: Commit Any Uncommitted Work
+## Step 2 — Commit Uncommitted Work (if any)
 
-If there are uncommitted changes:
-1. Stage relevant files (NOT .env, app.db, credentials, __pycache__, node_modules)
-2. Write a detailed commit message describing ALL changes
-3. Commit and push
+If `git status` shows modifications:
+1. Stage relevant files (NOT `.env`, `app.db`, `credentials`, `__pycache__`, `node_modules`)
+2. Write a detailed commit message describing ALL changes in this session
+3. Commit
 
-If no uncommitted changes, skip to Step 3.
+If no uncommitted changes, skip.
 
-## Step 3: Write SESSION_HANDOFF.md
+## Step 3 — Write `docs/SESSION_HANDOFF.md` (unique to /handoff)
 
-Create or OVERWRITE `docs/SESSION_HANDOFF.md` with this structure:
+This file is EPHEMERAL — it gets overwritten each session. Durable records live
+in `CURRENT_STATUS.md`, memory files, and git history.
+
+Structure:
 
 ```markdown
 # Session Handoff — {YYYY-MM-DD}
@@ -67,36 +73,31 @@ Create or OVERWRITE `docs/SESSION_HANDOFF.md` with this structure:
 - {Any decisions that were made and WHY}
 ```
 
-This file is EPHEMERAL — it gets overwritten each session. The durable
-record lives in CURRENT_STATUS.md, memory files, and git history.
+## Step 4 — Status-sync subset (shared with /checkpoint)
 
-## Step 4: Update CURRENT_STATUS.md
+Perform these /checkpoint steps (do NOT run the full /checkpoint ritual):
 
-Update the "Last updated" timestamp and any section that changed this session:
-- Test count if it changed
-- Schema version if it changed
-- Feature completion status
-- Active work section
+- **Step 3 of /checkpoint:** Update `CURRENT_STATUS.md` — timestamp, test count, schema version, "Active work" section. APPEND only; never truncate.
+- **Step 5 of /checkpoint:** Update `project_session_handoff.md` memory file with date, completed items, remaining priorities, test count, branch.
 
-IMPORTANT: APPEND or update in-place. NEVER truncate or delete existing sections.
+Skip the /checkpoint-only steps: master plan markers, FEATURE_MASTERLIST sync, COMPLETED_FEATURES append, RESUME_PROMPT rewrite, session summary, context-health recommendation. Those are milestone-grade ritual; /handoff is a fast exit.
 
-## Step 5: Update Memory
+## Step 5 — Final Report
 
-Update the `project_session_handoff.md` memory file in the auto-memory
-directory:
-- Set date to today's absolute date (YYYY-MM-DD)
-- List completed items from this session
-- List remaining items with priorities
-- Include test count and branch name
-
-## Step 6: Final Report
-
-Print a concise summary:
 ```
 Session Handoff Complete
 Branch: {branch} | Commits: {N this session}
 Tests: {X passed} | TSC: {clean/errors}
 Handoff: docs/SESSION_HANDOFF.md
-Status: CURRENT_STATUS.md updated
+Status: CURRENT_STATUS.md + memory updated
 Next: {top priority for next session}
+
+Run /checkpoint if you also want FEATURE_MASTERLIST / COMPLETED_FEATURES / RESUME_PROMPT updates.
 ```
+
+## Rules
+
+- Do NOT run the full /checkpoint ritual inside /handoff — Step 4 above lists the exact subset. Stay in that boundary.
+- Do NOT auto-invoke `/qa-sweep` (vetoed by user for mid-flow and handoff alike — see repo CLAUDE.md Suggestion Triggers).
+- Do NOT truncate or reorder existing content in CURRENT_STATUS.md or the memory file. Append/update in place.
+- If this session included a schema migration, a Known Sensitive Area touch, or 3+ files across backend/frontend/viewer — proactively suggest `/qa-sweep` per the Suggestion Triggers rule. Suggest, don't run.

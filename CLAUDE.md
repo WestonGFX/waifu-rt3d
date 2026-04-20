@@ -37,11 +37,43 @@ Never report a task as complete without verification matching the work type. Say
 
 ## Agent Dispatch Policy
 
-- For plans with 3+ independent features or file trees, dispatch parallel sub-agents (use `/sprint` or `/go` with parallel waves).
+- For plans with 3+ independent features or file trees, dispatch parallel sub-agents (use `/go` with parallel waves, or `/go --preset=sprint` for a 3-agent backend+frontend+docs split — absorbed the old `/sprint` skill).
 - Always spawn a dedicated QA agent (`qa-hunter`) for numeric constants, balance values, and boundary conditions (XP curves, tier thresholds, token budgets).
 - Cross-boundary contracts (API types, Pydantic ↔ TypeScript) MUST be defined in one place and consumed by all agents — see the `contract-broker` pattern (coming in session 15).
 - When one agent's output feeds another's input, the upstream agent MUST print the exact contract (interface, schema, or field list) at the top of its report. The downstream agent quotes that contract before writing code — never invents field names.
 - Single-file sequential work does NOT need agent dispatch. Use agents only when parallelism genuinely accelerates (e.g., backend + frontend + docs simultaneously).
+
+## Suggestion Triggers — /qa-sweep and /verify-servers
+
+Claude **suggests** (never auto-runs) these skills when specific risk signals fire. User explicitly opted for risk-signal mode over mandatory runs or per-session friction. See alternative modes below if you want to switch behavior. Never run `/qa-sweep` inside `/go` regardless of mode — the per-wave `pytest + tsc` gate is sufficient.
+
+### Active mode: risk-signal suggestions
+
+**Suggest `/qa-sweep` at commit or handoff boundary when ANY of:**
+1. Schema migration committed this session (preflight.py edited AND `LATEST_SCHEMA_VERSION` bumped)
+2. 3+ files modified spanning backend/, frontends/, AND viewer (cross-subsystem change)
+3. Any Known Sensitive Area touched — camera/grounding (`viewer.html`, `*Viewer*.tsx`), themes (`*.css` with `var()`), column layout (`AppLayout*`, `*Panel*.tsx` with resize logic), context providers (`SettingsContext`, `CharacterProvider`), Pydantic↔TypeScript boundary (`api.ts` AND any FastAPI response model changed in the same session)
+4. `preflight.py` touched at all
+
+**Suggest `/verify-servers` when ANY of:**
+1. Native module file changed: `better-sqlite3`, `onnxruntime`, `sqlite-vec`, Python version bump, `pyproject.toml`, `requirements.txt`, `package.json`
+2. A server-start command ran earlier this session AND an edit landed after it (ABI / import-error risk)
+3. Claude is about to claim "server works" / "backend running" in a user-facing response — probe first, then claim
+
+**Wording for suggestions:** "⚠ /qa-sweep is recommended — [which trigger fired]. Run now?" Keep the user in the driver's seat. If user says "not now" or ignores, drop it and move on — do not re-suggest in the same session unless a NEW trigger fires.
+
+### Alternative modes — swap by replacing the active-mode block above
+
+| Mode | How to apply | Tradeoff |
+|---|---|---|
+| **Commit-glob trigger** | Replace triggers 1–4 with a `git diff --cached --name-only` match against a hard-coded glob list (e.g., `preflight.py`, `backend/server.py`, `viewer.html`). | Simpler, more predictable. Misses cross-cutting sensitive-area edits. |
+| **Handoff-only** | Delete mid-session trigger logic. At `/handoff`, list changed files and let user decide manually. | Lightest touch. No mid-session nudge, so a broken claim can slip past. |
+| **Before-claim gate** | Move `/verify-servers` into the Verification Before Claiming Success table as a mandatory step before any "server works" claim. No trigger — it's a gate. | Tightest. Catches more. Costs tokens per claim. |
+| **Minimal / off** | Delete this entire section. User remembers manually. | Zero friction, zero safety net. Full user responsibility. |
+
+### Why suggestions, not gates?
+
+User explicitly prefers "break one thing and fix later" over paying sweep tax every session (2026-04-19 directive). The risk-signal set aims for near-100% fire rate on genuinely risky handoffs and near-zero noise otherwise. If this balance drifts wrong in practice, switch to an alternative mode above — do not ignore the signal.
 
 ## Python / Venv
 

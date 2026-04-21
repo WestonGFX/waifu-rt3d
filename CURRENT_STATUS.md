@@ -10,7 +10,18 @@
 
 ## Active Work
 
-**Session 16 (2026-04-20) in progress — Memory Browser audit + token-budget prune.** Discovered `MemoryBrowser.tsx` (commit `9592dcf`) already shipped 1197-line 4-tab UI (Overview / About You / Memories / Journal), fully wired to Ctrl+M + Sidebar + appStore overlay. Prior handoff's "backend ready, needs React UI" claim was stale. Session 16 corrects: updates MEMORY.md + SESSION_HANDOFF.md, archives old CURRENT_STATUS sessions, writes pre-session token-budget policy memory, begins Vitest coverage (Overview+Facts tabs this session — Memories+Journal next).
+**Session 16 (2026-04-20) committed** as `2d314fe`. Nothing in progress. Session 17 will continue MemoryBrowser test coverage (Memories + Journal tabs), then browser QA, then polish pass.
+
+## Completed This Session (Session 16 — Memory Browser audit + Vitest coverage + token-budget prune)
+
+| What | Details |
+|------|---------|
+| **Audit discovery** | `MemoryBrowser.tsx` (commit `9592dcf`, 1197 lines, 4 tabs) was already shipped — prior handoff's "backend ready, needs React UI" claim was stale memory. Actual gap = zero test coverage. |
+| **Vitest coverage** | 20 new cases in `frontends/sakura/src/test/MemoryBrowser.test.tsx`. Covers top-level overlay (open/close, tab switching, no-character guard), Overview tab (stats, category breakdown, journal preview, error fallback), and Facts tab (add/create/delete, source badges, category grouping). Memories + Journal tabs deferred to session 17. |
+| **CURRENT_STATUS.md prune** | 290 → 153 lines. Sessions 1-11 + Mar 29 research expansion relocated to new `docs/sessions/ARCHIVE.md`. Saves ~2k tokens per `/pre-session` cold start. |
+| **Stale-claim fixes** | `MEMORY.md` + `SESSION_HANDOFF.md` updated to reflect shipped-but-untested Memory Browser status. |
+| **New feedback memory** | `feedback_pre_session_token_budget.md` — user directive: prune CURRENT_STATUS/MEMORY/CLAUDE.md aggressively; additions should land with equivalent prune in same commit. |
+| **Verification** | pytest 2678 passed (backend untouched) · vitest 180 passed (+20) · 4 pre-existing failures unchanged · tsc clean. |
 
 ## Completed This Session (Apr 19–20, session 15 — CC Harness Hygiene Sweep)
 

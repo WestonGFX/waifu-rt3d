@@ -1,14 +1,16 @@
 # Current Project Status
 
-**Last updated:** 2026-04-20 PDT
+**Last updated:** 2026-04-20 (Session 16 in progress)
 **Branch:** master
 **Schema version:** v70
-**Tests:** 2678 backend (pytest) + 160 frontend (vitest) passing, tsc clean
+**Tests:** 2,678 backend (pytest) + 160 frontend (vitest) passing, tsc clean
 **Automation:** 12 agents, 22 skills, 6 rules, 8 hooks, 3 MCP servers
+
+**Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
 
-**Bond Progression all 6 phases complete.** Session 14 harness upgrades landed. **Session 15 (this session) = CC hygiene/cleanup sweep** — config mode flipped to `auto`, NO_FLICKER env wired, global safety-flag bypass dropped, skill redundancy collapsed (`/dashboard`, `/sprint`, `/review` → folded/renamed), orchestrator phantom agent deleted, /handoff refactored as /checkpoint thin wrapper, statusline math corrected (was reading cumulative tokens — now uses `current_usage`), Suggestion Triggers section added + Preference Forks meta-rule added globally, AnimeGirly cleanup mirrored same patterns. **Next priorities unchanged:** Memory Browser UI (backend ready, needs React UI — consider prototyping in Claude Design), Visual Content in Chat (image gen pipeline exists).
+**Session 16 (2026-04-20) in progress — Memory Browser audit + token-budget prune.** Discovered `MemoryBrowser.tsx` (commit `9592dcf`) already shipped 1197-line 4-tab UI (Overview / About You / Memories / Journal), fully wired to Ctrl+M + Sidebar + appStore overlay. Prior handoff's "backend ready, needs React UI" claim was stale. Session 16 corrects: updates MEMORY.md + SESSION_HANDOFF.md, archives old CURRENT_STATUS sessions, writes pre-session token-budget policy memory, begins Vitest coverage (Overview+Facts tabs this session — Memories+Journal next).
 
 ## Completed This Session (Apr 19–20, session 15 — CC Harness Hygiene Sweep)
 
@@ -16,227 +18,106 @@ Meta-work only — no product code or tests touched. Mirror-applied to AnimeGirl
 
 | What | Details |
 |------|---------|
-| **Permission mode** | `.claude/settings.local.json` `bypassPermissions` → `auto`. Dropped `skipDangerousModePermissionPrompt` from `~/.claude/settings.json` (the dangerous one). |
+| **Permission mode** | `.claude/settings.local.json` `bypassPermissions` → `auto`. Dropped `skipDangerousModePermissionPrompt` from `~/.claude/settings.json`. |
 | **Env flag** | Added `CLAUDE_CODE_NO_FLICKER=1` to `.claude/settings.json` env block. Restart CC to activate. |
 | **Skill deletions** | `/dashboard` (subset of `/pre-session`), `/sprint` (→ `/go --preset=sprint`), `/review` renamed → `/ui-review` (disambiguate from `/audit`). |
 | **Skill refactor** | `/handoff` rewritten as thin wrapper around `/checkpoint` — names shared status-sync steps instead of duplicating them. |
-| **Skill flag** | `/go` gained `--preset=sprint` (absorbed old /sprint); `/go` agent roster table updated to include `frontend-tester` + `advisor` + `regression-guard`, orchestrator row removed. |
+| **Skill flag** | `/go` gained `--preset=sprint`; `/go` agent roster updated to include `frontend-tester` + `advisor` + `regression-guard`, orchestrator row removed. |
 | **Agent deletion** | `orchestrator.md` — phantom role (main Claude IS the orchestrator during /go). |
 | **Agent demotion** | `production-readiness-auditor.md` moved from `~/.claude/agents/` → `.claude/agents/` (repo-local). |
 | **Agent descriptions** | `advisor` vs `prd-writer` boundary clarified (light vs formal PRDs); `qa-hunter` scoped to backend-only (vs `frontend-tester`). |
-| **Repo CLAUDE.md** | New "Suggestion Triggers" section — risk-signal mode for `/qa-sweep` + `/verify-servers` with 4 alternative modes documented inline for easy swap. |
+| **Repo CLAUDE.md** | New "Suggestion Triggers" section — risk-signal mode for `/qa-sweep` + `/verify-servers` with 4 alternative modes documented inline. |
 | **Global ~/.claude/CLAUDE.md** | New "Preference Forks — Offer Options, Don't Pick Silently" rule — extends AskUserQuestion with preference/aesthetic/layout fork coverage. |
 | **Global new-repo ritual** | Wrote `~/.claude/docs/new-repo-setup.md` — manual decision-tree reference for future repos. NOT auto-applied. |
-| **Statusline** | Fixed cumulative-vs-current-tokens bug ([CC issue #13783](https://github.com/anthropics/claude-code/issues/13783)) — bar now pulls from `current_usage` sum so visual matches `/context` output. Added `SEP_PAD` tunable, dynamic model-suffix shortening (`(1M context)` → `(1m)`), balanced separator spacing. |
-| **AGENTS.md** | Full rewrite — 12 agents, orchestrator removed, role boundaries spelled out, `/go --preset=sprint` + `--mode=roadmap` documented. |
-| **AnimeGirly mirror** | Same cleanups: deleted `/dashboard`, `/implement-feature`, orchestrator; `/go` got `--mode=roadmap`; advisor/prd-writer clarified; regression-guard agent ported; Suggestion Triggers section appended (AG-tailored — Dexie version, helper/, provider registry, avatar pipeline). |
-| **New feedback memory** | `feedback_no_qa_sweep_in_go.md`, `feedback_new_repo_setup_manual.md`, `feedback_tool_per_repo_no_mixing.md` (ClipFlow = Codex-only, no Claude Code), `project_statusline_review_due.md` (2026-05-19 rebuild reminder). |
-| **Evaluated but deferred** | `/ultrareview` (3 free Max runs — save for real product code, not meta sessions); Claude Design (web/GUI only — user to try on Memory Browser UI next). |
-| **Verification** | pytest 2678 passed ✓ / tsc clean ✓ — no product-code or test changes this session, all green baseline preserved. |
+| **Statusline** | Fixed cumulative-vs-current-tokens bug ([CC #13783](https://github.com/anthropics/claude-code/issues/13783)). Added `SEP_PAD` tunable, dynamic model-suffix shortening, balanced separator spacing. |
+| **AGENTS.md** | Full rewrite — 12 agents, orchestrator removed, role boundaries spelled out. |
+| **AnimeGirly mirror** | Same cleanups applied in AG working tree (deleted /dashboard, /implement-feature, orchestrator; /go got --mode=roadmap; Suggestion Triggers section appended, AG-tailored). |
+| **New feedback memory** | `feedback_no_qa_sweep_in_go.md`, `feedback_new_repo_setup_manual.md`, `feedback_tool_per_repo_no_mixing.md`, `project_statusline_review_due.md` (2026-05-19 rebuild reminder). |
+| **Verification** | pytest 2678 passed · tsc clean — no product-code or test changes, all green baseline preserved. |
 
 ## Completed This Session (Apr 18, session 14 — Harness Upgrades, Tier 1+2)
 
-Meta-work on the dev workflow itself per `~/.claude/plans/tranquil-percolating-spring.md`. Repo-local-only per user scope preference — no global `~/.claude/` changes.
+Meta-work on the dev workflow itself. Repo-local-only.
 
 | What | Details |
 |------|---------|
-| **14.1 CLAUDE.md verification gates** | Added `## Verification Before Claiming Success` (work-type → required evidence table: curl + pytest tail + migration validation + hook trigger) and `## Agent Dispatch Policy` (when to parallelize, qa-hunter for boundary conditions, contract-broker preview). Expanded `## Known Sensitive Areas` with context-provider mock drift + Pydantic↔TS type drift. Commit `0b08397`. |
-| **14.2 Biome hook upgrade** | Existing `.claude/settings.json` PostToolUse hook swapped `biome format --write` → `biome check --write` (format + safe-autofix lint rules in one npx spawn). Minimal-surface change. Repo-local, no commit. |
-| **14.3 /verify-servers skill** | New `.claude/skills/verify-servers/SKILL.md` — probes backend 8080, sakura 5175, dashboard 3333, viewer iframe. Curl + body-content sanity + log scan for ABI/ImportError/segfault keywords. Closes the "server bound port but handler silently 500s" verification gap. Repo-local. |
-| **14.4 /go phase gates** | `.claude/skills/go/SKILL.md` gained `Phase-End Gates` section: test-subset tail paste, `/verify-servers` when phase starts a service, one-line plan status append (never rewrite), advisory mid-session / MANDATORY at session-end "done" claim. Session-end checklist added. Repo-local. |
-| **14.5 /qa-sweep chunked mode** | `.claude/skills/qa-sweep/SKILL.md` appended `Chunked Mode — /qa-sweep --chunked`: batches of 50 cases, per-batch commit to `docs/testing/qa-findings-YYYY-MM-DD.md`, P0/P1/P2 categorization, P0-only auto-fix with explicit user approval. Prevents the 400-case context-exhaustion scenario. Repo-local. |
-| **14.6 regression-guard agent** | New `.claude/agents/regression-guard.md` — scans `git log --grep='fix'` for patterns fixed 2+ times, writes locked-in tests citing commit hashes, commits one test per trap. Seed keywords: avatar aspect, column resize, row_factory, SettingsContext, XP curve, theme hardcodes, VRM bones, token budget, voice duplex. Repo-local. |
-| **14.7 verification** | pytest 2678 passed (baseline preserved), tsc clean, vitest 160 passed + 4 pre-existing failures unchanged (OnboardingWizard × 1, SettingsView.exportImport × 3). |
-| **New feedback memory** | `feedback_batch_work_prefer_momentum.md`, `feedback_no_global_config_changes.md`, `feedback_scope_definitions.md` — capture lessons from this session's scope-confusion pivot so future sessions don't repeat it. |
+| **14.1 CLAUDE.md verification gates** | Added `## Verification Before Claiming Success` (work-type → required evidence) and `## Agent Dispatch Policy`. Expanded `## Known Sensitive Areas` with context-provider mock drift + Pydantic↔TS type drift. Commit `0b08397`. |
+| **14.2 Biome hook upgrade** | PostToolUse hook swapped `biome format --write` → `biome check --write` (format + safe-autofix lint). |
+| **14.3 /verify-servers skill** | New `.claude/skills/verify-servers/SKILL.md` — probes backend 8080, sakura 5175, dashboard 3333, viewer iframe. Curl + body-content sanity + log scan for ABI/ImportError/segfault keywords. |
+| **14.4 /go phase gates** | `/go` gained `Phase-End Gates`: test-subset tail paste, `/verify-servers` when phase starts a service, one-line plan status append. |
+| **14.5 /qa-sweep chunked mode** | `/qa-sweep --chunked`: batches of 50, per-batch commit to `docs/testing/qa-findings-*.md`, P0/P1/P2 categorization. |
+| **14.6 regression-guard agent** | New `.claude/agents/regression-guard.md` — scans `git log --grep='fix'` for repeat patterns, writes locked-in tests citing commit hashes. |
+| **14.7 verification** | pytest 2678 passed, tsc clean, vitest 160 passed + 4 pre-existing failures unchanged. |
+| **New feedback memory** | `feedback_batch_work_prefer_momentum.md`, `feedback_no_global_config_changes.md`, `feedback_scope_definitions.md`. |
 
 ## Completed This Session (Apr 14, session 13 — Bond Phases 5+6)
 
 | What | Details |
 |------|---------|
-| **Bond Phase 5: Memorial Scenes** | 39 tier-transition vignettes (13 chars × 3 tier boundaries: acquaintance→friend, friend→close_friend, close_friend→soulmate). `bond_scenes_seen` table (schema v70). 5 backend endpoints: `GET memorial-scene`, `POST memorial-scene/complete`, `GET first-memory`, plus existing analytics. `MemorialScene.tsx` overlay + `useMemorialScene` hook (frontend). 5 new API methods in `api.ts`. `appStore` overlay registration. |
-| **Bond Phase 6: Analytics** | `GET /api/characters/{id}/bond/analytics` — XP source breakdown, session counts, tier history. DevConsole Bond analytics tab showing per-source XP chart and tier progress. |
-| **Tests** | +32 new (2678 backend total, 160 frontend total): 22 pytest (`test_bond_phase5.py` + `test_bond_analytics.py`) + 10 vitest (`MemorialScene` component + `useMemorialScene`). |
+| **Bond Phase 5: Memorial Scenes** | 39 tier-transition vignettes (13 chars × 3 tier boundaries). `bond_scenes_seen` table (schema v70). 5 backend endpoints. `MemorialScene.tsx` overlay + `useMemorialScene` hook. |
+| **Bond Phase 6: Analytics** | `GET /api/characters/{id}/bond/analytics` — XP source breakdown, session counts, tier history. DevConsole Bond tab. |
+| **Tests** | +32 new (2678 backend total, 160 frontend total). |
 
 ## Completed This Session (Apr 14, session 12 — Per-Character Scenarios)
 
 | What | Details |
 |------|---------|
-| **Per-Character Scenario Templates** | schema v69 migration seeds 65 builtin templates (13 chars × 5). 6 REST endpoints under `/api/scenarios/templates`: list, active, create, update, delete (403 on builtins), activate (id=0 deactivates). |
-| **ScenarioPicker UI** | `ScenarioPicker.tsx` (497 lines) — modal with mood-grouped list, activate/random/create-custom. `useScenarios.ts` hook (186 lines). Sparkles button in ChatThread composer toolbar opens overlay. 7 new API methods in `api.ts`. |
-| **Tests** | +46 new (2650 total): 29 backend (`test_scenario_templates_api.py`) + 17 vitest frontend. |
+| **Per-Character Scenario Templates** | schema v69 seeds 65 builtin templates (13 chars × 5). 6 REST endpoints under `/api/scenarios/templates`. |
+| **ScenarioPicker UI** | `ScenarioPicker.tsx` (497 lines) — modal with mood-grouped list, activate/random/create-custom. `useScenarios.ts` hook (186 lines). |
+| **Tests** | +46 new (2650 total): 29 backend + 17 vitest. |
 
-## Completed This Session (Apr 7, session 11 — Quick Replies + CHARA V2 + Competitor Research)
+## Previous Sessions (detail in [ARCHIVE.md](docs/sessions/ARCHIVE.md))
 
-| What | Details |
-|------|---------|
-| **P0: AI Quick Replies** | Two-phase heuristic→LLM chip system in ChatThread.tsx. 11 vitest tests. No backend changes. |
-| **P1: CHARA V2 Compliance** | Schema v68 (7 new columns). Lossless import/export of all V2 fields. Scenario + post_history_instructions context injection. 15 pytest tests. |
-| **P3: Competitor Gap Analysis** | 577-line research doc. 60+ features, 30+ platforms. Top gaps: message swipe, visual content, memory UI. |
-| **Bug Fix** | test_bond_phase1 UTC date flake fixed |
+| Session | Date | Key work |
+|---------|------|----------|
+| 11 | Apr 7 | AI Quick Replies + CHARA V2 Compliance (v68) + Competitor Gap Analysis |
+| 10 | Apr 7 | QA Fixes (4) + Bond P1-2 (v67, BondProgressBar, LevelUpCelebration, +82 tests) |
+| 9 | Apr 6 | AIE Phase B (6 modules: trend, decay, memory→behavior, critique, topic graph, milestones; v66, +114 tests) |
+| 8 | Apr 6 | /release-test skill + 31 automation recs + 4 hooks + FastMCP bridge + SQLite MCP + 3 skills + 2 agents + 2 rules + Biome |
+| 7 | Apr 4 | 14 CC improvements (/handoff, /pre-session, /qa-sweep, perf-reviewer, pre-commit hook, CLAUDE.md sections) |
+| 5 | Apr 1 | AIE Phase A (4 modules: classifier, tuner, user model, gate; v65, +165 tests) |
+| 4 | Mar 31 | 12 NSFW frontend components + Intimacy tab + 11 overlays + +3 toolbar buttons + 3 shortcuts |
+| 3 | Mar 28 | NSFW Phases 1-3 (Foundation + State Machines + Scene Architecture) |
+| 2 | Mar 30 | NSFW Phases 5-10 (Emotional, Voice, Visual, Personalization, Polish, Advanced; +318 tests) |
+| 1 | Mar 30 | NSFW Phase 4 (Milestones, Intimate Memory, Aftercare, Pillow Talk; v62, +120 tests) |
 
-## Completed This Session (Apr 7, session 10 — QA Fixes + Bond Phases 1-2)
-
-| What | Details |
-|------|---------|
-| **QA Bug Fixes (4)** | I3: message copy/edit/delete actions, I8: GlobalSearch Escape, I9: motion stats fields, I10: name tooltip |
-| **Bond Phase 1: XP Engine** | `backend/bond/xp_engine.py` — depth multiplier (1.0-2.5x), interest match, session/daily bonuses |
-| **Bond Phase 1: Progression** | Quadratic XP curve (growth=0.3, ~361k total), 5-tier model (stranger/acquaintance/friend/close_friend/soulmate) |
-| **Bond Phase 1: Unlocks** | `backend/bond/unlocks.py` — 46-entry UNLOCK_TABLE, 9 unlock types across 100 levels |
-| **Bond Phase 1: Milestones** | `backend/bond/milestones.py` — record/query milestones, XP event logging |
-| **Schema v67** | bond_xp_events + bond_milestones tables, daily/session tracking columns |
-| **3 API endpoints** | GET milestones, GET unlocks, GET xp-history |
-| **Bond Phase 2: UI** | BondProgressBar, LevelUpCelebration, useBondProgress hook, tier badge in StatusBar |
-| **Tests** | +82 new (2556 total): XP engine, unlocks, milestones, progression curve |
-
-## Completed This Session (Apr 6, session 9 — AIE Phase B)
-
-| What | Details |
-|------|---------|
-| **B1: Trend Analyzer** | `backend/adaptive/trend_analyzer.py` — EMA + linear regression over preference_history, engagement pattern detection |
-| **B2: Memory Decay** | `backend/memory/decay.py` — Ebbinghaus forgetting curve, recall reinforcement, decay passes |
-| **B3: Memory→Behavior** | `backend/adaptive/memory_behavior.py` — 4-channel behavioral derivation (emotional, priming, references, continuity) |
-| **B4: Self-Critique** | `backend/adaptive/self_critique.py` — LLM self-review on engagement regression |
-| **B5: Topic Graph** | `backend/adaptive/topic_graph.py` — TF-IDF extraction, sentiment tracking, emerging detection |
-| **B6: Milestones** | `backend/adaptive/milestones.py` — 10-type relationship milestone detection |
-| **Schema v66** | Memory decay columns + topic_tracking table + relationship_milestones table |
-| **Integration** | B1+B6→reflector, B2→tiered_memory, B3→context_assembler, B4→reflector, B5→signals |
-| **5 API endpoints** | GET trends, POST decay-pass, GET topics, GET milestones, POST self-critique |
-| **Tests** | +114 new (2474 total): 20 trend, 20 decay, 19 topic, 17 milestone, 15 behavior, 23 critique |
-
-## Completed This Session (Apr 6, session 8 — Release Testing & Automation Deep Dive)
-
-| What | Details |
-|------|---------|
-| **/release-test skill** | Browser acceptance testing via Chrome computer-use. 5 user personas, 3 tiers (--major/--minor/--quick) |
-| **Automation analysis** | 31 recommendations across 6 categories from 3-agent parallel research (30+ web sources) |
-| **4 new hooks** | SessionStart context inject, Stop desktop notification, _BACKUP_ROOT hard-block, Biome TS/TSX format |
-| **FastMCP API bridge** | `backend/mcp_bridge.py` — 12 API endpoints as native MCP tools |
-| **SQLite MCP** | Read-only direct DB access via mcp-server-sqlite |
-| **3 new skills** | /vrm-animation, /new-component, /diff-impact |
-| **2 new agents** | frontend-tester (Vitest/RTL), theme-auditor (CSS variable audit) |
-| **2 new rules** | preflight-migrations (chain safety), testing-conventions (7 patterns) |
-| **Biome config** | `frontends/sakura/biome.json` — TS/TSX auto-format on every edit |
-
-## Completed This Session (Apr 4, session 7 — Claude Code setup)
-
-| What | Details |
-|------|---------|
-| **14 Claude Code improvements** | Applied all recommendations from /insights report (57 sessions, 611h analyzed) |
-| **New skills (3)** | `/handoff` (session save), `/pre-session` (health check), `/qa-sweep` (parallel QA) |
-| **New agent** | `perf-reviewer` — Three.js/VRM + Python + React performance review |
-| **New hooks** | Pre-commit blocking (pytest + tsc), path-scoped rules (4 files) |
-| **CLAUDE.md sections (4)** | Working Style, Known Sensitive Areas, Phase Gate Testing, Protected Paths |
-| **/go upgrades** | Model routing (Haiku/Sonnet/Opus), OWNS/READS file ownership, self-healing test loop |
-| **/research-to-action** | TDD test scaffolding + autonomous implementation pipeline |
-
-## Completed This Session (Apr 1, session 5)
-
-| What | Details |
-|------|---------|
-| **A1: Context Classifier** | Rule-based 7-type conversation classification (emotional_support, casual_chat, creative_roleplay, deep_philosophical, playful_flirty, factual_qa, comfort_reassurance) + confidence scoring |
-| **A2: Dynamic Param Tuner** | Context-aware LLM sampling params replace static temperature. Engagement drift, character blending, safe ranges |
-| **A3: Extended User Model** | 11 new user_profiles columns (communication style, emotional patterns, interaction patterns) + v65 migration |
-| **A4: Personalization Gate** | 3-gate memory filter (relevance, repetition, appropriateness) with 9 sensitivity categories. Wired into context_assembler RAG path |
-| **Integration** | All 4 modules wired into server.py (streaming + non-streaming), signals.py, reflector.py, context_assembler.py |
-| **Tests** | +165 new (2360 total): 40 classifier, 38 tuner, 44 user model, 43 gate |
-| **QA Questionnaire** | `docs/testing/qa-questionnaire.html` — guided walkthrough, auto-save, Markdown export |
-| **Lines added** | ~4,200 across 15 files |
-
-## Completed This Session (Mar 31, session 4)
-
-| What | Details |
-|------|---------|
-| **12 NSFW frontend components** | NsfwSettingsTab, IntimateScenarioBrowser, DesireTree, FantasyJournal, MilestoneTimeline, IntimateMemoryBrowser, SceneBookmarks, IntimateGallery, LoveLetterModal, AudioStoryPlayer, IntimateQuizPanel, SharedFantasyBuilder |
-| **Settings: Intimacy tab** | New tab in SettingsView with power dynamics, jealousy, spontaneity, time features |
-| **App integration** | 11 new overlay types in appStore, all components rendered in App.tsx |
-| **Keyboard shortcuts** | Alt+Shift+K (bookmarks), Alt+Shift+M (milestones), Alt+Shift+D (desires) |
-| **Lines added** | 6,434 lines across 15 files |
-| **Chat toolbar** | WhisperModeToggle (F27), QuickFireToggle (F36), TemperatureMeter (F21) |
-| **P9+P10 context injection** | 7 blocks wired into server.py: Clothing, Dual Track, Negotiation, Spontaneity, Physical Tells, Recovery, Desire Arcs |
-| **Final 3 components** | useAmbientAtmosphere hook (F23), PersonaPicker (F37), SceneReplayViewer (F35) |
-| **Total** | 18 components + 1 hook, 13 overlay types, ~7,500 lines added |
-
-## Completed This Session (Mar 28, session 3)
-
-| What | Details |
-|------|---------|
-| **NSFW Phase 1: Foundation** | F40 Boundaries, F13 Writing Styles, F15 Sensory Profiles, F30 Pet Names — full stack (backend + migration v61 + API + context wiring + frontend) |
-| **NSFW Phase 2: State Machines** | F17 Arousal Engine, F6 Pacing Engine, F16 Scene Phases, F10 Consent — backend + context wiring |
-| **NSFW Phase 3: Scene Architecture** | F32 Power Dynamics, F38 Intimate Director, F8 NSFW Scenarios (19 templates), F25 Touch Protocol — backend + API + context wiring |
-| **Dev Tooling** | `./run.sh check` (one-command smoke test), `./run.sh dash` (open dashboard), dev panel on localhost:3333 |
-| **Favicon** | Pixel waifu favicon deployed to Sakura + Neon frontends |
-| **Settings cleanup** | Local settings.json trimmed from 148 → 0 permissions (global wildcards cover all) |
-| **QUICKSTART.md** | One-page dev cheatsheet at docs/QUICKSTART.md |
-
-## NSFW Mega-Sprint Progress
+## NSFW Mega-Sprint Summary (detail per phase in ARCHIVE.md)
 
 | Phase | Status | Features | Tests Added |
 |-------|--------|----------|-------------|
-| **Phase 1: Foundation** | ✅ COMPLETE | F40 Boundaries, F13 Writing Styles, F15 Sensory, F30 Pet Names | +146 |
-| **Phase 2: State Machines** | ✅ COMPLETE | F17 Arousal, F6 Pacing, F16 Scene Phases, F10 Consent | +113 |
-| **Phase 3: Scene Architecture** | ✅ COMPLETE | F32 Power Dynamics, F38 Director, F8 Scenarios, F25 Touch | +112 |
-| **Phase 4: Memory & Milestones** | ✅ COMPLETE | F1 Milestones, F2 Intimate Memory, F5 Aftercare, F12 Pillow Talk | +120 |
-| **Phase 5: Emotional Continuity** | ✅ COMPLETE | F3 Morning After, F34 Confessions, F43 Post-Scene Mood, F45 Midnight Mode, F11 Fantasy Journal, F39 Desires | +126 |
-| **Phase 6: Voice & Audio** | ✅ COMPLETE | F4 Voice Intimacy, F33 Audio Stories, F36 Quickfire, F46 Love Letters | +70 |
-| **Phase 7: Visual & Image Gen** | ✅ COMPLETE | F29 Image Gen, F42 Gallery, F28 NSFW Portraits, F19 Arousal Visuals, F27 Whisper Mode | +34 |
-| **Phase 8: Deep Personalization** | ✅ COMPLETE | F35 Scene Replay, F37 Fantasy Personas, F47 Shared Fantasy, F31 Jealousy, F41 Body Language, F44 Erogenous Map, F22 Intimate Quiz | +37 |
-| **Phase 9: Polish & Extras** | ✅ COMPLETE | F24 Clothing, F26 Scene Scoring, F20 Bookmarks, F48 Playlist | +14 |
-| **Phase 10: Advanced Features** | ✅ COMPLETE | F49 Dual Track, F50 Negotiation, F51 Recovery, F52 Spontaneity, F53 Soundscapes, F54 Physical Tells, F55 Desire Arcs, F56 Mini-Games | +37 |
+| **Phase 1: Foundation** | ✅ COMPLETE | F40, F13, F15, F30 | +146 |
+| **Phase 2: State Machines** | ✅ COMPLETE | F17, F6, F16, F10 | +113 |
+| **Phase 3: Scene Architecture** | ✅ COMPLETE | F32, F38, F8, F25 | +112 |
+| **Phase 4: Memory & Milestones** | ✅ COMPLETE | F1, F2, F5, F12 | +120 |
+| **Phase 5: Emotional Continuity** | ✅ COMPLETE | F3, F34, F43, F45, F11, F39 | +126 |
+| **Phase 6: Voice & Audio** | ✅ COMPLETE | F4, F33, F36, F46 | +70 |
+| **Phase 7: Visual & Image Gen** | ✅ COMPLETE | F29, F42, F28, F19, F27 | +34 |
+| **Phase 8: Deep Personalization** | ✅ COMPLETE | F35, F37, F47, F31, F41, F44, F22 | +37 |
+| **Phase 9: Polish & Extras** | ✅ COMPLETE | F24, F26, F20, F48 | +14 |
+| **Phase 10: Advanced Features** | ✅ COMPLETE | F49–F56 (8 features) | +37 |
 
-## Completed This Session (Mar 30, session 2)
+## Next Tasks (Priority Order — updated Session 16)
 
-| What | Details |
-|------|---------|
-| **NSFW Phase 5: Emotional Continuity** | F3 Morning After, F34 Confessions, F45 Midnight Mode, F39 Desires, F43 Post-Scene Mood, F11 Fantasy Journal — schema v63 |
-| **NSFW Phase 6: Voice & Audio** | F4 Voice Intimacy, F33 Audio Stories, F36 Quickfire, F46 Love Letters |
-| **NSFW Phase 7: Visual & Image Gen** | F29 Image Gen, F42 Gallery, F28 NSFW Portraits, F19 Arousal Visuals, F27 Whisper Mode — schema v64 |
-| **NSFW Phase 8: Deep Personalization** | F35 Scene Replay, F37 Fantasy Personas, F47 Shared Fantasy, F31 Jealousy, F41 Body Language, F44 Erogenous Map, F22 Intimate Quiz |
-| **NSFW Phase 9: Polish** | F24 Clothing, F26 Scene Scoring, F20 Bookmarks, F48 Playlist |
-| **NSFW Phase 10: Advanced** | F49 Dual Track, F50 Negotiation, F51 Recovery, F52 Spontaneity, F53 Soundscapes, F54 Physical Tells, F55 Desire Arcs, F56 Mini-Games |
-| **Tests** | +318 new (2195 total), all passing, tsc clean |
+1. ~~**AIE Phase B**~~ · ~~**Bond Phases 1-2**~~ · ~~**Bond Phases 3+4**~~ · ~~**Bond Phases 5+6**~~ · ~~**Per-Character Scenarios**~~ — all ✅ DONE
+2. ~~**Memory Browser UI (P5)**~~ — discovered SHIPPED in commit `9592dcf` during session 16 audit. 1197-line 4-tab component fully wired. **New active gap: zero Vitest coverage.**
+3. **Memory Browser test coverage** (session 16+17) — Vitest suite for all 4 tabs. Session 16: Overview + Facts. Session 17: Memories + Journal + top-level. 3–5h total.
+4. **Memory Browser browser QA** (session 17) — exercise tabs in Sakura, file `docs/bugs/*.md`. 1–2h.
+5. **Memory Browser polish** (session 18) — apply QA findings, unify raw-fetch `/api/v2/memory/*` calls vs `api.getUserFacts()` client. 2–4h.
+6. **Visual Content in Chat** — "Character sends you a picture" UX. Image-gen pipeline exists in backend. ~4–8h.
+7. **Fix 4 pre-existing frontend test failures** — OnboardingWizard × 1, SettingsView.exportImport × 3. 2–4h.
+8. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h).
+9. **Spring Bones 3D** — Quick win: strip Mixamo spring bone tracks + delta time clamp. Spec: `docs/plans/2026-03-29-spring-bones-spec.md` (16.5h).
+10. **Jiggle Physics** — VRM spring bones. Spec: `docs/plans/2026-03-29-jiggle-physics-spec.md` (15-21h).
+11. **Model Marketplace Expansion** — Spec: `docs/plans/2026-03-29-model-marketplace-spec.md` (25-32h).
+12. **Privacy-First Sync** — Spec: `docs/plans/2026-03-29-privacy-sync-spec.md` (~6h).
+13. **AIE Phase C: Advanced** — LoRA training pipeline, DSPy prompt optimization. Heavy, independent.
 
-## Completed This Session (Mar 30, session 1)
-
-| What | Details |
-|------|---------|
-| **NSFW Phase 4: Memory & Milestones** | F1 Milestone Tracker (11 types, regex detection, 13 character voices, anniversary schedule), F2 Intimate Memory (sensory anchors, context-matched recall, frequency limiting), F5 Aftercare Engine (6 personality variants, 5-phase dialogue, phrase banks), F12 Pillow Talk (9-topic taxonomy, whispered register, character prefs, sleepiness fade) |
-| **Schema v62** | 3 new tables: intimate_milestones, intimate_memories, post_scene_states |
-| **Context injection** | 4 new blocks in server.py (milestones, memory, aftercare, pillow talk) |
-| **API endpoints** | GET milestones, GET/DELETE intimate-memories, GET post-scene-status |
-| **Tests** | +120 new (1877 total), all passing, tsc clean |
-| **Workflow improvement** | New memory rule: plans MUST include Research & Documentation References section |
-
-## Previous Sessions
-
-| Session | What |
-|---------|------|
-| Mar 29 session 3 | Research expansion (142k words, 26 part files), NSFW Phase 4 + Frontend UX research |
-| Mar 28 session 2 | P5 Memory Browser, P2 Context Viewer |
-| Mar 27-28 session 1 | NSFW plan v2 + v3 enhancement (6,006 lines) |
-
-## Next Tasks (Priority Order)
-
-1. ~~**AIE Phase B: Deep Learning**~~ ✅ DONE — 6 modules, v66, 114 tests. Commit `02529cd`.
-2. ~~**Bond Progression Phases 1-2**~~ ✅ DONE — XP engine, unlocks, milestones, v67, BondProgressBar, LevelUpCelebration, 82 tests. Commits `0c64708`→`cdae599`.
-3. ~~**Bond Progression Phases 3+4**~~ ✅ DONE — dialogue gates, BondPanel/BondTimeline/BondStoryViewer. Commit `af56509`.
-4. ~~**Bond Progression Phases 5+6**~~ ✅ DONE — 39 memorial scenes, analytics endpoint + DevConsole tab, schema v70, 32 tests. Commits `c87531a`, `25c551a`, `7323998`.
-5. ~~**Per-Character Scenarios (P2)**~~ ✅ DONE — 65 builtin templates, ScenarioPicker UI, v69, 46 tests.
-6. **Memory Browser UI (P5)** — React component for viewing/editing character memories. Backend API already exists. High-impact, low-cost frontend build.
-7. **Visual Content in Chat** — "Character sends you a picture" UX flow. Image gen pipeline exists in backend. ~4-6hrs estimated.
-8. **QA Browser Testing** — Run `docs/testing/qa-questionnaire.html` alongside the app. Phases 8-16 remaining.
-9. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h, 6 phases).
-10. **Spring Bones 3D** — Quick win: strip Mixamo spring bone tracks + delta time clamp (1.5h). Spec: `docs/plans/2026-03-29-spring-bones-spec.md` (16.5h, 5 phases).
-11. **Jiggle Physics** — VRM spring bones physics. Spec: `docs/plans/2026-03-29-jiggle-physics-spec.md` (15-21h, 6 phases).
-12. **Model Marketplace Expansion** — Spec: `docs/plans/2026-03-29-model-marketplace-spec.md` (25-32h, 6 phases).
-13. **Privacy-First Sync** — Spec: `docs/plans/2026-03-29-privacy-sync-spec.md` (~6h, 2 phases).
-14. **AIE Phase C: Advanced** — LoRA training pipeline, DSPy prompt optimization. Heavy, independent. Spec: same file (Phase C: 54-76h).
-
-### Browser Test Sweep Checklist
+## Browser Test Sweep Checklist
 
 | Feature | Area | What to verify |
 |---------|------|---------------|
 | NSFW Phase 1-3 panels | Settings/Chat | Boundaries panel, writing style picker, sensory vocab, pet names |
-| P5 Memory Browser | Panel | View/edit/delete character memories |
+| **Memory Browser (session 17)** | Ctrl+M overlay | All 4 tabs render, Facts CRUD works, Memory search returns, Promote/Delete update UI, Journal expand/collapse |
 | P2 Context Assembly Viewer | Dev panel | Token counts, color-coded sections |
 | Phase 2-3 frontend (new) | Settings/Chat | Pacing mode picker, scenario templates, power dynamics |
 | Director Mode commands | Chat input | `/direct` commands parse and execute |
@@ -250,30 +131,12 @@ Meta-work on the dev workflow itself per `~/.claude/plans/tranquil-percolating-s
 | Settings modal (all tabs) | Modal | Every tab renders, saves, persists |
 | 18 themes switching | Global | All 9 light + 9 dark themes apply correctly |
 
-## Completed This Session (Mar 29, session 3)
-
-| What | Details |
-|------|---------|
-| **Research expansion** | All 8 research files expanded to 15-20k words each (~142k total). Split into 26 part files (<1000 lines each) for Claude Code compatibility. |
-| **New research (2 files)** | NSFW Phase 4 (milestones, intimate memory, aftercare, pillow talk) + NSFW Frontend UX (pacing picker, scenario browser, power dynamics, ambient effects, safety) |
-| **Workflow rule** | Research ↔ spec bidirectional linking enforced — saved to memory |
-| **Memory rule** | `_BACKUP_ROOT/` is sacred — never delete contents, only move files into it |
-
-## Completed Session (Mar 29, session 2)
-
-| What | Details |
-|------|---------|
-| **Git cleanup** | 6 commits: gitignore expansion, frontend rebuild, Alana + Dae docs, proactive module, plans/research/design docs, status update |
-| **Disk cleanup** | ~1.29 GB freed (pycache, stale worktree, pytest cache) |
-| **Gitignore expansion** | 8 new rules: db backups, user images, tsbuildinfo, root package-lock, unity, e2e screenshots, character zips, artifacts/ |
-| **Research (5 topics)** | Adaptive intelligence, bond progression, model marketplaces, privacy sync, spring bones 3D |
-| **Implementation specs (5)** | Actionable specs with phases, file paths, schema SQL, API routes, effort estimates for all 5 research topics |
-
 ## Quick Reference
 
 | Resource | Path |
 |----------|------|
-| NSFW plan (implementation ref) | `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` |
+| Session Archive | `docs/sessions/ARCHIVE.md` |
+| NSFW plan | `docs/plans/2026-03-27-nsfw-mega-sprint-enhanced.md` |
 | Adaptive intelligence spec | `docs/plans/2026-03-29-adaptive-intelligence-spec.md` |
 | Bond progression spec | `docs/plans/2026-03-29-bond-progression-spec.md` |
 | Spring bones spec | `docs/plans/2026-03-29-spring-bones-spec.md` |
@@ -281,9 +144,10 @@ Meta-work on the dev workflow itself per `~/.claude/plans/tranquil-percolating-s
 | Privacy sync spec | `docs/plans/2026-03-29-privacy-sync-spec.md` |
 | Humanoid motion spec | `docs/plans/2026-03-29-humanoid-motion-spec.md` |
 | Jiggle physics spec | `docs/plans/2026-03-29-jiggle-physics-spec.md` |
-| Research docs | `docs/research/2026-03-29-*-part-*.md` (26 files, ~142k words) |
-| NSFW Phase 4 research | `docs/research/2026-03-29-nsfw-phase4-research-part-*.md` (3 parts) |
-| NSFW Frontend UX research | `docs/research/2026-03-29-nsfw-frontend-ux-research-part-*.md` (3 parts) |
-| Dev dashboard | `http://localhost:3333/dashboard.html` or `./run.sh dash` |
+| Research docs (26 files, ~142k words) | `docs/research/2026-03-29-*-part-*.md` |
+| NSFW Phase 4 research | `docs/research/2026-03-29-nsfw-phase4-research-part-*.md` |
+| NSFW Frontend UX research | `docs/research/2026-03-29-nsfw-frontend-ux-research-part-*.md` |
+| Dev dashboard | `http://localhost:3333/dashboard.html` |
 | Quickstart cheatsheet | `docs/QUICKSTART.md` |
 | Convention guides | `docs/conventions/*.md` |
+| v1.0 roadmap (uncommitted) | `docs/ROADMAP.md` |

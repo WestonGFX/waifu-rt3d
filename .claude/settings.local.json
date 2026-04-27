@@ -1,27 +1,25 @@
 {
   "permissions": {
+    "deny": [
+      "Edit(**/.env)",
+      "Edit(**/.env.*)",
+      "Edit(**/credentials*)",
+      "Edit(**/app.db)",
+      "Edit(**/*.db)",
+      "Write(**/.env)",
+      "Write(**/.env.*)",
+      "Write(**/credentials*)",
+      "Write(**/app.db)",
+      "Write(**/*.db)"
+    ],
     "defaultMode": "auto"
   },
-  "enabledMcpjsonServers": [
+  "enabledMcpjsonServers": [],
+  "disabledMcpjsonServers": [
     "insforge",
     "sqlite",
     "waifu-rt3d-api"
   ],
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/pre-commit-check.sh",
-            "if": "Bash(git commit*)",
-            "timeout": 120,
-            "statusMessage": "Running pre-commit checks (pytest + tsc)..."
-          }
-        ]
-      }
-    ]
-  },
-  "outputStyle": "Explanatory"
+  "spinnerTipsEnabled": false,
+  "autoDreamEnabled": true
 }

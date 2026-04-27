@@ -1,21 +1,25 @@
 /**
- * Tests for MemoryBrowser component (Session 16 coverage — Overview + Facts tabs).
+ * Tests for MemoryBrowser component (full 4-tab + integration coverage).
  *
- * Covers the top-level overlay (open/close, tab switching, empty-character guard),
- * the Overview tab (stats rendering, category breakdown, journal preview, error state),
- * and the Facts tab (empty state, add form flow, create, delete, source badges,
- * category grouping).
+ * Covers the top-level overlay (open/close, tab switching, empty-character guard,
+ * close button, tab reset on reopen), the Overview tab (stats rendering,
+ * category breakdown, journal preview, error state), the Facts tab (empty state,
+ * add form flow, create, delete, source badges, category grouping), the Memories
+ * tab (list pagination, search mode, delete, promote, fetch error, empty state),
+ * and the Journal tab (entries render, expand/collapse, empty state).
  *
- * Memories + Journal tabs are covered in session 17 (require additional fetch stubs).
+ * Sessions: Overview + Facts coverage landed session 16. Memories + Journal +
+ * integration coverage added session 17.
  *
  * Follows testing-conventions.md:
  *   Pattern 4 — framer-motion stub (ALL component tests)
  *   Pattern 2 — api module mock
  *   Pattern 1 — direct zustand store seeding via useAppStore.setState
+ *   Memories tab uses raw fetch — stubbed per-test via vi.stubGlobal('fetch', ...).
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryBrowser } from '../components/MemoryBrowser';
 import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
@@ -309,6 +313,325 @@ describe('MemoryBrowser', () => {
       await waitFor(() =>
         expect(screen.queryByText('Named Chris')).not.toBeInTheDocument()
       );
+    });
+  });
+
+  // ── Memories tab ───────────────────────────────────────────────────────────
+  //
+  // The Memories tab uses raw `fetch()` calls against /api/v2/memory/* (NOT the
+  // typed `api` client). Each test stubs `global.fetch` with a router that
+  // dispatches by URL + method. When session 18 unifies these calls into the
+  // `api` client, these tests should be migrated to Pattern 2 (api mocks).
+
+  describe('Memories tab', () => {
+    /** Build a fetch stub that routes by URL substring + method. */
+    function makeFetchStub(handlers: {
+      list?: (url: string) => unknown;
+      search?: (url: string) => unknown;
+      delete?: (id: string) => unknown;
+      promote?: (id: string) => unknown;
+    }) {
+      return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        const method = (init?.method ?? 'GET').toUpperCase();
+        let payload: unknown = { ok: true };
+        let ok = true;
+
+        if (url.includes('/api/v2/memory/list')) {
+          payload = handlers.list ? handlers.list(url) : { memories: [], total: 0 };
+        } else if (url.includes('/api/v2/memory/search')) {
+          payload = handlers.search ? handlers.search(url) : { results: [] };
+        } else if (method === 'DELETE' && url.match(/\/api\/v2\/memory\/[^/]+$/)) {
+          const idMatch = url.match(/\/api\/v2\/memory\/([^/?]+)$/);
+          payload = handlers.delete ? handlers.delete(idMatch?.[1] ?? '') : { ok: true };
+        } else if (method === 'PATCH' && url.includes('/promote')) {
+          const idMatch = url.match(/\/api\/v2\/memory\/([^/]+)\/promote$/);
+          payload = handlers.promote ? handlers.promote(idMatch?.[1] ?? '') : { ok: true };
+        } else {
+          ok = false;
+        }
+
+        return new Response(JSON.stringify(payload), {
+          status: ok ? 200 : 404,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+    }
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    /** Switch to the Memories tab and wait for first list fetch to settle. */
+    async function switchToMemoriesTab(fetchStub: ReturnType<typeof vi.fn>) {
+      vi.stubGlobal('fetch', fetchStub);
+      openBrowser();
+      render(<MemoryBrowser />);
+      await waitFor(() => expect(vi.mocked(api.getMemoryOverview)).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole('button', { name: /Memories/ }));
+      await waitFor(() =>
+        expect(fetchStub.mock.calls.some(([u]) =>
+          String(u).includes('/api/v2/memory/list')
+        )).toBe(true)
+      );
+    }
+
+    const SAMPLE_MEMORIES = [
+      { id: 'm1', text: 'User loves ramen and discusses it often.', role: 'user', tier: 1, created_at: '2026-04-10' },
+      { id: 'm2', text: 'User mentioned working in Tokyo.',         role: 'knowledge', tier: 2, created_at: '2026-04-11' },
+      { id: 'm3', text: 'Permanent memory: birthday is April 5.',    role: 'knowledge', tier: 3, created_at: '2026-04-12' },
+    ];
+
+    it('fetches /api/v2/memory/list with char_id when activated', async () => {
+      const stub = makeFetchStub({
+        list: () => ({ memories: SAMPLE_MEMORIES, total: SAMPLE_MEMORIES.length }),
+      });
+      await switchToMemoriesTab(stub);
+      const listCall = stub.mock.calls.find(([u]) => String(u).includes('/api/v2/memory/list'));
+      expect(listCall).toBeDefined();
+      expect(String(listCall![0])).toContain('char_id=42');
+      expect(String(listCall![0])).toContain('page=0');
+    });
+
+    it('renders memory text and role/tier badges', async () => {
+      const stub = makeFetchStub({
+        list: () => ({ memories: SAMPLE_MEMORIES, total: 3 }),
+      });
+      await switchToMemoriesTab(stub);
+      await waitFor(() => {
+        expect(screen.getByText(/User loves ramen/)).toBeInTheDocument();
+        expect(screen.getByText(/Working in Tokyo/i)).toBeInTheDocument();
+      });
+      // Tier labels render (T1 Fleeting, T2 Recent, T3 Permanent)
+      expect(screen.getByText(/T1 Fleeting/)).toBeInTheDocument();
+      expect(screen.getByText(/T2 Recent/)).toBeInTheDocument();
+      expect(screen.getByText(/T3 Permanent/)).toBeInTheDocument();
+    });
+
+    it('renders empty state when list returns no memories', async () => {
+      const stub = makeFetchStub({ list: () => ({ memories: [], total: 0 }) });
+      await switchToMemoriesTab(stub);
+      await waitFor(() =>
+        expect(screen.getByText('No memories stored yet.')).toBeInTheDocument()
+      );
+    });
+
+    it('renders error message when list fetch fails', async () => {
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/api/v2/memory/list')) {
+          return new Response('boom', { status: 500 });
+        }
+        return new Response('{}', { status: 200 });
+      }));
+      openBrowser();
+      render(<MemoryBrowser />);
+      await waitFor(() => expect(vi.mocked(api.getMemoryOverview)).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole('button', { name: /Memories/ }));
+      await waitFor(() =>
+        expect(screen.getByText(/Failed to load: 500/)).toBeInTheDocument()
+      );
+    });
+
+    it('switches to search mode and calls /api/v2/memory/search on Go click', async () => {
+      const stub = makeFetchStub({
+        list: () => ({ memories: SAMPLE_MEMORIES, total: 3 }),
+        search: () => ({ results: [SAMPLE_MEMORIES[0]] }),
+      });
+      await switchToMemoriesTab(stub);
+      await waitFor(() => expect(screen.getByText(/User loves ramen/)).toBeInTheDocument());
+
+      fireEvent.change(screen.getByPlaceholderText(/Semantic search/), {
+        target: { value: 'ramen' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /^Go$/ }));
+
+      await waitFor(() => {
+        const searchCall = stub.mock.calls.find(([u]) => String(u).includes('/api/v2/memory/search'));
+        expect(searchCall).toBeDefined();
+        expect(String(searchCall![0])).toContain('query=ramen');
+      });
+      // Search-mode footer shows result count + clear button
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /Clear search/ })).toBeInTheDocument()
+      );
+    });
+
+    it('calls DELETE /api/v2/memory/{id} when delete button clicked', async () => {
+      const stub = makeFetchStub({
+        list: () => ({ memories: SAMPLE_MEMORIES, total: 3 }),
+        delete: () => ({ ok: true }),
+      });
+      await switchToMemoriesTab(stub);
+      await waitFor(() => expect(screen.getByText(/User loves ramen/)).toBeInTheDocument());
+
+      const deleteBtns = screen.getAllByTitle('Delete memory');
+      fireEvent.click(deleteBtns[0]);
+
+      await waitFor(() => {
+        const deleteCall = stub.mock.calls.find(([u, init]) =>
+          String(u).match(/\/api\/v2\/memory\/m1$/) && (init as RequestInit | undefined)?.method === 'DELETE'
+        );
+        expect(deleteCall).toBeDefined();
+      });
+    });
+
+    it('calls PATCH /api/v2/memory/{id}/promote for tier-1/2 memories only', async () => {
+      const stub = makeFetchStub({
+        list: () => ({ memories: SAMPLE_MEMORIES, total: 3 }),
+        promote: () => ({ ok: true }),
+      });
+      await switchToMemoriesTab(stub);
+      await waitFor(() => expect(screen.getByText(/User loves ramen/)).toBeInTheDocument());
+
+      // Promote button title is "Promote to Permanent" — only rendered for tier < 3
+      const promoteBtns = screen.getAllByTitle('Promote to Permanent');
+      // 2 of 3 fixture memories are tier 1 + tier 2 → 2 promote buttons expected
+      expect(promoteBtns.length).toBe(2);
+
+      fireEvent.click(promoteBtns[0]);
+      await waitFor(() => {
+        const promoteCall = stub.mock.calls.find(([u, init]) =>
+          String(u).includes('/promote') && (init as RequestInit | undefined)?.method === 'PATCH'
+        );
+        expect(promoteCall).toBeDefined();
+      });
+    });
+
+    it('renders pagination controls when total exceeds page size', async () => {
+      const stub = makeFetchStub({
+        list: () => ({ memories: SAMPLE_MEMORIES, total: 30 }), // 30 items, PAGE_SIZE=12 → 3 pages
+      });
+      await switchToMemoriesTab(stub);
+      await waitFor(() => expect(screen.getByText(/Page 1 \/ 3 \(30 memories\)/)).toBeInTheDocument());
+    });
+  });
+
+  // ── Journal tab ────────────────────────────────────────────────────────────
+
+  describe('Journal tab', () => {
+    /** Switch to the Journal tab; reuses the file-level api.getMemoryOverview mock. */
+    async function switchToJournalTab() {
+      openBrowser();
+      render(<MemoryBrowser />);
+      await waitFor(() => expect(vi.mocked(api.getMemoryOverview)).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole('button', { name: /Journal/ }));
+    }
+
+    it('renders journal entry text from getMemoryOverview', async () => {
+      await switchToJournalTab();
+      await waitFor(() =>
+        // entry preview shows up (first 120 chars — fixture entry is short, so full text)
+        expect(screen.getByText(/favorite foods and he mentioned ramen/)).toBeInTheDocument()
+      );
+    });
+
+    it('renders entry count in heading', async () => {
+      await switchToJournalTab();
+      await waitFor(() =>
+        // 1 entry → singular "entry written"
+        expect(screen.getByText(/1 entry written/)).toBeInTheDocument()
+      );
+    });
+
+    it('shows empty state when no journal entries exist', async () => {
+      // Override response to have empty journal_entries on BOTH calls (Overview + Journal)
+      vi.mocked(api.getMemoryOverview).mockResolvedValue({
+        ...OVERVIEW_RESPONSE,
+        journal_entries: [],
+        stats: { ...OVERVIEW_RESPONSE.stats, total_journal_entries: 0 },
+      });
+      await switchToJournalTab();
+      await waitFor(() =>
+        expect(screen.getByText('No journal entries yet.')).toBeInTheDocument()
+      );
+    });
+
+    it('expands long entries when card clicked, collapses on second click', async () => {
+      // Long entry > 120 chars → expandable
+      const longText =
+        'Today we had a deep conversation about life, dreams, the weight of choices, ' +
+        'and the small things that bring joy. He admitted he had been feeling tired ' +
+        'lately, and we decided to plan a small ramen night for the weekend.';
+      vi.mocked(api.getMemoryOverview).mockResolvedValue({
+        ...OVERVIEW_RESPONSE,
+        journal_entries: [{ id: 99, session_id: 7, entry_text: longText, created_at: '2026-04-15T12:00:00Z' }],
+        stats: { ...OVERVIEW_RESPONSE.stats, total_journal_entries: 1 },
+      });
+      await switchToJournalTab();
+      await waitFor(() => expect(screen.getByText(/read more/i)).toBeInTheDocument());
+
+      // Click the card — full text now visible
+      fireEvent.click(screen.getByText(/read more/i).closest('div')!);
+      await waitFor(() => expect(screen.getByText(/plan a small ramen night/)).toBeInTheDocument());
+      // "read more" indicator gone after expand
+      expect(screen.queryByText(/read more/i)).not.toBeInTheDocument();
+    });
+
+    it('renders session number for each entry', async () => {
+      await switchToJournalTab();
+      await waitFor(() => expect(screen.getByText(/Session #3/)).toBeInTheDocument());
+    });
+  });
+
+  // ── Top-level integration ──────────────────────────────────────────────────
+
+  describe('top-level integration', () => {
+    it('clicking close button calls closeOverlay and unmounts panel', async () => {
+      openBrowser();
+      const { rerender } = render(<MemoryBrowser />);
+      expect(screen.getByText('Memory Browser')).toBeInTheDocument();
+
+      // The X close button is the only standalone icon-button in the header — find by parent
+      const closeButton = screen
+        .getByText('Memory Browser')
+        .closest('div')!
+        .parentElement!
+        .querySelector('button')!;
+      fireEvent.click(closeButton);
+
+      // Store should have cleared activeOverlay
+      expect(useAppStore.getState().activeOverlay).toBeNull();
+      // Re-render to flush AnimatePresence
+      rerender(<MemoryBrowser />);
+      await waitFor(() => expect(screen.queryByText('Memory Browser')).not.toBeInTheDocument());
+    });
+
+    it('preserves selected tab while overlay stays open', async () => {
+      openBrowser();
+      render(<MemoryBrowser />);
+      await waitFor(() => expect(vi.mocked(api.getMemoryOverview)).toHaveBeenCalledTimes(1));
+
+      // Switch to Facts — Overview should not refetch
+      fireEvent.click(screen.getByRole('button', { name: /About You/ }));
+      await waitFor(() => expect(vi.mocked(api.getUserFacts)).toHaveBeenCalled());
+      expect(vi.mocked(api.getMemoryOverview)).toHaveBeenCalledTimes(1);
+    });
+
+    it('resets to Overview tab when overlay is closed and reopened', async () => {
+      openBrowser();
+      render(<MemoryBrowser />);
+      await waitFor(() => expect(vi.mocked(api.getMemoryOverview)).toHaveBeenCalledTimes(1));
+
+      // Switch to Facts tab
+      fireEvent.click(screen.getByRole('button', { name: /About You/ }));
+      await waitFor(() => expect(vi.mocked(api.getUserFacts)).toHaveBeenCalled());
+
+      // Close, flush, then reopen — separate act() blocks ensure the
+      // `open` boolean genuinely transitions true→false→true, firing the
+      // reset effect. A single batched setState pair would skip the
+      // intermediate render and the effect's dep would not re-fire.
+      await act(async () => {
+        useAppStore.setState({ activeOverlay: null } as unknown as Parameters<typeof useAppStore.setState>[0]);
+      });
+      await waitFor(() => expect(screen.queryByText('Memory Browser')).not.toBeInTheDocument());
+
+      await act(async () => {
+        useAppStore.setState({ activeOverlay: 'memorybrowser' } as unknown as Parameters<typeof useAppStore.setState>[0]);
+      });
+
+      // Overview should refetch (tab reset effect fires on `open` -> true)
+      await waitFor(() => expect(vi.mocked(api.getMemoryOverview)).toHaveBeenCalledTimes(2));
     });
   });
 });

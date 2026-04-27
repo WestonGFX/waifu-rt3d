@@ -1,16 +1,24 @@
 # Current Project Status
 
-**Last updated:** 2026-04-20 (Session 16 in progress)
+**Last updated:** 2026-04-26 PDT
 **Branch:** master
 **Schema version:** v70
-**Tests:** 2,678 backend (pytest) + 160 frontend (vitest) passing, tsc clean
+**Tests:** 2,678 backend (pytest) + 200 frontend (vitest) passing, tsc clean (0 known failures)
 **Automation:** 12 agents, 22 skills, 6 rules, 8 hooks, 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
 
-**Session 16 (2026-04-20) committed** as `2d314fe`. Nothing in progress. Session 17 will continue MemoryBrowser test coverage (Memories + Journal tabs), then browser QA, then polish pass.
+**Session 17 (2026-04-26) committed** as `bc71397` + `9c17540` (both unpushed). Nothing in progress. Session 18 starts with Memory Browser browser QA (hand-on Chrome) or the raw-fetch → `api.*` unification refactor (autonomous) — see `docs/SESSION_HANDOFF.md` for the call.
+
+## Completed This Session (Session 17 — MemoryBrowser test closeout + 4 pre-existing failures cleared)
+
+| What | Details |
+|------|---------|
+| **MemoryBrowser Memories + Journal + integration coverage** | +16 Vitest cases in `frontends/sakura/src/test/MemoryBrowser.test.tsx`. Memories tab (7): list with `char_id`, role/tier badges, empty, 500 error, search→Go, DELETE, PATCH `/promote`, pagination. Journal tab (5): entries render, count singularization, empty, expand/collapse, session#. Integration (3): close button, tab persistence, Overview-reset on reopen. Used a per-suite `makeFetchStub()` URL+method router for raw-fetch endpoints. Commit `bc71397`. |
+| **Cleared 4 pre-existing frontend test failures** | OnboardingWizard "Get started → System Scan" was multi-matching `getByText` on the h2 + WizardProgress label — scoped to `getByRole('heading')`. SettingsView export/import × 3 were crashing because `FormatRulesEditor` mounted with an unstubbed `api.getFormatRules` — added the missing CRUD methods to the api mock. Test-only changes, zero production code touched. Commit `9c17540`. |
+| **Verification** | pytest 2678 passed (backend untouched) · vitest 196 → 200 passed (+16 new + 4 unbroken) · tsc clean. The "4 pre-existing failures" footnote that has been carried forward since session 13 is now retired. |
 
 ## Completed This Session (Session 16 — Memory Browser audit + Vitest coverage + token-budget prune)
 

@@ -1,74 +1,79 @@
-# Session Handoff — 2026-04-20 (Session 16)
+# Session Handoff — 2026-04-26 (Session 17)
 
 ## Branch: master
-## Test Status: 2,678 backend passed · 180 frontend passed (+20 from session 15) · 4 pre-existing failures unchanged · TSC clean
-## Session Commit: `2d314fe` (pushed? no — `git push` pending user decision)
+## Test Status: 2,678 backend passed · 200 frontend passed (was 196) · TSC clean · 0 pre-existing failures remaining
+## Session Commits: `bc71397`, `9c17540` (both unpushed — `git push` pending user decision)
 
-## Completed This Session (Session 16 — Memory Browser audit + token-budget prune + Vitest coverage)
+## Completed This Session (Session 17 — MemoryBrowser test closeout + clearing the long-standing 4 failures)
 
-### Key discovery (first 10 minutes of session)
-`/pre-session` + audit revealed: **Memory Browser UI (P5) was already shipped in commit `9592dcf`.** The 1197-line `MemoryBrowser.tsx` has all 4 tabs (Overview / About You / Memories / Journal), is fully wired to Ctrl+M, Sidebar button, and `appStore.activeOverlay === 'memorybrowser'`. Prior handoff's "backend ready, needs React UI" claim was stale memory. Actual gap = zero test coverage.
+### 1. MemoryBrowser Memories + Journal + integration coverage (`bc71397`)
 
-### Work delivered
-1. **Vitest: 20 new cases** for `MemoryBrowser.tsx` (new file: `frontends/sakura/src/test/MemoryBrowser.test.tsx`). Covers top-level overlay (open/close, tab switching, no-character guard), Overview tab (stats rendering, category breakdown, journal preview, error fallback), and Facts tab (empty state, add form toggle, create, delete, manual vs AI source badges, category grouping).
-2. **CURRENT_STATUS.md pruned** — 290 → 153 lines. Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion relocated to new `docs/sessions/ARCHIVE.md` (162 lines). Nothing deleted — relocated. Saves roughly 2k tokens per future `/pre-session` cold start.
-3. **Stale-claim corrections** — `MEMORY.md` "Next up" + NEXT SESSION TASKS list + `SESSION_HANDOFF.md` Next Session Priorities all now say "Memory Browser test coverage needed" (shipped-but-untested) instead of "needs build".
-4. **New feedback memory** — `feedback_pre_session_token_budget.md` captures the user's directive: prune `CURRENT_STATUS`/`MEMORY`/`CLAUDE.md` aggressively; every addition should land with an equivalent prune in the same commit.
+Closed out the 4-tab Vitest matrix that session 16 started. **+16 cases** in `frontends/sakura/src/test/MemoryBrowser.test.tsx`.
 
-### Files changed (committed as `2d314fe`)
+- **Memories tab (7 cases)**: list fetch with `char_id` query param, role/tier badges (T1 Fleeting / T2 Recent / T3 Permanent), empty state, 500 error fallback, search-mode + Go button switches to `/api/v2/memory/search`, DELETE on row, PATCH `/promote` (gated to tier<3), pagination footer.
+- **Journal tab (5 cases)**: entries render via `api.getMemoryOverview`, count heading singularization (1 entry → "1 entry written"), empty state, expand/collapse for >120-char entries, session-number display.
+- **Top-level integration (3 cases)**: close button clears `activeOverlay`, tab selection persists across switches without refetch, tab resets to Overview when overlay is closed and reopened.
+
+**Notable mechanic** — the Memories tab uses raw `fetch()` against four different endpoints. Tests use a per-suite `makeFetchStub()` factory that routes by URL substring + method (`list` / `search` / DELETE-by-id / PATCH `/promote`). When session 18 unifies these into the `api.*` client (priority below), this whole stub-router can be deleted in favor of Pattern 2.
+
+**Notable mechanic** — the "tab reset on reopen" test required `act()` boundaries between two consecutive `useAppStore.setState()` calls. Without them, zustand's setState pair gets batched into one React render tick and the `open` boolean never transitions true→false→true, so the reset effect's dep doesn't re-fire. Single `act()` wrapping both calls would also fail.
+
+### 2. Cleared 4 pre-existing frontend test failures (`9c17540`)
+
+These had been flagged as "pre-existing, defer" across sessions 13–16. Both root causes were environmental drift around the tests, not regressions in production code.
+
+- **OnboardingWizard "Get started advances to System Scan"** — once the wizard reaches step 2, "System Scan" appears in two DOM nodes: the `StepHardwareScan` `<h2>` heading AND the `WizardProgress` bar text "Step 2 of 7: System Scan". `getByText` throws on multi-match. Fixed by scoping to `getByRole('heading', { level: 2, name: /System Scan/i })`.
+- **SettingsView export/import × 3** — `SettingsView`'s Character tab mounts `FormatRulesEditor`, which fetches via `api.getFormatRules` on mount. The test's api mock predates that component and didn't stub it, so the editor threw `is not a function` and crashed the SettingsView subtree before Export/Import controls could render. Added `getFormatRules` + the four CRUD methods (`createFormatRule`, `updateFormatRule`, `deleteFormatRule`) as resolved-noop stubs.
+
+**Net result:** the "4 pre-existing failures unchanged" footnote that has been carried forward since session 13 is now retired. Frontend baseline is 200/200 passing.
+
+## Files changed this session
+
 ```
-CURRENT_STATUS.md                                |  292 +++++++---------------
-docs/SESSION_HANDOFF.md                          |  168 +++++-------
-docs/sessions/ARCHIVE.md                         | +162 (new)
-frontends/sakura/src/test/MemoryBrowser.test.tsx | +314 (new)
+frontends/sakura/src/test/MemoryBrowser.test.tsx          | 339 ++++++++++++++++-
+frontends/sakura/src/test/OnboardingWizard.test.tsx       |   7 +-
+frontends/sakura/src/test/SettingsView.exportImport.test.tsx |   7 +
 ```
-Global (outside repo): `~/.claude/projects/-Users-chris-Code-waifu-rt3d/memory/MEMORY.md` index updated + new `feedback_pre_session_token_budget.md` memory file.
 
-### Not yet committed (intentional)
-- `docs/ROADMAP.md` — carried over uncommitted from session 15, still pending user review before first commit.
-- `backend/config/app.json` + `backend/storage/app.db` — runtime drift, never commit.
-- `.codex/` — other tool's artifacts, untracked.
+Test-only diff. Zero production code changes. Backend untouched.
 
-## Token Budget Policy (new this session)
+## Not yet committed (intentional, carried over)
 
-User flagged `/pre-session` burning ~86k tokens at session start as wasteful. Decision tree for future sessions:
-
-- **Applied this session (Option A):** Archive old sessions out of `CURRENT_STATUS.md`. Saves ~2k/session.
-- **Deferred (Options B + C):** Trim SessionStart hook to emit digest form instead of full docs; move prose sections out of `CLAUDE.md` to `docs/conventions/` with one-line pointers. Combined savings ~5-8k/session. Needs a dedicated harness-hygiene session — user hasn't scheduled.
-- **Global rule (new memory):** Any future session that ADDS content to an auto-loaded doc (CLAUDE.md, CURRENT_STATUS.md, MEMORY.md) should prune equivalent stale content in the same commit. Keeps per-session start cost flat or decreasing.
+- `.claude/settings.json` + `.claude/settings.local.json` — harness drift from earlier sessions
+- `CURRENT_STATUS.md` — about to be updated by this handoff
+- `backend/config/app.json` + `backend/storage/app.db` — runtime drift, never commit
+- `docs/ROADMAP.md` — still pending user review (carried from session 15)
+- `docs/decisions/2026-04-24-claude-code-harness-cleanup.md` — new, untracked, hasn't been reviewed
+- `.codex/`, `.mcp.json.bak-20260424`, `.mcp.md` — other tools' artifacts, untracked
 
 ## Work In Progress
-- None. Session 16 is fully committed.
+
+- None. Both targeted priorities for session 17 are committed and verified.
 
 ## Known Issues / Bugs
-- **4 pre-existing frontend test failures** (unchanged from sessions 13, 14, 15): `OnboardingWizard.test.tsx` × 1, `SettingsView.exportImport.test.tsx` × 3. Targeted for a cleanup pass (see Next Session Priorities #5 below).
-- **Sakura UI bugs** — file specific bugs as `docs/bugs/YYYY-MM-DD-<symptom>.md` as they surface during session 17 browser QA.
 
-## Next Session (17) Priorities — in order
+- None new. The Memory Browser tab raw-fetch vs `api.*` inconsistency is captured for session 18 polish (priority below); not a bug, just a refactor opportunity.
 
-1. **Vitest: MemoryBrowser Memories + Journal tabs + top-level integration** — Memories tab uses raw `fetch` against `/api/v2/memory/list`, `/api/v2/memory/search`, `/api/v2/memory/{id}` (DELETE) and `/api/v2/memory/{id}/promote` (PATCH). Needs `vi.stubGlobal('fetch', ...)` per case. Journal tab uses `api.getMemoryOverview` (already mocked). Roughly 15-20 cases, 1.5-2h. Bring test count ~200 passing.
-2. **Browser QA: Memory Browser** — start Sakura, open Ctrl+M overlay with real data, exercise each tab. File bugs as `docs/bugs/2026-04-<date>-memory-browser-<symptom>.md`. 1-2h.
-3. **Apply Memory Browser polish fixes** — unify raw-fetch calls into `api.*` client methods (adds `listMemories`, `searchMemories`, `deleteMemory`, `promoteMemory` to `api.ts`), address QA findings, ensure theme coverage. 2-4h.
-4. **Next: Visual Content in Chat (Track A #2)** — "Character sends you a picture" UX. Image-gen pipeline exists. 4-8h.
-5. **4 pre-existing frontend test failures** — OnboardingWizard × 1, SettingsView.exportImport × 3. 2-4h.
-6. Track B (release verification) → Track C (release polish) → tag v1.0.0.
+## Next Session (18) Priorities — in order
+
+1. **Memory Browser browser QA** *(priority #2 from session 16 handoff, now next-up)* — start backend (`./run.sh`) + Sakura (`cd frontends/sakura && npx vite --port 5175`), open Ctrl+M overlay against real data. Exercise all 4 tabs, file bugs as `docs/bugs/2026-04-<date>-memory-browser-<symptom>.md`. ~1–2h. Requires hand-on Chrome interaction — not autonomous.
+2. **Memory Browser API unification refactor** *(priority #3 from session 16)* — move Memories tab raw `fetch()` calls into `api.*` client. Adds `listMemories`, `searchMemories`, `deleteMemory`, `promoteMemory` to `api.ts`. Once landed, the `makeFetchStub()` router in `MemoryBrowser.test.tsx` can be deleted and the 7 Memories cases collapsed onto Pattern 2. ~2–4h.
+3. **Visual Content in Chat** *(Track A #2)* — "Character sends you a picture" UX. Image-gen pipeline already exists in backend. ~4–8h.
+4. **Humanoid Motion Quality / Spring Bones / Jiggle Physics** — heavier Track-B specs already written in `docs/plans/2026-03-29-*.md`. Pick one when ready for a multi-session feature push.
+5. **AIE Phase C** — LoRA training pipeline, DSPy prompt optimization. Heavy, independent.
 
 ## Context for Next Session
 
-- **Token-aware start:** `CURRENT_STATUS.md` now 153 lines. Per-session cold start should feel noticeably lighter. If not, consider Option B (hook digest) as the next lever.
-- **MemoryBrowser test fixture:** Existing file seeds `useAppStore.setState({ activeOverlay: 'memorybrowser', activeCharacter, characters })` — copy this pattern for Memories+Journal tests.
-- **Memories tab raw fetch:** Before writing tests, consider whether to do the API unification refactor FIRST (session 17 item 3 before item 1). Pro: cleaner tests, one mock style. Con: mixes refactor + tests. Recommend: write fetch-stubbed tests first, refactor in session 18 with the tests as a safety net.
-- **`/ultrareview`** — 3 free Max runs still unused. Candidates: merging Memory Browser polish PR (session 18) or Visual Content in Chat landing. Don't burn on meta sessions.
-- **ClipFlow-AI = Codex-only** (memory `feedback_tool_per_repo_no_mixing.md`). Do not suggest Claude Code for it unless user asks.
-- **AnimeGirly** = still has pending commits from session 15. Separate session's problem — don't mix.
+- **Test baseline is now genuinely clean:** 200 frontend / 2,678 backend / tsc clean / 0 known failures. Session 18 should preserve this — any new test that lands red is a real regression, not noise.
+- **MemoryBrowser test fixture pattern** — the `OVERVIEW_RESPONSE` constant + `openBrowser()` helper at the top of `MemoryBrowser.test.tsx` is the canonical fixture for any further memory-related test. The `makeFetchStub()` factory (Memories describe block) is the canonical fetch-router pattern; reusable elsewhere if any other component still talks to raw `fetch`.
+- **`act()` interleave for store transitions** — if you write a future test that needs to verify behavior across a close→reopen cycle of any zustand-backed overlay, follow the pattern in the "resets to Overview tab" case: separate `act()` blocks + intermediate `waitFor` to confirm unmount before reopening.
+- **Token budget** — `CURRENT_STATUS.md` was pruned to 153 lines in session 16. This handoff appends one row to the "Active Work" / "Completed" sections without growing the body of the file. If session 18 lands more, follow the same add-and-trim policy from `feedback_pre_session_token_budget.md`.
+- **No suggestion triggers fired this session** — test-only changes, no schema migration, no Known Sensitive Area edits, no native module changes, no server-start claim. `/qa-sweep` and `/verify-servers` not warranted.
 
 ## Quick resume
 
 ```
-/pre-session       # should be lighter now
-# Then start Next Session Priority #1 (Memories + Journal Vitest)
-# When done: /handoff again
+/pre-session
+# Then either start Session 18 Priority #1 (browser QA — needs you driving Chrome)
+# or kick off Priority #2 (api unification refactor — autonomous)
 ```
-
-### Rename note
-User asked to "rename this session immediately". Claude Code's session IDs are not agent-renameable (no slash-tool exposed to the agent). Best available: this doc + `CURRENT_STATUS.md` + commit `2d314fe`'s prefix `chore(16):` all identify this as Session 16. If user wants a TUI-level rename, that's a manual step in Claude Code (no in-agent path).

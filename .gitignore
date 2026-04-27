@@ -113,13 +113,13 @@ frontends/sakura/e2e/screenshots/
 # ── Character doc archives (zips, not source) ───────────────────────────────
 docs/characters/*.zip
 
-# InsForge & AI agent skills
+# ── Other AI agent tool configs (project tracks Claude Code only) ───────────
 .insforge
 .agent
 .agents
 .augment
-.claude
 .cline
+.codex/
 .github/copilot*
 .kilocode
 .qoder
@@ -127,3 +127,18 @@ docs/characters/*.zip
 .roo
 .trae
 .windsurf
+
+# ── Claude Code: track agents/skills/rules/settings, ignore user-local cruft ──
+.claude/.DS_Store
+.claude/*.bak-*
+.claude/**/*.bak-*
+.claude/worktrees/
+.claude/plans/
+
+# ── Ephemeral Claude session docs (handoffs, transcripts, logs) ─────────────
+docs/SESSION_*.md
+!docs/SESSION_LOGGING_SETUP.md
+docs/session-logs/
+docs/CODEX_*.md
+docs/CLAUDE_CODE_HANDOFF.md
+docs/claude-code-handoff/

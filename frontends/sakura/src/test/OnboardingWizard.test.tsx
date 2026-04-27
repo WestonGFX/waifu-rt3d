@@ -92,8 +92,13 @@ describe('OnboardingWizard', () => {
   it('"Get started" advances to the System Scan step', async () => {
     render(<OnboardingWizard />);
     fireEvent.click(screen.getByText(/Get started/i));
+    // "System Scan" appears twice once advanced — as the StepHardwareScan h2
+    // heading AND inside the WizardProgress bar text ("Step 2 of 7: System Scan").
+    // Scope the assertion to the h2 to avoid getByText's multi-match throw.
     await waitFor(() => {
-      expect(screen.getByText(/System Scan/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { level: 2, name: /System Scan/i })
+      ).toBeInTheDocument();
     });
   });
 

@@ -42,6 +42,13 @@ vi.mock('../lib/api', () => ({
     listExpressionPortraits: vi.fn().mockResolvedValue({ ok: true, portraits: {}, mode: 0 }),
     getUserFacts: vi.fn().mockResolvedValue({ facts: [] }),
     getMemoryStats: vi.fn().mockResolvedValue({ total: 0 }),
+    // FormatRulesEditor mounts inside the Character tab and fetches on mount.
+    // Without these stubs the editor throws "api.getFormatRules is not a function"
+    // and crashes the SettingsView subtree before Export/Import controls can render.
+    getFormatRules: vi.fn().mockResolvedValue({ rules: [] }),
+    createFormatRule: vi.fn().mockResolvedValue({ ok: true }),
+    updateFormatRule: vi.fn().mockResolvedValue({ ok: true }),
+    deleteFormatRule: vi.fn().mockResolvedValue({ ok: true }),
   },
 }));
 

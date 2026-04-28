@@ -260,3 +260,8 @@ After each tier ships:
 - Bug filed: `docs/bugs/2026-04-27-hud-cramped-overcrowded.md`
 - Sensitive areas list: CLAUDE.md "Known Sensitive Areas"
 - Theme verification skill: `theme-auditor` agent
+- Tier 0 audit output: `docs/research/2026-04-27-hud-element-audit.md`
+
+## Status log
+
+- 2026-04-27 Tier 0: ✓ audit complete — 4 parallel zone agents → `docs/research/2026-04-27-hud-element-audit.md`. Findings: HUD has ~45+ visible elements (inventory undercounted top toolbar by 9, viewer by 18+). "Floating Next: tooltip" is actually inline header-height bloat (root cause corrected). Composer secondary row (8 elements) was missed by inventory. Surfaced 5 free deletes for revised Tier 1: ContextBudgetPill move into StatusBar, "Next:" line → hover tooltip, Ctrl+0 stale label, dead TemperatureMeter, duplicate viewer Close button. `frontend-design` skill scheduled for tiers 4, 6, 7. **Awaiting chris green/yellow/red review of audit before Tier 1.**

@@ -1,16 +1,27 @@
 # Current Project Status
 
-**Last updated:** 2026-04-26 PDT
+**Last updated:** 2026-04-27 21:15 PDT
 **Branch:** master
 **Schema version:** v70
-**Tests:** 2,678 backend (pytest) + 200 frontend (vitest) passing, tsc clean (0 known failures)
+**Tests:** 2,683 backend (pytest, +5 new) + 203 frontend (vitest, +3 new) passing, tsc clean (0 known failures)
 **Automation:** 12 agents, 22 skills, 6 rules, 8 hooks, 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
 
-**Session 17 (2026-04-26) committed** as `bc71397` + `9c17540` (both unpushed). Nothing in progress. Session 18 starts with Memory Browser browser QA (hand-on Chrome) or the raw-fetch → `api.*` unification refactor (autonomous) — see `docs/SESSION_HANDOFF.md` for the call.
+**Session 18 (2026-04-27) committed** as `7b7bce1`, `8a1f3f5`, `643bd24`, `6255578` (all unpushed). Nothing in progress. Session 19 starts with HUD redesign Tier 0 (audit) per `docs/plans/2026-04-27-hud-redesign-staged.md` — see `docs/SESSION_HANDOFF.md` for full context.
+
+## Completed This Session (Session 18 — Memory Browser unification + 3D viewer crash fix + HUD redesign plan)
+
+| What | Details |
+|------|---------|
+| **MemoryBrowser raw-fetch → `api.*` unification** | Added `MemoryItem` interface + 4 typed methods to `api.ts` (`listMemories`/`searchMemories`/`deleteMemory`/`promoteMemory`). Refactored `MemoryBrowser.tsx` Memories tab — 4 raw `fetch()` calls replaced. Test suite collapsed: removed `makeFetchStub` URL+method router (~50 lines); 7 Memories cases now use Pattern 2. Commit `7b7bce1`. |
+| **db-lock 500s on `/api/characters/{id}/relationship`** | `db()` helper now sets `PRAGMA busy_timeout = 30000` per connection — fixes the *class* of WAL-writer-contention bug across all `db()` users. `get_relationship` switched to SELECT-first / INSERT-on-miss. `reset_relationship` wrapped in `with conn:`. New regression test `test_relationship_endpoint.py` (5 tests). Commit `8a1f3f5`. |
+| **3D viewer crash + greeting endpoint chain** | THE viewer crash: `BlinkController` constructor in `viewer.html` called `_poissonDelay()` BEFORE initializing `_emotionMod` → `TypeError: Cannot read properties of undefined (reading 'rateMul')` *inside* GLTFLoader success callback. Crash happened AFTER VRM downloaded — viewer never sent `modelLoaded`, parent React stuck on "Loading 3D model..." forever. Fixed by reordering. Bumped `?v=7`→`?v=8`. Also fixed three phantom-column SQL bugs in `get_character_greeting` (`greeting_message` → `greeting_text`, `sessions.updated_at` → `MAX(messages.ts) WHERE char_id`, `sessions.character_id` → `messages.session_id WHERE char_id`). Same `sessions.character_id` bug in diary endpoint fixed in passing. New regression `viewer.blinkController.test.ts` (3 tests). Verification: Playwright drove app → VRM (Panicandy) renders at 118 FPS with `motion_neutral` animation playing. Commit `643bd24`. |
+| **HUD redesign plan written (deferred)** | `docs/plans/2026-04-27-hud-redesign-staged.md` (262 lines). 8-tier intensity ladder, escalate only when previous tier is judged insufficient. Recommended order: 0 → 1 → 2 → pause → 4 → pause → 3 → 6 → 5 → 7 → 8. Hard constraints baked in: no new chrome, theme test per tier, one commit per tier, 10-min real-use evaluation gates. Commit `6255578`. |
+| **4 bug docs filed in `docs/bugs/`** | `2026-04-27-character-relationship-db-lock.md` ✅FIXED · `2026-04-27-viewer-or-model-assignment-broken.md` ✅FIXED · `2026-04-27-model-picker-no-preview-images.md` (open, P2) · `2026-04-27-hud-cramped-overcrowded.md` (open, P1, has plan above) |
+| **Verification** | pytest 2683 passed (+5 new) · vitest 203 passed (+3 new BlinkController structural tests) · tsc clean. Live verification via Playwright agentic drive — 3D viewer renders the avatar successfully. |
 
 ## Completed This Session (Session 17 — MemoryBrowser test closeout + 4 pre-existing failures cleared)
 

@@ -27,7 +27,7 @@ import {
   Database, ArrowUpCircle, FileText,
 } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
-import { api } from '../lib/api';
+import { api, type MemoryItem } from '../lib/api';
 import type { UserFact } from '../lib/types';
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -61,17 +61,6 @@ const CATEGORY_META: Record<FactCategory, { label: string; icon: ReactNode; colo
 
 const CATEGORIES = Object.keys(CATEGORY_META) as FactCategory[];
 
-interface Memory {
-  id: string;
-  text: string;
-  role?: string;
-  timestamp?: number;
-  score?: number;
-  char_id?: number;
-  tier?: number;
-  salience?: number;
-  created_at?: string;
-}
 
 interface JournalEntry {
   id: number;
@@ -662,7 +651,7 @@ function FactRow({
  */
 function MemoriesTab({ charId }: { charId: number }) {
   const { characters } = useAppStore();
-  const [memories, setMemories] = useState<Memory[]>([]);
+  const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [query, setQuery] = useState('');
@@ -679,17 +668,16 @@ function MemoriesTab({ charId }: { charId: number }) {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ page: String(p), size: String(PAGE_SIZE) });
-      if (cid > 0) params.set('char_id', String(cid));
-      const res = await fetch(`/api/v2/memory/list?${params}`);
-      if (!res.ok) throw new Error(`${res.status}`);
-      const data = await res.json();
+      const data = await api.listMemories(cid, p, PAGE_SIZE);
       setMemories(data.memories || []);
       setTotal(data.total || 0);
       setPage(p);
       setIsSearchMode(false);
     } catch (e) {
-      setError((e as Error).message);
+      // api.* helpers throw "GET /url: 500" — surface only the status for the UI.
+      const msg = (e as Error).message;
+      const status = msg.match(/(\d{3})\s*$/)?.[1] ?? msg;
+      setError(status);
       setMemories([]);
     } finally {
       setLoading(false);
@@ -701,15 +689,14 @@ function MemoriesTab({ charId }: { charId: number }) {
     setLoading(true);
     setError(null);
     try {
-      const charParam = cid > 0 ? `&char_id=${cid}` : '&char_id=0';
-      const res = await fetch(`/api/v2/memory/search?query=${encodeURIComponent(q)}&n_results=20${charParam}`);
-      if (!res.ok) throw new Error(`${res.status}`);
-      const data = await res.json();
+      const data = await api.searchMemories(cid, q, 20);
       setMemories(data.results || []);
       setTotal(data.results?.length || 0);
       setIsSearchMode(true);
     } catch (e) {
-      setError((e as Error).message);
+      const msg = (e as Error).message;
+      const status = msg.match(/(\d{3})\s*$/)?.[1] ?? msg;
+      setError(status);
       setMemories([]);
     } finally {
       setLoading(false);
@@ -719,8 +706,7 @@ function MemoriesTab({ charId }: { charId: number }) {
   const handleDelete = useCallback(async (id: string) => {
     setDeletingId(id);
     try {
-      const res = await fetch(`/api/v2/memory/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(`${res.status}`);
+      await api.deleteMemory(id);
       if (isSearchMode && query) doSearch(query, filterCharId);
       else loadPage(page, filterCharId);
     } catch { /* non-fatal */ }
@@ -730,8 +716,7 @@ function MemoriesTab({ charId }: { charId: number }) {
   const handlePromote = useCallback(async (id: string) => {
     setPromotingId(id);
     try {
-      const res = await fetch(`/api/v2/memory/${encodeURIComponent(id)}/promote`, { method: 'PATCH' });
-      if (!res.ok) throw new Error(`${res.status}`);
+      await api.promoteMemory(id);
       if (isSearchMode && query) doSearch(query, filterCharId);
       else loadPage(page, filterCharId);
     } catch { /* non-fatal */ }

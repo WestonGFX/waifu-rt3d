@@ -9,21 +9,22 @@
  * and the Journal tab (entries render, expand/collapse, empty state).
  *
  * Sessions: Overview + Facts coverage landed session 16. Memories + Journal +
- * integration coverage added session 17.
+ * integration coverage added session 17. Session 18 collapsed the Memories
+ * tab onto Pattern 2 after the raw-fetch → `api.*` unification.
  *
  * Follows testing-conventions.md:
  *   Pattern 4 — framer-motion stub (ALL component tests)
- *   Pattern 2 — api module mock
+ *   Pattern 2 — api module mock (incl. v2 memory CRUD: list/search/delete/promote)
  *   Pattern 1 — direct zustand store seeding via useAppStore.setState
- *   Memories tab uses raw fetch — stubbed per-test via vi.stubGlobal('fetch', ...).
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryBrowser } from '../components/MemoryBrowser';
 import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
 import type { UserFact } from '../lib/types';
+import type { MemoryItem } from '../lib/api';
 
 // ── Pattern 4: Framer Motion stub ─────────────────────────────────────────────
 vi.mock('framer-motion', () => ({
@@ -41,6 +42,10 @@ vi.mock('../lib/api', () => ({
     getUserFacts: vi.fn(),
     createUserFact: vi.fn(),
     deleteUserFact: vi.fn(),
+    listMemories: vi.fn(),
+    searchMemories: vi.fn(),
+    deleteMemory: vi.fn(),
+    promoteMemory: vi.fn(),
   },
 }));
 
@@ -107,6 +112,11 @@ describe('MemoryBrowser', () => {
     // Default Overview response — individual tests can override
     vi.mocked(api.getMemoryOverview).mockResolvedValue(OVERVIEW_RESPONSE);
     vi.mocked(api.getUserFacts).mockResolvedValue({ ok: true, facts: OVERVIEW_FACTS });
+    // Safe defaults for v2 memory CRUD so tab switches don't blow up
+    vi.mocked(api.listMemories).mockResolvedValue({ memories: [], total: 0 });
+    vi.mocked(api.searchMemories).mockResolvedValue({ results: [] });
+    vi.mocked(api.deleteMemory).mockResolvedValue({ ok: true });
+    vi.mocked(api.promoteMemory).mockResolvedValue({ ok: true });
   });
 
   // ── Top-level overlay behavior ─────────────────────────────────────────────
@@ -324,106 +334,51 @@ describe('MemoryBrowser', () => {
   // `api` client, these tests should be migrated to Pattern 2 (api mocks).
 
   describe('Memories tab', () => {
-    /** Build a fetch stub that routes by URL substring + method. */
-    function makeFetchStub(handlers: {
-      list?: (url: string) => unknown;
-      search?: (url: string) => unknown;
-      delete?: (id: string) => unknown;
-      promote?: (id: string) => unknown;
-    }) {
-      return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === 'string' ? input : input.toString();
-        const method = (init?.method ?? 'GET').toUpperCase();
-        let payload: unknown = { ok: true };
-        let ok = true;
-
-        if (url.includes('/api/v2/memory/list')) {
-          payload = handlers.list ? handlers.list(url) : { memories: [], total: 0 };
-        } else if (url.includes('/api/v2/memory/search')) {
-          payload = handlers.search ? handlers.search(url) : { results: [] };
-        } else if (method === 'DELETE' && url.match(/\/api\/v2\/memory\/[^/]+$/)) {
-          const idMatch = url.match(/\/api\/v2\/memory\/([^/?]+)$/);
-          payload = handlers.delete ? handlers.delete(idMatch?.[1] ?? '') : { ok: true };
-        } else if (method === 'PATCH' && url.includes('/promote')) {
-          const idMatch = url.match(/\/api\/v2\/memory\/([^/]+)\/promote$/);
-          payload = handlers.promote ? handlers.promote(idMatch?.[1] ?? '') : { ok: true };
-        } else {
-          ok = false;
-        }
-
-        return new Response(JSON.stringify(payload), {
-          status: ok ? 200 : 404,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      });
-    }
-
-    afterEach(() => {
-      vi.unstubAllGlobals();
-    });
-
-    /** Switch to the Memories tab and wait for first list fetch to settle. */
-    async function switchToMemoriesTab(fetchStub: ReturnType<typeof vi.fn>) {
-      vi.stubGlobal('fetch', fetchStub);
-      openBrowser();
-      render(<MemoryBrowser />);
-      await waitFor(() => expect(vi.mocked(api.getMemoryOverview)).toHaveBeenCalled());
-      fireEvent.click(screen.getByRole('button', { name: /Memories/ }));
-      await waitFor(() =>
-        expect(fetchStub.mock.calls.some(([u]) =>
-          String(u).includes('/api/v2/memory/list')
-        )).toBe(true)
-      );
-    }
-
-    const SAMPLE_MEMORIES = [
+    const SAMPLE_MEMORIES: MemoryItem[] = [
       { id: 'm1', text: 'User loves ramen and discusses it often.', role: 'user', tier: 1, created_at: '2026-04-10' },
       { id: 'm2', text: 'User mentioned working in Tokyo.',         role: 'knowledge', tier: 2, created_at: '2026-04-11' },
       { id: 'm3', text: 'Permanent memory: birthday is April 5.',    role: 'knowledge', tier: 3, created_at: '2026-04-12' },
     ];
 
-    it('fetches /api/v2/memory/list with char_id when activated', async () => {
-      const stub = makeFetchStub({
-        list: () => ({ memories: SAMPLE_MEMORIES, total: SAMPLE_MEMORIES.length }),
-      });
-      await switchToMemoriesTab(stub);
-      const listCall = stub.mock.calls.find(([u]) => String(u).includes('/api/v2/memory/list'));
-      expect(listCall).toBeDefined();
-      expect(String(listCall![0])).toContain('char_id=42');
-      expect(String(listCall![0])).toContain('page=0');
+    /** Switch to the Memories tab and wait for first listMemories call to settle. */
+    async function switchToMemoriesTab() {
+      openBrowser();
+      render(<MemoryBrowser />);
+      await waitFor(() => expect(vi.mocked(api.getMemoryOverview)).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole('button', { name: /Memories/ }));
+      await waitFor(() => expect(vi.mocked(api.listMemories)).toHaveBeenCalled());
+    }
+
+    it('calls api.listMemories with active char id, page 0, and PAGE_SIZE on tab activation', async () => {
+      vi.mocked(api.listMemories).mockResolvedValue({ memories: SAMPLE_MEMORIES, total: SAMPLE_MEMORIES.length });
+      await switchToMemoriesTab();
+      // PAGE_SIZE constant in the component is 12 — assert positional args (charId, page, size).
+      expect(vi.mocked(api.listMemories)).toHaveBeenCalledWith(42, 0, 12);
     });
 
     it('renders memory text and role/tier badges', async () => {
-      const stub = makeFetchStub({
-        list: () => ({ memories: SAMPLE_MEMORIES, total: 3 }),
-      });
-      await switchToMemoriesTab(stub);
+      vi.mocked(api.listMemories).mockResolvedValue({ memories: SAMPLE_MEMORIES, total: 3 });
+      await switchToMemoriesTab();
       await waitFor(() => {
         expect(screen.getByText(/User loves ramen/)).toBeInTheDocument();
         expect(screen.getByText(/Working in Tokyo/i)).toBeInTheDocument();
       });
-      // Tier labels render (T1 Fleeting, T2 Recent, T3 Permanent)
       expect(screen.getByText(/T1 Fleeting/)).toBeInTheDocument();
       expect(screen.getByText(/T2 Recent/)).toBeInTheDocument();
       expect(screen.getByText(/T3 Permanent/)).toBeInTheDocument();
     });
 
-    it('renders empty state when list returns no memories', async () => {
-      const stub = makeFetchStub({ list: () => ({ memories: [], total: 0 }) });
-      await switchToMemoriesTab(stub);
+    it('renders empty state when listMemories returns no memories', async () => {
+      vi.mocked(api.listMemories).mockResolvedValue({ memories: [], total: 0 });
+      await switchToMemoriesTab();
       await waitFor(() =>
         expect(screen.getByText('No memories stored yet.')).toBeInTheDocument()
       );
     });
 
-    it('renders error message when list fetch fails', async () => {
-      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.includes('/api/v2/memory/list')) {
-          return new Response('boom', { status: 500 });
-        }
-        return new Response('{}', { status: 200 });
-      }));
+    it('renders error status when listMemories rejects', async () => {
+      // api helpers throw "GET /url: 500" — component extracts the status and shows "Failed to load: 500".
+      vi.mocked(api.listMemories).mockRejectedValueOnce(new Error('GET /api/v2/memory/list?page=0: 500'));
       openBrowser();
       render(<MemoryBrowser />);
       await waitFor(() => expect(vi.mocked(api.getMemoryOverview)).toHaveBeenCalled());
@@ -433,12 +388,10 @@ describe('MemoryBrowser', () => {
       );
     });
 
-    it('switches to search mode and calls /api/v2/memory/search on Go click', async () => {
-      const stub = makeFetchStub({
-        list: () => ({ memories: SAMPLE_MEMORIES, total: 3 }),
-        search: () => ({ results: [SAMPLE_MEMORIES[0]] }),
-      });
-      await switchToMemoriesTab(stub);
+    it('switches to search mode and calls api.searchMemories on Go click', async () => {
+      vi.mocked(api.listMemories).mockResolvedValue({ memories: SAMPLE_MEMORIES, total: 3 });
+      vi.mocked(api.searchMemories).mockResolvedValue({ results: [SAMPLE_MEMORIES[0]] });
+      await switchToMemoriesTab();
       await waitFor(() => expect(screen.getByText(/User loves ramen/)).toBeInTheDocument());
 
       fireEvent.change(screen.getByPlaceholderText(/Semantic search/), {
@@ -446,63 +399,45 @@ describe('MemoryBrowser', () => {
       });
       fireEvent.click(screen.getByRole('button', { name: /^Go$/ }));
 
-      await waitFor(() => {
-        const searchCall = stub.mock.calls.find(([u]) => String(u).includes('/api/v2/memory/search'));
-        expect(searchCall).toBeDefined();
-        expect(String(searchCall![0])).toContain('query=ramen');
-      });
-      // Search-mode footer shows result count + clear button
+      await waitFor(() =>
+        expect(vi.mocked(api.searchMemories)).toHaveBeenCalledWith(42, 'ramen', 20)
+      );
       await waitFor(() =>
         expect(screen.getByRole('button', { name: /Clear search/ })).toBeInTheDocument()
       );
     });
 
-    it('calls DELETE /api/v2/memory/{id} when delete button clicked', async () => {
-      const stub = makeFetchStub({
-        list: () => ({ memories: SAMPLE_MEMORIES, total: 3 }),
-        delete: () => ({ ok: true }),
-      });
-      await switchToMemoriesTab(stub);
+    it('calls api.deleteMemory and reloads the page when delete clicked', async () => {
+      vi.mocked(api.listMemories).mockResolvedValue({ memories: SAMPLE_MEMORIES, total: 3 });
+      vi.mocked(api.deleteMemory).mockResolvedValue({ ok: true });
+      await switchToMemoriesTab();
       await waitFor(() => expect(screen.getByText(/User loves ramen/)).toBeInTheDocument());
 
       const deleteBtns = screen.getAllByTitle('Delete memory');
       fireEvent.click(deleteBtns[0]);
 
-      await waitFor(() => {
-        const deleteCall = stub.mock.calls.find(([u, init]) =>
-          String(u).match(/\/api\/v2\/memory\/m1$/) && (init as RequestInit | undefined)?.method === 'DELETE'
-        );
-        expect(deleteCall).toBeDefined();
-      });
+      await waitFor(() => expect(vi.mocked(api.deleteMemory)).toHaveBeenCalledWith('m1'));
+      // After delete, list is re-fetched (initial + reload = 2 calls).
+      await waitFor(() => expect(vi.mocked(api.listMemories).mock.calls.length).toBeGreaterThanOrEqual(2));
     });
 
-    it('calls PATCH /api/v2/memory/{id}/promote for tier-1/2 memories only', async () => {
-      const stub = makeFetchStub({
-        list: () => ({ memories: SAMPLE_MEMORIES, total: 3 }),
-        promote: () => ({ ok: true }),
-      });
-      await switchToMemoriesTab(stub);
+    it('calls api.promoteMemory for tier-1/2 memories only (no button on tier 3)', async () => {
+      vi.mocked(api.listMemories).mockResolvedValue({ memories: SAMPLE_MEMORIES, total: 3 });
+      vi.mocked(api.promoteMemory).mockResolvedValue({ ok: true });
+      await switchToMemoriesTab();
       await waitFor(() => expect(screen.getByText(/User loves ramen/)).toBeInTheDocument());
 
-      // Promote button title is "Promote to Permanent" — only rendered for tier < 3
       const promoteBtns = screen.getAllByTitle('Promote to Permanent');
-      // 2 of 3 fixture memories are tier 1 + tier 2 → 2 promote buttons expected
+      // 2 of 3 fixture memories are tier 1 + tier 2 → 2 promote buttons expected.
       expect(promoteBtns.length).toBe(2);
 
       fireEvent.click(promoteBtns[0]);
-      await waitFor(() => {
-        const promoteCall = stub.mock.calls.find(([u, init]) =>
-          String(u).includes('/promote') && (init as RequestInit | undefined)?.method === 'PATCH'
-        );
-        expect(promoteCall).toBeDefined();
-      });
+      await waitFor(() => expect(vi.mocked(api.promoteMemory)).toHaveBeenCalledWith('m1'));
     });
 
     it('renders pagination controls when total exceeds page size', async () => {
-      const stub = makeFetchStub({
-        list: () => ({ memories: SAMPLE_MEMORIES, total: 30 }), // 30 items, PAGE_SIZE=12 → 3 pages
-      });
-      await switchToMemoriesTab(stub);
+      vi.mocked(api.listMemories).mockResolvedValue({ memories: SAMPLE_MEMORIES, total: 30 }); // 30 items, PAGE_SIZE=12 → 3 pages
+      await switchToMemoriesTab();
       await waitFor(() => expect(screen.getByText(/Page 1 \/ 3 \(30 memories\)/)).toBeInTheDocument());
     });
   });

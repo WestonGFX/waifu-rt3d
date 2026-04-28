@@ -83,6 +83,28 @@ export interface DownloadStatus {
   error?: string;
 }
 
+/**
+ * A single vector-store memory row as returned by `/api/v2/memory/list`
+ * and `/api/v2/memory/search`.
+ *
+ * Fields are loose because the backend returns slightly different shapes
+ * for list (recency-sorted) vs. search (similarity-scored). The Memory
+ * Browser UI tolerates missing fields.
+ */
+export interface MemoryItem {
+  id: string;
+  text: string;
+  role?: string;
+  timestamp?: number;
+  score?: number;
+  char_id?: number;
+  /** 1=Fleeting, 2=Recent, 3=Permanent (TieredMemoryManager only). */
+  tier?: number;
+  salience?: number;
+  created_at?: string;
+  session_id?: number;
+}
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 /**
@@ -805,6 +827,65 @@ export const api = {
       profile: Record<string, unknown> | null;
       stats: { total_messages: number; total_facts: number; total_journal_entries: number; has_profile: boolean };
     }>(`/api/characters/${charId}/memory/overview`),
+
+  /**
+   * Paginated list of stored vector memories for a character.
+   *
+   * Wraps `GET /api/v2/memory/list`. Pass `charId = 0` for all characters.
+   *
+   * @param charId - Character primary key, or 0 for all.
+   * @param page - Zero-indexed page number.
+   * @param size - Page size (1-50, server clamps).
+   * @returns `{memories, total}` ordered by recency.
+   */
+  listMemories: (charId: number, page: number, size: number) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    if (charId > 0) params.set('char_id', String(charId));
+    return get<{ memories: MemoryItem[]; total: number }>(`/api/v2/memory/list?${params}`);
+  },
+
+  /**
+   * Semantic memory search across the vector store.
+   *
+   * Wraps `GET /api/v2/memory/search`. Pass `charId = 0` for all characters
+   * (matching the existing UI semantics).
+   *
+   * @param charId - Character primary key, or 0 for all.
+   * @param query - Natural-language query string.
+   * @param nResults - Top-k cap (1-20, server clamps).
+   * @returns `{results}` sorted by similarity descending.
+   */
+  searchMemories: (charId: number, query: string, nResults = 20) => {
+    const params = new URLSearchParams({
+      char_id: String(charId),
+      query,
+      n_results: String(nResults),
+    });
+    return get<{ results: MemoryItem[] }>(`/api/v2/memory/search?${params}`);
+  },
+
+  /**
+   * Delete a single vector memory by document ID.
+   *
+   * Wraps `DELETE /api/v2/memory/{id}`.
+   *
+   * @param memoryId - Vector store document ID.
+   * @returns `{ok: true}` on success.
+   */
+  deleteMemory: (memoryId: string) =>
+    del<{ ok: boolean }>(`/api/v2/memory/${encodeURIComponent(memoryId)}`),
+
+  /**
+   * Promote a memory to Tier 3 (permanent — never pruned).
+   *
+   * Wraps `PATCH /api/v2/memory/{id}/promote`. Requires the
+   * TieredMemoryManager backend; otherwise the server returns 501.
+   *
+   * @param memoryId - Vector store document ID.
+   * @returns `{ok: true}` on success.
+   */
+  promoteMemory: (memoryId: string) =>
+    patch<{ ok: boolean }>(`/api/v2/memory/${encodeURIComponent(memoryId)}/promote`, {}),
 
   /**
    * Full prompt inspection for a session — returns every assembled section

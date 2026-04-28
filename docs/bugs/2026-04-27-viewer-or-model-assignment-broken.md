@@ -3,7 +3,7 @@
 **Reported:** 2026-04-27 (session 18 hand-on QA)
 **Reporter:** chris
 **Severity:** P0 (blocks core experience)
-**Status:** Surface confirmed = viewer iframe blank/crashed (user 2026-04-27)
+**Status:** ✅ FIXED (session 18, 2026-04-27) — see "Resolution" below
 
 ## Symptom
 
@@ -62,3 +62,59 @@ crashing the viewer before any VRM can mount. Check:
 - Related: `project_live2d_broken.md` (memory)
 - Related: `project_aspect_grounding.md` if aspect-ratio is part of the
   reported issue (Known Sensitive Area #1)
+
+## Resolution (2026-04-27, session 18)
+
+Diagnosis: Live2D was *not* the cause (active char `live2d_model` was
+empty). The crash chain (innermost to outermost):
+
+1. **Backend column phantoms** — three SQL queries in `get_character_greeting`
+   referenced columns that don't exist:
+   - `greeting_message` (real column name is `greeting_text`)
+   - `sessions.updated_at` (sessions has `created_ts` only)
+   - `sessions.character_id` (sessions has no character link — char→session
+     is implicit via `messages.char_id`)
+
+   These produced cascading 500s on app open, but didn't directly crash the
+   viewer.
+
+2. **DB lock contention** — `db()` opened raw `sqlite3.connect()` with no
+   `busy_timeout`. Hot-polled `/api/characters/{id}/relationship` issued an
+   unconditional `INSERT OR IGNORE` per GET, hitting WAL writer contention.
+   Fixed in commit `8a1f3f5` (filed separately as
+   `2026-04-27-character-relationship-db-lock.md`).
+
+3. **THE viewer crash** — `BlinkController` constructor in
+   `frontends/shared/viewer/viewer.html` called `this._poissonDelay()`
+   *before* initialising `this._emotionMod`. `_poissonDelay()` reads
+   `this._emotionMod.rateMul`, so it crashed with:
+
+   ```
+   TypeError: Cannot read properties of undefined (reading 'rateMul')
+       at BlinkController._poissonDelay
+       at new BlinkController
+       at loader.load callback (loadModel success path)
+   ```
+
+   The crash happened *inside the GLTFLoader success callback*, after the
+   VRM file fully downloaded. The viewer never reached the postMessage
+   `modelLoaded` reply, so the parent React app stayed stuck on
+   "Loading 3D model..." forever — appearing as a blank viewer panel.
+
+   Fixed by reordering the constructor: `_emotionMod` initialised
+   *before* `_poissonDelay()` is called.
+
+Also bumped `?v=7` → `?v=8` on the iframe src in `ModelPanel.tsx` so
+clients dodge any cached old viewer.html.
+
+## Verification
+
+- Playwright drove the app: opened sakura → clicked 3D viewer button →
+  iframe rendered VRM model (Panicandy, Rin Akane) at 118 FPS with
+  `motion_neutral` animation playing. Console clean of TypeErrors.
+- Regression test:
+  `frontends/sakura/src/test/viewer.blinkController.test.ts` — 3 cases.
+  Reads viewer.html as text; asserts that within the BlinkController
+  constructor, `_emotionMod` is assigned BEFORE the `_poissonDelay()`
+  call. Locks in the structural ordering so a future reordering breaks
+  CI loudly.

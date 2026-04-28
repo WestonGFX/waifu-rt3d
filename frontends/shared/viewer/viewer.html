@@ -3839,14 +3839,16 @@
         class BlinkController {
             constructor(vrm) {
                 this.vrm = vrm;
-                this.nextBlinkTime = this._poissonDelay();
                 this.isBlinking = false;
                 this.blinkProgress = 0;
                 this.doubleBlink = false;
                 this.blinkSpeed = 8;  // base close/open speed
-                /** Emotion state affects blink rate and speed.
-                 *  Set externally via setEmotion(). */
+                // _emotionMod MUST be initialised BEFORE _poissonDelay() is
+                // called — _poissonDelay reads _emotionMod.rateMul, so the
+                // earlier ordering crashed every model load with TypeError:
+                // "Cannot read properties of undefined (reading 'rateMul')".
                 this._emotionMod = { rateMul: 1.0, speedMul: 1.0 };
+                this.nextBlinkTime = this._poissonDelay();
             }
 
             /**

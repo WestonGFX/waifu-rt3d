@@ -9467,9 +9467,15 @@ async def generate_character_diary(char_id: int, req: Request):
             (session_id,)
         ).fetchall()
     else:
-        # Use the most recent session that belongs to this character
+        # Use the most recent session that belongs to this character.
+        # The sessions table has no char_id / character_id column —
+        # session→character is implicit via messages.char_id. Find the
+        # session whose most recent message belongs to this character.
+        # Earlier code referenced a phantom `character_id` column that
+        # produced 500s on the diary endpoint.
         sess_row = conn.execute(
-            "SELECT id FROM sessions WHERE character_id = ? ORDER BY updated_at DESC LIMIT 1",
+            "SELECT session_id FROM messages WHERE char_id = ? "
+            "ORDER BY ts DESC LIMIT 1",
             (char_id,)
         ).fetchone()
         if not sess_row:
@@ -9556,8 +9562,12 @@ async def get_character_greeting(char_id: int):
     """
     import time as _time
     conn = db()
+    # Note: column is `greeting_text` (added in v7); `greeting_message` is the
+    # CHARA V2 input-dict key name, mapped to greeting_text on import. The
+    # earlier `greeting_message` here was a typo that produced 500s on every
+    # call to this hot endpoint (the frontend polls greeting on app open).
     row = conn.execute(
-        "SELECT name, system_prompt, greeting_message, greeting_enabled, greeting_intensity, "
+        "SELECT name, system_prompt, greeting_text, greeting_enabled, greeting_intensity, "
         "diary, last_emotion FROM characters WHERE id = ?",
         (char_id,)
     ).fetchone()
@@ -9577,17 +9587,18 @@ async def get_character_greeting(char_id: int):
         if now_ts - cached_at < _GREETING_CACHE_TTL:
             return {"ok": True, "greeting": cached_text, "emotion": cached_emotion, "enabled": True}
 
-    # Get time since last session
-    last_sess = conn.execute(
-        "SELECT updated_at FROM sessions WHERE character_id = ? ORDER BY updated_at DESC LIMIT 1",
+    # Get time since last activity with this character. The sessions table
+    # has no char_id / character_id column — session→character is implicit
+    # via messages.char_id. So query the most recent message timestamp for
+    # this character; messages.ts is a unix timestamp (REAL).
+    last_msg = conn.execute(
+        "SELECT MAX(ts) FROM messages WHERE char_id = ?",
         (char_id,)
     ).fetchone()
     gap_text = ""
-    if last_sess and last_sess[0]:
+    if last_msg and last_msg[0]:
         try:
-            from datetime import timezone as _tz
-            last_dt = datetime.fromisoformat(last_sess[0].replace("Z", "+00:00"))
-            gap_days = (datetime.now(_tz.utc) - last_dt.replace(tzinfo=_tz.utc if last_dt.tzinfo is None else last_dt.tzinfo)).days
+            gap_days = int((_time.time() - float(last_msg[0])) / 86400)
             if gap_days > 7:
                 gap_text = f"It has been {gap_days} days since you last spoke."
             elif gap_days > 2:
@@ -9605,7 +9616,7 @@ async def get_character_greeting(char_id: int):
 
     # Current time slot for context
     from backend.mood.engine import _get_time_slot
-    hour = datetime.now().hour
+    hour = _time.localtime().tm_hour
     time_slot = _get_time_slot(hour)
 
     intensity = float(greeting_intensity) if greeting_intensity is not None else 0.8

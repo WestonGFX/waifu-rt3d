@@ -728,7 +728,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
             ) : (
               <iframe
                 ref={setIframeEl}
-                src="/shared/viewer/viewer.html?v=7"
+                src="/shared/viewer/viewer.html?v=8"
                 className="w-full h-full border-0"
                 title="3D Viewer"
               />

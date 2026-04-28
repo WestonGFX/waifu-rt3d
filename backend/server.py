@@ -381,7 +381,20 @@ def save_config(cfg):
     CONFIG.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 
 def db():
-    return sqlite3.connect(DB_PATH)
+    """Open a SQLite connection with sane lock-contention defaults.
+
+    Sets PRAGMA busy_timeout = 30000 (30s) so concurrent writers block
+    and retry instead of immediately raising OperationalError("database
+    is locked"). This was the root cause of repeated 500s on hot-path
+    endpoints like /api/characters/{id}/relationship.
+
+    Returns:
+        sqlite3.Connection: Fresh connection. Caller is responsible for
+            commit/close (most callers rely on GC for close).
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout = 30000")
+    return conn
 
 
 model_manager = None
@@ -8839,6 +8852,12 @@ def get_relationship(char_id: int):
 
     Returns affinity, mood, trust (0-1), interaction count, and last updated timestamp.
 
+    A SELECT-first, INSERT-on-miss strategy is used so that hot polling
+    of this endpoint does not take a write lock on every call. Prior
+    behavior issued an unconditional INSERT OR IGNORE per GET, which
+    flooded the WAL writer under concurrent message-handling writes
+    and produced repeated `OperationalError: database is locked` 500s.
+
     Args:
         char_id: Character ID.
 
@@ -8846,16 +8865,25 @@ def get_relationship(char_id: int):
         {"ok": True, "relationship": {affinity, mood, trust, interactions, last_updated}}
     """
     conn = db()
-    # Ensure row exists
-    conn.execute("INSERT OR IGNORE INTO character_relationships (char_id) VALUES (?)", (char_id,))
-    conn.commit()
-
     row = conn.execute(
         "SELECT affinity, mood, trust, interactions, last_updated FROM character_relationships WHERE char_id = ?",
         (char_id,)
     ).fetchone()
 
     if not row:
+        # Lazy seed only on miss — wrap in `with conn:` for auto-commit/rollback.
+        with conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO character_relationships (char_id) VALUES (?)",
+                (char_id,)
+            )
+        row = conn.execute(
+            "SELECT affinity, mood, trust, interactions, last_updated FROM character_relationships WHERE char_id = ?",
+            (char_id,)
+        ).fetchone()
+
+    if not row:
+        # Insert raced or failed — return defaults rather than 500.
         return {"ok": True, "relationship": {"affinity": 0.0, "mood": 0.5, "trust": 0.0, "interactions": 0, "last_updated": None}}
 
     return {
@@ -8874,6 +8902,9 @@ def get_relationship(char_id: int):
 def reset_relationship(char_id: int):
     """Reset relationship scores to neutral defaults.
 
+    Wraps the UPDATE/INSERT pair in a `with conn:` block so the two
+    statements are atomic and auto-rolled-back on failure.
+
     Args:
         char_id: Character ID.
 
@@ -8881,17 +8912,17 @@ def reset_relationship(char_id: int):
         {"ok": True}
     """
     conn = db()
-    conn.execute("""
-        UPDATE character_relationships SET
-            affinity = 0.5, mood = 0.5, trust = 0.5,
-            interactions = 0, last_updated = strftime('%s','now')
-        WHERE char_id = ?
-    """, (char_id,))
-    if conn.execute("SELECT changes()").fetchone()[0] == 0:
-        conn.execute(
-            "INSERT INTO character_relationships (char_id) VALUES (?)", (char_id,)
-        )
-    conn.commit()
+    with conn:
+        conn.execute("""
+            UPDATE character_relationships SET
+                affinity = 0.5, mood = 0.5, trust = 0.5,
+                interactions = 0, last_updated = strftime('%s','now')
+            WHERE char_id = ?
+        """, (char_id,))
+        if conn.execute("SELECT changes()").fetchone()[0] == 0:
+            conn.execute(
+                "INSERT INTO character_relationships (char_id) VALUES (?)", (char_id,)
+            )
     return {"ok": True}
 
 

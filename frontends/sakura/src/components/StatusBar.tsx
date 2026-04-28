@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { RELEASE_NOTES } from '../data/changelog';
 import { StreakBadge } from './StreakBadge';
 import { BondProgressBar } from './BondProgressBar';
+import { ContextBudgetPill } from './ContextBudgetPill';
 
 /** Map bond tier keys to badge colors. */
 const TIER_BADGE_COLORS: Record<string, string> = {
@@ -576,6 +577,11 @@ export function StatusBar({
         >
           <Box size={18} />
         </button>
+        <ContextBudgetPill
+          sessionId={sessionId}
+          messageCount={messageCount}
+          autoCompactThreshold={85}
+        />
         <button
           onClick={() => openOverlay('settings')}
           title="Settings"

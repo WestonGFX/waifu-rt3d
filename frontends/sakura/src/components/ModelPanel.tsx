@@ -728,7 +728,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
             ) : (
               <iframe
                 ref={setIframeEl}
-                src="/shared/viewer/viewer.html?v=8"
+                src="/shared/viewer/viewer.html?v=9"
                 className="w-full h-full border-0"
                 title="3D Viewer"
               />
@@ -1003,27 +1003,13 @@ export function ModelPanel({ character }: ModelPanelProps) {
               onClose={() => setShowFloatingComposer(false)}
             />
 
-            {/* ── Bottom-left: close button + right: screenshot + hide toggle ── */}
+            {/* ── Bottom-left: browse models + right: screenshot + hide toggle ── */}
             <div
               className="absolute bottom-0 left-0 right-0 flex items-end justify-between px-3 pb-3"
               style={{ transition: 'opacity 0.2s', opacity: 0.85 }}
             >
-              {/* Left: close-panel button + browse models */}
+              {/* Left: browse models (Close lives in the top "Back to Chat" pill) */}
               <div className="flex items-center gap-2">
-                <button
-                  onClick={toggleModelPanel}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs"
-                  style={{
-                    backgroundColor: 'var(--color-surface)',
-                    borderRadius: 'var(--radius-button)',
-                    boxShadow: 'var(--shadow-card)',
-                    color: 'var(--color-text-secondary)',
-                    border: '1px solid var(--color-border)',
-                  }}
-                  title="Collapse the 3D panel"
-                >
-                  <ChevronLeft size={14} /> Close
-                </button>
                 <button
                   onClick={() => openOverlay('modelbrowser')}
                   className="flex items-center gap-1 px-3 py-1.5 text-xs"

@@ -148,9 +148,16 @@ export function BondProgressBar({
   const barColor = TIER_BAR_COLORS[tier] ?? 'var(--color-accent)';
   const tierLabel = TIER_LABELS[tier] ?? tier;
 
+  // Native tooltip carries the next-unlock teaser so we don't burn a header
+  // row on it (Tier 1 deflate; was an inline <p> below the bar — see audit).
+  const nextUnlockHint = nextUnlock
+    ? `Next: ${nextUnlock.label} (Lv ${nextUnlock.level})`
+    : undefined;
+
   // ── Render ────────────────────────────────────────────────────────────
   return (
     <div
+      title={nextUnlockHint}
       style={{
         position: 'relative',
         backgroundColor: 'var(--color-surface)',
@@ -162,7 +169,7 @@ export function BondProgressBar({
         gap: 6,
         userSelect: 'none',
       }}
-      aria-label={`Bond level ${bondLevel}, ${tierLabel}, ${fmtXp(bondXp)} of ${fmtXp(xpToNext)} XP`}
+      aria-label={`Bond level ${bondLevel}, ${tierLabel}, ${fmtXp(bondXp)} of ${fmtXp(xpToNext)} XP${nextUnlockHint ? `. ${nextUnlockHint}` : ''}`}
     >
       {/* ── Level + tier row ── */}
       <div
@@ -254,21 +261,6 @@ export function BondProgressBar({
           transition={{ type: 'spring', stiffness: 100, damping: 20 }}
         />
       </div>
-
-      {/* ── Next unlock teaser ── */}
-      {nextUnlock && (
-        <p
-          style={{
-            margin: 0,
-            fontSize: 11,
-            color: 'var(--color-text-tertiary)',
-            textAlign: 'center',
-            letterSpacing: '0.01em',
-          }}
-        >
-          Next: {nextUnlock.label} (Lv {nextUnlock.level})
-        </p>
-      )}
 
       {/* ── XP delta popup ── */}
       <AnimatePresence>

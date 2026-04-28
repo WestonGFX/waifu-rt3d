@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles } from 'lucide-react';
 import { WhisperModeToggle, QuickFireToggle } from '../components/ChatModeToggles';
-import { TemperatureMeter } from '../components/TemperatureMeter';
 import { VNTextBox } from '../components/VNTextBox';
 import { VNPortrait } from '../components/VNPortrait';
 import { useAppStore } from '../stores/appStore';
@@ -25,7 +24,6 @@ import { GesturePicker } from '../components/GesturePicker';
 import type { GestureName, ExpressionName } from '../components/GesturePicker';
 import { VoiceConversationPanel } from '../components/VoiceConversationPanel';
 import { GreetingCard } from '../components/GreetingCard';
-import { ContextBudgetPill } from '../components/ContextBudgetPill';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -884,14 +882,6 @@ export function ChatThread() {
 
         {/* ── Message list ──────────────────────────────────────────────── */}
         <div className="flex-1 min-h-0" style={{ position: 'relative' }}>
-          {/* Context budget pill — top-right of chat message area */}
-          <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 50 }}>
-            <ContextBudgetPill
-              sessionId={sessionId}
-              messageCount={messages.length}
-              autoCompactThreshold={85}
-            />
-          </div>
         <div ref={scrollRef} className="chat-area h-full overflow-y-auto p-4 max-w-3xl mx-auto w-full">
           {searchQuery && (
             <p className="text-center text-xs mb-3" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -1358,9 +1348,6 @@ export function ChatThread() {
               >
                 <Clapperboard size={16} />
               </button>
-
-              {/* F21: Temperature meter — driven by arousal engine, hidden when 0 */}
-              <TemperatureMeter temperature={0} />
 
               {/* Reply length badge — cycles through brief/normal/detailed/auto on click */}
               <button

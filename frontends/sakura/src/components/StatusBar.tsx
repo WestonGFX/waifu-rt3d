@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Eye, MessageSquare, Search, Download, X, Globe, Music, Settings, Box } from 'lucide-react';
+import { Eye, MessageSquare, Search, Download, X, Music, Settings, Box, MoreHorizontal } from 'lucide-react';
 import type { Character } from '../lib/types';
 import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
@@ -279,10 +279,15 @@ export function StatusBar({
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Feature 5: Export format dropdown ────────────────────────────────────
-  const [exportOpen, setExportOpen] = useState(false);
-  const exportBtnRef = useRef<HTMLButtonElement>(null);
-  const exportDropRef = useRef<HTMLDivElement>(null);
+  // ── Tier 2 HUD: ⋯ overflow popover ──────────────────────────────────────
+  // Holds chat-threads, export, soundscape, model-browser, and the version
+  // pill (dev-mode unlock). Cuts top toolbar from 9 icons → 4 visible (+ ⋯).
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowBtnRef = useRef<HTMLButtonElement>(null);
+  const overflowDropRef = useRef<HTMLDivElement>(null);
+
+  // ── Tier 2 HUD: search scope toggle (replaces separate Globe button) ────
+  const [searchScope, setSearchScope] = useState<'thread' | 'global'>('thread');
 
   // ── Version click easter egg — 5 taps in 3 s → Developer Mode ──────────
   const versionClickCount = useRef(0);
@@ -310,19 +315,19 @@ export function StatusBar({
     }
   }, [settingsTier, setSettingsTier]);
 
-  // Close dropdown on outside click.
+  // Close ⋯ overflow popover on outside click.
   useEffect(() => {
-    if (!exportOpen) return;
+    if (!overflowOpen) return;
     const handle = (e: MouseEvent) => {
       if (
-        exportDropRef.current?.contains(e.target as Node) ||
-        exportBtnRef.current?.contains(e.target as Node)
+        overflowDropRef.current?.contains(e.target as Node) ||
+        overflowBtnRef.current?.contains(e.target as Node)
       ) return;
-      setExportOpen(false);
+      setOverflowOpen(false);
     };
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
-  }, [exportOpen]);
+  }, [overflowOpen]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -465,117 +470,10 @@ export function StatusBar({
           />
         </div>
 
-        {onOpenSessions && (
-          <button onClick={onOpenSessions} className="p-2 rounded-lg transition-all duration-200"
-            style={btnStyle()} title="Chat threads">
-            <MessageSquare size={18} />
-          </button>
-        )}
+        {/* Tier 2 HUD — visible right cluster: Search · ContextBudget · Settings · 3D · ⋯ */}
         <button onClick={toggleSearch} className="p-2 rounded-lg transition-all duration-200"
-          style={btnStyle(searchOpen)} title="Search messages in this thread">
+          style={btnStyle(searchOpen)} title="Search messages (Thread / Global toggle inside)">
           <Search size={18} />
-        </button>
-        <button
-          onClick={() => openOverlay('search')}
-          className="p-2 rounded-lg transition-all duration-200"
-          style={btnStyle()}
-          title="Global search — all characters &amp; sessions (Alt+F)"
-          aria-label="Open global message search"
-        >
-          <Globe size={18} />
-        </button>
-
-        {/* Feature 5: Export button with format dropdown */}
-        {(onExport || onExportMarkdown) && (
-          <div style={{ position: 'relative' }}>
-            <button
-              ref={exportBtnRef}
-              onClick={() => setExportOpen(o => !o)}
-              className="p-2 rounded-lg transition-all duration-200"
-              style={btnStyle(exportOpen)}
-              title="Export conversation"
-              aria-label="Export conversation"
-              aria-haspopup="true"
-              aria-expanded={exportOpen}
-            >
-              <Download size={18} />
-            </button>
-
-            {exportOpen && (
-              <div
-                ref={exportDropRef}
-                role="menu"
-                style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 4px)',
-                  right: 0,
-                  minWidth: 190,
-                  backgroundColor: 'var(--color-surface)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 8,
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
-                  zIndex: 50,
-                  overflow: 'hidden',
-                }}
-              >
-                {onExport && (
-                  <button
-                    role="menuitem"
-                    onClick={() => { setExportOpen(false); onExport(); }}
-                    className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150"
-                    style={{ color: 'var(--color-text-primary)' }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
-                  >
-                    Export as Text (.txt)
-                  </button>
-                )}
-                {onExportMarkdown && (
-                  <button
-                    role="menuitem"
-                    onClick={() => { setExportOpen(false); onExportMarkdown(); }}
-                    className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150"
-                    style={{ color: 'var(--color-text-primary)' }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
-                  >
-                    Export as Markdown (.md)
-                  </button>
-                )}
-                {onExportJson && (
-                  <button
-                    role="menuitem"
-                    onClick={() => { setExportOpen(false); onExportJson(); }}
-                    className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150"
-                    style={{ color: 'var(--color-text-primary)' }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
-                  >
-                    Export as JSON (.json)
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        <button
-          onClick={toggleSoundscape}
-          title="Ambient sounds"
-          aria-label={soundscapeOpen ? 'Close soundscape player' : 'Open soundscape player'}
-          className="p-2 rounded-lg transition-all duration-200"
-          style={btnStyle(soundscapeOpen)}
-        >
-          <Music size={18} />
-        </button>
-        <button
-          onClick={() => openOverlay('modelbrowser')}
-          title="Models"
-          aria-label="Open model browser"
-          className="p-2 rounded-lg transition-all duration-200"
-          style={btnStyle()}
-        >
-          <Box size={18} />
         </button>
         <ContextBudgetPill
           sessionId={sessionId}
@@ -610,24 +508,130 @@ export function StatusBar({
           <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.05em', color: 'var(--color-accent)', lineHeight: 1 }}>{modelPanelOpen ? 'Close' : '3D'}</span>
         </button>
 
-        {/* Version label — 5 rapid clicks unlock Developer Mode */}
-        <span
-          onClick={handleVersionClick}
-          title={settingsTier >= 2 ? 'Developer Mode active' : undefined}
-          style={{
-            fontSize: 10,
-            color: 'var(--color-text-tertiary)',
-            cursor: 'default',
-            userSelect: 'none',
-            flexShrink: 0,
-            letterSpacing: '0.02em',
-          }}
-        >
-          v{APP_VERSION}
-        </span>
+        {/* ⋯ overflow: chat-threads · export · soundscape · model-browser · version */}
+        <div style={{ position: 'relative' }}>
+          <button
+            ref={overflowBtnRef}
+            onClick={() => setOverflowOpen(o => !o)}
+            className="p-2 rounded-lg transition-all duration-200"
+            style={btnStyle(overflowOpen)}
+            title="More tools"
+            aria-label="More tools menu"
+            aria-haspopup="true"
+            aria-expanded={overflowOpen}
+          >
+            <MoreHorizontal size={18} />
+          </button>
+
+          {overflowOpen && (
+            <div
+              ref={overflowDropRef}
+              role="menu"
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 4px)',
+                right: 0,
+                minWidth: 220,
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 8,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+                zIndex: 50,
+                overflow: 'hidden',
+              }}
+            >
+              {onOpenSessions && (
+                <button
+                  role="menuitem"
+                  onClick={() => { setOverflowOpen(false); onOpenSessions(); }}
+                  className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                  style={{ color: 'var(--color-text-primary)' }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                >
+                  <MessageSquare size={14} /> Chat threads
+                </button>
+              )}
+              {onExport && (
+                <button
+                  role="menuitem"
+                  onClick={() => { setOverflowOpen(false); onExport(); }}
+                  className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                  style={{ color: 'var(--color-text-primary)' }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                >
+                  <Download size={14} /> Export as Text (.txt)
+                </button>
+              )}
+              {onExportMarkdown && (
+                <button
+                  role="menuitem"
+                  onClick={() => { setOverflowOpen(false); onExportMarkdown(); }}
+                  className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                  style={{ color: 'var(--color-text-primary)' }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                >
+                  <Download size={14} /> Export as Markdown (.md)
+                </button>
+              )}
+              {onExportJson && (
+                <button
+                  role="menuitem"
+                  onClick={() => { setOverflowOpen(false); onExportJson(); }}
+                  className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                  style={{ color: 'var(--color-text-primary)' }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                >
+                  <Download size={14} /> Export as JSON (.json)
+                </button>
+              )}
+              <button
+                role="menuitem"
+                onClick={() => { setOverflowOpen(false); toggleSoundscape(); }}
+                className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                style={{ color: soundscapeOpen ? 'var(--color-accent)' : 'var(--color-text-primary)' }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+              >
+                <Music size={14} /> Ambient sounds {soundscapeOpen ? '(on)' : ''}
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => { setOverflowOpen(false); openOverlay('modelbrowser'); }}
+                className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                style={{ color: 'var(--color-text-primary)' }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+              >
+                <Box size={14} /> Models
+              </button>
+              {/* Version footer — 5 rapid clicks still unlock Developer Mode */}
+              <div
+                style={{
+                  borderTop: '1px solid var(--color-border-subtle)',
+                  padding: '6px 16px',
+                  fontSize: 10,
+                  color: 'var(--color-text-tertiary)',
+                  letterSpacing: '0.02em',
+                  cursor: 'default',
+                  userSelect: 'none',
+                }}
+                onClick={handleVersionClick}
+                title={settingsTier >= 2 ? 'Developer Mode active' : 'v' + APP_VERSION}
+              >
+                v{APP_VERSION}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Search bar — slides down when open */}
+      {/* Search bar — slides down when open. Scope toggle replaces the
+          old standalone Globe icon: switching to "Global" hands the query
+          off to the existing global-search overlay (Alt+F equivalent). */}
       {searchOpen && (
         <div className="px-4 pb-2 flex items-center gap-2">
           <div className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg"
@@ -638,7 +642,7 @@ export function StatusBar({
               type="text"
               value={searchQuery}
               onChange={e => handleSearchChange(e.target.value)}
-              placeholder="Search messages..."
+              placeholder={searchScope === 'thread' ? 'Search messages in this thread...' : 'Search all chats...'}
               className="flex-1 bg-transparent outline-none text-sm"
               style={{ color: 'var(--color-text-primary)' }}
             />
@@ -647,6 +651,62 @@ export function StatusBar({
                 <X size={13} />
               </button>
             )}
+            {/* Scope segmented toggle */}
+            <div
+              role="tablist"
+              aria-label="Search scope"
+              style={{
+                display: 'flex',
+                gap: 0,
+                marginLeft: 8,
+                padding: 2,
+                borderRadius: 6,
+                backgroundColor: 'var(--color-border-subtle)',
+                flexShrink: 0,
+              }}
+            >
+              <button
+                role="tab"
+                aria-selected={searchScope === 'thread'}
+                onClick={() => setSearchScope('thread')}
+                style={{
+                  fontSize: 10,
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  backgroundColor: searchScope === 'thread' ? 'var(--color-surface)' : 'transparent',
+                  color: searchScope === 'thread' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                  fontWeight: 600,
+                  letterSpacing: '0.02em',
+                }}
+                title="Search only messages in this conversation"
+              >
+                Thread
+              </button>
+              <button
+                role="tab"
+                aria-selected={searchScope === 'global'}
+                onClick={() => {
+                  setSearchScope('global');
+                  setSearchOpen(false);
+                  onSearchChange?.('');
+                  openOverlay('search');
+                  // Reset back to thread for the next time the bar opens.
+                  setTimeout(() => setSearchScope('thread'), 0);
+                }}
+                style={{
+                  fontSize: 10,
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  backgroundColor: searchScope === 'global' ? 'var(--color-surface)' : 'transparent',
+                  color: searchScope === 'global' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                  fontWeight: 600,
+                  letterSpacing: '0.02em',
+                }}
+                title="Search across all characters and sessions (Alt+F)"
+              >
+                Global
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,6 +1,6 @@
 # Current Project Status
 
-**Last updated:** 2026-04-28 (session 19 end, post-restart turn)
+**Last updated:** 2026-04-28 (session 19 — Tier 4 turn end)
 **Branch:** master (clean, all pushed)
 **Schema version:** v70
 **Tests:** **2,684 backend** (pytest, 0 known failures) + 203 frontend (vitest) passing, tsc clean
@@ -10,11 +10,13 @@
 
 ## Active Work
 
-**Session 19 (2026-04-28) — 9 commits, all pushed to origin/master.**
+**Session 19 (2026-04-28) — 10 commits, all pushed to origin/master.**
 Pre-restart: `aef220a` Tier 0 audit · `3a1c60f` Tier 1 deletes · `b6485d8` db autocommit · `af39c53` handoff.
-Post-restart: `5ccf89a` date test fix · `62923e4` HUD Tier 2 (top toolbar 9→4 + ⋯ overflow) · `3bb8cce` `db_ctx` migration of 193 sites (**FD leak CLOSED**) · `fb77235` FD-leak regression test · `cc93e88` HUD Tier 3 (bottom toolbar 3 rows → 1) · `c4fadc5` HUD Tier 1b (sidebar 5-col → 6-col, fixes Help-orphan-row).
+Post-restart: `5ccf89a` date test fix · `62923e4` HUD Tier 2 (top toolbar 9→4 + ⋯ overflow) · `3bb8cce` `db_ctx` migration of 193 sites (**FD leak CLOSED**) · `fb77235` FD-leak regression test · `cc93e88` HUD Tier 3 (bottom toolbar 3 rows → 1) · `c4fadc5` HUD Tier 1b (sidebar 5-col → 6-col, fixes Help-orphan-row) · `fc3588a` mid-session handoff · `6120377` HUD Tier 4 (bond strip 4 rows → 1-line click-to-expand pill, +469/-180 lines).
 
-Nothing in progress. **Session 20 next priority:** HUD Tier 4 — bond strip simplify (4-row sticky chat header → 1 line, ~2h, first tier benefiting from `frontend-design` A/B/C variants) per `docs/plans/2026-04-27-hud-redesign-staged.md`. See `docs/SESSION_HANDOFF.md`.
+**Open bug — UNFIXED, blocks Tier 4 declared-shipped:** at user's actual Chrome window (innerWH 1440x900, dpr 1, zoom 100%) the app renders top-left-anchored with significant void below + right. Diagnostic shows `root.height=900` matching `innerHeight=900` — yet user's screenshots clearly show the app NOT filling the Chrome viewport. Could not reproduce in Playwright at any viewport (998×624, 1440×900, 1995×1248). Hypothesis to chase first next session: stale service worker (`/sw.js`) serving cached pre-Tier-4 bundle. See `docs/SESSION_HANDOFF.md` "Open bug" section for the full investigation plan.
+
+**Next session priority:** debug + fix the Tier 4 layout regression above. Then pause + evaluate Tier 4 per plan, then decide between Tier 5 / 6 / pill size bump / right-cluster overflow fix.
 
 ## Completed This Session (Session 18 — Memory Browser unification + 3D viewer crash fix + HUD redesign plan)
 

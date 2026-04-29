@@ -4,27 +4,8 @@ import type { Character } from '../lib/types';
 import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
 import { RELEASE_NOTES } from '../data/changelog';
-import { StreakBadge } from './StreakBadge';
-import { BondProgressBar } from './BondProgressBar';
+import { BondPill } from './BondPill';
 import { ContextBudgetPill } from './ContextBudgetPill';
-
-/** Map bond tier keys to badge colors. */
-const TIER_BADGE_COLORS: Record<string, string> = {
-  stranger: 'var(--color-text-tertiary)',
-  acquaintance: '#60a5fa',
-  friend: '#34d399',
-  close_friend: '#a78bfa',
-  soulmate: '#fbbf24',
-};
-
-/** Map bond tier keys to display labels. */
-const TIER_BADGE_LABELS: Record<string, string> = {
-  stranger: 'Stranger',
-  acquaintance: 'Acquaintance',
-  friend: 'Friend',
-  close_friend: 'Close Friend',
-  soulmate: 'Soulmate',
-};
 
 /** Current app version, sourced from the latest changelog entry. */
 const APP_VERSION = RELEASE_NOTES[0]?.version ?? '0.0.0';
@@ -64,139 +45,6 @@ const IDLE_PHRASES = [
   'thinking about you...',
   'gazing out the window...'
 ];
-
-/** Maps 0-1 score to a warm→cool hue via CSS color-mix. */
-function scoreColor(v: number): string {
-  if (v >= 0.7) return 'var(--color-success)';
-  if (v >= 0.4) return 'var(--color-accent)';
-  return 'var(--color-text-tertiary)';
-}
-
-/** Affinity tiers — map 0–1 affinity value to a label and accent color. */
-const AFFINITY_TIERS = [
-  { min: 0.90, label: 'Soulmate', color: 'var(--color-accent)' },
-  { min: 0.70, label: 'Devoted',  color: 'var(--color-success)' },
-  { min: 0.50, label: 'Close',    color: 'var(--color-accent)' },
-  { min: 0.30, label: 'Friendly', color: 'var(--color-text-secondary)' },
-  { min: 0.00, label: 'Neutral',  color: 'var(--color-text-tertiary)' },
-] as const;
-
-function getAffinityTier(affinity: number) {
-  return AFFINITY_TIERS.find(t => affinity >= t.min) ?? AFFINITY_TIERS[AFFINITY_TIERS.length - 1];
-}
-
-interface RelationshipData {
-  affinity: number;
-  mood: number;
-  trust: number;
-  interactions: number;
-}
-
-/**
- * Three tiny colored progress bars (affinity, mood, trust) showing the
- * current character's relationship health. Re-fetches whenever messageCount
- * changes (i.e. after each assistant reply).
- */
-function RelationshipBar({ charId, messageCount }: { charId: number; messageCount: number }) {
-  const [rel, setRel] = useState<RelationshipData | null>(null);
-  /** Rolling window of the last 10 affinity readings (oldest → newest). */
-  const affinityHistory = useRef<number[]>([]);
-
-  useEffect(() => {
-    api.getRelationship(charId)
-      .then(data => {
-        setRel(data);
-        // Keep a rolling window of the last 10 readings
-        affinityHistory.current = [...affinityHistory.current.slice(-9), data.affinity];
-      })
-      .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [charId, messageCount]);
-
-  if (!rel) return null;
-
-  const tier = getAffinityTier(rel.affinity);
-  const stats: Array<{ key: keyof RelationshipData; emoji: string; label: string }> = [
-    { key: 'affinity', emoji: '♥', label: 'Affinity' },
-    { key: 'mood',     emoji: '✦', label: 'Mood' },
-    { key: 'trust',    emoji: '◈', label: 'Trust' },
-  ];
-
-  return (
-    <div className="flex items-center gap-2 mt-0.5" style={{ flexWrap: 'nowrap' }}>
-      {/* Tier badge */}
-      <span
-        title={`Affinity: ${Math.round(rel.affinity * 100)}%`}
-        style={{
-          fontSize: 10,
-          fontWeight: 700,
-          padding: '1px 6px',
-          borderRadius: 99,
-          border: `1px solid ${tier.color}`,
-          color: tier.color,
-          lineHeight: 1.6,
-          letterSpacing: '0.02em',
-          flexShrink: 0,
-        }}
-      >
-        {tier.label}
-      </span>
-
-      {stats.map(({ key, emoji, label }) => (
-        <div key={key} className="flex items-center gap-1" title={`${label}: ${(rel[key] as number * 100).toFixed(0)}%`}>
-          <span style={{ fontSize: '10px', color: scoreColor(rel[key] as number), lineHeight: 1 }}>
-            {emoji}
-          </span>
-          <div style={{ width: 28, height: 4, borderRadius: 99, backgroundColor: 'var(--color-border)' }}>
-            <div
-              style={{
-                width: `${Math.round((rel[key] as number) * 100)}%`,
-                height: '100%',
-                borderRadius: 99,
-                backgroundColor: scoreColor(rel[key] as number),
-                transition: 'width 0.6s ease',
-              }}
-            />
-          </div>
-        </div>
-      ))}
-
-      <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)', flexShrink: 0 }}>
-        {rel.interactions}×
-      </span>
-
-      {/* Affinity sparkline — inline at the right end of the bar row, shown once ≥ 3 readings */}
-      {affinityHistory.current.length >= 3 && (() => {
-        const h = affinityHistory.current;
-        const W = 48, H = 14;
-        const minV = Math.min(...h);
-        const maxV = Math.max(...h);
-        const range = maxV - minV || 0.01;
-        const pts = h.map((v, i) => {
-          const x = (i / (h.length - 1)) * W;
-          const y = H - ((v - minV) / range) * (H - 2) - 1;
-          return `${x.toFixed(1)},${y.toFixed(1)}`;
-        }).join(' ');
-        const last = h[h.length - 1];
-        const lastY = H - ((last - minV) / range) * (H - 2) - 1;
-        return (
-          <svg
-            width={W} height={H} viewBox={`0 0 ${W} ${H}`}
-            style={{ flexShrink: 0, opacity: 0.75 }}
-            aria-label="Affinity trend" role="img"
-          >
-            <polyline
-              points={pts} fill="none"
-              stroke="var(--color-accent)" strokeWidth="1.5"
-              strokeLinecap="round" strokeLinejoin="round"
-            />
-            <circle cx={W} cy={lastY} r="2" fill="var(--color-accent)" />
-          </svg>
-        );
-      })()}
-    </div>
-  );
-}
 
 /**
  * Chat header with character name, online indicator, idle status, relationship
@@ -434,39 +282,18 @@ export function StatusBar({
             </span>
             {/* Feature B4: Author's Note active badge */}
             <AuthorNoteBadge sessionId={sessionId} />
-            {/* Feature T1-8: Daily interaction streak badge */}
-            <StreakBadge charId={character.id} messageCount={messageCount} />
-            {/* Bond tier badge */}
-            {bondLevel > 0 && (
-              <span
-                className="flex-shrink-0"
-                title={`Bond Level ${bondLevel} — ${TIER_BADGE_LABELS[bondTier] ?? bondTier}`}
-                style={{
-                  fontSize: 9,
-                  fontWeight: 700,
-                  padding: '1px 5px',
-                  borderRadius: 6,
-                  color: TIER_BADGE_COLORS[bondTier] ?? 'var(--color-text-tertiary)',
-                  backgroundColor: `color-mix(in srgb, ${TIER_BADGE_COLORS[bondTier] ?? 'var(--color-text-tertiary)'} 12%, transparent)`,
-                  letterSpacing: '0.04em',
-                  lineHeight: 1.5,
-                }}
-              >
-                Lv{bondLevel}
-              </span>
-            )}
           </div>
-          <p className="text-xs truncate" style={{ color: 'var(--color-text-tertiary)' }}>
-            {idlePhrase}
-          </p>
-          <RelationshipBar charId={character.id} messageCount={messageCount} />
-          {/* Bond XP progress bar — compact inline version */}
-          <BondProgressBar
+          {/* HUD Tier 4: single-line bond pill replaces idle phrase, RelationshipBar,
+              BondProgressBar, the inline Lv badge, and StreakBadge. Click expands. */}
+          <BondPill
+            charId={character.id}
             bondLevel={bondLevel}
             bondXp={bondXp}
             xpToNext={bondXpToNext}
             tier={bondTier}
             nextUnlock={bondNextUnlock}
+            messageCount={messageCount}
+            idlePhrase={idlePhrase}
           />
         </div>
 

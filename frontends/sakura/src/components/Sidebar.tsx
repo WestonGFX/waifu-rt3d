@@ -363,11 +363,14 @@ export function Sidebar() {
               <HelpDropdown />
             </div>
           ) : (
-            /* Expanded: 5-column icon grid with labels below */
+            /* Expanded: 6-column icon grid with labels below — fits all 5
+               TOOLS + Help on one row. NotificationBadge (rendered after
+               Help) wraps to row 2 only when an unread notification exists,
+               which is the rare case; default state is 1 row. */
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(5, 1fr)',
+                gridTemplateColumns: 'repeat(6, 1fr)',
                 gap: 2,
                 padding: '6px 8px',
               }}

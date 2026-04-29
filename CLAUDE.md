@@ -10,6 +10,16 @@ Waifu-RT3D is an **emotional AI companion platform** — not a chatbot, not a ga
 
 - **Bias heavily toward ACTION over PLANNING.** If a plan file already exists, do not rewrite it — execute it. Only create a new plan if explicitly asked. When in doubt, write code.
 
+## Push & PR Discipline
+
+Never `git push`, `gh pr create`, or `gh pr merge` while either `docs/SESSION_HANDOFF.md` or `CURRENT_STATUS.md` contain an active `OPEN BUG`, `UNFIXED`, or `⚠ BLOCKER` marker (**"active"** = not wrapped in `~~strikethrough~~`). Local commits are fine; the line is at the point where work becomes externally visible.
+
+**Before any push or PR action,** scan both files for those three trigger phrases. If any appear in an active section, STOP. Tell the user what was found, point at the file:line, and ask whether to proceed. Do not push.
+
+**Override:** only when the user explicitly says "push anyway" / "override the rule" / "ignore the bug for now" or similar in the same turn. Do not infer permission from earlier turns or from general approval to ship the feature.
+
+**Why this exists:** in session 19 (Tier 4 turn) Claude pushed a commit while `docs/SESSION_HANDOFF.md` literally contained `OPEN BUG — UNFIXED` describing a layout regression the user could see and Claude could not reproduce. The push was the wrong action — user feedback on the bug was still being gathered.
+
 ## Working Style
 
 - **Be decisive.** When the user gives a directive, execute it broadly. Prefer action over clarification. Do not ask 3 questions when 1 will do. If the intent is 80% clear, act on it and course-correct if needed.

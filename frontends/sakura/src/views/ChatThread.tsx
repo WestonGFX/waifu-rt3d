@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles } from 'lucide-react';
-import { WhisperModeToggle, QuickFireToggle } from '../components/ChatModeToggles';
+import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles, SlidersHorizontal, Check, MessageCircle, Zap } from 'lucide-react';
 import { VNTextBox } from '../components/VNTextBox';
 import { VNPortrait } from '../components/VNPortrait';
 import { useAppStore } from '../stores/appStore';
@@ -210,11 +209,32 @@ export function ChatThread() {
   const [whisperMode, setWhisperMode] = useState(false);
   const [quickFireMode, setQuickFireMode] = useState(false);
 
+  // ── Tier 3 HUD: ⚙ Modes inline popover ─────────────────────────────────
+  // Holds the 5 mode toggles + whisper + quickfire that previously lived in
+  // their own row above the composer. Collapses 3 rows → 1 row.
+  const [modesOpen, setModesOpen] = useState(false);
+  const modesBtnRef = useRef<HTMLButtonElement>(null);
+  const modesMenuRef = useRef<HTMLDivElement>(null);
+
   // ── Feature A1: Full-duplex voice conversation mode ─────────────────────
   const [fullDuplexVoice, setFullDuplexVoice] = useState(false);
 
   // ── Phase 12-P5: Character ambient audio ──────────────────────────────
   useCharacterAudio();
+
+  // Tier 3 HUD: close ⚙ Modes popover on outside click.
+  useEffect(() => {
+    if (!modesOpen) return;
+    const handle = (e: MouseEvent) => {
+      if (
+        modesMenuRef.current?.contains(e.target as Node) ||
+        modesBtnRef.current?.contains(e.target as Node)
+      ) return;
+      setModesOpen(false);
+    };
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [modesOpen]);
 
   // ── Feature B3: VN reader — index of the message currently shown ────────
   // Starts at last message; advances to next on each "advance" action.
@@ -1260,154 +1280,202 @@ export function ChatThread() {
               </div>
             )}
 
-            {/* F27 + F36: Intimate mode toggles — secondary row, only in RP modes.
-                Kept out of the main composer row to preserve textarea width. */}
-            {rpStyle !== 'none' && (
-              <div className="flex items-center gap-1 mb-1.5">
-                <WhisperModeToggle
-                  active={whisperMode}
-                  onToggle={() => setWhisperMode(!whisperMode)}
-                />
-                <QuickFireToggle
-                  active={quickFireMode}
-                  onToggle={() => setQuickFireMode(!quickFireMode)}
-                />
-              </div>
-            )}
-
-            {/* Composer toolbar + input area */}
-            <div className="flex flex-col gap-1 w-full min-w-0">
-            {/* Toolbar row — icon buttons + badges */}
-            <div className="flex items-center gap-1 flex-wrap">
-              {/* Scenario Library trigger */}
-              <button
-                onClick={() => openOverlay('scenarios')}
-                title="Scenario library (Alt+I)"
-                aria-label="Open scenario library"
-                className="p-2 rounded-lg transition-all duration-150 flex-shrink-0 text-base leading-none"
-                style={{ color: 'var(--color-text-tertiary)' }}
-              >
-                <BookOpen size={16} />
-              </button>
-
-              {/* Per-character scenario picker */}
-              <button
-                onClick={() => openOverlay('scenariopicker')}
-                title="Scenario picker — set scene context for this session"
-                aria-label="Open scenario picker"
-                className="p-2 rounded-lg transition-all duration-150 flex-shrink-0 text-base leading-none"
-                style={{ color: 'var(--color-text-tertiary)' }}
-              >
-                <Sparkles size={16} />
-              </button>
-
-              {/* Feature B3: Visual Novel reader mode toggle */}
-              <button
-                onClick={toggleVnMode}
-                title={vnMode ? 'Exit VN reader mode' : 'Visual Novel reader mode'}
-                aria-label="Toggle visual novel reader mode"
-                aria-pressed={vnMode}
-                className="p-2 rounded-lg transition-all duration-150 flex-shrink-0 text-base leading-none"
-                style={{
-                  backgroundColor: vnMode ? 'var(--color-accent-soft)' : 'transparent',
-                  color: vnMode ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
-                  boxShadow: vnMode ? '0 0 8px var(--color-accent-soft)' : 'none',
-                }}
-              >
-                <Tv size={16} />
-              </button>
-
-              {/* Gesture picker toggle button */}
-              <button
-                onClick={() => setGesturePickerOpen(o => !o)}
-                title="Gesture & expression picker"
-                aria-label="Toggle gesture picker"
-                aria-pressed={gesturePickerOpen}
-                className="p-2 rounded-lg transition-all duration-150 flex-shrink-0 text-base leading-none"
-                style={{
-                  backgroundColor: gesturePickerOpen ? 'var(--color-accent-soft)' : 'transparent',
-                  color: gesturePickerOpen ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
-                  boxShadow: gesturePickerOpen ? '0 0 8px var(--color-accent-soft)' : 'none',
-                }}
-              >
-                <Drama size={16} />
-              </button>
-
-              {/* Director Mode toggle — sends OOC stage directions instead of chat */}
-              <button
-                onClick={() => setDirectorMode(!directorMode)}
-                title={directorMode ? 'Exit director mode' : 'Director mode — send stage directions'}
-                aria-label="Toggle director mode"
-                aria-pressed={directorMode}
-                className="p-2 rounded-lg transition-all duration-150 flex-shrink-0 text-base leading-none"
-                style={{
-                  backgroundColor: directorMode ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
-                  color: directorMode ? 'rgb(245, 158, 11)' : 'var(--color-text-tertiary)',
-                  boxShadow: directorMode ? '0 0 8px rgba(245, 158, 11, 0.2)' : 'none',
-                }}
-              >
-                <Clapperboard size={16} />
-              </button>
-
-              {/* Reply length badge — cycles through brief/normal/detailed/auto on click */}
-              <button
-                onClick={cycleReplyLengthMode}
-                title={`Reply length: ${replyLengthMode}. Click to cycle.`}
-                aria-label={`Reply length mode: ${replyLengthMode}`}
-                className="flex-shrink-0 flex flex-col items-center justify-center leading-none rounded-lg px-1.5 py-1 transition-all duration-150"
-                style={{
-                  color: replyLengthMode !== 'normal' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
-                  backgroundColor: replyLengthMode !== 'normal' ? 'var(--color-accent-soft)' : 'transparent',
-                  minWidth: 36,
-                }}
-              >
-                <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'capitalize', lineHeight: 1.2 }}>
-                  {replyLengthMode === 'brief' ? 'Len: Brief' :
-                   replyLengthMode === 'detailed' ? 'Len: Long' :
-                   replyLengthMode === 'auto' ? 'Len: Auto' : 'Len: Norm'}
-                </span>
-                {replyLengthMode === 'auto' && (
-                  <span style={{ fontSize: 9, color: 'var(--color-text-tertiary)', lineHeight: 1.2 }}>
-                    {effectiveMaxTokens}t
-                  </span>
-                )}
-              </button>
-
-              {/* Content filter badge — cycles Off → 18+ → SFW → Off */}
-              <button
-                onClick={cycleContentFilter}
-                title={`Content filter: ${filterLabel}. Click to cycle. (Off → NSFW → SFW → Off)`}
-                aria-label={`Content filter: ${filterLabel}`}
-                className="flex-shrink-0 flex items-center gap-1 justify-center leading-none rounded-lg px-1.5 py-1 transition-all duration-150"
-                style={{
-                  color: filterColor ?? 'var(--color-text-tertiary)',
-                  backgroundColor: contentFilterLevel !== 0 ? 'var(--color-accent-soft)' : 'transparent',
-                  minWidth: 32,
-                }}
-              >
-                <Shield size={11} />
-                <span style={{ fontSize: 9, fontWeight: 600, lineHeight: 1.2 }}>{filterLabel}</span>
-              </button>
-
-              {/* RP style badge — cycles Chat → RP → RP+ → 18+RP → Chat */}
-              <button
-                onClick={cycleRpStyle}
-                title={`RP style: ${rpLabel}. Click to cycle. (Chat → Light RP → Full RP → Explicit RP → Chat)`}
-                aria-label={`RP style: ${rpLabel}`}
-                className="flex-shrink-0 flex items-center gap-1 justify-center leading-none rounded-lg px-1.5 py-1 transition-all duration-150"
-                style={{
-                  color: rpStyle !== 'none' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
-                  backgroundColor: rpStyle !== 'none' ? 'var(--color-accent-soft)' : 'transparent',
-                  minWidth: 32,
-                }}
-              >
-                <Sparkles size={11} />
-                <span style={{ fontSize: 9, fontWeight: 600, lineHeight: 1.2 }}>{rpLabel}</span>
-              </button>
-
-            </div>
-            {/* Input row — textarea + voice + send */}
+            {/* Tier 3 HUD: 1-row composer (was 3 rows). ⚙ Modes popover holds
+                the 5 mode toggles + whisper + quickfire. Segmented status
+                pill renders the 3 cycle controls inline. Voice icons + send
+                stay where they were. */}
             <div className="flex items-end gap-2 w-full min-w-0">
+              {/* ⚙ Modes inline popover */}
+              {(() => {
+                const anyModeOn = vnMode || gesturePickerOpen || directorMode || whisperMode || quickFireMode;
+                return (
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <button
+                      ref={modesBtnRef}
+                      onClick={() => setModesOpen(o => !o)}
+                      title="Composer modes (scenarios, gestures, director, whisper, quickfire)"
+                      aria-label="Toggle composer modes menu"
+                      aria-haspopup="true"
+                      aria-expanded={modesOpen}
+                      className="p-2 rounded-lg transition-all duration-150"
+                      style={{
+                        backgroundColor: modesOpen || anyModeOn ? 'var(--color-accent-soft)' : 'transparent',
+                        color: modesOpen || anyModeOn ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                        boxShadow: anyModeOn ? '0 0 8px var(--color-accent-soft)' : 'none',
+                      }}
+                    >
+                      <SlidersHorizontal size={16} />
+                    </button>
+                    {modesOpen && (
+                      <div
+                        ref={modesMenuRef}
+                        role="menu"
+                        style={{
+                          position: 'absolute',
+                          bottom: 'calc(100% + 4px)',
+                          left: 0,
+                          minWidth: 220,
+                          backgroundColor: 'var(--color-surface)',
+                          border: '1px solid var(--color-border)',
+                          borderRadius: 8,
+                          boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+                          zIndex: 50,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <button
+                          role="menuitem"
+                          onClick={() => { setModesOpen(false); openOverlay('scenarios'); }}
+                          className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                          style={{ color: 'var(--color-text-primary)' }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                        >
+                          <BookOpen size={14} /> Scenario library
+                        </button>
+                        <button
+                          role="menuitem"
+                          onClick={() => { setModesOpen(false); openOverlay('scenariopicker'); }}
+                          className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                          style={{ color: 'var(--color-text-primary)' }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                        >
+                          <Sparkles size={14} /> Scenario picker
+                        </button>
+                        <button
+                          role="menuitemcheckbox"
+                          aria-checked={vnMode}
+                          onClick={toggleVnMode}
+                          className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                          style={{ color: vnMode ? 'var(--color-accent)' : 'var(--color-text-primary)' }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                        >
+                          <Tv size={14} /> Visual Novel mode
+                          {vnMode && <Check size={12} style={{ marginLeft: 'auto' }} />}
+                        </button>
+                        <button
+                          role="menuitemcheckbox"
+                          aria-checked={gesturePickerOpen}
+                          onClick={() => setGesturePickerOpen(o => !o)}
+                          className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                          style={{ color: gesturePickerOpen ? 'var(--color-accent)' : 'var(--color-text-primary)' }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                        >
+                          <Drama size={14} /> Gesture picker
+                          {gesturePickerOpen && <Check size={12} style={{ marginLeft: 'auto' }} />}
+                        </button>
+                        <button
+                          role="menuitemcheckbox"
+                          aria-checked={directorMode}
+                          onClick={() => setDirectorMode(!directorMode)}
+                          className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                          style={{ color: directorMode ? 'rgb(245, 158, 11)' : 'var(--color-text-primary)' }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                        >
+                          <Clapperboard size={14} /> Director mode
+                          {directorMode && <Check size={12} style={{ marginLeft: 'auto' }} />}
+                        </button>
+                        {rpStyle !== 'none' && (
+                          <>
+                            <div style={{ borderTop: '1px solid var(--color-border-subtle)', margin: '2px 0' }} />
+                            <button
+                              role="menuitemcheckbox"
+                              aria-checked={whisperMode}
+                              onClick={() => setWhisperMode(!whisperMode)}
+                              className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                              style={{ color: whisperMode ? 'rgb(139, 92, 246)' : 'var(--color-text-primary)' }}
+                              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                              onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                            >
+                              <MessageCircle size={14} /> Whisper mode
+                              {whisperMode && <Check size={12} style={{ marginLeft: 'auto' }} />}
+                            </button>
+                            <button
+                              role="menuitemcheckbox"
+                              aria-checked={quickFireMode}
+                              onClick={() => setQuickFireMode(!quickFireMode)}
+                              className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                              style={{ color: quickFireMode ? 'rgb(249, 115, 22)' : 'var(--color-text-primary)' }}
+                              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                              onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                            >
+                              <Zap size={14} /> Quickfire mode
+                              {quickFireMode && <Check size={12} style={{ marginLeft: 'auto' }} />}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Segmented status pill — Brief · Off · 18+RP. Each segment is
+                  its own click-to-cycle button. Visually unified into one pill. */}
+              <div
+                className="flex items-center rounded-lg"
+                style={{
+                  backgroundColor: 'var(--color-background)',
+                  border: '1px solid var(--color-border-subtle)',
+                  flexShrink: 0,
+                  alignSelf: 'center',
+                }}
+              >
+                <button
+                  onClick={cycleReplyLengthMode}
+                  title={`Reply length: ${replyLengthMode}. Click to cycle.`}
+                  aria-label={`Reply length mode: ${replyLengthMode}`}
+                  className="px-2 py-1 transition-all duration-150"
+                  style={{
+                    color: replyLengthMode !== 'normal' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    lineHeight: 1.2,
+                    minWidth: 40,
+                  }}
+                >
+                  {replyLengthMode === 'brief' ? 'Brief' :
+                   replyLengthMode === 'detailed' ? 'Long' :
+                   replyLengthMode === 'auto' ? `Auto·${effectiveMaxTokens}t` : 'Norm'}
+                </button>
+                <span style={{ color: 'var(--color-text-tertiary)', fontSize: 10, opacity: 0.5 }}>·</span>
+                <button
+                  onClick={cycleContentFilter}
+                  title={`Content filter: ${filterLabel}. Click to cycle. (Off → NSFW → SFW → Off)`}
+                  aria-label={`Content filter: ${filterLabel}`}
+                  className="px-2 py-1 transition-all duration-150 flex items-center gap-1"
+                  style={{
+                    color: filterColor ?? 'var(--color-text-tertiary)',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  <Shield size={10} />
+                  {contentFilterLevel === -1 ? '18+' : contentFilterLevel === 1 ? 'SFW' : 'Off'}
+                </button>
+                <span style={{ color: 'var(--color-text-tertiary)', fontSize: 10, opacity: 0.5 }}>·</span>
+                <button
+                  onClick={cycleRpStyle}
+                  title={`RP style: ${rpLabel}. Click to cycle. (Chat → Light RP → Full RP → Explicit RP → Chat)`}
+                  aria-label={`RP style: ${rpLabel}`}
+                  className="px-2 py-1 transition-all duration-150 flex items-center gap-1"
+                  style={{
+                    color: rpStyle !== 'none' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  <Sparkles size={10} />
+                  {rpStyle === 'light_rp' ? 'RP' : rpStyle === 'full_rp' ? 'RP+' : rpStyle === 'explicit_rp' ? '18+RP' : 'Chat'}
+                </button>
+              </div>
+
               {/* Text input */}
               <textarea
                 ref={textareaRef}
@@ -1544,7 +1612,6 @@ export function ChatThread() {
                   <Send size={16} />
                 </button>
               )}
-            </div>
             </div>
           </div>
         </div>

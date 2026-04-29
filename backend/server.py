@@ -1059,9 +1059,8 @@ def health_check():
 
     db_status = "connected"
     try:
-        con = db()
-        con.execute("SELECT 1")
-        con.close()
+        with db_ctx() as con:
+            con.execute("SELECT 1")
     except Exception:
         db_status = "error"
 
@@ -1650,8 +1649,7 @@ def get_content_gate():
             "per_character_ceilings": {<char_id>: <ceiling>, ...}
         }
     """
-    con = db()
-    try:
+    with db_ctx() as con:
         row = con.execute(
             "SELECT global_content_ceiling, age_verified, "
             "content_lock_enabled FROM content_gate_config WHERE id = 1"
@@ -1674,8 +1672,6 @@ def get_content_gate():
             "content_lock_enabled": bool(row[2]),
             "per_character_ceilings": per_char,
         }
-    finally:
-        con.close()
 
 
 @app.put("/api/content-gate")
@@ -1700,8 +1696,7 @@ async def update_content_gate(req: Request):
     if ceiling not in CONTENT_RATING_ORDER:
         raise HTTPException(400, f"Invalid ceiling: {ceiling}. Must be one of {CONTENT_RATING_ORDER}")
 
-    con = db()
-    try:
+    with db_ctx() as con:
         row = con.execute(
             "SELECT age_verified, content_lock_enabled, "
             "content_lock_password_hash FROM content_gate_config WHERE id = 1"
@@ -1727,8 +1722,6 @@ async def update_content_gate(req: Request):
         )
         con.commit()
         return {"ok": True, "global_content_ceiling": ceiling}
-    finally:
-        con.close()
 
 
 @app.post("/api/content-gate/verify-age")
@@ -1747,16 +1740,13 @@ async def verify_age(req: Request):
     body = await req.json()
     if not body.get("confirmed"):
         raise HTTPException(400, "Must send {\"confirmed\": true}")
-    con = db()
-    try:
+    with db_ctx() as con:
         con.execute(
             "UPDATE content_gate_config SET age_verified = 1, "
             "updated_at = datetime('now') WHERE id = 1"
         )
         con.commit()
         return {"ok": True, "age_verified": True}
-    finally:
-        con.close()
 
 
 @app.post("/api/content-gate/lock")
@@ -1777,8 +1767,7 @@ async def set_content_lock(req: Request):
     if not password or len(password) < 4:
         raise HTTPException(400, "Password must be at least 4 characters")
     hashed = hash_content_lock_password(password)
-    con = db()
-    try:
+    with db_ctx() as con:
         con.execute(
             "UPDATE content_gate_config SET content_lock_enabled = 1, "
             "content_lock_password_hash = ?, updated_at = datetime('now') "
@@ -1787,8 +1776,6 @@ async def set_content_lock(req: Request):
         )
         con.commit()
         return {"ok": True, "content_lock_enabled": True}
-    finally:
-        con.close()
 
 
 @app.post("/api/content-gate/unlock")
@@ -1806,8 +1793,7 @@ async def unlock_content(req: Request):
     """
     body = await req.json()
     password = body.get("password", "")
-    con = db()
-    try:
+    with db_ctx() as con:
         row = con.execute(
             "SELECT content_lock_password_hash FROM content_gate_config WHERE id = 1"
         ).fetchone()
@@ -1821,8 +1807,6 @@ async def unlock_content(req: Request):
         )
         con.commit()
         return {"ok": True, "content_lock_enabled": False}
-    finally:
-        con.close()
 
 
 @app.put("/api/content-gate/character/{char_id}")
@@ -1843,8 +1827,7 @@ async def set_character_ceiling(char_id: int, req: Request):
     body = await req.json()
     ceiling = body.get("ceiling")
 
-    con = db()
-    try:
+    with db_ctx() as con:
         # Remove override
         if ceiling is None:
             con.execute(
@@ -1874,8 +1857,6 @@ async def set_character_ceiling(char_id: int, req: Request):
         )
         con.commit()
         return {"ok": True, "char_id": char_id, "ceiling": ceiling}
-    finally:
-        con.close()
 
 
 # ── Privacy Controls API (Phase 19D) ──────────────────────────────────
@@ -1893,13 +1874,28 @@ def get_privacy_settings():
             "intimacy_tracking": bool
         }
     """
-    con = db()
-    try:
-        row = con.execute(
-            "SELECT signal_collection, preference_learning, behavior_adaptation, "
-            "topic_tracking, intimacy_tracking FROM privacy_settings WHERE id = 1"
-        ).fetchone()
-        if not row:
+    with db_ctx() as con:
+        try:
+            row = con.execute(
+                "SELECT signal_collection, preference_learning, behavior_adaptation, "
+                "topic_tracking, intimacy_tracking FROM privacy_settings WHERE id = 1"
+            ).fetchone()
+            if not row:
+                return {
+                    "signal_collection": True,
+                    "preference_learning": True,
+                    "behavior_adaptation": True,
+                    "topic_tracking": True,
+                    "intimacy_tracking": True,
+                }
+            return {
+                "signal_collection": bool(row[0]),
+                "preference_learning": bool(row[1]),
+                "behavior_adaptation": bool(row[2]),
+                "topic_tracking": bool(row[3]),
+                "intimacy_tracking": bool(row[4]),
+            }
+        except Exception:
             return {
                 "signal_collection": True,
                 "preference_learning": True,
@@ -1907,23 +1903,6 @@ def get_privacy_settings():
                 "topic_tracking": True,
                 "intimacy_tracking": True,
             }
-        return {
-            "signal_collection": bool(row[0]),
-            "preference_learning": bool(row[1]),
-            "behavior_adaptation": bool(row[2]),
-            "topic_tracking": bool(row[3]),
-            "intimacy_tracking": bool(row[4]),
-        }
-    except Exception:
-        return {
-            "signal_collection": True,
-            "preference_learning": True,
-            "behavior_adaptation": True,
-            "topic_tracking": True,
-            "intimacy_tracking": True,
-        }
-    finally:
-        con.close()
 
 
 @app.put("/api/privacy")
@@ -1947,8 +1926,7 @@ async def update_privacy_settings(req: Request):
     if not updates:
         raise HTTPException(400, "No valid privacy settings provided")
 
-    con = db()
-    try:
+    with db_ctx() as con:
         set_clause = ", ".join(f"{k} = ?" for k in updates)
         con.execute(
             f"UPDATE privacy_settings SET {set_clause}, "
@@ -1957,8 +1935,6 @@ async def update_privacy_settings(req: Request):
         )
         con.commit()
         return {"ok": True, "settings": get_privacy_settings()}
-    finally:
-        con.close()
 
 
 @app.get("/api/privacy/export")
@@ -1972,9 +1948,8 @@ def export_personalization_data():
             "privacy_settings": {...}
         }
     """
-    con = db()
-    con.row_factory = sqlite3.Row
-    try:
+    with db_ctx() as con:
+        con.row_factory = sqlite3.Row
         signals = []
         try:
             rows = con.execute(
@@ -2008,8 +1983,6 @@ def export_personalization_data():
             "preference_history": prefs,
             "privacy_settings": privacy,
         }
-    finally:
-        con.close()
 
 
 @app.post("/api/privacy/purge")
@@ -2019,9 +1992,8 @@ async def purge_personalization_data():
     Returns:
         {"ok": True, "deleted": {"engagement_signals": int, "preference_history": int}}
     """
-    con = db()
-    deleted = {"engagement_signals": 0, "preference_history": 0}
-    try:
+    with db_ctx() as con:
+        deleted = {"engagement_signals": 0, "preference_history": 0}
         try:
             cur = con.execute("SELECT COUNT(*) FROM engagement_signals")
             deleted["engagement_signals"] = cur.fetchone()[0]
@@ -2037,8 +2009,6 @@ async def purge_personalization_data():
         con.commit()
         logger.info(f"[Privacy] Purged personalization data: {deleted}")
         return {"ok": True, "deleted": deleted}
-    finally:
-        con.close()
 
 
 @app.get("/api/privacy/behavior-modifiers/{char_id}")
@@ -2051,11 +2021,8 @@ def get_behavior_modifiers(char_id: int):
     Returns:
         BehaviorModifier dict with biases, hints, and confidence.
     """
-    con = db()
-    try:
+    with db_ctx() as con:
         return compute_behavior_modifiers(char_id, con)
-    finally:
-        con.close()
 
 
 # --- AIE Phase B: Adaptive Intelligence Engine — Deep Learning endpoints ---
@@ -2082,8 +2049,7 @@ def get_preference_trends(char_id: int, days: int = 14):
         generate_trend_summary,
     )
 
-    con = db()
-    try:
+    with db_ctx() as con:
         trends = compute_preference_trends(char_id, con, window_days=days)
         engagement = detect_engagement_pattern(char_id, con)
         summary = generate_trend_summary(trends)
@@ -2092,8 +2058,6 @@ def get_preference_trends(char_id: int, days: int = 14):
             "engagement_pattern": engagement,
             "summary": summary,
         }
-    finally:
-        con.close()
 
 
 @app.post("/api/memory/decay-pass")
@@ -2111,12 +2075,9 @@ def trigger_decay_pass(prune_threshold: float = 0.05):
     """
     from backend.memory.decay import run_decay_pass
 
-    con = db()
-    try:
+    with db_ctx() as con:
         result = run_decay_pass(con, prune_threshold=prune_threshold)
         return result
-    finally:
-        con.close()
 
 
 @app.get("/api/adaptive/topics/{char_id}")
@@ -2136,32 +2097,30 @@ def get_tracked_topics(char_id: int, limit: int = 20):
         build_topic_context_block,
     )
 
-    con = db()
-    try:
-        con.row_factory = sqlite3.Row
-        # All topics
-        rows = con.execute(
-            "SELECT topic, mention_count, avg_sentiment, is_emerging, "
-            "first_seen_at, last_seen_at FROM topic_tracking "
-            "WHERE char_id = ? ORDER BY mention_count DESC LIMIT ?",
-            (char_id, limit),
-        ).fetchall()
-        topics = [dict(r) for r in rows]
+    with db_ctx() as con:
+        try:
+            con.row_factory = sqlite3.Row
+            # All topics
+            rows = con.execute(
+                "SELECT topic, mention_count, avg_sentiment, is_emerging, "
+                "first_seen_at, last_seen_at FROM topic_tracking "
+                "WHERE char_id = ? ORDER BY mention_count DESC LIMIT ?",
+                (char_id, limit),
+            ).fetchall()
+            topics = [dict(r) for r in rows]
 
-        emerging = get_emerging_topics(char_id, con, limit=5)
-        affinities = get_topic_affinities(char_id, con)
-        context_block = build_topic_context_block(char_id, con)
+            emerging = get_emerging_topics(char_id, con, limit=5)
+            affinities = get_topic_affinities(char_id, con)
+            context_block = build_topic_context_block(char_id, con)
 
-        return {
-            "topics": topics,
-            "emerging": emerging,
-            "affinities": affinities,
-            "context_block": context_block,
-        }
-    except sqlite3.OperationalError:
-        return {"topics": [], "emerging": [], "affinities": {}, "context_block": ""}
-    finally:
-        con.close()
+            return {
+                "topics": topics,
+                "emerging": emerging,
+                "affinities": affinities,
+                "context_block": context_block,
+            }
+        except sqlite3.OperationalError:
+            return {"topics": [], "emerging": [], "affinities": {}, "context_block": ""}
 
 
 @app.get("/api/adaptive/milestones/{char_id}")
@@ -2176,16 +2135,13 @@ def get_relationship_milestones(char_id: int):
     """
     from backend.adaptive.milestones import get_milestones, build_milestone_context
 
-    con = db()
-    try:
+    with db_ctx() as con:
         milestones = get_milestones(char_id, con)
         context = build_milestone_context(char_id, con)
         return {
             "milestones": milestones,
             "context_block": context,
         }
-    finally:
-        con.close()
 
 
 @app.post("/api/adaptive/self-critique/{char_id}")
@@ -3983,11 +3939,10 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 **({"command_type": _director_cmd_type} if _director_cmd_type else {})}
 
     cfg = load_config() or {}
-    con = db()
-    cur = con.cursor()
-    char_name = ""
+    with db_ctx() as con:
+        cur = con.cursor()
+        char_name = ""
 
-    try:
         cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)", (session_id, f"Session {session_id}"))
 
         # Score user message importance for context-aware pruning
@@ -4134,20 +4089,18 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
 
         # ── Feature 19: Behavior adaptation modifiers ──────────────────────
         try:
-            _content_con = db()
-            _behavior_mods = compute_behavior_modifiers(char_id, _content_con)
-            _content_con.close()
+            with db_ctx() as _content_con:
+                _behavior_mods = compute_behavior_modifiers(char_id, _content_con)
             if _behavior_mods.get("confidence", 0) > 0.1:
                 _behavior_block = build_behavior_prompt_block(_behavior_mods)
                 if _behavior_block:
                     system_prompt += "\n\n" + _behavior_block
                 # Self-correcting: check for engagement regression
-                _reg_con = db()
-                _regression = check_engagement_regression(char_id, _reg_con)
-                if _regression:
-                    revert_adaptations(char_id, _reg_con)
-                    logger.info(f"[Adaptive] Reverted adaptations for char={char_id}: {_regression}")
-                _reg_con.close()
+                with db_ctx() as _reg_con:
+                    _regression = check_engagement_regression(char_id, _reg_con)
+                    if _regression:
+                        revert_adaptations(char_id, _reg_con)
+                        logger.info(f"[Adaptive] Reverted adaptations for char={char_id}: {_regression}")
         except Exception as _beh_err:
             logger.debug(f"[Adaptive] Behavior modifiers skipped: {_beh_err}")
 
@@ -4326,9 +4279,8 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 _aie_emoji = len(re.findall(r"[\U0001F300-\U0001FFFF\u2600-\u27BF]", text))
                 _aie_questions = text.count("?")
                 _aie_context = classify_context(text, _aie_sentiment, _aie_emoji, _aie_questions)
-                _aie_signals_con = db()
-                _aie_recent = get_recent_signals(char_id, _aie_signals_con, limit=10)
-                _aie_signals_con.close()
+                with db_ctx() as _aie_signals_con:
+                    _aie_recent = get_recent_signals(char_id, _aie_signals_con, limit=10)
                 _aie_rolling = compute_rolling_averages(_aie_recent)
                 _aie_trend = _aie_rolling.get("sentiment_score", 0.0)
                 _aie_params = get_tuned_params(
@@ -4620,8 +4572,6 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             "context_budget": assembled_ns.budget_summary,
             "capability_warning": _cap_warning_ns,
         }
-    finally:
-        con.close()
 
 
 @app.get("/api/context-budget/{session_id}")
@@ -4647,10 +4597,9 @@ async def get_context_budget(session_id: int, char_id: int = None):
         {"ok": true, "sections": [...], "total_tokens": 4433, ...}
     """
     cfg = load_config() or {}
-    con = db()
-    cur = con.cursor()
+    with db_ctx() as con:
+        cur = con.cursor()
 
-    try:
         # Resolve char_id if not provided
         if not char_id:
             row = cur.execute(
@@ -4753,8 +4702,6 @@ async def get_context_budget(session_id: int, char_id: int = None):
             "usage_pct": usage_pct,
             "token_counter": "tiktoken" if _tik_avail() else "heuristic",
         }
-    finally:
-        con.close()
 
 
 @app.get("/api/dev/prompt-inspect/{session_id}")
@@ -4780,10 +4727,9 @@ async def dev_prompt_inspect(session_id: int, char_id: int = None):
         {"ok": true, "sections": [...], "history": {...}, ...}
     """
     cfg = load_config() or {}
-    con = db()
-    cur = con.cursor()
+    with db_ctx() as con:
+        cur = con.cursor()
 
-    try:
         # Resolve char_id from session if not provided
         if not char_id:
             row = cur.execute(
@@ -4905,8 +4851,6 @@ async def dev_prompt_inspect(session_id: int, char_id: int = None):
             "summaries": summaries,
             "token_counter": "tiktoken" if _tik_pi() else "heuristic",
         }
-    finally:
-        con.close()
 
 
 @app.post("/api/chat/multi")
@@ -4937,10 +4881,9 @@ async def chat_multi(req: Request):
         raise HTTPException(400, "'character_ids' must be a non-empty list")
 
     cfg = load_config() or {}
-    con = db()
-    cur = con.cursor()
+    with db_ctx() as con:
+        cur = con.cursor()
 
-    try:
         # Store user message once (with first char_id)
         cur.execute("INSERT OR IGNORE INTO sessions(id,title) VALUES (?,?)", (session_id, f"Session {session_id}"))
         cur.execute(
@@ -5052,8 +4995,6 @@ async def chat_multi(req: Request):
 
         return {"ok": True, "responses": responses}
 
-    finally:
-        con.close()
 
 
 async def _tts_chunk_async(tts_client, text: str, tts_cfg: dict, index: int) -> dict | None:
@@ -5559,9 +5500,8 @@ async def chat_stream(req: Request):
             _aie_s_emoji = len(re.findall(r"[\U0001F300-\U0001FFFF\u2600-\u27BF]", text))
             _aie_s_questions = text.count("?")
             _aie_s_context = classify_context(text, _aie_s_sentiment, _aie_s_emoji, _aie_s_questions)
-            _aie_s_signals_con = db()
-            _aie_s_recent = get_recent_signals(char_id, _aie_s_signals_con, limit=10)
-            _aie_s_signals_con.close()
+            with db_ctx() as _aie_s_signals_con:
+                _aie_s_recent = get_recent_signals(char_id, _aie_s_signals_con, limit=10)
             _aie_s_rolling = compute_rolling_averages(_aie_s_recent)
             _aie_s_trend = _aie_s_rolling.get("sentiment_score", 0.0)
             _aie_s_params = get_tuned_params(
@@ -6457,58 +6397,57 @@ def list_sessions(archived: bool = False, search: str = None):
         {"sessions": [{id, title, created_ts, message_count, is_pinned, is_archived,
                        last_message_ts, tags}]}
     """
-    conn = db()
-    cur = conn.cursor()
+    with db_ctx() as conn:
+        cur = conn.cursor()
 
-    try:
-        # Full query with pin/archive/tags support — pinned first, then by most recent activity
-        base_sql = """
-            SELECT s.id, s.title, s.created_ts,
-                   (SELECT COUNT(id) FROM messages WHERE session_id=s.id) as msg_count,
-                   COALESCE(s.is_pinned, 0) as is_pinned,
-                   COALESCE(s.is_archived, 0) as is_archived,
-                   (SELECT MAX(ts) FROM messages WHERE session_id=s.id) as last_msg_ts,
-                   s.tags
-            FROM sessions s
-        """
-        conditions = []
-        params = []
+        try:
+            # Full query with pin/archive/tags support — pinned first, then by most recent activity
+            base_sql = """
+                SELECT s.id, s.title, s.created_ts,
+                       (SELECT COUNT(id) FROM messages WHERE session_id=s.id) as msg_count,
+                       COALESCE(s.is_pinned, 0) as is_pinned,
+                       COALESCE(s.is_archived, 0) as is_archived,
+                       (SELECT MAX(ts) FROM messages WHERE session_id=s.id) as last_msg_ts,
+                       s.tags
+                FROM sessions s
+            """
+            conditions = []
+            params = []
 
-        if archived:
-            conditions.append("COALESCE(s.is_archived, 0) = 1")
-        else:
-            conditions.append("COALESCE(s.is_archived, 0) = 0")
+            if archived:
+                conditions.append("COALESCE(s.is_archived, 0) = 1")
+            else:
+                conditions.append("COALESCE(s.is_archived, 0) = 0")
 
-        if search:
-            conditions.append("s.title LIKE ?")
-            params.append(f"%{search}%")
+            if search:
+                conditions.append("s.title LIKE ?")
+                params.append(f"%{search}%")
 
-        where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
-        order = " ORDER BY COALESCE(s.is_pinned, 0) DESC, COALESCE(last_msg_ts, s.created_ts) DESC"
+            where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+            order = " ORDER BY COALESCE(s.is_pinned, 0) DESC, COALESCE(last_msg_ts, s.created_ts) DESC"
 
-        cur.execute(base_sql + where + order, params)
-    except Exception:
-        # Fallback for older schema without is_pinned/is_archived/tags
-        cur.execute("""
-            SELECT s.id, s.title, s.created_ts,
-                   (SELECT COUNT(id) FROM messages WHERE session_id=s.id),
-                   0, 0, NULL, NULL
-            FROM sessions s ORDER BY s.created_ts DESC
-        """)
+            cur.execute(base_sql + where + order, params)
+        except Exception:
+            # Fallback for older schema without is_pinned/is_archived/tags
+            cur.execute("""
+                SELECT s.id, s.title, s.created_ts,
+                       (SELECT COUNT(id) FROM messages WHERE session_id=s.id),
+                       0, 0, NULL, NULL
+                FROM sessions s ORDER BY s.created_ts DESC
+            """)
 
-    sessions = []
-    for row in cur.fetchall():
-        sessions.append({
-            "id": row[0],
-            "title": row[1] or f"Session {row[0]}",
-            "created_ts": row[2],
-            "message_count": row[3],
-            "is_pinned": bool(row[4]),
-            "is_archived": bool(row[5]),
-            "last_message_ts": row[6],
-            "tags": json.loads(row[7] or "[]"),
-        })
-    conn.close()
+        sessions = []
+        for row in cur.fetchall():
+            sessions.append({
+                "id": row[0],
+                "title": row[1] or f"Session {row[0]}",
+                "created_ts": row[2],
+                "message_count": row[3],
+                "is_pinned": bool(row[4]),
+                "is_archived": bool(row[5]),
+                "last_message_ts": row[6],
+                "tags": json.loads(row[7] or "[]"),
+            })
     return {"sessions": sessions}
 
 @app.post("/api/sessions")
@@ -6555,26 +6494,24 @@ async def update_session(session_id: int, req: Request):
         return {"ok": True}
 
     params.append(session_id)
-    conn = db()
-    try:
-        conn.execute(f"UPDATE sessions SET {', '.join(updates)} WHERE id=?", params)
-        conn.commit()
-    except Exception as e:
-        conn.close()
-        raise HTTPException(500, str(e))
-    conn.close()
+    with db_ctx() as conn:
+        try:
+            conn.execute(f"UPDATE sessions SET {', '.join(updates)} WHERE id=?", params)
+            conn.commit()
+        except Exception as e:
+            conn.close()
+            raise HTTPException(500, str(e))
     return {"ok": True}
 
 @app.delete("/api/sessions/{session_id}")
 def delete_session(session_id: int):
     """Delete session and all its messages."""
-    conn = db()
-    curr = conn.cursor()
-    curr.execute("DELETE FROM messages WHERE session_id=?", (session_id,))
-    curr.execute("DELETE FROM sessions WHERE id=?", (session_id,))
-    deleted = curr.rowcount # This might be sessions deleted
-    conn.commit()
-    conn.close()
+    with db_ctx() as conn:
+        curr = conn.cursor()
+        curr.execute("DELETE FROM messages WHERE session_id=?", (session_id,))
+        curr.execute("DELETE FROM sessions WHERE id=?", (session_id,))
+        deleted = curr.rowcount # This might be sessions deleted
+        conn.commit()
     return {"ok": True, "deleted_messages": 0} # Simplified
 
 @app.post("/api/sessions/{session_id}/duplicate")
@@ -6590,30 +6527,29 @@ def duplicate_session(session_id: int):
     Returns:
         {"ok": True, "session": {id, title}}
     """
-    conn = db()
-    cur = conn.cursor()
+    with db_ctx() as conn:
+        cur = conn.cursor()
 
-    # Get original session
-    cur.execute("SELECT title FROM sessions WHERE id=?", (session_id,))
-    row = cur.fetchone()
-    if not row:
-        conn.close()
-        raise HTTPException(404, "Session not found")
+        # Get original session
+        cur.execute("SELECT title FROM sessions WHERE id=?", (session_id,))
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(404, "Session not found")
 
-    new_title = f"{row[0]} (copy)"
-    cur.execute("INSERT INTO sessions (title) VALUES (?)", (new_title,))
-    new_id = cur.lastrowid
+        new_title = f"{row[0]} (copy)"
+        cur.execute("INSERT INTO sessions (title) VALUES (?)", (new_title,))
+        new_id = cur.lastrowid
 
-    # Copy active messages
-    cur.execute("""
-        INSERT INTO messages (session_id, role, text, ts, is_active, emotion, char_id)
-        SELECT ?, role, text, ts, is_active, emotion, char_id
-        FROM messages WHERE session_id=? AND is_active=1
-        ORDER BY id
-    """, (new_id, session_id))
+        # Copy active messages
+        cur.execute("""
+            INSERT INTO messages (session_id, role, text, ts, is_active, emotion, char_id)
+            SELECT ?, role, text, ts, is_active, emotion, char_id
+            FROM messages WHERE session_id=? AND is_active=1
+            ORDER BY id
+        """, (new_id, session_id))
 
-    conn.commit()
-    conn.close()
+        conn.commit()
     return {"ok": True, "session": {"id": new_id, "title": new_title}}
 
 
@@ -6655,51 +6591,50 @@ async def fork_session(req: Request):
     if not session_id or not message_id:
         raise HTTPException(400, "session_id and message_id are required")
 
-    conn = db()
-    cur = conn.cursor()
+    with db_ctx() as conn:
+        cur = conn.cursor()
 
-    # Verify source session exists
-    cur.execute("SELECT title FROM sessions WHERE id=?", (session_id,))
-    row = cur.fetchone()
-    if not row:
-        conn.close()
-        raise HTTPException(404, "Source session not found")
+        # Verify source session exists
+        cur.execute("SELECT title FROM sessions WHERE id=?", (session_id,))
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(404, "Source session not found")
 
-    original_title = row[0] or "Untitled"
+        original_title = row[0] or "Untitled"
 
-    # Get messages up to and including the fork point
-    cur.execute(
-        """SELECT role, text, ts, is_active, emotion, char_id
-           FROM messages
-           WHERE session_id=? AND id<=? AND is_active=1
-           ORDER BY id""",
-        (session_id, message_id),
-    )
-    source_messages = cur.fetchall()
-    if not source_messages:
-        conn.close()
-        raise HTTPException(404, "No messages found up to the specified message_id")
-
-    # Create the forked session with lineage metadata
-    new_title = f"Fork of {original_title}"
-    cur.execute(
-        """INSERT INTO sessions (title, forked_from_session_id, forked_at_message_id)
-           VALUES (?, ?, ?)""",
-        (new_title, session_id, message_id),
-    )
-    new_id = cur.lastrowid
-
-    # Copy messages into the new session
-    for role, text, ts, is_active, emotion, char_id in source_messages:
+        # Get messages up to and including the fork point
         cur.execute(
-            """INSERT INTO messages (session_id, role, text, ts, is_active, emotion, char_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (new_id, role, text, ts, is_active, emotion, char_id),
+            """SELECT role, text, ts, is_active, emotion, char_id
+               FROM messages
+               WHERE session_id=? AND id<=? AND is_active=1
+               ORDER BY id""",
+            (session_id, message_id),
         )
+        source_messages = cur.fetchall()
+        if not source_messages:
+            conn.close()
+            raise HTTPException(404, "No messages found up to the specified message_id")
 
-    conn.commit()
-    msg_count = len(source_messages)
-    conn.close()
+        # Create the forked session with lineage metadata
+        new_title = f"Fork of {original_title}"
+        cur.execute(
+            """INSERT INTO sessions (title, forked_from_session_id, forked_at_message_id)
+               VALUES (?, ?, ?)""",
+            (new_title, session_id, message_id),
+        )
+        new_id = cur.lastrowid
+
+        # Copy messages into the new session
+        for role, text, ts, is_active, emotion, char_id in source_messages:
+            cur.execute(
+                """INSERT INTO messages (session_id, role, text, ts, is_active, emotion, char_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (new_id, role, text, ts, is_active, emotion, char_id),
+            )
+
+        conn.commit()
+        msg_count = len(source_messages)
 
     return {
         "ok": True,
@@ -6732,25 +6667,24 @@ async def import_session(req: Request):
     if not isinstance(messages, list):
         raise HTTPException(400, "'messages' must be a list")
 
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO sessions (title) VALUES (?)", (title,))
-    new_id = cur.lastrowid
+    with db_ctx() as conn:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO sessions (title) VALUES (?)", (title,))
+        new_id = cur.lastrowid
 
-    count = 0
-    for msg in messages:
-        role = msg.get("role", "user")
-        text = msg.get("text", "")
-        ts = msg.get("ts")
-        if text:
-            cur.execute(
-                "INSERT INTO messages (session_id, role, text, ts) VALUES (?, ?, ?, ?)",
-                (new_id, role, text, ts)
-            )
-            count += 1
+        count = 0
+        for msg in messages:
+            role = msg.get("role", "user")
+            text = msg.get("text", "")
+            ts = msg.get("ts")
+            if text:
+                cur.execute(
+                    "INSERT INTO messages (session_id, role, text, ts) VALUES (?, ?, ?, ?)",
+                    (new_id, role, text, ts)
+                )
+                count += 1
 
-    conn.commit()
-    conn.close()
+        conn.commit()
     return {"ok": True, "session": {"id": new_id, "title": title}, "message_count": count}
 
 
@@ -6770,9 +6704,8 @@ def get_session_messages(session_id: int, include_branches: bool = False):
                              token_count, input_token_count, generation_time_ms,
                              tokens_per_second, pinned}, ...]}
     """
-    conn = db()
-    cur = conn.cursor()
-    try:
+    with db_ctx() as conn:
+        cur = conn.cursor()
         cols = ("id, role, text, ts, parent_id, is_active, emotion, char_id, "
                 "token_count, input_token_count, generation_time_ms, tokens_per_second, pinned")
         if include_branches:
@@ -6818,8 +6751,6 @@ def get_session_messages(session_id: int, include_branches: bool = False):
             msg["pinned"] = bool(r[12]) if len(r) > 12 and r[12] is not None else False
             messages.append(msg)
         return {"messages": messages}
-    finally:
-        conn.close()
 
 
 # ==================== MESSAGE EDIT / REGENERATE ====================
@@ -6840,14 +6771,12 @@ async def edit_message(message_id: int, req: Request):
     if not new_text:
         raise HTTPException(400, "text required")
 
-    conn = db()
-    try:
-        conn.execute("UPDATE messages SET text=? WHERE id=?", (new_text, message_id))
-        conn.commit()
-    except Exception as e:
-        raise HTTPException(500, f"Edit failed: {e}")
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            conn.execute("UPDATE messages SET text=? WHERE id=?", (new_text, message_id))
+            conn.commit()
+        except Exception as e:
+            raise HTTPException(500, f"Edit failed: {e}")
     return {"ok": True, "id": message_id}
 
 
@@ -6867,19 +6796,17 @@ async def delete_message(message_id: int):
     Raises:
         HTTPException 404: If the message does not exist.
     """
-    conn = db()
-    try:
-        row = conn.execute("SELECT id FROM messages WHERE id=?", (message_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "Message not found")
-        conn.execute("DELETE FROM messages WHERE id=?", (message_id,))
-        conn.commit()
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"Delete failed: {e}")
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            row = conn.execute("SELECT id FROM messages WHERE id=?", (message_id,)).fetchone()
+            if not row:
+                raise HTTPException(404, "Message not found")
+            conn.execute("DELETE FROM messages WHERE id=?", (message_id,))
+            conn.commit()
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Delete failed: {e}")
     return {"ok": True, "id": message_id}
 
 
@@ -6898,10 +6825,9 @@ async def regenerate_message(message_id: int, req: Request):
     Returns:
         dict: {"ok": True, "new_message": {id, text, emotion, gesture}}
     """
-    conn = db()
-    cur = conn.cursor()
+    with db_ctx() as conn:
+        cur = conn.cursor()
 
-    try:
         # Get the original message and its context
         cur.execute("SELECT session_id, role, parent_id FROM messages WHERE id=?", (message_id,))
         row = cur.fetchone()
@@ -6991,8 +6917,6 @@ async def regenerate_message(message_id: int, req: Request):
                 "gesture": gesture,
             }
         }
-    finally:
-        conn.close()
 
 
 # ==================== MODEL ROUTING ====================
@@ -7068,66 +6992,66 @@ async def summarize_session(session_id: int, req: Request = None):
 
     max_messages = body.get("max_messages", 50)
 
-    conn = db()
-    rows = conn.execute(
-        "SELECT role, text FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id DESC LIMIT ?",
-        (session_id, max_messages)
-    ).fetchall()
+    with db_ctx() as conn:
+        rows = conn.execute(
+            "SELECT role, text FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id DESC LIMIT ?",
+            (session_id, max_messages)
+        ).fetchall()
 
-    if not rows:
-        return {"ok": False, "error": "No messages to summarize"}
+        if not rows:
+            return {"ok": False, "error": "No messages to summarize"}
 
-    # Build conversation for LLM
-    messages_text = "\n".join(
-        f"{'User' if r[0] == 'user' else 'AI'}: {r[1]}" for r in reversed(rows)
-    )
-
-    # Resolve character name for context-aware summarization
-    _sum_char_row = conn.execute(
-        "SELECT c.name FROM sessions s JOIN characters c ON c.id = s.character_id "
-        "WHERE s.id = ?", (session_id,)
-    ).fetchone()
-    _sum_char_name = _sum_char_row[0] if _sum_char_row else "the AI"
-
-    summarize_prompt = (
-        f"Summarize this conversation between the user and {_sum_char_name}. "
-        "Preserve:\n"
-        "- Key topics and decisions\n"
-        "- Emotional tone and relationship dynamics\n"
-        "- User preferences, facts, and personal details mentioned\n"
-        "- Any promises or commitments made by either party\n"
-        "- Named entities (people, places, media) that may be referenced later\n\n"
-        f"CONVERSATION:\n{messages_text}\n\n"
-        f"Write a dense, factual summary under 200 words. Use '{_sum_char_name}', not 'the AI'."
-    )
-
-    cfg = load_config()
-    try:
-        from backend.llm.registry import get_client
-        adapter = get_client(cfg)
-        res = await run_in_threadpool(
-            adapter.chat,
-            [{"role": "user", "content": summarize_prompt}],
-            cfg["llm"]["model"],
-            cfg["llm"]["endpoint"],
-            cfg["llm"]["api_key"],
-            temperature=0.3,
-            max_tokens=500,
+        # Build conversation for LLM
+        messages_text = "\n".join(
+            f"{'User' if r[0] == 'user' else 'AI'}: {r[1]}" for r in reversed(rows)
         )
-    except Exception as e:
-        logger.error(f"Summarization failed: {e}")
-        raise HTTPException(500, f"Summarization failed: {e}")
 
-    if not res.get("ok"):
-        raise HTTPException(500, res.get("error", "LLM error"))
+        # Resolve character name for context-aware summarization
+        _sum_char_row = conn.execute(
+            "SELECT c.name FROM sessions s JOIN characters c ON c.id = s.character_id "
+            "WHERE s.id = ?", (session_id,)
+        ).fetchone()
+        _sum_char_name = _sum_char_row[0] if _sum_char_row else "the AI"
 
-    summary = res["reply"].strip()
+        summarize_prompt = (
+            f"Summarize this conversation between the user and {_sum_char_name}. "
+            "Preserve:\n"
+            "- Key topics and decisions\n"
+            "- Emotional tone and relationship dynamics\n"
+            "- User preferences, facts, and personal details mentioned\n"
+            "- Any promises or commitments made by either party\n"
+            "- Named entities (people, places, media) that may be referenced later\n\n"
+            f"CONVERSATION:\n{messages_text}\n\n"
+            f"Write a dense, factual summary under 200 words. Use '{_sum_char_name}', not 'the AI'."
+        )
 
-    # Store in DB
-    conn.execute("UPDATE sessions SET summary = ? WHERE id = ?", (summary, session_id))
-    conn.commit()
+        cfg = load_config()
+        try:
+            from backend.llm.registry import get_client
+            adapter = get_client(cfg)
+            res = await run_in_threadpool(
+                adapter.chat,
+                [{"role": "user", "content": summarize_prompt}],
+                cfg["llm"]["model"],
+                cfg["llm"]["endpoint"],
+                cfg["llm"]["api_key"],
+                temperature=0.3,
+                max_tokens=500,
+            )
+        except Exception as e:
+            logger.error(f"Summarization failed: {e}")
+            raise HTTPException(500, f"Summarization failed: {e}")
 
-    return {"ok": True, "summary": summary}
+        if not res.get("ok"):
+            raise HTTPException(500, res.get("error", "LLM error"))
+
+        summary = res["reply"].strip()
+
+        # Store in DB
+        conn.execute("UPDATE sessions SET summary = ? WHERE id = ?", (summary, session_id))
+        conn.commit()
+
+        return {"ok": True, "summary": summary}
 
 
 @app.post("/api/sessions/{session_id}/compress")
@@ -7164,8 +7088,7 @@ async def compress_session(session_id: int, req: Request = None):
     keep_recent: int = int(body.get("keep_recent", 6))
     batch_size: int = int(body.get("batch_size", 20))
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         # Count total active messages
         total = conn.execute(
             "SELECT COUNT(*) FROM messages WHERE session_id = ? AND is_active = 1",
@@ -7306,8 +7229,6 @@ async def compress_session(session_id: int, req: Request = None):
         if meta_result:
             result["meta_summary"] = meta_result
         return result
-    finally:
-        conn.close()
 
 
 @app.get("/api/sessions/{session_id}/summary")
@@ -7320,11 +7241,11 @@ def get_session_summary(session_id: int):
     Returns:
         {"ok": True, "summary": "..." or null}
     """
-    conn = db()
-    row = conn.execute("SELECT summary FROM sessions WHERE id = ?", (session_id,)).fetchone()
-    if not row:
-        raise HTTPException(404, "Session not found")
-    return {"ok": True, "summary": row[0]}
+    with db_ctx() as conn:
+        row = conn.execute("SELECT summary FROM sessions WHERE id = ?", (session_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Session not found")
+        return {"ok": True, "summary": row[0]}
 
 
 # ==================== CONVERSATION EXPORT ====================
@@ -7340,9 +7261,8 @@ def export_session(session_id: int, format: str = "markdown"):
     Returns:
         StreamingResponse with appropriate Content-Type and filename.
     """
-    conn = db()
-    cur = conn.cursor()
-    try:
+    with db_ctx() as conn:
+        cur = conn.cursor()
         cur.execute("SELECT title, created_ts FROM sessions WHERE id=?", (session_id,))
         session_row = cur.fetchone()
         if not session_row:
@@ -7357,8 +7277,6 @@ def export_session(session_id: int, format: str = "markdown"):
             (session_id,)
         )
         messages = cur.fetchall()
-    finally:
-        conn.close()
 
     if format == "json":
         import json as _json
@@ -7545,14 +7463,13 @@ def v2_memory_graph(session_id: int = 1, char_id: int = 1, limit: int = 40):
     _telemetry_inc("memory.graph_requests_total")
     graph_limit = max(6, min(limit, 100))
 
-    conn = db()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT id, role, text, ts FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
-        (session_id, graph_limit)
-    )
-    rows = cur.fetchall()[::-1]
-    conn.close()
+    with db_ctx() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, role, text, ts FROM messages WHERE session_id=? ORDER BY id DESC LIMIT ?",
+            (session_id, graph_limit)
+        )
+        rows = cur.fetchall()[::-1]
 
     nodes = []
     edges = []
@@ -7669,27 +7586,9 @@ def v2_telemetry_summary():
 @app.get("/api/characters")
 def list_characters():
     """List all characters."""
-    conn = db()
-    cur = conn.cursor()
-    # Check if table exists/has correct columns by trying select
-    try:
-        cur.execute("""
-            SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider,
-                   personality_traits, live2d_model, model_type, avatar_2d_url, vrm_model_url,
-                   greeting_text, greeting_animation, background_url, background_mode, voice_sample_path,
-                   llm_endpoint, llm_model, llm_temperature, last_emotion, voice_config,
-                   expr_portraits, first_chat_date, diary, diary_date, capability_profile,
-                   tts_pitch, tts_rate, vocab_categories, animation_profile, emotion_voice_overrides,
-                   mood_enabled, mood_intensity, emotion_portraits_mode,
-                   bible_path, bible_enabled, bible_sections, system_prompt_lite,
-                   proactive_enabled, proactive_frequency, proactive_hours,
-                   scenario, chara_description, alternate_greetings, mes_example,
-                   post_history_instructions, chara_tags, creator_notes
-            FROM characters
-            ORDER BY id ASC
-        """)
-    except Exception:
-        # Fallback for pre-v68 schema (41 columns, without the new CHARA V2 fields)
+    with db_ctx() as conn:
+        cur = conn.cursor()
+        # Check if table exists/has correct columns by trying select
         try:
             cur.execute("""
                 SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider,
@@ -7700,88 +7599,105 @@ def list_characters():
                        tts_pitch, tts_rate, vocab_categories, animation_profile, emotion_voice_overrides,
                        mood_enabled, mood_intensity, emotion_portraits_mode,
                        bible_path, bible_enabled, bible_sections, system_prompt_lite,
-                       proactive_enabled, proactive_frequency, proactive_hours
-                FROM characters ORDER BY id ASC
+                       proactive_enabled, proactive_frequency, proactive_hours,
+                       scenario, chara_description, alternate_greetings, mes_example,
+                       post_history_instructions, chara_tags, creator_notes
+                FROM characters
+                ORDER BY id ASC
             """)
         except Exception:
-            # Fallback for pre-v7 schema
+            # Fallback for pre-v68 schema (41 columns, without the new CHARA V2 fields)
             try:
                 cur.execute("""
                     SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider,
-                           personality_traits, live2d_model, model_type, avatar_2d_url, vrm_model_url
+                           personality_traits, live2d_model, model_type, avatar_2d_url, vrm_model_url,
+                           greeting_text, greeting_animation, background_url, background_mode, voice_sample_path,
+                           llm_endpoint, llm_model, llm_temperature, last_emotion, voice_config,
+                           expr_portraits, first_chat_date, diary, diary_date, capability_profile,
+                           tts_pitch, tts_rate, vocab_categories, animation_profile, emotion_voice_overrides,
+                           mood_enabled, mood_intensity, emotion_portraits_mode,
+                           bible_path, bible_enabled, bible_sections, system_prompt_lite,
+                           proactive_enabled, proactive_frequency, proactive_hours
                     FROM characters ORDER BY id ASC
                 """)
             except Exception:
-                conn.close()
-                return {"characters": [{"id": 1, "name": "Default", "system_prompt": "You are a helpful AI.", "avatar_url": ""}]}
+                # Fallback for pre-v7 schema
+                try:
+                    cur.execute("""
+                        SELECT id, name, system_prompt, avatar_url, voice_id, tts_provider,
+                               personality_traits, live2d_model, model_type, avatar_2d_url, vrm_model_url
+                        FROM characters ORDER BY id ASC
+                    """)
+                except Exception:
+                    conn.close()
+                    return {"characters": [{"id": 1, "name": "Default", "system_prompt": "You are a helpful AI.", "avatar_url": ""}]}
 
-    characters = []
-    for row in cur.fetchall():
-        traits = []
-        try:
-            if row[6]:
-                traits = json.loads(row[6])
-        except (json.JSONDecodeError, TypeError):
-            pass
-        char = {
-            "id": row[0],
-            "name": row[1],
-            "system_prompt": row[2],
-            "avatar_url": row[3],
-            "voice_id": row[4],
-            "tts_provider": row[5],
-            "personality_traits": traits,
-            "live2d_model": row[7] if len(row) > 7 else "",
-            "model_type": row[8] if len(row) > 8 else "3d",
-            "avatar_2d_url": row[9] if len(row) > 9 else row[3],
-            "vrm_model_url": row[10] if len(row) > 10 else "",
-            "greeting_text": row[11] if len(row) > 11 else None,
-            "greeting_animation": row[12] if len(row) > 12 else None,
-            "background_url": row[13] if len(row) > 13 else None,
-            "background_mode": row[14] if len(row) > 14 else "transparent",
-            "voice_sample_path": row[15] if len(row) > 15 else None,
-            "llm_endpoint": row[16] if len(row) > 16 else "",
-            "llm_model": row[17] if len(row) > 17 else "",
-            "llm_temperature": row[18] if len(row) > 18 else None,
-            "last_emotion": row[19] if len(row) > 19 else "neutral",
-            "voice_config": row[20] if len(row) > 20 else None,
-            "expr_portraits": row[21] if len(row) > 21 else None,
-            "first_chat_date": row[22] if len(row) > 22 else None,
-            "diary": row[23] if len(row) > 23 else None,
-            "diary_date": row[24] if len(row) > 24 else None,
-            "capability_profile": row[25] if len(row) > 25 else None,
-            "tts_pitch": row[26] if len(row) > 26 else None,
-            "tts_rate": row[27] if len(row) > 27 else None,
-            "vocab_categories": row[28] if len(row) > 28 else None,
-            "animation_profile": json.loads(row[29]) if len(row) > 29 and row[29] else None,
-            # Feature H: per-emotion TTS voice overrides (JSON string or None)
-            "emotion_voice_overrides": row[30] if len(row) > 30 else None,
-            # Feature A4: time-of-day mood fields (schema v23)
-            "mood_enabled": bool(row[31]) if len(row) > 31 and row[31] is not None else True,
-            "mood_intensity": float(row[32]) if len(row) > 32 and row[32] is not None else 0.8,
-            # Phase 15: emotion portrait display mode (0=off, 1=chat, 2=chat+sidebar)
-            "emotion_portraits_mode": int(row[33]) if len(row) > 33 and row[33] is not None else 0,
-            # v36: Character bible integration
-            "bible_path": row[34] if len(row) > 34 else None,
-            "bible_enabled": bool(row[35]) if len(row) > 35 and row[35] is not None else False,
-            "bible_sections": json.loads(row[36]) if len(row) > 36 and row[36] else None,
-            # v52: Tiered prompts — lite CORE-only prompt for small context windows
-            "system_prompt_lite": row[37] if len(row) > 37 else None,
-            # v53: Proactive AI messaging settings
-            "proactive_enabled": bool(row[38]) if len(row) > 38 and row[38] is not None else False,
-            "proactive_frequency": row[39] if len(row) > 39 else "normal",
-            "proactive_hours": row[40] if len(row) > 40 else "9-22",
-            # v68: CHARA V2 individual fields
-            "scenario": row[41] if len(row) > 41 else None,
-            "chara_description": row[42] if len(row) > 42 else None,
-            "alternate_greetings": json.loads(row[43]) if len(row) > 43 and row[43] else [],
-            "mes_example": row[44] if len(row) > 44 else None,
-            "post_history_instructions": row[45] if len(row) > 45 else None,
-            "chara_tags": json.loads(row[46]) if len(row) > 46 and row[46] else [],
-            "creator_notes": row[47] if len(row) > 47 else None,
-        }
-        characters.append(char)
-    conn.close()
+        characters = []
+        for row in cur.fetchall():
+            traits = []
+            try:
+                if row[6]:
+                    traits = json.loads(row[6])
+            except (json.JSONDecodeError, TypeError):
+                pass
+            char = {
+                "id": row[0],
+                "name": row[1],
+                "system_prompt": row[2],
+                "avatar_url": row[3],
+                "voice_id": row[4],
+                "tts_provider": row[5],
+                "personality_traits": traits,
+                "live2d_model": row[7] if len(row) > 7 else "",
+                "model_type": row[8] if len(row) > 8 else "3d",
+                "avatar_2d_url": row[9] if len(row) > 9 else row[3],
+                "vrm_model_url": row[10] if len(row) > 10 else "",
+                "greeting_text": row[11] if len(row) > 11 else None,
+                "greeting_animation": row[12] if len(row) > 12 else None,
+                "background_url": row[13] if len(row) > 13 else None,
+                "background_mode": row[14] if len(row) > 14 else "transparent",
+                "voice_sample_path": row[15] if len(row) > 15 else None,
+                "llm_endpoint": row[16] if len(row) > 16 else "",
+                "llm_model": row[17] if len(row) > 17 else "",
+                "llm_temperature": row[18] if len(row) > 18 else None,
+                "last_emotion": row[19] if len(row) > 19 else "neutral",
+                "voice_config": row[20] if len(row) > 20 else None,
+                "expr_portraits": row[21] if len(row) > 21 else None,
+                "first_chat_date": row[22] if len(row) > 22 else None,
+                "diary": row[23] if len(row) > 23 else None,
+                "diary_date": row[24] if len(row) > 24 else None,
+                "capability_profile": row[25] if len(row) > 25 else None,
+                "tts_pitch": row[26] if len(row) > 26 else None,
+                "tts_rate": row[27] if len(row) > 27 else None,
+                "vocab_categories": row[28] if len(row) > 28 else None,
+                "animation_profile": json.loads(row[29]) if len(row) > 29 and row[29] else None,
+                # Feature H: per-emotion TTS voice overrides (JSON string or None)
+                "emotion_voice_overrides": row[30] if len(row) > 30 else None,
+                # Feature A4: time-of-day mood fields (schema v23)
+                "mood_enabled": bool(row[31]) if len(row) > 31 and row[31] is not None else True,
+                "mood_intensity": float(row[32]) if len(row) > 32 and row[32] is not None else 0.8,
+                # Phase 15: emotion portrait display mode (0=off, 1=chat, 2=chat+sidebar)
+                "emotion_portraits_mode": int(row[33]) if len(row) > 33 and row[33] is not None else 0,
+                # v36: Character bible integration
+                "bible_path": row[34] if len(row) > 34 else None,
+                "bible_enabled": bool(row[35]) if len(row) > 35 and row[35] is not None else False,
+                "bible_sections": json.loads(row[36]) if len(row) > 36 and row[36] else None,
+                # v52: Tiered prompts — lite CORE-only prompt for small context windows
+                "system_prompt_lite": row[37] if len(row) > 37 else None,
+                # v53: Proactive AI messaging settings
+                "proactive_enabled": bool(row[38]) if len(row) > 38 and row[38] is not None else False,
+                "proactive_frequency": row[39] if len(row) > 39 else "normal",
+                "proactive_hours": row[40] if len(row) > 40 else "9-22",
+                # v68: CHARA V2 individual fields
+                "scenario": row[41] if len(row) > 41 else None,
+                "chara_description": row[42] if len(row) > 42 else None,
+                "alternate_greetings": json.loads(row[43]) if len(row) > 43 and row[43] else [],
+                "mes_example": row[44] if len(row) > 44 else None,
+                "post_history_instructions": row[45] if len(row) > 45 else None,
+                "chara_tags": json.loads(row[46]) if len(row) > 46 and row[46] else [],
+                "creator_notes": row[47] if len(row) > 47 else None,
+            }
+            characters.append(char)
     return {"characters": characters}
 
 @app.get("/api/characters/recent-messages")
@@ -7794,25 +7710,23 @@ def get_recent_messages_per_character():
     Returns:
         {"ok": True, "recent": {char_id: {"text": str, "ts": float}}}
     """
-    conn = db()
-    cur = conn.cursor()
-    try:
-        cur.execute("""
-            SELECT char_id, text, MAX(ts) as last_ts
-            FROM messages
-            WHERE role = 'assistant' AND char_id IS NOT NULL
-            GROUP BY char_id
-        """)
-        recent = {}
-        for row in cur.fetchall():
-            char_id, text, ts = row
-            # Truncate long messages for preview display
-            preview = (text[:120] + "…") if text and len(text) > 120 else (text or "")
-            recent[str(char_id)] = {"text": preview, "ts": ts}
-    except Exception:
-        recent = {}
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT char_id, text, MAX(ts) as last_ts
+                FROM messages
+                WHERE role = 'assistant' AND char_id IS NOT NULL
+                GROUP BY char_id
+            """)
+            recent = {}
+            for row in cur.fetchall():
+                char_id, text, ts = row
+                # Truncate long messages for preview display
+                preview = (text[:120] + "…") if text and len(text) > 120 else (text or "")
+                recent[str(char_id)] = {"text": preview, "ts": ts}
+        except Exception:
+            recent = {}
     return {"ok": True, "recent": recent}
 
 
@@ -7925,16 +7839,15 @@ async def create_character(req: Request):
     placeholders = ", ".join(["?"] * len(cols))
     col_names = ", ".join(cols)
 
-    conn = db()
-    cur = conn.cursor()
-    try:
-        cur.execute(f"INSERT INTO characters ({col_names}) VALUES ({placeholders})", vals)
-        char_id = cur.lastrowid
-        conn.commit()
-    except Exception as e:
-        conn.close()
-        raise HTTPException(500, f"DB Error: {e}")
-    conn.close()
+    with db_ctx() as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute(f"INSERT INTO characters ({col_names}) VALUES ({placeholders})", vals)
+            char_id = cur.lastrowid
+            conn.commit()
+        except Exception as e:
+            conn.close()
+            raise HTTPException(500, f"DB Error: {e}")
     return {
         "id": char_id,
         "name": name,
@@ -7947,59 +7860,58 @@ async def create_character(req: Request):
 async def update_character(character_id: int, req: Request):
     """Update character details."""
     body = await req.json()
-    conn = db()
-    cur = conn.cursor()
-    updates = []
-    params = []
-    
-    fields = [
-        "name", "system_prompt", "avatar_url", "voice_id", "tts_provider",
-        "tts_pitch", "tts_rate", "live2d_model", "model_type", "avatar_2d_url",
-        "vrm_model_url", "greeting_text", "greeting_animation", "background_url",
-        "background_mode", "voice_sample_path", "vocab_categories",
-        "llm_endpoint", "llm_model", "llm_temperature", "last_emotion",
-        "voice_config",  # v13: extended per-character voice settings JSON (#77)
-        "capability_profile",  # v15: Phase 9 per-character LLM capability metadata
-        "animation_profile",  # v16: Phase 6F per-character animation personality traits
-        "emotion_voice_overrides",  # v19: Feature H per-emotion TTS voice override map
-        "mood_enabled",  # v23: Feature A4 time-of-day mood toggle
-        "mood_intensity",  # v23: Feature A4 mood strength 0.0-1.0
-        "emotion_portraits_mode",  # v31: Phase 15 emotion portrait display mode (0/1/2)
-        "bible_path",  # v36: character bible markdown file path
-        "bible_enabled",  # v36: toggle bible injection into system prompt
-        "bible_sections",  # v36: JSON list of section numbers to inject
-        # v68: CHARA V2 individual fields
-        "scenario", "chara_description", "mes_example",
-        "post_history_instructions", "creator_notes",
-        "alternate_greetings", "chara_tags",
-    ]
-    _json_fields = {"capability_profile", "voice_config", "vocab_categories", "animation_profile",
-                    "emotion_voice_overrides", "bible_sections", "alternate_greetings", "chara_tags"}
-    for field in fields:
-        if field in body:
-            updates.append(f"{field}=?")
-            val = body[field]
-            # JSON-encode dict/list values before storing
-            if field in _json_fields and isinstance(val, (dict, list)):
-                val = json.dumps(val)
-            params.append(val)
+    with db_ctx() as conn:
+        cur = conn.cursor()
+        updates = []
+        params = []
 
-    if "personality_traits" in body:
-        updates.append("personality_traits=?")
-        params.append(json.dumps(body["personality_traits"]))
-        
-    if not updates:
-        conn.close()
-        return {"ok": True} # No updates needed
-        
-    params.append(character_id)
-    try:
-        cur.execute(f"UPDATE characters SET {', '.join(updates)} WHERE id=?", params)
-        conn.commit()
-    except Exception as e:
-        conn.close()
-        raise HTTPException(500, f"DB Error: {e}")
-    conn.close()
+        fields = [
+            "name", "system_prompt", "avatar_url", "voice_id", "tts_provider",
+            "tts_pitch", "tts_rate", "live2d_model", "model_type", "avatar_2d_url",
+            "vrm_model_url", "greeting_text", "greeting_animation", "background_url",
+            "background_mode", "voice_sample_path", "vocab_categories",
+            "llm_endpoint", "llm_model", "llm_temperature", "last_emotion",
+            "voice_config",  # v13: extended per-character voice settings JSON (#77)
+            "capability_profile",  # v15: Phase 9 per-character LLM capability metadata
+            "animation_profile",  # v16: Phase 6F per-character animation personality traits
+            "emotion_voice_overrides",  # v19: Feature H per-emotion TTS voice override map
+            "mood_enabled",  # v23: Feature A4 time-of-day mood toggle
+            "mood_intensity",  # v23: Feature A4 mood strength 0.0-1.0
+            "emotion_portraits_mode",  # v31: Phase 15 emotion portrait display mode (0/1/2)
+            "bible_path",  # v36: character bible markdown file path
+            "bible_enabled",  # v36: toggle bible injection into system prompt
+            "bible_sections",  # v36: JSON list of section numbers to inject
+            # v68: CHARA V2 individual fields
+            "scenario", "chara_description", "mes_example",
+            "post_history_instructions", "creator_notes",
+            "alternate_greetings", "chara_tags",
+        ]
+        _json_fields = {"capability_profile", "voice_config", "vocab_categories", "animation_profile",
+                        "emotion_voice_overrides", "bible_sections", "alternate_greetings", "chara_tags"}
+        for field in fields:
+            if field in body:
+                updates.append(f"{field}=?")
+                val = body[field]
+                # JSON-encode dict/list values before storing
+                if field in _json_fields and isinstance(val, (dict, list)):
+                    val = json.dumps(val)
+                params.append(val)
+
+        if "personality_traits" in body:
+            updates.append("personality_traits=?")
+            params.append(json.dumps(body["personality_traits"]))
+
+        if not updates:
+            conn.close()
+            return {"ok": True} # No updates needed
+
+        params.append(character_id)
+        try:
+            cur.execute(f"UPDATE characters SET {', '.join(updates)} WHERE id=?", params)
+            conn.commit()
+        except Exception as e:
+            conn.close()
+            raise HTTPException(500, f"DB Error: {e}")
     return {"ok": True}
 
 @app.delete("/api/characters/{character_id}")
@@ -8007,11 +7919,10 @@ def delete_character(character_id: int):
     """Delete a character."""
     if character_id == 1:
         raise HTTPException(400, "Cannot delete default character")
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM characters WHERE id=?", (character_id,))
-    conn.commit()
-    conn.close()
+    with db_ctx() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM characters WHERE id=?", (character_id,))
+        conn.commit()
     return {"ok": True}
 
 
@@ -8029,9 +7940,8 @@ def export_character(character_id: int):
     Returns:
         dict: Full character data with export metadata.
     """
-    conn = db()
-    cur = conn.cursor()
-    try:
+    with db_ctx() as conn:
+        cur = conn.cursor()
         cur.execute("SELECT * FROM characters WHERE id=?", (character_id,))
         row = cur.fetchone()
         if not row:
@@ -8053,8 +7963,6 @@ def export_character(character_id: int):
         char_data.pop('id', None)
 
         return char_data
-    finally:
-        conn.close()
 
 
 @app.post("/api/characters/export/{char_id}")
@@ -8079,9 +7987,8 @@ async def export_character_post(char_id: int):
         >>> assert response.json()["ok"] == True
     """
     import datetime as _dt
-    conn = db()
-    cur = conn.cursor()
-    try:
+    with db_ctx() as conn:
+        cur = conn.cursor()
         cur.execute("SELECT * FROM characters WHERE id=?", (char_id,))
         row = cur.fetchone()
         if not row:
@@ -8104,8 +8011,6 @@ async def export_character_post(char_id: int):
         card["exported_at"] = _dt.datetime.utcnow().isoformat() + "Z"
 
         return {"ok": True, "character": card}
-    finally:
-        conn.close()
 
 
 @app.post("/api/characters/import")
@@ -8138,45 +8043,43 @@ async def import_character(req: Request):
     if isinstance(traits, list):
         body['personality_traits'] = json.dumps(traits)
 
-    conn = db()
-    cur = conn.cursor()
-    try:
-        # Build dynamic INSERT from available fields
-        allowed_fields = [
-            'name', 'system_prompt', 'avatar_url', 'voice_id', 'tts_provider',
-            'tts_pitch', 'tts_rate', 'personality_traits', 'live2d_model',
-            'model_type', 'avatar_2d_url', 'vrm_model_url', 'greeting_text',
-            'greeting_animation', 'background_url', 'background_mode', 'voice_sample_path',
-            'vocab_categories', 'llm_endpoint', 'llm_model', 'llm_temperature',
-            'voice_config', 'capability_profile', 'animation_profile',
-            'emotion_voice_overrides',  # Feature H: per-emotion TTS voice override map
-            # CHARA V2 fields (v68+)
-            'scenario', 'chara_description', 'alternate_greetings', 'mes_example',
-            'post_history_instructions', 'chara_tags', 'creator_notes',
-        ]
-        # JSON-encode dict/list fields before INSERT
-        for jf in ('voice_config', 'capability_profile', 'vocab_categories', 'animation_profile',
-                    'emotion_voice_overrides', 'alternate_greetings', 'chara_tags'):
-            if jf in body and isinstance(body[jf], (dict, list)):
-                body[jf] = json.dumps(body[jf])
-        fields = []
-        values = []
-        for f in allowed_fields:
-            if f in body:
-                fields.append(f)
-                values.append(body[f])
+    with db_ctx() as conn:
+        cur = conn.cursor()
+        try:
+            # Build dynamic INSERT from available fields
+            allowed_fields = [
+                'name', 'system_prompt', 'avatar_url', 'voice_id', 'tts_provider',
+                'tts_pitch', 'tts_rate', 'personality_traits', 'live2d_model',
+                'model_type', 'avatar_2d_url', 'vrm_model_url', 'greeting_text',
+                'greeting_animation', 'background_url', 'background_mode', 'voice_sample_path',
+                'vocab_categories', 'llm_endpoint', 'llm_model', 'llm_temperature',
+                'voice_config', 'capability_profile', 'animation_profile',
+                'emotion_voice_overrides',  # Feature H: per-emotion TTS voice override map
+                # CHARA V2 fields (v68+)
+                'scenario', 'chara_description', 'alternate_greetings', 'mes_example',
+                'post_history_instructions', 'chara_tags', 'creator_notes',
+            ]
+            # JSON-encode dict/list fields before INSERT
+            for jf in ('voice_config', 'capability_profile', 'vocab_categories', 'animation_profile',
+                        'emotion_voice_overrides', 'alternate_greetings', 'chara_tags'):
+                if jf in body and isinstance(body[jf], (dict, list)):
+                    body[jf] = json.dumps(body[jf])
+            fields = []
+            values = []
+            for f in allowed_fields:
+                if f in body:
+                    fields.append(f)
+                    values.append(body[f])
 
-        placeholders = ','.join(['?'] * len(fields))
-        field_names = ','.join(fields)
-        cur.execute(f"INSERT INTO characters ({field_names}) VALUES ({placeholders})", values)
-        char_id = cur.lastrowid
-        conn.commit()
+            placeholders = ','.join(['?'] * len(fields))
+            field_names = ','.join(fields)
+            cur.execute(f"INSERT INTO characters ({field_names}) VALUES ({placeholders})", values)
+            char_id = cur.lastrowid
+            conn.commit()
 
-        return {"ok": True, "id": char_id, "name": name}
-    except Exception as e:
-        raise HTTPException(500, f"Import failed: {e}")
-    finally:
-        conn.close()
+            return {"ok": True, "id": char_id, "name": name}
+        except Exception as e:
+            raise HTTPException(500, f"Import failed: {e}")
 
 
 @app.post("/api/characters/import-card")
@@ -8233,63 +8136,61 @@ async def import_chara_card(file: UploadFile = File(...)):
     except Exception:
         avatar_url = None
 
-    conn = db()
-    cur = conn.cursor()
-    try:
-        # Map CHARA v2 fields → characters table columns
-        # personality_traits stores the character description (background)
-        # greeting_text stores first_mes
-        fields: list[str] = ["name"]
-        values: list = [card_data["name"]]
+    with db_ctx() as conn:
+        cur = conn.cursor()
+        try:
+            # Map CHARA v2 fields → characters table columns
+            # personality_traits stores the character description (background)
+            # greeting_text stores first_mes
+            fields: list[str] = ["name"]
+            values: list = [card_data["name"]]
 
-        if card_data.get("system_prompt"):
-            fields.append("system_prompt")
-            values.append(card_data["system_prompt"])
-        if card_data.get("background"):
-            # description + personality + scenario joined — store as personality_traits
-            fields.append("personality_traits")
-            values.append(card_data["background"])
-        if card_data.get("greeting_message"):
-            fields.append("greeting_text")
-            values.append(card_data["greeting_message"])
-        if avatar_url:
-            fields.append("avatar_url")
-            values.append(avatar_url)
+            if card_data.get("system_prompt"):
+                fields.append("system_prompt")
+                values.append(card_data["system_prompt"])
+            if card_data.get("background"):
+                # description + personality + scenario joined — store as personality_traits
+                fields.append("personality_traits")
+                values.append(card_data["background"])
+            if card_data.get("greeting_message"):
+                fields.append("greeting_text")
+                values.append(card_data["greeting_message"])
+            if avatar_url:
+                fields.append("avatar_url")
+                values.append(avatar_url)
 
-        # CHARA V2 individual fields (v68+) — preserve each field separately
-        if card_data.get("scenario"):
-            fields.append("scenario")
-            values.append(card_data["scenario"])
-        if card_data.get("chara_description"):
-            fields.append("chara_description")
-            values.append(card_data["chara_description"])
-        if card_data.get("mes_example"):
-            fields.append("mes_example")
-            values.append(card_data["mes_example"])
-        if card_data.get("post_history_instructions"):
-            fields.append("post_history_instructions")
-            values.append(card_data["post_history_instructions"])
-        if card_data.get("creator_notes"):
-            fields.append("creator_notes")
-            values.append(card_data["creator_notes"])
-        if card_data.get("alternate_greetings"):
-            fields.append("alternate_greetings")
-            values.append(json.dumps(card_data["alternate_greetings"]))
-        if card_data.get("chara_tags"):
-            fields.append("chara_tags")
-            values.append(json.dumps(card_data["chara_tags"]))
+            # CHARA V2 individual fields (v68+) — preserve each field separately
+            if card_data.get("scenario"):
+                fields.append("scenario")
+                values.append(card_data["scenario"])
+            if card_data.get("chara_description"):
+                fields.append("chara_description")
+                values.append(card_data["chara_description"])
+            if card_data.get("mes_example"):
+                fields.append("mes_example")
+                values.append(card_data["mes_example"])
+            if card_data.get("post_history_instructions"):
+                fields.append("post_history_instructions")
+                values.append(card_data["post_history_instructions"])
+            if card_data.get("creator_notes"):
+                fields.append("creator_notes")
+                values.append(card_data["creator_notes"])
+            if card_data.get("alternate_greetings"):
+                fields.append("alternate_greetings")
+                values.append(json.dumps(card_data["alternate_greetings"]))
+            if card_data.get("chara_tags"):
+                fields.append("chara_tags")
+                values.append(json.dumps(card_data["chara_tags"]))
 
-        placeholders = ",".join(["?"] * len(fields))
-        field_names = ",".join(fields)
-        cur.execute(f"INSERT INTO characters ({field_names}) VALUES ({placeholders})", values)
-        char_id = cur.lastrowid
-        conn.commit()
-        logger.info("[import-card] Created character %r (id=%s) from CHARA v2 card", card_data["name"], char_id)
-        return {"ok": True, "id": char_id, "name": card_data["name"]}
-    except Exception as e:
-        raise HTTPException(500, f"Import failed: {e}")
-    finally:
-        conn.close()
+            placeholders = ",".join(["?"] * len(fields))
+            field_names = ",".join(fields)
+            cur.execute(f"INSERT INTO characters ({field_names}) VALUES ({placeholders})", values)
+            char_id = cur.lastrowid
+            conn.commit()
+            logger.info("[import-card] Created character %r (id=%s) from CHARA v2 card", card_data["name"], char_id)
+            return {"ok": True, "id": char_id, "name": card_data["name"]}
+        except Exception as e:
+            raise HTTPException(500, f"Import failed: {e}")
 
 
 @app.get("/api/characters/{character_id}/export-card")
@@ -8318,9 +8219,8 @@ async def export_chara_card(character_id: int):
     from backend.characters.chara_card import CharaCardWriter
     from starlette.responses import StreamingResponse
 
-    conn = db()
-    cur = conn.cursor()
-    try:
+    with db_ctx() as conn:
+        cur = conn.cursor()
         row = cur.execute(
             """SELECT name, system_prompt, personality_traits, greeting_text, avatar_url,
                       scenario, chara_description, alternate_greetings, mes_example,
@@ -8328,8 +8228,6 @@ async def export_chara_card(character_id: int):
                FROM characters WHERE id = ?""",
             (character_id,),
         ).fetchone()
-    finally:
-        conn.close()
 
     if not row:
         raise HTTPException(404, "Character not found")
@@ -8413,19 +8311,17 @@ async def upload_character_doc(character_id: int, file: UploadFile = File(...)):
     # Chunk the content into ~500-char segments at sentence boundaries
     chunks = _chunk_text(content, max_chars=500)
 
-    conn = db()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            "INSERT INTO character_docs (char_id, filename, content, chunk_count) VALUES (?,?,?,?)",
-            (character_id, file.filename, content, len(chunks))
-        )
-        doc_id = cur.lastrowid
-        conn.commit()
-    except Exception as e:
-        raise HTTPException(500, f"DB error: {e}")
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "INSERT INTO character_docs (char_id, filename, content, chunk_count) VALUES (?,?,?,?)",
+                (character_id, file.filename, content, len(chunks))
+            )
+            doc_id = cur.lastrowid
+            conn.commit()
+        except Exception as e:
+            raise HTTPException(500, f"DB error: {e}")
 
     # Embed chunks in vector store
     stored = 0
@@ -8445,9 +8341,8 @@ def list_character_docs(character_id: int):
     Returns:
         dict: {"docs": [{id, filename, chunk_count, created_ts}, ...]}
     """
-    conn = db()
-    cur = conn.cursor()
-    try:
+    with db_ctx() as conn:
+        cur = conn.cursor()
         cur.execute(
             "SELECT id, filename, chunk_count, created_ts FROM character_docs "
             "WHERE char_id=? ORDER BY created_ts DESC",
@@ -8458,8 +8353,6 @@ def list_character_docs(character_id: int):
             for r in cur.fetchall()
         ]
         return {"docs": docs}
-    finally:
-        conn.close()
 
 
 @app.delete("/api/characters/{character_id}/docs/{doc_id}")
@@ -8473,15 +8366,12 @@ def delete_character_doc(character_id: int, doc_id: int):
     Returns:
         dict: {"ok": True}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         conn.execute(
             "DELETE FROM character_docs WHERE id=? AND char_id=?",
             (doc_id, character_id)
         )
         conn.commit()
-    finally:
-        conn.close()
 
     if vector_store:
         vector_store.delete_doc_chunks(doc_id)
@@ -8501,9 +8391,8 @@ def list_templates(category: str = ""):
     Returns:
         dict: {"templates": [{id, name, category, system_prompt, description, created_ts}, ...]}
     """
-    conn = db()
-    cur = conn.cursor()
-    try:
+    with db_ctx() as conn:
+        cur = conn.cursor()
         if category:
             cur.execute(
                 "SELECT id, name, category, system_prompt, description, created_ts "
@@ -8521,8 +8410,6 @@ def list_templates(category: str = ""):
             for r in cur.fetchall()
         ]
         return {"templates": templates}
-    finally:
-        conn.close()
 
 
 @app.post("/api/templates")
@@ -8544,9 +8431,8 @@ async def create_template(req: Request):
     category = body.get("category", "custom")
     description = body.get("description", "")
 
-    conn = db()
-    cur = conn.cursor()
-    try:
+    with db_ctx() as conn:
+        cur = conn.cursor()
         cur.execute(
             "INSERT INTO prompt_templates (name, category, system_prompt, description) VALUES (?,?,?,?)",
             (name, category, system_prompt, description)
@@ -8554,8 +8440,6 @@ async def create_template(req: Request):
         tpl_id = cur.lastrowid
         conn.commit()
         return {"ok": True, "id": tpl_id}
-    finally:
-        conn.close()
 
 
 @app.put("/api/templates/{template_id}")
@@ -8581,12 +8465,9 @@ async def update_template(template_id: int, req: Request):
         return {"ok": True}
 
     params.append(template_id)
-    conn = db()
-    try:
+    with db_ctx() as conn:
         conn.execute(f"UPDATE prompt_templates SET {', '.join(updates)} WHERE id=?", params)
         conn.commit()
-    finally:
-        conn.close()
     return {"ok": True}
 
 
@@ -8600,12 +8481,9 @@ def delete_template(template_id: int):
     Returns:
         dict: {"ok": True}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         conn.execute("DELETE FROM prompt_templates WHERE id=?", (template_id,))
         conn.commit()
-    finally:
-        conn.close()
     return {"ok": True}
 
 
@@ -8616,9 +8494,8 @@ def export_templates():
     Returns:
         dict: {"templates": [...]} suitable for re-import.
     """
-    conn = db()
-    cur = conn.cursor()
-    try:
+    with db_ctx() as conn:
+        cur = conn.cursor()
         cur.execute(
             "SELECT name, category, system_prompt, description FROM prompt_templates ORDER BY name"
         )
@@ -8627,8 +8504,6 @@ def export_templates():
             for r in cur.fetchall()
         ]
         return {"templates": templates}
-    finally:
-        conn.close()
 
 
 @app.post("/api/templates/import")
@@ -8648,11 +8523,10 @@ async def import_templates(req: Request):
     if not templates:
         raise HTTPException(400, "No templates provided")
 
-    conn = db()
-    cur = conn.cursor()
-    imported = 0
-    skipped = 0
-    try:
+    with db_ctx() as conn:
+        cur = conn.cursor()
+        imported = 0
+        skipped = 0
         for tpl in templates:
             name = tpl.get("name", "").strip()
             prompt = tpl.get("system_prompt", "").strip()
@@ -8673,8 +8547,6 @@ async def import_templates(req: Request):
             imported += 1
 
         conn.commit()
-    finally:
-        conn.close()
 
     return {"ok": True, "imported": imported, "skipped": skipped}
 
@@ -8790,12 +8662,12 @@ async def upload_voice_sample(char_id: int, file: UploadFile = File(...)):
 
         # Update character's voice_sample_path in DB
         rel_path = f"/files/voice_samples/{char_id}/{safe_name}"
-        conn = db()
-        conn.execute("UPDATE characters SET voice_sample_path = ? WHERE id = ?", (rel_path, char_id))
-        conn.commit()
+        with db_ctx() as conn:
+            conn.execute("UPDATE characters SET voice_sample_path = ? WHERE id = ?", (rel_path, char_id))
+            conn.commit()
 
-        logger.info(f"Voice sample uploaded for character {char_id}: {file_path}")
-        return {"ok": True, "path": rel_path, "abs_path": str(file_path)}
+            logger.info(f"Voice sample uploaded for character {char_id}: {file_path}")
+            return {"ok": True, "path": rel_path, "abs_path": str(file_path)}
     except Exception as e:
         logger.error(f"Voice sample upload failed: {e}")
         raise HTTPException(500, f"Upload failed: {e}")
@@ -8811,29 +8683,29 @@ async def delete_voice_sample(char_id: int):
     Returns:
         {"ok": True}
     """
-    conn = db()
-    row = conn.execute("SELECT voice_sample_path FROM characters WHERE id = ?", (char_id,)).fetchone()
-    if not row:
-        raise HTTPException(404, "Character not found")
+    with db_ctx() as conn:
+        row = conn.execute("SELECT voice_sample_path FROM characters WHERE id = ?", (char_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Character not found")
 
-    voice_path = row[0]
-    if voice_path:
-        try:
-            # voice_path is a URL like /files/voice_samples/1/voice_sample.wav
-            # Resolve to filesystem: STORAGE / voice_samples/1/voice_sample.wav
-            rel = voice_path.replace("/files/", "", 1) if voice_path.startswith("/files/") else voice_path
-            p = STORAGE / rel if not Path(voice_path).is_absolute() else Path(voice_path)
-            if p.exists():
-                p.unlink()
-                # Clean up empty parent dir
-                if p.parent.exists() and not any(p.parent.iterdir()):
-                    p.parent.rmdir()
-        except Exception as e:
-            logger.warning(f"Failed to delete voice file: {e}")
+        voice_path = row[0]
+        if voice_path:
+            try:
+                # voice_path is a URL like /files/voice_samples/1/voice_sample.wav
+                # Resolve to filesystem: STORAGE / voice_samples/1/voice_sample.wav
+                rel = voice_path.replace("/files/", "", 1) if voice_path.startswith("/files/") else voice_path
+                p = STORAGE / rel if not Path(voice_path).is_absolute() else Path(voice_path)
+                if p.exists():
+                    p.unlink()
+                    # Clean up empty parent dir
+                    if p.parent.exists() and not any(p.parent.iterdir()):
+                        p.parent.rmdir()
+            except Exception as e:
+                logger.warning(f"Failed to delete voice file: {e}")
 
-    conn.execute("UPDATE characters SET voice_sample_path = NULL WHERE id = ?", (char_id,))
-    conn.commit()
-    return {"ok": True}
+        conn.execute("UPDATE characters SET voice_sample_path = NULL WHERE id = ?", (char_id,))
+        conn.commit()
+        return {"ok": True}
 
 
 @app.post("/api/upload/live2d")
@@ -8965,19 +8837,19 @@ def reset_relationship(char_id: int):
     Returns:
         {"ok": True}
     """
-    conn = db()
-    with conn:
-        conn.execute("""
-            UPDATE character_relationships SET
-                affinity = 0.5, mood = 0.5, trust = 0.5,
-                interactions = 0, last_updated = strftime('%s','now')
-            WHERE char_id = ?
-        """, (char_id,))
-        if conn.execute("SELECT changes()").fetchone()[0] == 0:
-            conn.execute(
-                "INSERT INTO character_relationships (char_id) VALUES (?)", (char_id,)
-            )
-    return {"ok": True}
+    with db_ctx() as conn:
+        with conn:
+            conn.execute("""
+                UPDATE character_relationships SET
+                    affinity = 0.5, mood = 0.5, trust = 0.5,
+                    interactions = 0, last_updated = strftime('%s','now')
+                WHERE char_id = ?
+            """, (char_id,))
+            if conn.execute("SELECT changes()").fetchone()[0] == 0:
+                conn.execute(
+                    "INSERT INTO character_relationships (char_id) VALUES (?)", (char_id,)
+                )
+        return {"ok": True}
 
 
 # ── Bond Progression System (Phase 13A) ───────────────────────────────────────
@@ -8998,14 +8870,14 @@ def get_character_bond(char_id: int):
         >>> resp.json()["bond"]["tier"]
         'stranger'
     """
-    conn = db()
-    try:
-        from backend.bond.progression import get_bond_level
-        bond = get_bond_level(char_id, conn.cursor())
-        return {"ok": True, "bond": bond}
-    except Exception as e:
-        logger.warning(f"[Bond] get_bond failed: {e}")
-        return {"ok": True, "bond": {"bond_level": 0, "bond_xp": 0, "xp_to_next": 50, "tier": "stranger", "relationship_mode": "friend"}}
+    with db_ctx() as conn:
+        try:
+            from backend.bond.progression import get_bond_level
+            bond = get_bond_level(char_id, conn.cursor())
+            return {"ok": True, "bond": bond}
+        except Exception as e:
+            logger.warning(f"[Bond] get_bond failed: {e}")
+            return {"ok": True, "bond": {"bond_level": 0, "bond_xp": 0, "xp_to_next": 50, "tier": "stranger", "relationship_mode": "friend"}}
 
 
 @app.get("/api/characters/{char_id}/bond/gifts")
@@ -9018,14 +8890,14 @@ def get_character_gifts(char_id: int):
     Returns:
         {"ok": True, "gifts": [{id, gift_name, gift_category, affinity_boost, is_favorite, description}]}
     """
-    conn = db()
-    try:
-        from backend.bond.gifts import get_available_gifts
-        gifts = get_available_gifts(char_id, conn.cursor())
-        return {"ok": True, "gifts": gifts}
-    except Exception as e:
-        logger.warning(f"[Bond] get_gifts failed: {e}")
-        return {"ok": True, "gifts": []}
+    with db_ctx() as conn:
+        try:
+            from backend.bond.gifts import get_available_gifts
+            gifts = get_available_gifts(char_id, conn.cursor())
+            return {"ok": True, "gifts": gifts}
+        except Exception as e:
+            logger.warning(f"[Bond] get_gifts failed: {e}")
+            return {"ok": True, "gifts": []}
 
 
 @app.post("/api/characters/{char_id}/bond/gift")
@@ -9046,16 +8918,16 @@ async def give_character_gift(char_id: int, req: Request):
     if not gift_id:
         return {"ok": False, "error": "gift_id required"}
 
-    conn = db()
-    try:
-        from backend.bond.gifts import give_gift
-        cur = conn.cursor()
-        result = give_gift(char_id, gift_id, cur)
-        conn.commit()
-        return {"ok": True, **result}
-    except Exception as e:
-        logger.warning(f"[Bond] give_gift failed: {e}")
-        return {"ok": False, "error": str(e)}
+    with db_ctx() as conn:
+        try:
+            from backend.bond.gifts import give_gift
+            cur = conn.cursor()
+            result = give_gift(char_id, gift_id, cur)
+            conn.commit()
+            return {"ok": True, **result}
+        except Exception as e:
+            logger.warning(f"[Bond] give_gift failed: {e}")
+            return {"ok": False, "error": str(e)}
 
 
 @app.get("/api/characters/{char_id}/bond/stories")
@@ -9069,36 +8941,36 @@ def get_bond_stories(char_id: int):
         {"ok": True, "stories": [{id, title, bond_level_required, unlocked, viewed, scene_text?}]}
         scene_text is only included for unlocked stories.
     """
-    conn = db()
-    try:
-        cur = conn.cursor()
-        rows = cur.execute(
-            """SELECT id, bond_level_required, title, scene_text, scene_type,
-                      unlocked, viewed
-               FROM bond_stories
-               WHERE char_id = ?
-               ORDER BY bond_level_required ASC""",
-            (char_id,),
-        ).fetchall()
+    with db_ctx() as conn:
+        try:
+            cur = conn.cursor()
+            rows = cur.execute(
+                """SELECT id, bond_level_required, title, scene_text, scene_type,
+                          unlocked, viewed
+                   FROM bond_stories
+                   WHERE char_id = ?
+                   ORDER BY bond_level_required ASC""",
+                (char_id,),
+            ).fetchall()
 
-        stories = []
-        for row in rows:
-            story = {
-                "id": row[0],
-                "bond_level_required": row[1],
-                "title": row[2],
-                "scene_type": row[4],
-                "unlocked": bool(row[5]),
-                "viewed": bool(row[6]),
-            }
-            if row[5]:  # only include scene_text for unlocked stories
-                story["scene_text"] = row[3]
-            stories.append(story)
+            stories = []
+            for row in rows:
+                story = {
+                    "id": row[0],
+                    "bond_level_required": row[1],
+                    "title": row[2],
+                    "scene_type": row[4],
+                    "unlocked": bool(row[5]),
+                    "viewed": bool(row[6]),
+                }
+                if row[5]:  # only include scene_text for unlocked stories
+                    story["scene_text"] = row[3]
+                stories.append(story)
 
-        return {"ok": True, "stories": stories}
-    except Exception as e:
-        logger.warning(f"[Bond] get_stories failed: {e}")
-        return {"ok": True, "stories": []}
+            return {"ok": True, "stories": stories}
+        except Exception as e:
+            logger.warning(f"[Bond] get_stories failed: {e}")
+            return {"ok": True, "stories": []}
 
 
 @app.post("/api/characters/{char_id}/bond/stories/{story_id}/view")
@@ -9112,13 +8984,13 @@ def mark_story_viewed(char_id: int, story_id: int):
     Returns:
         {"ok": True}
     """
-    conn = db()
-    conn.execute(
-        "UPDATE bond_stories SET viewed = 1 WHERE id = ? AND char_id = ?",
-        (story_id, char_id),
-    )
-    conn.commit()
-    return {"ok": True}
+    with db_ctx() as conn:
+        conn.execute(
+            "UPDATE bond_stories SET viewed = 1 WHERE id = ? AND char_id = ?",
+            (story_id, char_id),
+        )
+        conn.commit()
+        return {"ok": True}
 
 
 @app.get("/api/characters/{char_id}/bond/gift-history")
@@ -9131,14 +9003,14 @@ def get_character_gift_history(char_id: int):
     Returns:
         {"ok": True, "history": [{gift_name, given_at, reaction}]}
     """
-    conn = db()
-    try:
-        from backend.bond.gifts import get_gift_history
-        history = get_gift_history(char_id, conn.cursor())
-        return {"ok": True, "history": history}
-    except Exception as e:
-        logger.warning(f"[Bond] get_gift_history failed: {e}")
-        return {"ok": True, "history": []}
+    with db_ctx() as conn:
+        try:
+            from backend.bond.gifts import get_gift_history
+            history = get_gift_history(char_id, conn.cursor())
+            return {"ok": True, "history": history}
+        except Exception as e:
+            logger.warning(f"[Bond] get_gift_history failed: {e}")
+            return {"ok": True, "history": []}
 
 
 # ── Bond Progression Phase 1: Milestones, Unlocks, XP History ────────────────
@@ -9157,14 +9029,14 @@ def get_bond_milestones_endpoint(char_id: int):
         {"ok": True, "milestones": [{id, milestone_type, milestone_key,
          bond_level, achieved_at, viewed}, ...]}
     """
-    conn = db()
-    try:
-        from backend.bond.milestones import get_milestones
-        ms = get_milestones(char_id, conn.cursor())
-        return {"ok": True, "milestones": ms}
-    except Exception as e:
-        logger.warning(f"[Bond] get_milestones failed: {e}")
-        return {"ok": True, "milestones": []}
+    with db_ctx() as conn:
+        try:
+            from backend.bond.milestones import get_milestones
+            ms = get_milestones(char_id, conn.cursor())
+            return {"ok": True, "milestones": ms}
+        except Exception as e:
+            logger.warning(f"[Bond] get_milestones failed: {e}")
+            return {"ok": True, "milestones": []}
 
 
 @app.get("/api/characters/{char_id}/bond/unlocks")
@@ -9182,22 +9054,22 @@ def get_bond_unlocks_endpoint(char_id: int):
         {"ok": True, "bond_level": int, "tier": str,
          "unlocked": [...], "next_unlock": {...} | null}
     """
-    conn = db()
-    try:
-        from backend.bond.progression import get_bond_level
-        from backend.bond.unlocks import get_unlocked_features, get_next_unlock
-        bond = get_bond_level(char_id, conn.cursor())
-        level = bond.get("bond_level", 0)
-        return {
-            "ok": True,
-            "bond_level": level,
-            "tier": bond.get("tier", "stranger"),
-            "unlocked": get_unlocked_features(level),
-            "next_unlock": get_next_unlock(level),
-        }
-    except Exception as e:
-        logger.warning(f"[Bond] get_unlocks failed: {e}")
-        return {"ok": True, "bond_level": 0, "tier": "stranger", "unlocked": [], "next_unlock": None}
+    with db_ctx() as conn:
+        try:
+            from backend.bond.progression import get_bond_level
+            from backend.bond.unlocks import get_unlocked_features, get_next_unlock
+            bond = get_bond_level(char_id, conn.cursor())
+            level = bond.get("bond_level", 0)
+            return {
+                "ok": True,
+                "bond_level": level,
+                "tier": bond.get("tier", "stranger"),
+                "unlocked": get_unlocked_features(level),
+                "next_unlock": get_next_unlock(level),
+            }
+        except Exception as e:
+            logger.warning(f"[Bond] get_unlocks failed: {e}")
+            return {"ok": True, "bond_level": 0, "tier": "stranger", "unlocked": [], "next_unlock": None}
 
 
 @app.get("/api/characters/{char_id}/bond/xp-history")
@@ -9215,14 +9087,14 @@ def get_bond_xp_history_endpoint(char_id: int, limit: int = 50):
         {"ok": True, "events": [{id, xp_amount, action, multiplier,
          source_detail, created_at}, ...]}
     """
-    conn = db()
-    try:
-        from backend.bond.milestones import get_xp_history
-        events = get_xp_history(char_id, conn.cursor(), limit=min(limit, 200))
-        return {"ok": True, "events": events}
-    except Exception as e:
-        logger.warning(f"[Bond] get_xp_history failed: {e}")
-        return {"ok": True, "events": []}
+    with db_ctx() as conn:
+        try:
+            from backend.bond.milestones import get_xp_history
+            events = get_xp_history(char_id, conn.cursor(), limit=min(limit, 200))
+            return {"ok": True, "events": events}
+        except Exception as e:
+            logger.warning(f"[Bond] get_xp_history failed: {e}")
+            return {"ok": True, "events": []}
 
 
 # ── Bond Phase 5: Memorial Scenes ────────────────────────────────────────────
@@ -9254,18 +9126,18 @@ def get_bond_memorial_scene_endpoint(char_id: int, level: int = 0):
         ``beats``, ``culmination``, ``keepsake``, ``char_id``, or
         ``{"ok": True, "scene": null}`` when no scene is pending.
     """
-    conn = db()
-    try:
-        from backend.bond.memorial_scenes import get_pending_scene
-        row = conn.execute(
-            "SELECT name FROM characters WHERE id = ?", (char_id,)
-        ).fetchone()
-        char_name = row[0] if row else None
-        scene = get_pending_scene(char_id, level, conn, char_name=char_name)
-        return {"ok": True, "scene": scene}
-    except Exception as e:
-        logger.warning(f"[Bond] get_memorial_scene failed: {e}")
-        return {"ok": True, "scene": None}
+    with db_ctx() as conn:
+        try:
+            from backend.bond.memorial_scenes import get_pending_scene
+            row = conn.execute(
+                "SELECT name FROM characters WHERE id = ?", (char_id,)
+            ).fetchone()
+            char_name = row[0] if row else None
+            scene = get_pending_scene(char_id, level, conn, char_name=char_name)
+            return {"ok": True, "scene": scene}
+        except Exception as e:
+            logger.warning(f"[Bond] get_memorial_scene failed: {e}")
+            return {"ok": True, "scene": None}
 
 
 @app.post("/api/characters/{char_id}/bond/memorial-scene/complete")
@@ -9285,14 +9157,14 @@ def complete_bond_memorial_scene_endpoint(
     Returns:
         ``{"ok": True, "recorded": bool, "already_seen": bool}``
     """
-    conn = db()
-    try:
-        from backend.bond.memorial_scenes import mark_scene_completed
-        recorded = mark_scene_completed(char_id, req.scene_id, conn)
-        return {"ok": True, "recorded": recorded, "already_seen": not recorded}
-    except Exception as e:
-        logger.warning(f"[Bond] complete_memorial_scene failed: {e}")
-        return {"ok": False, "error": str(e)}
+    with db_ctx() as conn:
+        try:
+            from backend.bond.memorial_scenes import mark_scene_completed
+            recorded = mark_scene_completed(char_id, req.scene_id, conn)
+            return {"ok": True, "recorded": recorded, "already_seen": not recorded}
+        except Exception as e:
+            logger.warning(f"[Bond] complete_memorial_scene failed: {e}")
+            return {"ok": False, "error": str(e)}
 
 
 @app.get("/api/characters/{char_id}/bond/first-memory")
@@ -9314,14 +9186,14 @@ def get_bond_first_memory_endpoint(char_id: int):
         ``{"ok": True, "scene": {scene_id, char_id, level, tier_label,
         setting, beats, culmination, keepsake, source_messages, generated}}``
     """
-    conn = db()
-    try:
-        from backend.bond.memorial_scenes import generate_first_memory_scene
-        scene = generate_first_memory_scene(char_id, conn, llm_caller=None)
-        return {"ok": True, "scene": scene}
-    except Exception as e:
-        logger.warning(f"[Bond] get_first_memory failed: {e}")
-        return {"ok": False, "error": str(e)}
+    with db_ctx() as conn:
+        try:
+            from backend.bond.memorial_scenes import generate_first_memory_scene
+            scene = generate_first_memory_scene(char_id, conn, llm_caller=None)
+            return {"ok": True, "scene": scene}
+        except Exception as e:
+            logger.warning(f"[Bond] get_first_memory failed: {e}")
+            return {"ok": False, "error": str(e)}
 
 
 # ── Bond Phase 6: Analytics ───────────────────────────────────────────────────
@@ -9348,103 +9220,103 @@ def get_bond_analytics_endpoint(char_id: int):
         where ``source_breakdown`` is a dict mapping action slug to percentage
         of total XP earned in the last 7 days.
     """
-    conn = db()
-    try:
-        from backend.bond.progression import get_bond_level
+    with db_ctx() as conn:
+        try:
+            from backend.bond.progression import get_bond_level
 
-        bond = get_bond_level(char_id, conn.cursor())
-        current_level: int = bond.get("bond_level", 0)
-        current_xp: int = bond.get("bond_xp", 0)
+            bond = get_bond_level(char_id, conn.cursor())
+            current_level: int = bond.get("bond_level", 0)
+            current_xp: int = bond.get("bond_xp", 0)
 
-        # ── Total XP ever earned ──────────────────────────────────────────
-        row = conn.execute(
-            "SELECT COALESCE(SUM(xp_amount), 0) FROM bond_xp_events WHERE char_id = ?",
-            (char_id,),
-        ).fetchone()
-        total_xp_earned: int = int(row[0]) if row else 0
+            # ── Total XP ever earned ──────────────────────────────────────────
+            row = conn.execute(
+                "SELECT COALESCE(SUM(xp_amount), 0) FROM bond_xp_events WHERE char_id = ?",
+                (char_id,),
+            ).fetchone()
+            total_xp_earned: int = int(row[0]) if row else 0
 
-        # ── Days active (distinct calendar days with any XP event) ────────
-        row = conn.execute(
-            """
-            SELECT COUNT(DISTINCT date(created_at))
-              FROM bond_xp_events
-             WHERE char_id = ?
-            """,
-            (char_id,),
-        ).fetchone()
-        days_active: int = int(row[0]) if row else 0
+            # ── Days active (distinct calendar days with any XP event) ────────
+            row = conn.execute(
+                """
+                SELECT COUNT(DISTINCT date(created_at))
+                  FROM bond_xp_events
+                 WHERE char_id = ?
+                """,
+                (char_id,),
+            ).fetchone()
+            days_active: int = int(row[0]) if row else 0
 
-        # ── Avg XP per active day (last 14 days of activity) ─────────────
-        rows = conn.execute(
-            """
-            SELECT date(created_at) AS day, SUM(xp_amount) AS day_xp
-              FROM bond_xp_events
-             WHERE char_id = ?
-               AND created_at >= datetime('now', '-14 days')
-             GROUP BY day
-            """,
-            (char_id,),
-        ).fetchall()
-        recent_day_totals = [r[1] for r in rows if r[1] is not None]
-        avg_xp_per_day: float = (
-            sum(recent_day_totals) / len(recent_day_totals)
-            if recent_day_totals
-            else 0.0
-        )
+            # ── Avg XP per active day (last 14 days of activity) ─────────────
+            rows = conn.execute(
+                """
+                SELECT date(created_at) AS day, SUM(xp_amount) AS day_xp
+                  FROM bond_xp_events
+                 WHERE char_id = ?
+                   AND created_at >= datetime('now', '-14 days')
+                 GROUP BY day
+                """,
+                (char_id,),
+            ).fetchall()
+            recent_day_totals = [r[1] for r in rows if r[1] is not None]
+            avg_xp_per_day: float = (
+                sum(recent_day_totals) / len(recent_day_totals)
+                if recent_day_totals
+                else 0.0
+            )
 
-        # ── Days to Soulmate projection ───────────────────────────────────
-        est_days_to_soulmate: int | None = None
-        if current_level < 65 and avg_xp_per_day > 0:
-            from backend.bond.progression import _xp_required_for_level  # type: ignore[attr-defined]
+            # ── Days to Soulmate projection ───────────────────────────────────
+            est_days_to_soulmate: int | None = None
+            if current_level < 65 and avg_xp_per_day > 0:
+                from backend.bond.progression import _xp_required_for_level  # type: ignore[attr-defined]
 
-            # Sum XP required from current level through level 64.
-            xp_remaining: int = -current_xp  # subtract already-earned XP at this level
-            for lvl in range(current_level, 65):
-                xp_remaining += _xp_required_for_level(lvl)
-            xp_remaining = max(0, xp_remaining)
-            est_days_to_soulmate = max(1, round(xp_remaining / avg_xp_per_day))
+                # Sum XP required from current level through level 64.
+                xp_remaining: int = -current_xp  # subtract already-earned XP at this level
+                for lvl in range(current_level, 65):
+                    xp_remaining += _xp_required_for_level(lvl)
+                xp_remaining = max(0, xp_remaining)
+                est_days_to_soulmate = max(1, round(xp_remaining / avg_xp_per_day))
 
-        # ── Source breakdown (last 7 days) ────────────────────────────────
-        rows = conn.execute(
-            """
-            SELECT action, SUM(xp_amount) AS total
-              FROM bond_xp_events
-             WHERE char_id = ?
-               AND created_at >= datetime('now', '-7 days')
-             GROUP BY action
-             ORDER BY total DESC
-            """,
-            (char_id,),
-        ).fetchall()
-        period_total = sum(r[1] for r in rows if r[1]) or 1  # avoid div-by-zero
-        source_breakdown: dict[str, float] = {
-            r[0]: round(100.0 * r[1] / period_total, 1)
-            for r in rows
-            if r[1]
-        }
+            # ── Source breakdown (last 7 days) ────────────────────────────────
+            rows = conn.execute(
+                """
+                SELECT action, SUM(xp_amount) AS total
+                  FROM bond_xp_events
+                 WHERE char_id = ?
+                   AND created_at >= datetime('now', '-7 days')
+                 GROUP BY action
+                 ORDER BY total DESC
+                """,
+                (char_id,),
+            ).fetchall()
+            period_total = sum(r[1] for r in rows if r[1]) or 1  # avoid div-by-zero
+            source_breakdown: dict[str, float] = {
+                r[0]: round(100.0 * r[1] / period_total, 1)
+                for r in rows
+                if r[1]
+            }
 
-        return {
-            "ok": True,
-            "analytics": {
-                "total_xp_earned": total_xp_earned,
-                "days_active": days_active,
-                "avg_xp_per_day": round(avg_xp_per_day, 1),
-                "est_days_to_soulmate": est_days_to_soulmate,
-                "source_breakdown": source_breakdown,
-            },
-        }
-    except Exception as e:
-        logger.warning(f"[Bond] get_analytics failed: {e}")
-        return {
-            "ok": True,
-            "analytics": {
-                "total_xp_earned": 0,
-                "days_active": 0,
-                "avg_xp_per_day": 0.0,
-                "est_days_to_soulmate": None,
-                "source_breakdown": {},
-            },
-        }
+            return {
+                "ok": True,
+                "analytics": {
+                    "total_xp_earned": total_xp_earned,
+                    "days_active": days_active,
+                    "avg_xp_per_day": round(avg_xp_per_day, 1),
+                    "est_days_to_soulmate": est_days_to_soulmate,
+                    "source_breakdown": source_breakdown,
+                },
+            }
+        except Exception as e:
+            logger.warning(f"[Bond] get_analytics failed: {e}")
+            return {
+                "ok": True,
+                "analytics": {
+                    "total_xp_earned": 0,
+                    "days_active": 0,
+                    "avg_xp_per_day": 0.0,
+                    "est_days_to_soulmate": None,
+                    "source_breakdown": {},
+                },
+            }
 
 
 # ── Character Diary (#57) ─────────────────────────────────────────────────────
@@ -9464,13 +9336,13 @@ def get_character_diary(char_id: int):
         {"ok": True, "diary": "...", "diary_date": "YYYY-MM-DD"} or
         {"ok": True, "diary": None, "diary_date": None} if no entry yet.
     """
-    conn = db()
-    row = conn.execute(
-        "SELECT diary, diary_date FROM characters WHERE id = ?", (char_id,)
-    ).fetchone()
-    if not row:
-        raise HTTPException(404, "Character not found")
-    return {"ok": True, "diary": row[0], "diary_date": row[1]}
+    with db_ctx() as conn:
+        row = conn.execute(
+            "SELECT diary, diary_date FROM characters WHERE id = ?", (char_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Character not found")
+        return {"ok": True, "diary": row[0], "diary_date": row[1]}
 
 
 @app.post("/api/characters/{char_id}/diary")
@@ -9500,96 +9372,96 @@ async def generate_character_diary(char_id: int, req: Request):
     except Exception:
         pass
 
-    conn = db()
+    with db_ctx() as conn:
 
-    # Load character metadata
-    char_row = conn.execute(
-        "SELECT name, system_prompt, last_emotion FROM characters WHERE id = ?",
-        (char_id,)
-    ).fetchone()
-    if not char_row:
-        raise HTTPException(404, "Character not found")
-    char_name = char_row[0] or "Character"
-    char_system_prompt = char_row[1] or ""
-    char_emotion = char_row[2] or "neutral"
-
-    # Determine which session to summarize
-    session_id = body.get("session_id")
-    if session_id:
-        msgs = conn.execute(
-            "SELECT role, text FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id",
-            (session_id,)
-        ).fetchall()
-    else:
-        # Use the most recent session that belongs to this character.
-        # The sessions table has no char_id / character_id column —
-        # session→character is implicit via messages.char_id. Find the
-        # session whose most recent message belongs to this character.
-        # Earlier code referenced a phantom `character_id` column that
-        # produced 500s on the diary endpoint.
-        sess_row = conn.execute(
-            "SELECT session_id FROM messages WHERE char_id = ? "
-            "ORDER BY ts DESC LIMIT 1",
+        # Load character metadata
+        char_row = conn.execute(
+            "SELECT name, system_prompt, last_emotion FROM characters WHERE id = ?",
             (char_id,)
         ).fetchone()
-        if not sess_row:
-            return {"ok": False, "error": "No sessions found for this character"}
-        msgs = conn.execute(
-            "SELECT role, text FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id",
-            (sess_row[0],)
-        ).fetchall()
+        if not char_row:
+            raise HTTPException(404, "Character not found")
+        char_name = char_row[0] or "Character"
+        char_system_prompt = char_row[1] or ""
+        char_emotion = char_row[2] or "neutral"
 
-    if not msgs:
-        return {"ok": False, "error": "No messages found to write diary about"}
+        # Determine which session to summarize
+        session_id = body.get("session_id")
+        if session_id:
+            msgs = conn.execute(
+                "SELECT role, text FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id",
+                (session_id,)
+            ).fetchall()
+        else:
+            # Use the most recent session that belongs to this character.
+            # The sessions table has no char_id / character_id column —
+            # session→character is implicit via messages.char_id. Find the
+            # session whose most recent message belongs to this character.
+            # Earlier code referenced a phantom `character_id` column that
+            # produced 500s on the diary endpoint.
+            sess_row = conn.execute(
+                "SELECT session_id FROM messages WHERE char_id = ? "
+                "ORDER BY ts DESC LIMIT 1",
+                (char_id,)
+            ).fetchone()
+            if not sess_row:
+                return {"ok": False, "error": "No sessions found for this character"}
+            msgs = conn.execute(
+                "SELECT role, text FROM messages WHERE session_id = ? AND is_active = 1 ORDER BY id",
+                (sess_row[0],)
+            ).fetchall()
 
-    # Build conversation excerpt (last 30 messages to stay within context)
-    excerpt = "\n".join(
-        f"{'[User]' if r[0] == 'user' else f'[{char_name}]'}: {r[1][:300]}"
-        for r in msgs[-30:]
-    )
+        if not msgs:
+            return {"ok": False, "error": "No messages found to write diary about"}
 
-    # Diary generation prompt — first-person, 2–3 sentences, in character
-    diary_prompt = (
-        f"You are {char_name}. Based on your personality and the conversation below, "
-        f"write a short diary entry (2–4 sentences) in the first person, as if you are "
-        f"writing in your personal diary tonight. Reflect on the conversation, your "
-        f"feelings, and anything memorable. Stay in character. "
-        f"Current mood: {char_emotion}.\n\n"
-        f"CONVERSATION:\n{excerpt}\n\n"
-        f"DIARY ENTRY ({char_name}'s words only):"
-    )
-
-    cfg = load_config()
-    try:
-        from backend.llm.registry import get_client
-        adapter = get_client(cfg)
-        res = await run_in_threadpool(
-            adapter.chat,
-            [{"role": "user", "content": diary_prompt}],
-            cfg["llm"]["model"],
-            cfg["llm"]["endpoint"],
-            cfg["llm"]["api_key"],
-            temperature=0.75,
-            max_tokens=300,
+        # Build conversation excerpt (last 30 messages to stay within context)
+        excerpt = "\n".join(
+            f"{'[User]' if r[0] == 'user' else f'[{char_name}]'}: {r[1][:300]}"
+            for r in msgs[-30:]
         )
-    except Exception as exc:
-        logger.error(f"[Diary] LLM call failed for char {char_id}: {exc}")
-        raise HTTPException(500, f"LLM error: {exc}")
 
-    if not res.get("ok"):
-        raise HTTPException(500, res.get("error", "LLM error"))
+        # Diary generation prompt — first-person, 2–3 sentences, in character
+        diary_prompt = (
+            f"You are {char_name}. Based on your personality and the conversation below, "
+            f"write a short diary entry (2–4 sentences) in the first person, as if you are "
+            f"writing in your personal diary tonight. Reflect on the conversation, your "
+            f"feelings, and anything memorable. Stay in character. "
+            f"Current mood: {char_emotion}.\n\n"
+            f"CONVERSATION:\n{excerpt}\n\n"
+            f"DIARY ENTRY ({char_name}'s words only):"
+        )
 
-    diary_text = res["reply"].strip()
-    today = datetime.now().strftime("%Y-%m-%d")
+        cfg = load_config()
+        try:
+            from backend.llm.registry import get_client
+            adapter = get_client(cfg)
+            res = await run_in_threadpool(
+                adapter.chat,
+                [{"role": "user", "content": diary_prompt}],
+                cfg["llm"]["model"],
+                cfg["llm"]["endpoint"],
+                cfg["llm"]["api_key"],
+                temperature=0.75,
+                max_tokens=300,
+            )
+        except Exception as exc:
+            logger.error(f"[Diary] LLM call failed for char {char_id}: {exc}")
+            raise HTTPException(500, f"LLM error: {exc}")
 
-    conn.execute(
-        "UPDATE characters SET diary = ?, diary_date = ? WHERE id = ?",
-        (diary_text, today, char_id)
-    )
-    conn.commit()
+        if not res.get("ok"):
+            raise HTTPException(500, res.get("error", "LLM error"))
 
-    logger.info(f"[Diary] Written for char {char_id} ({char_name}) on {today}")
-    return {"ok": True, "diary": diary_text, "diary_date": today}
+        diary_text = res["reply"].strip()
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        conn.execute(
+            "UPDATE characters SET diary = ?, diary_date = ? WHERE id = ?",
+            (diary_text, today, char_id)
+        )
+        conn.commit()
+
+        logger.info(f"[Diary] Written for char {char_id} ({char_name}) on {today}")
+        return {"ok": True, "diary": diary_text, "diary_date": today}
 
 
 # ── Companion Opening Greeting ──────────────────────────────────────────────────
@@ -9615,127 +9487,127 @@ async def get_character_greeting(char_id: int):
         If greeting_enabled is False, returns {"ok": True, "enabled": False}.
     """
     import time as _time
-    conn = db()
-    # Note: column is `greeting_text` (added in v7); `greeting_message` is the
-    # CHARA V2 input-dict key name, mapped to greeting_text on import. The
-    # earlier `greeting_message` here was a typo that produced 500s on every
-    # call to this hot endpoint (the frontend polls greeting on app open).
-    row = conn.execute(
-        "SELECT name, system_prompt, greeting_text, greeting_enabled, greeting_intensity, "
-        "diary, last_emotion FROM characters WHERE id = ?",
-        (char_id,)
-    ).fetchone()
-    if not row:
-        raise HTTPException(404, "Character not found")
+    with db_ctx() as conn:
+        # Note: column is `greeting_text` (added in v7); `greeting_message` is the
+        # CHARA V2 input-dict key name, mapped to greeting_text on import. The
+        # earlier `greeting_message` here was a typo that produced 500s on every
+        # call to this hot endpoint (the frontend polls greeting on app open).
+        row = conn.execute(
+            "SELECT name, system_prompt, greeting_text, greeting_enabled, greeting_intensity, "
+            "diary, last_emotion FROM characters WHERE id = ?",
+            (char_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Character not found")
 
-    char_name, system_prompt, greeting_message, greeting_enabled, greeting_intensity, diary, last_emotion = row
-    greeting_enabled = bool(greeting_enabled if greeting_enabled is not None else 1)
+        char_name, system_prompt, greeting_message, greeting_enabled, greeting_intensity, diary, last_emotion = row
+        greeting_enabled = bool(greeting_enabled if greeting_enabled is not None else 1)
 
-    if not greeting_enabled:
-        return {"ok": True, "enabled": False}
+        if not greeting_enabled:
+            return {"ok": True, "enabled": False}
 
-    # Return cached greeting if fresh
-    now_ts = _time.time()
-    if char_id in _greeting_cache:
-        cached_at, cached_text, cached_emotion = _greeting_cache[char_id]
-        if now_ts - cached_at < _GREETING_CACHE_TTL:
-            return {"ok": True, "greeting": cached_text, "emotion": cached_emotion, "enabled": True}
+        # Return cached greeting if fresh
+        now_ts = _time.time()
+        if char_id in _greeting_cache:
+            cached_at, cached_text, cached_emotion = _greeting_cache[char_id]
+            if now_ts - cached_at < _GREETING_CACHE_TTL:
+                return {"ok": True, "greeting": cached_text, "emotion": cached_emotion, "enabled": True}
 
-    # Get time since last activity with this character. The sessions table
-    # has no char_id / character_id column — session→character is implicit
-    # via messages.char_id. So query the most recent message timestamp for
-    # this character; messages.ts is a unix timestamp (REAL).
-    last_msg = conn.execute(
-        "SELECT MAX(ts) FROM messages WHERE char_id = ?",
-        (char_id,)
-    ).fetchone()
-    gap_text = ""
-    if last_msg and last_msg[0]:
-        try:
-            gap_days = int((_time.time() - float(last_msg[0])) / 86400)
-            if gap_days > 7:
-                gap_text = f"It has been {gap_days} days since you last spoke."
-            elif gap_days > 2:
-                gap_text = f"It has been {gap_days} days since your last conversation."
-            elif gap_days == 1:
-                gap_text = "You last spoke yesterday."
-        except Exception:
-            pass
+        # Get time since last activity with this character. The sessions table
+        # has no char_id / character_id column — session→character is implicit
+        # via messages.char_id. So query the most recent message timestamp for
+        # this character; messages.ts is a unix timestamp (REAL).
+        last_msg = conn.execute(
+            "SELECT MAX(ts) FROM messages WHERE char_id = ?",
+            (char_id,)
+        ).fetchone()
+        gap_text = ""
+        if last_msg and last_msg[0]:
+            try:
+                gap_days = int((_time.time() - float(last_msg[0])) / 86400)
+                if gap_days > 7:
+                    gap_text = f"It has been {gap_days} days since you last spoke."
+                elif gap_days > 2:
+                    gap_text = f"It has been {gap_days} days since your last conversation."
+                elif gap_days == 1:
+                    gap_text = "You last spoke yesterday."
+            except Exception:
+                pass
 
-    # Get relationship affinity
-    rel_row = conn.execute(
-        "SELECT affinity FROM character_relationships WHERE char_id = ?", (char_id,)
-    ).fetchone()
-    affinity = float(rel_row[0]) if rel_row else 0.0
+        # Get relationship affinity
+        rel_row = conn.execute(
+            "SELECT affinity FROM character_relationships WHERE char_id = ?", (char_id,)
+        ).fetchone()
+        affinity = float(rel_row[0]) if rel_row else 0.0
 
-    # Current time slot for context
-    from backend.mood.engine import _get_time_slot
-    hour = _time.localtime().tm_hour
-    time_slot = _get_time_slot(hour)
+        # Current time slot for context
+        from backend.mood.engine import _get_time_slot
+        hour = _time.localtime().tm_hour
+        time_slot = _get_time_slot(hour)
 
-    intensity = float(greeting_intensity) if greeting_intensity is not None else 0.8
+        intensity = float(greeting_intensity) if greeting_intensity is not None else 0.8
 
-    # Build greeting prompt
-    context_parts = []
-    if gap_text:
-        context_parts.append(gap_text)
-    if diary:
-        context_parts.append(f"Your last diary entry: \"{diary[:200]}\"")
-    if affinity >= 70:
-        context_parts.append("You feel very close to this person.")
-    elif affinity <= 15:
-        context_parts.append("You are still getting to know this person.")
+        # Build greeting prompt
+        context_parts = []
+        if gap_text:
+            context_parts.append(gap_text)
+        if diary:
+            context_parts.append(f"Your last diary entry: \"{diary[:200]}\"")
+        if affinity >= 70:
+            context_parts.append("You feel very close to this person.")
+        elif affinity <= 15:
+            context_parts.append("You are still getting to know this person.")
 
-    context_block = "\n".join(context_parts) if context_parts else "No prior context."
+        context_block = "\n".join(context_parts) if context_parts else "No prior context."
 
-    brevity = "1-2 warm sentences" if intensity < 0.5 else "2-3 sentences"
-    prompt = (
-        f"You are {char_name}. It is {time_slot.replace('_', ' ')}. "
-        f"The user just opened the app and is about to start chatting with you.\n\n"
-        f"Context:\n{context_block}\n\n"
-        f"Write a natural, in-character opening greeting ({brevity}). "
-        f"Reference the time gap if significant. Stay in your personality. "
-        f"Do not start with 'Oh' or clichés. Do not use the word 'greetings'. "
-        f"End with the [EMOTION: X, INTENSITY: Y] tag on its own line.\n\n"
-        f"Greeting:"
-    )
-
-    cfg = load_config()
-    try:
-        from backend.llm.registry import get_client
-        adapter = get_client(cfg)
-        res = await run_in_threadpool(
-            adapter.chat,
-            [{"role": "user", "content": prompt}],
-            cfg["llm"]["model"],
-            cfg["llm"]["endpoint"],
-            cfg["llm"]["api_key"],
-            temperature=0.8,
-            max_tokens=200,
+        brevity = "1-2 warm sentences" if intensity < 0.5 else "2-3 sentences"
+        prompt = (
+            f"You are {char_name}. It is {time_slot.replace('_', ' ')}. "
+            f"The user just opened the app and is about to start chatting with you.\n\n"
+            f"Context:\n{context_block}\n\n"
+            f"Write a natural, in-character opening greeting ({brevity}). "
+            f"Reference the time gap if significant. Stay in your personality. "
+            f"Do not start with 'Oh' or clichés. Do not use the word 'greetings'. "
+            f"End with the [EMOTION: X, INTENSITY: Y] tag on its own line.\n\n"
+            f"Greeting:"
         )
-    except Exception as exc:
-        logger.error(f"[Greeting] LLM call failed for char {char_id}: {exc}")
-        # Graceful fallback: use the character's static greeting_message
-        fallback = greeting_message or f"Hey, good to see you again!"
-        return {"ok": True, "greeting": fallback, "emotion": "happy", "enabled": True}
 
-    if not res.get("ok"):
-        fallback = greeting_message or f"Hey, good to see you again!"
-        return {"ok": True, "greeting": fallback, "emotion": "happy", "enabled": True}
+        cfg = load_config()
+        try:
+            from backend.llm.registry import get_client
+            adapter = get_client(cfg)
+            res = await run_in_threadpool(
+                adapter.chat,
+                [{"role": "user", "content": prompt}],
+                cfg["llm"]["model"],
+                cfg["llm"]["endpoint"],
+                cfg["llm"]["api_key"],
+                temperature=0.8,
+                max_tokens=200,
+            )
+        except Exception as exc:
+            logger.error(f"[Greeting] LLM call failed for char {char_id}: {exc}")
+            # Graceful fallback: use the character's static greeting_message
+            fallback = greeting_message or f"Hey, good to see you again!"
+            return {"ok": True, "greeting": fallback, "emotion": "happy", "enabled": True}
 
-    raw = res["reply"].strip()
+        if not res.get("ok"):
+            fallback = greeting_message or f"Hey, good to see you again!"
+            return {"ok": True, "greeting": fallback, "emotion": "happy", "enabled": True}
 
-    # Strip emotion tag for clean display
-    import re as _re
-    emotion_match = _re.search(r'\[EMOTION:\s*(\w+)', raw, _re.IGNORECASE)
-    detected_emotion = emotion_match.group(1).lower() if emotion_match else (last_emotion or "happy")
-    clean_greeting = _re.sub(r'\[EMOTION:[^\]]*\]', '', raw).strip()
+        raw = res["reply"].strip()
 
-    # Cache result
-    _greeting_cache[char_id] = (now_ts, clean_greeting, detected_emotion)
+        # Strip emotion tag for clean display
+        import re as _re
+        emotion_match = _re.search(r'\[EMOTION:\s*(\w+)', raw, _re.IGNORECASE)
+        detected_emotion = emotion_match.group(1).lower() if emotion_match else (last_emotion or "happy")
+        clean_greeting = _re.sub(r'\[EMOTION:[^\]]*\]', '', raw).strip()
 
-    logger.info(f"[Greeting] Generated for char {char_id} ({char_name}), emotion={detected_emotion}")
-    return {"ok": True, "greeting": clean_greeting, "emotion": detected_emotion, "enabled": True}
+        # Cache result
+        _greeting_cache[char_id] = (now_ts, clean_greeting, detected_emotion)
+
+        logger.info(f"[Greeting] Generated for char {char_id} ({char_name}), emotion={detected_emotion}")
+        return {"ok": True, "greeting": clean_greeting, "emotion": detected_emotion, "enabled": True}
 
 
 # ── Character Analytics Dashboard ──────────────────────────────────────────────
@@ -9808,8 +9680,7 @@ def get_character_analytics(char_id: int):
     """
     from collections import Counter as _Counter
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         # Validate character exists
         char_row = conn.execute(
             "SELECT id FROM characters WHERE id = ?", (char_id,)
@@ -9977,8 +9848,6 @@ def get_character_analytics(char_id: int):
             "longest_session_messages": longest_session_messages,
         }
 
-    finally:
-        conn.close()
 
 
 # ── Feature #6 — Character Backstory Generator ─────────────────────────────────
@@ -10005,14 +9874,11 @@ async def generate_character_backstory(char_id: int):
         POST /api/characters/2/generate-backstory
         Response: {"backstory": "Born in the neon-lit streets of Neo Kyoto..."}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         char_row = conn.execute(
             "SELECT name, system_prompt, personality_traits FROM characters WHERE id = ?",
             (char_id,)
         ).fetchone()
-    finally:
-        conn.close()
 
     if not char_row:
         raise HTTPException(404, "Character not found")
@@ -10051,15 +9917,12 @@ async def generate_character_backstory(char_id: int):
 
     backstory_text = res["reply"].strip()
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         conn.execute(
             "UPDATE characters SET backstory = ? WHERE id = ?",
             (backstory_text, char_id)
         )
         conn.commit()
-    finally:
-        conn.close()
 
     logger.info(f"[Backstory] Generated for char {char_id} ({char_name})")
     return {"backstory": backstory_text}
@@ -10104,15 +9967,12 @@ async def update_session_tags(session_id: int, req: Request):
 
     tags_json = json.dumps(tags)
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Session not found")
         conn.execute("UPDATE sessions SET tags = ? WHERE id = ?", (tags_json, session_id))
         conn.commit()
-    finally:
-        conn.close()
 
     logger.info(f"[Tags] Session {session_id} tags updated: {tags}")
     return {"tags": tags, "session_id": session_id}
@@ -10133,14 +9993,11 @@ async def get_author_note(session_id: int):
     Raises:
         HTTPException 404: If the session does not exist.
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT author_note, author_note_position, author_note_enabled FROM sessions WHERE id=?",
             (session_id,),
         ).fetchone()
-    finally:
-        conn.close()
     if not row:
         raise HTTPException(404, "Session not found")
     return {"note": row[0] or "", "position": row[1] or "after_system", "enabled": bool(row[2])}
@@ -10178,8 +10035,7 @@ async def update_author_note(session_id: int, req: Request):
     except Exception:
         raise HTTPException(400, "Invalid JSON body")
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT author_note, author_note_position, author_note_enabled FROM sessions WHERE id=?",
             (session_id,),
@@ -10201,8 +10057,6 @@ async def update_author_note(session_id: int, req: Request):
             (str(note), position, int(enabled), session_id),
         )
         conn.commit()
-    finally:
-        conn.close()
 
     logger.info(f"[AuthorNote] Session {session_id}: enabled={enabled}, pos={position}")
     return {"ok": True, "note": note, "position": position, "enabled": enabled}
@@ -10223,14 +10077,11 @@ async def get_scene(session_id: int):
     Raises:
         HTTPException 404: If the session does not exist.
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT scene_context, scene_enabled FROM sessions WHERE id=?",
             (session_id,),
         ).fetchone()
-    finally:
-        conn.close()
     if not row:
         raise HTTPException(404, "Session not found")
     return {"scene": row[0] or "", "enabled": bool(row[1])}
@@ -10265,8 +10116,7 @@ async def update_scene(session_id: int, req: Request):
     except Exception:
         raise HTTPException(400, "Invalid JSON body")
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT scene_context, scene_enabled FROM sessions WHERE id=?",
             (session_id,),
@@ -10284,8 +10134,6 @@ async def update_scene(session_id: int, req: Request):
             (str(scene), int(enabled), session_id),
         )
         conn.commit()
-    finally:
-        conn.close()
 
     logger.info(f"[Scene] Session {session_id}: enabled={enabled}")
     return {"ok": True, "scene": scene, "enabled": enabled}
@@ -10324,15 +10172,12 @@ async def pin_message(message_id: int, req: Request):
 
     pinned_int = 1 if pinned_val else 0
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute("SELECT id FROM messages WHERE id = ?", (message_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Message not found")
         conn.execute("UPDATE messages SET pinned = ? WHERE id = ?", (pinned_int, message_id))
         conn.commit()
-    finally:
-        conn.close()
 
     logger.info(f"[Pin] Message {message_id} pinned={pinned_val}")
     return {"message_id": message_id, "pinned": pinned_val}
@@ -10350,15 +10195,13 @@ async def get_character_streak(character_id: int):
     Returns:
         dict: ``{streak, total_xp, tier, next_tier, xp_to_next}``
     """
-    conn = db()
-    try:
-        from backend.rewards.tracker import get_streak_info
-        return get_streak_info(conn, character_id)
-    except Exception:
-        return {"streak": 0, "total_xp": 0, "tier": "stranger",
-                "next_tier": "acquaintance", "xp_to_next": 100}
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            from backend.rewards.tracker import get_streak_info
+            return get_streak_info(conn, character_id)
+        except Exception:
+            return {"streak": 0, "total_xp": 0, "tier": "stranger",
+                    "next_tier": "acquaintance", "xp_to_next": 100}
 
 
 # ── Feature T1-7 — Output Format Rules CRUD ──────────────────────────────────
@@ -10373,22 +10216,20 @@ async def list_format_rules(character_id: int):
     Returns:
         dict: ``{"rules": [{id, rule_name, pattern, replacement, is_enabled, priority}]}``
     """
-    conn = db()
-    try:
-        rows = conn.execute(
-            "SELECT id, rule_name, pattern, replacement, is_enabled, priority "
-            "FROM output_format_rules WHERE character_id = ? ORDER BY priority ASC",
-            (character_id,)
-        ).fetchall()
-        return {"rules": [
-            {"id": r[0], "rule_name": r[1], "pattern": r[2], "replacement": r[3],
-             "is_enabled": bool(r[4]), "priority": r[5]}
-            for r in rows
-        ]}
-    except Exception:
-        return {"rules": []}
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            rows = conn.execute(
+                "SELECT id, rule_name, pattern, replacement, is_enabled, priority "
+                "FROM output_format_rules WHERE character_id = ? ORDER BY priority ASC",
+                (character_id,)
+            ).fetchall()
+            return {"rules": [
+                {"id": r[0], "rule_name": r[1], "pattern": r[2], "replacement": r[3],
+                 "is_enabled": bool(r[4]), "priority": r[5]}
+                for r in rows
+            ]}
+        except Exception:
+            return {"rules": []}
 
 
 @app.post("/api/characters/{character_id}/format-rules")
@@ -10419,8 +10260,7 @@ async def create_format_rule(character_id: int, req: Request):
     except re.error as e:
         raise HTTPException(400, f"Invalid regex: {e}")
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.execute(
             "INSERT INTO output_format_rules (character_id, rule_name, pattern, replacement, is_enabled, priority) "
             "VALUES (?, ?, ?, ?, ?, ?)",
@@ -10428,8 +10268,6 @@ async def create_format_rule(character_id: int, req: Request):
         )
         conn.commit()
         return {"ok": True, "id": cur.lastrowid}
-    finally:
-        conn.close()
 
 
 @app.patch("/api/format-rules/{rule_id}")
@@ -10469,13 +10307,10 @@ async def update_format_rule(rule_id: int, req: Request):
             raise HTTPException(400, f"Invalid regex: {e}")
 
     params.append(rule_id)
-    conn = db()
-    try:
+    with db_ctx() as conn:
         conn.execute(f"UPDATE output_format_rules SET {', '.join(updates)} WHERE id = ?", params)
         conn.commit()
         return {"ok": True}
-    finally:
-        conn.close()
 
 
 @app.delete("/api/format-rules/{rule_id}")
@@ -10488,13 +10323,10 @@ async def delete_format_rule(rule_id: int):
     Returns:
         dict: ``{"ok": True}``
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         conn.execute("DELETE FROM output_format_rules WHERE id = ?", (rule_id,))
         conn.commit()
         return {"ok": True}
-    finally:
-        conn.close()
 
 
 # ── Feature T0-3 — Branch Listing ─────────────────────────────────────────────
@@ -10516,8 +10348,7 @@ async def get_message_branches(message_id: int):
     Raises:
         HTTPException: 404 if the message does not exist.
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT id, parent_id FROM messages WHERE id = ?", (message_id,)
         ).fetchone()
@@ -10549,8 +10380,6 @@ async def get_message_branches(message_id: int):
         active_index = next((i for i, b in enumerate(branches) if b["is_active"]), 0)
 
         return {"branches": branches, "active_index": active_index, "total": len(branches)}
-    finally:
-        conn.close()
 
 
 # ── Feature #14 — Branch Activation ───────────────────────────────────────────
@@ -10581,8 +10410,7 @@ async def activate_branch(message_id: int):
         >>> POST /api/messages/42/activate
         {"ok": true, "message_id": 42, "deactivated": [38]}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT id, parent_id FROM messages WHERE id = ?", (message_id,)
         ).fetchone()
@@ -10610,8 +10438,6 @@ async def activate_branch(message_id: int):
         # Activate the target message
         conn.execute("UPDATE messages SET is_active=1 WHERE id = ?", (message_id,))
         conn.commit()
-    finally:
-        conn.close()
 
     logger.info(f"[Branch] Activated message {message_id}, deactivated {deactivated}")
     return {"ok": True, "message_id": message_id, "deactivated": deactivated}
@@ -10634,15 +10460,12 @@ def get_pinned_messages(session_id: int):
         GET /api/sessions/3/pinned
         Response: {"messages": [{"id": 17, "role": "assistant", ...}]}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         rows = conn.execute(
             "SELECT id, role, text, emotion, ts FROM messages "
             "WHERE session_id = ? AND pinned = 1 ORDER BY id ASC",
             (session_id,)
         ).fetchall()
-    finally:
-        conn.close()
 
     messages = [
         {
@@ -10681,8 +10504,7 @@ def get_message_reactions(message_id: int):
         >>> GET /api/messages/42/reactions
         {"reactions": [{"id": 1, "emoji": "❤️", "ts": 1700000000}]}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         msg_row = conn.execute(
             "SELECT id FROM messages WHERE id = ?", (message_id,)
         ).fetchone()
@@ -10694,8 +10516,6 @@ def get_message_reactions(message_id: int):
             "WHERE message_id = ? ORDER BY ts ASC, id ASC",
             (message_id,),
         ).fetchall()
-    finally:
-        conn.close()
 
     return {
         "reactions": [{"id": r[0], "emoji": r[1], "ts": r[2]} for r in rows]
@@ -10738,8 +10558,7 @@ async def add_message_reaction(message_id: int, req: Request):
 
     emoji = emoji.strip()
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         msg_row = conn.execute(
             "SELECT id FROM messages WHERE id = ?", (message_id,)
         ).fetchone()
@@ -10759,8 +10578,6 @@ async def add_message_reaction(message_id: int, req: Request):
             "SELECT id, message_id, emoji, ts FROM message_reactions WHERE id = ?",
             (reaction_id,),
         ).fetchone()
-    finally:
-        conn.close()
 
     logger.info("[Reactions] Added reaction '%s' to message %s (reaction_id=%s)", emoji, message_id, reaction_id)
     return {"id": row[0], "message_id": row[1], "emoji": row[2], "ts": row[3]}
@@ -10788,8 +10605,7 @@ def delete_message_reaction(message_id: int, reaction_id: int):
         >>> DELETE /api/messages/42/reactions/7
         {"ok": True}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT id FROM message_reactions WHERE id = ? AND message_id = ?",
             (reaction_id, message_id),
@@ -10801,8 +10617,6 @@ def delete_message_reaction(message_id: int, reaction_id: int):
             "DELETE FROM message_reactions WHERE id = ?", (reaction_id,)
         )
         conn.commit()
-    finally:
-        conn.close()
 
     logger.info("[Reactions] Deleted reaction %s from message %s", reaction_id, message_id)
     return {"ok": True}
@@ -10858,8 +10672,7 @@ def get_character_portfolio(char_id: int):
             "total_messages": 234
         }
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         # Load core character fields
         char_row = conn.execute(
             "SELECT name, avatar_url, personality_traits, first_chat_date "
@@ -10946,8 +10759,6 @@ def get_character_portfolio(char_id: int):
         ).fetchone()
         total_messages = count_row[0] if count_row else 0
 
-    finally:
-        conn.close()
 
     return {
         "name":               char_name or "",
@@ -11005,8 +10816,7 @@ async def set_day_off(char_id: int, req: Request):
 
     day_off_int = 1 if enabled else 0
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         char_row = conn.execute(
             "SELECT id FROM characters WHERE id = ?", (char_id,)
         ).fetchone()
@@ -11018,8 +10828,6 @@ async def set_day_off(char_id: int, req: Request):
             (day_off_int, char_id),
         )
         conn.commit()
-    finally:
-        conn.close()
 
     logger.info("[DayOff] char_id=%s day_off=%s", char_id, enabled)
     return {"ok": True, "char_id": char_id, "day_off": enabled}
@@ -11044,8 +10852,7 @@ def list_lore_entries(char_id: int):
         >>> GET /api/characters/3/lore
         {"ok": true, "entries": [{...}, ...]}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         rows = conn.execute(
             "SELECT id, character_id, title, content, keywords, "
             "injection_position, priority, enabled, created_at "
@@ -11071,8 +10878,6 @@ def list_lore_entries(char_id: int):
                 "created_at": r[8],
             })
         return {"ok": True, "entries": entries}
-    finally:
-        conn.close()
 
 
 @app.post("/api/characters/{char_id}/lore")
@@ -11119,8 +10924,7 @@ async def create_lore_entry(char_id: int, req: Request):
     if injection_position not in valid_positions:
         injection_position = "after_system_prompt"
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.execute(
             "INSERT INTO lore_entries (character_id, title, content, keywords, "
             "injection_position, priority, enabled) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -11128,8 +10932,6 @@ async def create_lore_entry(char_id: int, req: Request):
         )
         conn.commit()
         entry_id = cur.lastrowid
-    finally:
-        conn.close()
 
     logger.info("[LoreA6] Created lore entry id=%s for char_id=%s title=%r", entry_id, char_id, title)
     return {
@@ -11170,8 +10972,7 @@ async def update_lore_entry(entry_id: int, req: Request):
     """
     body = await req.json()
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute("SELECT id FROM lore_entries WHERE id = ?", (entry_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Lore entry not found")
@@ -11215,8 +11016,6 @@ async def update_lore_entry(entry_id: int, req: Request):
                 params,
             )
             conn.commit()
-    finally:
-        conn.close()
 
     return {"ok": True, "entry_id": entry_id}
 
@@ -11238,16 +11037,13 @@ def delete_lore_entry(entry_id: int):
         >>> DELETE /api/lore/5
         {"ok": true, "deleted": 5}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute("SELECT id FROM lore_entries WHERE id = ?", (entry_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Lore entry not found")
 
         conn.execute("DELETE FROM lore_entries WHERE id = ?", (entry_id,))
         conn.commit()
-    finally:
-        conn.close()
 
     return {"ok": True, "deleted": entry_id}
 
@@ -11266,16 +11062,13 @@ def get_user_facts(char_id: int):
         >>> GET /api/characters/1/user-facts
         {"ok": true, "facts": [{"id": 1, "category": "identity", "fact_text": "name is Alex", ...}]}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         rows = conn.execute(
             """SELECT id, category, fact_text, source, confidence, created_at
                FROM user_facts WHERE character_id = ?
                ORDER BY confidence DESC, created_at DESC""",
             (char_id,),
         ).fetchall()
-    finally:
-        conn.close()
 
     return {
         "ok": True,
@@ -11322,8 +11115,7 @@ async def create_user_fact(char_id: int, req: Request):
         raise HTTPException(400, "fact_text is required")
     confidence = float(body.get("confidence", 1.0))
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.execute(
             "INSERT INTO user_facts (character_id, category, fact_text, source, confidence) VALUES (?, ?, ?, 'manual', ?)",
             (char_id, category, fact_text, confidence),
@@ -11333,8 +11125,6 @@ async def create_user_fact(char_id: int, req: Request):
         created_at = conn.execute(
             "SELECT created_at FROM user_facts WHERE id = ?", (fact_id,)
         ).fetchone()[0]
-    finally:
-        conn.close()
 
     logger.info("[KG-C3] Manual fact id=%s added for char_id=%s", fact_id, char_id)
     return {
@@ -11364,8 +11154,7 @@ def delete_user_fact(char_id: int, fact_id: int):
     Raises:
         HTTPException 404: If the fact does not exist for this character.
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT id FROM user_facts WHERE id = ? AND character_id = ?",
             (fact_id, char_id),
@@ -11374,8 +11163,6 @@ def delete_user_fact(char_id: int, fact_id: int):
             raise HTTPException(404, "User fact not found")
         conn.execute("DELETE FROM user_facts WHERE id = ?", (fact_id,))
         conn.commit()
-    finally:
-        conn.close()
 
     return {"ok": True, "deleted": fact_id}
 
@@ -11401,8 +11188,7 @@ async def update_user_fact(char_id: int, fact_id: int, req: Request):
     if not new_text:
         raise HTTPException(400, "fact_text is required")
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT id FROM user_facts WHERE id = ? AND character_id = ?",
             (fact_id, char_id),
@@ -11430,8 +11216,6 @@ async def update_user_fact(char_id: int, fact_id: int, req: Request):
                 "created_at": updated[6],
             },
         }
-    finally:
-        conn.close()
 
 
 # ── Character Journal (Phase 13B) ─────────────────────────────────────────
@@ -11453,9 +11237,9 @@ def get_character_journal(char_id: int, limit: int = 10):
     """
     try:
         from backend.adaptive.journal import get_journal_entries
-        conn = db()
-        entries = get_journal_entries(char_id, conn.cursor(), limit=limit)
-        return {"ok": True, "entries": entries}
+        with db_ctx() as conn:
+            entries = get_journal_entries(char_id, conn.cursor(), limit=limit)
+            return {"ok": True, "entries": entries}
     except Exception as e:
         logger.debug(f"[Journal] get entries failed: {e}")
         return {"ok": True, "entries": []}
@@ -11507,58 +11291,58 @@ def get_memory_overview(char_id: int):
         {"ok": True, "user_facts": [...], "journal_entries": [...],
          "profile": {...}, "stats": {...}}
     """
-    conn = db()
-    cur = conn.cursor()
+    with db_ctx() as conn:
+        cur = conn.cursor()
 
-    # User facts
-    facts = []
-    try:
-        rows = cur.execute(
-            "SELECT id, category, fact_text, confidence, created_ts FROM user_facts WHERE character_id = ? ORDER BY confidence DESC",
-            (char_id,),
-        ).fetchall()
-        facts = [{"id": r[0], "category": r[1], "fact_text": r[2], "confidence": r[3], "created_at": r[4]} for r in rows]
-    except Exception:
-        pass
+        # User facts
+        facts = []
+        try:
+            rows = cur.execute(
+                "SELECT id, category, fact_text, confidence, created_ts FROM user_facts WHERE character_id = ? ORDER BY confidence DESC",
+                (char_id,),
+            ).fetchall()
+            facts = [{"id": r[0], "category": r[1], "fact_text": r[2], "confidence": r[3], "created_at": r[4]} for r in rows]
+        except Exception:
+            pass
 
-    # Journal entries
-    journal = []
-    try:
-        from backend.adaptive.journal import get_journal_entries
-        journal = get_journal_entries(char_id, cur, limit=5)
-    except Exception:
-        pass
+        # Journal entries
+        journal = []
+        try:
+            from backend.adaptive.journal import get_journal_entries
+            journal = get_journal_entries(char_id, cur, limit=5)
+        except Exception:
+            pass
 
-    # Adaptive profile
-    profile = None
-    try:
-        from backend.adaptive.tuner import load_user_profile
-        profile = load_user_profile(char_id, cur)
-    except Exception:
-        pass
+        # Adaptive profile
+        profile = None
+        try:
+            from backend.adaptive.tuner import load_user_profile
+            profile = load_user_profile(char_id, cur)
+        except Exception:
+            pass
 
-    # Stats
-    stats = {}
-    try:
-        msg_count = cur.execute(
-            "SELECT COUNT(*) FROM messages WHERE char_id = ?", (char_id,)
-        ).fetchone()[0]
-        stats["total_messages"] = msg_count
-        stats["total_facts"] = len(facts)
-        stats["total_journal_entries"] = cur.execute(
-            "SELECT COUNT(*) FROM character_journals WHERE char_id = ?", (char_id,)
-        ).fetchone()[0] if journal else 0
-        stats["has_profile"] = profile is not None
-    except Exception:
-        pass
+        # Stats
+        stats = {}
+        try:
+            msg_count = cur.execute(
+                "SELECT COUNT(*) FROM messages WHERE char_id = ?", (char_id,)
+            ).fetchone()[0]
+            stats["total_messages"] = msg_count
+            stats["total_facts"] = len(facts)
+            stats["total_journal_entries"] = cur.execute(
+                "SELECT COUNT(*) FROM character_journals WHERE char_id = ?", (char_id,)
+            ).fetchone()[0] if journal else 0
+            stats["has_profile"] = profile is not None
+        except Exception:
+            pass
 
-    return {
-        "ok": True,
-        "user_facts": facts,
-        "journal_entries": journal,
-        "profile": profile,
-        "stats": stats,
-    }
+        return {
+            "ok": True,
+            "user_facts": facts,
+            "journal_entries": journal,
+            "profile": profile,
+            "stats": stats,
+        }
 
 
 @app.get("/api/sessions/{session_id}/emotions")
@@ -11574,16 +11358,16 @@ def get_emotion_timeline(session_id: int):
     Returns:
         {"ok": True, "emotions": [{id, emotion, ts}, ...]}
     """
-    conn = db()
-    rows = conn.execute(
-        "SELECT id, emotion, ts FROM messages WHERE session_id = ? AND role = 'assistant' AND emotion IS NOT NULL ORDER BY ts ASC",
-        (session_id,)
-    ).fetchall()
+    with db_ctx() as conn:
+        rows = conn.execute(
+            "SELECT id, emotion, ts FROM messages WHERE session_id = ? AND role = 'assistant' AND emotion IS NOT NULL ORDER BY ts ASC",
+            (session_id,)
+        ).fetchall()
 
-    return {
-        "ok": True,
-        "emotions": [{"id": r[0], "emotion": r[1], "ts": r[2]} for r in rows]
-    }
+        return {
+            "ok": True,
+            "emotions": [{"id": r[0], "emotion": r[1], "ts": r[2]} for r in rows]
+        }
 
 
 # ── Sprint 5: Emotional Depth APIs ─────────────────────────────────────────
@@ -11600,25 +11384,23 @@ def get_character_dreams(char_id: int, limit: int = 10):
     Returns:
         {"ok": True, "dreams": [...], "undelivered": int}
     """
-    conn = db()
-    try:
-        from backend.emotional.dreams import get_dream_history, get_undelivered_dreams
-        dreams = get_dream_history(char_id, conn, limit=limit)
-        undelivered = get_undelivered_dreams(char_id, conn)
-        return {
-            "ok": True,
-            "dreams": [
-                {"id": d.id, "dream_text": d.dream_text, "dream_mood": d.dream_mood,
-                 "delivered": d.delivered, "created_at": d.created_at,
-                 "delivered_at": d.delivered_at}
-                for d in dreams
-            ],
-            "undelivered": len(undelivered),
-        }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            from backend.emotional.dreams import get_dream_history, get_undelivered_dreams
+            dreams = get_dream_history(char_id, conn, limit=limit)
+            undelivered = get_undelivered_dreams(char_id, conn)
+            return {
+                "ok": True,
+                "dreams": [
+                    {"id": d.id, "dream_text": d.dream_text, "dream_mood": d.dream_mood,
+                     "delivered": d.delivered, "created_at": d.created_at,
+                     "delivered_at": d.delivered_at}
+                    for d in dreams
+                ],
+                "undelivered": len(undelivered),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
 
 @app.post("/api/characters/{char_id}/dreams/deliver")
@@ -11628,23 +11410,21 @@ async def deliver_character_dream(char_id: int):
     Returns:
         {"ok": True, "dream": {...}} or {"ok": True, "dream": null}
     """
-    conn = db()
-    try:
-        from backend.emotional.dreams import get_undelivered_dreams, mark_dream_delivered
-        undelivered = get_undelivered_dreams(char_id, conn)
-        if not undelivered:
-            return {"ok": True, "dream": None}
-        dream = undelivered[0]
-        mark_dream_delivered(dream.id, conn)
-        return {
-            "ok": True,
-            "dream": {"id": dream.id, "dream_text": dream.dream_text,
-                       "dream_mood": dream.dream_mood, "created_at": dream.created_at},
-        }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            from backend.emotional.dreams import get_undelivered_dreams, mark_dream_delivered
+            undelivered = get_undelivered_dreams(char_id, conn)
+            if not undelivered:
+                return {"ok": True, "dream": None}
+            dream = undelivered[0]
+            mark_dream_delivered(dream.id, conn)
+            return {
+                "ok": True,
+                "dream": {"id": dream.id, "dream_text": dream.dream_text,
+                           "dream_mood": dream.dream_mood, "created_at": dream.created_at},
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
 
 @app.get("/api/characters/{char_id}/capsules")
@@ -11654,24 +11434,22 @@ def get_character_capsules(char_id: int):
     Returns:
         {"ok": True, "pending": [...], "summary": {...}}
     """
-    conn = db()
-    try:
-        from backend.emotional.capsules import get_pending_capsules, get_capsule_summary
-        pending = get_pending_capsules(char_id, conn)
-        summary = get_capsule_summary(char_id, conn)
-        return {
-            "ok": True,
-            "pending": [
-                {"id": c.id, "creator": c.creator, "deliver_at": c.deliver_at,
-                 "created_at": c.created_at}
-                for c in pending
-            ],
-            "summary": summary,
-        }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            from backend.emotional.capsules import get_pending_capsules, get_capsule_summary
+            pending = get_pending_capsules(char_id, conn)
+            summary = get_capsule_summary(char_id, conn)
+            return {
+                "ok": True,
+                "pending": [
+                    {"id": c.id, "creator": c.creator, "deliver_at": c.deliver_at,
+                     "created_at": c.created_at}
+                    for c in pending
+                ],
+                "summary": summary,
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
 
 @app.post("/api/characters/{char_id}/capsules")
@@ -11690,17 +11468,15 @@ async def create_character_capsule(char_id: int, req: Request):
     if not message or not deliver_at:
         raise HTTPException(400, "message and deliver_at required")
 
-    conn = db()
-    try:
-        from backend.emotional.capsules import create_capsule
-        capsule = create_capsule(char_id, message, deliver_at, conn, creator=creator)
-        return {"ok": True, "capsule_id": capsule.id}
-    except ValueError as ve:
-        raise HTTPException(400, str(ve))
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            from backend.emotional.capsules import create_capsule
+            capsule = create_capsule(char_id, message, deliver_at, conn, creator=creator)
+            return {"ok": True, "capsule_id": capsule.id}
+        except ValueError as ve:
+            raise HTTPException(400, str(ve))
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
 
 @app.delete("/api/capsules/{capsule_id}")
@@ -11710,15 +11486,13 @@ def delete_time_capsule(capsule_id: int):
     Returns:
         {"ok": True, "deleted": bool}
     """
-    conn = db()
-    try:
-        from backend.emotional.capsules import delete_capsule
-        deleted = delete_capsule(capsule_id, conn)
-        return {"ok": True, "deleted": deleted}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            from backend.emotional.capsules import delete_capsule
+            deleted = delete_capsule(capsule_id, conn)
+            return {"ok": True, "deleted": deleted}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
 
 @app.get("/api/characters/{char_id}/quiz")
@@ -11729,28 +11503,26 @@ def get_character_quiz(char_id: int, session_id: int = 0):
         {"ok": True, "next_question": {...}|null, "progress": {...},
          "can_ask_this_session": bool}
     """
-    conn = db()
-    try:
-        from backend.emotional.quiz import (
-            get_next_question, get_or_create_profile, can_ask_question_this_session,
-        )
-        profile = get_or_create_profile(char_id, conn)
-        next_q = get_next_question(char_id, conn)
-        can_ask = can_ask_question_this_session(char_id, session_id, conn) if session_id else True
-        answers = profile.quiz_answers if isinstance(profile.quiz_answers, dict) else {}
-        return {
-            "ok": True,
-            "next_question": {
-                "id": next_q.id, "text": next_q.text, "category": next_q.category,
-                "follow_up": next_q.follow_up
-            } if next_q else None,
-            "progress": {"answered": len(answers), "total": 20},
-            "can_ask_this_session": can_ask,
-        }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            from backend.emotional.quiz import (
+                get_next_question, get_or_create_profile, can_ask_question_this_session,
+            )
+            profile = get_or_create_profile(char_id, conn)
+            next_q = get_next_question(char_id, conn)
+            can_ask = can_ask_question_this_session(char_id, session_id, conn) if session_id else True
+            answers = profile.quiz_answers if isinstance(profile.quiz_answers, dict) else {}
+            return {
+                "ok": True,
+                "next_question": {
+                    "id": next_q.id, "text": next_q.text, "category": next_q.category,
+                    "follow_up": next_q.follow_up
+                } if next_q else None,
+                "progress": {"answered": len(answers), "total": 20},
+                "can_ask_this_session": can_ask,
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
 
 @app.post("/api/characters/{char_id}/quiz/answer")
@@ -11768,15 +11540,13 @@ async def record_quiz_answer(char_id: int, req: Request):
     if not question_id or not answer:
         raise HTTPException(400, "question_id and answer required")
 
-    conn = db()
-    try:
-        from backend.emotional.quiz import record_answer
-        result = record_answer(char_id, question_id, answer, conn)
-        return {"ok": True, **result}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            from backend.emotional.quiz import record_answer
+            result = record_answer(char_id, question_id, answer, conn)
+            return {"ok": True, **result}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
 
 @app.get("/api/characters/{char_id}/compatibility")
@@ -11786,15 +11556,13 @@ def get_character_compatibility(char_id: int):
     Returns:
         {"ok": True, "card": {...}} or {"ok": True, "card": null}
     """
-    conn = db()
-    try:
-        from backend.emotional.quiz import get_compatibility_card
-        card = get_compatibility_card(char_id, conn)
-        return {"ok": True, "card": card}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            from backend.emotional.quiz import get_compatibility_card
+            card = get_compatibility_card(char_id, conn)
+            return {"ok": True, "card": card}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
 
 @app.get("/api/scan/live2d")
@@ -13115,10 +12883,10 @@ async def _db_vacuum_loop(interval_days: int = 7) -> None:
     while True:
         await _asyncio.sleep(interval_secs)
         try:
-            conn = db()
-            conn.execute("VACUUM")
-            conn.commit()
-            logger.info("DB vacuum complete")
+            with db_ctx() as conn:
+                conn.execute("VACUUM")
+                conn.commit()
+                logger.info("DB vacuum complete")
         except Exception as _e:
             logger.warning(f"DB vacuum error: {_e}")
 
@@ -13563,9 +13331,9 @@ async def get_model_capabilities(model_id: str, context_length: int = None):
         from backend.llm.model_enricher import enrich_model
         from backend.llm.capability_detector import get_tool_protocol
         result = enrich_model(model_id, lm_context_length=context_length)
-        conn = db()
-        tool_protocol = get_tool_protocol(model_id, conn=conn)
-        return {"ok": True, **result, "tool_protocol": tool_protocol}
+        with db_ctx() as conn:
+            tool_protocol = get_tool_protocol(model_id, conn=conn)
+            return {"ok": True, **result, "tool_protocol": tool_protocol}
     except Exception as exc:
         logger.warning(f"Model capability enrichment failed for '{model_id}': {exc}")
         raise HTTPException(500, str(exc))
@@ -13635,10 +13403,10 @@ async def set_model_tool_protocol(model_id: str, req: Request):
     if protocol not in ("openai_functions", "xml_fallback", "none"):
         raise HTTPException(400, "protocol must be one of: openai_functions, xml_fallback, none")
     from backend.llm.capability_detector import set_manual_override
-    conn = db()
-    set_manual_override(conn, model_id, protocol)  # type: ignore[arg-type]
-    logger.info(f"[C2] Manual tool protocol override: {model_id} → {protocol}")
-    return {"ok": True, "model_id": model_id, "protocol": protocol}
+    with db_ctx() as conn:
+        set_manual_override(conn, model_id, protocol)  # type: ignore[arg-type]
+        logger.info(f"[C2] Manual tool protocol override: {model_id} → {protocol}")
+        return {"ok": True, "model_id": model_id, "protocol": protocol}
 
 
 @app.get("/api/models/capability-cache")
@@ -13648,17 +13416,17 @@ def get_capability_cache():
     Returns:
         {"ok": True, "entries": [{model_id, tool_protocol, source, manual_override, cached_at}, ...]}
     """
-    conn = db()
-    rows = conn.execute(
-        "SELECT model_id, tool_protocol, source, manual_override, cached_at FROM model_capability_cache ORDER BY cached_at DESC"
-    ).fetchall()
-    return {
-        "ok": True,
-        "entries": [
-            {"model_id": r[0], "tool_protocol": r[1], "source": r[2], "manual_override": bool(r[3]), "cached_at": r[4]}
-            for r in rows
-        ],
-    }
+    with db_ctx() as conn:
+        rows = conn.execute(
+            "SELECT model_id, tool_protocol, source, manual_override, cached_at FROM model_capability_cache ORDER BY cached_at DESC"
+        ).fetchall()
+        return {
+            "ok": True,
+            "entries": [
+                {"model_id": r[0], "tool_protocol": r[1], "source": r[2], "manual_override": bool(r[3]), "cached_at": r[4]}
+                for r in rows
+            ],
+        }
 
 
 # ==================== VOCABULARY SYSTEM ====================
@@ -14330,13 +14098,12 @@ async def generate_background(req: Request):
     char_id = body.get("character_id")
     if result.get("ok") and char_id:
         try:
-            con = db()
-            con.execute(
-                "UPDATE characters SET background_url = ? WHERE id = ?",
-                (result["url"], char_id),
-            )
-            con.commit()
-            con.close()
+            with db_ctx() as con:
+                con.execute(
+                    "UPDATE characters SET background_url = ? WHERE id = ?",
+                    (result["url"], char_id),
+                )
+                con.commit()
         except Exception as exc:
             logger.warning(f"[ImageGen] Failed to auto-update character background: {exc}")
 
@@ -14401,13 +14168,12 @@ async def generate_portrait(req: Request):
     char_id = body.get("character_id")
     if result.get("ok") and char_id:
         try:
-            con = db()
-            con.execute(
-                "UPDATE characters SET avatar_2d_url = ? WHERE id = ?",
-                (result["url"], char_id),
-            )
-            con.commit()
-            con.close()
+            with db_ctx() as con:
+                con.execute(
+                    "UPDATE characters SET avatar_2d_url = ? WHERE id = ?",
+                    (result["url"], char_id),
+                )
+                con.commit()
         except Exception as exc:
             logger.warning(f"[ImageGen] Failed to auto-update character portrait: {exc}")
 
@@ -14444,11 +14210,10 @@ async def generate_expression_pack(char_id: int, req: Request):
     body = await req.json()
 
     # Fetch character to get name + system_prompt for base prompt
-    con = db()
-    row = con.execute(
-        "SELECT name, system_prompt FROM characters WHERE id = ?", (char_id,)
-    ).fetchone()
-    con.close()
+    with db_ctx() as con:
+        row = con.execute(
+            "SELECT name, system_prompt FROM characters WHERE id = ?", (char_id,)
+        ).fetchone()
 
     if not row:
         raise HTTPException(404, f"Character {char_id} not found")
@@ -14539,13 +14304,12 @@ async def generate_expression_pack(char_id: int, req: Request):
     # Save portrait map to DB
     if portraits:
         import json as _json
-        con = db()
-        con.execute(
-            "UPDATE characters SET expr_portraits = ? WHERE id = ?",
-            (_json.dumps(portraits), char_id),
-        )
-        con.commit()
-        con.close()
+        with db_ctx() as con:
+            con.execute(
+                "UPDATE characters SET expr_portraits = ? WHERE id = ?",
+                (_json.dumps(portraits), char_id),
+            )
+            con.commit()
 
     return {
         "ok": len(portraits) > 0,
@@ -14565,17 +14329,17 @@ def get_expr_portraits(char_id: int):
         {"ok": True, "expr_portraits": {emotion: url, ...}} or {"ok": True, "expr_portraits": null}
     """
     import json as _json
-    conn = db()
-    row = conn.execute("SELECT expr_portraits FROM characters WHERE id = ?", (char_id,)).fetchone()
-    if not row:
-        raise HTTPException(404, "Character not found")
-    portraits = None
-    if row[0]:
-        try:
-            portraits = _json.loads(row[0])
-        except Exception:
-            portraits = None
-    return {"ok": True, "expr_portraits": portraits}
+    with db_ctx() as conn:
+        row = conn.execute("SELECT expr_portraits FROM characters WHERE id = ?", (char_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Character not found")
+        portraits = None
+        if row[0]:
+            try:
+                portraits = _json.loads(row[0])
+            except Exception:
+                portraits = None
+        return {"ok": True, "expr_portraits": portraits}
 
 
 # ---------------------------------------------------------------------------
@@ -14614,9 +14378,8 @@ async def get_expression_portrait(char_id: int, emotion: str):
         return FileResponse(primary, media_type="image/png")
 
     # Fallback: legacy A5 flat-file pattern ({charname}_expr_{emotion}.png)
-    con = db()
-    row = con.execute("SELECT name FROM characters WHERE id = ?", (char_id,)).fetchone()
-    con.close()
+    with db_ctx() as con:
+        row = con.execute("SELECT name FROM characters WHERE id = ?", (char_id,)).fetchone()
     if row:
         clean_name = row[0].split("(")[-1].rstrip(")").strip().lower() if "(" in row[0] else row[0].split()[0].lower()
         legacy = os.path.join(storage, f"{clean_name}_expr_{emotion_normalized}.png")
@@ -14658,25 +14421,24 @@ async def upload_expression_portrait(char_id: int, emotion: str, file: UploadFil
 
     # Update the JSON column too
     url = f"/files/images/expr_portraits/{char_id}/{emotion_normalized}.png"
-    con = db()
-    row = con.execute("SELECT expr_portraits FROM characters WHERE id = ?", (char_id,)).fetchone()
-    if not row:
-        con.close()
-        raise HTTPException(404, "Character not found")
+    with db_ctx() as con:
+        row = con.execute("SELECT expr_portraits FROM characters WHERE id = ?", (char_id,)).fetchone()
+        if not row:
+            con.close()
+            raise HTTPException(404, "Character not found")
 
-    portraits = {}
-    if row[0]:
-        try:
-            portraits = json.loads(row[0])
-        except Exception:
-            portraits = {}
-    portraits[emotion_normalized] = url
-    con.execute(
-        "UPDATE characters SET expr_portraits = ? WHERE id = ?",
-        (json.dumps(portraits), char_id),
-    )
-    con.commit()
-    con.close()
+        portraits = {}
+        if row[0]:
+            try:
+                portraits = json.loads(row[0])
+            except Exception:
+                portraits = {}
+        portraits[emotion_normalized] = url
+        con.execute(
+            "UPDATE characters SET expr_portraits = ? WHERE id = ?",
+            (json.dumps(portraits), char_id),
+        )
+        con.commit()
 
     return {"ok": True, "url": url}
 
@@ -14707,20 +14469,19 @@ async def delete_expression_portrait(char_id: int, emotion: str):
         os.remove(primary)
 
     # Update JSON column
-    con = db()
-    row = con.execute("SELECT expr_portraits FROM characters WHERE id = ?", (char_id,)).fetchone()
-    if row and row[0]:
-        try:
-            portraits = json.loads(row[0])
-            portraits.pop(emotion_normalized, None)
-            con.execute(
-                "UPDATE characters SET expr_portraits = ? WHERE id = ?",
-                (json.dumps(portraits), char_id),
-            )
-            con.commit()
-        except Exception:
-            pass
-    con.close()
+    with db_ctx() as con:
+        row = con.execute("SELECT expr_portraits FROM characters WHERE id = ?", (char_id,)).fetchone()
+        if row and row[0]:
+            try:
+                portraits = json.loads(row[0])
+                portraits.pop(emotion_normalized, None)
+                con.execute(
+                    "UPDATE characters SET expr_portraits = ? WHERE id = ?",
+                    (json.dumps(portraits), char_id),
+                )
+                con.commit()
+            except Exception:
+                pass
 
     return {"ok": True}
 
@@ -14756,12 +14517,11 @@ def list_expression_portraits(char_id: int):
                 portraits[emotion] = f"/files/images/expr_portraits/{char_id}/{fname}"
 
     # Merge legacy JSON column entries (lower priority — disk files win)
-    con = db()
-    row = con.execute(
-        "SELECT expr_portraits, emotion_portraits_mode FROM characters WHERE id = ?",
-        (char_id,),
-    ).fetchone()
-    con.close()
+    with db_ctx() as con:
+        row = con.execute(
+            "SELECT expr_portraits, emotion_portraits_mode FROM characters WHERE id = ?",
+            (char_id,),
+        ).fetchone()
 
     if not row:
         raise HTTPException(404, "Character not found")
@@ -14872,13 +14632,12 @@ async def video_gen_status(job_id: str):
         char_id = _video_jobs[job_id].get("character_id")
         if status.get("status") == "done" and status.get("url") and char_id:
             try:
-                con = db()
-                con.execute(
-                    "UPDATE characters SET world_video_url = ? WHERE id = ?",
-                    (status["url"], char_id),
-                )
-                con.commit()
-                con.close()
+                with db_ctx() as con:
+                    con.execute(
+                        "UPDATE characters SET world_video_url = ? WHERE id = ?",
+                        (status["url"], char_id),
+                    )
+                    con.commit()
             except Exception as exc:
                 logger.warning(f"[VideoGen] Failed to auto-assign video to character: {exc}")
 
@@ -14899,36 +14658,34 @@ def get_scheduler_pending():
         >>> GET /api/scheduler/pending
         {"ok": true, "pending": [{"id": 1, "char_id": 5, ...}]}
     """
-    conn = db()
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT sm.id, sm.char_id, c.name, c.avatar_url, sm.text, sm.triggered_at,
-                   sm.trigger_type
-            FROM scheduled_messages sm
-            JOIN characters c ON c.id = sm.char_id
-            WHERE sm.delivered = 0
-            ORDER BY sm.triggered_at ASC
-        """)
-        rows = cur.fetchall()
-        pending = [
-            {
-                "id": row[0],
-                "char_id": row[1],
-                "char_name": row[2],
-                "char_avatar_url": row[3],
-                "text": row[4],
-                "triggered_at": row[5],
-                "trigger_type": row[6] or "schedule",
-            }
-            for row in rows
-        ]
-        return {"ok": True, "pending": pending}
-    except Exception as _exc:
-        logger.error("[Scheduler] Error fetching pending messages: %s", _exc)
-        raise HTTPException(status_code=500, detail="Failed to fetch pending messages")
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT sm.id, sm.char_id, c.name, c.avatar_url, sm.text, sm.triggered_at,
+                       sm.trigger_type
+                FROM scheduled_messages sm
+                JOIN characters c ON c.id = sm.char_id
+                WHERE sm.delivered = 0
+                ORDER BY sm.triggered_at ASC
+            """)
+            rows = cur.fetchall()
+            pending = [
+                {
+                    "id": row[0],
+                    "char_id": row[1],
+                    "char_name": row[2],
+                    "char_avatar_url": row[3],
+                    "text": row[4],
+                    "triggered_at": row[5],
+                    "trigger_type": row[6] or "schedule",
+                }
+                for row in rows
+            ]
+            return {"ok": True, "pending": pending}
+        except Exception as _exc:
+            logger.error("[Scheduler] Error fetching pending messages: %s", _exc)
+            raise HTTPException(status_code=500, detail="Failed to fetch pending messages")
 
 
 @app.post("/api/scheduler/acknowledge")
@@ -14959,19 +14716,17 @@ async def acknowledge_scheduler_message(req: Request):
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="'message_id' must be an integer")
 
-    conn = db()
-    try:
-        conn.execute(
-            "UPDATE scheduled_messages SET delivered = 1 WHERE id = ?",
-            (message_id,)
-        )
-        conn.commit()
-        return {"ok": True}
-    except Exception as _exc:
-        logger.error("[Scheduler] Error acknowledging message %s: %s", message_id, _exc)
-        raise HTTPException(status_code=500, detail="Failed to acknowledge message")
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            conn.execute(
+                "UPDATE scheduled_messages SET delivered = 1 WHERE id = ?",
+                (message_id,)
+            )
+            conn.commit()
+            return {"ok": True}
+        except Exception as _exc:
+            logger.error("[Scheduler] Error acknowledging message %s: %s", message_id, _exc)
+            raise HTTPException(status_code=500, detail="Failed to acknowledge message")
 
 
 # ---------------------------------------------------------------------------
@@ -14999,55 +14754,53 @@ async def update_proactive_settings(char_id: int, req: Request):
         {"ok": true, "proactive_enabled": 1, ...}
     """
     body = await req.json()
-    conn = db()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT id FROM characters WHERE id = ?", (char_id,))
-        if not cur.fetchone():
-            raise HTTPException(status_code=404, detail="Character not found")
+    with db_ctx() as conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM characters WHERE id = ?", (char_id,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=404, detail="Character not found")
 
-        updates: list[str] = []
-        params: list = []
+            updates: list[str] = []
+            params: list = []
 
-        if "enabled" in body:
-            updates.append("proactive_enabled = ?")
-            params.append(1 if body["enabled"] else 0)
-        if "frequency" in body:
-            freq = body["frequency"]
-            if freq not in ("quiet", "normal", "chatty"):
-                raise HTTPException(status_code=400, detail="frequency must be quiet, normal, or chatty")
-            updates.append("proactive_frequency = ?")
-            params.append(freq)
-        if "hours" in body:
-            updates.append("proactive_hours = ?")
-            params.append(body["hours"])
+            if "enabled" in body:
+                updates.append("proactive_enabled = ?")
+                params.append(1 if body["enabled"] else 0)
+            if "frequency" in body:
+                freq = body["frequency"]
+                if freq not in ("quiet", "normal", "chatty"):
+                    raise HTTPException(status_code=400, detail="frequency must be quiet, normal, or chatty")
+                updates.append("proactive_frequency = ?")
+                params.append(freq)
+            if "hours" in body:
+                updates.append("proactive_hours = ?")
+                params.append(body["hours"])
 
-        if updates:
-            params.append(char_id)
+            if updates:
+                params.append(char_id)
+                cur.execute(
+                    f"UPDATE characters SET {', '.join(updates)} WHERE id = ?",
+                    params,
+                )
+                conn.commit()
+
             cur.execute(
-                f"UPDATE characters SET {', '.join(updates)} WHERE id = ?",
-                params,
+                "SELECT proactive_enabled, proactive_frequency, proactive_hours FROM characters WHERE id = ?",
+                (char_id,),
             )
-            conn.commit()
-
-        cur.execute(
-            "SELECT proactive_enabled, proactive_frequency, proactive_hours FROM characters WHERE id = ?",
-            (char_id,),
-        )
-        row = cur.fetchone()
-        return {
-            "ok": True,
-            "proactive_enabled": row[0],
-            "proactive_frequency": row[1],
-            "proactive_hours": row[2],
-        }
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("[Proactive] Error updating settings for char %s: %s", char_id, exc)
-        raise HTTPException(status_code=500, detail="Failed to update proactive settings")
-    finally:
-        conn.close()
+            row = cur.fetchone()
+            return {
+                "ok": True,
+                "proactive_enabled": row[0],
+                "proactive_frequency": row[1],
+                "proactive_hours": row[2],
+            }
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("[Proactive] Error updating settings for char %s: %s", char_id, exc)
+            raise HTTPException(status_code=500, detail="Failed to update proactive settings")
 
 
 @app.get("/api/characters/{char_id}/proactive/history")
@@ -15065,36 +14818,34 @@ def get_proactive_history(char_id: int, limit: int = 20):
         >>> GET /api/characters/5/proactive/history?limit=10
         {"ok": true, "messages": [{"id": 1, "text": "Good morning!", ...}]}
     """
-    conn = db()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT id, text, triggered_at, delivered, trigger_type
-            FROM scheduled_messages
-            WHERE char_id = ?
-            ORDER BY triggered_at DESC
-            LIMIT ?
-            """,
-            (char_id, limit),
-        )
-        rows = cur.fetchall()
-        messages = [
-            {
-                "id": row[0],
-                "text": row[1],
-                "triggered_at": row[2],
-                "delivered": bool(row[3]),
-                "trigger_type": row[4] or "schedule",
-            }
-            for row in rows
-        ]
-        return {"ok": True, "messages": messages}
-    except Exception as exc:
-        logger.error("[Proactive] Error fetching history for char %s: %s", char_id, exc)
-        raise HTTPException(status_code=500, detail="Failed to fetch proactive history")
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT id, text, triggered_at, delivered, trigger_type
+                FROM scheduled_messages
+                WHERE char_id = ?
+                ORDER BY triggered_at DESC
+                LIMIT ?
+                """,
+                (char_id, limit),
+            )
+            rows = cur.fetchall()
+            messages = [
+                {
+                    "id": row[0],
+                    "text": row[1],
+                    "triggered_at": row[2],
+                    "delivered": bool(row[3]),
+                    "trigger_type": row[4] or "schedule",
+                }
+                for row in rows
+            ]
+            return {"ok": True, "messages": messages}
+        except Exception as exc:
+            logger.error("[Proactive] Error fetching history for char %s: %s", char_id, exc)
+            raise HTTPException(status_code=500, detail="Failed to fetch proactive history")
 
 
 @app.post("/api/characters/{char_id}/proactive/inject")
@@ -15125,45 +14876,43 @@ async def inject_proactive_messages(char_id: int, req: Request):
     if session_id is None:
         raise HTTPException(status_code=400, detail="session_id is required")
 
-    conn = db()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id, text, trigger_type FROM scheduled_messages WHERE char_id = ? AND delivered = 0 ORDER BY triggered_at ASC",
-            (char_id,),
-        )
-        pending = cur.fetchall()
-
-        injected: list[dict] = []
-        import time as _time
-        for (msg_id, text, trigger_type) in pending:
-            ts = int(_time.time())
+    with db_ctx() as conn:
+        try:
+            cur = conn.cursor()
             cur.execute(
-                "INSERT INTO messages (session_id, role, text, ts, char_id, is_active, emotion) "
-                "VALUES (?, 'assistant', ?, ?, ?, 1, 'neutral')",
-                (session_id, text, ts, char_id),
+                "SELECT id, text, trigger_type FROM scheduled_messages WHERE char_id = ? AND delivered = 0 ORDER BY triggered_at ASC",
+                (char_id,),
             )
-            new_msg_id = cur.lastrowid
-            cur.execute(
-                "UPDATE scheduled_messages SET delivered = 1 WHERE id = ?",
-                (msg_id,),
-            )
-            injected.append({
-                "message_id": new_msg_id,
-                "text": text,
-                "trigger_type": trigger_type or "schedule",
-                "ts": ts,
-            })
+            pending = cur.fetchall()
 
-        conn.commit()
-        return {"ok": True, "injected": injected}
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("[Proactive] Error injecting messages for char %s: %s", char_id, exc)
-        raise HTTPException(status_code=500, detail="Failed to inject proactive messages")
-    finally:
-        conn.close()
+            injected: list[dict] = []
+            import time as _time
+            for (msg_id, text, trigger_type) in pending:
+                ts = int(_time.time())
+                cur.execute(
+                    "INSERT INTO messages (session_id, role, text, ts, char_id, is_active, emotion) "
+                    "VALUES (?, 'assistant', ?, ?, ?, 1, 'neutral')",
+                    (session_id, text, ts, char_id),
+                )
+                new_msg_id = cur.lastrowid
+                cur.execute(
+                    "UPDATE scheduled_messages SET delivered = 1 WHERE id = ?",
+                    (msg_id,),
+                )
+                injected.append({
+                    "message_id": new_msg_id,
+                    "text": text,
+                    "trigger_type": trigger_type or "schedule",
+                    "ts": ts,
+                })
+
+            conn.commit()
+            return {"ok": True, "injected": injected}
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("[Proactive] Error injecting messages for char %s: %s", char_id, exc)
+            raise HTTPException(status_code=500, detail="Failed to inject proactive messages")
 
 
 @app.post("/api/proactive/trigger-idle/{char_id}")
@@ -15187,58 +14936,56 @@ async def trigger_idle_proactive(char_id: int):
     from backend.proactive.triggers import is_within_active_hours, get_daily_message_count, get_daily_cap
     from backend.proactive.generator import generate_proactive_message
 
-    conn = db()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT name, proactive_enabled, proactive_frequency, proactive_hours, day_off FROM characters WHERE id = ?",
-            (char_id,),
-        )
-        row = cur.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Character not found")
+    with db_ctx() as conn:
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT name, proactive_enabled, proactive_frequency, proactive_hours, day_off FROM characters WHERE id = ?",
+                (char_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Character not found")
 
-        char_name, proactive_enabled, frequency, active_hours, day_off = row
-        frequency = frequency or "normal"
-        active_hours = active_hours or "9-22"
+            char_name, proactive_enabled, frequency, active_hours, day_off = row
+            frequency = frequency or "normal"
+            active_hours = active_hours or "9-22"
 
-        if not proactive_enabled:
-            return {"ok": False, "reason": "proactive_disabled"}
-        if day_off:
-            return {"ok": False, "reason": "day_off"}
+            if not proactive_enabled:
+                return {"ok": False, "reason": "proactive_disabled"}
+            if day_off:
+                return {"ok": False, "reason": "day_off"}
 
-        now = _dt.datetime.now()
-        if not is_within_active_hours(active_hours, now):
-            return {"ok": False, "reason": "outside_active_hours"}
+            now = _dt.datetime.now()
+            if not is_within_active_hours(active_hours, now):
+                return {"ok": False, "reason": "outside_active_hours"}
 
-        daily_count = get_daily_message_count(char_id, cur)
-        if daily_count >= get_daily_cap(frequency):
-            return {"ok": False, "reason": "daily_cap_reached"}
+            daily_count = get_daily_message_count(char_id, cur)
+            if daily_count >= get_daily_cap(frequency):
+                return {"ok": False, "reason": "daily_cap_reached"}
 
-        cfg = load_config() or {}
-        message_text = generate_proactive_message(
-            char_id, char_name, "idle", str(STORAGE / "app.db"), cfg
-        )
-        now_ts = int(now.timestamp())
-        cur.execute(
-            "INSERT INTO scheduled_messages (char_id, text, triggered_at, delivered, trigger_type) "
-            "VALUES (?, ?, ?, 0, 'idle')",
-            (char_id, message_text, now_ts),
-        )
-        msg_id = cur.lastrowid
-        conn.commit()
+            cfg = load_config() or {}
+            message_text = generate_proactive_message(
+                char_id, char_name, "idle", str(STORAGE / "app.db"), cfg
+            )
+            now_ts = int(now.timestamp())
+            cur.execute(
+                "INSERT INTO scheduled_messages (char_id, text, triggered_at, delivered, trigger_type) "
+                "VALUES (?, ?, ?, 0, 'idle')",
+                (char_id, message_text, now_ts),
+            )
+            msg_id = cur.lastrowid
+            conn.commit()
 
-        return {
-            "ok": True,
-            "message": {"id": msg_id, "text": message_text, "trigger_type": "idle"},
-        }
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("[Proactive] Error triggering idle for char %s: %s", char_id, exc)
-        raise HTTPException(status_code=500, detail="Failed to trigger idle message")
-    finally:
-        conn.close()
+            return {
+                "ok": True,
+                "message": {"id": msg_id, "text": message_text, "trigger_type": "idle"},
+            }
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("[Proactive] Error triggering idle for char %s: %s", char_id, exc)
+            raise HTTPException(status_code=500, detail="Failed to trigger idle message")
 
 
 # ---------------------------------------------------------------------------
@@ -15281,72 +15028,70 @@ def search_messages(
     if not q or not q.strip():
         raise HTTPException(status_code=422, detail="Query parameter 'q' must not be empty")
 
-    conn = db()
-    try:
-        # Detect whether the FTS5 virtual table exists
-        fts_row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='messages_fts'"
-        ).fetchone()
-        use_fts = fts_row is not None
+    with db_ctx() as conn:
+        try:
+            # Detect whether the FTS5 virtual table exists
+            fts_row = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='messages_fts'"
+            ).fetchone()
+            use_fts = fts_row is not None
 
-        if use_fts:
-            # FTS5 path: ranked results with highlighted snippets.
-            # snippet() col index 0 = the single 'content' column in messages_fts.
-            base_sql = """
-                SELECT m.id, m.session_id, m.role, m.content, m.ts,
-                       s.character_id, c.name AS char_name,
-                       snippet(messages_fts, 0, '<mark>', '</mark>', '\u2026', 40) AS snip
-                FROM messages_fts
-                JOIN messages m ON messages_fts.rowid = m.id
-                JOIN sessions s ON m.session_id = s.id
-                JOIN characters c ON s.character_id = c.id
-                WHERE messages_fts MATCH ?
-            """
-            params: list = [q]
-            if char_id is not None:
-                base_sql += " AND s.character_id = ?"
-                params.append(char_id)
-            base_sql += " ORDER BY rank LIMIT ?"
-            params.append(limit)
-        else:
-            # LIKE fallback: simple substring match, no ranking
-            base_sql = """
-                SELECT m.id, m.session_id, m.role, m.content, m.ts,
-                       s.character_id, c.name AS char_name,
-                       m.content AS snip
-                FROM messages m
-                JOIN sessions s ON m.session_id = s.id
-                JOIN characters c ON s.character_id = c.id
-                WHERE m.content LIKE ?
-            """
-            params = [f"%{q}%"]
-            if char_id is not None:
-                base_sql += " AND s.character_id = ?"
-                params.append(char_id)
-            base_sql += " ORDER BY m.id DESC LIMIT ?"
-            params.append(limit)
+            if use_fts:
+                # FTS5 path: ranked results with highlighted snippets.
+                # snippet() col index 0 = the single 'content' column in messages_fts.
+                base_sql = """
+                    SELECT m.id, m.session_id, m.role, m.content, m.ts,
+                           s.character_id, c.name AS char_name,
+                           snippet(messages_fts, 0, '<mark>', '</mark>', '\u2026', 40) AS snip
+                    FROM messages_fts
+                    JOIN messages m ON messages_fts.rowid = m.id
+                    JOIN sessions s ON m.session_id = s.id
+                    JOIN characters c ON s.character_id = c.id
+                    WHERE messages_fts MATCH ?
+                """
+                params: list = [q]
+                if char_id is not None:
+                    base_sql += " AND s.character_id = ?"
+                    params.append(char_id)
+                base_sql += " ORDER BY rank LIMIT ?"
+                params.append(limit)
+            else:
+                # LIKE fallback: simple substring match, no ranking
+                base_sql = """
+                    SELECT m.id, m.session_id, m.role, m.content, m.ts,
+                           s.character_id, c.name AS char_name,
+                           m.content AS snip
+                    FROM messages m
+                    JOIN sessions s ON m.session_id = s.id
+                    JOIN characters c ON s.character_id = c.id
+                    WHERE m.content LIKE ?
+                """
+                params = [f"%{q}%"]
+                if char_id is not None:
+                    base_sql += " AND s.character_id = ?"
+                    params.append(char_id)
+                base_sql += " ORDER BY m.id DESC LIMIT ?"
+                params.append(limit)
 
-        rows = conn.execute(base_sql, params).fetchall()
-        results = [
-            {
-                "id": row[0],
-                "session_id": row[1],
-                "role": row[2],
-                "snippet": row[7],
-                "created_at": row[4],
-                "char_id": row[5],
-                "char_name": row[6],
-            }
-            for row in rows
-        ]
-        return {"ok": True, "query": q, "results": results, "total": len(results)}
-    except HTTPException:
-        raise
-    except Exception as _exc:
-        logger.error("[Search] Full-text search failed: %s", _exc)
-        raise HTTPException(status_code=500, detail="Search failed")
-    finally:
-        conn.close()
+            rows = conn.execute(base_sql, params).fetchall()
+            results = [
+                {
+                    "id": row[0],
+                    "session_id": row[1],
+                    "role": row[2],
+                    "snippet": row[7],
+                    "created_at": row[4],
+                    "char_id": row[5],
+                    "char_name": row[6],
+                }
+                for row in rows
+            ]
+            return {"ok": True, "query": q, "results": results, "total": len(results)}
+        except HTTPException:
+            raise
+        except Exception as _exc:
+            logger.error("[Search] Full-text search failed: %s", _exc)
+            raise HTTPException(status_code=500, detail="Search failed")
 
 
 # ---------------------------------------------------------------------------
@@ -15382,51 +15127,49 @@ def list_bookmarks(
         >>> GET /api/bookmarks?character_id=1&limit=10
         {"ok": true, "bookmarks": [{"id": 1, "message_id": 42, ...}]}
     """
-    conn = db()
-    try:
-        sql = """
-            SELECT b.id, b.message_id, b.session_id, b.character_id,
-                   COALESCE(c.name, 'Unknown') AS character_name,
-                   b.label,
-                   SUBSTR(m.content, 1, 150) AS content_preview,
-                   m.role,
-                   b.created_at
-            FROM bookmarks b
-            LEFT JOIN messages m ON b.message_id = m.id
-            LEFT JOIN sessions s ON b.session_id = s.id
-            LEFT JOIN characters c ON b.character_id = c.id
-            WHERE 1=1
-        """
-        params: list = []
+    with db_ctx() as conn:
+        try:
+            sql = """
+                SELECT b.id, b.message_id, b.session_id, b.character_id,
+                       COALESCE(c.name, 'Unknown') AS character_name,
+                       b.label,
+                       SUBSTR(m.content, 1, 150) AS content_preview,
+                       m.role,
+                       b.created_at
+                FROM bookmarks b
+                LEFT JOIN messages m ON b.message_id = m.id
+                LEFT JOIN sessions s ON b.session_id = s.id
+                LEFT JOIN characters c ON b.character_id = c.id
+                WHERE 1=1
+            """
+            params: list = []
 
-        if character_id is not None:
-            sql += " AND b.character_id = ?"
-            params.append(character_id)
+            if character_id is not None:
+                sql += " AND b.character_id = ?"
+                params.append(character_id)
 
-        sql += " ORDER BY b.created_at DESC LIMIT ?"
-        params.append(limit)
+            sql += " ORDER BY b.created_at DESC LIMIT ?"
+            params.append(limit)
 
-        rows = conn.execute(sql, params).fetchall()
-        bookmarks = [
-            {
-                "id": row[0],
-                "message_id": row[1],
-                "session_id": row[2],
-                "character_id": row[3],
-                "character_name": row[4],
-                "label": row[5] or "",
-                "content_preview": row[6] or "",
-                "role": row[7] or "unknown",
-                "created_at": row[8],
-            }
-            for row in rows
-        ]
-        return {"ok": True, "bookmarks": bookmarks}
-    except Exception as exc:
-        logger.error("[Bookmarks] list failed: %s", exc)
-        raise HTTPException(status_code=500, detail="Failed to list bookmarks")
-    finally:
-        conn.close()
+            rows = conn.execute(sql, params).fetchall()
+            bookmarks = [
+                {
+                    "id": row[0],
+                    "message_id": row[1],
+                    "session_id": row[2],
+                    "character_id": row[3],
+                    "character_name": row[4],
+                    "label": row[5] or "",
+                    "content_preview": row[6] or "",
+                    "role": row[7] or "unknown",
+                    "created_at": row[8],
+                }
+                for row in rows
+            ]
+            return {"ok": True, "bookmarks": bookmarks}
+        except Exception as exc:
+            logger.error("[Bookmarks] list failed: %s", exc)
+            raise HTTPException(status_code=500, detail="Failed to list bookmarks")
 
 
 @app.post("/api/bookmarks")
@@ -15464,62 +15207,60 @@ async def create_bookmark(req: Request):
     if message_id is None or session_id is None:
         raise HTTPException(status_code=400, detail="message_id and session_id are required")
 
-    conn = db()
-    try:
-        # Verify the message exists
-        msg_row = conn.execute("SELECT id FROM messages WHERE id = ?", (message_id,)).fetchone()
-        if not msg_row:
-            raise HTTPException(status_code=404, detail="Message not found")
+    with db_ctx() as conn:
+        try:
+            # Verify the message exists
+            msg_row = conn.execute("SELECT id FROM messages WHERE id = ?", (message_id,)).fetchone()
+            if not msg_row:
+                raise HTTPException(status_code=404, detail="Message not found")
 
-        # Check for existing bookmark on this message (prevent duplicates)
-        existing = conn.execute(
-            "SELECT id, message_id, session_id, character_id, label, created_at FROM bookmarks WHERE message_id = ?",
-            (message_id,),
-        ).fetchone()
-        if existing:
+            # Check for existing bookmark on this message (prevent duplicates)
+            existing = conn.execute(
+                "SELECT id, message_id, session_id, character_id, label, created_at FROM bookmarks WHERE message_id = ?",
+                (message_id,),
+            ).fetchone()
+            if existing:
+                return {
+                    "ok": True,
+                    "bookmark": {
+                        "id": existing[0],
+                        "message_id": existing[1],
+                        "session_id": existing[2],
+                        "character_id": existing[3],
+                        "label": existing[4] or "",
+                        "created_at": existing[5],
+                    },
+                }
+
+            conn.execute(
+                "INSERT INTO bookmarks (message_id, session_id, character_id, label) VALUES (?, ?, ?, ?)",
+                (message_id, session_id, character_id, label),
+            )
+            bookmark_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.commit()
+
+            bookmark_row = conn.execute(
+                "SELECT id, message_id, session_id, character_id, label, created_at FROM bookmarks WHERE id = ?",
+                (bookmark_id,),
+            ).fetchone()
+
             return {
                 "ok": True,
                 "bookmark": {
-                    "id": existing[0],
-                    "message_id": existing[1],
-                    "session_id": existing[2],
-                    "character_id": existing[3],
-                    "label": existing[4] or "",
-                    "created_at": existing[5],
+                    "id": bookmark_row[0],
+                    "message_id": bookmark_row[1],
+                    "session_id": bookmark_row[2],
+                    "character_id": bookmark_row[3],
+                    "label": bookmark_row[4] or "",
+                    "created_at": bookmark_row[5],
                 },
             }
-
-        conn.execute(
-            "INSERT INTO bookmarks (message_id, session_id, character_id, label) VALUES (?, ?, ?, ?)",
-            (message_id, session_id, character_id, label),
-        )
-        bookmark_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        conn.commit()
-
-        bookmark_row = conn.execute(
-            "SELECT id, message_id, session_id, character_id, label, created_at FROM bookmarks WHERE id = ?",
-            (bookmark_id,),
-        ).fetchone()
-
-        return {
-            "ok": True,
-            "bookmark": {
-                "id": bookmark_row[0],
-                "message_id": bookmark_row[1],
-                "session_id": bookmark_row[2],
-                "character_id": bookmark_row[3],
-                "label": bookmark_row[4] or "",
-                "created_at": bookmark_row[5],
-            },
-        }
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("[Bookmarks] create failed: %s", exc)
-        conn.rollback()
-        raise HTTPException(status_code=500, detail="Failed to create bookmark")
-    finally:
-        conn.close()
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("[Bookmarks] create failed: %s", exc)
+            conn.rollback()
+            raise HTTPException(status_code=500, detail="Failed to create bookmark")
 
 
 @app.delete("/api/bookmarks/{bookmark_id}")
@@ -15542,17 +15283,15 @@ def delete_bookmark(bookmark_id: int):
         >>> DELETE /api/bookmarks/7
         {"ok": true}
     """
-    conn = db()
-    try:
-        conn.execute("DELETE FROM bookmarks WHERE id = ?", (bookmark_id,))
-        conn.commit()
-        return {"ok": True}
-    except Exception as exc:
-        logger.error("[Bookmarks] delete failed: %s", exc)
-        conn.rollback()
-        raise HTTPException(status_code=500, detail="Failed to delete bookmark")
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            conn.execute("DELETE FROM bookmarks WHERE id = ?", (bookmark_id,))
+            conn.commit()
+            return {"ok": True}
+        except Exception as exc:
+            logger.error("[Bookmarks] delete failed: %s", exc)
+            conn.rollback()
+            raise HTTPException(status_code=500, detail="Failed to delete bookmark")
 
 
 @app.get("/api/bookmarks/message/{message_id}")
@@ -15573,30 +15312,28 @@ def get_bookmark_for_message(message_id: int):
         >>> GET /api/bookmarks/message/42
         {"ok": true, "bookmark": {"id": 7, "message_id": 42, ...}}
     """
-    conn = db()
-    try:
-        row = conn.execute(
-            "SELECT id, message_id, session_id, character_id, label, created_at FROM bookmarks WHERE message_id = ?",
-            (message_id,),
-        ).fetchone()
-        if row:
-            return {
-                "ok": True,
-                "bookmark": {
-                    "id": row[0],
-                    "message_id": row[1],
-                    "session_id": row[2],
-                    "character_id": row[3],
-                    "label": row[4] or "",
-                    "created_at": row[5],
-                },
-            }
-        return {"ok": True, "bookmark": None}
-    except Exception as exc:
-        logger.error("[Bookmarks] check failed: %s", exc)
-        raise HTTPException(status_code=500, detail="Failed to check bookmark")
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            row = conn.execute(
+                "SELECT id, message_id, session_id, character_id, label, created_at FROM bookmarks WHERE message_id = ?",
+                (message_id,),
+            ).fetchone()
+            if row:
+                return {
+                    "ok": True,
+                    "bookmark": {
+                        "id": row[0],
+                        "message_id": row[1],
+                        "session_id": row[2],
+                        "character_id": row[3],
+                        "label": row[4] or "",
+                        "created_at": row[5],
+                    },
+                }
+            return {"ok": True, "bookmark": None}
+        except Exception as exc:
+            logger.error("[Bookmarks] check failed: %s", exc)
+            raise HTTPException(status_code=500, detail="Failed to check bookmark")
 
 
 # ---------------------------------------------------------------------------
@@ -15659,64 +15396,62 @@ def export_all_data():
         rows = conn.execute(f"SELECT * FROM {table}").fetchall()  # noqa: S608
         return [dict(zip(cols, row)) for row in rows]
 
-    conn = db()
-    try:
-        with _zipfile.ZipFile(zip_path, "w", compression=_zipfile.ZIP_DEFLATED) as zf:
-
-            # --- characters.json ---
-            zf.writestr(
-                "characters.json",
-                json.dumps(_table_to_dicts(conn, "characters"), indent=2, default=str),
-            )
-
-            # --- sessions.json ---
-            zf.writestr(
-                "sessions.json",
-                json.dumps(_table_to_dicts(conn, "sessions"), indent=2, default=str),
-            )
-
-            # --- messages.json ---
-            zf.writestr(
-                "messages.json",
-                json.dumps(_table_to_dicts(conn, "messages"), indent=2, default=str),
-            )
-
-            # --- config.json ---
-            cfg_data = load_config()
-            zf.writestr("config.json", json.dumps(cfg_data, indent=2, default=str))
-
-            # --- vocabulary.json (via VocabManager if loaded) ---
-            try:
-                if vocab_manager and vocab_manager._loaded:
-                    vocab_data = vocab_manager.export_user_vocab()
-                    zf.writestr("vocabulary.json", json.dumps(vocab_data, indent=2, default=str))
-                else:
-                    zf.writestr("vocabulary.json", json.dumps([], indent=2))
-            except Exception as _ve:
-                logger.warning("[Export] Vocab export skipped: %s", _ve)
-                zf.writestr("vocabulary.json", json.dumps([]))
-
-            # --- memories.json (via vector_store if available) ---
-            try:
-                if vector_store is not None:
-                    mem_result = vector_store.list_memories(page=0, size=10000)
-                    memories_data = mem_result.get("memories", [])
-                    zf.writestr("memories.json", json.dumps(memories_data, indent=2, default=str))
-                else:
-                    zf.writestr("memories.json", json.dumps([]))
-            except Exception as _me:
-                logger.warning("[Export] Memory export skipped: %s", _me)
-                zf.writestr("memories.json", json.dumps([]))
-
-    except Exception as _exc:
-        logger.error("[Export] Data export failed: %s", _exc)
+    with db_ctx() as conn:
         try:
-            _os.unlink(zip_path)
-        except OSError:
-            pass
-        raise HTTPException(status_code=500, detail="Data export failed")
-    finally:
-        conn.close()
+            with _zipfile.ZipFile(zip_path, "w", compression=_zipfile.ZIP_DEFLATED) as zf:
+
+                # --- characters.json ---
+                zf.writestr(
+                    "characters.json",
+                    json.dumps(_table_to_dicts(conn, "characters"), indent=2, default=str),
+                )
+
+                # --- sessions.json ---
+                zf.writestr(
+                    "sessions.json",
+                    json.dumps(_table_to_dicts(conn, "sessions"), indent=2, default=str),
+                )
+
+                # --- messages.json ---
+                zf.writestr(
+                    "messages.json",
+                    json.dumps(_table_to_dicts(conn, "messages"), indent=2, default=str),
+                )
+
+                # --- config.json ---
+                cfg_data = load_config()
+                zf.writestr("config.json", json.dumps(cfg_data, indent=2, default=str))
+
+                # --- vocabulary.json (via VocabManager if loaded) ---
+                try:
+                    if vocab_manager and vocab_manager._loaded:
+                        vocab_data = vocab_manager.export_user_vocab()
+                        zf.writestr("vocabulary.json", json.dumps(vocab_data, indent=2, default=str))
+                    else:
+                        zf.writestr("vocabulary.json", json.dumps([], indent=2))
+                except Exception as _ve:
+                    logger.warning("[Export] Vocab export skipped: %s", _ve)
+                    zf.writestr("vocabulary.json", json.dumps([]))
+
+                # --- memories.json (via vector_store if available) ---
+                try:
+                    if vector_store is not None:
+                        mem_result = vector_store.list_memories(page=0, size=10000)
+                        memories_data = mem_result.get("memories", [])
+                        zf.writestr("memories.json", json.dumps(memories_data, indent=2, default=str))
+                    else:
+                        zf.writestr("memories.json", json.dumps([]))
+                except Exception as _me:
+                    logger.warning("[Export] Memory export skipped: %s", _me)
+                    zf.writestr("memories.json", json.dumps([]))
+
+        except Exception as _exc:
+            logger.error("[Export] Data export failed: %s", _exc)
+            try:
+                _os.unlink(zip_path)
+            except OSError:
+                pass
+            raise HTTPException(status_code=500, detail="Data export failed")
 
     def _cleanup_zip(path: str) -> None:
         """Remove the temporary ZIP file after the response has been sent.
@@ -15887,8 +15622,7 @@ async def list_universes():
         >>> GET /api/universes
         [{"id": 1, "name": "Sakura Academy", "lore": "...", "character_count": 3}]
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         rows = conn.execute("""
             SELECT u.id, u.name, u.lore, u.created_at,
                    COUNT(c.id) AS character_count
@@ -15907,8 +15641,6 @@ async def list_universes():
             }
             for r in rows
         ]
-    finally:
-        conn.close()
 
 
 @app.post("/api/universes")
@@ -15936,15 +15668,12 @@ async def create_universe(req: Request):
     if not name:
         raise HTTPException(400, "name required")
     lore = (body.get("lore") or "").strip()
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.execute(
             "INSERT INTO universes (name, lore) VALUES (?, ?)", (name, lore)
         )
         conn.commit()
         return {"id": cur.lastrowid, "name": name, "lore": lore}
-    finally:
-        conn.close()
 
 
 @app.put("/api/universes/{universe_id}")
@@ -15968,8 +15697,7 @@ async def update_universe(universe_id: int, req: Request):
         {"ok": true}
     """
     body = await req.json()
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT id FROM universes WHERE id = ?", (universe_id,)
         ).fetchone()
@@ -15983,8 +15711,6 @@ async def update_universe(universe_id: int, req: Request):
         )
         conn.commit()
         return {"ok": True}
-    finally:
-        conn.close()
 
 
 @app.delete("/api/universes/{universe_id}")
@@ -16004,8 +15730,7 @@ async def delete_universe(universe_id: int):
         >>> DELETE /api/universes/1
         {"ok": true}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         # Null-out FK before deleting the parent row (SQLite ALTER TABLE does not
         # support ON DELETE SET NULL for columns added via ALTER TABLE).
         conn.execute(
@@ -16015,8 +15740,6 @@ async def delete_universe(universe_id: int):
         conn.execute("DELETE FROM universes WHERE id=?", (universe_id,))
         conn.commit()
         return {"ok": True}
-    finally:
-        conn.close()
 
 
 @app.post("/api/universes/{universe_id}/characters/{char_id}")
@@ -16041,8 +15764,7 @@ async def assign_character_to_universe(universe_id: int, char_id: int):
         >>> POST /api/universes/1/characters/3
         {"ok": true}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT id FROM universes WHERE id = ?", (universe_id,)
         ).fetchone()
@@ -16054,8 +15776,6 @@ async def assign_character_to_universe(universe_id: int, char_id: int):
         )
         conn.commit()
         return {"ok": True}
-    finally:
-        conn.close()
 
 
 @app.delete("/api/universes/characters/{char_id}")
@@ -16074,15 +15794,12 @@ async def remove_character_from_universe(char_id: int):
         >>> DELETE /api/universes/characters/3
         {"ok": true}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         conn.execute(
             "UPDATE characters SET universe_id=NULL WHERE id=?", (char_id,)
         )
         conn.commit()
         return {"ok": True}
-    finally:
-        conn.close()
 
 
 # --- MINI GAMES (Feature A2) ---
@@ -16166,16 +15883,13 @@ async def start_game(body: dict):
         state = mm_engine.new_state(pairs, theme)
         public = mm_engine.public_state(state)
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.execute(
             "INSERT INTO game_sessions (character_id, game_type, game_state) VALUES (?, ?, ?)",
             (character_id, game_type, json.dumps(state)),
         )
         conn.commit()
         session_id = cur.lastrowid
-    finally:
-        conn.close()
 
     return {"session_id": session_id, "state": public}
 
@@ -16203,8 +15917,7 @@ async def game_move(session_id: int, body: dict):
         >>> POST /api/games/3/move
         {"choice": 2}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT game_type, game_state, character_id FROM game_sessions WHERE id=?",
             (session_id,),
@@ -16371,8 +16084,6 @@ async def game_move(session_id: int, body: dict):
         conn.commit()
 
         return {"event": event, "state": public, "reaction": reaction}
-    finally:
-        conn.close()
 
 
 @app.get("/api/games/history")
@@ -16391,8 +16102,7 @@ async def game_history(character_id: int, limit: int = 20):
         >>> GET /api/games/history?character_id=1
         {"games": [{"id": 5, "game_type": "trivia", "result": "win", ...}]}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         rows = conn.execute(
             """
             SELECT id, game_type, result, score, max_score,
@@ -16417,8 +16127,6 @@ async def game_history(character_id: int, limit: int = 20):
             for r in rows
         ]
         return {"games": games}
-    finally:
-        conn.close()
 
 
 @app.get("/api/games/{session_id}/state")
@@ -16438,8 +16146,7 @@ async def get_game_state(session_id: int):
         >>> GET /api/games/3/state
         {"game_type": "trivia", "state": {...}}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT game_type, game_state FROM game_sessions WHERE id=?",
             (session_id,),
@@ -16459,8 +16166,6 @@ async def get_game_state(session_id: int):
         elif game_type == "memory_match" and not state.get("finished"):
             state = mm_engine.public_state(state)
         return {"game_type": game_type, "state": state}
-    finally:
-        conn.close()
 
 
 @app.get("/api/games/best-scores")
@@ -16481,8 +16186,7 @@ async def game_best_scores(character_id: int):
         >>> GET /api/games/best-scores?character_id=1
         {"best_scores": {"trivia": {"best": 0.9, "plays": 5, "wins": 3}}}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         rows = conn.execute(
             """
             SELECT game_type,
@@ -16502,8 +16206,6 @@ async def game_best_scores(character_id: int):
             for r in rows
         }
         return {"best_scores": best}
-    finally:
-        conn.close()
 
 
 # ==================== CONNECTION PROFILES ====================
@@ -16528,20 +16230,18 @@ def get_profiles():
         >>> GET /api/profiles
         {"ok": true, "profiles": [{...}], "active_id": 1}
     """
-    conn = db()
-    try:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT * FROM connection_profiles ORDER BY name"
-        ).fetchall()
-        profiles = [dict(r) for r in rows]
-        active = next((p["id"] for p in profiles if p.get("is_active")), None)
-        return {"ok": True, "profiles": profiles, "active_id": active}
-    except sqlite3.OperationalError:
-        # Table doesn't exist yet (migration hasn't run)
-        return {"ok": True, "profiles": [], "active_id": None}
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM connection_profiles ORDER BY name"
+            ).fetchall()
+            profiles = [dict(r) for r in rows]
+            active = next((p["id"] for p in profiles if p.get("is_active")), None)
+            return {"ok": True, "profiles": profiles, "active_id": active}
+        except sqlite3.OperationalError:
+            # Table doesn't exist yet (migration hasn't run)
+            return {"ok": True, "profiles": [], "active_id": None}
 
 
 @app.post("/api/profiles")
@@ -16577,8 +16277,7 @@ async def create_profile(req: Request):
     top_p = body.get("top_p", 0.95)
     repeat_penalty = body.get("repeat_penalty", 1.1)
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.execute(
             """INSERT INTO connection_profiles
                (name, server_url, model, context_size, temperature, top_p, repeat_penalty)
@@ -16595,8 +16294,6 @@ async def create_profile(req: Request):
             ).fetchone()
         )
         return {"ok": True, "profile": profile}
-    finally:
-        conn.close()
 
 
 @app.put("/api/profiles/{profile_id}")
@@ -16628,8 +16325,7 @@ async def update_profile(profile_id: int, req: Request):
     if not updates:
         raise HTTPException(400, "No valid fields to update")
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         # Verify profile exists
         existing = conn.execute(
             "SELECT id FROM connection_profiles WHERE id = ?", (profile_id,)
@@ -16652,8 +16348,6 @@ async def update_profile(profile_id: int, req: Request):
             ).fetchone()
         )
         return {"ok": True, "profile": profile}
-    finally:
-        conn.close()
 
 
 @app.delete("/api/profiles/{profile_id}")
@@ -16676,8 +16370,7 @@ def delete_profile(profile_id: int):
         >>> DELETE /api/profiles/3
         {"ok": true}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         existing = conn.execute(
             "SELECT id FROM connection_profiles WHERE id = ?", (profile_id,)
         ).fetchone()
@@ -16687,8 +16380,6 @@ def delete_profile(profile_id: int):
         conn.execute("DELETE FROM connection_profiles WHERE id = ?", (profile_id,))
         conn.commit()
         return {"ok": True}
-    finally:
-        conn.close()
 
 
 @app.post("/api/profiles/{profile_id}/activate")
@@ -16717,8 +16408,7 @@ def activate_profile(profile_id: int):
         >>> POST /api/profiles/2/activate
         {"ok": true, "profile": {"id": 2, "name": "Remote 70B", ..., "is_active": 1}}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute(
             "SELECT * FROM connection_profiles WHERE id = ?", (profile_id,)
@@ -16754,8 +16444,6 @@ def activate_profile(profile_id: int):
             f"(endpoint={profile['server_url']}, model={profile['model']})"
         )
         return {"ok": True, "profile": profile}
-    finally:
-        conn.close()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -16778,8 +16466,7 @@ def get_boundaries(char_id: int):
         {"ok": true, "boundaries": [...], "constraint_prompt": "ABSOLUTE RULE..."}
     """
     from backend.content.boundaries import BoundaryManager
-    conn = db()
-    try:
+    with db_ctx() as conn:
         mgr = BoundaryManager()
         boundaries = mgr.get_boundaries(char_id, conn)
         prompt = mgr.build_constraint_prompt(char_id, conn)
@@ -16796,8 +16483,6 @@ def get_boundaries(char_id: int):
             ],
             "constraint_prompt": prompt,
         }
-    finally:
-        conn.close()
 
 
 @app.put("/api/characters/{char_id}/boundaries")
@@ -16820,8 +16505,7 @@ def update_boundaries(char_id: int, request: Request):
     import asyncio
     from backend.content.boundaries import BoundaryManager
     body = asyncio.get_event_loop().run_until_complete(request.json())
-    conn = db()
-    try:
+    with db_ctx() as conn:
         mgr = BoundaryManager()
         results = []
         for b in body.get("boundaries", []):
@@ -16839,8 +16523,6 @@ def update_boundaries(char_id: int, request: Request):
                 "description": boundary.description, "set_via": boundary.set_via,
             })
         return {"ok": True, "boundaries": results}
-    finally:
-        conn.close()
 
 
 @app.delete("/api/characters/{char_id}/boundaries/{boundary_type}")
@@ -16858,13 +16540,10 @@ def delete_boundary(char_id: int, boundary_type: str):
         >>> DELETE /api/characters/1/boundaries/pacing
     """
     from backend.content.boundaries import BoundaryManager
-    conn = db()
-    try:
+    with db_ctx() as conn:
         mgr = BoundaryManager()
         mgr.delete_boundary(char_id, boundary_type, conn)
         return {"ok": True}
-    finally:
-        conn.close()
 
 
 @app.get("/api/characters/{char_id}/boundaries/export")
@@ -16878,13 +16557,10 @@ def export_boundaries(char_id: int):
         >>> GET /api/characters/1/boundaries/export
     """
     from backend.content.boundaries import BoundaryManager
-    conn = db()
-    try:
+    with db_ctx() as conn:
         mgr = BoundaryManager()
         data = mgr.export_boundaries(char_id, conn)
         return {"ok": True, "data": data}
-    finally:
-        conn.close()
 
 
 @app.post("/api/characters/{char_id}/boundaries/import")
@@ -16902,13 +16578,10 @@ def import_boundaries(char_id: int, request: Request):
     import asyncio
     from backend.content.boundaries import BoundaryManager
     body = asyncio.get_event_loop().run_until_complete(request.json())
-    conn = db()
-    try:
+    with db_ctx() as conn:
         mgr = BoundaryManager()
         imported = mgr.import_boundaries(char_id, body.get("data", "[]"), conn)
         return {"ok": True, "imported": len(imported)}
-    finally:
-        conn.close()
 
 
 # ── F13: Writing Styles ──────────────────────────────────────────────────────
@@ -16962,16 +16635,13 @@ def set_session_writing_style(session_id: int, request: Request):
     import asyncio
     body = asyncio.get_event_loop().run_until_complete(request.json())
     style = body.get("style")
-    conn = db()
-    try:
+    with db_ctx() as conn:
         conn.execute(
             "UPDATE sessions SET writing_style = ? WHERE id = ?",
             (style, session_id),
         )
         conn.commit()
         return {"ok": True, "style": style}
-    finally:
-        conn.close()
 
 
 @app.put("/api/characters/{char_id}/default-writing-style")
@@ -16995,8 +16665,7 @@ def set_character_default_writing_style(char_id: int, request: Request):
     import asyncio
     body = asyncio.get_event_loop().run_until_complete(request.json())
     style = body.get("style", "romantic")
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT personality_traits FROM characters WHERE id = ?", (char_id,)
         ).fetchone()
@@ -17008,8 +16677,6 @@ def set_character_default_writing_style(char_id: int, request: Request):
         )
         conn.commit()
         return {"ok": True, "style": style}
-    finally:
-        conn.close()
 
 
 # ── F15: Sensory Profiles ────────────────────────────────────────────────────
@@ -17028,8 +16695,7 @@ def get_sensory_profile(char_id: int):
         >>> GET /api/characters/1/sensory-profile
     """
     from backend.content.sensory_profiles import get_sensory_profile as _get_profile
-    conn = db()
-    try:
+    with db_ctx() as conn:
         # Get char_name for fallback lookup
         row = conn.execute(
             "SELECT display_name FROM characters WHERE id = ?", (char_id,)
@@ -17047,8 +16713,6 @@ def get_sensory_profile(char_id: int):
                 },
             }
         return {"ok": True, "profile": None}
-    finally:
-        conn.close()
 
 
 @app.put("/api/characters/{char_id}/sensory-profile")
@@ -17070,16 +16734,13 @@ def update_sensory_profile(char_id: int, request: Request):
     """
     import asyncio
     body = asyncio.get_event_loop().run_until_complete(request.json())
-    conn = db()
-    try:
+    with db_ctx() as conn:
         conn.execute(
             "UPDATE characters SET sensory_profile = ? WHERE id = ?",
             (json.dumps(body), char_id),
         )
         conn.commit()
         return {"ok": True}
-    finally:
-        conn.close()
 
 
 # ── F30: Private Vocabulary ──────────────────────────────────────────────────
@@ -17096,8 +16757,7 @@ def get_character_vocabulary(char_id: int):
         >>> GET /api/characters/1/vocabulary
     """
     from backend.relationship.vocabulary import VocabularyManager
-    conn = db()
-    try:
+    with db_ctx() as conn:
         mgr = VocabularyManager()
         terms = mgr.get_vocabulary(char_id, conn)
         stats = mgr.get_stats(char_id, conn)
@@ -17116,8 +16776,6 @@ def get_character_vocabulary(char_id: int):
             ],
             "stats": stats,
         }
-    finally:
-        conn.close()
 
 
 @app.delete("/api/characters/{char_id}/vocabulary/{term_id}")
@@ -17135,13 +16793,10 @@ def delete_vocabulary_term(char_id: int, term_id: int):
         >>> DELETE /api/characters/1/vocabulary/42
     """
     from backend.relationship.vocabulary import VocabularyManager
-    conn = db()
-    try:
+    with db_ctx() as conn:
         mgr = VocabularyManager()
         mgr.deactivate_term(term_id, conn)
         return {"ok": True}
-    finally:
-        conn.close()
 
 
 @app.get("/api/characters/{char_id}/vocabulary/stats")
@@ -17155,13 +16810,10 @@ def get_vocabulary_stats(char_id: int):
         >>> GET /api/characters/1/vocabulary/stats
     """
     from backend.relationship.vocabulary import VocabularyManager
-    conn = db()
-    try:
+    with db_ctx() as conn:
         mgr = VocabularyManager()
         stats = mgr.get_stats(char_id, conn)
         return {"ok": True, "stats": stats}
-    finally:
-        conn.close()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -17177,16 +16829,13 @@ def get_power_dynamic(char_id: int):
         {"ok": True, "mode": "off", "intensity": 0.5, "natural_leaning": "dominant"}
     """
     from backend.content.power_dynamics import PowerDynamicEngine, CHARACTER_NATURAL_LEANINGS
-    conn = db()
-    try:
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT display_name FROM characters WHERE id = ?", (char_id,)
         ).fetchone()
         char_name = row[0] if row else ""
         leaning = CHARACTER_NATURAL_LEANINGS.get(char_name, "switch")
         return {"ok": True, "mode": "off", "intensity": 0.5, "natural_leaning": leaning}
-    finally:
-        conn.close()
 
 
 @app.put("/api/characters/{char_id}/power-dynamic")
@@ -17252,8 +16901,7 @@ def get_character_milestones(char_id: int):
         {"ok": True, "milestones": [...], "all_types": {...}}
     """
     from backend.milestones.intimate_tracker import MilestoneStore, MILESTONE_TYPES
-    conn = db()
-    try:
+    with db_ctx() as conn:
         store = MilestoneStore()
         timeline = store.get_timeline(char_id, conn)
         return {
@@ -17261,8 +16909,6 @@ def get_character_milestones(char_id: int):
             "milestones": timeline,
             "all_types": {k: v["bond_min"] for k, v in MILESTONE_TYPES.items()},
         }
-    finally:
-        conn.close()
 
 
 @app.get("/api/characters/{char_id}/timeline")
@@ -17276,8 +16922,7 @@ def get_character_timeline(char_id: int):
     Returns:
         {"ok": True, "timeline": [{"date": "...", "label": "...", "type": "...", "detail": "..."}, ...]}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         events: list[dict] = []
 
         # 1) Milestones from intimate_milestones table
@@ -17336,8 +16981,6 @@ def get_character_timeline(char_id: int):
         events.sort(key=lambda e: e.get("date", ""), reverse=True)
 
         return {"ok": True, "timeline": events}
-    finally:
-        conn.close()
 
 
 @app.get("/api/characters/{char_id}/intimate-memories")
@@ -17351,8 +16994,7 @@ def get_character_intimate_memories(char_id: int):
         {"ok": True, "memories": [...]}
     """
     from backend.memory.intimate_memories import IntimateMemoryStore
-    conn = db()
-    try:
+    with db_ctx() as conn:
         store = IntimateMemoryStore()
         memories = store.get_all(char_id, conn)
         return {
@@ -17375,8 +17017,6 @@ def get_character_intimate_memories(char_id: int):
                 for m in memories
             ],
         }
-    finally:
-        conn.close()
 
 
 @app.delete("/api/characters/{char_id}/intimate-memories/{memory_id}")
@@ -17387,13 +17027,10 @@ def delete_character_intimate_memory(char_id: int, memory_id: int):
         {"ok": True, "deleted": True} or {"ok": True, "deleted": False}
     """
     from backend.memory.intimate_memories import IntimateMemoryStore
-    conn = db()
-    try:
+    with db_ctx() as conn:
         store = IntimateMemoryStore()
         deleted = store.delete(memory_id, conn)
         return {"ok": True, "deleted": deleted}
-    finally:
-        conn.close()
 
 
 @app.get("/api/characters/{char_id}/post-scene-status")
@@ -17411,8 +17048,7 @@ def get_post_scene_status(char_id: int, session_id: int = 0):
         {"ok": True, "active": True/False, "state": {...}} or
         {"ok": True, "active": False}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         if session_id == 0:
             row = conn.execute(
                 "SELECT id, current_phase, aftercare_messages_sent, arousal_peak, "
@@ -17445,8 +17081,6 @@ def get_post_scene_status(char_id: int, session_id: int = 0):
                 "completed": bool(row[7]),
             },
         }
-    finally:
-        conn.close()
 
 
 # --- NSFW Phase 5 API Endpoints ---
@@ -17468,8 +17102,7 @@ def get_character_desires(char_id: int):
     """
     from backend.emotional.desires import DesireEngine
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.cursor()
         # Get character name
         char_row = cur.execute(
@@ -17529,8 +17162,6 @@ def get_character_desires(char_id: int):
             desire_list.append(entry)
 
         return {"ok": True, "desires": desire_list, "status": status}
-    finally:
-        conn.close()
 
 
 @app.get("/api/characters/{char_id}/fantasy-journal")
@@ -17548,8 +17179,7 @@ def get_character_fantasy_journal(char_id: int, limit: int = 10):
     """
     from backend.adaptive.journal import get_fantasy_entries
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.cursor()
         # Get bond level
         bond_level = 0
@@ -17569,8 +17199,6 @@ def get_character_fantasy_journal(char_id: int, limit: int = 10):
             "visible": bond_level >= 80,
             "bond_level": bond_level,
         }
-    finally:
-        conn.close()
 
 
 @app.get("/api/characters/{char_id}/post-scene-moods")
@@ -17584,8 +17212,7 @@ def get_character_post_scene_moods(char_id: int, limit: int = 20):
     Returns:
         {"ok": True, "moods": [...]}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.cursor()
         moods = []
         try:
@@ -17611,8 +17238,6 @@ def get_character_post_scene_moods(char_id: int, limit: int = 20):
         except Exception:
             pass
         return {"ok": True, "moods": moods}
-    finally:
-        conn.close()
 
 
 @app.get("/api/characters/{char_id}/audio-story-types")
@@ -17627,8 +17252,7 @@ def get_audio_story_types(char_id: int):
     """
     from backend.voice.audio_stories import AudioStoryEngine
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.cursor()
         bond_level = 0
         try:
@@ -17648,8 +17272,6 @@ def get_audio_story_types(char_id: int):
             "bond_level": bond_level,
             "tts_params": engine.get_tts_params(),
         }
-    finally:
-        conn.close()
 
 
 @app.post("/api/characters/{char_id}/love-letter")
@@ -17666,8 +17288,7 @@ def generate_love_letter(char_id: int):
     """
     from backend.emotional.love_letters import LoveLetterEngine
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.cursor()
         # Get character name
         char_row = cur.execute(
@@ -17705,8 +17326,6 @@ def generate_love_letter(char_id: int):
                 "prompt": prompt,
             },
         }
-    finally:
-        conn.close()
 
 
 # --- NSFW Phase 7+8 API Endpoints ---
@@ -17727,14 +17346,11 @@ def get_character_gallery(char_id: int, limit: int = 50, mood: str = None, favor
     """
     from backend.image_gen.gallery import GalleryManager
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         mgr = GalleryManager()
         images = mgr.get_gallery(char_id, conn, category=mood, favorites_only=favorites, limit=limit)
         stats = mgr.get_gallery_stats(char_id, conn)
         return {"ok": True, "images": images, "stats": stats}
-    finally:
-        conn.close()
 
 
 @app.get("/api/characters/{char_id}/persona-types")
@@ -17749,8 +17365,7 @@ def get_persona_types(char_id: int):
     """
     from backend.content.fantasy_personas import FantasyPersonaEngine
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.cursor()
         bond_level = 0
         try:
@@ -17767,8 +17382,6 @@ def get_persona_types(char_id: int):
             "eligible": engine.should_allow(bond_level),
             "bond_level": bond_level,
         }
-    finally:
-        conn.close()
 
 
 @app.get("/api/characters/{char_id}/shared-fantasies")
@@ -17781,8 +17394,7 @@ def get_shared_fantasies(char_id: int):
     Returns:
         {"ok": True, "fantasies": [...]}
     """
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.cursor()
         fantasies = []
         try:
@@ -17803,8 +17415,6 @@ def get_shared_fantasies(char_id: int):
         except Exception:
             pass
         return {"ok": True, "fantasies": fantasies}
-    finally:
-        conn.close()
 
 
 @app.get("/api/characters/{char_id}/intimate-quiz/progress")
@@ -17819,8 +17429,7 @@ def get_intimate_quiz_progress(char_id: int):
     """
     from backend.emotional.intimate_quiz import IntimateQuizEngine
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         cur = conn.cursor()
         bond_level = 0
         try:
@@ -17848,8 +17457,6 @@ def get_intimate_quiz_progress(char_id: int):
             "eligible": engine.should_allow(bond_level),
             "categories": engine.get_categories(),
         }
-    finally:
-        conn.close()
 
 
 # --- Scenario Templates ---
@@ -17932,8 +17539,7 @@ def list_scenario_templates(char_id: int):
     if char_id <= 0:
         raise HTTPException(status_code=400, detail="char_id must be a positive integer")
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         templates = get_templates(char_id, conn)
         return {
             "ok": True,
@@ -17953,8 +17559,6 @@ def list_scenario_templates(char_id: int):
                 for t in templates
             ],
         }
-    finally:
-        conn.close()
 
 
 @app.get("/api/scenarios/templates/active")
@@ -17976,8 +17580,7 @@ def get_active_scenario_template(char_id: int, session_id: int):
     """
     from backend.scenario.templates import get_active_template
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         template = get_active_template(char_id, session_id, conn)
         return {
             "ok": True,
@@ -17998,8 +17601,6 @@ def get_active_scenario_template(char_id: int, session_id: int):
                 else None
             ),
         }
-    finally:
-        conn.close()
 
 
 @app.post("/api/scenarios/templates")
@@ -18021,38 +17622,36 @@ def create_scenario_template(body: _ScenarioCreateBody):
     """
     from backend.scenario.templates import create_template
 
-    conn = db()
-    try:
-        template = create_template(
-            char_id=body.char_id,
-            title=body.title,
-            description=body.description,
-            conn=conn,
-            setting=body.setting,
-            time_of_day=body.time_of_day,
-            mood=body.mood,
-            is_default=body.is_default,
-            is_builtin=False,
-        )
-        return {
-            "ok": True,
-            "template": {
-                "id": template.id,
-                "char_id": template.char_id,
-                "title": template.title,
-                "description": template.description,
-                "setting": template.setting,
-                "time_of_day": template.time_of_day,
-                "mood": template.mood,
-                "is_default": template.is_default,
-                "is_builtin": template.is_builtin,
-                "created_at": template.created_at,
-            },
-        }
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    finally:
-        conn.close()
+    with db_ctx() as conn:
+        try:
+            template = create_template(
+                char_id=body.char_id,
+                title=body.title,
+                description=body.description,
+                conn=conn,
+                setting=body.setting,
+                time_of_day=body.time_of_day,
+                mood=body.mood,
+                is_default=body.is_default,
+                is_builtin=False,
+            )
+            return {
+                "ok": True,
+                "template": {
+                    "id": template.id,
+                    "char_id": template.char_id,
+                    "title": template.title,
+                    "description": template.description,
+                    "setting": template.setting,
+                    "time_of_day": template.time_of_day,
+                    "mood": template.mood,
+                    "is_default": template.is_default,
+                    "is_builtin": template.is_builtin,
+                    "created_at": template.created_at,
+                },
+            }
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.put("/api/scenarios/templates/{template_id}")
@@ -18075,8 +17674,7 @@ def update_scenario_template(template_id: int, body: _ScenarioUpdateBody):
     """
     from backend.scenario.templates import update_template
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         kwargs = {
             k: v
             for k, v in body.model_dump().items()
@@ -18086,8 +17684,6 @@ def update_scenario_template(template_id: int, body: _ScenarioUpdateBody):
         if not updated:
             raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
         return {"ok": True}
-    finally:
-        conn.close()
 
 
 @app.delete("/api/scenarios/templates/{template_id}")
@@ -18109,8 +17705,7 @@ def delete_scenario_template(template_id: int):
     """
     from backend.scenario.templates import get_template, delete_template
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         template = get_template(template_id, conn)
         if template is None:
             raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
@@ -18121,8 +17716,6 @@ def delete_scenario_template(template_id: int):
             )
         delete_template(template_id, conn)
         return {"ok": True}
-    finally:
-        conn.close()
 
 
 @app.post("/api/scenarios/templates/activate")
@@ -18144,8 +17737,7 @@ def activate_scenario_template(body: _ScenarioActivateBody):
     """
     from backend.scenario.templates import activate_template, get_template
 
-    conn = db()
-    try:
+    with db_ctx() as conn:
         # Validate template exists (skip for deactivate shortcut)
         if body.template_id != 0:
             template = get_template(body.template_id, conn)
@@ -18162,8 +17754,6 @@ def activate_scenario_template(body: _ScenarioActivateBody):
                 detail=f"Session {body.session_id} not found",
             )
         return {"ok": True, "activated": activated}
-    finally:
-        conn.close()
 
 
 # --- EXCEPTION HANDLERS ---

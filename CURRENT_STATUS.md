@@ -1,16 +1,16 @@
 # Current Project Status
 
-**Last updated:** 2026-04-27 21:15 PDT
-**Branch:** master
+**Last updated:** 2026-04-28 (session 19 end)
+**Branch:** master (3 commits unpushed)
 **Schema version:** v70
-**Tests:** 2,683 backend (pytest, +5 new) + 203 frontend (vitest, +3 new) passing, tsc clean (0 known failures)
+**Tests:** 2,682 backend (pytest, 1 unrelated date-dependent failure) + 203 frontend (vitest) passing, tsc clean
 **Automation:** 12 agents, 22 skills, 6 rules, 8 hooks, 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
 
-**Session 18 (2026-04-27) committed** as `7b7bce1`, `8a1f3f5`, `643bd24`, `6255578` (all unpushed). Nothing in progress. Session 19 starts with HUD redesign Tier 0 (audit) per `docs/plans/2026-04-27-hud-redesign-staged.md` — see `docs/SESSION_HANDOFF.md` for full context.
+**Session 19 (2026-04-28) committed** as `aef220a` (HUD Tier 0 audit), `3a1c60f` (HUD Tier 1 deletes), `b6485d8` (db autocommit fix). All unpushed. Nothing in progress. Session 20 starts with HUD Tier 2 (top toolbar overflow, 9 → 4 buttons) OR the DB FD-leak migration sweep (~197 `db()` callers in server.py → `db_ctx()`). See `docs/SESSION_HANDOFF.md` + `docs/bugs/2026-04-28-db-connection-fd-leak.md`.
 
 ## Completed This Session (Session 18 — Memory Browser unification + 3D viewer crash fix + HUD redesign plan)
 

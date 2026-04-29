@@ -1,169 +1,170 @@
-# Session Handoff — 2026-04-27 (Session 18)
+# Session Handoff — 2026-04-28 (Session 19)
 
-## Branch: master · Commits this session: 4 (all unpushed)
-## Test Status: pytest 2,683 passed · vitest 203 passed · tsc clean
+## Branch: master · Commits this session: 3 (all unpushed)
 
-## Completed This Session
+- `aef220a` docs(19-T0): HUD element audit complete
+- `3a1c60f` fix(19-T1): HUD Tier 1 — 5 layout deletes/moves
+- `b6485d8` fix(19): db autocommit + db_ctx — kill `database is locked` 500s
 
-### Memory Browser closeout
-- **`refactor(18): MemoryBrowser raw-fetch → api.* unification`** (`7b7bce1`)
-  - Added `MemoryItem` interface + 4 typed methods to `api.ts`:
-    `listMemories` / `searchMemories` / `deleteMemory` / `promoteMemory`
-  - Refactored `MemoryBrowser.tsx` Memories tab — 4 raw `fetch()` calls
-    replaced with `api.*` helpers. Local `Memory` interface deleted.
-  - Test suite collapsed: removed `makeFetchStub` URL+method router
-    (~50 lines). 7 Memories cases now use Pattern 2
-    (`vi.mocked(api.*).mockResolvedValue`).
+## Test Status: pytest 2682 ✓ (1 unrelated date-test failure) · vitest 203 ✓ · tsc clean
 
-### Backend stability — 3D viewer + greeting endpoint chain unblocked
-- **`fix(backend): db-lock 500s on /api/characters/{id}/relationship`** (`8a1f3f5`)
-  - `db()` helper now sets `PRAGMA busy_timeout = 30000` per connection.
-    Fixes the *class* of WAL-writer-contention bug across all `db()` users.
-  - `get_relationship` switched to SELECT-first / INSERT-on-miss. Hot
-    GET path no longer takes a write lock per call.
-  - `reset_relationship` wrapped in `with conn:` for atomic UPDATE/INSERT.
-  - New regression test `backend/tests/test_relationship_endpoint.py`
-    (5 tests): defaults, lazy-seed-once invariant, 50× rapid-fire all
-    200, reset seeds + resets, `db()` busy_timeout=30000.
+## Completed this session
 
-- **`fix(viewer+backend): unblock 3D viewer + greeting endpoint chain`** (`643bd24`)
-  - **THE viewer crash** — `BlinkController` constructor in
-    `viewer.html` called `this._poissonDelay()` BEFORE initializing
-    `this._emotionMod`. `_poissonDelay()` reads `_emotionMod.rateMul`,
-    so it crashed *inside the GLTFLoader success callback* with
-    `TypeError: Cannot read properties of undefined (reading
-    'rateMul')`. The crash happened AFTER the VRM file fully
-    downloaded — the viewer never sent `modelLoaded` and the parent
-    React app stayed stuck on "Loading 3D model..." forever, appearing
-    as a blank viewer panel. Fixed by reordering the constructor.
-  - Bumped iframe `?v=7` → `?v=8` in `ModelPanel.tsx` so clients dodge
-    cached old viewer.html.
-  - Three phantom-column SQL bugs in `get_character_greeting` fixed:
-    `greeting_message` → `greeting_text`, `sessions.updated_at` →
-    `MAX(messages.ts) WHERE char_id`, `sessions.character_id` →
-    `messages.session_id WHERE char_id` (sessions has no character
-    link). Same `sessions.character_id` bug in diary endpoint (line
-    9476) fixed in passing.
-  - New regression test
-    `frontends/sakura/src/test/viewer.blinkController.test.ts` (3
-    tests). Reads `viewer.html` as text, asserts `_emotionMod` is
-    assigned BEFORE `_poissonDelay()` in the BlinkController
-    constructor.
-  - **Verification:** Playwright drove sakura → opened 3D viewer → VRM
-    character (Panicandy / Rin Akane) renders at 118 FPS with
-    `motion_neutral` animation playing. Console clean of TypeErrors.
+### HUD Redesign — Tier 0 audit (commit `aef220a`)
+- 4 parallel codebase-analyst agents mapped every HUD element across
+  9 zones with first-introduced commit, importance, proposed visibility
+  tier. Output: `docs/research/2026-04-27-hud-element-audit.md` (358
+  lines).
+- Major findings beyond inventory: top toolbar has 17 elements not 8
+  (8-element composer secondary row was missed); 3D viewer has 30+
+  controls not 12+; "floating Next: tooltip" bug was misdescribed —
+  actual cause is BondProgressBar stacking 3 rows in the sticky header,
+  not z-index conflict. 5 free deletes surfaced for Tier 1.
+- Decided: `frontend-design` skill (browser-preview A/B/C variants)
+  fits at Tiers 4, 6, 7 (visual-decision tiers), NOT as a separate
+  ladder option.
 
-### HUD redesign plan written (deferred to session 19+)
-- **`docs(plan): staged HUD redesign — 8-tier intensity ladder`** (`6255578`)
-  - `docs/plans/2026-04-27-hud-redesign-staged.md` — 262 lines.
-  - 8-tier escalation ladder, escalate only when previous tier is
-    judged insufficient. Recommended order: 0 → 1 → 2 → pause → 4 →
-    pause → 3 → 6 → 5 → 7 → 8. Most users stop after tier 2-4.
-  - Hard constraints baked in: no new chrome, theme test per tier,
-    one commit per tier, 10-min real-use evaluation gates between
-    tiers.
+### HUD Redesign — Tier 1 deletes/moves (commit `3a1c60f`)
+Pure bug fixes + dead-UI deletes from the audit. -48 +20 across 5 files.
 
-### Bug docs filed (4 new in `docs/bugs/`)
-- `2026-04-27-character-relationship-db-lock.md` — ✅ FIXED
-- `2026-04-27-viewer-or-model-assignment-broken.md` — ✅ FIXED
-- `2026-04-27-model-picker-no-preview-images.md` — open, P2 UX
-- `2026-04-27-hud-cramped-overcrowded.md` — open, P1 UX debt
-  (now has implementation plan above)
+1. ContextBudgetPill moved from absolute-positioned overlay
+   (`ChatThread.tsx`) into StatusBar right-side icon group between
+   model-browser and settings — kills overlap with conversation
+   starters in empty chat.
+2. Inline "Next:" unlock teaser line removed from BondProgressBar;
+   moved to native title-tooltip on the bond pill + appended to
+   aria-label. Sticky header drops 1 row.
+3. Dead `TemperatureMeter temperature={0}` import + use removed from
+   chat-area mid toolbar (F21 not yet wired).
+4. Duplicate viewer Close button at bottom-left of 3D panel deleted;
+   "Back to Chat" pill in top bar remains as the single close
+   affordance (more discoverable, always visible).
+5. Stale `Ctrl+0 Reset` HUD hint in viewer.html corrected to
+   `Dbl-click Reset`. Iframe cache-bust bumped `?v=8` → `?v=9`.
+
+Browser-verified via Playwright on a populated session (Rin/Akane):
+ContextBudgetPill renders in StatusBar top-right
+(`1.7k / 262.1k 0.6%`), bond card shows level/tier/XP only, viewer
+bottom-left has only "Models" remaining (no duplicate Close),
+Dbl-click hint confirmed via curl on `?v=9` served HTML.
+
+### DB connection lock 500s (commit `b6485d8`)
+`POST /api/sessions` was 500ing intermittently with
+`OperationalError: database is locked` even though session 18 had set
+WAL mode + `busy_timeout = 30000`.
+
+Root cause was NOT lock contention. Python sqlite3's default
+`isolation_level=""` holds an implicit BEGIN from the first INSERT
+until `commit()` is called; ~200 `db()` callers in server.py never
+call `commit()` (or even `close()`). Forgotten commits leave the
+writer lock dangling past `busy_timeout` until the conn is GC'd.
+
+Fix: `db()` now uses `isolation_level=None` (autocommit). Each
+statement is atomic — no dangling write locks possible. Multi-
+statement atomicity remains opt-in via `with conn:` (only 4 such
+callers; existing usages still work in autocommit mode).
+
+Verification: 50× sequential POST /api/sessions = 50× HTTP 200, zero
+500s. Previously would 500 after ~10 min polling load.
+
+Also added: `db_ctx()` context-manager helper, `_AutoCloseConnection`
+subclass (defense-in-depth, see open issue below). Migrated
+`create_session` and `get_relationship` as templates.
 
 ## Work In Progress
-- Nothing in progress. All session 18 work committed.
+**None.** All session 19 work is committed.
 
-## Known Issues / Bugs Discovered (NOT yet fixed)
+## Known Issues / Bugs Discovered NOT yet fixed
 
-### POST /api/sessions intermittent 500s (DB connection leak)
-- Symptom: After ~10 min of normal browser polling, `db()` accumulates
-  130+ open connections. Eventually one of them holds the write lock
-  indefinitely; subsequent `INSERT INTO sessions` hits `database is
-  locked` even with the new 30s busy_timeout.
-- Verified during session 18 via `lsof backend/storage/app.db | wc -l`
-  → 138 handles on PID 52591.
-- Restart clears it. Underlying fix needs `db()` callers to use a
-  context manager (`with db() as conn:` requires `db()` to return a
-  contextmanager wrapper) OR a real connection pool.
-- Out of scope for this session. Filed mentally; needs its own bug doc
-  next session.
+### Connection FD leak (P2, slow-burn) — `docs/bugs/2026-04-28-db-connection-fd-leak.md`
+Separate bug from the lock 500s above (which IS fixed).
 
-### Stale character portrait 404s
-- Console shows 8× 404 on `/files/images/{nana,mikazuki,suzuha,
-  tsukimi,shirayuki,alana}_portrait.png` + `icon.png`.
-- These are character data references to portrait files that don't
-  exist on disk. UX falls back to default avatar (initial letter
-  bubble), so non-blocking.
-- Lower priority. Either ship the missing PNGs or null out the stale
-  `avatar_url` rows.
+Symptom: `lsof backend/storage/app.db | wc -l` climbs ~1 FD per GET
+request to handlers using raw `db()` without explicit close. After
+600 mixed GETs: 401 FDs to the `.db` file alone. Eventually starves
+OS soft FD limit.
+
+What was tried this session and didn't work:
+- `_AutoCloseConnection` subclass with `__del__`: works in
+  scripts/in-process tests, does NOT fire reliably under uvicorn —
+  FastAPI/Starlette retains frame refs past handler return.
+- `gc.collect()` in HTTP middleware: no effect, reverted.
+
+What works: `db_ctx()` context manager (verified — 200 GETs to
+`/relationship` migrated to db_ctx = 0 leak; 200 GETs to `/bond`
+still raw db() = 201 leak).
+
+**Recommended next-session fix:** Dispatch ONE `senior-dev` agent
+for a sequential single-file mechanical migration of all ~197
+remaining `db()` call sites in `backend/server.py` to
+`with db_ctx() as conn:`. Mechanical pattern, pytest validates each
+chunk. Estimated 2–4h. Add a regression test that asserts FD count
+stays bounded over N sequential requests.
+
+### Pre-existing test failure (date-dependent, NOT my regression)
+`backend/tests/test_phase6_voice_audio.py::TestLoveLetterFrequency::test_blocked_by_recent_letter`
+
+Test hardcodes `2026-03-29` as "yesterday's date — too recent" but
+today is `2026-04-28`. 30-day cooldown has elapsed → assertion
+inverts. Should be fixed by making the date relative to `today() -
+timedelta(days=1)` instead of hardcoded.
+
+### Pre-existing portrait 404s (cosmetic, fall back works)
+8× `/files/images/{nana,mikazuki,suzuha,tsukimi,shirayuki,alana}_portrait.png + icon.png` 404s in console. UX falls back to default avatar (initial letter bubble), non-blocking. Either ship the missing PNGs or null out the stale `avatar_url` rows.
 
 ## Files Modified (this session)
 
 ```
-backend/server.py                                  |  96 +++++---
-backend/tests/test_relationship_endpoint.py        | 114 +++++++++
-docs/bugs/2026-04-27-character-relationship-...    | 105 +++++++++
-docs/bugs/2026-04-27-hud-cramped-overcrowded.md    |  68 ++++++
-docs/bugs/2026-04-27-model-picker-no-preview-...   |  55 +++++
-docs/bugs/2026-04-27-viewer-or-model-assign...     | 120 ++++++++++
-docs/plans/2026-04-27-hud-redesign-staged.md       | 262 +++++++++++++
-frontends/sakura/src/components/MemoryBrowser.tsx  |  41 +---
-frontends/sakura/src/components/ModelPanel.tsx     |   2 +-
-frontends/sakura/src/lib/api.ts                    |  81 +++++++
-frontends/sakura/src/test/MemoryBrowser.test.tsx   | 179 +++++---------
-frontends/sakura/src/test/viewer.blinkController.test.ts |  67 ++++++
-frontends/shared/viewer/viewer.html                |   8 +-
-13 files changed, 1017 insertions(+), 181 deletions(-)
+backend/server.py                                 |  76 +++++++++++++++++--
+backend/tests/                                    | (no changes)
+docs/bugs/2026-04-28-db-connection-fd-leak.md     | 117 ++++++++++++++++++++++++
+docs/plans/2026-04-27-hud-redesign-staged.md      |  +6 status log + linked
+docs/research/2026-04-27-hud-element-audit.md     | 358 ++++++ NEW
+frontends/sakura/src/components/BondProgressBar.tsx | -15 +6
+frontends/sakura/src/components/ModelPanel.tsx    | -16 +5
+frontends/sakura/src/components/StatusBar.tsx     |  +6
+frontends/sakura/src/views/ChatThread.tsx         | -16 +0
+frontends/shared/viewer/viewer.html               | -1 +1
 ```
 
 ## Next Session Priorities
 
-1. **HUD redesign Tier 0 (audit)** — `docs/plans/2026-04-27-hud-redesign-staged.md`.
-   Build the spreadsheet: every HUD element across all 7 zones, with
-   feature, session added, importance ranking, proposed visibility
-   tier. Output: `docs/research/2026-04-XX-hud-element-audit.md`.
-   ~1h. Prereq for everything else in the ladder.
+1. **HUD Tier 2** — collapse top toolbar 9 → 4 (3 visible + `⋯`
+   overflow). Tier 0 audit recommends keeping {chat-threads,
+   settings, 3D-toggle} OR {global-search, settings, 3D-toggle},
+   merging thread-search + global-search into single search with
+   scope toggle, moving {export, soundscape, model-browser} to
+   `⋯` overflow popover, version pill → Settings/About. ~1h. Use
+   `theme-auditor` agent to verify against 1 light + 1 dark theme.
+   Single biggest visual peak-screen relief possible. Per plan,
+   pause + evaluate after this — likely good-enough stopping point.
 
-2. **HUD Tier 1 (layout bug fixes)** — fix the floating "Next:
-   Character uses your name (Lv 1)" tooltip overlapping chat content,
-   and the "1.7k / 262.1k" context-budget pill overlapping conversation
-   starters. Pure bug fixes, no UX changes. ~30 min.
+2. **DB FD leak migration** — see open bug doc. Dispatch
+   `senior-dev` agent for mechanical sweep of `db()` →
+   `db_ctx()` across server.py. Add a regression test
+   (`test_db_fd_leak.py`) that opens 200 connections via the test
+   client and asserts `lsof` handle count stays bounded.
 
-3. **HUD Tier 2 (top toolbar overflow)** — collapse the 8-icon top
-   strip to 3 visible + `⋯` overflow popover. ~1h. Single biggest
-   visible relief possible without behavior change. **Pause and
-   evaluate after this** — likely good-enough stopping point for many
-   users.
+3. **Date-dependent test fix** — make the hardcoded `2026-03-29`
+   in `test_phase6_voice_audio.py:397` relative to today.
 
-4. **(Out-of-band)** Investigate the `db()` connection leak for
-   `/api/sessions` 500s. Needs a context manager refactor or a real
-   pool. Filed in this handoff under Known Issues.
+4. **(deferred)** HUD Tier 4 (bond strip simplify) — first tier
+   that benefits from `frontend-design` skill A/B/C variants. Bond
+   pill format, bar style, streak placement have aesthetic
+   tradeoffs.
 
 ## Context for Next Session
 
-- **Servers WERE running at handoff** — backend on 8080 (PID 52591),
-  sakura vite on 5175. Whether they're still up by next session
-  depends on machine state. Run `/verify-servers` to check before
-  claiming anything.
-- **Browser state:** Playwright session was open at
-  `http://localhost:5175/sakura/` with the 3D viewer panel toggled
-  open. Will need fresh navigate next time.
-- **Active plan file:** `docs/plans/2026-04-27-hud-redesign-staged.md`.
-  Tiers 0–8 — start with Tier 0.
-- **Key decision logged in plan:** The 8-tier ladder is *deliberately*
-  overengineered as a discipline mechanism. The user explicitly asked
-  for staged escalation so we don't big-bang a redesign in sensitive
-  areas. Read the plan's "Why staged?" section before deviating.
-- **Working tree dirty** — pre-existing modifications to
-  `CURRENT_STATUS.md` (will be updated by /handoff itself),
-  `backend/config/app.json`, `backend/storage/app.db` (DB writes from
-  the running backend). Plus 10 untracked `viewer-*.png` debug
-  screenshots from session 18 Playwright runs and one
-  `.claude/scheduled_tasks.lock`. Safe to delete the PNGs; the lock
-  file is harmless.
-- **DB schema is at v70** (per CURRENT_STATUS, unchanged this
-  session — no migrations).
-- **Ollama, not LM Studio** — user mentioned mid-session that they
-  switched LLM provider. Doesn't affect backend logic but the greeting
-  endpoint LLM call may behave differently when the user reloads the
-  app.
+- Servers torn down at handoff. Run `/verify-servers` after restart.
+- Browser state: Playwright closed.
+- Active plan file: `docs/plans/2026-04-27-hud-redesign-staged.md`
+  with Tier 0 + Tier 1 status logs appended (no rewrites).
+- `aef220a` + `3a1c60f` + `b6485d8` are unpushed. Push when ready.
+- DB schema unchanged at v70 (no migrations this session).
+- `_AutoCloseConnection` subclass kept in tree as defense-in-depth
+  even though it doesn't help in uvicorn context — it's free in
+  non-server contexts and the docstring documents the limitation.
+- The user's directive at end of session: "context getting too high,
+  exit and try again from a different angle." The DB leak migration
+  was the spinning point — fresh session will be more efficient
+  for the 197-site sweep.

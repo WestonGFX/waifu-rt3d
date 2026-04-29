@@ -16,7 +16,7 @@ import json
 import re
 import sqlite3
 import psutil
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from typing import Optional
 
 # ... (Previous imports) ...
@@ -380,21 +380,81 @@ def _get_comfyui_endpoint(cfg: dict, section: str = "image_gen") -> str:
 def save_config(cfg):
     CONFIG.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 
-def db():
-    """Open a SQLite connection with sane lock-contention defaults.
+class _AutoCloseConnection(sqlite3.Connection):
+    """`sqlite3.Connection` subclass that closes itself on garbage collection.
 
-    Sets PRAGMA busy_timeout = 30000 (30s) so concurrent writers block
-    and retry instead of immediately raising OperationalError("database
-    is locked"). This was the root cause of repeated 500s on hot-path
-    endpoints like /api/characters/{id}/relationship.
+    Stock `sqlite3.Connection` releases SQLite C resources lazily — under load
+    the OS sees 100s of open `.db` / `.db-wal` / `.db-shm` file descriptors
+    even though Python no longer holds references. This subclass adds a
+    `__del__` that explicitly calls `close()` so CPython's deterministic
+    refcount-based GC releases FDs the moment the last reference drops
+    (typically when a request handler returns).
+
+    Suppresses errors during `__del__` because interpreter-shutdown ordering
+    can leave `sqlite3` partially torn down before connections are collected.
+    """
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
+
+def db():
+    """Open a SQLite connection in autocommit mode with WAL-friendly defaults.
+
+    Two behavioural choices that prevent the class of "database is locked"
+    500s on hot-path endpoints (relationship, sessions, bond):
+
+    1. `isolation_level=None` → autocommit mode. Python sqlite3 normally
+       holds an implicit BEGIN from the first INSERT until the caller calls
+       `commit()`; forgotten `commit()`s (common across this file's ~200
+       `db()` callers) leave the writer lock dangling past `busy_timeout`.
+       Autocommit makes each statement atomic and lock-released immediately.
+       Multi-statement atomicity remains opt-in via `with conn:` (only ~4
+       callers need this).
+
+    2. `factory=_AutoCloseConnection` → connection releases its FDs on
+       refcount-drop (deterministic in CPython). Without this, `lsof
+       backend/storage/app.db` accumulates 100s of handles under polling
+       load and eventually starves the FD pool.
+
+    `PRAGMA busy_timeout = 30000` (30s) keeps concurrent writers polite if
+    multiple processes ever share the DB.
 
     Returns:
-        sqlite3.Connection: Fresh connection. Caller is responsible for
-            commit/close (most callers rely on GC for close).
+        sqlite3.Connection: Fresh autocommit connection that auto-closes
+            when its last Python reference drops. Prefer `db_ctx()` if you
+            want explicit control over close timing.
     """
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, isolation_level=None, factory=_AutoCloseConnection)
     conn.execute("PRAGMA busy_timeout = 30000")
     return conn
+
+
+@contextmanager
+def db_ctx():
+    """Context-manager wrapper around `db()` that guarantees connection close.
+
+    Prefer this over raw `db()` for new code. Although `db()` already auto-
+    closes via `_AutoCloseConnection.__del__` when the local variable goes
+    out of scope, `db_ctx()` makes the lifecycle explicit and works
+    reliably even if a caller squirrels the connection away in a closure.
+
+    Yields:
+        sqlite3.Connection: Fresh autocommit connection (see `db()`).
+
+    Example:
+        with db_ctx() as conn:
+            row = conn.execute("SELECT 1").fetchone()
+        # connection closed here
+    """
+    conn = db()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 model_manager = None
@@ -6456,14 +6516,10 @@ async def create_session(req: Request):
     """Create a new chat session."""
     body = await req.json()
     title = body.get("title", "New Session")
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO sessions (title) VALUES (?)", (title,))
-    session_id = cur.lastrowid
-    # created_ts might be auto-generated or NULL depending on schema details
-    # We'll just return what we have
-    conn.commit()
-    conn.close()
+    with db_ctx() as conn:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO sessions (title) VALUES (?)", (title,))
+        session_id = cur.lastrowid
     return {"id": session_id, "title": title}
 
 @app.put("/api/sessions/{session_id}")
@@ -8864,23 +8920,21 @@ def get_relationship(char_id: int):
     Returns:
         {"ok": True, "relationship": {affinity, mood, trust, interactions, last_updated}}
     """
-    conn = db()
-    row = conn.execute(
-        "SELECT affinity, mood, trust, interactions, last_updated FROM character_relationships WHERE char_id = ?",
-        (char_id,)
-    ).fetchone()
-
-    if not row:
-        # Lazy seed only on miss — wrap in `with conn:` for auto-commit/rollback.
-        with conn:
-            conn.execute(
-                "INSERT OR IGNORE INTO character_relationships (char_id) VALUES (?)",
-                (char_id,)
-            )
+    with db_ctx() as conn:
         row = conn.execute(
             "SELECT affinity, mood, trust, interactions, last_updated FROM character_relationships WHERE char_id = ?",
             (char_id,)
         ).fetchone()
+
+        if not row:
+            conn.execute(
+                "INSERT OR IGNORE INTO character_relationships (char_id) VALUES (?)",
+                (char_id,)
+            )
+            row = conn.execute(
+                "SELECT affinity, mood, trust, interactions, last_updated FROM character_relationships WHERE char_id = ?",
+                (char_id,)
+            ).fetchone()
 
     if not row:
         # Insert raced or failed — return defaults rather than 500.

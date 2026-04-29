@@ -6,6 +6,8 @@ and F46 Love Letters.  All tests are pure-unit — no TTS, LLM, or network I/O.
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -393,13 +395,13 @@ class TestLoveLetterFrequency:
 
     def test_blocked_by_recent_letter(self) -> None:
         e = LoveLetterEngine()
-        # Yesterday's date — too recent
-        assert e.can_generate(1, 50, "2026-03-29") is False
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        assert e.can_generate(1, 50, yesterday) is False
 
     def test_allowed_after_30_days(self) -> None:
         e = LoveLetterEngine()
-        # 31+ days ago — should be allowed
-        assert e.can_generate(1, 50, "2026-02-20") is True
+        long_ago = (date.today() - timedelta(days=31)).isoformat()
+        assert e.can_generate(1, 50, long_ago) is True
 
     def test_blocked_low_bond(self) -> None:
         e = LoveLetterEngine()

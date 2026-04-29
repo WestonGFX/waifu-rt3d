@@ -1,16 +1,20 @@
 # Current Project Status
 
-**Last updated:** 2026-04-28 (session 19 end)
-**Branch:** master (3 commits unpushed)
+**Last updated:** 2026-04-28 (session 19 end, post-restart turn)
+**Branch:** master (clean, all pushed)
 **Schema version:** v70
-**Tests:** 2,682 backend (pytest, 1 unrelated date-dependent failure) + 203 frontend (vitest) passing, tsc clean
+**Tests:** **2,684 backend** (pytest, 0 known failures) + 203 frontend (vitest) passing, tsc clean
 **Automation:** 12 agents, 22 skills, 6 rules, 8 hooks, 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
 
-**Session 19 (2026-04-28) committed** as `aef220a` (HUD Tier 0 audit), `3a1c60f` (HUD Tier 1 deletes), `b6485d8` (db autocommit fix). All unpushed. Nothing in progress. Session 20 starts with HUD Tier 2 (top toolbar overflow, 9 → 4 buttons) OR the DB FD-leak migration sweep (~197 `db()` callers in server.py → `db_ctx()`). See `docs/SESSION_HANDOFF.md` + `docs/bugs/2026-04-28-db-connection-fd-leak.md`.
+**Session 19 (2026-04-28) — 9 commits, all pushed to origin/master.**
+Pre-restart: `aef220a` Tier 0 audit · `3a1c60f` Tier 1 deletes · `b6485d8` db autocommit · `af39c53` handoff.
+Post-restart: `5ccf89a` date test fix · `62923e4` HUD Tier 2 (top toolbar 9→4 + ⋯ overflow) · `3bb8cce` `db_ctx` migration of 193 sites (**FD leak CLOSED**) · `fb77235` FD-leak regression test · `cc93e88` HUD Tier 3 (bottom toolbar 3 rows → 1) · `c4fadc5` HUD Tier 1b (sidebar 5-col → 6-col, fixes Help-orphan-row).
+
+Nothing in progress. **Session 20 next priority:** HUD Tier 4 — bond strip simplify (4-row sticky chat header → 1 line, ~2h, first tier benefiting from `frontend-design` A/B/C variants) per `docs/plans/2026-04-27-hud-redesign-staged.md`. See `docs/SESSION_HANDOFF.md`.
 
 ## Completed This Session (Session 18 — Memory Browser unification + 3D viewer crash fix + HUD redesign plan)
 

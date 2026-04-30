@@ -3,6 +3,7 @@ import { Volume2, Pin, ChevronLeft, ChevronRight, RefreshCw, Copy, Trash2, Penci
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
 import { api } from '../lib/api';
+import { parseActions } from '../lib/parseActions';
 
 /**
  * Canonical 26-emotion emoji map (Phase 15).
@@ -119,39 +120,19 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
 }
 
 /**
- * Tokenise markdown-flavoured text into typed segments for rendering.
- * Supports **bold**, *italic*, and (parenthetical narration) for RP styling.
- * Narration requires 4+ chars inside parens to avoid false-matching "(lol)" etc.
+ * Renders message text with basic markdown: **bold**, *italic*-as-action,
+ * (parenthetical narration), and paragraph breaks (double newline).
+ * Single newlines become <br>. Search highlighting is preserved inside
+ * plain segments. Italic tokens render with the theme accent color so
+ * roleplay actions (`*i hold sakura's hand*`) stand out from spoken text.
  */
-type TokenType = 'plain' | 'bold' | 'italic' | 'narration';
-function tokenizeMarkdown(text: string): Array<{ type: TokenType; text: string }> {
-  const tokens: Array<{ type: TokenType; text: string }> = [];
-  const regex = /\*\*(.+?)\*\*|\*([^*\n]+)\*|\(([^)]{4,})\)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) tokens.push({ type: 'plain', text: text.slice(lastIndex, match.index) });
-    if (match[1] !== undefined) tokens.push({ type: 'bold', text: match[1] });
-    else if (match[2] !== undefined) tokens.push({ type: 'italic', text: match[2] });
-    else if (match[3] !== undefined) tokens.push({ type: 'narration', text: match[3] });
-    lastIndex = regex.lastIndex;
-  }
-  if (lastIndex < text.length) tokens.push({ type: 'plain', text: text.slice(lastIndex) });
-  return tokens;
-}
-
-/**
- * Renders LLM response text with basic markdown: **bold**, *italic*, and
- * paragraph breaks (double newline). Single newlines become <br>.
- * Search highlighting is preserved within plain text segments.
- */
-function MarkdownText({ text, query }: { text: string; query: string }) {
+function MarkdownText({ text, query, italicColor = 'var(--color-accent)' }: { text: string; query: string; italicColor?: string }) {
   const paragraphs = text.split(/\n\n+/);
   return (
     <>
       {paragraphs.map((para, pi) => (
         <p key={pi} style={{ margin: pi === 0 ? '0' : '0.55em 0 0' }}>
-          {tokenizeMarkdown(para).map((tok, ti) => {
+          {parseActions(para).map((tok, ti) => {
             const parts = tok.text.split('\n');
             const inner = parts.map((part, si) => (
               <span key={si}>
@@ -160,7 +141,11 @@ function MarkdownText({ text, query }: { text: string; query: string }) {
               </span>
             ));
             if (tok.type === 'bold') return <strong key={ti}>{inner}</strong>;
-            if (tok.type === 'italic') return <em key={ti}>{inner}</em>;
+            if (tok.type === 'italic') return (
+              <em key={ti} style={{ color: italicColor, opacity: 0.85 }}>
+                {inner}
+              </em>
+            );
             if (tok.type === 'narration') return (
               <span key={ti} style={{
                 fontStyle: 'italic',
@@ -415,7 +400,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               </div>
             </div>
           ) : (
-            <HighlightedText text={message.text} query={searchQuery} />
+            <MarkdownText text={message.text} query={searchQuery} italicColor="var(--color-accent-text)" />
           )}
           {/* Action buttons — visible on hover */}
           {hovered && !editing && (

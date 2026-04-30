@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles, SlidersHorizontal, Check, MessageCircle, Zap } from 'lucide-react';
+import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles, SlidersHorizontal, Check, MessageCircle, Zap, Italic } from 'lucide-react';
 import { VNTextBox } from '../components/VNTextBox';
 import { VNPortrait } from '../components/VNPortrait';
 import { useAppStore } from '../stores/appStore';
@@ -640,12 +640,50 @@ export function ChatThread() {
     }
   }, [draft, loading, sendMessage, sendDirectorNote, directorMode, incognito, effectiveMaxTokens]);
 
+  /**
+   * Wrap the textarea selection with `*...*` so it renders as an italic
+   * roleplay action. With no selection, insert `**` and park the cursor
+   * between the asterisks. Keeps focus inside the textarea.
+   */
+  const wrapSelectionWithAction = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const value = el.value;
+    let nextValue: string;
+    let nextStart: number;
+    let nextEnd: number;
+    if (start === end) {
+      nextValue = value.slice(0, start) + '**' + value.slice(end);
+      nextStart = start + 1;
+      nextEnd = start + 1;
+    } else {
+      const selected = value.slice(start, end);
+      nextValue = value.slice(0, start) + '*' + selected + '*' + value.slice(end);
+      nextStart = start + 1;
+      nextEnd = end + 1;
+    }
+    setDraft(nextValue);
+    requestAnimationFrame(() => {
+      const node = textareaRef.current;
+      if (!node) return;
+      node.focus();
+      node.setSelectionRange(nextStart, nextEnd);
+    });
+  }, [setDraft]);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I')) {
+      e.preventDefault();
+      wrapSelectionWithAction();
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  }, [handleSend]);
+  }, [handleSend, wrapSelectionWithAction]);
 
   // ── Feature E: Dialogue choice select ──────────────────────────────────
   const handleChoiceSelect = useCallback((choice: string) => {
@@ -1514,6 +1552,23 @@ export function ChatThread() {
                   minWidth: 0,
                 }}
               />
+
+              {/* Italic / action wrap button — wraps textarea selection in
+                  `*...*` so it renders as an accent-coloured roleplay action.
+                  With no selection, drops `**` and parks cursor between. */}
+              <button
+                type="button"
+                onClick={wrapSelectionWithAction}
+                title="Wrap selection in *italic* (Ctrl/Cmd+I) — for roleplay actions"
+                aria-label="Wrap selection in italic action"
+                className="p-2 rounded-lg transition-all duration-150 flex-shrink-0"
+                style={{
+                  backgroundColor: 'transparent',
+                  color: 'var(--color-text-tertiary)',
+                }}
+              >
+                <Italic size={16} />
+              </button>
 
               {/* Push-to-talk mic button (hidden when voice mode active) */}
               {!voiceActive && (

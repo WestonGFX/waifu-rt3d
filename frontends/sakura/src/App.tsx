@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Sidebar } from './components/Sidebar';
+import { BackendErrorBanner } from './components/BackendErrorBanner';
 import { MemoryPanel } from './components/MemoryPanel';
 import { VocabPanel } from './components/VocabPanel';
 import { AnalyticsPanel } from './components/AnalyticsPanel';
@@ -324,6 +325,8 @@ function MainApp() {
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--color-background)' }}>
+      {/* Floats above everything — visible signal when /api/characters fails. */}
+      <BackendErrorBanner />
       {/* B1: Hide sidebar in cinematic mode */}
       {!cinematicMode && <Sidebar />}
       <main className="flex-1 min-w-0 h-screen overflow-hidden">

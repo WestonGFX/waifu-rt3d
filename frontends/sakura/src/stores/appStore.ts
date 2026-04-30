@@ -91,6 +91,15 @@ interface AppState {
   loadCharacters: () => Promise<void>;
   deleteCharacter: (id: number) => Promise<void>;
 
+  /**
+   * `null` while loadCharacters has not finished or succeeded; populated with
+   * a human-readable error string after all retries fail. UI surfaces this as
+   * a banner so users don't mistake an unreachable backend for data loss.
+   */
+  bootError: string | null;
+  /** Manual retry button target — clears bootError, calls loadCharacters again. */
+  retryBoot: () => Promise<void>;
+
   // Config
   config: AppConfig;
   /** True once the first loadConfig() call has resolved (prevents onboarding flash). */
@@ -263,8 +272,36 @@ export const useAppStore = create<AppState>()(
       setActiveCharacter: (char) => set({ activeCharacter: char }),
       selectCharacter: (char) => set({ activeCharacter: char, sidebarSection: 'chats' }),
       loadCharacters: async () => {
-        const characters = await api.getCharacters();
-        set({ characters });
+        // Retry transient failures with exponential backoff. App boot calls
+        // this once; if the backend hiccups (transient 500, network blip,
+        // worker still starting) the user gets stranded on WelcomeScreen
+        // until manual reload. Two retries with 200ms / 600ms backoff is
+        // enough to bridge a typical uvicorn restart without delaying boot
+        // perceptibly on the happy path. After all retries fail, set
+        // `bootError` so the UI can show a banner instead of looking
+        // identical to "data was deleted".
+        const backoffMs = [200, 600];
+        const maxAttempts = backoffMs.length + 1;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          try {
+            const characters = await api.getCharacters();
+            set({ characters, bootError: null });
+            return;
+          } catch (err) {
+            if (attempt === maxAttempts) {
+              const msg = err instanceof Error ? err.message : String(err);
+              set({ bootError: `Backend unreachable: ${msg}` });
+              throw err;
+            }
+            const delay = backoffMs[attempt - 1];
+            console.warn(
+              `[appStore] loadCharacters attempt ${attempt}/${maxAttempts} failed:`,
+              err,
+              `retrying in ${delay}ms`
+            );
+            await new Promise((r) => setTimeout(r, delay));
+          }
+        }
       },
       deleteCharacter: async (id) => {
         await api.deleteCharacter(id);
@@ -275,6 +312,16 @@ export const useAppStore = create<AppState>()(
           characters,
           activeCharacter: activeCharacter?.id === id ? null : activeCharacter,
         });
+      },
+
+      bootError: null,
+      retryBoot: async () => {
+        set({ bootError: null });
+        try {
+          await get().loadCharacters();
+        } catch {
+          // loadCharacters already populated bootError; nothing more to do.
+        }
       },
 
       // Config

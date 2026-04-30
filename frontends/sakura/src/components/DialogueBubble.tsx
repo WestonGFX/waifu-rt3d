@@ -126,7 +126,7 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
  * plain segments. Italic tokens render with the theme accent color so
  * roleplay actions (`*i hold sakura's hand*`) stand out from spoken text.
  */
-function MarkdownText({ text, query, italicColor = 'var(--color-accent)' }: { text: string; query: string; italicColor?: string }) {
+function MarkdownText({ text, query }: { text: string; query: string }) {
   const paragraphs = text.split(/\n\n+/);
   return (
     <>
@@ -142,7 +142,7 @@ function MarkdownText({ text, query, italicColor = 'var(--color-accent)' }: { te
             ));
             if (tok.type === 'bold') return <strong key={ti}>{inner}</strong>;
             if (tok.type === 'italic') return (
-              <em key={ti} style={{ color: italicColor, opacity: 0.85 }}>
+              <em key={ti} style={{ color: 'var(--color-action)', opacity: 0.95 }}>
                 {inner}
               </em>
             );
@@ -400,7 +400,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               </div>
             </div>
           ) : (
-            <MarkdownText text={message.text} query={searchQuery} italicColor="var(--color-accent-text)" />
+            <MarkdownText text={message.text} query={searchQuery} />
           )}
           {/* Action buttons — visible on hover */}
           {hovered && !editing && (

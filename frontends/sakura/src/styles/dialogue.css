@@ -16,6 +16,20 @@
   box-shadow: 0 2px 12px var(--color-accent-soft), 0 1px 3px rgba(0,0,0,0.05);
 }
 
+/* Rich composer — contenteditable that renders *italic* tokens live as the
+   user types. Placeholder uses :empty::before. We strip the asterisks
+   visually inside the input by leaning on parseActions tokens, but here we
+   keep them so the user sees what they typed (single source of truth). */
+.rich-composer:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+  display: inline-block;
+}
+.rich-composer em[data-action] {
+  font-style: italic;
+}
+
 /* Hover metadata reveal */
 .dialogue-meta {
   opacity: 0;

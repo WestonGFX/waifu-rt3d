@@ -18,6 +18,7 @@
   --color-accent-soft: rgba(232, 120, 138, 0.10);
   --color-accent-text: #FFFFFF;
   --color-accent-gradient: linear-gradient(135deg, #E8788A 0%, #D4566A 100%);
+  --color-action: #C4892D;
   --color-success: #5EC99A;
   --color-warning: #F0C27A;
   --color-danger: #E05A6D;
@@ -50,6 +51,7 @@
   --color-accent-soft: rgba(107, 138, 237, 0.10);
   --color-accent-text: #FFFFFF;
   --color-accent-gradient: linear-gradient(135deg, #6B8AED 0%, #5472D4 100%);
+  --color-action: #C77B3D;
   --color-success: #5EC99A;
   --color-warning: #F6BE5C;
   --color-danger: #FC6B6B;
@@ -82,6 +84,7 @@
   --color-accent-soft: rgba(232, 138, 154, 0.12);
   --color-accent-text: #1A1518;
   --color-accent-gradient: linear-gradient(135deg, #E88A9A 0%, #D4708A 100%);
+  --color-action: #FFD66B;
   --color-success: #5EC99A;
   --color-warning: #F0C27A;
   --color-danger: #E86B7C;
@@ -114,6 +117,7 @@
   --color-accent-soft: rgba(106, 153, 85, 0.10);
   --color-accent-text: #FFFFFF;
   --color-accent-gradient: linear-gradient(135deg, #6A9955 0%, #527A42 100%);
+  --color-action: #C77B3D;
   --color-success: #5EC99A;
   --color-warning: #D4A855;
   --color-danger: #C85A5A;
@@ -146,6 +150,7 @@
   --color-accent-soft: rgba(147, 112, 219, 0.10);
   --color-accent-text: #FFFFFF;
   --color-accent-gradient: linear-gradient(135deg, #9370DB 0%, #7A5AC4 100%);
+  --color-action: #C9892D;
   --color-success: #5EC99A;
   --color-warning: #E8B86D;
   --color-danger: #E0607A;
@@ -178,6 +183,7 @@
   --color-accent-soft: rgba(230, 120, 80, 0.10);
   --color-accent-text: #FFFFFF;
   --color-accent-gradient: linear-gradient(135deg, #E67850 0%, #CC5E36 100%);
+  --color-action: #5B7AC9;
   --color-success: #5EC99A;
   --color-warning: #F0B842;
   --color-danger: #E04060;
@@ -210,6 +216,7 @@
   --color-accent-soft: rgba(255, 185, 80, 0.12);
   --color-accent-text: #0F1117;
   --color-accent-gradient: linear-gradient(135deg, #FFB950 0%, #FF9420 100%);
+  --color-action: #C4A4FF;
   --color-success: #5EC99A;
   --color-warning: #FFB950;
   --color-danger: #FF6B6B;
@@ -242,6 +249,7 @@
   --color-accent-soft: rgba(255, 105, 180, 0.12);
   --color-accent-text: #FFFFFF;
   --color-accent-gradient: linear-gradient(135deg, #FF69B4 0%, #FF1493 100%);
+  --color-action: #5B7AC9;
   --color-success: #5EC99A;
   --color-warning: #FFB347;
   --color-danger: #FF4466;
@@ -274,6 +282,7 @@
   --color-accent-soft: rgba(88, 101, 242, 0.15);
   --color-accent-text: #FFFFFF;
   --color-accent-gradient: linear-gradient(135deg, #5865F2 0%, #7289DA 100%);
+  --color-action: #FFD66B;
   --color-success: #5EC99A;
   --color-warning: #FEE75C;
   --color-danger: #ED4245;
@@ -307,6 +316,7 @@
   --color-accent-soft: rgba(136, 57, 239, 0.10);
   --color-accent-text: #FFFFFF;
   --color-accent-gradient: linear-gradient(135deg, #8839EF 0%, #EA76CB 100%);
+  --color-action: #DF8E1D;           /* Latte Yellow */
   --color-success: #40A02B;          /* Latte Green */
   --color-warning: #DF8E1D;          /* Latte Yellow */
   --color-danger: #D20F39;           /* Latte Red */
@@ -340,6 +350,7 @@
   --color-accent-soft: rgba(183, 189, 248, 0.12);
   --color-accent-text: #1E2030;
   --color-accent-gradient: linear-gradient(135deg, #B7BDF8 0%, #C6A0F6 100%);
+  --color-action: #F9E2AF;           /* Macchiato Yellow (warm against lavender bg) */
   --color-success: #A6DA95;          /* Macchiato Green */
   --color-warning: #EED49F;          /* Macchiato Yellow */
   --color-danger: #ED8796;           /* Macchiato Red */
@@ -372,6 +383,7 @@
   --color-accent-soft: rgba(123, 156, 240, 0.12);
   --color-accent-text: #141619;
   --color-accent-gradient: linear-gradient(135deg, #7B9CF0 0%, #5E82E0 100%);
+  --color-action: #F5C46E;
   --color-success: #5EC99A;
   --color-warning: #F6C05C;
   --color-danger: #F06B6B;
@@ -404,6 +416,7 @@
   --color-accent-soft: rgba(166, 226, 46, 0.12);
   --color-accent-text: #1C1D18;
   --color-accent-gradient: linear-gradient(135deg, #A6E22E 0%, #E6DB74 100%);
+  --color-action: #F92672;           /* Monokai pink — iconic Monokai action token */
   --color-success: #A6E22E;
   --color-warning: #E6DB74;          /* Monokai yellow */
   --color-danger: #F92672;           /* Monokai pink */
@@ -436,6 +449,7 @@
   --color-accent-soft: rgba(104, 151, 187, 0.12);
   --color-accent-text: #1E1E1E;
   --color-accent-gradient: linear-gradient(135deg, #6897BB 0%, #CC7832 100%);
+  --color-action: #FFC66D;           /* Darcula yellow */
   --color-success: #6A8759;          /* Darcula string green */
   --color-warning: #CC7832;          /* Darcula keyword orange */
   --color-danger: #FF6B68;
@@ -468,6 +482,7 @@
   --color-accent-soft: rgba(189, 147, 249, 0.12);
   --color-accent-text: #282A36;
   --color-accent-gradient: linear-gradient(135deg, #BD93F9 0%, #FF79C6 100%);
+  --color-action: #F1FA8C;           /* Dracula yellow */
   --color-success: #50FA7B;          /* Dracula green */
   --color-warning: #F1FA8C;          /* Dracula yellow */
   --color-danger: #FF5555;           /* Dracula red */
@@ -500,6 +515,7 @@
   --color-accent-soft: rgba(122, 162, 247, 0.12);
   --color-accent-text: #16161E;
   --color-accent-gradient: linear-gradient(135deg, #7AA2F7 0%, #BB9AF7 100%);
+  --color-action: #E0AF68;           /* Tokyo Night yellow */
   --color-success: #9ECE6A;          /* Tokyo Night green */
   --color-warning: #E0AF68;          /* Tokyo Night yellow */
   --color-danger: #F7768E;           /* Tokyo Night red */
@@ -533,6 +549,7 @@
   --color-accent-soft: rgba(255, 45, 120, 0.10);
   --color-accent-text: #FFFFFF;
   --color-accent-gradient: linear-gradient(135deg, #FF2D78 0%, #FF69B4 100%);
+  --color-action: #4A78F0;           /* Sapphire — contrasts hot pink */
   --color-success: #00C16A;
   --color-warning: #F59E0B;
   --color-danger: #EF4444;
@@ -567,6 +584,7 @@
   --color-accent-soft: rgba(245, 193, 0, 0.14);
   --color-accent-text: #0D0D0D;      /* Black text on yellow for contrast */
   --color-accent-gradient: linear-gradient(135deg, #F5C100 0%, #FFD944 100%);
+  --color-action: #C2185B;           /* Deep magenta — contrasts golden yellow */
   --color-success: #00B050;
   --color-warning: #F59E0B;
   --color-danger: #EF4444;

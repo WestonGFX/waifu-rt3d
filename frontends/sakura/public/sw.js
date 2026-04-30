@@ -8,7 +8,13 @@
  *           cache-first with a network fallback and cache the fresh response
  */
 
-const CACHE_NAME = 'sakura-v1';
+// Cache name. The placeholder string assigned to CACHE_NAME below is
+// replaced at dev-serve and production-build time by the
+// `inject-sw-build-id` Vite plugin (vite.config.ts) with
+// `sakura-<package.json version>-<timestamp>`. If the plugin does not run,
+// the literal survives — the SW still works, just with a fixed cache name
+// (i.e. the original stale-cache regression).
+const CACHE_NAME = '__SAKURA_BUILD_ID__';
 
 /** Files to precache on install (app shell). */
 const PRECACHE_URLS = ['/', '/index.html'];
@@ -17,6 +23,7 @@ const PRECACHE_URLS = ['/', '/index.html'];
 // Install — precache app shell
 // ---------------------------------------------------------------------------
 self.addEventListener('install', (event) => {
+  console.info('[SW] installing cache:', CACHE_NAME);
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
   );
@@ -28,14 +35,15 @@ self.addEventListener('install', (event) => {
 // Activate — purge stale caches from previous versions
 // ---------------------------------------------------------------------------
 self.addEventListener('activate', (event) => {
+  console.info('[SW] activated cache:', CACHE_NAME);
   event.waitUntil(
-    caches.keys().then((cacheNames) =>
-      Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      )
-    )
+    caches.keys().then((cacheNames) => {
+      const stale = cacheNames.filter((name) => name !== CACHE_NAME);
+      if (stale.length > 0) {
+        console.info('[SW] purging stale caches:', stale);
+      }
+      return Promise.all(stale.map((name) => caches.delete(name)));
+    })
   );
   // Take control of all pages immediately
   self.clients.claim();

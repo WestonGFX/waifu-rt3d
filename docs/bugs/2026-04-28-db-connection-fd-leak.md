@@ -2,7 +2,7 @@
 
 **Filed:** 2026-04-28 (session 19)
 **Severity:** P2 (slow degradation, eventually starves OS FDs)
-**Status:** OPEN — partial fix landed, full migration deferred
+**Status:** ✅ FIXED in session 19 commit `3bb8cce` — full `db_ctx()` migration of all 193 raw `db()` callsites in `backend/server.py`. Regression test in `fb77235`. Closes the partial fix that landed earlier in this same session.
 **Related:** session 18 handoff "POST /api/sessions intermittent 500s",
 which was actually two distinct bugs conflated.
 

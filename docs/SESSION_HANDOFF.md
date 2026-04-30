@@ -1,180 +1,118 @@
-# Session Handoff — 2026-04-28 (Session 19, Tier 4 turn)
+# Session Handoff — 2026-04-29 (Session 20, Tier 4 layout debug)
 
-## Branch: master · Commits this turn: 1 (pushed) · Session 19 total: 10 commits
+## Branch: master · Commits this session: 2 (NOT pushed)
 
-This turn:
-- `6120377` fix(19-T4): HUD Tier 4 — bond strip 4-row block → 1-line click-to-expand pill
+This session:
+- `f8e4ef0` fix(sakura): SW cache name now includes build id
+- `a2ac04a` feat(sakura): boot retry + backend-unreachable banner
 
-Earlier this session (already in handoff history):
-- `fc3588a` chore(19): post-restart status sync · `c4fadc5` Tier 1b sidebar 5→6 col · `cc93e88` Tier 3 composer 3→1 row · `fb77235` FD-leak regression test · `3bb8cce` db_ctx 193 sites · `62923e4` Tier 2 top toolbar 9→4 · `5ccf89a` love-letter date · `af39c53` mid-session handoff · `b6485d8` db autocommit · `aef220a` Tier 0 audit · `3a1c60f` Tier 1 deletes.
+## Test Status: pytest **2684 ✓** · vitest **207 ✓** (was 203, +4 new) · tsc clean
 
-## Test Status: pytest **2684 ✓** · vitest **203 ✓** · tsc clean
+## Resolved This Session
 
-## Completed This Turn
+### ~~OPEN BUG — HUD layout regression~~ ✅ FIXED via SW cache fix
+The previous session's `OPEN BUG — UNFIXED` is closed. User confirmed the
+app no longer renders top-left-anchored with void at right/bottom. Root
+cause was the proximate hypothesis from the Session 19 handoff: stale
+service-worker cache. `frontends/sakura/public/sw.js` had hardcoded
+`CACHE_NAME = 'sakura-v1'` that never bumped, so old CSS lived in the
+user's cache forever. Fix injects a per-build cache name via Vite plugin;
+the existing activate-handler purge evicts the stale `sakura-v1` cache
+on first activation of the new SW.
 
-### HUD Tier 4 — bond strip simplify (`6120377`)
-New `BondPill.tsx` (frontends/sakura/src/components/BondPill.tsx, 469 lines)
-collapses the 4-row chat-header bond block into a single 28px pill.
+### Bonus fix — empty-sidebar-looks-like-data-loss
+After the SW fix landed and the user reloaded, their backend wasn't
+running on `:8080`. `loadCharacters` failed silently (or with retries
+exhausted) → empty character list → empty sidebar. User read this as
+"all my data was deleted" — DB was actually intact (14 chars / 302
+sessions / 188 messages confirmed via `sqlite3 backend/storage/app.db`).
 
-**Always-visible row:** `♥ Lv N · Tier · 60px inline progress bar · XP/XP_to_next · 🔥 streak (if > 0) · ▼ caret`
+Two-part fix:
+1. `loadCharacters` retries 3× with 200ms / 600ms exponential backoff
+2. After retries exhaust, `bootError` is set on the appStore and
+   `BackendErrorBanner` renders a fixed-position pill at the top of
+   the app with a Retry button (Lucide WifiOff + RefreshCw icons).
 
-**Click toggles a floating popover** (`position:absolute; z-index:30`)
-anchored under the pill, containing the affinity tier badge, 3 mini bars
-(♥ ✦ ◈), affinity sparkline, next-unlock teaser, and idle phrase.
+Verified end-to-end in own Chrome:
+- Kill backend → reload → banner appears
+- Restart backend → click Retry → banner dismisses, characters populate
 
-**Critical design decision:** popover floats over chat content (zero
-layout reflow on toggle). The first implementation expanded inline via
-`height:0 → auto`, which pushed the parent flex column taller and shoved
-the composer off-screen at certain DPR/zoom combos — fixed by switching
-to overlay before commit.
+## Files Modified
 
-**StatusBar.tsx cleanup:** removed `TIER_BADGE_COLORS`, `TIER_BADGE_LABELS`,
-the `RelationshipBar` function, `scoreColor`, `AFFINITY_TIERS`,
-`getAffinityTier`, the `RelationshipData` interface — all dead after
-content moved into BondPill. Net `-187` lines. `StreakBadge.tsx` and
-`BondProgressBar.tsx` files retained (BondPanel.tsx still uses
-BondProgressBar; StreakBadge has no remaining callers — kept for one
-cycle, safe to delete next session).
+```
+frontends/sakura/public/sw.js                                  +14 -3   (cache token)
+frontends/sakura/vite.config.ts                                +69 +1   (inject-sw-build-id plugin)
+frontends/sakura/dev-tools/layout-debug.js                     +268     (NEW: paste-into-console diagnostic)
+frontends/sakura/src/stores/appStore.ts                        +51 -2   (retry + bootError + retryBoot)
+frontends/sakura/src/App.tsx                                   +3       (mount BackendErrorBanner)
+frontends/sakura/src/components/BackendErrorBanner.tsx         +94      (NEW: pill + retry)
+frontends/sakura/src/test/appStore.loadCharactersRetry.test.ts +97      (NEW: 4 Pattern-2 tests)
+```
 
-User picked variant **B (pill + inline mini-bar)** from a 3-option
-AskUserQuestion fork (variants A bare-pill / B inline-bar / C
-underline-bar).
+`backend/storage/app.db` and `backend/config/app.json` carry runtime
+state across sessions — left modified, NOT committed (sensitive paths
+per CLAUDE.md).
 
-**Browser-verified in Playwright:**
-- 998×624 (matches user's effective CSS viewport at 2x DPR): collapsed +
-  expanded both render correctly, composer + sidebar bottom toolbar
-  visible in both states
-- 1400×900 dark (catppuccin-macchiato) + 1440×900 + 1995×1248 in light
-  (catppuccin-latte): popover floats over chat, layout stable
+`frontends/sakura/dist/*` artifact churn from `npx vite build` run
+during Step 1 verification — left uncommitted; will regenerate on next
+build.
+
+Pre-existing untracked screenshots (`tier4-*.png`, `snap-collapsed.md`)
+from Session 19 still in repo root, untouched — user's call whether to
+move to `docs/testing/screenshots/` or delete.
 
 ## Work In Progress
-**None.** Tier 4 committed AND pushed. But see "Open bug" below — there
-is an unresolved layout regression that user reports seeing live but I
-could not reproduce in any Playwright run.
 
-## Open Bug — HUD layout regression at user's Chrome (UNFIXED)
+**None.** All four planned steps from the session plan
+(`/Users/chris/.claude/plans/okay-what-should-we-warm-moler.md`) shipped
+and verified. Plus the bonus banner fix.
 
-**Symptom (per user, screenshots provided across the session):** Sakura
-renders in the top-left of the Chrome viewport with significant empty
-void to the right and bottom. Composer and sidebar-bottom toolbar are
-not visible. User describes it as "zoomed into top-left corner so that
-the bottom right corner does NOT match the edge of the browser window."
+## Push/PR Status
 
-**My reproductions failed.** Ran Playwright at 998×624, 1440×900,
-1995×1248 across welcome screen, chat thread, expanded bond pill — app
-fills the viewport in every case.
-
-**User's diagnostic (paste from their Chrome console):**
-```json
-{"innerWH":[1440,900],"dpr":1,"zoom":"95%",
- "rootRect":{"x":0,"y":0,"width":1440,"height":900,...},
- "bodyRect":{"x":0,"y":0,"width":1440,"height":900,...},
- "rootChildRect":{"x":0,"y":0,"width":1440,"height":900,...},
- "composerVisible":false}
-```
-
-The diagnostic says viewport is 1440x900 AND root fills it. Yet the
-user's screenshot at the same time shows the app rendered into a much
-smaller area than the screenshot canvas.
-
-**False alarms I fell into:**
-- "composerVisible: false" — selector was wrong; composer is `<textarea>`
-  not `<input>`. Composer IS in DOM.
-- "Chrome zoom 95%" — user reset to 100% (Cmd+0); didn't change anything.
-- I initially explained the void as "macOS desktop showing past the
-  Chrome window" — user pushed back, this is wrong, the void IS within
-  the Chrome window.
-
-**Things I did NOT try yet:**
-- Asking the user for an EXACT screen-recording with dev tools' Elements
-  panel hover showing what's at the void area (could reveal an unstyled
-  parent eating space).
-- Computed-style dump of `<div class="flex h-screen">` and its descendants
-  to see what's actually setting the layout.
-- Drag-resize the window mid-session to see if `100vh` re-evaluates.
-- Disable browser extensions that may inject content.
-- Check for a service worker stale CSS bundle (the earlier 500s could
-  have left cached CSS without `h-screen` resolved). Vite hard-reload may
-  not bypass SW.
-
-**Hypothesis to investigate first next session:** Stale service worker
-serving old build. The `index.html` in this repo registers `/sw.js`. If
-the SW cached the bundle pre-Tier-4 with a different CSS hash, hard
-reload may not bypass it. Try:
-1. Chrome DevTools → Application tab → Service Workers → Unregister
-2. Application → Clear storage → Clear site data
-3. Reload
-
-If that doesn't fix it, capture computed style of root + main with
-`window.getComputedStyle(document.querySelector('#root')).cssText` and
-compare against my Playwright values.
-
-## Pre-existing bugs surfaced (not Tier 4 fault)
-
-### App boot has no retry on `loadCharacters()` failure
-If backend returns 500 during initial load, `appStore.characters` stays
-empty forever — user stuck on `WelcomeScreen` until manual reload. Hit
-this twice during this turn while I was bouncing servers between tests.
-Easy fix: 1-2 retries with backoff in `loadCharacters()` at
-`frontends/sakura/src/stores/appStore.ts:265-268`. ~30 min.
-
-### Pre-existing portrait 404s (cosmetic, fall back works)
-8× `/files/images/{nana,mikazuki,suzuha,tsukimi,shirayuki,alana}_portrait.png`
-+ `icon.png` 404s in console. Default avatar fallback handles it.
-
-## Files Modified (this turn)
-
-```
-CURRENT_STATUS.md                             |  12 +-
-docs/SESSION_HANDOFF.md                       | 273 +++++++--------
-frontends/sakura/src/components/BondPill.tsx  | 469 ++++++++++++++++++++++++++  (new)
-frontends/sakura/src/components/Sidebar.tsx   |   7 +-
-frontends/sakura/src/components/StatusBar.tsx | 187 +---------                  (-180 dead)
-```
+**Local-only — no push.** Two commits ahead of `origin/master`. The
+previous handoff's OPEN BUG marker is now resolved (struck through
+above), so the push gate has lifted per CLAUDE.md Push & PR Discipline.
+Did not push because the user did not explicitly request it. Ask before
+pushing next session.
 
 ## Next Session Priorities
 
-1. **Fix the HUD layout regression** described in "Open bug" above. Start
-   with the service-worker hypothesis. If that's not it, dump computed
-   styles. ~1-2h. **This is the only blocker for declaring Tier 4
-   shipped per the plan's escalation rule** — current state is "user
-   reports it's broken in their browser, I can't reproduce."
-
-2. **App boot retry on transient backend 500.** ~30 min, autonomous.
-   Eliminates the entire class of "user reloads during backend hiccup
-   and gets stuck on Welcome screen" support requests.
-
-3. **Pause + evaluate Tier 4** per plan once the regression is fixed.
-   User has not yet been able to use the cleaned-up Tier 4 layout in
-   anger because of #1. After 10-min real-use window, decide:
-   - Stop here (the simpler chat header is enough)
-   - Tier 6 (3D viewer overlay rethink)
-   - Tier 5 (sidebar bottom consolidate)
-   - Bond pill size bump (user said "it's now too small" — three options
-     pre-drafted: slight bump 12→14 font + 60→90 mini-bar / bigger bump
-     with accent underline / default-expanded mode that mimics the old
-     3-row feel)
-
-4. **Right-cluster horizontal overflow.** Tier 2 toolbar shows `..`
-   instead of `⋯` at narrow widths. Separate from Tier 4. Easy
-   1-character fix or `min-width:0` on the right cluster's flex parent.
+1. **Push the two commits** (`f8e4ef0`, `a2ac04a`) to `origin/master`
+   once the user confirms they want to ship. Push gate is clear.
+2. **Move/delete Session 19 screenshots** in repo root — `tier4-*.png`,
+   `snap-collapsed.md`. Either to `docs/testing/screenshots/` or trash.
+3. **Right-cluster horizontal overflow.** Tier 2 top toolbar shows `..`
+   instead of `⋯` at narrow widths. ~10 min — single-character
+   replacement, likely in StatusBar/HUD top toolbar.
+4. **Pause + evaluate Tier 4** per the staged plan
+   (`docs/plans/2026-04-27-hud-redesign-staged.md`). User has now had
+   a real-use window with the cleaned-up HUD (no longer blocked by
+   the layout regression). Decide: stop here, Tier 6 (3D viewer
+   overlay rethink), Tier 5 (sidebar bottom consolidate), bond pill
+   size bump.
+5. **Visual Content in Chat** — backlog, ~4-8h, multi-session.
 
 ## Context for Next Session
 
-- **Active plan:** `docs/plans/2026-04-27-hud-redesign-staged.md`. Tiers
-  0, 1, 1b, 2, 3, 4 done. Current pause-and-evaluate gate is at Tier 4
-  per plan order — but blocked on the open bug above.
-- **Servers:** All killed at end of turn. Next session: `./run.sh` (or
-  `.venv/bin/python -m uvicorn backend.server:app --host 0.0.0.0 --port
-  8080` for backend; `cd frontends/sakura && npx vite --port 5175` for
-  Sakura).
-- **The screenshots from this turn** (`tier4-*.png`,
-  `snap-collapsed.md`) are in the repo root, untracked. Useful for
-  comparing my Playwright results against the user's reported view.
-  Delete or move to `docs/testing/screenshots/` next session.
-- **Workflow change requested by user:** when Playwright is running, drive
-  my own browser instance to gather diagnostic data instead of asking
-  the user to copy-paste console output. Apply via memory file update
-  next session if not done now (this handoff is the cap of this session).
-- **CLAUDE.md global was edited mid-turn** by user (linter or manual).
-  Take into account next session.
+- **The `inject-sw-build-id` plugin** lives in `vite.config.ts` and
+  uses `package.json`'s `version` + `Date.now()` for the cache key.
+  Bumping `package.json` version is no longer required to invalidate
+  caches — every build gets a unique key automatically. In dev mode,
+  every browser load gets a fresh cache (Date.now() per request).
+- **`bootError` + `retryBoot`** on `useAppStore`. Other failure modes
+  (e.g. `loadConfig` 500) could be wired into the same banner if
+  desired — currently only `loadCharacters` populates it.
+- **`dev-tools/layout-debug.js`** is the playbook for next time a
+  layout bug can't be reproduced: paste into user's broken Chrome
+  console, get back one JSON blob with everything we'd ask for.
+- **Servers status at end of session:**
+  - Backend uvicorn `:8080` — running (background task `bk0w28f4x`)
+  - Sakura vite `:5175` — running (background task `bz5en2i4r`)
+  - Both will stop when the bash session ends. Restart with
+    `./run.sh` and `cd frontends/sakura && npx vite --port 5175`.
+- **Active plan:** `docs/plans/2026-04-27-hud-redesign-staged.md`
+  (HUD redesign). Tier 0/1/1b/2/3/4 done. Pause-and-evaluate gate at
+  Tier 4 — no longer blocked by anything.
+- **Per-CLAUDE.md push rule:** the OPEN BUG marker that was carried
+  forward from Session 19 is now struck above. Future sessions can
+  push freely unless a new OPEN BUG/UNFIXED/BLOCKER appears.

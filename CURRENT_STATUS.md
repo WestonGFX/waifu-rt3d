@@ -1,22 +1,26 @@
 # Current Project Status
 
-**Last updated:** 2026-04-28 (session 19 — Tier 4 turn end)
-**Branch:** master (clean, all pushed)
+**Last updated:** 2026-04-29 (session 20 — Tier 4 layout debug)
+**Branch:** master (2 local commits ahead of origin, NOT pushed)
 **Schema version:** v70
-**Tests:** **2,684 backend** (pytest, 0 known failures) + 203 frontend (vitest) passing, tsc clean
+**Tests:** **2,684 backend** (pytest, 0 known failures) + 207 frontend (vitest, +4 new) passing, tsc clean
 **Automation:** 12 agents, 22 skills, 6 rules, 8 hooks, 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
 
+**Session 20 (2026-04-29) — Tier 4 layout regression FIXED. 2 local commits.**
+- `f8e4ef0` fix(sakura): SW cache name now includes build id — Vite plugin replaces `'__SAKURA_BUILD_ID__'` in `public/sw.js` with `sakura-<version>-<ts>` per dev-serve request and per prod build. Existing activate-purge handler evicts the old `sakura-v1` cache automatically. Resolves Session 19's `OPEN BUG`. Also added `frontends/sakura/dev-tools/layout-debug.js` paste-into-console diagnostic for future user-environment-specific bugs.
+- `a2ac04a` feat(sakura): boot retry + backend-unreachable banner — `loadCharacters` retries 3× w/ 200ms/600ms backoff. After exhaustion, `bootError` populated and `BackendErrorBanner` (fixed-position pill, Lucide WifiOff icon, Retry button) renders. Built after the user reloaded post-SW-fix, found backend was off, saw empty sidebar and thought their data was deleted (DB was intact: 14 chars / 302 sessions / 188 messages).
+
+**Tier 4 OPEN BUG — RESOLVED.** User confirmed app no longer renders top-left-anchored with void at right/bottom. Push gate cleared.
+
+**Next session priority:** push the 2 commits if user OKs, then either Tier 4 evaluate (Tier 5/6/pill size bump/right-cluster `..` overflow) or Visual Content in Chat (backlog).
+
 **Session 19 (2026-04-28) — 10 commits, all pushed to origin/master.**
 Pre-restart: `aef220a` Tier 0 audit · `3a1c60f` Tier 1 deletes · `b6485d8` db autocommit · `af39c53` handoff.
 Post-restart: `5ccf89a` date test fix · `62923e4` HUD Tier 2 (top toolbar 9→4 + ⋯ overflow) · `3bb8cce` `db_ctx` migration of 193 sites (**FD leak CLOSED**) · `fb77235` FD-leak regression test · `cc93e88` HUD Tier 3 (bottom toolbar 3 rows → 1) · `c4fadc5` HUD Tier 1b (sidebar 5-col → 6-col, fixes Help-orphan-row) · `fc3588a` mid-session handoff · `6120377` HUD Tier 4 (bond strip 4 rows → 1-line click-to-expand pill, +469/-180 lines).
-
-**Open bug — UNFIXED, blocks Tier 4 declared-shipped:** at user's actual Chrome window (innerWH 1440x900, dpr 1, zoom 100%) the app renders top-left-anchored with significant void below + right. Diagnostic shows `root.height=900` matching `innerHeight=900` — yet user's screenshots clearly show the app NOT filling the Chrome viewport. Could not reproduce in Playwright at any viewport (998×624, 1440×900, 1995×1248). Hypothesis to chase first next session: stale service worker (`/sw.js`) serving cached pre-Tier-4 bundle. See `docs/SESSION_HANDOFF.md` "Open bug" section for the full investigation plan.
-
-**Next session priority:** debug + fix the Tier 4 layout regression above. Then pause + evaluate Tier 4 per plan, then decide between Tier 5 / 6 / pill size bump / right-cluster overflow fix.
 
 ## Completed This Session (Session 18 — Memory Browser unification + 3D viewer crash fix + HUD redesign plan)
 
@@ -132,20 +136,24 @@ Meta-work on the dev workflow itself. Repo-local-only.
 | **Phase 9: Polish & Extras** | ✅ COMPLETE | F24, F26, F20, F48 | +14 |
 | **Phase 10: Advanced Features** | ✅ COMPLETE | F49–F56 (8 features) | +37 |
 
-## Next Tasks (Priority Order — updated Session 16)
+## Next Tasks (Priority Order — updated Session 21, 2026-04-29)
 
-1. ~~**AIE Phase B**~~ · ~~**Bond Phases 1-2**~~ · ~~**Bond Phases 3+4**~~ · ~~**Bond Phases 5+6**~~ · ~~**Per-Character Scenarios**~~ — all ✅ DONE
-2. ~~**Memory Browser UI (P5)**~~ — discovered SHIPPED in commit `9592dcf` during session 16 audit. 1197-line 4-tab component fully wired. **New active gap: zero Vitest coverage.**
-3. **Memory Browser test coverage** (session 16+17) — Vitest suite for all 4 tabs. Session 16: Overview + Facts. Session 17: Memories + Journal + top-level. 3–5h total.
-4. **Memory Browser browser QA** (session 17) — exercise tabs in Sakura, file `docs/bugs/*.md`. 1–2h.
-5. **Memory Browser polish** (session 18) — apply QA findings, unify raw-fetch `/api/v2/memory/*` calls vs `api.getUserFacts()` client. 2–4h.
-6. **Visual Content in Chat** — "Character sends you a picture" UX. Image-gen pipeline exists in backend. ~4–8h.
-7. **Fix 4 pre-existing frontend test failures** — OnboardingWizard × 1, SettingsView.exportImport × 3. 2–4h.
-8. **Humanoid Motion Quality** — Springs/easing, follow-through, VRMLookAt, bone masks, procedural gestures, CoG. Spec: `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h).
-9. **Spring Bones 3D** — Quick win: strip Mixamo spring bone tracks + delta time clamp. Spec: `docs/plans/2026-03-29-spring-bones-spec.md` (16.5h).
-10. **Jiggle Physics** — VRM spring bones. Spec: `docs/plans/2026-03-29-jiggle-physics-spec.md` (15-21h).
-11. **Model Marketplace Expansion** — Spec: `docs/plans/2026-03-29-model-marketplace-spec.md` (25-32h).
-12. **Privacy-First Sync** — Spec: `docs/plans/2026-03-29-privacy-sync-spec.md` (~6h).
+Completed since the last refresh: AIE Phase B · Bond Phases 1-6 · Per-Character Scenarios · Memory Browser (UI shipped session 16, test coverage session 16-17, raw-fetch→`api.*` unification session 18) · 4 pre-existing frontend test failures cleared session 17 · DB connection FD leak closed session 19 (commit `3bb8cce`) · HUD Tier 0/1/1b/2/3/4 + SW cache fix + backend-unreachable banner.
+
+**Active queue:**
+
+1. **Push 2 local commits** (`f8e4ef0`, `a2ac04a`) to `origin/master` — push gate clear. Plus the cleanup commits from this session.
+2. **HUD Tier 4 evaluate** per `docs/plans/2026-04-27-hud-redesign-staged.md`. User just had a real-use window during the SW-cache debug. Decision: stop / Tier 5 (sidebar consolidate) / Tier 6 (3D viewer overlay rethink) / pill size bump. Each tier ~1.5–4h.
+3. **Verify or drop the right-cluster `..` claim** from Session 20 handoff. `StatusBar.tsx:350` already uses Lucide `MoreHorizontal` (renders as `⋯`). The `..` is probably a clipped label elsewhere. Browser-repro at narrow widths needed. ~10 min.
+4. **Bond pill size bump** (Tier 4 follow-up alternative). Single-line cosmetic. ~30 min.
+5. **`docs/bugs/2026-04-27-model-picker-no-preview-images.md`** (P2, OPEN) — model picker shows no preview thumbnails. Untriaged.
+6. **Visual Content in Chat** — "Character sends you a picture" UX. Image-gen pipeline exists in backend. ~4–8h, multi-session.
+7. **HUD Tier 7 (density toggle)** + **Tier 8 (full IA redesign)** — only if Tier 5/6 don't satisfy.
+8. **Humanoid Motion Quality** — `docs/plans/2026-03-29-humanoid-motion-spec.md` (83-130h).
+9. **Spring Bones 3D** — `docs/plans/2026-03-29-spring-bones-spec.md` (16.5h).
+10. **Jiggle Physics** — `docs/plans/2026-03-29-jiggle-physics-spec.md` (15-21h).
+11. **Model Marketplace Expansion** — `docs/plans/2026-03-29-model-marketplace-spec.md` (25-32h).
+12. **Privacy-First Sync** — `docs/plans/2026-03-29-privacy-sync-spec.md` (~6h).
 13. **AIE Phase C: Advanced** — LoRA training pipeline, DSPy prompt optimization. Heavy, independent.
 
 ## Browser Test Sweep Checklist

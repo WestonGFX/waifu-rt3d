@@ -248,10 +248,18 @@ export function ChatThread() {
   const recognitionRef = useRef<unknown>(null);
   const [dictating, setDictating] = useState(false);
 
-  // Auto-resize textarea to fit content (max ~5 lines ≈ 120px)
+  // Auto-resize textarea to fit content (max ~5 lines ≈ 120px).
+  // Why: when draft is empty, clear the inline height so the rows=1 CSS
+  // default takes over (~40px). Without this, the textarea can get stuck
+  // at a previous taller value because Chrome reports scrollHeight equal
+  // to the inline height when no content overflows.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
+    if (!draft) {
+      el.style.height = '';
+      return;
+    }
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [draft]);

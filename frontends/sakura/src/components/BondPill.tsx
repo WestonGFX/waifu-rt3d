@@ -202,18 +202,18 @@ export function BondPill({
           width: '100%',
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
-          padding: '6px 10px',
+          gap: 7,
+          padding: '7px 12px',
           backgroundColor: 'transparent',
           border: 'none',
           color: 'var(--color-text)',
           cursor: 'pointer',
           textAlign: 'left',
-          fontSize: 12,
+          fontSize: 13,
           lineHeight: 1.4,
         }}
       >
-        <Heart size={12} style={{ color: barColor, flexShrink: 0 }} aria-hidden />
+        <Heart size={14} style={{ color: barColor, flexShrink: 0 }} aria-hidden />
 
         <span style={{ fontWeight: 600, flexShrink: 0 }}>Lv {bondLevel}</span>
 
@@ -221,12 +221,12 @@ export function BondPill({
 
         <span style={{ color: barColor, fontWeight: 500, flexShrink: 0 }}>{tierLabel}</span>
 
-        {/* Inline progress bar (60px) */}
+        {/* Inline progress bar (80px) */}
         <div
           style={{
             position: 'relative',
-            width: 60,
-            height: 5,
+            width: 80,
+            height: 6,
             backgroundColor: 'var(--color-bg-secondary)',
             borderRadius: 999,
             overflow: 'hidden',
@@ -257,7 +257,7 @@ export function BondPill({
         <span
           style={{
             color: 'var(--color-text-secondary)',
-            fontSize: 11,
+            fontSize: 12,
             fontVariantNumeric: 'tabular-nums',
             whiteSpace: 'nowrap',
             flexShrink: 0,
@@ -271,11 +271,11 @@ export function BondPill({
           <span
             title={`Daily streak: ${streakCount}${streak?.next_tier ? ` · ${streak.xp_to_next} XP to ${streak.next_tier}` : ''}`}
             style={{
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 700,
               color: 'var(--color-warning, #f59e0b)',
               backgroundColor: 'color-mix(in srgb, var(--color-warning, #f59e0b) 12%, transparent)',
-              padding: '1px 5px',
+              padding: '2px 6px',
               borderRadius: 6,
               flexShrink: 0,
               lineHeight: 1.5,
@@ -288,7 +288,7 @@ export function BondPill({
         {/* Spacer pushes caret right */}
         <span style={{ flex: 1 }} aria-hidden />
 
-        <Caret size={14} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} aria-hidden />
+        <Caret size={16} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} aria-hidden />
       </button>
 
       {/* ── XP delta popup (anchored to pill row) ── */}

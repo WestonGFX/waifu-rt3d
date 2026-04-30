@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain,
-  ChevronLeft, ChevronRight, Search, Wifi, WifiOff, Pencil, BookMarked, Gamepad2, HelpCircle, Wand2, BarChart2, Cpu
+  ChevronLeft, ChevronRight, Search, Wifi, WifiOff, Pencil, BookMarked, Gamepad2, HelpCircle, Wand2, BarChart2, Cpu, MoreHorizontal
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
@@ -334,20 +334,21 @@ export function Sidebar() {
         className="flex-shrink-0"
         style={{ borderTop: '1px solid var(--color-border-subtle)' }}
       >
-        {/* Toolbar items — shared between collapsed and expanded layouts */}
+        {/* HUD Tier 5 — sidebar consolidate.
+            Primary (always-visible): Memory · Lore. Help and NotificationBadge
+            are independent components with their own affordances.
+            Secondary (Games · Stats · Ctx) collapsed into MoreToolsDropdown
+            (`⋯`). Audit: docs/research/2026-04-27-hud-element-audit.md Zone 8. */}
         {(() => {
-          const TOOLS = [
-            { action: () => openOverlay('memorybrowser'),   icon: Brain,      label: 'Memory',   short: 'Memory' },
-            { action: () => openOverlay('lore'),           icon: BookMarked, label: 'Lorebook', short: 'Lore' },
-            { action: () => openOverlay('games'),          icon: Gamepad2,   label: 'Games',    short: 'Games' },
-            { action: () => openOverlay('analytics'),      icon: BarChart2,  label: 'Analytics', short: 'Stats' },
-            { action: () => openOverlay('contextviewer'), icon: Cpu,        label: 'Context',  short: 'Ctx' },
+          const PRIMARY_TOOLS = [
+            { action: () => openOverlay('memorybrowser'), icon: Brain,      label: 'Memory',   short: 'Memory' },
+            { action: () => openOverlay('lore'),          icon: BookMarked, label: 'Lorebook', short: 'Lore' },
           ];
 
           return sidebarCollapsed ? (
             /* Collapsed: vertical icon column — each icon gets full 56px width */
             <div className="flex flex-col items-center gap-0.5 py-2">
-              {TOOLS.map(({ action, icon: Icon, label }) => (
+              {PRIMARY_TOOLS.map(({ action, icon: Icon, label }) => (
                 <button
                   key={label}
                   onClick={action}
@@ -359,23 +360,23 @@ export function Sidebar() {
                   <Icon size={18} />
                 </button>
               ))}
+              <MoreToolsDropdown collapsed />
               <NotificationBadge onNavigateToChar={handleNavigateToChar} />
               <HelpDropdown />
             </div>
           ) : (
-            /* Expanded: 6-column icon grid with labels below — fits all 5
-               TOOLS + Help on one row. NotificationBadge (rendered after
-               Help) wraps to row 2 only when an unread notification exists,
-               which is the rare case; default state is 1 row. */
+            /* Expanded: 4-column grid — Memory · Lore · ⋯ · Help.
+               NotificationBadge wraps to row 2 only when unread notifications
+               exist (rare); default state is 1 row. */
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(6, 1fr)',
+                gridTemplateColumns: 'repeat(4, 1fr)',
                 gap: 2,
                 padding: '6px 8px',
               }}
             >
-              {TOOLS.map(({ action, icon: Icon, label, short }) => (
+              {PRIMARY_TOOLS.map(({ action, icon: Icon, label, short }) => (
                 <button
                   key={label}
                   onClick={action}
@@ -388,13 +389,102 @@ export function Sidebar() {
                   <span style={{ fontSize: '0.6rem', fontWeight: 500, whiteSpace: 'nowrap' }}>{short}</span>
                 </button>
               ))}
-              <NotificationBadge onNavigateToChar={handleNavigateToChar} />
+              <MoreToolsDropdown />
               <HelpDropdown />
+              <NotificationBadge onNavigateToChar={handleNavigateToChar} />
             </div>
           );
         })()}
       </div>
     </aside>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   More Tools Dropdown — "⋯" with secondary tools (Games · Stats · Ctx)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Secondary-tools dropdown in the sidebar bottom toolbar.
+ * Holds Games (mini-games), Stats (bond analytics), and Context Viewer
+ * (LLM prompt debug). Opens upward, closes on Escape or click-outside.
+ * Pattern mirrors HelpDropdown so future maintainers see the parallel.
+ */
+function MoreToolsDropdown({ collapsed = false }: { collapsed?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { openOverlay } = useAppStore();
+
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') { setOpen(false); e.stopPropagation(); }
+    }
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [open]);
+
+  const items = [
+    { label: 'Games',   icon: Gamepad2,  action: () => { openOverlay('games');         setOpen(false); } },
+    { label: 'Stats',   icon: BarChart2, action: () => { openOverlay('analytics');     setOpen(false); } },
+    { label: 'Context', icon: Cpu,       action: () => { openOverlay('contextviewer'); setOpen(false); } },
+  ];
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className={
+          collapsed
+            ? "sidebar-tool-btn flex items-center justify-center w-full py-1.5 rounded-lg transition-colors"
+            : "sidebar-tool-btn flex flex-col items-center gap-0.5 py-1.5 rounded-lg transition-colors w-full"
+        }
+        style={{ color: collapsed ? 'var(--color-text-secondary)' : 'var(--color-text-primary)', opacity: collapsed ? 1 : 0.7 }}
+        title="More tools"
+        aria-label="More tools"
+        aria-expanded={open}
+      >
+        <MoreHorizontal size={collapsed ? 18 : 17} />
+        {!collapsed && (
+          <span style={{ fontSize: '0.6rem', fontWeight: 500, whiteSpace: 'nowrap' }}>More</span>
+        )}
+      </button>
+
+      {open && (
+        <div
+          className="absolute bottom-full left-0 mb-1.5 z-[90] min-w-[160px] py-1 rounded-lg"
+          style={{
+            backgroundColor: 'var(--color-surface)',
+            border: '1px solid var(--color-border-subtle)',
+            boxShadow: 'var(--shadow-elevated)',
+          }}
+        >
+          {items.map(({ label, icon: Icon, action }) => (
+            <button
+              key={label}
+              onClick={action}
+              className="w-full text-left px-3 py-2 text-xs transition-colors flex items-center gap-2"
+              style={{ color: 'var(--color-text-secondary)' }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)'; }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              <Icon size={14} />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

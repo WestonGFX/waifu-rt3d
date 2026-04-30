@@ -1,0 +1,182 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - heading "WAIFU.EXE" [level=1] [ref=e7]
+        - generic [ref=e8]:
+          - generic [ref=e9]: (Sakura)
+          - generic [ref=e10]: "|"
+          - generic [ref=e11]:
+            - img [ref=e116]
+            - text: OpenAI
+      - button "Collapse sidebar" [ref=e19] [cursor=pointer]:
+        - img [ref=e20]
+    - generic [ref=e22]:
+      - button "Neon" [ref=e23] [cursor=pointer]
+      - button "Sakura" [ref=e24]
+      - button "Nova" [ref=e25] [cursor=pointer]
+      - button "Girly" [ref=e26] [cursor=pointer]
+    - generic [ref=e27]:
+      - button "Chats" [pressed] [ref=e28] [cursor=pointer]:
+        - img [ref=e29]
+        - generic [ref=e31]: Chats
+        - generic [ref=e32]: "14"
+      - button "Characters" [ref=e33] [cursor=pointer]:
+        - img [ref=e34]
+        - generic [ref=e39]: Characters
+      - button "Create" [ref=e40] [cursor=pointer]:
+        - img [ref=e41]
+        - generic [ref=e43]: Create
+    - generic [ref=e45]:
+      - generic [ref=e46]:
+        - img [ref=e47]
+        - textbox "Search..." [ref=e50]
+      - generic [ref=e51]:
+        - button "Rin (Akane) Rin (Akane) Start a conversation..." [ref=e120] [cursor=pointer]:
+          - img "Rin (Akane)" [ref=e122]
+          - generic [ref=e123]:
+            - paragraph [ref=e124]: Rin (Akane)
+            - paragraph [ref=e125]: Start a conversation...
+        - button "Tsundere (Raine) Tsundere (Raine) Start a conversation..." [ref=e127] [cursor=pointer]:
+          - img "Tsundere (Raine)" [ref=e129]
+          - generic [ref=e130]:
+            - paragraph [ref=e131]: Tsundere (Raine)
+            - paragraph [ref=e132]: Start a conversation...
+        - button "Ayane (Yuki) Ayane (Yuki) Start a conversation..." [ref=e133] [cursor=pointer]:
+          - img "Ayane (Yuki)" [ref=e135]
+          - generic [ref=e136]:
+            - paragraph [ref=e137]: Ayane (Yuki)
+            - paragraph [ref=e138]: Start a conversation...
+        - button "Genki (Kitsune) Genki (Kitsune) Start a conversation..." [ref=e139] [cursor=pointer]:
+          - img "Genki (Kitsune)" [ref=e141]
+          - generic [ref=e142]:
+            - paragraph [ref=e143]: Genki (Kitsune)
+            - paragraph [ref=e144]: Start a conversation...
+        - button "Hana (Momoka) Hana (Momoka) Start a conversation..." [ref=e145] [cursor=pointer]:
+          - img "Hana (Momoka)" [ref=e147]
+          - generic [ref=e148]:
+            - paragraph [ref=e149]: Hana (Momoka)
+            - paragraph [ref=e150]: Start a conversation...
+        - button "Sable (Kuroha) Sable (Kuroha) Start a conversation..." [ref=e151] [cursor=pointer]:
+          - img "Sable (Kuroha)" [ref=e153]
+          - generic [ref=e154]:
+            - paragraph [ref=e155]: Sable (Kuroha)
+            - paragraph [ref=e156]: Start a conversation...
+        - button "S Shiori (Nana) Start a conversation..." [ref=e157] [cursor=pointer]:
+          - generic [ref=e159]: S
+          - generic [ref=e160]:
+            - paragraph [ref=e161]: Shiori (Nana)
+            - paragraph [ref=e162]: Start a conversation...
+        - button "M Mika (Mikazuki) Start a conversation..." [ref=e163] [cursor=pointer]:
+          - generic [ref=e165]: M
+          - generic [ref=e166]:
+            - paragraph [ref=e167]: Mika (Mikazuki)
+            - paragraph [ref=e168]: Start a conversation...
+        - button "K Kaede (Suzuha) Start a conversation..." [ref=e169] [cursor=pointer]:
+          - generic [ref=e171]: K
+          - generic [ref=e172]:
+            - paragraph [ref=e173]: Kaede (Suzuha)
+            - paragraph [ref=e174]: Start a conversation...
+        - button "L Luna (Tsukimi) Start a conversation..." [ref=e175] [cursor=pointer]:
+          - generic [ref=e177]: L
+          - generic [ref=e178]:
+            - paragraph [ref=e179]: Luna (Tsukimi)
+            - paragraph [ref=e180]: Start a conversation...
+        - button "Y Yuki (Shirayuki) Start a conversation..." [ref=e181] [cursor=pointer]:
+          - generic [ref=e183]: "Y"
+          - generic [ref=e184]:
+            - paragraph [ref=e185]: Yuki (Shirayuki)
+            - paragraph [ref=e186]: Start a conversation...
+        - button "Dae (Neciridae) Dae (Neciridae) Start a conversation..." [ref=e187] [cursor=pointer]:
+          - img "Dae (Neciridae)" [ref=e189]
+          - generic [ref=e190]:
+            - paragraph [ref=e191]: Dae (Neciridae)
+            - paragraph [ref=e192]: Start a conversation...
+        - button "A Alana Calloway Start a conversation..." [ref=e193] [cursor=pointer]:
+          - generic [ref=e195]: A
+          - generic [ref=e196]:
+            - paragraph [ref=e197]: Alana Calloway
+            - paragraph [ref=e198]: Start a conversation...
+        - button "Brittney Brittney Start a conversation..." [ref=e199] [cursor=pointer]:
+          - img "Brittney" [ref=e201]
+          - generic [ref=e202]:
+            - paragraph [ref=e203]: Brittney
+            - paragraph [ref=e204]: Start a conversation...
+    - generic [ref=e54]:
+      - button "Memory" [ref=e55] [cursor=pointer]:
+        - img [ref=e56]
+        - generic [ref=e66]: Memory
+      - button "Lorebook" [ref=e67] [cursor=pointer]:
+        - img [ref=e68]
+        - generic [ref=e71]: Lore
+      - button "Games" [ref=e72] [cursor=pointer]:
+        - img [ref=e73]
+        - generic [ref=e75]: Games
+      - button "Analytics" [ref=e76] [cursor=pointer]:
+        - img [ref=e77]
+        - generic [ref=e78]: Stats
+      - button "Context" [ref=e79] [cursor=pointer]:
+        - img [ref=e80]
+        - generic [ref=e83]: Ctx
+      - button "Help" [ref=e85] [cursor=pointer]:
+        - img [ref=e86]
+  - main [ref=e89]:
+    - generic [ref=e206]:
+      - generic [ref=e208]:
+        - generic [ref=e209]:
+          - generic [ref=e210]:
+            - generic "Rin (Akane)" [ref=e211]
+            - generic "Current time-of-day mood slot" [ref=e213]: night
+          - button "Bond level 0, Stranger, 6 of 144 XP. Click to expand bond detail." [ref=e215] [cursor=pointer]:
+            - img [ref=e216]
+            - generic [ref=e218]: Lv 0
+            - generic [ref=e219]: ·
+            - generic [ref=e220]: Stranger
+            - progressbar "Bond XP progress" [ref=e221]
+            - generic [ref=e223]: 6/144 XP
+            - img [ref=e224]
+        - button "Search messages (Thread / Global toggle inside)" [ref=e226] [cursor=pointer]:
+          - img [ref=e227]
+        - button "1.7k / 262.1k (0.6%)" [ref=e231] [cursor=pointer]:
+          - generic [ref=e233]:
+            - text: 1.7k / 262.1k
+            - generic [ref=e234]: (0.6%)
+          - img [ref=e235]
+        - button "Open settings" [ref=e237] [cursor=pointer]:
+          - img [ref=e238]
+        - button "Open 3D character viewer" [ref=e241] [cursor=pointer]:
+          - img [ref=e242]
+          - generic [ref=e245]: 3D
+        - button "More tools menu" [ref=e247] [cursor=pointer]:
+          - img [ref=e248]
+      - generic [ref=e254]:
+        - heading "Rin (Akane)" [level=2] [ref=e255]
+        - paragraph [ref=e256]: No messages yet — say hello!
+        - group "Suggested conversation starters" [ref=e257]:
+          - button "Tell me about yourself" [ref=e258] [cursor=pointer]
+          - button "How are you feeling today?" [ref=e259] [cursor=pointer]
+          - button "What do you want to talk about?" [ref=e260] [cursor=pointer]
+      - generic [ref=e263]:
+        - button "Toggle composer modes menu" [ref=e265] [cursor=pointer]:
+          - img [ref=e266]
+        - generic [ref=e267]:
+          - 'button "Reply length mode: brief" [ref=e268] [cursor=pointer]': Brief
+          - generic [ref=e269]: ·
+          - 'button "Content filter: Filter: Off" [ref=e270] [cursor=pointer]':
+            - img [ref=e271]
+            - text: "Off"
+          - generic [ref=e273]: ·
+          - 'button "RP style: Style: 18+RP" [ref=e274] [cursor=pointer]':
+            - img [ref=e275]
+            - text: 18+RP
+        - textbox "Message Rin (Akane)…" [ref=e277]
+        - button "Push to talk" [ref=e278] [cursor=pointer]:
+          - img [ref=e279]
+        - button "Start voice dictation" [ref=e282] [cursor=pointer]:
+          - img [ref=e283]
+        - button "Enter voice-first mode" [ref=e286] [cursor=pointer]:
+          - img [ref=e287]
+        - button "Start voice conversation" [ref=e293] [cursor=pointer]:
+          - img [ref=e294]
+        - button "Send message" [disabled] [ref=e296] [cursor=pointer]:
+          - img [ref=e297]

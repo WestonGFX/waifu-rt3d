@@ -1,167 +1,186 @@
-# Session Handoff — 2026-04-29 (Session 21, audit + cleanup + bond pill bump)
+# Session Handoff — 2026-04-29 (Session 23, Reply-Assist Tier 1 + follow-ups)
 
-## Branch: master · Commits this session: 4 (all pushed)
-
-This session pushed 6 commits total to `origin/master` —
-the 2 commits carried over from Session 20 plus 4 new ones:
-
-- `1534155` feat(sakura): bond pill size bump (~15%)
-- `6bb69f4` build(sakura): rebuild dist (session 20 SW cache + boot retry)
-- `39dbdae` chore(21): relocate Session 19 Tier 4 screenshots
-- `18224cb` chore(21): sync stale paperwork
-- `a2ac04a` feat(sakura): boot retry + backend-unreachable banner (Session 20)
-- `f8e4ef0` fix(sakura): SW cache name now includes build id (Session 20)
-
-## Test Status: pytest **2684 ✓** · vitest **207 ✓** · tsc clean · push gate clear
+## Branch: master · Commits this session: 2 (LOCAL — NOT pushed per user)
+## Test Status: pytest **2684 ✓** · vitest **225 ✓** · tsc clean · push gate clear
 
 ## Completed This Session
 
-### 1. /pre-session priority audit (no commit, conversation only)
-User asked to verify the 5 priorities surfaced by `/pre-session` against
-ground truth. Audit findings written to `~/.claude/plans/drifting-plotting-garden.md`:
+### 1. Reply-Assist Tier 1 — *italic* action syntax (commit `fbe6eaf`)
 
-| Original priority | Verdict |
-|---|---|
-| Push 2 commits | ✅ valid — pushed |
-| Move Session 19 screenshots | ✅ valid — moved |
-| Right-cluster `..` → `⋯` | ⚠ misdiagnosed — `MoreHorizontal` Lucide icon already renders `⋯`. Actual narrow-width issues are header-title CSS truncation + bond-bar/right-cluster overlap at <1024px, both unrelated to the overflow icon |
-| Tier 4 evaluate | ✅ valid — user later confirmed "looks normal again" |
-| Visual Content in Chat | ✅ valid — still on queue |
+Pure-frontend, no LLM cost. Plan refined mid-impl: existing
+`tokenizeMarkdown` parser in `DialogueBubble.tsx` already handled
+`**bold**` / `*italic*` / `(narration)` for assistant messages. Factored
+to `frontends/sakura/src/lib/parseActions.ts` with 18-case Vitest suite,
+then reused for **both** assistant + user message rendering (user side
+previously rendered raw via `HighlightedText`).
 
-Missing items added: stale `RESUME_PROMPT.md`, stale FD-leak bug doc,
-stale `CURRENT_STATUS.md` Next Tasks list, untriaged model picker bug,
-bond pill size bump.
+Composer: Lucide `Italic` toolbar button + textarea-local Ctrl/Cmd+I
+shortcut. Composer-local handler avoids collision with global
+`ctrl+i = Cinematic mode` (global has `allowInInput: false`, ours fires
+only when textarea has focus).
 
-### 2. Group A — Cleanup & paperwork (commits 18224cb + 39dbdae + 6bb69f4)
+Verified: tsc clean, vitest 207 → 225 (+18), pytest 2684 unchanged,
+hand-on browser at `localhost:5175/sakura/` in light + dark themes.
 
-- Pruned `CURRENT_STATUS.md` Next Tasks list — sessions 16-20 work
-  consolidated into a "completed since" header, queue rewritten around
-  6 active items (push, Tier 4 evaluate, `..` verify, model picker bug,
-  Visual Content, narrow-width bugs)
-- Replaced stale `docs/plans/RESUME_PROMPT.md` (Session 14 contents)
-  with a pointer stub directing readers to `CURRENT_STATUS.md` +
-  `SESSION_HANDOFF.md`. The file drifts whenever sessions only run
-  `/handoff` (which doesn't refresh it) and skip `/checkpoint` (which
-  used to). Stub avoids confusing future cold starts
-- Marked `docs/bugs/2026-04-28-db-connection-fd-leak.md` ✅ FIXED with
-  reference to commit `3bb8cce` (193-site `db_ctx` migration in
-  Session 19) and regression test commit `fb77235`
-- Captured Session 20's `docs/SESSION_HANDOFF.md` (was modified but
-  uncommitted at session start)
-- Relocated 9 `tier4-*.png` + `snap-collapsed.md` from repo root to
-  `docs/testing/screenshots/2026-04-28-tier4/` — pure file move
-- Committed `frontends/sakura/dist/*` rebuild artifacts (28 files
-  changed) from Session 20's verification `vite build`. Sakura `dist/`
-  is intentionally tracked (`.gitignore` has `!frontends/sakura/dist/`)
+### 2. Tier 1 follow-ups — `--color-action` theme token + scaffolds (commit `65b9533`)
 
-### 3. Group B — Browser-verified the `..` claim (no code changes)
+User pointed out three issues after Tier 1 landed:
+1. Italic on user bubble was invisible (color matched body text)
+2. No live preview while typing in composer
+3. Empty AI reply when sending
 
-Started backend + sakura, drove Playwright at 1280/1024/800 widths,
-screenshotted top-right cluster:
-- `MoreHorizontal` icon renders correctly as `⋯` at every width
-- Real narrow-width issues are: header title truncates `Rin (Akane)` →
-  `Rin (...` at 800px; bond bar XP text overlaps the right-cluster
-  pills at 800px; composer placeholder line-wraps inside input
-- These are layout bugs unrelated to the `..` claim. Folded into
-  `CURRENT_STATUS.md` next-task list
+Fixes shipped this session:
 
-Screenshots committed at `docs/testing/screenshots/2026-04-29-bond-pill-bump/verify-narrow-{800,1024,1280}.png`
+**Issue 1 — `--color-action` theme token added to ALL 18 themes.**
+Per-palette tuned: gold on dark themes (sakura, blurple, dark-crystal,
+dark-sakura, midnight); deep amber on light themes (sakura, crystal,
+matcha, lavender); special palette colors for the
+flagship-coded themes (monokai pink, dracula yellow, tokyo-night
+yellow, catppuccin-latte/macchiato yellow, darcula yellow); sapphire
+on hot-pink themes (peach, bubblegum, pop-bubblegum); deep magenta
+on the yellow pop-lemonade theme. `DialogueBubble.MarkdownText` drops
+the `italicColor` prop and uses `var(--color-action)` everywhere.
+Visible across user + assistant bubbles.
 
-### 4. Bond pill size bump (commit 1534155)
+**Issue 2 — RichComposer scaffold (NOT wired).**
+`frontends/sakura/src/components/RichComposer.tsx` — standalone
+contenteditable composer that renders `*italic*` tokens live as the
+user types. Imperative `wrapSelection` handle, IME-safe via
+composition events, plain-text paste, caret offset preservation
+across re-renders. NOT yet wired into `ChatThread.tsx` — picks up
+next session. Wire-up is the remainder of task 7.
 
-Closes the HUD Tier 4 evaluate gate. User confirmed Tier 4 layout
-(SW-cache fix held), so the natural follow-up was a modest size bump
-for legibility — the new one-line bond display was readable but easy
-to overlook.
+**Issue 3 — bug doc filed at `docs/bugs/2026-04-29-empty-llm-reply.md`.**
+Root cause: configured LLM endpoint `http://10.0.0.17:1234/v1` (Windows
+GPU PC) responds to `GET /v1/models` (HTTP 200) but hangs on
+`POST /v1/chat/completions` (timeout 30s, HTTP 000). `localhost:1234`
+works (HTTP 200, 6.2s reply). Compounding bug: `thinking_mode: true`
+with low max_tokens burns the entire budget on reasoning, returning
+`content: ""` with `finish_reason: "length"`. Five fix options listed
+in the doc. NOT a regression from any current commit.
 
-`frontends/sakura/src/components/BondPill.tsx` changes (collapsed row only):
-- `fontSize`: main row 12→13 · XP text 11→12 · streak badge 10→11
-- icons: `Heart` 12→14 · `Caret` 14→16
-- progress bar: `60×5 → 80×6`
-- `padding`: 6/10 → 7/12 · `gap`: 6→7 · streak `padding` 1/5 → 2/6
+### 3. Stale state from session 22 (NOT touched)
 
-Verified via Playwright at 1280×800 (collapsed + expanded panel) and
-800×600 (no narrow-width regression — pre-existing overlap unchanged).
+`CURRENT_STATUS.md` and prior `docs/SESSION_HANDOFF.md` were already
+modified going into this session — same files listed in session 22's
+own handoff under "Files Modified This Session". Backend `app.db` and
+`backend/config/app.json` carry runtime state per CLAUDE.md sensitive
+paths and are LEFT modified, NOT committed.
 
-Visual artifacts at `docs/testing/screenshots/2026-04-29-bond-pill-bump/bond-pill-after-{1280,800}.png` + `bond-pill-expanded-after-1280.png`.
+## Work In Progress — task 7 (RichComposer wire-up)
 
-## Work In Progress
+The contenteditable composer scaffold is complete and standalone.
+Remaining work (~30-60 min):
 
-**None.** All 4 commits pushed. Audit plan saved at
-`~/.claude/plans/drifting-plotting-garden.md` (durable but private to
-~/.claude, not in repo).
+1. In `ChatThread.tsx`, change `textareaRef` type from
+   `HTMLTextAreaElement` to `RichComposerHandle` (imported from the
+   new component).
+2. Drop the auto-resize `useEffect` at line 256-265 (RichComposer
+   handles via `max-height` + `overflow-y: auto` natively).
+3. Update `wrapSelectionWithAction` (currently uses
+   `textareaRef.current.selectionStart` / `selectionEnd`) to call
+   `textareaRef.current?.wrapSelection()` instead.
+4. Replace the `<textarea>` JSX block (line 1488-1554) with a
+   `<RichComposer>` element. Most props translate 1:1 (value→value,
+   onChange wraps setDraft + chip clear, onKeyDown→onKeyDown,
+   placeholder→placeholder). The composer needs a `max-height`
+   inline style (~120px to match the previous auto-resize cap) plus
+   the existing border/bg/color tokens. Mic, voice mode, dictation
+   all set `draft` via `setDraft` so they continue working unchanged
+   — RichComposer's external-value sync useEffect picks up the
+   change and re-renders.
+5. Add a `.rich-composer` className that the existing CSS
+   placeholder rule matches (already added to dialogue.css).
+6. Browser-verify in 1 light + 1 dark theme: type `*action*`, watch
+   the asterisk-wrapped portion turn italic+colored as you type;
+   send and confirm same render in the bubble.
+
+Risks during wire-up:
+- IME composition timing — RichComposer suppresses re-render during
+  composition; verify Japanese / Pinyin input works.
+- Mic dictation — `setDraft(final + interim)` is called on every
+  speech tick. The external-value sync should handle it, but verify
+  cursor doesn't jump erratically during streaming.
+- Send-clear — `setDraft('')` after send. Verify composer empties
+  and shows placeholder again.
+- Voice-first mode — overlay on textarea. Make sure
+  `pointer-events: none` overlays still register.
+- `Shift+Enter` for newline — needs explicit handling. Browsers
+  insert `<br>` or `<div>` on Enter inside contenteditable;
+  `handleInput` extractPlainText normalises both to `\n`. Verify.
 
 ## Known Issues / Bugs
 
 ### Open — needs work
-- **Narrow-width header/bond-bar overlap** (<1024px viewports). Bond
-  bar `XP` text gets covered by the search/budget cluster; chat header
-  title CSS-truncates to `Rin (...`; composer placeholder line-wraps
-  inside the input. Filed as next-task #3 in `CURRENT_STATUS.md`.
-  Repro screenshots at `docs/testing/screenshots/2026-04-29-bond-pill-bump/verify-narrow-800.png` and `bond-pill-after-800.png`.
-- **Model picker preview images** (P2, OPEN). Existing bug doc:
-  `docs/bugs/2026-04-27-model-picker-no-preview-images.md`. Untriaged.
+- **Empty AI reply** (P0) — `docs/bugs/2026-04-29-empty-llm-reply.md`.
+  Either change endpoint to `localhost:1234`, restart LM Studio on
+  10.0.0.17, or disable `thinking_mode`. Decision is on the user.
+- **Live preview while typing** — RichComposer scaffolded; wire-up is
+  the remainder of task 7. See WIP section above.
+- **Model picker preview images** (P2 OPEN, untriaged from session 21).
 
-### Not bugs (resolved this session)
-- ~~`..` overflow icon claim~~ — misdiagnosis, see Group B
-- ~~`docs/bugs/2026-04-28-db-connection-fd-leak.md` OPEN status~~ —
-  was actually closed in Session 19, doc updated
+### Resolved this session
+- ~~User-bubble italic invisible (color matched body text)~~ — fixed
+  via `--color-action` theme token in commit `65b9533`.
 
 ## Files Modified This Session
 
 ```
-CURRENT_STATUS.md                                              +21 -16
-docs/SESSION_HANDOFF.md                                        +118-180  (Session 20 content captured)
-docs/bugs/2026-04-28-db-connection-fd-leak.md                  +1  -1
-docs/plans/RESUME_PROMPT.md                                    +20 -59
-docs/testing/screenshots/2026-04-28-tier4/*                    +10 (NEW: Session 19 screenshot relocate)
-docs/testing/screenshots/2026-04-29-bond-pill-bump/*           +6  (NEW: this-session verify + after)
-frontends/sakura/src/components/BondPill.tsx                   +11 -11
-frontends/sakura/dist/*                                        +28 files (rebuild churn)
+docs/SESSION_HANDOFF.md                                                  (this file)
+CURRENT_STATUS.md                                                        (untouched — stale from session 22)
+docs/plans/2026-04-29-user-reply-assist.md                               +1 -1
+docs/bugs/2026-04-29-empty-llm-reply.md                                  +99 (NEW)
+docs/testing/screenshots/2026-04-29-tier1-action-syntax/*.png            +2 (NEW)
+frontends/sakura/src/components/DialogueBubble.tsx                       +6 -25
+frontends/sakura/src/components/RichComposer.tsx                         +245 (NEW, NOT wired)
+frontends/sakura/src/lib/parseActions.ts                                 +90 (NEW)
+frontends/sakura/src/test/parseActions.test.ts                           +127 (NEW, 18 cases)
+frontends/sakura/src/styles/dialogue.css                                 +14
+frontends/sakura/src/styles/themes.css                                   +18 (one --color-action per theme)
+frontends/sakura/src/views/ChatThread.tsx                                +44 -1
 ```
 
 `backend/storage/app.db` and `backend/config/app.json` carry runtime
-state — left modified, NOT committed (sensitive paths per CLAUDE.md).
+state — left modified, NOT committed (CLAUDE.md sensitive paths).
 
 ## Next Session Priorities
 
-1. **HUD Tier 5 (sidebar consolidate) or Tier 6 (3D viewer overlay rethink)** —
-   only if user wants more pruning. Tier 4 chapter is functionally
-   closed; user has a real-use window to decide. Plan:
-   `docs/plans/2026-04-27-hud-redesign-staged.md`. Each tier ~1.5–4h.
-2. **Visual Content in Chat** — "Character sends you a picture" UX.
-   Image-gen pipeline already in backend. ~4–8h, multi-session.
-3. **Narrow-width header/bond overlap fix** — ~1–2h, single-commit.
-   StatusBar.tsx top header layout at <1024px.
-4. **Model picker preview image bug** (P2 OPEN, untriaged). Effort
-   unknown until first read of the bug doc.
-5. **Push and PR Discipline rule documentation** — already added to
-   CLAUDE.md (commit `06bc348`); no follow-up needed unless user
-   wants the rule extended.
+1. **Wire RichComposer into ChatThread** (task 7 remainder, ~30-60 min).
+   See "Work In Progress" section above for the 6-step plan and risks.
+   This unblocks issue 2 from the user's session-23 feedback.
+2. **Pick a fix for the empty-reply bug.** See
+   `docs/bugs/2026-04-29-empty-llm-reply.md`. Three quick options:
+   `sed -i '' 's|10.0.0.17:1234|localhost:1234|' backend/config/app.json`
+   (if local Mac LM Studio is fine for now), restart LM Studio on
+   10.0.0.17, or set `thinking_mode: false`. Then verify a chat
+   actually returns content.
+3. **Push 5 local commits.** Push gate clear. The 5 are:
+   `badee27` (Tier 5) · `a29bf69` (composer fix) · `8213ad6` (plan
+   stub) · `fbe6eaf` (Tier 1) · `65b9533` (theme + scaffold).
+4. Reply-Assist Tier 2 (reply pills) — still blocked on the four
+   open questions in the plan file.
 
 ## Context for Next Session
 
-- **Active plan:** `docs/plans/2026-04-27-hud-redesign-staged.md`.
-  Tier 0/1/1b/2/3/4 done + bond pill bump (which was the Tier 4
-  follow-up alternative listed at line 19 of `CURRENT_STATUS.md`).
-  Tier 5 / Tier 6 / Tier 7 / Tier 8 unstarted; user choice whether
-  to continue ratcheting or call HUD work done.
+- **Active plans:**
+  - `docs/plans/2026-04-29-user-reply-assist.md` — Tier 1 SHIPPED
+    (commit fbe6eaf), follow-ups partially shipped (commit 65b9533).
+    Tier 2 + 3 still gated on open questions 1-4.
+  - `docs/plans/2026-04-27-hud-redesign-staged.md` — Tier 5 done.
 - **Push gate:** clear. No active `OPEN BUG` / `UNFIXED` / `BLOCKER`
-  markers in `CURRENT_STATUS.md` or this file. Future sessions can
-  push freely until a new marker appears.
-- **`docs/plans/RESUME_PROMPT.md` is now a stub.** Treat
-  `CURRENT_STATUS.md` + this file as the canonical handoff. If you
-  want per-session resume instructions back, run `/checkpoint` (the
-  full ritual) and the file will be rewritten.
-- **Audit-mode plan file:** `~/.claude/plans/drifting-plotting-garden.md`
-  (private, not in repo). Records the priority audit reasoning if you
-  need to revisit.
-- **Servers stopped** at end of session. Restart with `./run.sh` and
-  `cd frontends/sakura && npx vite --port 5175`.
-- **Sensitive area touched (mild):** `BondPill.tsx` is part of the
-  chat header layout (Known Sensitive Area: column resize / layout
-  reflow). Bump is pure size/font/padding — no `var()` change, no
-  logic change, no theme contract change. Verified across collapsed
-  + expanded states + narrow widths. Per Suggestion Triggers rule a
-  `/qa-sweep` could be run, but the change scope is single-file UI
-  cosmetics; user can skip unless they want the extra reassurance.
+  markers. Free to push when user says.
+- **Runtime state caveat:** `app.json` points at `10.0.0.17:1234`
+  which is unreachable for inference. Fix per bug doc before any
+  chat-related testing.
+- **Sensitive areas touched:** themes.css (18-theme fan-out — CLAUDE.md
+  flags theme color inheritance as Known Sensitive Area; verified by
+  browser test in light + dark via Tier 1 commit's screenshots, and
+  `--color-action` is purely additive — no existing tokens changed).
+  DialogueBubble.tsx (cross-cutting message render — minimal change,
+  prop drop + var swap).
+- **Servers:** backend (port 8080) + sakura (port 5175) were running
+  during this session; the sakura process died (exit 144) mid-session.
+  Restart with `cd frontends/sakura && npx vite --port 5175` if you
+  pick up RichComposer wire-up.
+- **Tab caveat:** session 22's note still applies — user has multiple
+  Chrome tabs of the app open; HMR may have left some stale.

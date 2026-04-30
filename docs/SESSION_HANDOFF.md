@@ -1,118 +1,167 @@
-# Session Handoff — 2026-04-29 (Session 20, Tier 4 layout debug)
+# Session Handoff — 2026-04-29 (Session 21, audit + cleanup + bond pill bump)
 
-## Branch: master · Commits this session: 2 (NOT pushed)
+## Branch: master · Commits this session: 4 (all pushed)
 
-This session:
-- `f8e4ef0` fix(sakura): SW cache name now includes build id
-- `a2ac04a` feat(sakura): boot retry + backend-unreachable banner
+This session pushed 6 commits total to `origin/master` —
+the 2 commits carried over from Session 20 plus 4 new ones:
 
-## Test Status: pytest **2684 ✓** · vitest **207 ✓** (was 203, +4 new) · tsc clean
+- `1534155` feat(sakura): bond pill size bump (~15%)
+- `6bb69f4` build(sakura): rebuild dist (session 20 SW cache + boot retry)
+- `39dbdae` chore(21): relocate Session 19 Tier 4 screenshots
+- `18224cb` chore(21): sync stale paperwork
+- `a2ac04a` feat(sakura): boot retry + backend-unreachable banner (Session 20)
+- `f8e4ef0` fix(sakura): SW cache name now includes build id (Session 20)
 
-## Resolved This Session
+## Test Status: pytest **2684 ✓** · vitest **207 ✓** · tsc clean · push gate clear
 
-### ~~OPEN BUG — HUD layout regression~~ ✅ FIXED via SW cache fix
-The previous session's `OPEN BUG — UNFIXED` is closed. User confirmed the
-app no longer renders top-left-anchored with void at right/bottom. Root
-cause was the proximate hypothesis from the Session 19 handoff: stale
-service-worker cache. `frontends/sakura/public/sw.js` had hardcoded
-`CACHE_NAME = 'sakura-v1'` that never bumped, so old CSS lived in the
-user's cache forever. Fix injects a per-build cache name via Vite plugin;
-the existing activate-handler purge evicts the stale `sakura-v1` cache
-on first activation of the new SW.
+## Completed This Session
 
-### Bonus fix — empty-sidebar-looks-like-data-loss
-After the SW fix landed and the user reloaded, their backend wasn't
-running on `:8080`. `loadCharacters` failed silently (or with retries
-exhausted) → empty character list → empty sidebar. User read this as
-"all my data was deleted" — DB was actually intact (14 chars / 302
-sessions / 188 messages confirmed via `sqlite3 backend/storage/app.db`).
+### 1. /pre-session priority audit (no commit, conversation only)
+User asked to verify the 5 priorities surfaced by `/pre-session` against
+ground truth. Audit findings written to `~/.claude/plans/drifting-plotting-garden.md`:
 
-Two-part fix:
-1. `loadCharacters` retries 3× with 200ms / 600ms exponential backoff
-2. After retries exhaust, `bootError` is set on the appStore and
-   `BackendErrorBanner` renders a fixed-position pill at the top of
-   the app with a Retry button (Lucide WifiOff + RefreshCw icons).
+| Original priority | Verdict |
+|---|---|
+| Push 2 commits | ✅ valid — pushed |
+| Move Session 19 screenshots | ✅ valid — moved |
+| Right-cluster `..` → `⋯` | ⚠ misdiagnosed — `MoreHorizontal` Lucide icon already renders `⋯`. Actual narrow-width issues are header-title CSS truncation + bond-bar/right-cluster overlap at <1024px, both unrelated to the overflow icon |
+| Tier 4 evaluate | ✅ valid — user later confirmed "looks normal again" |
+| Visual Content in Chat | ✅ valid — still on queue |
 
-Verified end-to-end in own Chrome:
-- Kill backend → reload → banner appears
-- Restart backend → click Retry → banner dismisses, characters populate
+Missing items added: stale `RESUME_PROMPT.md`, stale FD-leak bug doc,
+stale `CURRENT_STATUS.md` Next Tasks list, untriaged model picker bug,
+bond pill size bump.
 
-## Files Modified
+### 2. Group A — Cleanup & paperwork (commits 18224cb + 39dbdae + 6bb69f4)
 
-```
-frontends/sakura/public/sw.js                                  +14 -3   (cache token)
-frontends/sakura/vite.config.ts                                +69 +1   (inject-sw-build-id plugin)
-frontends/sakura/dev-tools/layout-debug.js                     +268     (NEW: paste-into-console diagnostic)
-frontends/sakura/src/stores/appStore.ts                        +51 -2   (retry + bootError + retryBoot)
-frontends/sakura/src/App.tsx                                   +3       (mount BackendErrorBanner)
-frontends/sakura/src/components/BackendErrorBanner.tsx         +94      (NEW: pill + retry)
-frontends/sakura/src/test/appStore.loadCharactersRetry.test.ts +97      (NEW: 4 Pattern-2 tests)
-```
+- Pruned `CURRENT_STATUS.md` Next Tasks list — sessions 16-20 work
+  consolidated into a "completed since" header, queue rewritten around
+  6 active items (push, Tier 4 evaluate, `..` verify, model picker bug,
+  Visual Content, narrow-width bugs)
+- Replaced stale `docs/plans/RESUME_PROMPT.md` (Session 14 contents)
+  with a pointer stub directing readers to `CURRENT_STATUS.md` +
+  `SESSION_HANDOFF.md`. The file drifts whenever sessions only run
+  `/handoff` (which doesn't refresh it) and skip `/checkpoint` (which
+  used to). Stub avoids confusing future cold starts
+- Marked `docs/bugs/2026-04-28-db-connection-fd-leak.md` ✅ FIXED with
+  reference to commit `3bb8cce` (193-site `db_ctx` migration in
+  Session 19) and regression test commit `fb77235`
+- Captured Session 20's `docs/SESSION_HANDOFF.md` (was modified but
+  uncommitted at session start)
+- Relocated 9 `tier4-*.png` + `snap-collapsed.md` from repo root to
+  `docs/testing/screenshots/2026-04-28-tier4/` — pure file move
+- Committed `frontends/sakura/dist/*` rebuild artifacts (28 files
+  changed) from Session 20's verification `vite build`. Sakura `dist/`
+  is intentionally tracked (`.gitignore` has `!frontends/sakura/dist/`)
 
-`backend/storage/app.db` and `backend/config/app.json` carry runtime
-state across sessions — left modified, NOT committed (sensitive paths
-per CLAUDE.md).
+### 3. Group B — Browser-verified the `..` claim (no code changes)
 
-`frontends/sakura/dist/*` artifact churn from `npx vite build` run
-during Step 1 verification — left uncommitted; will regenerate on next
-build.
+Started backend + sakura, drove Playwright at 1280/1024/800 widths,
+screenshotted top-right cluster:
+- `MoreHorizontal` icon renders correctly as `⋯` at every width
+- Real narrow-width issues are: header title truncates `Rin (Akane)` →
+  `Rin (...` at 800px; bond bar XP text overlaps the right-cluster
+  pills at 800px; composer placeholder line-wraps inside input
+- These are layout bugs unrelated to the `..` claim. Folded into
+  `CURRENT_STATUS.md` next-task list
 
-Pre-existing untracked screenshots (`tier4-*.png`, `snap-collapsed.md`)
-from Session 19 still in repo root, untouched — user's call whether to
-move to `docs/testing/screenshots/` or delete.
+Screenshots committed at `docs/testing/screenshots/2026-04-29-bond-pill-bump/verify-narrow-{800,1024,1280}.png`
+
+### 4. Bond pill size bump (commit 1534155)
+
+Closes the HUD Tier 4 evaluate gate. User confirmed Tier 4 layout
+(SW-cache fix held), so the natural follow-up was a modest size bump
+for legibility — the new one-line bond display was readable but easy
+to overlook.
+
+`frontends/sakura/src/components/BondPill.tsx` changes (collapsed row only):
+- `fontSize`: main row 12→13 · XP text 11→12 · streak badge 10→11
+- icons: `Heart` 12→14 · `Caret` 14→16
+- progress bar: `60×5 → 80×6`
+- `padding`: 6/10 → 7/12 · `gap`: 6→7 · streak `padding` 1/5 → 2/6
+
+Verified via Playwright at 1280×800 (collapsed + expanded panel) and
+800×600 (no narrow-width regression — pre-existing overlap unchanged).
+
+Visual artifacts at `docs/testing/screenshots/2026-04-29-bond-pill-bump/bond-pill-after-{1280,800}.png` + `bond-pill-expanded-after-1280.png`.
 
 ## Work In Progress
 
-**None.** All four planned steps from the session plan
-(`/Users/chris/.claude/plans/okay-what-should-we-warm-moler.md`) shipped
-and verified. Plus the bonus banner fix.
+**None.** All 4 commits pushed. Audit plan saved at
+`~/.claude/plans/drifting-plotting-garden.md` (durable but private to
+~/.claude, not in repo).
 
-## Push/PR Status
+## Known Issues / Bugs
 
-**Local-only — no push.** Two commits ahead of `origin/master`. The
-previous handoff's OPEN BUG marker is now resolved (struck through
-above), so the push gate has lifted per CLAUDE.md Push & PR Discipline.
-Did not push because the user did not explicitly request it. Ask before
-pushing next session.
+### Open — needs work
+- **Narrow-width header/bond-bar overlap** (<1024px viewports). Bond
+  bar `XP` text gets covered by the search/budget cluster; chat header
+  title CSS-truncates to `Rin (...`; composer placeholder line-wraps
+  inside the input. Filed as next-task #3 in `CURRENT_STATUS.md`.
+  Repro screenshots at `docs/testing/screenshots/2026-04-29-bond-pill-bump/verify-narrow-800.png` and `bond-pill-after-800.png`.
+- **Model picker preview images** (P2, OPEN). Existing bug doc:
+  `docs/bugs/2026-04-27-model-picker-no-preview-images.md`. Untriaged.
+
+### Not bugs (resolved this session)
+- ~~`..` overflow icon claim~~ — misdiagnosis, see Group B
+- ~~`docs/bugs/2026-04-28-db-connection-fd-leak.md` OPEN status~~ —
+  was actually closed in Session 19, doc updated
+
+## Files Modified This Session
+
+```
+CURRENT_STATUS.md                                              +21 -16
+docs/SESSION_HANDOFF.md                                        +118-180  (Session 20 content captured)
+docs/bugs/2026-04-28-db-connection-fd-leak.md                  +1  -1
+docs/plans/RESUME_PROMPT.md                                    +20 -59
+docs/testing/screenshots/2026-04-28-tier4/*                    +10 (NEW: Session 19 screenshot relocate)
+docs/testing/screenshots/2026-04-29-bond-pill-bump/*           +6  (NEW: this-session verify + after)
+frontends/sakura/src/components/BondPill.tsx                   +11 -11
+frontends/sakura/dist/*                                        +28 files (rebuild churn)
+```
+
+`backend/storage/app.db` and `backend/config/app.json` carry runtime
+state — left modified, NOT committed (sensitive paths per CLAUDE.md).
 
 ## Next Session Priorities
 
-1. **Push the two commits** (`f8e4ef0`, `a2ac04a`) to `origin/master`
-   once the user confirms they want to ship. Push gate is clear.
-2. **Move/delete Session 19 screenshots** in repo root — `tier4-*.png`,
-   `snap-collapsed.md`. Either to `docs/testing/screenshots/` or trash.
-3. **Right-cluster horizontal overflow.** Tier 2 top toolbar shows `..`
-   instead of `⋯` at narrow widths. ~10 min — single-character
-   replacement, likely in StatusBar/HUD top toolbar.
-4. **Pause + evaluate Tier 4** per the staged plan
-   (`docs/plans/2026-04-27-hud-redesign-staged.md`). User has now had
-   a real-use window with the cleaned-up HUD (no longer blocked by
-   the layout regression). Decide: stop here, Tier 6 (3D viewer
-   overlay rethink), Tier 5 (sidebar bottom consolidate), bond pill
-   size bump.
-5. **Visual Content in Chat** — backlog, ~4-8h, multi-session.
+1. **HUD Tier 5 (sidebar consolidate) or Tier 6 (3D viewer overlay rethink)** —
+   only if user wants more pruning. Tier 4 chapter is functionally
+   closed; user has a real-use window to decide. Plan:
+   `docs/plans/2026-04-27-hud-redesign-staged.md`. Each tier ~1.5–4h.
+2. **Visual Content in Chat** — "Character sends you a picture" UX.
+   Image-gen pipeline already in backend. ~4–8h, multi-session.
+3. **Narrow-width header/bond overlap fix** — ~1–2h, single-commit.
+   StatusBar.tsx top header layout at <1024px.
+4. **Model picker preview image bug** (P2 OPEN, untriaged). Effort
+   unknown until first read of the bug doc.
+5. **Push and PR Discipline rule documentation** — already added to
+   CLAUDE.md (commit `06bc348`); no follow-up needed unless user
+   wants the rule extended.
 
 ## Context for Next Session
 
-- **The `inject-sw-build-id` plugin** lives in `vite.config.ts` and
-  uses `package.json`'s `version` + `Date.now()` for the cache key.
-  Bumping `package.json` version is no longer required to invalidate
-  caches — every build gets a unique key automatically. In dev mode,
-  every browser load gets a fresh cache (Date.now() per request).
-- **`bootError` + `retryBoot`** on `useAppStore`. Other failure modes
-  (e.g. `loadConfig` 500) could be wired into the same banner if
-  desired — currently only `loadCharacters` populates it.
-- **`dev-tools/layout-debug.js`** is the playbook for next time a
-  layout bug can't be reproduced: paste into user's broken Chrome
-  console, get back one JSON blob with everything we'd ask for.
-- **Servers status at end of session:**
-  - Backend uvicorn `:8080` — running (background task `bk0w28f4x`)
-  - Sakura vite `:5175` — running (background task `bz5en2i4r`)
-  - Both will stop when the bash session ends. Restart with
-    `./run.sh` and `cd frontends/sakura && npx vite --port 5175`.
-- **Active plan:** `docs/plans/2026-04-27-hud-redesign-staged.md`
-  (HUD redesign). Tier 0/1/1b/2/3/4 done. Pause-and-evaluate gate at
-  Tier 4 — no longer blocked by anything.
-- **Per-CLAUDE.md push rule:** the OPEN BUG marker that was carried
-  forward from Session 19 is now struck above. Future sessions can
-  push freely unless a new OPEN BUG/UNFIXED/BLOCKER appears.
+- **Active plan:** `docs/plans/2026-04-27-hud-redesign-staged.md`.
+  Tier 0/1/1b/2/3/4 done + bond pill bump (which was the Tier 4
+  follow-up alternative listed at line 19 of `CURRENT_STATUS.md`).
+  Tier 5 / Tier 6 / Tier 7 / Tier 8 unstarted; user choice whether
+  to continue ratcheting or call HUD work done.
+- **Push gate:** clear. No active `OPEN BUG` / `UNFIXED` / `BLOCKER`
+  markers in `CURRENT_STATUS.md` or this file. Future sessions can
+  push freely until a new marker appears.
+- **`docs/plans/RESUME_PROMPT.md` is now a stub.** Treat
+  `CURRENT_STATUS.md` + this file as the canonical handoff. If you
+  want per-session resume instructions back, run `/checkpoint` (the
+  full ritual) and the file will be rewritten.
+- **Audit-mode plan file:** `~/.claude/plans/drifting-plotting-garden.md`
+  (private, not in repo). Records the priority audit reasoning if you
+  need to revisit.
+- **Servers stopped** at end of session. Restart with `./run.sh` and
+  `cd frontends/sakura && npx vite --port 5175`.
+- **Sensitive area touched (mild):** `BondPill.tsx` is part of the
+  chat header layout (Known Sensitive Area: column resize / layout
+  reflow). Bump is pure size/font/padding — no `var()` change, no
+  logic change, no theme contract change. Verified across collapsed
+  + expanded states + narrow widths. Per Suggestion Triggers rule a
+  `/qa-sweep` could be run, but the change scope is single-file UI
+  cosmetics; user can skip unless they want the extra reassurance.

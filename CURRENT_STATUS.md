@@ -1,22 +1,30 @@
 # Current Project Status
 
-**Last updated:** 2026-04-29 (session 20 — Tier 4 layout debug)
-**Branch:** master (2 local commits ahead of origin, NOT pushed)
+**Last updated:** 2026-04-29 (session 21 — pre-session audit + cleanup + bond pill bump)
+**Branch:** master (clean — all pushed to origin)
 **Schema version:** v70
-**Tests:** **2,684 backend** (pytest, 0 known failures) + 207 frontend (vitest, +4 new) passing, tsc clean
+**Tests:** **2,684 backend** (pytest, 0 known failures) + 207 frontend (vitest) passing, tsc clean
 **Automation:** 12 agents, 22 skills, 6 rules, 8 hooks, 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
 
-**Session 20 (2026-04-29) — Tier 4 layout regression FIXED. 2 local commits.**
+**Session 21 (2026-04-29) — Pre-session audit + cleanup + bond pill bump. 4 commits, all pushed.**
+- `1534155` feat(sakura): bond pill size bump (~15%) — closes Tier 4 evaluate gate. Bumps `BondPill.tsx` collapsed-row sizes (font 12/11/10 → 13/12/11, icons 12/14 → 14/16, bar 60×5 → 80×6, padding/gap +1px). Verified via Playwright at 1280 + 800 + expanded panel. Pure cosmetic — no var/logic/theme contract change.
+- `6bb69f4` build(sakura): rebuild dist — Session 20 verification `vite build` artifacts (28 files, SW cache token + BackendErrorBanner chunk).
+- `39dbdae` chore(21): relocate Session 19 Tier 4 screenshots — 9 PNGs + 1 .md moved from repo root → `docs/testing/screenshots/2026-04-28-tier4/`.
+- `18224cb` chore(21): sync stale paperwork — pruned `CURRENT_STATUS.md` Next Tasks, replaced stale Session 14 `RESUME_PROMPT.md` with pointer stub, marked FD-leak bug ✅ FIXED (closed in Session 19 commit `3bb8cce`), captured Session 20 handoff.
+
+**Verified-not-bugs:** the Session 20 handoff's "right-cluster `..` → `⋯`" claim was misdiagnosed — `MoreHorizontal` Lucide icon already renders correctly at every width. The actual narrow-width issues at <1024px (header title CSS-truncates, bond bar overlaps right cluster, composer placeholder line-wraps) are layout bugs unrelated to the overflow icon. Folded into next-task #3.
+
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers anywhere.
+
+**Session 20 (2026-04-29) — Tier 4 layout regression FIXED. 2 commits, pushed in Session 21.**
 - `f8e4ef0` fix(sakura): SW cache name now includes build id — Vite plugin replaces `'__SAKURA_BUILD_ID__'` in `public/sw.js` with `sakura-<version>-<ts>` per dev-serve request and per prod build. Existing activate-purge handler evicts the old `sakura-v1` cache automatically. Resolves Session 19's `OPEN BUG`. Also added `frontends/sakura/dev-tools/layout-debug.js` paste-into-console diagnostic for future user-environment-specific bugs.
 - `a2ac04a` feat(sakura): boot retry + backend-unreachable banner — `loadCharacters` retries 3× w/ 200ms/600ms backoff. After exhaustion, `bootError` populated and `BackendErrorBanner` (fixed-position pill, Lucide WifiOff icon, Retry button) renders. Built after the user reloaded post-SW-fix, found backend was off, saw empty sidebar and thought their data was deleted (DB was intact: 14 chars / 302 sessions / 188 messages).
 
-**Tier 4 OPEN BUG — RESOLVED.** User confirmed app no longer renders top-left-anchored with void at right/bottom. Push gate cleared.
-
-**Next session priority:** push the 2 commits if user OKs, then either Tier 4 evaluate (Tier 5/6/pill size bump/right-cluster `..` overflow) or Visual Content in Chat (backlog).
+**Next session priority:** HUD Tier 5 (sidebar) / Tier 6 (3D viewer) only if user wants more pruning; otherwise start Visual Content in Chat (~4–8h, multi-session) or fix narrow-width layout bugs (~1–2h).
 
 **Session 19 (2026-04-28) — 10 commits, all pushed to origin/master.**
 Pre-restart: `aef220a` Tier 0 audit · `3a1c60f` Tier 1 deletes · `b6485d8` db autocommit · `af39c53` handoff.

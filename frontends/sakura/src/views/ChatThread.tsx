@@ -23,6 +23,7 @@ import { GesturePicker } from '../components/GesturePicker';
 import type { GestureName, ExpressionName } from '../components/GesturePicker';
 import { VoiceConversationPanel } from '../components/VoiceConversationPanel';
 import { GreetingCard } from '../components/GreetingCard';
+import { RichComposer, type RichComposerHandle } from '../components/RichComposer';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -179,7 +180,7 @@ export function ChatThread() {
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   // Ref shared with WaveformVisualizer so it can attach an AnalyserNode.
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const textareaRef = useRef<RichComposerHandle | null>(null);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [quickChips, setQuickChips] = useState<string[]>([]);
@@ -248,21 +249,7 @@ export function ChatThread() {
   const recognitionRef = useRef<unknown>(null);
   const [dictating, setDictating] = useState(false);
 
-  // Auto-resize textarea to fit content (max ~5 lines ≈ 120px).
-  // Why: when draft is empty, clear the inline height so the rows=1 CSS
-  // default takes over (~40px). Without this, the textarea can get stuck
-  // at a previous taller value because Chrome reports scrollHeight equal
-  // to the inline height when no content overflows.
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    if (!draft) {
-      el.style.height = '';
-      return;
-    }
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-  }, [draft]);
+  // RichComposer handles its own sizing via CSS max-height + overflow-y:auto.
 
   // ── Proactive guard ─────────────────────────────────────────────────────
   /** Prevents multiple proactive triggers before the user resumes typing. */
@@ -641,37 +628,13 @@ export function ChatThread() {
   }, [draft, loading, sendMessage, sendDirectorNote, directorMode, incognito, effectiveMaxTokens]);
 
   /**
-   * Wrap the textarea selection with `*...*` so it renders as an italic
-   * roleplay action. With no selection, insert `**` and park the cursor
-   * between the asterisks. Keeps focus inside the textarea.
+   * Wrap the composer selection with `*...*`. Delegates to the RichComposer
+   * imperative `wrapSelection` handle, which mutates the contenteditable
+   * directly, restores caret, and fires onChange → setDraft.
    */
   const wrapSelectionWithAction = useCallback(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart ?? 0;
-    const end = el.selectionEnd ?? 0;
-    const value = el.value;
-    let nextValue: string;
-    let nextStart: number;
-    let nextEnd: number;
-    if (start === end) {
-      nextValue = value.slice(0, start) + '**' + value.slice(end);
-      nextStart = start + 1;
-      nextEnd = start + 1;
-    } else {
-      const selected = value.slice(start, end);
-      nextValue = value.slice(0, start) + '*' + selected + '*' + value.slice(end);
-      nextStart = start + 1;
-      nextEnd = end + 1;
-    }
-    setDraft(nextValue);
-    requestAnimationFrame(() => {
-      const node = textareaRef.current;
-      if (!node) return;
-      node.focus();
-      node.setSelectionRange(nextStart, nextEnd);
-    });
-  }, [setDraft]);
+    textareaRef.current?.wrapSelection();
+  }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I')) {
@@ -1522,11 +1485,12 @@ export function ChatThread() {
                 </button>
               </div>
 
-              {/* Text input */}
-              <textarea
+              {/* Text input — RichComposer renders *italic* tokens live as the
+                  user types. onChange receives the plain text string (not an event). */}
+              <RichComposer
                 ref={textareaRef}
                 value={draft}
-                onChange={(e) => { setDraft(e.target.value); if (quickChips.length) { setQuickChips([]); setChipsVisible(false); } }}
+                onChange={(next) => { setDraft(next); if (quickChips.length) { setQuickChips([]); setChipsVisible(false); } }}
                 onKeyDown={handleKeyDown}
                 placeholder={
                   dictating ? 'Dictating — speak now…' :
@@ -1535,8 +1499,8 @@ export function ChatThread() {
                   incognito ? 'Incognito — not saved…' :
                   `Message ${activeCharacter.name}…`
                 }
-                rows={1}
-                className="flex-1 resize-none px-4 py-2.5 text-sm outline-none transition-all duration-200"
+                aria-label="Message composer"
+                className="rich-composer flex-1 px-4 py-2.5 text-sm outline-none transition-all duration-200"
                 style={{
                   backgroundColor: 'var(--color-background)',
                   borderRadius: 'var(--radius-input)',
@@ -1548,8 +1512,12 @@ export function ChatThread() {
                     ? '1px solid var(--color-accent)'
                     : '1px solid var(--color-border)',
                   color: 'var(--color-text-primary)',
-                  overflowY: 'hidden',
                   minWidth: 0,
+                  minHeight: 40,
+                  maxHeight: 120,
+                  overflowY: 'auto',
+                  boxSizing: 'border-box',
+                  lineHeight: 1.4,
                 }}
               />
 

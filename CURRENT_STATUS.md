@@ -1,14 +1,33 @@
 # Current Project Status
 
-**Last updated:** 2026-04-29 (session 21 — pre-session audit + cleanup + bond pill bump)
-**Branch:** master (clean — all pushed to origin)
+**Last updated:** 2026-05-01 (session 24 — RichComposer wire-up + 6 commits pushed)
+**Branch:** master (clean, all pushed through `88d78bd`)
 **Schema version:** v70
-**Tests:** **2,684 backend** (pytest, 0 known failures) + 207 frontend (vitest) passing, tsc clean
+**Tests:** **2,684 backend** (pytest, 0 known failures) + 225 frontend (vitest, +18 from Tier 1) passing, tsc clean
 **Automation:** 12 agents, 22 skills, 6 rules, 8 hooks, 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session 24 (2026-05-01) — RichComposer wire-up + push. 2 commits, all pushed.**
+- `e94384c` feat(sakura): wire RichComposer into ChatThread — closes session-23 WIP item. textareaRef retyped to `RichComposerHandle`, auto-resize `useEffect` dropped (RichComposer caps via inline `max-height: 120px` + `overflow-y: auto`), `wrapSelectionWithAction` collapsed to one-line delegate to `wrapSelection()` imperative handle, `<textarea>` JSX swapped for `<RichComposer>` with `rich-composer` className. ChatThread.tsx -32 net. Browser-verified via Playwright on Rin character: live italic during typing (gold `rgb(249,226,175)` on dark sakura, amber `rgb(196,137,45)` on light sakura — `--color-action` token resolves correctly), wrap toolbar button works on selection, send-clear returns to 41.6px placeholder state, multi-line growth caps at 120px and engages scroll. 2 screenshots at `docs/testing/screenshots/2026-05-01-richcomposer-wireup/`.
+- `88d78bd` docs(plan): append wire-up status line to `docs/plans/2026-04-29-user-reply-assist.md`.
+
+**Pushed in this session (carried from session 23):** `badee27` HUD Tier 5 · `a29bf69` composer height fix · `8213ad6` reply-assist plan · `fbe6eaf` Tier 1 italic syntax · `65b9533` `--color-action` token + RichComposer scaffold. All 6 (sessions 22-24) reached `origin/master` via single push (`4654ba8..e94384c`).
+
+**Empty-LLM-reply bug:** user reverted `backend/config/app.json` endpoint back to `10.0.0.17:1234` after the localhost swap was tested (intentional — runtime state not committed). Bug doc remains at `docs/bugs/2026-04-29-empty-llm-reply.md` with 5 fix options. Verified path: localhost:1234 with `max_tokens: 300` returned `content: "OK"` finish=stop — endpoint healthy when unreachable host issue resolved.
+
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers anywhere.
+
+**Session 22 (2026-04-29) — HUD Tier 5 + composer height fix + reply-assist plan. 3 commits LOCAL (not pushed per user).**
+- `8213ad6` docs(plan): user reply assist (pills + full draft + action syntax) — `docs/plans/2026-04-29-user-reply-assist.md`. 3 sub-features, ranked above Visual Content in Chat by user. NOT started — 4 open questions (persona storage, pill count, auto-fill vs auto-send, Tier 3 model) need user answers.
+- `a29bf69` fix(sakura): composer textarea stuck at tall height when empty. Auto-resize useEffect re-pinned inline height because Chrome reported scrollHeight = inline height when no overflow. Fix: clear inline height when draft empty. Composer dropped 125 → 67px in user's tab.
+- `badee27` feat(sakura): HUD Tier 5 — sidebar consolidate (6→4 cells, More popover). Memory + Lore stay always-visible; Games · Stats · Context collapsed into MoreToolsDropdown (`⋯ More`, mirrors HelpDropdown pattern). Browser-verified at light + dark themes via Playwright. 8 screenshots committed at `docs/testing/screenshots/2026-04-29-hud-tier5/`. Plan log entry appended.
+
+**Investigation surfaced** (no commit, conversation-only): chat empty-state visually right-shifted ~120px because `chat-area max-w-3xl mx-auto` centers in chat parent (which spans sidebar→edge) but sidebar (240w) has no right-side counterweight. Pre-existing layout choice. 4 fix options surfaced (anchor LEFT / drop max-width / phantom right pad / absolute positioning) — user did not pick one. Filed as next-session item #4.
+
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers anywhere.
 
 **Session 21 (2026-04-29) — Pre-session audit + cleanup + bond pill bump. 4 commits, all pushed.**
 - `1534155` feat(sakura): bond pill size bump (~15%) — closes Tier 4 evaluate gate. Bumps `BondPill.tsx` collapsed-row sizes (font 12/11/10 → 13/12/11, icons 12/14 → 14/16, bar 60×5 → 80×6, padding/gap +1px). Verified via Playwright at 1280 + 800 + expanded panel. Pure cosmetic — no var/logic/theme contract change.

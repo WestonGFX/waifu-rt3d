@@ -44,22 +44,19 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = REPO_ROOT / "backend" / "storage" / "app.db"
 IMAGES_DIR = REPO_ROOT / "backend" / "storage" / "images"
 
-# Each tuple: (character_name_substring, expected_old_url, new_url, asset_filename)
-# Matching by name substring rather than id makes the script robust to a
-# differently-seeded database; matching expected_old_url makes it idempotent.
-FIXES: list[tuple[str, str, str, str]] = [
-    (
-        "Shiori",
-        "/files/avatars/Kitsune.vrm",
-        "/files/images/shiori_pixel_portrait.png",
-        "shiori_pixel_portrait.png",
-    ),
-    (
-        "Luna",
-        "/files/avatars/Kitsune.vrm",
-        "/files/images/tsuki_portrait.png",
-        "tsuki_portrait.png",
-    ),
+# Each tuple: (character_name_substring, new_url, asset_filename).
+# Idempotent: applies only if the row's avatar_url != new_url.
+FIXES: list[tuple[str, str, str]] = [
+    # Session-29 first wave (already landed via this script's earlier form):
+    ("Shiori", "/files/images/shiori_pixel_portrait.png", "shiori_pixel_portrait.png"),
+    ("Luna", "/files/images/tsuki_portrait.png", "tsuki_portrait.png"),
+    # Session-29 second wave (user picks via _avatar_picker.html review):
+    ("Rin (Akane)", "/files/images/rin_street_race.png", "rin_street_race.png"),
+    ("Mika", "/files/images/sable_data_room.png", "sable_data_room.png"),
+    ("Kaede", "/files/images/seraph_sky_garden.png", "seraph_sky_garden.png"),
+    ("Yuki (Shirayuki)", "/files/images/panicandy_portrait.png", "panicandy_portrait.png"),
+    ("Dae", "/files/images/kitsune_live_concert.png", "kitsune_live_concert.png"),
+    ("Alana", "/files/images/alana_avatar.png", "alana_avatar.png"),
 ]
 
 
@@ -94,7 +91,7 @@ def main() -> int:
     try:
         applied = 0
         skipped = 0
-        for name_sub, expected_old, new_url, _asset in FIXES:
+        for name_sub, new_url, _asset in FIXES:
             row = con.execute(
                 "SELECT id, name, avatar_url FROM characters WHERE name LIKE ?",
                 (f"%{name_sub}%",),
@@ -103,17 +100,15 @@ def main() -> int:
                 print(f"  no character matches name LIKE '%{name_sub}%' — skipping")
                 skipped += 1
                 continue
-            if row["avatar_url"] != expected_old:
-                # Already fixed, or hand-customized to something else — leave alone.
+            if row["avatar_url"] == new_url:
                 print(
-                    f"  id={row['id']:>2} {row['name']:<20} avatar_url='{row['avatar_url']}' "
-                    f"!= expected '{expected_old}' — skipping (already fixed or customized)"
+                    f"  id={row['id']:>2} {row['name']:<20} already at {new_url} — skipping"
                 )
                 skipped += 1
                 continue
             tag = "[DRY]" if args.dry_run else "[FIX]"
             print(
-                f"  {tag} id={row['id']:>2} {row['name']:<20} -> {new_url}"
+                f"  {tag} id={row['id']:>2} {row['name']:<20} {row['avatar_url']:<45} -> {new_url}"
             )
             if not args.dry_run:
                 con.execute(

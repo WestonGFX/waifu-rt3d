@@ -297,3 +297,11 @@ No new files. No backend changes. No schema changes.
   `vi.mock('../lib/api', ...)` shape used throughout `MemoryBrowser.test.tsx`.
 - `MemoryBrowser.test.tsx` header comment (lines 1–19) — documents session
   history and which patterns apply per section.
+
+---
+
+## Status
+
+- 2026-05-06 Phase 1: ✓ `api.updateUserFact` wrapper added (`api.ts` after `deleteUserFact`)
+- 2026-05-06 Phase 2: ✓ `FactRow.handleSave` migrated to `api.updateUserFact` (raw `fetch()` removed)
+- 2026-05-06 Phase 3: ✓ Vitest case `calls updateUserFact and updates fact text in-place on save` added; suite 37/37 pass; tsc clean; 0 `fetch(` hits in `MemoryBrowser.tsx`

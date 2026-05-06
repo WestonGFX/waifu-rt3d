@@ -539,16 +539,10 @@ function FactRow({
     }
     setSaving(true);
     try {
-      const res = await fetch(`/api/characters/${charId}/user-facts/${fact.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fact_text: trimmed }),
-      });
-      if (res.ok) {
-        onEdit(fact.id, trimmed);
-        setEditing(false);
-      }
-    } catch { /* non-fatal */ }
+      await api.updateUserFact(charId, fact.id, trimmed);
+      onEdit(fact.id, trimmed);
+      setEditing(false);
+    } catch { /* non-fatal — save silently fails; editor stays open */ }
     finally { setSaving(false); }
   };
 

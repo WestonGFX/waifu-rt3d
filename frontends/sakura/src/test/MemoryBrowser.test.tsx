@@ -42,6 +42,7 @@ vi.mock('../lib/api', () => ({
     getUserFacts: vi.fn(),
     createUserFact: vi.fn(),
     deleteUserFact: vi.fn(),
+    updateUserFact: vi.fn(),
     listMemories: vi.fn(),
     searchMemories: vi.fn(),
     deleteMemory: vi.fn(),
@@ -117,6 +118,7 @@ describe('MemoryBrowser', () => {
     vi.mocked(api.searchMemories).mockResolvedValue({ results: [] });
     vi.mocked(api.deleteMemory).mockResolvedValue({ ok: true });
     vi.mocked(api.promoteMemory).mockResolvedValue({ ok: true });
+    vi.mocked(api.updateUserFact).mockResolvedValue({ ok: true, fact: OVERVIEW_FACTS[0] });
   });
 
   // ── Top-level overlay behavior ─────────────────────────────────────────────
@@ -322,6 +324,30 @@ describe('MemoryBrowser', () => {
       await waitFor(() => expect(vi.mocked(api.deleteUserFact)).toHaveBeenCalledWith(42, 1));
       await waitFor(() =>
         expect(screen.queryByText('Named Chris')).not.toBeInTheDocument()
+      );
+    });
+
+    it('calls updateUserFact and updates fact text in-place on save', async () => {
+      const updatedFact: UserFact = { ...OVERVIEW_FACTS[0], fact_text: 'Named Christopher' };
+      vi.mocked(api.updateUserFact).mockResolvedValueOnce({ ok: true, fact: updatedFact });
+
+      await switchToFactsTab();
+      await waitFor(() => expect(screen.getByText('Named Chris')).toBeInTheDocument());
+
+      // Click the (hover-revealed) edit button on the first fact row.
+      const editButtons = screen.getAllByTitle('Edit this fact');
+      fireEvent.click(editButtons[0]);
+
+      // Input is autofocused with the current fact_text — change it and press Enter to save.
+      const input = screen.getByDisplayValue('Named Chris') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: 'Named Christopher' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      await waitFor(() =>
+        expect(vi.mocked(api.updateUserFact)).toHaveBeenCalledWith(42, 1, 'Named Christopher')
+      );
+      await waitFor(() =>
+        expect(screen.getByText('Named Christopher')).toBeInTheDocument()
       );
     });
   });

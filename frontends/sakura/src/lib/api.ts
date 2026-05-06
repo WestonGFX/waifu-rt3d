@@ -540,37 +540,6 @@ export const api = {
   llmGenerate: (messages: Array<{ role: string; content: string }>, temperature = 0.9, maxTokens = 500) =>
     post<{ text: string }>('/api/llm/generate', { messages, temperature, max_tokens: maxTokens }),
 
-  /**
-   * Generate 3 AI-powered quick-reply suggestions based on the last assistant message.
-   *
-   * Uses the LLM generation proxy with a short, focused prompt to produce
-   * contextually relevant reply options the user can click to continue chatting.
-   *
-   * @param assistantReply - The last assistant message text (truncated to 300 chars internally).
-   * @param charName       - Character name for context.
-   * @param userName       - User's display name for personalisation.
-   * @returns Promise resolving to `{ text: string }` where text is a JSON array of 3 strings.
-   */
-  generateQuickReplies: (assistantReply: string, charName: string, userName: string) =>
-    post<{ text: string }>('/api/llm/generate', {
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You generate exactly 3 short reply suggestions for a chat companion app. ' +
-            'Output ONLY a JSON array of 3 strings, no other text. No markdown. No explanation. ' +
-            'Each suggestion must be under 60 characters. ' +
-            'Vary tone: one warm/affectionate, one curious/engaged, one playful/teasing.',
-        },
-        {
-          role: 'user',
-          content: `${charName} just said: "${assistantReply.slice(0, 300)}"\nGenerate 3 short replies ${userName || 'the user'} might send.`,
-        },
-      ],
-      temperature: 0.85,
-      max_tokens: 120,
-    }),
-
   uploadAvatar: (file: File) => {
     const form = new FormData();
     form.append('file', file);
@@ -809,6 +778,23 @@ export const api = {
    */
   deleteUserFact: (charId: number, factId: number) =>
     del<{ ok: boolean; deleted: number }>(`/api/characters/${charId}/user-facts/${factId}`),
+
+  /**
+   * Update the text of an existing user fact.
+   *
+   * Wraps `PATCH /api/characters/{charId}/user-facts/{factId}`. Only `fact_text`
+   * is mutable; category, source, and confidence are unchanged server-side.
+   *
+   * @param charId   - Character primary key (scope guard).
+   * @param factId   - User fact primary key.
+   * @param factText - New fact text (must be non-empty; server returns 400 otherwise).
+   * @returns Updated UserFact wrapped in `{ok, fact}`.
+   */
+  updateUserFact: (charId: number, factId: number, factText: string) =>
+    patch<{ ok: boolean; fact: UserFact }>(
+      `/api/characters/${charId}/user-facts/${factId}`,
+      { fact_text: factText },
+    ),
 
   /**
    * Comprehensive memory overview for a character.

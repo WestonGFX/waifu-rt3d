@@ -1,160 +1,90 @@
-# Session Handoff — 2026-05-01 (Session 24, RichComposer wire-up + push)
+# Session Handoff — 2026-05-06 (Session 26)
 
-## Branch: master (clean, pushed) · Commits this session: 2 (`e94384c`, `88d78bd`)
-## Test Status: pytest **2684 ✓** · vitest **225 ✓** · tsc clean · push gate clear
+## Branch: master
+## Test Status: 2703 backend passed | TSC: clean
+## Commits this session: `d34f86f` (Visual Content MVP Phase 1)
 
-## Completed This Session
+## Completed This Session — Visual Content MVP Phase 1
 
-### 1. RichComposer wired into ChatThread (commit `e94384c`)
+Single-commit shipping session. Backend foundation for "character sends you a picture" UX. Image-gen infra was already ~80% built; this commit closes the per-character art-style drift gap.
 
-Closes the WIP item from the session-23 handoff. Reply-Assist Tier 1
-follow-up #2 ("live preview while typing") now resolved — the
-contenteditable composer scaffolded last session is now the active
-composer, replacing the textarea.
+- **Schema v70 → v71** — `characters.image_style TEXT` JSON column. Migration is idempotent + fail-soft. Plan reservation chain still: v71 ✅, v72 (AIE feedback Phase 0), v73 (LoRA), v74 (DSPy).
+- **`resolve_character_style(char_id, db_path)` helper** in `backend/image_gen/registry.py`. Read-only short-lived sqlite (`?mode=ro` URI). Returns `("", "")` on every error path so callers can blindly prepend.
+- **Endpoint wiring** in `backend/server.py` — `generate_portrait` + `generate_background` prepend positive style to prompt and thread negative style into `gen_cfg.negative_prompt` (composes with caller-supplied negative when both present).
+- **Agent tool wiring** in `backend/agent/tools/image_gen.py` — `_execute` does the same prefix logic. `ToolResult.data["prompt"]` now carries the resolved full prompt so Phase 2 can populate `ChatMessage.imagePrompt` for regenerate.
+- **Tests:** `backend/tests/test_image_gen_style.py` — 10 new (8 helper branch coverage + 2 endpoint integration). Backend: 2693 → **2703** passing, zero regressions.
+- **Status sync:** `CURRENT_STATUS.md` + `MEMORY.md` schema badges bumped to v71, test count to 2703.
 
-ChatThread.tsx changes (-32 net):
+### Notable maneuver
 
-- `textareaRef` retyped from `HTMLTextAreaElement` →
-  `RichComposerHandle` (imported alongside `RichComposer`).
-- Auto-resize `useEffect` (the one fixed in `a29bf69` for the
-  scrollHeight-pinning bug) dropped entirely. RichComposer manages
-  its own height via inline `max-height: 120px` + `overflow-y: auto`,
-  with `min-height: 40px` keeping the empty-state frame stable.
-- `wrapSelectionWithAction` collapsed from a 26-line Selection-API
-  helper to a one-line delegate that calls
-  `textareaRef.current?.wrapSelection()`. The Selection-API logic
-  moved inside `RichComposer` where it belongs.
-- The `<textarea>` JSX (lines 1525-1554) became a `<RichComposer>`
-  element with className `rich-composer flex-1 px-4 py-2.5 text-sm
-  outline-none transition-all duration-200`. Border-state branching
-  (director / voice / incognito / default) preserved 1:1. `boxSizing:
-  border-box` + `lineHeight: 1.4` added so padding doesn't push the
-  frame past the 120 cap.
+Session-24's RichComposer follow-up WIP on `backend/server.py` was intermingled with Phase 1 edits. To extract a clean commit without disturbing the pre-existing WIP:
 
-Browser verification (Playwright @ localhost:5175/sakura/, character Rin):
+1. `git show HEAD:backend/server.py > /tmp/server_head.py`
+2. Re-applied Phase 1 edits to the temp file via Edit
+3. `git hash-object -w /tmp/server_head.py` → new blob SHA
+4. `git update-index --cacheinfo 100644,$SHA,backend/server.py` — staged my-only diff without touching the working tree
+5. Committed; working tree still has session-24 WIP exactly as inherited
 
-| What | Result |
-|---|---|
-| Type `Hello *waves shyly* there!` | em span renders inline, color = `rgb(249,226,175)` (sakura-dark gold token) |
-| Switch theme to `sakura-light` + retype | em color flips to `rgb(196,137,45)` (sakura-light amber). `--color-action` contract intact. |
-| Select "world" in `hello world`, click italic toolbar | text becomes `hello *world*`, em wraps |
-| `innerHTML = ''` + input event (send-clear sim) | height returns to 41.6px (min), placeholder reappears |
-| Insert 7 newlines | scrollHeight 138, frame pinned at 120, vertical scroll engages |
+`git diff HEAD backend/server.py` post-commit shows ONLY session-24 hunks (lines 1231 + 5524–6126) — Phase 1 hunks (14164+ in pre-commit numbering) are now in HEAD.
 
-Screenshots: `docs/testing/screenshots/2026-05-01-richcomposer-wireup/`
-(dark + light themes captured).
+## Work In Progress
 
-### 2. Plan status line appended (commit `88d78bd`)
-
-`docs/plans/2026-04-29-user-reply-assist.md` got a one-line entry
-referencing `e94384c` so the plan log accurately reflects Tier 1
-follow-up #2 closure. Tiers 2 + 3 still gated on Open Questions 1-4.
-
-### 3. Push of 6 commits to origin/master
-
-User-authorized via AskUserQuestion. Push gate scan clean before push.
-Range pushed: `4654ba8..e94384c`. Six commits = `badee27`, `a29bf69`,
-`8213ad6`, `fbe6eaf`, `65b9533` (carried from sessions 22-23) plus
-this session's `e94384c`. Commit `88d78bd` (plan status line) is
-local-only at handoff time — also clean to push.
-
-### 4. Empty-LLM-reply bug — endpoint test only
-
-User picked option 1 ("swap to localhost:1234") via AskUserQuestion.
-I made the swap, verified `POST /v1/chat/completions` with
-`max_tokens: 300` returns `content: "OK"` finish=stop — endpoint
-healthy. User then reverted `backend/config/app.json` back to
-`http://10.0.0.17:1234/v1` (intentional, system reminder confirmed).
-That file is uncommitted runtime per CLAUDE.md sensitive-paths
-convention. Bug doc unchanged at `docs/bugs/2026-04-29-empty-llm-reply.md`.
-
-The verification did surface a second-order finding: even on the
-working endpoint, `thinking_mode: true` with `max_tokens: 20` produced
-empty content because reasoning ate the budget. With `max_tokens: 300`
-the content returns fine. So the "compounding bug" hypothesis from
-the bug doc is correct — both the unreachable-endpoint fix AND a
-realistic token cap matter.
-
-## Work In Progress — none
-
-No half-finished code at session boundary. The remaining Tier 2 + 3
-items in `docs/plans/2026-04-29-user-reply-assist.md` are still
-blocked on Open Questions 1-4 (persona storage, pill count, auto-fill
-vs auto-send, Tier 3 model) — user has not answered those yet.
+Nothing started by this session is incomplete. Phase 2 + Phase 3 are NOT started by design (Phase 2 merge-gated on Ultraplan PR; Phase 3 deferred).
 
 ## Known Issues / Bugs
 
-### Open — needs work / decision
+None new this session. The following pre-existing items remain:
 
-- **Empty AI reply** (P0, untouched this session) —
-  `docs/bugs/2026-04-29-empty-llm-reply.md`. User reverted endpoint
-  to 10.0.0.17 so the unreachable-host condition is back. Three
-  options remain on the table:
-  1. Re-swap to `localhost:1234` (verified working this session).
-  2. Restart LM Studio on 10.0.0.17 (Windows GPU PC).
-  3. Set `thinking_mode: false` AND keep enough `max_tokens` budget.
-- **Model picker preview images** (P2 OPEN, untriaged from session 21).
-- **Reply-assist Tier 2 + 3 — Open Questions 1-4** still gating
-  implementation in `docs/plans/2026-04-29-user-reply-assist.md`.
+- **Empty-LLM-reply bug** — `docs/bugs/2026-04-29-empty-llm-reply.md` (5 fix options documented, not fixed; user runtime config reverted intentionally).
+- **Cubism 2 error spam** — suppressed via console.error patch (long-standing).
+- **Live2D runtime broken** — Cubism SDK fails to load; chars with `live2d_model` crash viewer.
+- **Embedding model issue** — MLX-format model produces garbage; needs standard PyTorch format.
+- **Pre-existing model picker no-preview-images bug** — `docs/bugs/2026-04-27-model-picker-no-preview-images.md` (P2, OPEN).
 
-### Resolved this session
-
-- ~~Live italic preview while typing~~ — fixed via RichComposer
-  wire-up in commit `e94384c`. Closes Tier 1 follow-up #2 from
-  session 23 handoff.
-
-## Files Modified This Session
+## Files Modified (this session's commit `d34f86f`)
 
 ```
-e94384c (feat — wire-up):
-  frontends/sakura/src/views/ChatThread.tsx                                 +19 -51
-  docs/testing/screenshots/2026-05-01-richcomposer-wireup/*.png             +2 (NEW)
-
-88d78bd (docs — plan status):
-  docs/plans/2026-04-29-user-reply-assist.md                                +1
+ CURRENT_STATUS.md                     |  21 +++-
+ backend/agent/tools/image_gen.py      |  28 ++++-
+ backend/image_gen/registry.py         |  78 +++++++++++++
+ backend/preflight.py                  |  75 ++++++++++++-
+ backend/server.py                     |  29 ++++-
+ backend/tests/test_image_gen_style.py | 199 ++++++++++++++++++++++++++++++++++
+ 6 files changed, 414 insertions(+), 16 deletions(-)
 ```
 
-`backend/storage/app.db` and `backend/config/app.json` carry runtime
-state — left modified, NOT committed (CLAUDE.md sensitive paths).
+## Pre-existing Working Tree (NOT mine — session 24 WIP)
+
+The following are session-24 RichComposer follow-up modifications, intentionally untouched:
+
+- `backend/config/app.json`, `backend/storage/app.db`
+- `backend/server.py` — chat_stream + `_parse_quick_replies` insertion at L1231 + chat_stream additions L5524–6126
+- `frontends/sakura/src/components/DialogueBubble.tsx`
+- `frontends/sakura/src/lib/api.ts`, `lib/types.ts`
+- `frontends/sakura/src/stores/appStore.ts`, `chatStore.ts`
+- `frontends/sakura/src/styles/components.css`
+- `frontends/sakura/src/views/ChatThread.tsx`, `SettingsView.tsx`
+- Deleted: `frontends/sakura/src/test/quickChips.llm.test.ts`
+
+Untracked:
+- `app.db` (root-level DB file)
+- `backend/storage/waifu.db.bak.20260506132609` (DB backup from this session's preflight bump)
+- `backend/tests/test_quick_replies_parser.py` (session-24 untracked test)
+- `docs/research/2026-05-01-settings-dedup-audit.md` (session-24 untracked research)
 
 ## Next Session Priorities
 
-1. **Pick a real fix for empty-LLM-reply.** User reverted the
-   endpoint test, so the bug is back. Quick options in
-   `docs/bugs/2026-04-29-empty-llm-reply.md`. Until this resolves,
-   any chat-flow testing is blocked.
-2. **Reply-Assist Tier 2 (reply pills)** — needs Open Questions 1-4
-   answered first. Plan: `docs/plans/2026-04-29-user-reply-assist.md`.
-3. **HUD Tier 6 (3D viewer overlay rethink)** OR **Visual Content in
-   Chat** — Tier 4 + 5 evaluation passed, Tier 5 sidebar consolidation
-   shipped session 22. Next reasonable HUD step is the viewer overlay,
-   estimated 2-3h. Visual Content is heavier (~4-8h, multi-session).
-4. **Model picker preview images** (P2 OPEN, ~1-2h).
+1. **Check Ultraplan PR status** — beta-test MVP cloud session at https://claude.ai/code/session_018ZzrXgcHRkgKqsAtpxKbKJ. If merged: unblocks Phase 2 of Visual Content MVP (touches `DialogueBubble.tsx` + `ChatThread.tsx`). If still in flight: wait or pivot to a non-overlapping path.
+2. **Visual Content MVP Phase 2** (~6–8h) once Ultraplan PR is on master — `docs/plans/2026-05-06-visual-content-mvp-execution.md` Phase 2. Adds `ImageLightbox.tsx`, `lib/downloadFile.ts`, `regenerateImage` chatStore action, `imagePrompt` field on `ChatMessage`, ImageLightbox.test.tsx (Pattern 4 Framer Motion stub). Phase 1's helper is already populating `ToolResult.data["prompt"]` so the upstream wiring is ready.
+3. **Visual Content MVP Phase 3** (~4–6h) — `scripts/draft_character_styles.py` (LLM-drafts 13 builtin char styles to a reviewable JSON file), retention cleanup in `_run_scheduler_tick`, README schema-badge bump, stuck-generation UI in DialogueBubble (depends on Phase 2's `imagePrompt` field). Phase 3 draft step is unblocked from Phase 1; the stuck-gen sub-task waits for Phase 2.
+4. **Memory Browser `updateUserFact` cleanup** (~30 min, autonomous) — `docs/plans/2026-05-06-memory-browser-api-unification.md`. Single PATCH wrapper at `MemoryBrowser.tsx:542`. Must run AFTER Ultraplan PR merge.
+5. **Resolve session-24 WIP** — RichComposer follow-up working-tree mods need a decision (finish + commit, push as-is, or discard). Pre-existing `_parse_quick_replies` + `chat_stream` chunks have been sitting since session 25.
+6. **AIE Phase C tier decision** — `docs/plans/2026-05-06-aie-phase-c-scoping.md` Section 6. User picks MVP / Standard / Full / Defer. Quick fork; unblocks LoRA + DSPy execution plan author.
 
 ## Context for Next Session
 
-- **Active plans:**
-  - `docs/plans/2026-04-29-user-reply-assist.md` — Tier 1 SHIPPED +
-    follow-up #2 (live preview) SHIPPED. Tier 2/3 still gated.
-  - `docs/plans/2026-04-27-hud-redesign-staged.md` — Tier 0/1/1b/2/3/4/5
-    done. Tier 6 (viewer overlay) next.
-- **Push gate:** clear. No active `OPEN BUG` / `UNFIXED` / `BLOCKER`
-  markers. The session-23 mention in old handoff used the keywords as
-  meta-references inside "no active markers" assertions, not as live
-  blocker labels.
-- **Runtime state caveat:** `backend/config/app.json` points at
-  `10.0.0.17:1234` (user-confirmed). Inference will hang there per
-  the bug doc.
-- **Sensitive areas touched this session:** themes contract verified
-  via Playwright on dark + light sakura — `--color-action` resolves to
-  the right per-theme token (gold dark / amber light). No theme file
-  edits this session. ChatThread.tsx is cross-cutting but the change
-  was a tight ref-type + JSX swap, no contract changes outside the
-  composer's own surface.
-- **Servers running at handoff:** `bhdp3z2lf` (sakura vite @ 5175),
-  `b8bohypkr` (uvicorn @ 8080). Both started this session for browser
-  verification. Safe to leave running or kill — no state in them.
-- **Verification before next push:** push gate scan must check both
-  `CURRENT_STATUS.md` + `docs/SESSION_HANDOFF.md` for active
-  `OPEN BUG` / `UNFIXED` / `BLOCKER` markers (not strikethrough,
-  not inside a "no active markers" assertion).
+- **Schema v71 active.** New characters.image_style column is NULL for all 13 builtin chars. Phase 3's `draft_character_styles.py` is the natural follow-up to populate it.
+- **Active plan files** (priority order): `docs/plans/2026-05-06-visual-content-mvp-execution.md` (Phase 2 next) → `docs/plans/2026-05-06-memory-browser-api-unification.md` → `docs/plans/2026-05-06-aie-phase-c-scoping.md`.
+- **Session-24 WIP discipline:** the `git show HEAD: + hash-object + update-index` pattern works for surgical commits when working tree has unrelated unfinished work. Reuse this if Phase 2 needs to land alongside the still-WIP RichComposer mods.
+- **Push gate:** clear (no OPEN BUG / UNFIXED / BLOCKER markers anywhere). Local commit only — user decides push.
+- **Suggestion-trigger fired:** Schema migration committed this session → CLAUDE.md "Suggestion Triggers" rule recommends `/qa-sweep` at the commit/handoff boundary. User has previously vetoed `/qa-sweep` mid-flow but allows it at handoff. Suggested in final report below.

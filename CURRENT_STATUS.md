@@ -1,7 +1,7 @@
 # Current Project Status
 
 **Last updated:** 2026-05-06 (session 26 — Visual Content MVP Phase 1 shipped: schema v71 + per-character `image_style` resolver wired into image-gen endpoints + agent tool; +10 tests)
-**Branch:** master (session-25 commit `16006a0` + session-26 commit pending — pre-existing session-24-WIP working-tree mods still untouched)
+**Branch:** master (commit `d34f86f` local, not pushed — pre-existing session-24-WIP working-tree mods still intentionally untouched)
 **Schema version:** v71 (chain reserved through v74: ✅ v71 Visual Content MVP, v72 AIE feedback Phase 0, v73 AIE LoRA, v74 AIE DSPy)
 **Tests:** **2,703 backend** (pytest, 0 known failures) passing, tsc clean
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
@@ -9,6 +9,16 @@
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session 26 (2026-05-06) — Visual Content MVP Phase 1 shipped. 1 commit local (`d34f86f`), backend-only.**
+- `d34f86f` feat(viz-mvp-p1): per-character `image_style` + style resolver (schema v71). 6 files, +414/-16. Schema v70 → v71 (`characters.image_style` JSON column, idempotent migration). New `resolve_character_style(char_id, db_path)` helper in `backend/image_gen/registry.py` — fail-soft read-only sqlite, returns `("", "")` on every error path. Wired into `generate_portrait` + `generate_background` (server.py) and the agent `generate_image` tool (`backend/agent/tools/image_gen.py`). `ToolResult.data["prompt"]` now carries the resolved full prompt for Phase 2's `imagePrompt` field. 10 new tests in `backend/tests/test_image_gen_style.py` (8 helper branches + 2 endpoint integration). Backend suite: 2693 → **2703** passing, zero regressions.
+- **Surgical commit maneuver:** session-24's RichComposer follow-up working-tree mods on `backend/server.py` were intermingled with Phase 1 edits. Used `git show HEAD: + git hash-object -w + git update-index --cacheinfo` to stage only the Phase 1 hunks without touching the working tree. Session-24 WIP preserved verbatim — confirmed via post-commit `git diff HEAD backend/server.py` showing only session-24 hunks (lines 1231 + 5524–6126).
+- Phase 2 (lightbox / downloadFile / regenerateImage / `imagePrompt` on ChatMessage) remains gated on the in-flight Ultraplan PR which touches `DialogueBubble.tsx` + `ChatThread.tsx`. Phase 3 (AI-drafted character styles + retention cleanup) is unblocked by this commit's helper but deferred per plan.
+- `CURRENT_STATUS.md` + `MEMORY.md` schema badges bumped v70 → v71, test count → 2703.
+
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers anywhere. Local commit only — schema migration committed → CLAUDE.md "Suggestion Triggers" recommends `/qa-sweep` at handoff.
+
+---
 
 **Session 25 (2026-05-06) — Planning-heavy sprint. 1 commit local (`16006a0`), 4 plan docs, 2 remote Ultraplan sessions kicked off.**
 - `16006a0` docs(plan): 4 new plan docs in `docs/plans/`, 1648 insertions. (a) Visual Content scoping (4 decisions locked: MVP-only, AI-drafted styles, NSFW=SFW, 90-day retention); (b) Visual Content MVP execution plan (52KB, ready for `/go`, schema v71); (c) AIE Phase C scoping (3 decisions locked: single base model, Mac-served-everywhere, hybrid-feedback signal subsystem with 4 user-controlled privacy modes); (d) Memory Browser API unification (stale-backlog correction — sessions 16-17 already shipped 95%, only `updateUserFact` PATCH wrapper at `MemoryBrowser.tsx:542` remains).

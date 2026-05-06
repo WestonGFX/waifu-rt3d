@@ -3,8 +3,8 @@
 > **AI Companion Platform** — 3D anime avatars with personality-driven animation, local/cloud LLM integration, 45-model catalog with hardware-aware recommendations, director mode, daily streaks, full-duplex voice conversation, 9-provider TTS, offline STT, agentic tool use, mini games, lorebook, tiered memory, character moods, 18 themes, cinematic mode, and OBS streaming overlays.
 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-2678%20passed-brightgreen)](backend/tests/)
-[![Schema](https://img.shields.io/badge/DB%20schema-v70-purple)](#)
+[![Tests](https://img.shields.io/badge/tests-2703%20passed-brightgreen)](backend/tests/)
+[![Schema](https://img.shields.io/badge/DB%20schema-v71-purple)](#)
 [![Themes](https://img.shields.io/badge/themes-18-ff69b4)](#themes)
 [![Frontends](https://img.shields.io/badge/frontends-Neon%20%7C%20Sakura%20%7C%20Nova-ff69b4)](#dual-frontend-architecture)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -144,7 +144,7 @@ Characters with agentic mode enabled can autonomously use tools during conversat
 - **Diary writing** — LLM writes session diary entries that persist
 - **Self-modification** — change own greeting, traits, background
 - **Relationship tracking** — check and respond to affinity/mood/trust scores
-- **Image generation** — trigger AI art via ComfyUI/SD adapters
+- **Image generation** — trigger AI art via ComfyUI/SD adapters; per-character `image_style` (positive/negative prompt prefixes, optional LoRA) auto-applied so generated images stay on-model across sessions
 - **Voice synthesis** — generate speech with per-character voice config
 - **Knowledge base** — search uploaded character documents
 - **Cross-character messaging** — characters can talk to each other

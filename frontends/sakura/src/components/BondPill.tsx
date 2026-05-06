@@ -166,15 +166,21 @@ export function BondPill({
   }, [charId, messageCount]);
 
   // ── Derived values ───────────────────────────────────────────────────
-  const fillPercent = xpToNext > 0
-    ? Math.min(100, Math.max(0, (bondXp / xpToNext) * 100))
+  // `xpToNext` is XP *remaining* until next level. The level threshold is
+  // therefore bondXp + xpToNext. Displaying `{bondXp}/{xpToNext}` reads as
+  // "138 of 12" when bondXp overshoots the remainder — confusing. Show
+  // `{bondXp}/{threshold} XP · {xpToNext} to next` so both numbers tell a
+  // consistent story.
+  const levelThreshold = bondXp + Math.max(0, xpToNext);
+  const fillPercent = levelThreshold > 0
+    ? Math.min(100, Math.max(0, (bondXp / levelThreshold) * 100))
     : 0;
   const barColor = TIER_BAR_COLORS[tier] ?? 'var(--color-accent)';
   const tierLabel = TIER_LABELS[tier] ?? tier;
   const streakCount = streak?.streak ?? 0;
   const showStreak = streakCount > 0;
 
-  const collapsedAriaLabel = `Bond level ${bondLevel}, ${tierLabel}, ${fmtXp(bondXp)} of ${fmtXp(xpToNext)} XP${
+  const collapsedAriaLabel = `Bond level ${bondLevel}, ${tierLabel}, ${fmtXp(bondXp)} of ${fmtXp(levelThreshold)} XP, ${fmtXp(xpToNext)} to next level${
     showStreak ? `, daily streak ${streakCount}` : ''
   }. Click to ${expanded ? 'collapse' : 'expand'} bond detail.`;
 
@@ -236,7 +242,7 @@ export function BondPill({
           role="progressbar"
           aria-valuenow={bondXp}
           aria-valuemin={0}
-          aria-valuemax={xpToNext}
+          aria-valuemax={levelThreshold}
           aria-label="Bond XP progress"
         >
           <motion.div
@@ -264,7 +270,7 @@ export function BondPill({
           }}
           aria-hidden
         >
-          {fmtXp(bondXp)}/{fmtXp(xpToNext)} XP
+          {fmtXp(bondXp)}/{fmtXp(levelThreshold)} XP · {fmtXp(xpToNext)} to next
         </span>
 
         {showStreak && (

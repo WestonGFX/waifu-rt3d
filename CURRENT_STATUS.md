@@ -1,14 +1,25 @@
 # Current Project Status
 
-**Last updated:** 2026-05-01 (session 24 — RichComposer wire-up + 6 commits pushed)
-**Branch:** master (clean, all pushed through `88d78bd`)
-**Schema version:** v70
-**Tests:** **2,684 backend** (pytest, 0 known failures) + 225 frontend (vitest, +18 from Tier 1) passing, tsc clean
-**Automation:** 12 agents, 22 skills, 6 rules, 8 hooks, 3 MCP servers
+**Last updated:** 2026-05-06 (session 26 — Visual Content MVP Phase 1 shipped: schema v71 + per-character `image_style` resolver wired into image-gen endpoints + agent tool; +10 tests)
+**Branch:** master (session-25 commit `16006a0` + session-26 commit pending — pre-existing session-24-WIP working-tree mods still untouched)
+**Schema version:** v71 (chain reserved through v74: ✅ v71 Visual Content MVP, v72 AIE feedback Phase 0, v73 AIE LoRA, v74 AIE DSPy)
+**Tests:** **2,703 backend** (pytest, 0 known failures) passing, tsc clean
+**Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session 25 (2026-05-06) — Planning-heavy sprint. 1 commit local (`16006a0`), 4 plan docs, 2 remote Ultraplan sessions kicked off.**
+- `16006a0` docs(plan): 4 new plan docs in `docs/plans/`, 1648 insertions. (a) Visual Content scoping (4 decisions locked: MVP-only, AI-drafted styles, NSFW=SFW, 90-day retention); (b) Visual Content MVP execution plan (52KB, ready for `/go`, schema v71); (c) AIE Phase C scoping (3 decisions locked: single base model, Mac-served-everywhere, hybrid-feedback signal subsystem with 4 user-controlled privacy modes); (d) Memory Browser API unification (stale-backlog correction — sessions 16-17 already shipped 95%, only `updateUserFact` PATCH wrapper at `MemoryBrowser.tsx:542` remains).
+- **Beta-test MVP plan** authored locally + teleported to Ultraplan (https://claude.ai/code/session_018ZzrXgcHRkgKqsAtpxKbKJ) — executing remotely, will land as a PR. Scope: backend `clock.py` chokepoint + `/api/test/time-travel` endpoint, Phase 0 testid batch on critical UI surfaces, Phase 1 `/beta-test` skill with 5 personas (Alex/Sam/Morgan/Jordan/Reese).
+- **Plan-check session** at https://claude.ai/code/session_01RABmNEjrciKcoRcmrrvmf9 — read-only diagnostic on the beta-test PR.
+- New feedback memory: `feedback_ultraplan_workflow.md` documents the teleport workflow.
+- `MEMORY.md` NEXT SESSION TASKS items 2/3/4 updated with plan-doc cross-links + scope corrections.
+
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers anywhere. (Per CLAUDE.md, do not push session-24's pre-existing working-tree mods on behalf of session 25.)
+
+---
 
 **Session 24 (2026-05-01) — RichComposer wire-up + push. 2 commits, all pushed.**
 - `e94384c` feat(sakura): wire RichComposer into ChatThread — closes session-23 WIP item. textareaRef retyped to `RichComposerHandle`, auto-resize `useEffect` dropped (RichComposer caps via inline `max-height: 120px` + `overflow-y: auto`), `wrapSelectionWithAction` collapsed to one-line delegate to `wrapSelection()` imperative handle, `<textarea>` JSX swapped for `<RichComposer>` with `rich-composer` className. ChatThread.tsx -32 net. Browser-verified via Playwright on Rin character: live italic during typing (gold `rgb(249,226,175)` on dark sakura, amber `rgb(196,137,45)` on light sakura — `--color-action` token resolves correctly), wrap toolbar button works on selection, send-clear returns to 41.6px placeholder state, multi-line growth caps at 120px and engages scroll. 2 screenshots at `docs/testing/screenshots/2026-05-01-richcomposer-wireup/`.

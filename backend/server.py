@@ -14074,7 +14074,7 @@ async def generate_background(req: Request):
         raise HTTPException(400, "prompt is required")
 
     cfg = load_config()
-    from backend.image_gen.registry import get_image_gen
+    from backend.image_gen.registry import get_image_gen, resolve_character_style
     adapter = get_image_gen(cfg)
 
     if not adapter.is_available():
@@ -14082,6 +14082,12 @@ async def generate_background(req: Request):
             {"ok": False, "error": f"Image generation backend ({adapter.provider_name()}) is not available"},
             status_code=503,
         )
+
+    # v71: per-character art-style prefix (no-op when image_style is NULL).
+    char_id = body.get("character_id")
+    style_pos, style_neg = resolve_character_style(char_id, str(DB_PATH))
+    if style_pos:
+        prompt = f"{style_pos}, {prompt}"
 
     # Merge request overrides with config defaults
     image_cfg = cfg.get("image_gen", {})
@@ -14091,11 +14097,16 @@ async def generate_background(req: Request):
         "steps": body.get("steps", image_cfg.get("steps", 9)),
         "model": body.get("model", image_cfg.get("model", "")),
     }
+    if style_neg:
+        # Prepend character's negative-style hint to any caller-supplied negative prompt
+        existing_neg = body.get("negative_prompt", "").strip()
+        gen_cfg["negative_prompt"] = (
+            f"{style_neg}, {existing_neg}" if existing_neg else style_neg
+        )
 
     result = await run_in_threadpool(adapter.generate, prompt, gen_cfg)
 
     # Optionally auto-update the character's background_url
-    char_id = body.get("character_id")
     if result.get("ok") and char_id:
         try:
             with db_ctx() as con:
@@ -14145,7 +14156,7 @@ async def generate_portrait(req: Request):
         prompt = f"{char_name}, {prompt}"
 
     cfg = load_config()
-    from backend.image_gen.registry import get_image_gen
+    from backend.image_gen.registry import get_image_gen, resolve_character_style
     adapter = get_image_gen(cfg)
 
     if not adapter.is_available():
@@ -14154,6 +14165,12 @@ async def generate_portrait(req: Request):
             status_code=503,
         )
 
+    # v71: per-character art-style prefix (no-op when image_style is NULL).
+    char_id = body.get("character_id")
+    style_pos, style_neg = resolve_character_style(char_id, str(DB_PATH))
+    if style_pos:
+        prompt = f"{style_pos}, {prompt}"
+
     image_cfg = cfg.get("image_gen", {})
     gen_cfg = {
         "width": body.get("width", 512),
@@ -14161,11 +14178,15 @@ async def generate_portrait(req: Request):
         "steps": body.get("steps", image_cfg.get("steps", 9)),
         "model": body.get("model", image_cfg.get("model", "")),
     }
+    if style_neg:
+        existing_neg = body.get("negative_prompt", "").strip()
+        gen_cfg["negative_prompt"] = (
+            f"{style_neg}, {existing_neg}" if existing_neg else style_neg
+        )
 
     result = await run_in_threadpool(adapter.generate, prompt, gen_cfg)
 
     # Optionally auto-update character's avatar_2d_url
-    char_id = body.get("character_id")
     if result.get("ok") and char_id:
         try:
             with db_ctx() as con:

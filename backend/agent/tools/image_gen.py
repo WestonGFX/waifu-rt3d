@@ -65,12 +65,36 @@ async def _execute(args: dict, context: ToolContext) -> ToolResult:
             error="Image generation unavailable (provider offline)",
         )
 
-    result = await run_in_threadpool(gen.generate, prompt, context.cfg)
+    # v71: per-character art-style prefix (no-op when image_style is NULL).
+    # Deferred import mirrors _get_image_gen to avoid circular-import risk.
+    from backend.image_gen.registry import resolve_character_style
+    from backend.server import DB_PATH
+
+    style_pos, style_neg = resolve_character_style(context.char_id, str(DB_PATH))
+    full_prompt = f"{style_pos}, {prompt}" if style_pos else prompt
+
+    gen_cfg = dict(context.cfg) if isinstance(context.cfg, dict) else {}
+    if style_neg:
+        existing_neg = ""
+        if isinstance(context.cfg, dict):
+            existing_neg = (context.cfg.get("negative_prompt") or "").strip()
+        gen_cfg["negative_prompt"] = (
+            f"{style_neg}, {existing_neg}" if existing_neg else style_neg
+        )
+
+    result = await run_in_threadpool(gen.generate, full_prompt, gen_cfg)
 
     if result.get("ok"):
         return ToolResult(
             ok=True,
-            data={"url": result["url"], "filename": result.get("filename", "")},
+            data={
+                "url": result["url"],
+                "filename": result.get("filename", ""),
+                # Store the resolved prompt so the frontend can re-fire it on
+                # regenerate without re-resolving the character style. Phase 2
+                # surfaces this as ``ChatMessage.imagePrompt``.
+                "prompt": full_prompt,
+            },
             display="image",
         )
     return ToolResult(ok=False, error=result.get("error", "Generation failed"))

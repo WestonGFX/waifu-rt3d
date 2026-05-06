@@ -5008,6 +5008,65 @@ def migrate_to_v70(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v71(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v70 to v71.
+
+    Adds: ``image_style`` TEXT (JSON) column to the ``characters`` table.
+    Stores per-character art-style hints for image generation prompts so
+    that any image generated for a character automatically inherits a
+    consistent visual style without changing the call signature seen by
+    callers.
+
+    Expected JSON shape::
+
+        {"positive": str, "negative": str, "lora"?: str}
+
+    Default is NULL — generation falls back to the unmodified user prompt.
+    The schema is additive-only; future fields can be added without
+    breaking existing rows.
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.  Raises on failure (caller is responsible
+        for rolling back the outer transaction).
+
+    Raises:
+        sqlite3.Error: If the ALTER TABLE or version-bump statement fails.
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> con.execute("CREATE TABLE schema_version (version INTEGER)")  # doctest: +ELLIPSIS
+        <...>
+        >>> con.execute("INSERT INTO schema_version VALUES (70)")  # doctest: +ELLIPSIS
+        <...>
+        >>> con.execute("CREATE TABLE characters (id INTEGER PRIMARY KEY)")  # doctest: +ELLIPSIS
+        <...>
+        >>> migrate_to_v71(con)
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 71:
+        logger.info("Schema already at v%d, skipping v71 migration.", cur_ver)
+        return True
+
+    try:
+        con.execute(
+            "ALTER TABLE characters ADD COLUMN image_style TEXT DEFAULT NULL"
+        )
+        con.execute("UPDATE schema_version SET version = 71")
+        con.commit()
+        logger.info(
+            "✅ Schema v71 migration complete (image_style column added to characters)"
+        )
+        return True
+    except Exception as e:
+        logger.error("Schema v71 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -5535,21 +5594,27 @@ def ensure_db():
             if migrate_to_v70(con):
                 version = 70
 
+        if version < 71:
+            logger.info("Upgrading database schema from v70 to v71...")
+            logger.info("  - Visual Content MVP: characters.image_style JSON column")
+            if migrate_to_v71(con):
+                version = 71
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 70:
-            raise RuntimeError(f"Database initialization failed: Expected v70, got v{final_version}")
+        if final_version < 71:
+            raise RuntimeError(f"Database initialization failed: Expected v71, got v{final_version}")
 
-        if final_version > 70:
-            logger.warning(f"Database is newer than application (v{final_version} > v70). Some features might be unused.")
+        if final_version > 71:
+            logger.warning(f"Database is newer than application (v{final_version} > v71). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v70 adds memorial scene tracking)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v71 adds image_style column for per-character art guidance)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

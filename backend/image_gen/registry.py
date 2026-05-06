@@ -14,8 +14,10 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import sqlite3
 from pathlib import Path
 
 from .adapters.base import ImageGenAdapter
@@ -104,6 +106,82 @@ def get_image_gen(cfg: dict) -> ImageGenAdapter:
     if provider != "disabled":
         logger.warning(f"[ImageGen] Unknown provider '{provider}', using disabled adapter")
     return _DisabledAdapter(_IMAGES_DIR, _CONFIG_DIR)
+
+
+def resolve_character_style(
+    char_id: int | None, db_path: str
+) -> tuple[str, str]:
+    """Load a character's ``image_style`` JSON and return prompt prefix strings.
+
+    Reads the schema-v71 ``characters.image_style`` column and parses it as
+    JSON of the form ``{"positive": str, "negative": str, "lora"?: str}``.
+    Returns the ``positive`` and ``negative`` strings so callers can build
+    style-aware generation prompts without changing call signatures::
+
+        pos, neg = resolve_character_style(char_id, str(DB_PATH))
+        full_prompt = f"{pos}, {user_prompt}" if pos else user_prompt
+
+    The function is intentionally fail-soft: any error path (no char_id,
+    NULL row, missing column, malformed JSON, missing DB file) returns
+    ``("", "")`` so callers can blindly prepend without an extra guard.
+
+    The connection is opened in read-only URI mode and closed before
+    returning — no pool participation, no write lock contention. This
+    helper is a utility (not a request handler), so a short-lived raw
+    connection is appropriate per project conventions.
+
+    Args:
+        char_id: Database ID of the active character, or ``None``.
+        db_path: Absolute path to the SQLite application database file.
+
+    Returns:
+        Tuple of ``(positive_prefix, negative_prefix)``. Both are empty
+        strings when ``char_id`` is ``None``, the row is missing, the
+        column is NULL, or the JSON cannot be parsed.
+
+    Example:
+        >>> pos, neg = resolve_character_style(1, "/path/to/app.db")
+        >>> full_prompt = f"{pos}, selfie" if pos else "selfie"
+    """
+    if char_id is None:
+        return "", ""
+    if not db_path:
+        return "", ""
+
+    con: sqlite3.Connection | None = None
+    try:
+        # Read-only URI mode — short-lived helper, no write lock acquired.
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        row = con.execute(
+            "SELECT image_style FROM characters WHERE id = ?", (int(char_id),)
+        ).fetchone()
+    except sqlite3.Error as e:
+        logger.debug("[ImageGen] resolve_character_style read failed: %s", e)
+        return "", ""
+    finally:
+        if con is not None:
+            con.close()
+
+    if row is None or row[0] is None:
+        return "", ""
+
+    try:
+        data = json.loads(row[0])
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.warning(
+            "[ImageGen] image_style JSON parse failed for char_id=%s: %s",
+            char_id,
+            e,
+        )
+        return "", ""
+
+    if not isinstance(data, dict):
+        return "", ""
+
+    positive = data.get("positive") or ""
+    negative = data.get("negative") or ""
+    return (positive if isinstance(positive, str) else "",
+            negative if isinstance(negative, str) else "")
 
 
 def get_video_gen(cfg: dict) -> ImageGenAdapter:

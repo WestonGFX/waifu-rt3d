@@ -113,6 +113,9 @@ frontends/sakura/e2e/screenshots/
 # ── Character doc archives (zips, not source) ───────────────────────────────
 docs/characters/*.zip
 
+# ── Visual Content MVP — AI-drafted character styles awaiting human review ──
+backend/characters/builtin_image_styles.draft.json
+
 # ── Other AI agent tool configs (project tracks Claude Code only) ───────────
 .insforge
 .agent

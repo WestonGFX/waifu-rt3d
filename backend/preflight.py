@@ -5067,6 +5067,100 @@ def migrate_to_v71(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v72(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v71 to v72.
+
+    Deduplicates ``character_relationships`` and enforces a UNIQUE
+    constraint on ``char_id``.  Prior code paths inserted new rows
+    instead of upserting, producing thousands of duplicates per
+    character (P1 bug filed 2026-05-06: 24,508 rows for 11 chars).
+
+    Strategy:
+        1. For each ``char_id``, keep the row with the highest
+           ``bond_xp``; break ties with latest ``last_updated``,
+           then highest ``id``.  This preserves the user's furthest
+           bond progression.
+        2. Delete all other rows for that char_id.
+        3. Create UNIQUE INDEX on char_id so future inserts fail
+           loudly instead of silently piling on duplicates.
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.  Raises on failure.
+
+    Raises:
+        sqlite3.Error: If any SQL statement fails.
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> _ = con.execute("CREATE TABLE schema_version (version INTEGER, applied_ts REAL)")
+        >>> _ = con.execute("INSERT INTO schema_version VALUES (71, 0)")
+        >>> _ = con.execute("CREATE TABLE character_relationships (id INTEGER PRIMARY KEY, char_id INTEGER, bond_xp INTEGER DEFAULT 0, last_updated REAL DEFAULT 0)")
+        >>> _ = con.execute("INSERT INTO character_relationships(char_id, bond_xp, last_updated) VALUES (1, 50, 1.0), (1, 99, 2.0), (1, 10, 3.0)")
+        >>> migrate_to_v72(con)
+        True
+        >>> con.execute("SELECT COUNT(*), MAX(bond_xp) FROM character_relationships WHERE char_id=1").fetchone()
+        (1, 99)
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 72:
+        logger.info("Schema already at v%d, skipping v72 migration.", cur_ver)
+        return True
+
+    try:
+        before = con.execute(
+            "SELECT COUNT(*) FROM character_relationships"
+        ).fetchone()[0]
+
+        # Window-function dedupe — keep highest-progression row per char_id
+        con.execute(
+            """
+            DELETE FROM character_relationships
+            WHERE id NOT IN (
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (
+                        PARTITION BY char_id
+                        ORDER BY bond_xp DESC,
+                                 last_updated DESC,
+                                 id DESC
+                    ) AS rn
+                    FROM character_relationships
+                ) WHERE rn = 1
+            )
+            """
+        )
+
+        after = con.execute(
+            "SELECT COUNT(*) FROM character_relationships"
+        ).fetchone()[0]
+
+        # Lock down future inserts so the duplication regression cannot recur.
+        con.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS "
+            "uq_character_relationships_char_id "
+            "ON character_relationships(char_id)"
+        )
+
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (72, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info(
+            "✅ Schema v72 migration complete "
+            "(deduped character_relationships %d → %d rows; "
+            "UNIQUE INDEX on char_id added)",
+            before, after,
+        )
+        return True
+    except Exception as e:
+        logger.error("Schema v72 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -5600,21 +5694,27 @@ def ensure_db():
             if migrate_to_v71(con):
                 version = 71
 
+        if version < 72:
+            logger.info("Upgrading database schema from v71 to v72...")
+            logger.info("  - Dedupe character_relationships + UNIQUE INDEX on char_id")
+            if migrate_to_v72(con):
+                version = 72
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 71:
-            raise RuntimeError(f"Database initialization failed: Expected v71, got v{final_version}")
+        if final_version < 72:
+            raise RuntimeError(f"Database initialization failed: Expected v72, got v{final_version}")
 
-        if final_version > 71:
-            logger.warning(f"Database is newer than application (v{final_version} > v71). Some features might be unused.")
+        if final_version > 72:
+            logger.warning(f"Database is newer than application (v{final_version} > v72). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v71 adds image_style column for per-character art guidance)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v72 dedupes character_relationships + adds UNIQUE INDEX on char_id)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

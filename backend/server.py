@@ -209,6 +209,7 @@ async def lifespan(app: FastAPI):
         "bg_image", "background_mode", "memory", "services", "system",
         "prompt_tier", "default_frontend", "rp_style_preset", "user_persona",
         "soundscape_enabled",
+        "reply_pills_count", "reply_pills_action",
     }
     for key in cfg:
         if key not in _KNOWN_CFG_KEYS:

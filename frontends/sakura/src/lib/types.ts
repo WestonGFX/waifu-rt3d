@@ -241,6 +241,10 @@ export interface ChatResponse {
 }
 
 export interface AppConfig {
+  /** Number of reply pills shown after each AI message. Default 3. */
+  reply_pills_count?: 2 | 3;
+  /** What clicking a reply pill does. 'fill' drops it in the composer; 'send' fires it immediately. Default 'fill'. */
+  reply_pills_action?: 'fill' | 'send';
   [key: string]: unknown;
 }
 

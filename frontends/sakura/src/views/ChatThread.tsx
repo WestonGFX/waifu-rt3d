@@ -71,48 +71,54 @@ function TypingIndicator({ name }: { name: string }) {
 }
 
 /**
- * Generate 3 quick-reply chip suggestions from the last assistant message.
+ * Generate 2-3 quick-reply chip suggestions from the last assistant message.
  * Uses simple heuristics — no backend call needed.
  *
  * @param text     - Last assistant message text.
  * @param charName - Character name for personalised chips.
- * @returns Array of exactly 3 suggestion strings.
+ * @param count    - 2 or 3 (default 3). Returned array is sliced to this length.
+ * @returns Array of exactly `count` suggestion strings.
  */
-function generateChips(text: string, charName: string): string[] {
+function generateChips(text: string, charName: string, count: 2 | 3 = 3): string[] {
   const lower = text.toLowerCase();
   const hasQuestion = text.includes('?');
   const isAskingAboutUser = /how (are|do) you|what about you|tell me/i.test(lower);
   const isEmotional = /happy|sad|miss|love|glad|wonder|hope|afraid/i.test(lower);
 
+  let chips: string[];
   if (hasQuestion && isAskingAboutUser) {
-    return ["I'm doing well! 😊", "Honestly, not great…", "Tell me more first!"];
+    chips = ["I'm doing well! 😊", "Honestly, not great…", "Tell me more first!"];
+  } else if (hasQuestion) {
+    chips = ["Yes, definitely!", "Not really, no…", "I'm not sure, what do you think?"];
+  } else if (isEmotional) {
+    chips = [`I feel the same way, ${charName}`, "That's really sweet ♥", "Tell me more about that"];
+  } else {
+    chips = ["That's interesting! Go on…", "I hadn't thought of it that way", `What else is on your mind, ${charName}?`];
   }
-  if (hasQuestion) {
-    return ["Yes, definitely!", "Not really, no…", "I'm not sure, what do you think?"];
-  }
-  if (isEmotional) {
-    return [`I feel the same way, ${charName}`, "That's really sweet ♥", "Tell me more about that"];
-  }
-  return ["That's interesting! Go on…", "I hadn't thought of it that way", `What else is on your mind, ${charName}?`];
+  return chips.slice(0, count);
 }
 
 /**
- * Generate 3 AI-powered quick-reply chips via the LLM generation proxy.
+ * Generate 2-3 AI-powered quick-reply chips via the LLM generation proxy.
  *
  * Calls `/api/llm/generate` with a focused prompt and parses the JSON array
  * response. Returns `null` on any failure (timeout, parse error, network)
  * so the caller can fall back to heuristic chips.
  *
- * @param replyText - Last assistant message text.
- * @param charName  - Character name for context.
- * @param userName  - User display name for personalisation.
- * @param signal    - AbortSignal to cancel the request early.
- * @returns Array of 3 suggestion strings, or null on failure.
+ * @param replyText    - Last assistant message text.
+ * @param charName     - Character name for context.
+ * @param userName     - User display name for personalisation.
+ * @param userPersona  - Persona string from `user_persona` config; injected into the prompt for tonal consistency with chat.
+ * @param count        - 2 or 3 suggestions (default 3).
+ * @param signal       - AbortSignal to cancel the request early.
+ * @returns Array of `count` suggestion strings, or null on failure.
  */
 async function generateChipsLLM(
   replyText: string,
   charName: string,
   userName: string,
+  userPersona: string,
+  count: 2 | 3,
   signal?: AbortSignal,
 ): Promise<string[] | null> {
   try {
@@ -124,7 +130,7 @@ async function generateChipsLLM(
     });
 
     const result = await Promise.race([
-      api.generateQuickReplies(replyText, charName, userName),
+      api.generateQuickReplies(replyText, charName, userName, { count, userPersona }),
       timeout,
     ]);
 
@@ -135,16 +141,16 @@ async function generateChipsLLM(
     // Try direct JSON parse first, then extract array from prose fallback
     try {
       const parsed = JSON.parse(text);
-      if (Array.isArray(parsed) && parsed.length >= 3) {
-        return parsed.slice(0, 3).map((s: unknown) => String(s).slice(0, 80));
+      if (Array.isArray(parsed) && parsed.length >= count) {
+        return parsed.slice(0, count).map((s: unknown) => String(s).slice(0, 80));
       }
     } catch {
       // LLM may have wrapped the array in markdown or prose — extract it
       const match = text.match(/\[.*\]/s);
       if (match) {
         const extracted = JSON.parse(match[0]);
-        if (Array.isArray(extracted) && extracted.length >= 3) {
-          return extracted.slice(0, 3).map((s: unknown) => String(s).slice(0, 80));
+        if (Array.isArray(extracted) && extracted.length >= count) {
+          return extracted.slice(0, count).map((s: unknown) => String(s).slice(0, 80));
         }
       }
     }
@@ -418,8 +424,12 @@ export function ChatThread() {
     if (!loading) {
       const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
       if (lastAssistant?.text && activeCharacter && showQuickChips) {
+        // Reply-Assist Tier 2: configurable count (default 3) + persona injection.
+        const pillCount: 2 | 3 = config?.reply_pills_count === 2 ? 2 : 3;
+        const userPersona = String(config?.user_persona ?? '').trim();
+
         // Phase 1: Immediate heuristic chips (zero latency)
-        const heuristicChips = generateChips(lastAssistant.text, activeCharacter.name);
+        const heuristicChips = generateChips(lastAssistant.text, activeCharacter.name, pillCount);
         setQuickChips(heuristicChips);
         setChipsVisible(false);
 
@@ -434,7 +444,7 @@ export function ChatThread() {
         setLlmChipsLoading(true);
 
         const userName = String(config?.user_name ?? config?.user_persona ?? '').split(/\s/)[0];
-        generateChipsLLM(lastAssistant.text, activeCharacter.name, userName, abort.signal)
+        generateChipsLLM(lastAssistant.text, activeCharacter.name, userName, userPersona, pillCount, abort.signal)
           .then(llmChips => {
             if (abort.signal.aborted) return;
             setLlmChipsLoading(false);
@@ -1191,7 +1201,16 @@ export function ChatThread() {
                       // race where the user typed between last render and this click.
                       if (useChatStore.getState().draft) return;
                       setQuickChips([]);
-                      sendMessage(chip, true, incognito, effectiveMaxTokens);
+                      setChipsVisible(false);
+                      // Reply-Assist Tier 2: 'fill' (default) drops chip into composer
+                      // for edit; 'send' preserves the previous auto-send behavior.
+                      const action = config?.reply_pills_action === 'send' ? 'send' : 'fill';
+                      if (action === 'send') {
+                        sendMessage(chip, true, incognito, effectiveMaxTokens);
+                      } else {
+                        setDraft(chip);
+                        textareaRef.current?.focus();
+                      }
                     }}
                     className="px-3 py-1.5 text-xs rounded-full transition-all duration-150"
                     style={{

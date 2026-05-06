@@ -2591,6 +2591,67 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
               className="accent-[var(--color-accent)]"
             />
           </SettingField>
+          <div style={{ opacity: showQuickChips ? 1 : 0.5, pointerEvents: showQuickChips ? 'auto' : 'none' }}>
+            <SettingField
+              label="Pill count"
+              description="How many reply suggestions to show after each AI message."
+            >
+              {(() => {
+                const currentCount = cfg('reply_pills_count', 3) === 2 ? 2 : 3;
+                return (
+                  <div
+                    className="flex gap-0.5 p-0.5 rounded-lg"
+                    style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border)' }}
+                  >
+                    {([2, 3] as const).map(n => (
+                      <button
+                        key={n}
+                        onClick={() => save('reply_pills_count', n)}
+                        className="px-3 py-1 rounded-md text-xs font-medium transition-all"
+                        style={{
+                          backgroundColor: currentCount === n ? 'var(--color-accent)' : 'transparent',
+                          color: currentCount === n ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
+                        }}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+            </SettingField>
+            <SettingField
+              label="On click"
+              description="Click a pill to fill the composer (you can edit) or send immediately."
+            >
+              {(() => {
+                const currentAction = cfg('reply_pills_action', 'fill') === 'send' ? 'send' : 'fill';
+                return (
+                  <div
+                    className="flex gap-0.5 p-0.5 rounded-lg"
+                    style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border)' }}
+                  >
+                    {([
+                      { id: 'fill' as const, label: 'Fill composer' },
+                      { id: 'send' as const, label: 'Send immediately' },
+                    ]).map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => save('reply_pills_action', opt.id)}
+                        className="px-3 py-1 rounded-md text-xs font-medium transition-all"
+                        style={{
+                          backgroundColor: currentAction === opt.id ? 'var(--color-accent)' : 'transparent',
+                          color: currentAction === opt.id ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+            </SettingField>
+          </div>
           <SettingField
             label="Settings Panel"
             description="Sidebar: Settings opens as a left panel — the 3D model stays visible on the right. Drawer: full-width overlay (default)."

@@ -1067,12 +1067,16 @@ export function MemoryBrowser() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.3 }}
             exit={{ opacity: 0 }}
-            onClick={closeOverlay}
+            onClick={(e) => {
+              if ((e.target as HTMLElement).closest('[data-memory-browser-panel]')) return;
+              closeOverlay();
+            }}
             style={{ position: 'fixed', inset: 0, backgroundColor: '#000', zIndex: 40 }}
           />
 
           {/* Panel */}
           <motion.div
+            data-memory-browser-panel=""
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
@@ -1125,8 +1129,11 @@ export function MemoryBrowser() {
               style={{
                 display: 'flex', gap: 0, flexShrink: 0,
                 borderBottom: '1px solid var(--color-border-subtle)',
-                padding: '0 12px',
-              }}
+                padding: '0 8px',
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+              } as React.CSSProperties}
             >
               {TABS.map(tab => {
                 const active = activeTab === tab.id;
@@ -1135,8 +1142,10 @@ export function MemoryBrowser() {
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      padding: '10px 12px',
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      padding: '10px 10px',
+                      flexShrink: 0,
+                      whiteSpace: 'nowrap',
                       fontSize: '0.72rem', fontWeight: active ? 600 : 400,
                       color: active ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
                       background: 'none', border: 'none',

@@ -27,6 +27,11 @@ jobs:
           pip install \
             fastapi uvicorn starlette python-multipart psutil requests httpx \
             edge-tts huggingface_hub
+          # Emotion module deps — backend/emotion/__init__.py eagerly imports
+          # AdvancedSentimentAnalyzer, which top-level imports transformers + torch.
+          # CPU-only torch wheel keeps the install footprint small.
+          pip install transformers
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
           # Test runner
           pip install pytest pytest-asyncio
 
@@ -44,8 +49,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
-          cache-dependency-path: frontends/neon/package-lock.json
+          # No cache here — frontends/neon has no package.json/package-lock.json,
+          # so the cache step would fail with "Some specified paths were not
+          # resolved". The install step below already handles missing files
+          # gracefully.
 
       - name: Install ESLint
         working-directory: frontends/neon

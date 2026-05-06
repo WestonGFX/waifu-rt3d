@@ -208,6 +208,22 @@ export interface ChatMessage {
    * Stored on the messages table (schema v20). Defaults to false.
    */
   pinned?: boolean;
+  /**
+   * Lifecycle stage during generation, derived from SSE events:
+   *   - 'processing'  → backend is assembling context / model is in prefill
+   *   - 'generating'  → first token has arrived, streaming in progress
+   * Cleared (undefined) once status flips to 'sent' or 'failed'. Used by the
+   * thinking-indicator stages mode to render Reading/Thinking/Generating rows.
+   */
+  stage?: 'processing' | 'generating';
+  /**
+   * AI-generated context-aware reply suggestions (3 short strings) shipped
+   * inline with the assistant reply via the `quick_replies` SSE event. The
+   * backend extracts them from a `<quick_replies>` block in the model output
+   * before emitting the final text. Replaces the old two-phase chip-generation
+   * architecture (regex heuristic + post-hoc LLM upgrade).
+   */
+  quickReplies?: string[];
 }
 
 export interface Session {

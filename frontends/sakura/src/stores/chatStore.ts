@@ -259,12 +259,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         switch (eventType) {
           case 'processing':
             // LLM is processing input — keep typing dots but note input tokens
-            patchAssistant({ status: 'pending' });
+            patchAssistant({ status: 'pending', stage: 'processing' });
             break;
 
           case 'generating':
             // First token incoming — switch from dots to streaming
-            patchAssistant({ status: 'streaming', text: '' });
+            patchAssistant({ status: 'streaming', text: '', stage: 'generating' });
             break;
 
           case 'token':
@@ -272,6 +272,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             fullText += data.t;
             tokenCount++;
             patchAssistant({ status: 'streaming', text: fullText });
+            break;
+
+          case 'quick_replies':
+            // Phase 2: Piggyback context-aware reply suggestions extracted from
+            // the model's <quick_replies> block. Replaces the old two-phase
+            // (regex + post-hoc LLM) chip-generation flow.
+            if (Array.isArray(data.options) && data.options.length > 0) {
+              patchAssistant({ quickReplies: data.options.slice(0, 3).map((s: unknown) => String(s).slice(0, 80)) });
+            }
             break;
 
           case 'audio_chunk':
@@ -297,6 +306,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             patchAssistant({
               text: data.reply || fullText,
               status: 'sent',
+              stage: undefined,
               emotion: data.emotion,
               gesture: data.gesture ?? undefined,
               audioUrl: data.audio_url || data.tts_chunked ? undefined : undefined,

@@ -165,6 +165,12 @@ textarea:focus {
   30%           { opacity: 1;    transform: translateY(-4px); }
 }
 
+/* ── Streaming text caret blink ────────────────────────────────────────── */
+@keyframes caretBlink {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 /* ── Quick-reply chip loading pulse (while LLM upgrade is in-flight) ──── */
 @keyframes pulse {
   0%, 100% { opacity: 0.65; }

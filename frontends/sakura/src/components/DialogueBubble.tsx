@@ -4,6 +4,7 @@ import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
 import { api } from '../lib/api';
 import { parseActions } from '../lib/parseActions';
+import { useAppStore } from '../stores/appStore';
 
 /**
  * Canonical 26-emotion emoji map (Phase 15).
@@ -165,6 +166,140 @@ function MarkdownText({ text, query }: { text: string; query: string }) {
 }
 
 /**
+ * Skeleton placeholder shown while an assistant message is in `pending` status
+ * (model prefill, before any token has streamed back). Renders three shimmering
+ * placeholder lines, three animated dots, and a live elapsed-time counter
+ * ("Thinking 14s") so the user knows the system is alive even when the model
+ * takes 20-30s to produce a first token.
+ *
+ * Two render modes:
+ * - `'skeleton'` (default): three shimmer lines + dots + counter
+ * - `'stages'`: three labelled rows (Reading context / Thinking / Generating)
+ *   driven by the SSE-event-derived `stage` field on the message.
+ *
+ * @param charName  - Character display name, used in the aria-label.
+ * @param startedAt - Epoch ms when the assistant message was created. Powers
+ *                    the elapsed counter via setInterval.
+ * @param stage     - 'processing' | 'generating' | undefined. Drives the
+ *                    stages-mode progression. Optional — skeleton mode ignores it.
+ * @param mode      - 'skeleton' (default) or 'stages'.
+ */
+function ThinkingPlaceholder({
+  charName,
+  startedAt,
+  stage,
+  mode = 'skeleton',
+}: {
+  charName?: string;
+  startedAt: number;
+  stage?: 'processing' | 'generating';
+  mode?: 'skeleton' | 'stages';
+}) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    }, 250);
+    return () => clearInterval(id);
+  }, [startedAt]);
+
+  if (mode === 'stages') {
+    const reading = stage === 'processing' || stage === 'generating';
+    const thinking = stage === 'generating';
+    return (
+      <div
+        aria-label={`${charName ?? 'Assistant'} is thinking`}
+        aria-live="polite"
+        style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '4px 0', fontSize: '0.85rem' }}
+      >
+        <StageRow done={reading} active={!reading} label="Reading context" />
+        <StageRow
+          done={thinking}
+          active={reading && !thinking}
+          label={`Thinking${reading && !thinking ? ` ${elapsed}s` : ''}`}
+        />
+        <StageRow done={false} active={thinking} label="Generating" />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      aria-label={`${charName ?? 'Assistant'} is thinking`}
+      aria-live="polite"
+      style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '2px 0' }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+        }}
+      >
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+          {[0, 1, 2].map(i => (
+            <span
+              key={i}
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                backgroundColor: 'var(--color-accent)',
+                opacity: 0.6,
+                animation: 'typingDot 1.2s ease-in-out infinite',
+                animationDelay: `${i * 0.18}s`,
+                display: 'inline-block',
+              }}
+            />
+          ))}
+          <span style={{ marginLeft: 8, color: 'var(--color-text-muted)', fontSize: '0.78rem' }}>
+            Thinking… {elapsed}s
+          </span>
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <SkeletonLine widthPct={92} />
+        <SkeletonLine widthPct={78} />
+        <SkeletonLine widthPct={64} />
+      </div>
+    </div>
+  );
+}
+
+/** A single shimmering placeholder line for the thinking skeleton. */
+function SkeletonLine({ widthPct }: { widthPct: number }) {
+  return (
+    <div
+      className="loading-shimmer"
+      style={{
+        height: 10,
+        width: `${widthPct}%`,
+        borderRadius: 5,
+        opacity: 0.55,
+      }}
+    />
+  );
+}
+
+/** A single row in the stages-mode thinking placeholder. */
+function StageRow({ done, active, label }: { done: boolean; active: boolean; label: string }) {
+  const color = done
+    ? 'var(--color-success, var(--color-accent))'
+    : active
+      ? 'var(--color-accent)'
+      : 'var(--color-text-muted)';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color, opacity: done || active ? 1 : 0.55 }}>
+      <span style={{ width: 14, display: 'inline-flex', justifyContent: 'center' }}>
+        {done ? '✓' : active ? '●' : '○'}
+      </span>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+/**
  * Visual novel style message bubble.
  * User messages render as right-aligned accent-gradient bubbles.
  * Assistant messages render as left-aligned cards with avatar, name, and hover metadata.
@@ -175,6 +310,7 @@ function MarkdownText({ text, query }: { text: string; query: string }) {
  * Pinned messages show a filled Pin indicator in the top-right corner.
  */
 export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onBranchSwitch, onDelete, onEdit, isLastAssistant = false, isRegenerating = false }: DialogueBubbleProps) {
+  const thinkingMode = useAppStore(s => s.thinkingIndicatorMode);
   const [pinned, setPinned] = useState(message.pinned ?? false);
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -526,16 +662,26 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
         </div>
         <div className="text-sm leading-relaxed" style={{ color: 'var(--color-text-primary)' }}>
           {message.status === 'pending' ? (
-            <div className="flex items-center gap-1 py-1">
-              <span className="typing-dot" />
-              <span className="typing-dot" />
-              <span className="typing-dot" />
-            </div>
+            <ThinkingPlaceholder
+              charName={character?.name}
+              startedAt={message.createdAt}
+              stage={message.stage}
+              mode={thinkingMode}
+            />
           ) : message.status === 'streaming' ? (
             <span>
-              {message.text}
-              <span className="inline-block w-0.5 h-4 ml-0.5 animate-pulse align-text-bottom"
-                style={{ backgroundColor: 'var(--color-accent)' }} />
+              <MarkdownText text={message.text} query={searchQuery} />
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: 2,
+                  height: '1em',
+                  marginLeft: 2,
+                  verticalAlign: 'text-bottom',
+                  backgroundColor: 'var(--color-accent)',
+                  animation: 'caretBlink 1s steps(2) infinite',
+                }}
+              />
             </span>
           ) : message.status === 'failed' ? (
             <span style={{ color: 'var(--color-danger, #f44)', fontStyle: 'italic' }}>

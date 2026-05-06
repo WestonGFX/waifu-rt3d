@@ -191,6 +191,15 @@ interface AppState {
   showQuickChips: boolean;
   setShowQuickChips: (v: boolean) => void;
 
+  /**
+   * Thinking-indicator render mode shown while the AI is generating a reply.
+   *   - 'skeleton': shimmering placeholder lines + dots + elapsed counter (default)
+   *   - 'stages':   labelled rows (Reading context / Thinking / Generating)
+   *                 driven by SSE-event-derived `stage` field on the message
+   */
+  thinkingIndicatorMode: 'skeleton' | 'stages';
+  setThinkingIndicatorMode: (m: 'skeleton' | 'stages') => void;
+
   // Bond progression state (polled after each message exchange)
   bondLevel: number;
   bondXp: number;
@@ -440,6 +449,10 @@ export const useAppStore = create<AppState>()(
       showQuickChips: true,
       setShowQuickChips: (v) => set({ showQuickChips: v }),
 
+      // Thinking indicator render mode (default skeleton)
+      thinkingIndicatorMode: 'skeleton',
+      setThinkingIndicatorMode: (m) => set({ thinkingIndicatorMode: m }),
+
       // Bond progression
       bondLevel: 0,
       bondXp: 0,
@@ -486,6 +499,7 @@ export const useAppStore = create<AppState>()(
         incognito: s.incognito,
         settingsMode: s.settingsMode,
         showQuickChips: s.showQuickChips,
+        thinkingIndicatorMode: s.thinkingIndicatorMode,
       }),
       // Migrate old compactMode: true → layoutMode: 'compact'
       merge: (persisted: unknown, current) => {

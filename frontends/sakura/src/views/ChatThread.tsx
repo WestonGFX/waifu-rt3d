@@ -32,130 +32,6 @@ type MicState = 'idle' | 'recording' | 'processing';
 
 // ── Helper components ────────────────────────────────────────────────────────
 
-/**
- * Animated three-dot bubble shown while the AI is generating a response.
- * Uses the typingDot CSS keyframe from components.css.
- *
- * @param name - Character name for the aria-label.
- */
-function TypingIndicator({ name }: { name: string }) {
-  return (
-    <div
-      className="flex items-end gap-2 px-4 py-1"
-      aria-label={`${name} is typing`}
-      aria-live="polite"
-    >
-      <div
-        style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          padding: '10px 14px', borderRadius: '18px 18px 18px 4px',
-          backgroundColor: 'var(--color-surface)',
-          border: '1px solid var(--color-border-subtle)',
-          boxShadow: 'var(--shadow-card)',
-        }}
-      >
-        {[0, 1, 2].map(i => (
-          <span
-            key={i}
-            style={{
-              display: 'block', width: 6, height: 6, borderRadius: '50%',
-              backgroundColor: 'var(--color-text-muted)',
-              animation: 'typingDot 1.2s ease-in-out infinite',
-              animationDelay: `${i * 0.2}s`,
-            }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Generate 3 quick-reply chip suggestions from the last assistant message.
- * Uses simple heuristics — no backend call needed.
- *
- * @param text     - Last assistant message text.
- * @param charName - Character name for personalised chips.
- * @returns Array of exactly 3 suggestion strings.
- */
-function generateChips(text: string, charName: string): string[] {
-  const lower = text.toLowerCase();
-  const hasQuestion = text.includes('?');
-  const isAskingAboutUser = /how (are|do) you|what about you|tell me/i.test(lower);
-  const isEmotional = /happy|sad|miss|love|glad|wonder|hope|afraid/i.test(lower);
-
-  if (hasQuestion && isAskingAboutUser) {
-    return ["I'm doing well! 😊", "Honestly, not great…", "Tell me more first!"];
-  }
-  if (hasQuestion) {
-    return ["Yes, definitely!", "Not really, no…", "I'm not sure, what do you think?"];
-  }
-  if (isEmotional) {
-    return [`I feel the same way, ${charName}`, "That's really sweet ♥", "Tell me more about that"];
-  }
-  return ["That's interesting! Go on…", "I hadn't thought of it that way", `What else is on your mind, ${charName}?`];
-}
-
-/**
- * Generate 3 AI-powered quick-reply chips via the LLM generation proxy.
- *
- * Calls `/api/llm/generate` with a focused prompt and parses the JSON array
- * response. Returns `null` on any failure (timeout, parse error, network)
- * so the caller can fall back to heuristic chips.
- *
- * @param replyText - Last assistant message text.
- * @param charName  - Character name for context.
- * @param userName  - User display name for personalisation.
- * @param signal    - AbortSignal to cancel the request early.
- * @returns Array of 3 suggestion strings, or null on failure.
- */
-async function generateChipsLLM(
-  replyText: string,
-  charName: string,
-  userName: string,
-  signal?: AbortSignal,
-): Promise<string[] | null> {
-  try {
-    // Race the LLM call against a 6-second timeout so slow models
-    // don't block the chip UI indefinitely.
-    const timeout = new Promise<never>((_, reject) => {
-      const id = setTimeout(() => reject(new Error('chip-llm-timeout')), 6000);
-      signal?.addEventListener('abort', () => { clearTimeout(id); reject(new Error('aborted')); });
-    });
-
-    const result = await Promise.race([
-      api.generateQuickReplies(replyText, charName, userName),
-      timeout,
-    ]);
-
-    if (signal?.aborted) return null;
-
-    const text = result.text.trim();
-
-    // Try direct JSON parse first, then extract array from prose fallback
-    try {
-      const parsed = JSON.parse(text);
-      if (Array.isArray(parsed) && parsed.length >= 3) {
-        return parsed.slice(0, 3).map((s: unknown) => String(s).slice(0, 80));
-      }
-    } catch {
-      // LLM may have wrapped the array in markdown or prose — extract it
-      const match = text.match(/\[.*\]/s);
-      if (match) {
-        const extracted = JSON.parse(match[0]);
-        if (Array.isArray(extracted) && extracted.length >= 3) {
-          return extracted.slice(0, 3).map((s: unknown) => String(s).slice(0, 80));
-        }
-      }
-    }
-
-    return null;
-  } catch {
-    // Network error, timeout, abort — all silently return null
-    return null;
-  }
-}
-
 // ── Main component ───────────────────────────────────────────────────────────
 
 /**
@@ -183,14 +59,6 @@ export function ChatThread() {
   const textareaRef = useRef<RichComposerHandle | null>(null);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [quickChips, setQuickChips] = useState<string[]>([]);
-  // Chips are hidden until a short delay after AI response (less jarring than immediate pop-in)
-  const [chipsVisible, setChipsVisible] = useState(false);
-  const chipsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Tracks in-flight LLM chip generation so we can abort on cleanup
-  const llmChipsAbortRef = useRef<AbortController | null>(null);
-  // True while the async LLM upgrade is in-flight (heuristic chips show at reduced opacity)
-  const [llmChipsLoading, setLlmChipsLoading] = useState(false);
 
   // ── Task 2: Diary state ─────────────────────────────────────────────────
   const [diaryText, setDiaryText] = useState<string | null>(null);
@@ -402,69 +270,16 @@ export function ChatThread() {
   // Memorial scene: check for pending cinematic after level-ups
   useMemorialScene(activeCharacter?.id ?? null);
 
-  // ── Feature C: Two-phase quick-reply chips (heuristic → LLM upgrade) ────
-  //
-  // Phase 1 (sync):  Show regex-based heuristic chips after 1.5 s delay.
-  // Phase 2 (async): Fire an LLM call in the background. When it resolves,
-  //                  silently swap in the AI-generated chips if the user
-  //                  hasn't started typing. If the LLM fails or times out
-  //                  (6 s), the heuristic chips remain — no error shown.
-  useEffect(() => {
-    // Clean up timers and in-flight LLM requests from the previous run
-    if (chipsTimerRef.current) { clearTimeout(chipsTimerRef.current); chipsTimerRef.current = null; }
-    if (llmChipsAbortRef.current) { llmChipsAbortRef.current.abort(); llmChipsAbortRef.current = null; }
-    setLlmChipsLoading(false);
-
-    if (!loading) {
-      const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
-      if (lastAssistant?.text && activeCharacter && showQuickChips) {
-        // Phase 1: Immediate heuristic chips (zero latency)
-        const heuristicChips = generateChips(lastAssistant.text, activeCharacter.name);
-        setQuickChips(heuristicChips);
-        setChipsVisible(false);
-
-        chipsTimerRef.current = setTimeout(() => {
-          setChipsVisible(true);
-          chipsTimerRef.current = null;
-        }, 1500);
-
-        // Phase 2: Async LLM upgrade — fire and forget
-        const abort = new AbortController();
-        llmChipsAbortRef.current = abort;
-        setLlmChipsLoading(true);
-
-        const userName = String(config?.user_name ?? config?.user_persona ?? '').split(/\s/)[0];
-        generateChipsLLM(lastAssistant.text, activeCharacter.name, userName, abort.signal)
-          .then(llmChips => {
-            if (abort.signal.aborted) return;
-            setLlmChipsLoading(false);
-            if (!llmChips) return; // Parse failed — keep heuristic chips
-
-            // Only swap if the user hasn't started typing
-            if (!useChatStore.getState().draft) {
-              setQuickChips(llmChips);
-            }
-          })
-          .catch(() => {
-            if (!abort.signal.aborted) setLlmChipsLoading(false);
-          });
-      } else {
-        setQuickChips([]);
-        setChipsVisible(false);
-      }
-    } else {
-      setQuickChips([]);
-      setChipsVisible(false);
-    }
-
-    // Cleanup: abort in-flight LLM request when effect re-runs or component unmounts
-    return () => {
-      if (llmChipsAbortRef.current) { llmChipsAbortRef.current.abort(); llmChipsAbortRef.current = null; }
-    };
-  // messages and activeCharacter.id are intentionally included so chips
-  // regenerate correctly after a character switch mid-session.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, activeCharacter?.id, showQuickChips]);
+  // Quick-reply chips now arrive piggybacked on the main chat-stream reply via
+  // the SSE 'quick_replies' event (see chatStore.ts). The frontend just reads
+  // them off the last assistant message — no separate LLM call, no timeouts,
+  // no two-phase race. Toggled off when showQuickChips is false.
+  const lastAssistantQuickReplies = (() => {
+    if (!showQuickChips || loading) return null;
+    const last = [...messages].reverse().find(m => m.role === 'assistant');
+    if (!last || last.status !== 'sent' || !last.quickReplies?.length) return null;
+    return last.quickReplies;
+  })();
 
   // ── Feature A: Voice-First Mode ─────────────────────────────────────────
   /**
@@ -1038,8 +853,10 @@ export function ChatThread() {
           });
           })()}
 
-          {/* Typing indicator — shown while AI is generating */}
-          {loading && <TypingIndicator name={activeCharacter.name} />}
+          {/* Thinking indicator now lives inside the assistant DialogueBubble
+              while the message is in 'pending' status — see ThinkingPlaceholder
+              in DialogueBubble.tsx. The standalone bubble caused redundant UI
+              and easy-to-miss positioning below an empty placeholder. */}
         </div>
         </div>{/* end message list wrapper */}
 
@@ -1170,37 +987,28 @@ export function ChatThread() {
           }}
         >
           <div className="max-w-3xl mx-auto">
-            {/* Quick-reply chips — appear after AI response, hidden while typing or loading.
-                While the async LLM upgrade is in-flight, chips render at reduced opacity
-                with a subtle pulse to hint that better suggestions are incoming. */}
-            {quickChips.length > 0 && chipsVisible && !draft && !loading && (
+            {/* Context-aware quick-reply chips — piggybacked on the main reply
+                via the SSE 'quick_replies' event. Hidden while typing or loading. */}
+            {lastAssistantQuickReplies && !draft && (
               <div
                 className="flex gap-2 mb-2 flex-wrap justify-center"
                 role="group"
                 aria-label="Quick reply suggestions"
-                style={{
-                  opacity: llmChipsLoading ? 0.65 : 1,
-                  transition: 'opacity 0.3s ease',
-                }}
               >
-                {quickChips.map((chip, i) => (
+                {lastAssistantQuickReplies.map((chip, i) => (
                   <button
                     key={i}
                     onClick={() => {
-                      // Read draft synchronously from store to avoid stale closure
-                      // race where the user typed between last render and this click.
                       if (useChatStore.getState().draft) return;
-                      setQuickChips([]);
                       sendMessage(chip, true, incognito, effectiveMaxTokens);
                     }}
                     className="px-3 py-1.5 text-xs rounded-full transition-all duration-150"
                     style={{
                       backgroundColor: 'var(--color-surface)',
-                      border: `1px solid ${llmChipsLoading ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                      border: '1px solid var(--color-border)',
                       color: 'var(--color-text-secondary)',
                       cursor: 'pointer',
                       whiteSpace: 'nowrap',
-                      animation: llmChipsLoading ? 'pulse 1.5s ease-in-out infinite' : 'none',
                     }}
                   >
                     {chip}
@@ -1490,7 +1298,7 @@ export function ChatThread() {
               <RichComposer
                 ref={textareaRef}
                 value={draft}
-                onChange={(next) => { setDraft(next); if (quickChips.length) { setQuickChips([]); setChipsVisible(false); } }}
+                onChange={(next) => setDraft(next)}
                 onKeyDown={handleKeyDown}
                 placeholder={
                   dictating ? 'Dictating — speak now…' :

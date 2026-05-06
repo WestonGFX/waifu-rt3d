@@ -2143,7 +2143,7 @@ interface GeneralTabProps {
 }
 
 function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMode, layoutMode, setLayoutMode }: GeneralTabProps) {
-  const { incognito, setIncognito, showQuickChips, setShowQuickChips, settingsMode, setSettingsMode, settingsTier, setSettingsTier, activeCharacter } = useAppStore();
+  const { incognito, setIncognito, showQuickChips, setShowQuickChips, settingsMode, setSettingsMode, settingsTier, setSettingsTier, activeCharacter, thinkingIndicatorMode, setThinkingIndicatorMode } = useAppStore();
 
   /** Proactive messages: enabled toggle (per-character, PATCH /api/characters/{id}/proactive). */
   const [proactiveEnabled, setProactiveEnabled] = useState(Boolean(activeCharacter?.proactive_enabled));
@@ -2590,6 +2590,29 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
               onChange={e => setShowQuickChips(e.target.checked)}
               className="accent-[var(--color-accent)]"
             />
+          </SettingField>
+          <SettingField
+            label="Thinking Indicator Style"
+            description="Skeleton: shimmering placeholder + elapsed timer (default). Stages: explicit Reading / Thinking / Generating rows."
+          >
+            <div
+              className="flex gap-0.5 p-0.5 rounded-lg"
+              style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border)' }}
+            >
+              {(['skeleton', 'stages'] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setThinkingIndicatorMode(mode)}
+                  className="px-3 py-1 rounded-md text-xs font-medium transition-all capitalize"
+                  style={{
+                    backgroundColor: thinkingIndicatorMode === mode ? 'var(--color-accent)' : 'transparent',
+                    color: thinkingIndicatorMode === mode ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
+                  }}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
           </SettingField>
           <SettingField
             label="Settings Panel"

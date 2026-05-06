@@ -1231,6 +1231,72 @@ def _parse_emotion_gesture(text: str) -> tuple:
     return emotion, gesture, clean or text
 
 
+def _parse_quick_replies(text: str) -> tuple[list[str], str]:
+    """Extract a ``<quick_replies>`` block from an LLM reply.
+
+    The chat-stream endpoint instructs the model to append exactly three short
+    user-perspective reply suggestions inside a ``<quick_replies>...</quick_replies>``
+    block at the very end of its response.  This helper extracts them and returns
+    the cleaned reply (with the block removed) so the user only sees the dialogue.
+
+    Each line inside the block is treated as one suggestion.  Blank lines and lines
+    longer than 80 characters are dropped; the result is capped at 3 entries.
+
+    Args:
+        text: Raw LLM reply text, possibly ending with a quick_replies block.
+
+    Returns:
+        Tuple of ``(replies, clean_reply)`` where:
+          - *replies* is a list of 0-3 short suggestion strings.
+          - *clean_reply* is *text* with the entire block stripped, whitespace
+            trimmed; falls back to the original *text* if stripping leaves an
+            empty string.
+
+    Example:
+        >>> r, c = _parse_quick_replies("Hi!\\n<quick_replies>\\nHey!\\nWhat's up?\\nTell me more.\\n</quick_replies>")
+        >>> r
+        ['Hey!', "What's up?", 'Tell me more.']
+        >>> c
+        'Hi!'
+    """
+    match = re.search(r'<quick_replies>(.*?)</quick_replies>', text, re.IGNORECASE | re.DOTALL)
+    if not match:
+        return [], text
+    block = match.group(1)
+    # One reply per non-blank line. Strip leading "- " bullets / numeric prefixes
+    # ("1. ", "1) ") that some models add despite instructions.
+    raw = [ln.strip() for ln in block.splitlines() if ln.strip()]
+    cleaned: list[str] = []
+    for ln in raw:
+        ln = re.sub(r'^[-*•]\s+', '', ln)
+        ln = re.sub(r'^\d+[.)]\s+', '', ln)
+        # Strip surrounding quotes the model sometimes adds
+        ln = ln.strip('"\'')
+        if ln and len(ln) <= 80:
+            cleaned.append(ln)
+        if len(cleaned) >= 3:
+            break
+    clean_text = re.sub(r'<quick_replies>.*?</quick_replies>', '', text, flags=re.IGNORECASE | re.DOTALL).strip()
+    return cleaned, clean_text or text
+
+
+# System message appended to every chat-stream request to elicit context-aware
+# quick-reply suggestions inline with the main reply. Replaces the previous
+# two-phase architecture (regex heuristic + post-hoc /api/llm/generate call)
+# which suffered from silent timeouts and zero conversation context.
+_QUICK_REPLIES_INSTRUCTION = (
+    "After your reply, on a NEW line, append a single block exactly in this format:\n"
+    "<quick_replies>\n"
+    "{a short reply the user might say in their own voice — affectionate or warm}\n"
+    "{a different direction or a curious follow-up question advancing the conversation}\n"
+    "{a playful, teasing, or unexpected option that fits this character}\n"
+    "</quick_replies>\n"
+    "Each suggestion: under 60 characters, written as the USER speaking to the character "
+    "(not the character speaking), and concretely tied to what just happened in this turn. "
+    "No quotes, no bullets, no numbering. Only three lines inside the block."
+)
+
+
 def _maybe_auto_compress(
     session_id: int,
     total_active: int,
@@ -5458,6 +5524,13 @@ async def chat_stream(req: Request):
         post_history_instructions=_phi_text,
     )
     llm_messages = assembled_s.messages
+    # Phase 2 (piggyback quick-replies): append a final system message asking the
+    # model to emit 3 reply suggestions inside a <quick_replies>...</quick_replies>
+    # block at the end of its reply. Parsed + stripped server-side before the
+    # cleaned text is persisted, so users never see the raw block.
+    llm_messages = list(llm_messages) + [
+        {"role": "system", "content": _QUICK_REPLIES_INSTRUCTION}
+    ]
     # Derive hist for lorebook keyword scanning (non-system messages)
     hist = [m for m in llm_messages if m["role"] != "system"]
 
@@ -5586,6 +5659,8 @@ async def chat_stream(req: Request):
                 tokens_per_second = round(token_count / elapsed, 1) if elapsed > 0 else None
 
                 emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
+                # Phase 2 (piggyback quick-replies): see _parse_quick_replies docstring.
+                _quick_replies, clean_reply = _parse_quick_replies(clean_reply)
 
                 if not incognito:
                     _asst_imp_s = _score_msg_s(clean_reply, "assistant", emotion_intensity=1.0)
@@ -5700,6 +5775,11 @@ async def chat_stream(req: Request):
                 emotion_val = emotion or 'neutral'
                 intensity_val = 1.0 if emotion_val != 'neutral' else 0.0
                 yield f"event: emotion\ndata: {json.dumps({'type': 'emotion', 'emotion': emotion_val, 'intensity': intensity_val})}\n\n"
+                # Phase 2 (piggyback quick-replies): ship the 3 user-perspective
+                # suggestions extracted from the model's <quick_replies> block
+                # so the frontend can render context-aware reply chips.
+                if _quick_replies:
+                    yield f"event: quick_replies\ndata: {json.dumps({'options': _quick_replies})}\n\n"
                 yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
                 try:
@@ -5863,6 +5943,11 @@ async def chat_stream(req: Request):
 
                 # Stream complete — parse emotion/gesture, save to DB, emit done event
                 emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
+
+                # Phase 2 (piggyback quick-replies): extract the <quick_replies>
+                # block the model was instructed to append. Strip from clean_reply
+                # before persisting so the user never sees the raw markup.
+                _quick_replies, clean_reply = _parse_quick_replies(clean_reply)
 
                 # T1-7: Apply user-defined regex format rules
                 try:
@@ -6041,6 +6126,11 @@ async def chat_stream(req: Request):
                 emotion_val = emotion or 'neutral'
                 intensity_val = 1.0 if emotion_val != 'neutral' else 0.0
                 yield f"event: emotion\ndata: {json.dumps({'type': 'emotion', 'emotion': emotion_val, 'intensity': intensity_val})}\n\n"
+                # Phase 2 (piggyback quick-replies): ship the 3 user-perspective
+                # suggestions extracted from the model's <quick_replies> block
+                # so the frontend can render context-aware reply chips.
+                if _quick_replies:
+                    yield f"event: quick_replies\ndata: {json.dumps({'options': _quick_replies})}\n\n"
                 yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
                 # Fire outbound webhooks (#62) — non-blocking background threads

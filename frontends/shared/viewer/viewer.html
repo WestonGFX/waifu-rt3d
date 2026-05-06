@@ -6926,6 +6926,7 @@
                     window.parent.postMessage({
                         type: 'screenshotReady',
                         dataUrl,
+                        requestId: payload?.requestId,
                         width: renderer.domElement.width * (payload?.quality || 1),
                         height: renderer.domElement.height * (payload?.quality || 1),
                     }, '*');

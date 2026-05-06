@@ -2,9 +2,10 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Search, Download, Loader2, Trash2, Edit3, Box,
-  Globe, HardDrive, CheckCircle, AlertCircle
+  Globe, HardDrive, CheckCircle, AlertCircle, Camera
 } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
+import { useViewerStore } from '../stores/viewerStore';
 import { api } from '../lib/api';
 import type { BrowseableModel, AvatarDownloadStatus, Character } from '../lib/types';
 
@@ -71,6 +72,9 @@ export function ModelBrowser() {
   // ── Character assignment ──
   const [assignTarget, setAssignTarget] = useState<number | null>(null);
 
+  // ── Thumbnail capture ──
+  const [capturingThumbnailFor, setCapturingThumbnailFor] = useState<string | null>(null);
+
   // Debounce search input
   useEffect(() => {
     debounceRef.current = setTimeout(() => setDebouncedQuery(query), 350);
@@ -94,11 +98,11 @@ export function ModelBrowser() {
           .filter((m: { name: string; url: string }) =>
             !debouncedQuery || m.name.toLowerCase().includes(debouncedQuery.toLowerCase())
           )
-          .map((m: { name: string; url: string }) => ({
+          .map((m: { name: string; url: string; thumbnail_url?: string }) => ({
             id: `local_${m.name}`,
             name: m.name,
             description: `Local model: ${m.url}`,
-            thumbnail_url: '',
+            thumbnail_url: m.thumbnail_url || '',
             download_url: m.url,
             format: (m.url.endsWith('.glb') || m.url.endsWith('.gltf') ? 'glb' : 'vrm') as 'vrm' | 'glb' | 'gltf',
             license: 'local',
@@ -120,6 +124,26 @@ export function ModelBrowser() {
   }, [open, tab, debouncedQuery]);
 
   useEffect(() => { fetchModels(); }, [fetchModels]);
+
+  // Handle screenshotReady for thumbnail captures (requestId starts with 'thumbnail_')
+  useEffect(() => {
+    const handler = async (e: MessageEvent) => {
+      const reqId: string | undefined = e.data?.requestId;
+      if (e.data?.type !== 'screenshotReady' || !reqId?.startsWith('thumbnail_')) return;
+      const modelName = reqId.slice('thumbnail_'.length);
+      const dataUrl: string = e.data.dataUrl;
+      try {
+        await api.saveAvatarThumbnail(modelName, dataUrl);
+        await fetchModels();
+      } catch {
+        // Non-fatal: thumbnail save failed
+      } finally {
+        setCapturingThumbnailFor(null);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [fetchModels]);
 
   // ── Download progress polling ──
   useEffect(() => {
@@ -507,6 +531,7 @@ export function ModelBrowser() {
                       model={model}
                       isDownloading={downloadingId === model.id}
                       isLocal={tab === 'local'}
+                      isCapturingThumbnail={capturingThumbnailFor === model.name}
                       onDownload={() => handleDownload(model)}
                       onDelete={() => {
                         // Extract filename from URL for local models
@@ -521,6 +546,10 @@ export function ModelBrowser() {
                       onAssign={(charId) => {
                         const parts = model.download_url.split('/');
                         handleAssign(parts[parts.length - 1], charId);
+                      }}
+                      onCaptureThumbnail={() => {
+                        setCapturingThumbnailFor(model.name);
+                        useViewerStore.getState().dispatchScreenshot({ requestId: `thumbnail_${model.name}` });
                       }}
                       characters={characters}
                     />
@@ -619,10 +648,12 @@ interface ModelCardProps {
   model: BrowseableModel;
   isDownloading: boolean;
   isLocal: boolean;
+  isCapturingThumbnail: boolean;
   onDownload: () => void;
   onDelete: () => void;
   onRename: () => void;
   onAssign: (charId: number) => void;
+  onCaptureThumbnail: () => void;
   characters: Character[];
 }
 
@@ -631,8 +662,8 @@ interface ModelCardProps {
  * and action buttons (download / delete / rename / assign).
  */
 function ModelCard({
-  model, isDownloading, isLocal,
-  onDownload, onDelete, onRename, onAssign,
+  model, isDownloading, isLocal, isCapturingThumbnail,
+  onDownload, onDelete, onRename, onAssign, onCaptureThumbnail,
   characters,
 }: ModelCardProps) {
   const formatStyle = FORMAT_COLORS[model.format] || FORMAT_COLORS.glb;
@@ -785,6 +816,22 @@ function ModelCard({
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            <button
+              onClick={onCaptureThumbnail}
+              disabled={isCapturingThumbnail}
+              title={model.thumbnail_url ? 'Re-capture thumbnail' : 'Capture thumbnail from viewer'}
+              style={{
+                padding: '4px',
+                borderRadius: '6px',
+                border: '1px solid var(--color-border-subtle)',
+                backgroundColor: 'transparent',
+                color: model.thumbnail_url ? 'var(--color-text-tertiary)' : 'var(--color-accent)',
+                cursor: isCapturingThumbnail ? 'wait' : 'pointer',
+                opacity: isCapturingThumbnail ? 0.5 : 1,
+              }}
+            >
+              {isCapturingThumbnail ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
+            </button>
             <button
               onClick={onRename}
               title="Rename"

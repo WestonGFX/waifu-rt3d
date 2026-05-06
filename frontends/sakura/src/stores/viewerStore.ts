@@ -125,7 +125,7 @@ interface ViewerState {
   dispatchKeyframes: (data: Record<string, unknown>) => void;
 
   /** Request a screenshot from the active renderer. */
-  dispatchScreenshot: (opts?: { quality?: number; transparent?: boolean }) => void;
+  dispatchScreenshot: (opts?: { quality?: number; transparent?: boolean; requestId?: string }) => void;
 
   // ── Photo Mode ──────────────────────────────────────────────────────────
 

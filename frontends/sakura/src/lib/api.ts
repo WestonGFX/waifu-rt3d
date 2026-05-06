@@ -355,9 +355,18 @@ export const api = {
    * Returns a unified list with type metadata.
    */
   scan3dModels: () =>
-    get<{ models: Array<{ name: string; file: string; url: string; size: number; type: string }> }>(
+    get<{ models: Array<{ name: string; file: string; url: string; size: number; type: string; thumbnail_url: string }> }>(
       '/api/scan/models3d'
     ).then(d => d.models),
+
+  /**
+   * Save a canvas-captured PNG as a VRM thumbnail sibling file.
+   * @param name - Model stem (e.g. "Panicandy" not "Panicandy.vrm")
+   * @param dataUrl - data:image/png;base64,... from canvas.toDataURL()
+   * @returns URL of the saved thumbnail
+   */
+  saveAvatarThumbnail: (name: string, dataUrl: string) =>
+    post<{ url: string }>('/api/avatars/thumbnail', { name, data_url: dataUrl }),
 
   /** Scan for available Live2D models (.model3.json files). */
   scanLive2d: () =>

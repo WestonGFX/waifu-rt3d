@@ -396,6 +396,8 @@ export function ModelPanel({ character }: ModelPanelProps) {
         setViewportFpsLocal(fps);  // drives the in-panel FPS overlay
         setViewportFps(fps);       // mirrors to store for SettingsView
       } else if (e.data?.type === 'screenshotReady') {
+        // Thumbnail captures are handled by ModelBrowser — skip download.
+        if ((e.data.requestId as string | undefined)?.startsWith('thumbnail_')) return;
         if (screenshotTimeoutRef.current) {
           clearTimeout(screenshotTimeoutRef.current);
           screenshotTimeoutRef.current = null;

@@ -1,22 +1,27 @@
 # Current Project Status
 
-**Last updated:** 2026-05-06 (session 28 — push backlog cleared + v72 dedupe migration + ImageLightbox extracted + /go skill rewritten with per-task strategy selection + Memory Browser P2 bug filed; 3 local commits this session, all pushed)
-**Branch:** master · 0 ahead of `origin/master` · all session-28 work pushed (`dbdac98`, `eeaa2de`, `c9b0dc4`); session 27's 14-commit backlog also pushed at session start (`efc766b..5a87385`).
+**Last updated:** 2026-05-06 (session 29 — Visual Content MVP Phases 2+3 complete + Memory Browser P2 bugs fixed + Bond Pill XP display fixed + avatar URL fixes; 7 commits this session, all pushed)
+**Branch:** master · 0 ahead of `origin/master` · all session-29 work pushed (`5349b42`, `05bf460`, `4d95d7c`, `c7342b5`, `9aea9d2`, `87b380f`, `7367280`).
 **Schema version:** v72 in code (chain reserved through v74: ✅ v71 Visual Content MVP, ✅ v72 character_relationships dedupe + UNIQUE INDEX, v73 AIE LoRA, v74 AIE DSPy). Live DB still v71 — preflight will auto-apply v72 on next backend restart.
-**Tests:** **2,703 backend** + **215 frontend** passing, tsc clean. (Frontend was 201 in session 27; jumped to 215 from MemoryBrowser test additions during browser QA — verify count next session.)
+**Tests:** **2,703 backend** + **226 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
 
-**Session 28 (2026-05-06) — push backlog cleared + v72 + ImageLightbox + /go rewrite. 3 commits, all pushed.**
-- `dbdac98` feat(schema-v72): dedupe character_relationships + UNIQUE INDEX on char_id. Resolves session-27's P1. Window-function dedupe keeps highest bond_xp row per char_id (ties → latest last_updated, then highest id). UNIQUE INDEX `uq_character_relationships_char_id` prevents recurrence. 2703/2703 backend tests pass. Live DB at v71 — preflight auto-runs v72 on next backend boot. Inline test: 6 → 3 rows, UNIQUE enforced, idempotent.
-- `eeaa2de` refactor(viz-mvp-p2): extract `ImageLightbox` from `GalleryOverlay`. Self-contained component, props-driven (item, onClose, onToggleFavorite, onDownload, onDelete). ~155 LOC moved into `frontends/sakura/src/components/ImageLightbox.tsx`. `formatSize` duplicated inline (6 lines, not worth a util). Delete-confirm stays caller-side so future callers can customize. Frontend 215/215 pass, tsc clean. Phase 2 dependency for chat-image lightbox is now ready — remaining Phase-2 work still blocked on Ultraplan PR for `DialogueBubble.tsx` + `ChatThread.tsx`.
-- `c9b0dc4` refactor(/go): port AnimeGirly's per-task strategy selection + waifu-specific guards. `.claude/skills/go/SKILL.md` 263 → 385 lines. Phase 0 plan-file bootstrap, Phase 2.5 strategy selection (8-axis scoring + 9th waifu axis for sensitive areas), Hybrid pattern, token-budget rule (20k haiku / 40k sonnet / 80k opus), Step 4 preference forks via AskUserQuestion, new `--seq`/`--ask` flags. **Hard rule changes:** "NEVER plan mode" → "Plan mode is conditional"; new "NEVER auto-pick MoE for tasks under 300 LOC / 3 files"; new "NEVER auto-pick MoE when sensitive area touched" (avatar, themes, column resize, context providers, Pydantic↔TS — those have regressed 10+ times). Phase 5 callouts added for Pydantic↔TS api.ts mirror + context-provider expansion test mock drift. Phase 6 push-gate scan added.
-- **Session 28 also pushed session-27's 14-commit backlog** (`efc766b..5a87385`) and filed a P2 bug from hands-on Memory Browser QA: tab strip overflows viewport at 1512w, click on "About You" tab closes panel via backdrop. Repro + suggested fix in `docs/bugs/2026-05-06-memory-browser-tab-overflow-and-close-on-click.md`.
+**Session 29 (2026-05-06) — Visual Content MVP complete + bugs cleared. 7 commits, all pushed.**
+- `5349b42` feat(viz-mvp-p2): chat image lightbox + regenerateImage. `ChatImageLightbox.tsx` (URL-shaped, distinct from gallery's item-shaped `ImageLightbox`). `DialogueBubble` `<img>` click → fullscreen with Save/Copy URL/Regenerate. `chatStore.regenerateImage(messageId)` reads stored `imagePrompt`, hits `/api/image-gen/portrait`, patches `imageUrl` in place. `tool_result` SSE handler captures `data.data.prompt` → `imagePrompt`. `onRegenerateImage` prop wired through ChatThread. 7 Vitest cases (`ChatImageLightbox.test.tsx`). Frontend 215 → 222.
+- `05bf460` feat(viz-mvp-p3): image retention cleanup + apply-styles script + Settings slider. `_run_image_retention_cleanup(cfg)` in `backend/server.py` + called from `_run_scheduler_tick` (24h gate, skips `*_expr_*.png`, `retention_days=0` = unlimited). Settings → Image Generation: SliderField for retention (0–365d, persists `image_gen.retention_days`). `scripts/apply_character_styles.py` — reads approved draft JSON, bulk-writes `characters.image_style`, supports `--dry-run`.
+- `4d95d7c` fix(memory-browser): tab strip overflow + backdrop close-on-click guard. Fixes both P2 bugs from session-28 QA (`docs/bugs/2026-05-06-memory-browser-tab-overflow-and-close-on-click.md`).
+- `c7342b5` fix(bond-pill): clarify XP display format. "138/12 XP" → "138/150 · 12 to next". Resolves P3 bug (`docs/bugs/2026-05-06-bondpill-xp-overshoots-level-threshold.md`).
+- `9aea9d2` test(bond-pill): regression tests for XP display format. Locks in the fix.
+- `87b380f` fix(seed-data): repoint Shiori + Luna avatar_url to portrait images.
+- `7367280` fix(seed-data): apply 6 user-confirmed avatar picks (session 29 wave 2).
 
-**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers anywhere. All session-28 work externally visible.
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers anywhere. All session-29 work externally visible.
+
+**Deferred (needs re-spec):** stuck-gen indicator on `DialogueBubble` — planned signal (`imagePrompt` set + `imageUrl` absent) doesn't match either gen path; needs `regenStartedAt` field redesign before implementation. Low-value relative to other work.
 
 ---
 

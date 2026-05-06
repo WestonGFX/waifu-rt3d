@@ -11716,17 +11716,63 @@ def scan_3d_models():
         for path in base.glob(ext_glob):
             ext = path.suffix.lower().lstrip(".")
             model_type = "vrm" if ext == "vrm" else "glb"
+            thumb = path.with_suffix(".png")
+            thumbnail_url = f"/files/avatars/{thumb.name}" if thumb.exists() else ""
             models.append({
                 "name": path.stem,
                 "file": path.name,
                 "url": f"/files/avatars/{path.name}",
                 "size": path.stat().st_size,
                 "type": model_type,
+                "thumbnail_url": thumbnail_url,
             })
 
     # Sort by name for stable ordering
     models.sort(key=lambda m: m["name"].lower())
     return {"models": models}
+
+
+class AvatarThumbnailBody(BaseModel):
+    """Request body for saving an avatar thumbnail."""
+    name: str
+    data_url: str  # data:image/png;base64,<b64>
+
+
+@app.post("/api/avatars/thumbnail")
+async def save_avatar_thumbnail(body: AvatarThumbnailBody):
+    """Save a base64-encoded PNG as a VRM thumbnail sibling file.
+
+    The thumbnail is stored at backend/storage/avatars/{name}.png and
+    immediately served via the /files/avatars/ static mount.  Overwrites
+    any existing thumbnail so the user can re-capture after repositioning.
+
+    Args:
+        body: { name: str (stem without extension), data_url: str }
+
+    Returns:
+        {"url": "/files/avatars/{name}.png"}
+
+    Raises:
+        400: If name contains path traversal characters or data_url is invalid.
+    """
+    import base64, re
+    name = body.name
+    if not re.match(r'^[\w\- ]+$', name):
+        raise HTTPException(status_code=400, detail="Invalid model name")
+
+    # Strip the data URL prefix
+    match = re.match(r'^data:image/png;base64,(.+)$', body.data_url, re.DOTALL)
+    if not match:
+        raise HTTPException(status_code=400, detail="data_url must be data:image/png;base64,...")
+
+    try:
+        img_bytes = base64.b64decode(match.group(1))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 data")
+
+    dest = STORAGE / "avatars" / f"{name}.png"
+    await run_in_threadpool(dest.write_bytes, img_bytes)
+    return {"url": f"/files/avatars/{name}.png"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════

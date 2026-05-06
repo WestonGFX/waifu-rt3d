@@ -14,6 +14,7 @@ import { useMemorialScene } from '../hooks/useMemorialScene';
 import { useAdaptivePacing } from '../hooks/useAdaptivePacing';
 import { useCharacterAudio } from '../hooks/useCharacterAudio';
 import { api } from '../lib/api';
+import { downloadBlob } from '../lib/downloadFile';
 import { DialogueBubble } from '../components/DialogueBubble';
 import { WaveformVisualizer } from '../components/WaveformVisualizer';
 import { StatusBar } from '../components/StatusBar';
@@ -577,12 +578,8 @@ export function ChatThread() {
     });
     const content = `${activeCharacter?.name ?? 'Chat'} — exported ${new Date().toLocaleString()}\n\n${lines.join('\n\n')}`;
     const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(activeCharacter?.name ?? 'chat').replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const filename = `${(activeCharacter?.name ?? 'chat').replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.txt`;
+    downloadBlob(blob, filename);
   }, [messages, activeCharacter]);
 
   /**
@@ -613,12 +610,8 @@ export function ChatThread() {
       '*Exported from Waifu-RT3D*',
     ].join('\n');
     const blob = new Blob([content], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${charName.replace(/[^a-z0-9]/gi, '_')}-${new Date().toISOString().slice(0, 10)}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const filename = `${charName.replace(/[^a-z0-9]/gi, '_')}-${new Date().toISOString().slice(0, 10)}.md`;
+    downloadBlob(blob, filename);
   }, [messages, activeCharacter, sessionId]);
 
   /**
@@ -632,13 +625,9 @@ export function ChatThread() {
       const resp = await fetch(`/api/sessions/${sessionId}/export?format=json`);
       if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
       const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
       const charName = (activeCharacter?.name ?? 'chat').replace(/[^a-z0-9]/gi, '_');
-      a.download = `${charName}-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const filename = `${charName}-${new Date().toISOString().slice(0, 10)}.json`;
+      downloadBlob(blob, filename);
     } catch (err) {
       console.error('[ChatThread] JSON export failed:', err);
     }

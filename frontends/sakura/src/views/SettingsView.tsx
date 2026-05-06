@@ -4347,6 +4347,15 @@ function AIArtTab({ save, cfg }: TabProps) {
             onChange={(v) => save('image_gen.height', v)}
             format={(v) => `${v}px`}
           />
+
+          <SliderField
+            label="Image Retention"
+            description="Auto-delete chat-generated images older than N days. Set to 0 for unlimited (no cleanup). Expression-portrait files are never affected."
+            value={Number(cfg('image_gen.retention_days', 90))}
+            min={0} max={365} step={1}
+            onChange={(v) => save('image_gen.retention_days', v)}
+            format={(v) => (v === 0 ? 'Unlimited' : `${v} days`)}
+          />
         </div>
       </section>
 

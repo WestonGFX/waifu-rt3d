@@ -12983,6 +12983,7 @@ async def _db_vacuum_loop(interval_days: int = 7) -> None:
 
 # Module-level handle so the lifespan shutdown can cancel the scheduler task.
 _scheduler_task = None
+_last_retention_run: float = 0.0
 
 
 async def _scheduler_loop(db_path: str) -> None:
@@ -13164,6 +13165,66 @@ def _run_scheduler_tick(db_path: str) -> None:
         logger.warning("[Scheduler] Tick error: %s", _e)
     finally:
         conn.close()
+
+    # Visual MVP P3: per-day image-retention sweep (chat-generated images only).
+    try:
+        _run_image_retention_cleanup(cfg)
+    except Exception as _e:
+        logger.warning("[Scheduler] Image retention sweep error: %s", _e)
+
+
+def _run_image_retention_cleanup(cfg: dict) -> None:
+    """Delete old chat-generated images from the storage directory.
+
+    Runs at most once per 24 hours regardless of scheduler tick cadence
+    (gated via the module-level ``_last_retention_run`` timestamp). Skips
+    expression-portrait files (``*_expr_*.png``) so the per-character
+    expression sets remain intact regardless of age.
+
+    Args:
+        cfg: Loaded application config; reads
+            ``cfg["image_gen"]["retention_days"]`` (default 90, ``0``
+            means unlimited and short-circuits the sweep).
+
+    Returns:
+        None. Logs a summary line on each non-noop pass.
+    """
+    global _last_retention_run
+    import time as _time
+    from backend.image_gen.registry import _IMAGES_DIR
+
+    retention_days = int(cfg.get("image_gen", {}).get("retention_days", 90) or 0)
+    if retention_days <= 0:
+        return  # Unlimited retention — nothing to do.
+
+    now_ts = _time.time()
+    if now_ts - _last_retention_run < 86400:
+        return  # Less than 24h since last sweep.
+
+    cutoff = now_ts - (retention_days * 86400)
+    deleted = 0
+    if _IMAGES_DIR.exists():
+        for entry in _IMAGES_DIR.iterdir():
+            if not entry.is_file() or entry.suffix.lower() != ".png":
+                continue
+            name = entry.name
+            if "_expr_" in name:
+                continue  # Skip expression portraits.
+            if not (name.startswith("gen_") or name.startswith("portrait_")):
+                continue
+            try:
+                if entry.stat().st_mtime < cutoff:
+                    entry.unlink()
+                    deleted += 1
+            except OSError:
+                continue
+
+    _last_retention_run = now_ts
+    if deleted:
+        logger.info(
+            "[Scheduler] Image retention sweep deleted %d files older than %dd",
+            deleted, retention_days,
+        )
 
 
 # NOTE: startup logic is now in the lifespan() context manager above.

@@ -26,7 +26,7 @@ jobs:
           # Core server dependencies (chromadb excluded — tests mock the vector store)
           pip install \
             fastapi uvicorn starlette python-multipart psutil requests httpx \
-            edge-tts huggingface_hub
+            edge-tts huggingface_hub numpy Pillow
           # Test runner
           pip install pytest pytest-asyncio
 

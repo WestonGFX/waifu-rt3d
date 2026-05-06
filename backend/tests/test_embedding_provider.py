@@ -18,6 +18,16 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+# unittest.mock.patch('sentence_transformers.SentenceTransformer', ...) imports
+# the real module to resolve the attribute path, so the package must be present
+# even though every test mocks the implementation. CI does not install
+# sentence-transformers (it pulls torch + transformers — ~1-2 GB) so skip this
+# whole file when the dependency is missing.
+pytest.importorskip(
+    "sentence_transformers",
+    reason="sentence-transformers not installed (CI skips heavy ML deps; full local venv runs these)",
+)
+
 # Ensure project root is on sys.path regardless of invocation CWD.
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:

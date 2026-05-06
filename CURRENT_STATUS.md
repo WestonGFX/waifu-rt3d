@@ -1,14 +1,31 @@
 # Current Project Status
 
-**Last updated:** 2026-05-06 (session 26 — Visual Content MVP Phase 1 shipped: schema v71 + per-character `image_style` resolver wired into image-gen endpoints + agent tool; +10 tests)
-**Branch:** master (commit `d34f86f` local, not pushed — pre-existing session-24-WIP working-tree mods still intentionally untouched)
+**Last updated:** 2026-05-06 (session 27 — Memory Browser API unification closed + Viz MVP Phase 3 draft script + README badges + research persistence; 4 local commits)
+**Branch:** master (commits `201f465`, `e253a35`, `47da798`, `f9db148` local, not pushed — pre-existing session-24-WIP working-tree mods still intentionally untouched)
 **Schema version:** v71 (chain reserved through v74: ✅ v71 Visual Content MVP, v72 AIE feedback Phase 0, v73 AIE LoRA, v74 AIE DSPy)
-**Tests:** **2,703 backend** (pytest, 0 known failures) passing, tsc clean
+**Tests:** **2,703 backend** (pytest, 0 known failures) + **200 frontend** (Vitest, MemoryBrowser 36 → 37) passing, tsc clean
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session 27 (2026-05-06) — Memory Browser API unification closed + Viz MVP Phase 3 partial + README hygiene. 4 commits local, all unpushed.**
+- `201f465` refactor(memory-browser): migrate `FactRow` inline edit to `api.updateUserFact`. Closes the last raw-fetch gap from MEMORY.md NEXT TASK item 2 — adds `api.updateUserFact(charId, factId, factText)` wrapper to `frontends/sakura/src/lib/api.ts` (mirrors `createUserFact`/`deleteUserFact` shape), replaces the raw `fetch()` call at `MemoryBrowser.tsx:542`, drops the now-redundant `if (res.ok)` guard since `patch<T>` throws on 4xx/5xx. Adds one Vitest case under `Facts (About You) tab` describe block exercising the edit-and-save flow via `getByTitle('Edit this fact')` + Enter-key save. MemoryBrowser test suite 36 → **37** passing, 0 raw `fetch(` calls remain in the component. Plan status lines appended to `docs/plans/2026-05-06-memory-browser-api-unification.md`.
+- `e253a35` docs(readme): bump test badge 2678 → 2703 + schema badge v70 → v71 + extend "Image generation" agent-tool bullet to mention per-character `image_style` (positive/negative prompt prefixes, optional LoRA) auto-applied. Tracks session 26's Phase 1 ship.
+- `47da798` feat(viz-mvp-p3): scripts/draft_character_styles.py + .gitignore for draft output. Read-only-against-characters-table script that calls the configured LLM adapter once per character with a module-level `STYLE_DRAFT_PROMPT`, parses the JSON reply tolerantly (regex-extract → json.loads, returns sentinel on bad rows so the batch keeps going), writes `backend/characters/builtin_image_styles.draft.json` (gitignored) for human review. Flags: `--char-id N` (single character), `--dry-run` (no LLM call), `--output PATH`. WAIFU_DB_PATH env override. Smoke-tested with --dry-run → 14 entries written without LLM contact. Backend suite still 2703/2703.
+- `f9db148` docs(research): persist 2026-05-01 settings dedup audit (orphan untracked since May 1). 5 hard duplicates, 6 soft duplicates, 3 orphan store fields, 3 orphan UI controls, 19 live backend unknown-key warnings, 4 double-persisted config keys — read-only inventory for a future settings refactor pass.
+
+**Outstanding Phase 3 work — blocked by session-24 WIP on shared files:**
+- Stuck-generation indicator on `DialogueBubble.tsx` (also depends on Phase 2's `imagePrompt` ChatMessage field).
+- Retention slider on `SettingsView.tsx` Image Gen tab.
+- Once-per-day retention cleanup pass in `_run_scheduler_tick()` (`backend/server.py`).
+
+The session-24 RichComposer follow-up working-tree edits on `server.py` (lines 1231 + 5524-6126), `DialogueBubble.tsx`, `ChatThread.tsx`, `chatStore.ts`, `appStore.ts`, `types.ts`, `SettingsView.tsx`, `components.css` plus the orphan `backend/tests/test_quick_replies_parser.py` remain untouched per CLAUDE.md push-gate / Plan File Safety rules. Empty 0-byte `app.db` at repo root and today's 60KB `backend/storage/waifu.db.bak.20260506132609` also untouched (no destructive ops without user confirmation).
+
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers anywhere. Local commits only.
+
+---
 
 **Session 26 (2026-05-06) — Visual Content MVP Phase 1 shipped. 1 commit local (`d34f86f`), backend-only.**
 - `d34f86f` feat(viz-mvp-p1): per-character `image_style` + style resolver (schema v71). 6 files, +414/-16. Schema v70 → v71 (`characters.image_style` JSON column, idempotent migration). New `resolve_character_style(char_id, db_path)` helper in `backend/image_gen/registry.py` — fail-soft read-only sqlite, returns `("", "")` on every error path. Wired into `generate_portrait` + `generate_background` (server.py) and the agent `generate_image` tool (`backend/agent/tools/image_gen.py`). `ToolResult.data["prompt"]` now carries the resolved full prompt for Phase 2's `imagePrompt` field. 10 new tests in `backend/tests/test_image_gen_style.py` (8 helper branches + 2 endpoint integration). Backend suite: 2693 → **2703** passing, zero regressions.

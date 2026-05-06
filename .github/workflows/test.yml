@@ -27,11 +27,6 @@ jobs:
           pip install \
             fastapi uvicorn starlette python-multipart psutil requests httpx \
             edge-tts huggingface_hub
-          # Emotion module deps — backend/emotion/__init__.py eagerly imports
-          # AdvancedSentimentAnalyzer, which top-level imports transformers + torch.
-          # CPU-only torch wheel keeps the install footprint small.
-          pip install transformers
-          pip install --index-url https://download.pytorch.org/whl/cpu torch
           # Test runner
           pip install pytest pytest-asyncio
 

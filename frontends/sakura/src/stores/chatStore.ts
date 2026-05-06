@@ -30,6 +30,14 @@ interface ChatState {
   clear: () => void;
   /** Drive the VRM viewer's expression and mirror state into the store. */
   setCurrentEmotion: (emotion: string, intensity: number) => void;
+  /**
+   * Regenerate the image attached to a prior assistant message in place.
+   * Reads the message's stored `imagePrompt` (resolved with style prefix
+   * during the original tool_result), re-fires the portrait endpoint, and
+   * patches the new `imageUrl` onto the same message — never appends a new
+   * bubble.
+   */
+  regenerateImage: (messageId: string) => Promise<void>;
 }
 
 const genId = () => crypto.randomUUID();
@@ -339,7 +347,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             // Agent tool finished — if the tool generated an image, attach the URL
             // to the current assistant message so DialogueBubble can render it.
             if (data.display === 'image' && data.data?.url) {
-              patchAssistant({ imageUrl: data.data.url });
+              const patch: Partial<ChatMessage> = { imageUrl: data.data.url };
+              if (typeof data.data.prompt === 'string' && data.data.prompt) {
+                patch.imagePrompt = data.data.prompt;
+              }
+              patchAssistant(patch);
             }
             break;
 
@@ -447,5 +459,26 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     } finally {
       set({ loading: false, abortController: null });
     }
-  }
+  },
+
+  regenerateImage: async (messageId: string) => {
+    const msg = get().messages.find((m) => m.id === messageId);
+    if (!msg?.imagePrompt) return;
+    const patch = (p: Partial<ChatMessage>) => {
+      set((s) => ({
+        messages: s.messages.map((m) => (m.id === messageId ? { ...m, ...p } : m)),
+      }));
+    };
+    patch({ status: 'streaming' });
+    try {
+      const result = await api.generatePortrait({ prompt: msg.imagePrompt });
+      if (result.ok && result.url) {
+        patch({ imageUrl: result.url, status: 'sent' });
+      } else {
+        patch({ status: 'sent' });
+      }
+    } catch {
+      patch({ status: 'sent' });
+    }
+  },
 }));

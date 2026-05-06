@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { Volume2, Pin, ChevronLeft, ChevronRight, RefreshCw, Copy, Trash2, Pencil, Check, X } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
+import { ChatImageLightbox } from './ChatImageLightbox';
+import { downloadUrl } from '../lib/downloadFile';
 import { api } from '../lib/api';
 import { parseActions } from '../lib/parseActions';
 import { useAppStore } from '../stores/appStore';
@@ -91,6 +94,8 @@ interface DialogueBubbleProps {
   onChoiceSelect?: (choice: string) => void;
   /** T0-3: called when user clicks regenerate on an assistant message. */
   onRegenerate?: (serverMessageId: number) => void;
+  /** Visual MVP P2: regenerate the inline image attached to this message. */
+  onRegenerateImage?: (messageId: string) => void;
   /** T0-3: called when user navigates to a different branch. */
   onBranchSwitch?: (newMessageId: number, newText: string, newEmotion?: string) => void;
   /** Called when the user deletes a message. Receives the local message ID. */
@@ -309,12 +314,13 @@ function StageRow({ done, active, label }: { done: boolean; active: boolean; lab
  * PUT /api/messages/{serverMessageId}/pin and tracks pinned state locally.
  * Pinned messages show a filled Pin indicator in the top-right corner.
  */
-export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onBranchSwitch, onDelete, onEdit, isLastAssistant = false, isRegenerating = false }: DialogueBubbleProps) {
+export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onRegenerateImage, onBranchSwitch, onDelete, onEdit, isLastAssistant = false, isRegenerating = false }: DialogueBubbleProps) {
   const thinkingMode = useAppStore(s => s.thinkingIndicatorMode);
   const [pinned, setPinned] = useState(message.pinned ?? false);
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [editText, setEditText] = useState(message.text);
   const editRef = useRef<HTMLTextAreaElement>(null);
 
@@ -699,14 +705,33 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               src={message.imageUrl}
               alt="Generated image"
               className="rounded-lg max-w-full"
+              onClick={() => setLightboxOpen(true)}
               style={{
                 maxHeight: 360,
                 border: '1px solid var(--color-border-subtle)',
                 objectFit: 'contain',
+                cursor: 'zoom-in',
               }}
             />
           </div>
         )}
+        <AnimatePresence>
+          {lightboxOpen && message.imageUrl && (
+            <ChatImageLightbox
+              imageUrl={message.imageUrl}
+              onClose={() => setLightboxOpen(false)}
+              onSave={() => {
+                const filename = `${character?.name ?? 'image'}-${message.id.slice(0, 8)}.png`;
+                void downloadUrl(message.imageUrl!, filename);
+              }}
+              onRegenerate={
+                message.imagePrompt && onRegenerateImage
+                  ? () => onRegenerateImage(message.id)
+                  : undefined
+              }
+            />
+          )}
+        </AnimatePresence>
 
         {/* Feature E: Dialogue choice buttons */}
         {message.choices && message.choices.length > 0 && onChoiceSelect && (

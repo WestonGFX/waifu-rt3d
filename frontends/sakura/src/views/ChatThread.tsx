@@ -51,7 +51,7 @@ type MicState = 'idle' | 'recording' | 'processing';
  */
 export function ChatThread() {
   const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode, config, saveConfig } = useAppStore();
-  const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode } = useChatStore();
+  const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode, regenerateImage } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
@@ -831,6 +831,7 @@ export function ChatThread() {
                   searchQuery={searchQuery}
                   onChoiceSelect={handleChoiceSelect}
                   onRegenerate={handleRegenerate}
+                  onRegenerateImage={regenerateImage}
                   onBranchSwitch={handleBranchSwitch}
                   onDelete={handleDeleteMessage}
                   onEdit={msg.role === 'user' ? handleEditMessage : undefined}

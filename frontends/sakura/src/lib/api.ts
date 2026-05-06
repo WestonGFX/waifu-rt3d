@@ -541,7 +541,7 @@ export const api = {
     post<{ text: string }>('/api/llm/generate', { messages, temperature, max_tokens: maxTokens }),
 
   /**
-   * Generate 3 AI-powered quick-reply suggestions based on the last assistant message.
+   * Generate 2-3 AI-powered quick-reply suggestions based on the last assistant message.
    *
    * Uses the LLM generation proxy with a short, focused prompt to produce
    * contextually relevant reply options the user can click to continue chatting.
@@ -549,27 +549,40 @@ export const api = {
    * @param assistantReply - The last assistant message text (truncated to 300 chars internally).
    * @param charName       - Character name for context.
    * @param userName       - User's display name for personalisation.
-   * @returns Promise resolving to `{ text: string }` where text is a JSON array of 3 strings.
+   * @param opts           - Optional `count` (2 or 3, default 3) and `userPersona` (mirrored from chat system prompt for tonal consistency).
+   * @returns Promise resolving to `{ text: string }` where text is a JSON array of `count` strings.
    */
-  generateQuickReplies: (assistantReply: string, charName: string, userName: string) =>
-    post<{ text: string }>('/api/llm/generate', {
+  generateQuickReplies: (
+    assistantReply: string,
+    charName: string,
+    userName: string,
+    opts?: { count?: 2 | 3; userPersona?: string },
+  ) => {
+    const count = opts?.count ?? 3;
+    const persona = (opts?.userPersona ?? '').trim();
+    const toneRule = count === 2
+      ? 'Vary tone: one warm/curious, one playful/teasing.'
+      : 'Vary tone: one warm/affectionate, one curious/engaged, one playful/teasing.';
+    const personaPrefix = persona ? `[About the user]: ${persona}\n` : '';
+    return post<{ text: string }>('/api/llm/generate', {
       messages: [
         {
           role: 'system',
           content:
-            'You generate exactly 3 short reply suggestions for a chat companion app. ' +
-            'Output ONLY a JSON array of 3 strings, no other text. No markdown. No explanation. ' +
+            `You generate exactly ${count} short reply suggestions for a chat companion app. ` +
+            `Output ONLY a JSON array of ${count} strings, no other text. No markdown. No explanation. ` +
             'Each suggestion must be under 60 characters. ' +
-            'Vary tone: one warm/affectionate, one curious/engaged, one playful/teasing.',
+            toneRule,
         },
         {
           role: 'user',
-          content: `${charName} just said: "${assistantReply.slice(0, 300)}"\nGenerate 3 short replies ${userName || 'the user'} might send.`,
+          content: `${personaPrefix}${charName} just said: "${assistantReply.slice(0, 300)}"\nGenerate ${count} short replies ${userName || 'the user'} might send.`,
         },
       ],
       temperature: 0.85,
-      max_tokens: 120,
-    }),
+      max_tokens: count === 2 ? 90 : 120,
+    });
+  },
 
   uploadAvatar: (file: File) => {
     const form = new FormData();

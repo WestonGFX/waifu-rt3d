@@ -696,3 +696,11 @@ Commit cadence: one commit per phase minimum. Do not batch all three phases into
 ---
 
 *Forward-looking:* Standard tier (proactive image sends, bond-milestone visual unlocks, daily send budget) and Full tier (VRM outfit sync, ControlNet pose-guided generation) are documented in `docs/plans/2026-05-06-visual-content-in-chat-scoping.md`. Re-evaluate after MVP ships and beta-test signal arrives.
+
+---
+
+## Status
+
+- 2026-05-06 Phase 1: ✓ session 26 commit `d34f86f` — schema v71, `resolve_character_style` helper, wired into `generate_portrait` + `generate_background` + agent `generate_image`; 10 new tests (`test_image_gen_style.py`); backend 2693 → 2703.
+- 2026-05-06 Phase 3 partial: ✓ session 27 commit `47da798` — `scripts/draft_character_styles.py` (read-only-against-characters-table) + `.gitignore` entry for the draft output. Smoke-tested with `--dry-run` (14 entries, no LLM contact). Remaining Phase 3 work (retention cleanup in `_run_scheduler_tick`, stuck-gen indicator on `DialogueBubble`, Settings retention slider) blocked by session-24 WIP on shared files.
+- 2026-05-06 Phase 2: ⏸ blocked — `DialogueBubble.tsx` + `ChatThread.tsx` are in the in-flight Ultraplan PR diff and also carry session-24 WIP; check out fresh from master after the merge before opening them.

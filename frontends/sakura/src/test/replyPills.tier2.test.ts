@@ -1,14 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { api } from '../lib/api';
 
-/**
- * Reply-Assist Tier 2 — verify the api.generateQuickReplies wrapper forwards
- * the new `opts.count` (2 or 3) and `opts.userPersona` correctly into the
- * `/api/llm/generate` request body, and that the system + user prompt vary
- * with count and persona presence.
- *
- * Stubs `fetch` directly so we exercise the real api method (not a mock).
- */
+// Stubs fetch directly so the real api.generateQuickReplies runs (not a mock).
 describe('Reply-Assist Tier 2 — generateQuickReplies request shape', () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
 

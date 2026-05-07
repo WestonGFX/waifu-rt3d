@@ -323,3 +323,5 @@ All 7 open questions answered. `/go` against M1 is now unblocked.
 - 2026-05-06 M1 (items 1-8): ✓ All 8 items shipped across sessions 31-32. Schema v73 landed. Browser verify needed for item 7 (viewer narrow-panel ResizeObserver — sensitive area).
 - 2026-05-06 M2 (items 9-12): ✓ All 4 items shipped in session 33. Memory tier capacity meter, "Remember this" pin→memory, SVG mind map tab, tier filter pills.
 - 2026-05-06 M3 (items 13-16): ✓ All 4 items shipped in session 33. Voxtral TTS adapter, voice wand endpoint, schema v74 voice_message_url, inline audio player + generate-voice button in DialogueBubble, Voice Cloning section in SettingsView VoiceTab.
+- 2026-05-06 M4 (items 17-19): ⚠ Item 17 ✓ (PATCH endpoint + persistence). Item 18 deferred (re-spec needed for image_regen_started_at). Item 19 ✓ (already implemented, verified).
+- 2026-05-06 M6 (items 20-22): ✓ Item 20 already complete (BondPill streak counter). Item 21 ✓ (character_achievements v75 + 11 defs + AchievementToast). Item 22 ✓ (nsfw.skip_bond_gate config toggle + SafetyTab UI + 3 call sites in server.py).

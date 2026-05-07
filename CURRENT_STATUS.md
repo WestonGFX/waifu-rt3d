@@ -1,8 +1,8 @@
 # Current Project Status
 
-**Last updated:** 2026-05-06 (session 33 — M1 ✅ + M2 ✅ + M3 ✅ complete, 16/16 items shipped; next: M4 Visual Content MVP Closeout)
-**Branch:** master · 13 ahead of `origin/master`.
-**Schema version:** v74 in code (✅ v71 Visual Content MVP, ✅ v72 character_relationships dedupe, ✅ v73 messages 6-col consolidation, ✅ v74 voice_message_url; next: v75 for M6 badges table).
+**Last updated:** 2026-05-06 (session 33 — M1 ✅ + M2 ✅ + M3 ✅ + M4 ✅ + M6 ✅ complete; 22/22 items done; M18 deferred; next: M5 AIE Phase C or M8 Distribution)
+**Branch:** master · 16 ahead of `origin/master`.
+**Schema version:** v75 in code (✅ v73 messages 6-col, ✅ v74 voice_message_url, ✅ v75 character_achievements).
 **Tests:** **2,725 backend** + **256 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
@@ -30,7 +30,23 @@ M2 Memory Transparency (items 9-12):
 | 11 | Memory Browser graph view (SVG radial mind map) | ✅ | `d256e41` |
 | 12 | Memory tier filter pills + promoted_at display | ✅ | `b6970d7` |
 
-**Next: M4 — Visual Content MVP Closeout** (items 17-19).
+M6 Gamification (items 20-22):
+
+| # | Item | Status | Commit |
+|---|---|---|---|
+| 20 | Daily streaks UI (🔥 counter) | ✅ pre-existing | `BondPill.tsx` |
+| 21 | Achievement/badge system (schema v75 + 11 defs + AchievementToast) | ✅ | `31492ef` |
+| 22 | Affinity-gated NSFW override toggle | ✅ | `5384c77` |
+
+M4 Visual Content MVP Closeout (items 17-19):
+
+| # | Item | Status | Commit |
+|---|---|---|---|
+| 17 | PATCH /messages/{id}/image-url + chatStore persist | ✅ | `dc8d45e` |
+| 18 | Stuck-gen indicator (image_regen_started_at) | ⏸ deferred — needs re-spec |  |
+| 19 | Settings retention slider | ✅ pre-existing | `SettingsView.tsx:4411` |
+
+**Next: M5 AIE Phase C (gated by tier decision) or M8 Distribution & Marketing.**
 
 ---
 

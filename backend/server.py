@@ -5627,6 +5627,9 @@ async def chat_stream(req: Request):
             full_reply = ""
             token_count = 0
             stream_start_time = time.time()
+            # Captured when a generate_image tool_result arrives mid-stream.
+            _stream_image_url: str | None = None
+            _stream_image_prompt: str | None = None
 
             yield f"event: processing\ndata: {json.dumps({'input_tokens': est_input_tokens})}\n\n"
             yield f"event: generating\ndata: {json.dumps({'status': 'first_token'})}\n\n"
@@ -5651,6 +5654,11 @@ async def chat_stream(req: Request):
                         yield f"event: token\ndata: {json.dumps({'t': t})}\n\n"
 
                     elif evt_type in ("tool_call", "tool_result"):
+                        if evt_type == "tool_result" and evt_data.get("display") == "image":
+                            _d = evt_data.get("data") or {}
+                            if _d.get("url"):
+                                _stream_image_url = _d["url"]
+                                _stream_image_prompt = _d.get("prompt") or None
                         yield f"event: {evt_type}\ndata: {json.dumps(evt_data)}\n\n"
 
                 # Stream complete — parse emotion/gesture, save to DB, emit done event
@@ -5681,6 +5689,17 @@ async def chat_stream(req: Request):
                              token_count, est_input_tokens, generation_time_ms, tokens_per_second)
                         )
                     assistant_message_id = cur.lastrowid
+
+                    # Persist image fields if the agent generated an image this turn.
+                    if _stream_image_url and assistant_message_id:
+                        try:
+                            con.execute(
+                                "UPDATE messages SET image_url=?, image_prompt=? WHERE id=?",
+                                (_stream_image_url, _stream_image_prompt, assistant_message_id)
+                            )
+                        except sqlite3.OperationalError:
+                            pass  # v73 columns not yet present on older DBs mid-migration
+
                     con.commit()
 
                     _update_relationship(con, char_id, emotion, user_msg_len=len(text))
@@ -6792,12 +6811,13 @@ def get_session_messages(session_id: int, include_branches: bool = False):
     Returns:
         dict: {"messages": [{id, role, text, ts, parent_id, is_active, emotion, char_id,
                              token_count, input_token_count, generation_time_ms,
-                             tokens_per_second, pinned}, ...]}
+                             tokens_per_second, pinned, image_url?, image_prompt?}, ...]}
     """
     with db_ctx() as conn:
         cur = conn.cursor()
         cols = ("id, role, text, ts, parent_id, is_active, emotion, char_id, "
-                "token_count, input_token_count, generation_time_ms, tokens_per_second, pinned")
+                "token_count, input_token_count, generation_time_ms, tokens_per_second, pinned, "
+                "image_url, image_prompt")
         if include_branches:
             cur.execute(
                 f"SELECT {cols} FROM messages WHERE session_id=? ORDER BY id ASC",
@@ -6839,6 +6859,11 @@ def get_session_messages(session_id: int, include_branches: bool = False):
                 msg["tokens_per_second"] = r[11]
             # Pinned flag (v20 column)
             msg["pinned"] = bool(r[12]) if len(r) > 12 and r[12] is not None else False
+            # Image fields (v73 columns)
+            if len(r) > 13 and r[13] is not None:
+                msg["image_url"] = r[13]
+            if len(r) > 14 and r[14] is not None:
+                msg["image_prompt"] = r[14]
             messages.append(msg)
         return {"messages": messages}
 

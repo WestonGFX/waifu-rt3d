@@ -300,3 +300,21 @@ M5 + M7 add anywhere from 124h (MVP + spring bones only) to 360h+ (Full Phase C 
 ## Status
 
 Plan ready. **Next action:** Christopher answers Q1-Q7. Once answered, `/go` against M1 — start with item 5 (image url persistence, validates v73 schema-add path) and proceed in suggested order.
+
+---
+
+## Decisions — 2026-05-06 (session 31)
+
+All 7 open questions answered. `/go` against M1 is now unblocked.
+
+| Q | Decision | Notes |
+|---|---|---|
+| **Q1 AIE Phase C tier** | **MVP (24-30h)** | Single LoRA adapter per character, basic DSPy signature optimization. Ship fast, prove the loop. |
+| **Q2 Group chat** | **Re-litigate** | User wants to revisit. Add scoping pass to M6/backlog — perhaps 2-char mode (user + 1 guest character) rather than full group. |
+| **Q3 Steam distribution** | **Scope it this plan (~4h decision doc)** | Write decision doc only — no build commitment. Understand content moderation risk + review fees + competitor precedent. |
+| **Q4 Affinity-gated NSFW** | **Ship it, but make it optional toggle** | Bond-level unlocks NSFW content tiers AND expose an explicit override so user can opt out of bond-gating (keeps user agency). ~3h + ~1h for the toggle. |
+| **Q5 M1 vs M2 order** | **Keep M1 first** | Quick wins, closes P1 bugs, builds polish before defensive memory feature. |
+| **Q6 Voice cloning** | **Ship in this plan (M3)** | Window is open — OSS tools ready. Don't wait. |
+| **Q7 Bug doc re-title** | **Re-title + add note** | Renamed to `2026-05-06-retry-regenerate-and-message-edit-scaffolded-not-wired.md` + correction note prepended. |
+
+**Updated execution order:** M1 → M2 → M3 → M4 → M6 → M8 → M5 → M7 (unchanged from suggestion). Group chat scoping folds into M6 backlog pass.

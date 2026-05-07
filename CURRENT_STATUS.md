@@ -1,14 +1,47 @@
 # Current Project Status
 
-**Last updated:** 2026-05-06 (session 29 wave 2 — Browser QA sweep complete + AnimationBrowser crash fixed + 4 new bugs filed; 1 new commit this wave)
-**Branch:** master · 0 ahead of `origin/master` · all prior session-29 work pushed.
-**Schema version:** v72 in code (chain reserved through v74: ✅ v71 Visual Content MVP, ✅ v72 character_relationships dedupe + UNIQUE INDEX, v73 AIE LoRA, v74 AIE DSPy). Live DB still v71 — preflight will auto-apply v72 on next backend restart.
+**Last updated:** 2026-05-06 (session 31 — Q1-Q7 answered; roadmap unblocked; `/go` M1 ready)
+**Branch:** master · 2 ahead of `origin/master` (`c9e327d` wave 2 + `cb5f8aa` planning).
+**Schema version:** v72 in code (chain now reserved through v74: ✅ v71 Visual Content MVP, ✅ v72 character_relationships dedupe + UNIQUE INDEX, **v73 reserved for messages-table consolidation (edit history + sibling siblings + image url — 6 cols, 1 migration)**, v74 AIE LoRA/DSPy). Live DB still v71 — preflight will auto-apply v72 on next backend restart.
 **Tests:** **2,703 backend** + **226 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session 31 (2026-05-06) — Q1-Q7 answered. Roadmap locked. `/go` M1 unblocked.**
+
+All 7 open questions from the master roadmap resolved:
+
+| Q | Decision |
+|---|---|
+| Q1 AIE Phase C | **MVP (24-30h)** — single LoRA + basic DSPy signatures |
+| Q2 Group chat | **Re-litigate** — scoping pass for 2-char mode in M6 backlog |
+| Q3 Steam | **Scope it (~4h decision doc)** — no build commitment yet |
+| Q4 Affinity NSFW | **Ship bond-gated unlocks + optional override toggle** (~4h) |
+| Q5 M1 vs M2 order | **M1 first** — quick wins + P1 bug closures |
+| Q6 Voice cloning | **Ship in this plan (M3)** |
+| Q7 Bug doc rename | **Done** — renamed to `retry-regenerate-and-message-edit-scaffolded-not-wired.md` + correction note |
+
+Decisions recorded in `docs/plans/2026-05-06-opus-planning-roadmap.md` (Decisions section appended).
+
+**Execution order locked: M1 → M2 → M3 → M4 → M6 → M8 → M5 → M7.**
+**Next action: authorize push for 2 local commits, then `/go` M1 starting with item 5 (image_url persistence → v73 migration).**
+
+---
+
+**Session 30 (2026-05-06) — Pure planning sprint. 1 commit (`cb5f8aa`), zero production code touched. Master roadmap doc + 4 PRDs + 6 bug docs + competitor refresh delta.**
+
+- `cb5f8aa` docs(session-30): planning sprint — 6 bug docs + 4 PRDs + competitor refresh + master roadmap. 12 files, +3140 / -0.
+- **6 bug docs filed in `docs/bugs/2026-05-06-*.md`:** header occlusion (P1), retry/regen+edit+prev-gens scaffolded-not-wired (P1, renamed), animation packs dead URLs (P2), image_url not persisted (P2), viewer 0 FPS first-open (P3), viewer narrow-panel grounding (P3, sensitive area).
+- **Competitor refresh** `docs/research/2026-05-06-competitor-refresh-delta.md` — ~395 lines, 40 sources.
+- **4 PRDs:** `prd-header-overflow.md`, `prd-retry-regenerate.md`, `prd-message-editing.md`, `prd-previous-generations-browser.md`.
+- **Master roadmap** `docs/plans/2026-05-06-opus-planning-roadmap.md` — 8 milestones, 54 items. M1-M6+M8 ≈ 74h calibrated AI-assisted.
+
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers anywhere. 2 local commits await user-authorized push.
+
+---
 
 **Session 29 wave 2 (2026-05-06) — Browser QA sweep + AnimationBrowser crash fix.**
 - `10519fa` fix(animation-browser): optional-chain `clip.emotions?.join(', ') ?? ''` — crash on clips with no emotion tags caused full black screen (React tree kill). `AnimationBrowser.tsx:215`.
@@ -299,3 +332,6 @@ Completed since the last refresh: AIE Phase B · Bond Phases 1-6 · Per-Characte
 | Quickstart cheatsheet | `docs/QUICKSTART.md` |
 | Convention guides | `docs/conventions/*.md` |
 | v1.0 roadmap (uncommitted) | `docs/ROADMAP.md` |
+| **Master Q2 2026 roadmap (session 30)** | **`docs/plans/2026-05-06-opus-planning-roadmap.md`** |
+| Session 30 PRDs (4) | `docs/plans/2026-05-06-prd-{header-overflow,retry-regenerate,message-editing,previous-generations-browser}.md` |
+| Competitor refresh delta (May 6) | `docs/research/2026-05-06-competitor-refresh-delta.md` |

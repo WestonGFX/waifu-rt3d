@@ -1,9 +1,11 @@
-# Retry/Regenerate AI Response + Message Edit Missing
+# Retry/Regenerate AI Response + Message Edit — Scaffolded Not Wired
+
+> **Correction (session 31, 2026-05-06):** Original title said "missing" — that was wrong. PRD authoring in session 30 found these features are 70-90% already implemented. See PRDs in `docs/plans/2026-05-06-prd-{retry-regenerate,message-editing,previous-generations-browser}.md` for the actual state. This doc is preserved for repro context; the PRDs are the implementation source of truth.
 
 **Date filed:** 2026-05-06 (session 29 wave 2 → formalized session 30)
 **Severity:** P1
 **Component:** `frontends/sakura/src/components/ChatThread.tsx`, `DialogueBubble.tsx`, `chatStore.ts`, backend `messages` table + `/api/messages/*` endpoints
-**Type:** Missing feature (filed as bug because users hit it daily and there's no escape hatch)
+**Type:** Scaffolded but unwired (originally filed as missing feature — see correction above)
 
 ## Summary
 

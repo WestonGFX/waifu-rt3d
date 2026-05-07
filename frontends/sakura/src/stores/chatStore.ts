@@ -186,6 +186,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       status: 'sent',
       emotion: m.emotion ?? undefined,
       pinned: m.pinned === 1,
+      imageUrl: m.image_url ?? undefined,
+      imagePrompt: m.image_prompt ?? undefined,
     }));
     set({ messages });
   },

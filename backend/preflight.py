@@ -5161,6 +5161,85 @@ def migrate_to_v72(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v73(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v72 to v73.
+
+    Adds six NULL-safe columns to the ``messages`` table, consolidating
+    three separate M1 feature tracks into one migration:
+
+    - ``image_url`` / ``image_prompt``: persist generated-image data so
+      chat images and the Regenerate button survive page reloads (M1-5).
+    - ``edited_at`` / ``edit_history``: audit trail for user + assistant
+      message edits; ``edit_history`` stores a JSON array of
+      ``{ts, old_text}`` objects (M1-3).
+    - ``sibling_group_id`` / ``sibling_index``: UUID group key + position
+      counter used by the previous-generations browser to cluster
+      branch siblings (M1-4).
+
+    All six use ``PRAGMA table_info`` guards so the migration is fully
+    idempotent — safe to run multiple times or against a DB that already
+    has some of the columns from a manual hotfix.
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.  Raises on failure.
+
+    Raises:
+        sqlite3.Error: If any SQL statement fails.
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> _ = con.execute("CREATE TABLE schema_version (version INTEGER, applied_ts REAL)")
+        >>> _ = con.execute("INSERT INTO schema_version VALUES (72, 0)")
+        >>> _ = con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, text TEXT)")
+        >>> migrate_to_v73(con)
+        True
+        >>> cols = {r[1] for r in con.execute("PRAGMA table_info(messages)")}
+        >>> "image_url" in cols and "edited_at" in cols and "sibling_group_id" in cols
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 73:
+        logger.info("Schema already at v%d, skipping v73 migration.", cur_ver)
+        return True
+
+    try:
+        msg_cols = {row[1] for row in con.execute("PRAGMA table_info(messages)")}
+
+        new_cols = [
+            ("image_url",        "TEXT"),
+            ("image_prompt",     "TEXT"),
+            ("edited_at",        "REAL"),
+            ("edit_history",     "TEXT"),
+            ("sibling_group_id", "TEXT"),
+            ("sibling_index",    "INTEGER"),
+        ]
+        for col_name, col_type in new_cols:
+            if col_name not in msg_cols:
+                con.execute(
+                    f"ALTER TABLE messages ADD COLUMN {col_name} {col_type}"
+                )
+                logger.info("  - Added messages.%s (%s)", col_name, col_type)
+
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (73, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info(
+            "✅ Schema v73 migration complete "
+            "(6 columns added to messages: image_url, image_prompt, "
+            "edited_at, edit_history, sibling_group_id, sibling_index)"
+        )
+        return True
+    except Exception as e:
+        logger.error("Schema v73 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -5700,21 +5779,25 @@ def ensure_db():
             if migrate_to_v72(con):
                 version = 72
 
+        if version < 73:
+            if migrate_to_v73(con):
+                version = 73
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 72:
-            raise RuntimeError(f"Database initialization failed: Expected v72, got v{final_version}")
+        if final_version < 73:
+            raise RuntimeError(f"Database initialization failed: Expected v73, got v{final_version}")
 
-        if final_version > 72:
-            logger.warning(f"Database is newer than application (v{final_version} > v72). Some features might be unused.")
+        if final_version > 73:
+            logger.warning(f"Database is newer than application (v{final_version} > v73). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v72 dedupes character_relationships + adds UNIQUE INDEX on char_id)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v73 adds image_url/prompt, edited_at/history, sibling cols to messages)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

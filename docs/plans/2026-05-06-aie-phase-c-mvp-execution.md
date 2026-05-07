@@ -234,3 +234,5 @@ CREATE TABLE IF NOT EXISTS dspy_compiled_programs (
 ## Status Log
 
 - 2026-05-06 Phase 0: ✓ DONE (session 35) — commit `6af30cc`. schema v76, feedback module, 3 endpoints, FeedbackButtons UI, 57 new tests (2762 backend / 276 frontend all passing).
+- 2026-05-06 Phase 1: ✓ DONE (session 36) — commits `c59dc10` + `420eeea`. schema v77 (character_loras), corpus_builder, trainer, eval_harness, peft_local adapter, CLI script, 3 server endpoints (status/wipe/retrain), 28 new tests (2790 backend all passing).
+- 2026-05-06 Phase 2: ✓ DONE (session 36) — commit `e00c80c`. schema v78 (dspy_compiled_programs), DSPy Signature+Module+optimizer_runner, feature-flag switch in context_classifier, recursion-safe fallback via _classify_rule_based, 53 new tests (2843 backend all passing).

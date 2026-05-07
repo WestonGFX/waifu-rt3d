@@ -1,33 +1,39 @@
 # Current Project Status
 
-**Last updated:** 2026-05-06 (session 31 — Q1-Q7 answered; roadmap unblocked; `/go` M1 ready)
-**Branch:** master · 2 ahead of `origin/master` (`c9e327d` wave 2 + `cb5f8aa` planning).
-**Schema version:** v72 in code (chain now reserved through v74: ✅ v71 Visual Content MVP, ✅ v72 character_relationships dedupe + UNIQUE INDEX, **v73 reserved for messages-table consolidation (edit history + sibling siblings + image url — 6 cols, 1 migration)**, v74 AIE LoRA/DSPy). Live DB still v71 — preflight will auto-apply v72 on next backend restart.
-**Tests:** **2,703 backend** + **226 frontend** passing, tsc clean.
+**Last updated:** 2026-05-06 (session 32 — M1 Wave-2 Bug Cleanup COMPLETE, 8/8 items shipped)
+**Branch:** master · 8 ahead of `origin/master`.
+**Schema version:** v73 in code (chain reserved through v74: ✅ v71 Visual Content MVP, ✅ v72 character_relationships dedupe, ✅ v73 messages 6-col consolidation: edited_at/edit_history/sibling_group_id/sibling_index/image_url/image_prompt, v74 AIE LoRA/DSPy).
+**Tests:** **2,725 backend** + **256 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
 
+**Session 32 (2026-05-06) — M1 Wave-2 Bug Cleanup: ALL 8 ITEMS SHIPPED.**
+
+| # | Item | Status | Commit |
+|---|---|---|---|
+| 1 | Header overflow at narrow widths | ✅ | `5b7df25` |
+| 2 | Retry/Regenerate AI response | ✅ | (session 31 wave) |
+| 3 | Message editing — schema v73 + UI | ✅ | (session 31 wave) |
+| 4 | Previous-generations browser hardening | ✅ | (session 31 wave) |
+| 5 | image_url + image_prompt persisted — schema v73 | ✅ | `feat(schema-v73)` |
+| 6 | 3D viewer 0 FPS / black canvas on first open | ✅ | (session 31 wave) |
+| 7 | 3D viewer narrow-panel grounding (ResizeObserver fix) | ✅ browser-verify needed | `c9f6bbf` |
+| 8 | Animation packs — procedural clips now functional | ✅ | `c9f6bbf` |
+
+**Item 7 note:** ResizeObserver approach ships; requires visual browser verification in narrow-panel mode before calling fully closed (sensitive area).
+
+**Next: M2 — Memory Transparency Parity** (items 9-12 in roadmap). Authorize push first.
+
+---
+
 **Session 31 (2026-05-06) — Q1-Q7 answered. Roadmap locked. `/go` M1 unblocked.**
 
-All 7 open questions from the master roadmap resolved:
-
-| Q | Decision |
-|---|---|
-| Q1 AIE Phase C | **MVP (24-30h)** — single LoRA + basic DSPy signatures |
-| Q2 Group chat | **Re-litigate** — scoping pass for 2-char mode in M6 backlog |
-| Q3 Steam | **Scope it (~4h decision doc)** — no build commitment yet |
-| Q4 Affinity NSFW | **Ship bond-gated unlocks + optional override toggle** (~4h) |
-| Q5 M1 vs M2 order | **M1 first** — quick wins + P1 bug closures |
-| Q6 Voice cloning | **Ship in this plan (M3)** |
-| Q7 Bug doc rename | **Done** — renamed to `retry-regenerate-and-message-edit-scaffolded-not-wired.md` + correction note |
-
-Decisions recorded in `docs/plans/2026-05-06-opus-planning-roadmap.md` (Decisions section appended).
+All 7 open questions from the master roadmap resolved (see `docs/plans/2026-05-06-opus-planning-roadmap.md` Decisions section).
 
 **Execution order locked: M1 → M2 → M3 → M4 → M6 → M8 → M5 → M7.**
-**Next action: authorize push for 2 local commits, then `/go` M1 starting with item 5 (image_url persistence → v73 migration).**
 
 ---
 

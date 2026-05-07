@@ -3562,7 +3562,8 @@ def _build_prompt_sections(
                 _da_bond = _da_bond_row[0]
         except Exception:
             pass
-        if _da_engine.should_allow(_da_bond):
+        _da_skip_gate = bool(load_config().get("nsfw", {}).get("skip_bond_gate", False))
+        if _da_skip_gate or _da_engine.should_allow(_da_bond):
             try:
                 _da_row = cur.execute(
                     "SELECT arc_type, current_stage FROM desire_arc_states WHERE char_id=?",
@@ -18064,10 +18065,11 @@ def get_audio_story_types(char_id: int):
             pass
 
         engine = AudioStoryEngine()
+        _as_skip_gate = bool(load_config().get("nsfw", {}).get("skip_bond_gate", False))
         return {
             "ok": True,
             "types": engine.get_story_types(),
-            "eligible": engine.should_allow(bond_level),
+            "eligible": _as_skip_gate or engine.should_allow(bond_level),
             "bond_level": bond_level,
             "tts_params": engine.get_tts_params(),
         }
@@ -18107,7 +18109,8 @@ def generate_love_letter(char_id: int):
             pass
 
         engine = LoveLetterEngine()
-        if not engine.should_allow(bond_level):
+        _ll_skip_gate = bool(load_config().get("nsfw", {}).get("skip_bond_gate", False))
+        if not _ll_skip_gate and not engine.should_allow(bond_level):
             return {
                 "ok": False,
                 "error": f"Bond level {bond_level} is below minimum ({engine.should_allow.__doc__ or 40})",

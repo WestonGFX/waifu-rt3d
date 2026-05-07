@@ -4276,6 +4276,30 @@ function SafetyTab({ save, cfg }: TabProps) {
           />
         </div>
       </section>
+
+      {/* M6-item22: Affinity-gated NSFW override */}
+      <section className="mb-6">
+        <SectionHeader title="Bond Gate Override" />
+        <div style={cardStyle} className="px-4">
+          <SettingField
+            label="Skip Bond Level Requirement"
+            description="By default, intimate content (desire arc, love letters, audio stories) requires a minimum bond level. Enable this to unlock all bond-gated content immediately."
+            tooltip="Useful for testing or if you prefer not to grind relationship levels. This does NOT bypass the global content ceiling — NSFW must still be enabled at the Safety level."
+          >
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={Boolean(cfg('nsfw.skip_bond_gate', false))}
+                onChange={(e) => save('nsfw.skip_bond_gate', e.target.checked)}
+                className="accent-[var(--color-accent)]"
+              />
+              <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
+                Unlock without bond level requirement
+              </span>
+            </label>
+          </SettingField>
+        </div>
+      </section>
     </>
   );
 }

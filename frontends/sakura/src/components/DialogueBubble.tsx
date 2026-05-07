@@ -96,8 +96,9 @@ interface DialogueBubbleProps {
   onRegenerate?: (serverMessageId: number) => void;
   /** Visual MVP P2: regenerate the inline image attached to this message. */
   onRegenerateImage?: (messageId: string) => void;
-  /** T0-3: called when user navigates to a different branch. */
-  onBranchSwitch?: (newMessageId: number, newText: string, newEmotion?: string) => void;
+  /** T0-3: called when user navigates to a different branch.
+   *  `localMessageId` is the store ID of the message being switched. */
+  onBranchSwitch?: (newMessageId: number, newText: string, newEmotion?: string, localMessageId?: string) => void;
   /** Called when the user deletes a message. Receives the local message ID. */
   onDelete?: (messageId: string) => void;
   /** Called when the user edits a message. Receives local ID and new text. */
@@ -358,7 +359,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
       const active = data.branches[data.active_index];
       setBranchIndex(data.active_index);
       if (active && onBranchSwitch) {
-        onBranchSwitch(active.id, active.text, active.emotion);
+        onBranchSwitch(active.id, active.text, active.emotion, message.id);
       }
     } catch (err) {
       console.error('[BranchNav] switch failed:', err);
@@ -837,8 +838,11 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
                 >
                   <ChevronLeft size={12} />
                 </button>
-                <span style={{ color: 'var(--color-text-muted)', minWidth: 28, textAlign: 'center' }}>
-                  {branchIndex + 1}/{branchTotal}
+                <span
+                  style={{ color: 'var(--color-text-muted)', minWidth: 28, textAlign: 'center' }}
+                  title={branchTotal > 10 ? `More versions exist (showing first 10)` : undefined}
+                >
+                  {branchIndex + 1}/{branchTotal > 10 ? '10+' : branchTotal}
                 </span>
                 <button
                   onClick={() => handleBranchNav(1)}

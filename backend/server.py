@@ -7038,14 +7038,34 @@ async def regenerate_message(message_id: int, req: Request):
         cur = conn.cursor()
 
         # Get the original message and its context
-        cur.execute("SELECT session_id, role, parent_id FROM messages WHERE id=?", (message_id,))
+        cur.execute(
+            "SELECT session_id, role, parent_id, sibling_group_id FROM messages WHERE id=?",
+            (message_id,),
+        )
         row = cur.fetchone()
         if not row:
             raise HTTPException(404, "Message not found")
 
-        session_id, role, parent_id = row
+        session_id, role, parent_id, group_id = row
         if role != "assistant":
             raise HTTPException(400, "Can only regenerate assistant messages")
+
+        # Allocate sibling_group_id on first regen; extend on Nth.
+        # This replaces parent_id as the canonical sibling key (orphan-grouping fix).
+        if group_id is None:
+            group_id = str(uuid.uuid4())
+            cur.execute(
+                "UPDATE messages SET sibling_group_id=?, sibling_index=0 WHERE id=?",
+                (group_id, message_id),
+            )
+            next_idx = 1
+        else:
+            cur.execute(
+                "SELECT COALESCE(MAX(sibling_index), -1) + 1 FROM messages "
+                "WHERE sibling_group_id=?",
+                (group_id,),
+            )
+            next_idx = cur.fetchone()[0]
 
         # Mark old message as inactive
         cur.execute("UPDATE messages SET is_active=0 WHERE id=?", (message_id,))
@@ -7105,11 +7125,11 @@ async def regenerate_message(message_id: int, req: Request):
         raw_reply = res["reply"]
         emotion, gesture, clean_reply = _parse_emotion_gesture(raw_reply)
 
-        # Insert new message with same parent_id
+        # Insert new sibling message; keep parent_id for backward compat
         cur.execute(
-            "INSERT INTO messages(session_id, role, text, parent_id, is_active, emotion, char_id) "
-            "VALUES (?,?,?,?,1,?,?)",
-            (session_id, "assistant", clean_reply, parent_id, emotion, char_id)
+            "INSERT INTO messages(session_id, role, text, parent_id, is_active, emotion, char_id, "
+            "sibling_group_id, sibling_index) VALUES (?,?,?,?,1,?,?,?,?)",
+            (session_id, "assistant", clean_reply, parent_id, emotion, char_id, group_id, next_idx)
         )
         new_id = cur.lastrowid
         conn.commit()
@@ -10559,36 +10579,64 @@ async def get_message_branches(message_id: int):
     """
     with db_ctx() as conn:
         row = conn.execute(
-            "SELECT id, parent_id FROM messages WHERE id = ?", (message_id,)
+            "SELECT id, parent_id, sibling_group_id FROM messages WHERE id = ?", (message_id,)
         ).fetchone()
         if not row:
             raise HTTPException(404, "Message not found")
 
-        _msg_id, parent_id = row
-        if parent_id is None:
-            # No parent — this message has no branches
+        _msg_id, parent_id, group_id = row
+
+        # Prefer sibling_group_id (v73 canonical key); fall back to parent_id for
+        # pre-v73 data that has no group yet (first-regen rows still using parent_id).
+        if group_id is not None:
+            siblings = conn.execute(
+                "SELECT id, text, emotion, created_at, is_active, sibling_index FROM messages "
+                "WHERE sibling_group_id = ? ORDER BY sibling_index ASC",
+                (group_id,),
+            ).fetchall()
+            branches = [
+                {
+                    "id": s[0], "text": s[1], "emotion": s[2], "created_at": s[3],
+                    "is_active": bool(s[4]), "sibling_index": s[5],
+                    "is_original": s[5] == 0,
+                }
+                for s in siblings
+            ]
+        elif parent_id is not None:
+            # Legacy fallback: parent_id-based grouping (pre-v73 regen rows)
+            siblings = conn.execute(
+                "SELECT id, text, emotion, created_at, is_active FROM messages "
+                "WHERE parent_id = ? ORDER BY id ASC",
+                (parent_id,),
+            ).fetchall()
+            branches = [
+                {
+                    "id": s[0], "text": s[1], "emotion": s[2], "created_at": s[3],
+                    "is_active": bool(s[4]), "sibling_index": i, "is_original": i == 0,
+                }
+                for i, s in enumerate(siblings)
+            ]
+        else:
+            # No siblings — return singleton
             r = conn.execute(
                 "SELECT id, text, emotion, created_at, is_active FROM messages WHERE id = ?",
-                (message_id,)
+                (message_id,),
             ).fetchone()
             return {
-                "branches": [{"id": r[0], "text": r[1], "emotion": r[2], "created_at": r[3], "is_active": bool(r[4])}],
+                "branches": [{"id": r[0], "text": r[1], "emotion": r[2], "created_at": r[3],
+                               "is_active": bool(r[4]), "sibling_index": 0, "is_original": True}],
                 "active_index": 0,
                 "total": 1,
+                "sibling_group_id": None,
             }
 
-        siblings = conn.execute(
-            "SELECT id, text, emotion, created_at, is_active FROM messages WHERE parent_id = ? ORDER BY id ASC",
-            (parent_id,)
-        ).fetchall()
-
-        branches = [
-            {"id": s[0], "text": s[1], "emotion": s[2], "created_at": s[3], "is_active": bool(s[4])}
-            for s in siblings
-        ]
         active_index = next((i for i, b in enumerate(branches) if b["is_active"]), 0)
-
-        return {"branches": branches, "active_index": active_index, "total": len(branches)}
+        return {
+            "branches": branches,
+            "active_index": active_index,
+            "total": len(branches),
+            "sibling_group_id": group_id,
+        }
 
 
 # ── Feature #14 — Branch Activation ───────────────────────────────────────────
@@ -10621,30 +10669,37 @@ async def activate_branch(message_id: int):
     """
     with db_ctx() as conn:
         row = conn.execute(
-            "SELECT id, parent_id FROM messages WHERE id = ?", (message_id,)
+            "SELECT id, parent_id, sibling_group_id FROM messages WHERE id = ?", (message_id,)
         ).fetchone()
         if not row:
             raise HTTPException(404, "Message not found")
 
-        _msg_id, parent_id = row
+        _msg_id, parent_id, group_id = row
 
-        # Deactivate all siblings that share the same parent
+        # Use sibling_group_id (v73) when available; fall back to parent_id for legacy rows.
         deactivated: list[int] = []
-        if parent_id is not None:
+        if group_id is not None:
+            siblings = conn.execute(
+                "SELECT id FROM messages WHERE sibling_group_id = ? AND id != ?",
+                (group_id, message_id),
+            ).fetchall()
+        elif parent_id is not None:
             siblings = conn.execute(
                 "SELECT id FROM messages WHERE parent_id = ? AND id != ?",
                 (parent_id, message_id),
             ).fetchall()
-            sibling_ids = [r[0] for r in siblings]
-            if sibling_ids:
-                placeholders = ",".join("?" * len(sibling_ids))
-                conn.execute(
-                    f"UPDATE messages SET is_active=0 WHERE id IN ({placeholders})",
-                    sibling_ids,
-                )
-                deactivated = sibling_ids
+        else:
+            siblings = []
 
-        # Activate the target message
+        sibling_ids = [r[0] for r in siblings]
+        if sibling_ids:
+            placeholders = ",".join("?" * len(sibling_ids))
+            conn.execute(
+                f"UPDATE messages SET is_active=0 WHERE id IN ({placeholders})",
+                sibling_ids,
+            )
+            deactivated = sibling_ids
+
         conn.execute("UPDATE messages SET is_active=1 WHERE id = ?", (message_id,))
         conn.commit()
 

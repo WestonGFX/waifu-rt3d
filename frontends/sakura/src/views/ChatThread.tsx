@@ -14,6 +14,7 @@ import { useMemorialScene } from '../hooks/useMemorialScene';
 import { useAdaptivePacing } from '../hooks/useAdaptivePacing';
 import { useCharacterAudio } from '../hooks/useCharacterAudio';
 import { api } from '../lib/api';
+import { useToastStore } from '../components/ToastQueue';
 import { downloadBlob } from '../lib/downloadFile';
 import { DialogueBubble } from '../components/DialogueBubble';
 import { WaveformVisualizer } from '../components/WaveformVisualizer';
@@ -521,23 +522,41 @@ export function ChatThread() {
     }
   }, []);
 
-  const handleBranchSwitch = useCallback(async (newMsgId: number, newText: string, newEmotion?: string) => {
-    // Update message in-place instead of full history reload
+  const handleBranchSwitch = useCallback(async (newMsgId: number, newText: string, newEmotion?: string, localMessageId?: string) => {
     const { messages: currentMsgs } = useChatStore.getState();
-    let lastAssistantIdx = -1;
-    for (let i = currentMsgs.length - 1; i >= 0; i--) {
-      if (currentMsgs[i].role === 'assistant') { lastAssistantIdx = i; break; }
+    const addToast = useToastStore.getState().addToast;
+
+    // Find the message being switched by its local store id (preferred) or last assistant fallback
+    let switchIdx = localMessageId
+      ? currentMsgs.findIndex(m => m.id === localMessageId)
+      : -1;
+    if (switchIdx < 0) {
+      for (let i = currentMsgs.length - 1; i >= 0; i--) {
+        if (currentMsgs[i].role === 'assistant') { switchIdx = i; break; }
+      }
     }
-    if (lastAssistantIdx >= 0) {
-      const updated = [...currentMsgs];
-      updated[lastAssistantIdx] = {
-        ...updated[lastAssistantIdx],
-        text: newText,
-        emotion: newEmotion ?? updated[lastAssistantIdx].emotion,
-        serverMessageId: newMsgId,
-      };
-      useChatStore.setState({ messages: updated });
+
+    if (switchIdx < 0) return;
+
+    // Downstream-drift warning: if messages exist after this one, context diverges
+    const hasDownstream = switchIdx < currentMsgs.length - 1;
+    if (hasDownstream) {
+      addToast({
+        message: 'Switched a past reply — later messages stay visible, but the next reply may feel inconsistent.',
+        type: 'warning',
+        icon: 'ⓘ',
+        duration: 4000,
+      });
     }
+
+    const updated = [...currentMsgs];
+    updated[switchIdx] = {
+      ...updated[switchIdx],
+      text: newText,
+      emotion: newEmotion ?? updated[switchIdx].emotion,
+      serverMessageId: newMsgId,
+    };
+    useChatStore.setState({ messages: updated });
   }, []);
 
   // Ctrl+Shift+R shortcut to regenerate last assistant message

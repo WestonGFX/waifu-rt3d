@@ -258,7 +258,12 @@ export const api = {
 
   /** Get all branch siblings of a message for swipe navigation. */
   getMessageBranches: (messageId: number) =>
-    get<{ branches: Array<{ id: number; text: string; emotion: string; created_at: string; is_active: boolean }>; active_index: number; total: number }>(
+    get<{
+      branches: Array<{ id: number; text: string; emotion: string; created_at: string; is_active: boolean; sibling_index: number; is_original: boolean }>;
+      active_index: number;
+      total: number;
+      sibling_group_id: string | null;
+    }>(
       `/api/messages/${messageId}/branches`
     ),
 

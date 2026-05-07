@@ -606,11 +606,12 @@ describe('store integration — branch navigation updates message in-place', () 
   it('getMessageBranches returns correct branch list shape', async () => {
     vi.mocked(api.getMessageBranches).mockResolvedValue({
       branches: [
-        { id: 42, text: 'Branch A response', emotion: 'neutral', created_at: '2026-01-01T00:00:00Z', is_active: false },
-        { id: 43, text: 'Branch B response', emotion: 'happy', created_at: '2026-01-02T00:00:00Z', is_active: true },
+        { id: 42, text: 'Branch A response', emotion: 'neutral', created_at: '2026-01-01T00:00:00Z', is_active: false, sibling_index: 0, is_original: true },
+        { id: 43, text: 'Branch B response', emotion: 'happy', created_at: '2026-01-02T00:00:00Z', is_active: true, sibling_index: 1, is_original: false },
       ],
       active_index: 1,
       total: 2,
+      sibling_group_id: 'test-group-uuid',
     });
 
     const result = await api.getMessageBranches(42);

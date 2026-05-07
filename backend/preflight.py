@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v76)
+- Database schema migrations (v3 → v4 → … → v77)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -46,6 +46,7 @@ Migration Strategy:
     - v74 → v75: M6 Gamification — character_achievements table
     - v75 → v76: AIE Phase C feedback subsystem — message_feedback, aie_signal_weights tables
                   + explicit_signals_enabled/implicit_signals_enabled on privacy_settings
+    - v76 → v77: AIE Phase C Strand A — character_loras table for LoRA fine-tuning adapters
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -5470,6 +5471,90 @@ def migrate_to_v76(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v77(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v76 to v77.
+
+    Adds: character_loras table and idx_char_loras_active unique index.
+
+    ``character_loras`` records LoRA adapter checkpoints produced by the AIE
+    Phase C fine-tuning pipeline.  Each row links one adapter (``adapter_path``)
+    to a character (``char_id``) and the base model it was trained against
+    (``base_model``).  Only one adapter per character may be flagged
+    ``is_active=1`` at a time, enforced by the partial unique index
+    ``idx_char_loras_active``.
+
+    Columns:
+        id (INTEGER PK AUTOINCREMENT): Surrogate primary key.
+        char_id (INTEGER NOT NULL): FK → characters(id).
+        base_model (TEXT NOT NULL): Identifier of the base LLM the adapter targets.
+        adapter_path (TEXT NOT NULL): Filesystem path to the saved adapter files.
+        trained_at (REAL NOT NULL): Unix timestamp of training completion.
+        eval_score (REAL): Optional evaluation metric from post-training assessment.
+        is_active (INTEGER DEFAULT 0): 1 if this adapter is currently loaded for inference.
+        meta (TEXT): JSON blob for arbitrary training metadata (hyperparams, loss history…).
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.
+
+    Raises:
+        sqlite3.Error: If a SQL statement fails for a reason other than an
+            already-existing object (which is handled by ``IF NOT EXISTS``).
+
+    Example:
+        >>> import sqlite3
+        >>> con = sqlite3.connect(":memory:")
+        >>> _ = con.execute("CREATE TABLE schema_version (version INTEGER, applied_ts REAL)")
+        >>> _ = con.execute("INSERT INTO schema_version VALUES (76, 0)")
+        >>> _ = con.execute("CREATE TABLE characters (id INTEGER PRIMARY KEY)")
+        >>> migrate_to_v77(con)
+        True
+        >>> tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        >>> "character_loras" in tables
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 77:
+        logger.info("Schema already at v%d, skipping v77 migration.", cur_ver)
+        return True
+
+    try:
+        con.execute(
+            """CREATE TABLE IF NOT EXISTS character_loras (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id      INTEGER NOT NULL REFERENCES characters(id),
+                base_model   TEXT NOT NULL,
+                adapter_path TEXT NOT NULL,
+                trained_at   REAL NOT NULL,
+                eval_score   REAL,
+                is_active    INTEGER DEFAULT 0,
+                meta         TEXT
+            )"""
+        )
+        logger.info("  - Created character_loras table")
+
+        # Partial unique index: at most one active adapter per character
+        con.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_char_loras_active "
+            "ON character_loras(char_id) WHERE is_active=1"
+        )
+        logger.info("  - Created idx_char_loras_active unique index")
+
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (77, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v77 migration complete (AIE Phase C Strand A: character_loras)")
+        return True
+    except Exception as e:
+        logger.error("Schema v77 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -6029,21 +6114,27 @@ def ensure_db():
             if migrate_to_v76(con):
                 version = 76
 
+        if version < 77:
+            logger.info("Upgrading database schema from v76 to v77...")
+            logger.info("  - AIE Phase C Strand A: character_loras table for LoRA fine-tuning")
+            if migrate_to_v77(con):
+                version = 77
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 76:
-            raise RuntimeError(f"Database initialization failed: Expected v76, got v{final_version}")
+        if final_version < 77:
+            raise RuntimeError(f"Database initialization failed: Expected v77, got v{final_version}")
 
-        if final_version > 76:
-            logger.warning(f"Database is newer than application (v{final_version} > v76). Some features might be unused.")
+        if final_version > 77:
+            logger.warning(f"Database is newer than application (v{final_version} > v77). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v76 adds AIE Phase C feedback subsystem)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v77 adds character_loras for LoRA fine-tuning)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

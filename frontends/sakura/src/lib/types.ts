@@ -230,6 +230,10 @@ export interface ChatMessage {
    * architecture (regex heuristic + post-hoc LLM upgrade).
    */
   quickReplies?: string[];
+  /** Unix-ms timestamp of most recent edit. Undefined if never edited. */
+  editedAt?: number;
+  /** Server-side audit log of prior versions. Not surfaced in UI in MVP. */
+  editHistory?: { ts: number; prevContent: string }[];
 }
 
 export interface Session {

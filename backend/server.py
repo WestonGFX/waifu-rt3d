@@ -27,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.staticfiles import StaticFiles
 import time
+import uuid
 
 # --- LOGGING SETUP ---
 LOG_QUEUE = queue.Queue(maxsize=100)
@@ -6817,7 +6818,7 @@ def get_session_messages(session_id: int, include_branches: bool = False):
         cur = conn.cursor()
         cols = ("id, role, text, ts, parent_id, is_active, emotion, char_id, "
                 "token_count, input_token_count, generation_time_ms, tokens_per_second, pinned, "
-                "image_url, image_prompt")
+                "image_url, image_prompt, edited_at")
         if include_branches:
             cur.execute(
                 f"SELECT {cols} FROM messages WHERE session_id=? ORDER BY id ASC",
@@ -6864,35 +6865,128 @@ def get_session_messages(session_id: int, include_branches: bool = False):
                 msg["image_url"] = r[13]
             if len(r) > 14 and r[14] is not None:
                 msg["image_prompt"] = r[14]
+            # edited_at (v73 column, index 15)
+            if len(r) > 15 and r[15] is not None:
+                msg["edited_at"] = r[15]
             messages.append(msg)
         return {"messages": messages}
 
 
 # ==================== MESSAGE EDIT / REGENERATE ====================
 
-@app.put("/api/messages/{message_id}")
-async def edit_message(message_id: int, req: Request):
-    """Edit the text of an existing message.
+
+class EditHistoryEntry(BaseModel):
+    """One captured prior version of a message's text.
+
+    Attributes:
+        ts: Unix timestamp (ms) when this version was overwritten.
+        prev_content: The text content prior to the edit.
+    """
+
+    ts: int
+    prev_content: str
+
+
+class MessageEditRequest(BaseModel):
+    """Request body for PUT /api/messages/{id}.
+
+    Attributes:
+        text: New message text. Must be non-empty after strip.
+    """
+
+    text: str
+
+
+class MessageOut(BaseModel):
+    """Full message payload returned by edit endpoints.
+
+    Attributes:
+        id: Server-side row id from the messages table.
+        role: Message role string.
+        text: Current text content.
+        ts: ISO-8601 creation timestamp.
+        edited_at: Unix ms of most recent edit, or None if never edited.
+        edit_history: List of prior versions (oldest first, capped at 20).
+        emotion: Last detected emotion tag (assistant only).
+        pinned: Whether this message is user-pinned.
+    """
+
+    id: int
+    role: str
+    text: str
+    ts: Optional[str] = None
+    edited_at: Optional[int] = None
+    edit_history: Optional[list[EditHistoryEntry]] = None
+    emotion: Optional[str] = None
+    pinned: bool = False
+
+
+@app.put("/api/messages/{message_id}", response_model=MessageOut)
+async def edit_message(message_id: int, body: MessageEditRequest) -> MessageOut:
+    """Edit the text of an existing message, preserving full audit history.
+
+    Captures the prior text into ``edit_history`` (JSON), sets
+    ``edited_at`` to the current unix-ms timestamp, then overwrites
+    ``text``. Returns the full updated ``MessageOut`` so the client
+    can patch its in-memory message without a follow-up GET.
 
     Args:
-        message_id: ID of the message to edit.
-        req: JSON body with ``text`` field.
+        message_id: Row id from the ``messages`` table.
+        body: New text content; must be non-empty after strip.
 
     Returns:
-        dict: {"ok": True, "id": message_id}
+        MessageOut with updated text, edited_at, and edit_history.
+
+    Raises:
+        HTTPException 400: If text is empty after strip.
+        HTTPException 404: If the message_id does not exist.
+        HTTPException 500: On unexpected DB failure.
     """
-    body = await req.json()
-    new_text = body.get("text", "").strip()
+    new_text = body.text.strip()
     if not new_text:
         raise HTTPException(400, "text required")
+    now_ms = int(time.time() * 1000)
+    HISTORY_CAP = 20
 
     with db_ctx() as conn:
+        row = conn.execute(
+            "SELECT id, role, text, ts, edited_at, edit_history, emotion, pinned "
+            "FROM messages WHERE id=?",
+            (message_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Message not found")
+
+        prev_text = row[2] or ""
+        prev_history_raw = row[5]
         try:
-            conn.execute("UPDATE messages SET text=? WHERE id=?", (new_text, message_id))
-            conn.commit()
+            history: list[dict] = json.loads(prev_history_raw) if prev_history_raw else []
+        except (TypeError, ValueError):
+            history = []
+
+        history.append({"ts": now_ms, "prev_content": prev_text})
+        if len(history) > HISTORY_CAP:
+            history = history[-HISTORY_CAP:]
+
+        try:
+            with conn:
+                conn.execute(
+                    "UPDATE messages SET text=?, edited_at=?, edit_history=? WHERE id=?",
+                    (new_text, now_ms, json.dumps(history), message_id),
+                )
         except Exception as e:
             raise HTTPException(500, f"Edit failed: {e}")
-    return {"ok": True, "id": message_id}
+
+        return MessageOut(
+            id=row[0],
+            role=row[1],
+            text=new_text,
+            ts=str(row[3]) if row[3] is not None else None,
+            edited_at=now_ms,
+            edit_history=[EditHistoryEntry(**h) for h in history],
+            emotion=row[6],
+            pinned=bool(row[7] or 0),
+        )
 
 
 @app.delete("/api/messages/{message_id}")

@@ -572,17 +572,12 @@ export function ChatThread() {
   }, [messages]);
 
   const handleEditMessage = useCallback(async (messageId: string, newText: string) => {
-    const msg = messages.find(m => m.id === messageId);
-    if (!msg?.serverMessageId) return;
     try {
-      await api.editMessage(msg.serverMessageId, newText);
-      useChatStore.setState(s => ({
-        messages: s.messages.map(m => m.id === messageId ? { ...m, text: newText } : m),
-      }));
+      await useChatStore.getState().editMessage(messageId, newText);
     } catch (err) {
       console.error('[EditMessage] failed:', err);
     }
-  }, [messages]);
+  }, []);
 
   // ── Search filter ────────────────────────────────────────────────────────
   const visibleMessages = useMemo(() => {
@@ -855,7 +850,7 @@ export function ChatThread() {
                   onRegenerateImage={regenerateImage}
                   onBranchSwitch={handleBranchSwitch}
                   onDelete={handleDeleteMessage}
-                  onEdit={msg.role === 'user' ? handleEditMessage : undefined}
+                  onEdit={handleEditMessage}
                   isLastAssistant={isLastAssistant}
                   isRegenerating={regeneratingMsgId === msg.serverMessageId}
                 />

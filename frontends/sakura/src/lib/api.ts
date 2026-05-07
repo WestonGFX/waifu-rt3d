@@ -91,6 +91,22 @@ export interface DownloadStatus {
  * for list (recency-sorted) vs. search (similarity-scored). The Memory
  * Browser UI tolerates missing fields.
  */
+export interface EditHistoryEntry {
+  ts: number;
+  prev_content: string;
+}
+
+export interface MessageOut {
+  id: number;
+  role: 'user' | 'assistant' | 'system' | 'director';
+  text: string;
+  ts?: string | null;
+  edited_at?: number | null;
+  edit_history?: EditHistoryEntry[] | null;
+  emotion?: string | null;
+  pinned?: boolean;
+}
+
 export interface MemoryItem {
   id: string;
   text: string;
@@ -221,12 +237,16 @@ export const api = {
     patch<{ ok: boolean; tags: string[] }>(`/api/sessions/${id}/tags`, { tags }),
   deleteSession: (id: number) => del<{ ok: boolean; deleted_messages: number }>(`/api/sessions/${id}`),
   getMessages: (sessionId: number) =>
-    get<{ messages: Array<{ id: number; role: string; text: string; ts: string; emotion?: string; parent_id?: number | null; is_active?: number; pinned?: number; image_url?: string; image_prompt?: string }> }>(
+    get<{ messages: Array<{ id: number; role: string; text: string; ts: string; emotion?: string; parent_id?: number | null; is_active?: number; pinned?: number; image_url?: string; image_prompt?: string; edited_at?: number | null }> }>(
       `/api/sessions/${sessionId}/messages`
     ),
-  /** Edit the text of an existing message. */
+  /**
+   * Edit a message's text content. Captures previous text into server-side
+   * edit_history audit log; sets edited_at to the current unix-ms timestamp.
+   * Returns the full updated message so the caller can patch state in place.
+   */
   editMessage: (messageId: number, text: string) =>
-    put<{ ok: boolean; id: number }>(`/api/messages/${messageId}`, { text }),
+    put<MessageOut>(`/api/messages/${messageId}`, { text }),
 
   /** Delete a message by ID. */
   deleteMessage: (messageId: number) =>

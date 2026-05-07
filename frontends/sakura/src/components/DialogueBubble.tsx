@@ -542,10 +542,27 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               </div>
             </div>
           ) : (
-            <MarkdownText text={message.text} query={searchQuery} />
+            <>
+              <MarkdownText text={message.text} query={searchQuery} />
+              {message.editedAt && (
+                <span
+                  title={`Edited ${new Date(message.editedAt).toLocaleString()}`}
+                  style={{
+                    display: 'block',
+                    fontSize: '0.65rem',
+                    color: 'var(--color-text-tertiary)',
+                    fontStyle: 'italic',
+                    marginTop: '2px',
+                    textAlign: 'right',
+                  }}
+                >
+                  (edited)
+                </span>
+              )}
+            </>
           )}
-          {/* Action buttons — visible on hover */}
-          {hovered && !editing && (
+          {/* Action buttons — visible on hover; hidden while streaming */}
+          {hovered && !editing && message.status === 'sent' && (
             <div
               className="absolute -bottom-3 right-2 flex items-center gap-0.5 px-1 py-0.5 rounded-md"
               style={{
@@ -653,6 +670,19 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               {EMOTION_EMOJI[message.emotion]}
             </span>
           )}
+          {message.editedAt && (
+            <span
+              title={`Edited ${new Date(message.editedAt).toLocaleString()}`}
+              style={{
+                fontSize: '0.7rem',
+                color: 'var(--color-text-tertiary)',
+                fontStyle: 'italic',
+                marginLeft: '0.4rem',
+              }}
+            >
+              (edited)
+            </span>
+          )}
           {message.audioUrl && onPlayAudio && (
             <button
               onClick={onPlayAudio}
@@ -693,6 +723,31 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
             <span style={{ color: 'var(--color-danger, #f44)', fontStyle: 'italic' }}>
               {message.text}
             </span>
+          ) : editing ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 200 }}>
+              <textarea
+                ref={editRef}
+                value={editText}
+                onChange={e => setEditText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditConfirm(); } if (e.key === 'Escape') handleEditCancel(); }}
+                style={{
+                  width: '100%', minHeight: 60, resize: 'vertical',
+                  fontSize: '0.875rem', padding: '6px 8px', borderRadius: 6,
+                  border: '1px solid var(--color-accent)',
+                  backgroundColor: 'var(--color-background)',
+                  color: 'var(--color-text-primary)',
+                  outline: 'none',
+                }}
+              />
+              <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                <button onClick={handleEditCancel} title="Cancel" style={{ padding: '2px 6px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer' }}>
+                  <X size={12} />
+                </button>
+                <button onClick={handleEditConfirm} title="Save" style={{ padding: '2px 6px', borderRadius: 4, border: '1px solid var(--color-accent)', background: 'var(--color-accent-soft)', color: 'var(--color-accent)', cursor: 'pointer' }}>
+                  <Check size={12} />
+                </button>
+              </div>
+            </div>
           ) : (
             <MarkdownText text={message.text} query={searchQuery} />
           )}
@@ -827,6 +882,16 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
                 title={isRegenerating ? 'Regenerating...' : 'Regenerate response'}
               >
                 <RefreshCw size={11} className={isRegenerating ? 'animate-spin' : ''} />
+              </button>
+            )}
+            {onEdit && !editing && (
+              <button
+                onClick={handleEditStart}
+                className="p-0.5 rounded transition-colors"
+                style={{ color: 'var(--color-text-tertiary)' }}
+                title="Edit message"
+              >
+                <Pencil size={11} />
               </button>
             )}
             <button

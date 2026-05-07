@@ -38,6 +38,12 @@ interface ChatState {
    * bubble.
    */
   regenerateImage: (messageId: string) => Promise<void>;
+  /**
+   * Edit a message's text in place. Calls PUT /api/messages/{id}, then
+   * patches the local message with the new text + editedAt from the server
+   * response. Does NOT trigger regeneration.
+   */
+  editMessage: (messageId: string, newText: string) => Promise<void>;
 }
 
 const genId = () => crypto.randomUUID();
@@ -188,6 +194,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       pinned: m.pinned === 1,
       imageUrl: m.image_url ?? undefined,
       imagePrompt: m.image_prompt ?? undefined,
+      editedAt: m.edited_at ?? undefined,
     }));
     set({ messages });
   },
@@ -460,6 +467,34 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
     } finally {
       set({ loading: false, abortController: null });
+    }
+  },
+
+  editMessage: async (messageId, newText) => {
+    const msg = get().messages.find(m => m.id === messageId);
+    if (!msg?.serverMessageId) return;
+    const trimmed = newText.trim();
+    if (!trimmed || trimmed === msg.text) return;
+    try {
+      const updated = await api.editMessage(msg.serverMessageId, trimmed);
+      set(s => ({
+        messages: s.messages.map(m =>
+          m.id === messageId
+            ? {
+                ...m,
+                text: updated.text,
+                editedAt: updated.edited_at ?? undefined,
+                editHistory: (updated.edit_history ?? []).map(h => ({
+                  ts: h.ts,
+                  prevContent: h.prev_content,
+                })),
+              }
+            : m
+        ),
+      }));
+    } catch (err) {
+      console.error('[editMessage] failed:', err);
+      throw err;
     }
   },
 

@@ -1,7 +1,7 @@
 # Current Project Status
 
-**Last updated:** 2026-05-06 (session 29 — Visual Content MVP Phases 2+3 complete + Memory Browser P2 bugs fixed + Bond Pill XP display fixed + avatar URL fixes; 7 commits this session, all pushed)
-**Branch:** master · 0 ahead of `origin/master` · all session-29 work pushed (`5349b42`, `05bf460`, `4d95d7c`, `c7342b5`, `9aea9d2`, `87b380f`, `7367280`).
+**Last updated:** 2026-05-06 (session 29 wave 2 — Browser QA sweep complete + AnimationBrowser crash fixed + 4 new bugs filed; 1 new commit this wave)
+**Branch:** master · 0 ahead of `origin/master` · all prior session-29 work pushed.
 **Schema version:** v72 in code (chain reserved through v74: ✅ v71 Visual Content MVP, ✅ v72 character_relationships dedupe + UNIQUE INDEX, v73 AIE LoRA, v74 AIE DSPy). Live DB still v71 — preflight will auto-apply v72 on next backend restart.
 **Tests:** **2,703 backend** + **226 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
@@ -9,6 +9,21 @@
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session 29 wave 2 (2026-05-06) — Browser QA sweep + AnimationBrowser crash fix.**
+- `10519fa` fix(animation-browser): optional-chain `clip.emotions?.join(', ') ?? ''` — crash on clips with no emotion tags caused full black screen (React tree kill). `AnimationBrowser.tsx:215`.
+- QA report: `docs/testing/qa-sweep-2026-05-06-wave1.md` — 14 features tested, all PASS except animation packs (dead URLs).
+- **4 open bugs filed this wave:**
+  - **P1** `docs/bugs/` — Header UI occlusion: elements overlap at narrow widths when 3D viewer open (context pill, settings gear, bond XP text compete for same space)
+  - **P1** — Retry/Resend feature missing: no way to regenerate AI response or browse previous generations at a conversation point; message editing also absent
+  - **P2** — Animation packs: `tools/download_animation_packs.py` URLs all dead (SillyTavern repo 404, CDN 404); 0/36 clips on disk
+  - **P2** — `image_url`/`image_prompt` not persisted to messages table; regenerated images vanish on reload
+  - **P3** — 3D viewer shows 0 FPS / black canvas on first open until user clicks a camera preset
+- **Next session: New Opus planning session** — 32-64+ item roadmap with milestones, PRDs, research on NSFW roleplay app competitors, and feature specs for header fix + retry/regenerate + message editing + previous-generations browser.
+
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers in tracked files. Local `10519fa` commit unpushed.
+
+---
 
 **Session 29 (2026-05-06) — Visual Content MVP complete + bugs cleared. 7 commits, all pushed.**
 - `5349b42` feat(viz-mvp-p2): chat image lightbox + regenerateImage. `ChatImageLightbox.tsx` (URL-shaped, distinct from gallery's item-shaped `ImageLightbox`). `DialogueBubble` `<img>` click → fullscreen with Save/Copy URL/Regenerate. `chatStore.regenerateImage(messageId)` reads stored `imagePrompt`, hits `/api/image-gen/portrait`, patches `imageUrl` in place. `tool_result` SSE handler captures `data.data.prompt` → `imagePrompt`. `onRegenerateImage` prop wired through ChatThread. 7 Vitest cases (`ChatImageLightbox.test.tsx`). Frontend 215 → 222.

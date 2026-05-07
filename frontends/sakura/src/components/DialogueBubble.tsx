@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Volume2, Pin, ChevronLeft, ChevronRight, RefreshCw, Copy, Trash2, Pencil, Check, X, Bookmark } from 'lucide-react';
+import { Volume2, Pin, ChevronLeft, ChevronRight, ChevronsRight, RefreshCw, Copy, Trash2, Pencil, Check, X, Bookmark } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
 import { ChatImageLightbox } from './ChatImageLightbox';
@@ -107,6 +107,8 @@ interface DialogueBubbleProps {
   isLastAssistant?: boolean;
   /** Whether this message is currently being regenerated — shows spinner. */
   isRegenerating?: boolean;
+  /** Called to ask the character to continue their previous response. */
+  onContinue?: () => void;
 }
 
 /** Highlight occurrences of `query` inside `text` using <mark> spans. */
@@ -315,7 +317,7 @@ function StageRow({ done, active, label }: { done: boolean; active: boolean; lab
  * PUT /api/messages/{serverMessageId}/pin and tracks pinned state locally.
  * Pinned messages show a filled Pin indicator in the top-right corner.
  */
-export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onRegenerateImage, onBranchSwitch, onDelete, onEdit, isLastAssistant = false, isRegenerating = false }: DialogueBubbleProps) {
+export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onRegenerateImage, onBranchSwitch, onDelete, onEdit, isLastAssistant = false, isRegenerating = false, onContinue }: DialogueBubbleProps) {
   const thinkingMode = useAppStore(s => s.thinkingIndicatorMode);
   const [pinned, setPinned] = useState(message.pinned ?? false);
   const [hovered, setHovered] = useState(false);
@@ -975,6 +977,16 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
                 title={generatingVoice ? 'Generating voice...' : voiceUrl ? 'Regenerate voice' : 'Generate voice'}
               >
                 <Volume2 size={11} className={generatingVoice ? 'animate-pulse' : ''} />
+              </button>
+            )}
+            {onContinue && isLastAssistant && message.role === 'assistant' && (
+              <button
+                onClick={onContinue}
+                className="p-0.5 rounded transition-colors"
+                style={{ color: 'var(--color-text-tertiary)' }}
+                title="Continue response"
+              >
+                <ChevronsRight size={11} />
               </button>
             )}
             {onDelete && (

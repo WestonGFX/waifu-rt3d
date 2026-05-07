@@ -52,7 +52,7 @@ type MicState = 'idle' | 'recording' | 'processing';
  */
 export function ChatThread() {
   const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode, config, saveConfig } = useAppStore();
-  const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode, regenerateImage } = useChatStore();
+  const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode, regenerateImage, continueGeneration } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
@@ -872,6 +872,7 @@ export function ChatThread() {
                   onEdit={handleEditMessage}
                   isLastAssistant={isLastAssistant}
                   isRegenerating={regeneratingMsgId === msg.serverMessageId}
+                  onContinue={isLastAssistant ? continueGeneration : undefined}
                 />
               </div>
             );

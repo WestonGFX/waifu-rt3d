@@ -44,6 +44,12 @@ interface ChatState {
    * response. Does NOT trigger regeneration.
    */
   editMessage: (messageId: string, newText: string) => Promise<void>;
+  /**
+   * Ask the character to continue their previous response without adding a
+   * visible user message. Sends `[CONTINUE]` as an incognito turn so the DB
+   * and UI stay clean; the new assistant reply appears as a fresh bubble.
+   */
+  continueGeneration: () => Promise<void>;
 }
 
 const genId = () => crypto.randomUUID();
@@ -522,6 +528,80 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
     } catch {
       applyPatch({ status: 'sent' });
+    }
+  },
+
+  continueGeneration: async () => {
+    const { sessionId, charId, loading } = get();
+    if (loading || sessionId == null || !charId) return;
+
+    const controller = new AbortController();
+    const assistantId = genId();
+    const assistantMsg: ChatMessage = {
+      id: assistantId,
+      role: 'assistant',
+      text: '',
+      createdAt: Date.now(),
+      status: 'pending',
+    };
+
+    set((s) => ({ messages: [...s.messages, assistantMsg], loading: true, abortController: controller }));
+
+    const patchAssistant = (patch: Partial<ChatMessage>) => {
+      set((s) => ({ messages: s.messages.map((m) => (m.id === assistantId ? { ...m, ...patch } : m)) }));
+    };
+
+    let fullText = '';
+    try {
+      const response = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: '[CONTINUE]',
+          session_id: sessionId,
+          character_id: charId,
+          speak: false,
+          incognito: true,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) throw new Error(`Stream request failed: ${response.status}`);
+
+      await parseSSEStream(response, (eventType, data: any) => {
+        switch (eventType) {
+          case 'processing':
+            patchAssistant({ status: 'pending', stage: 'processing' });
+            break;
+          case 'token':
+            fullText += data.t ?? '';
+            patchAssistant({ text: fullText, status: 'streaming', stage: 'generating' });
+            break;
+          case 'done':
+            patchAssistant({
+              text: data.reply ?? fullText,
+              status: 'sent',
+              stage: undefined,
+              emotion: data.emotion ?? undefined,
+              serverMessageId: data.message_id ?? undefined,
+              quickReplies: Array.isArray(data.quick_replies) && data.quick_replies.length > 0
+                ? data.quick_replies
+                : undefined,
+            });
+            break;
+          case 'error':
+            patchAssistant({ text: `Error: ${data.error ?? 'unknown'}`, status: 'failed', stage: undefined });
+            break;
+        }
+      });
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        patchAssistant({ text: fullText || '(cancelled)', status: 'sent' });
+      } else {
+        patchAssistant({ text: `Failed: ${err.message}`, status: 'failed' });
+      }
+    } finally {
+      set({ loading: false, abortController: null });
     }
   },
 }));

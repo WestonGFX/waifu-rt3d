@@ -17,6 +17,7 @@ from .adapters.styletts2 import StyleTTS2Adapter
 from .adapters.parler import ParlerTTSAdapter
 from .adapters.dia import DiaAdapter
 from .adapters.cosyvoice import CosyVoiceAdapter
+from .adapters.voxtral import VoxtralAdapter
 
 
 def get_tts(cfg):
@@ -56,6 +57,7 @@ def get_tts(cfg):
         if ptype == "parler": return ParlerTTSAdapter(audio_dir)
         if ptype == "dia": return DiaAdapter(audio_dir)
         if ptype == "cosyvoice": return CosyVoiceAdapter(audio_dir)
+        if ptype == "voxtral": return VoxtralAdapter(audio_dir)
         if ptype == "generic_rest": return PinokioGenericAdapter(audio_dir)
 
         # Fallback to generic if we have an endpoint
@@ -81,4 +83,5 @@ def get_tts(cfg):
     if prov == "parler": return ParlerTTSAdapter(audio_dir)
     if prov == "dia": return DiaAdapter(audio_dir)
     if prov == "cosyvoice": return CosyVoiceAdapter(audio_dir)
+    if prov == "voxtral": return VoxtralAdapter(audio_dir)
     return EdgeTTSAdapter(audio_dir)  # Ultimate fallback

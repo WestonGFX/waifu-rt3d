@@ -195,6 +195,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       imageUrl: m.image_url ?? undefined,
       imagePrompt: m.image_prompt ?? undefined,
       editedAt: m.edited_at ?? undefined,
+      voiceMessageUrl: m.voice_message_url ?? undefined,
     }));
     set({ messages });
   },

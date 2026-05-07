@@ -6818,7 +6818,7 @@ def get_session_messages(session_id: int, include_branches: bool = False):
         cur = conn.cursor()
         cols = ("id, role, text, ts, parent_id, is_active, emotion, char_id, "
                 "token_count, input_token_count, generation_time_ms, tokens_per_second, pinned, "
-                "image_url, image_prompt, edited_at")
+                "image_url, image_prompt, edited_at, voice_message_url")
         if include_branches:
             cur.execute(
                 f"SELECT {cols} FROM messages WHERE session_id=? ORDER BY id ASC",
@@ -6868,6 +6868,9 @@ def get_session_messages(session_id: int, include_branches: bool = False):
             # edited_at (v73 column, index 15)
             if len(r) > 15 and r[15] is not None:
                 msg["edited_at"] = r[15]
+            # voice_message_url (v74 column, index 16)
+            if len(r) > 16 and r[16] is not None:
+                msg["voice_message_url"] = r[16]
             messages.append(msg)
         return {"messages": messages}
 
@@ -8940,6 +8943,177 @@ async def delete_voice_sample(char_id: int):
         conn.execute("UPDATE characters SET voice_sample_path = NULL WHERE id = ?", (char_id,))
         conn.commit()
         return {"ok": True}
+
+
+@app.post("/api/characters/{char_id}/voice-wand")
+async def voice_wand(char_id: int):
+    """Generate a voice description for a character from their backstory and personality.
+
+    Reads the character's ``backstory`` and ``personality`` fields, then uses
+    the active LLM to write a concise voice description in Parler-TTS format
+    (e.g. "A warm, expressive female voice with slight breathiness…").
+    The result can be pasted into the Parler TTS voice prompt field.
+
+    This does NOT modify the character or generate audio — it returns text only.
+
+    Args:
+        char_id: ID of the character to generate a voice description for.
+
+    Returns:
+        {"voice_description": str, "char_name": str}
+
+    Raises:
+        HTTPException 404: Character not found.
+        HTTPException 503: LLM not available.
+
+    Example:
+        POST /api/characters/1/voice-wand
+        Response: {"voice_description": "A gentle, breathy female voice...", "char_name": "Yuki"}
+    """
+    with db_ctx() as conn:
+        row = conn.execute(
+            "SELECT name, personality, backstory FROM characters WHERE id = ?",
+            (char_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "Character not found")
+
+    char_name, personality, backstory = row
+
+    # Build a prompt that will elicit a voice description.
+    persona_excerpt = (personality or "")[:400]
+    backstory_excerpt = (backstory or "")[:400]
+
+    wand_prompt = (
+        f"You are a voice director. Based on this character description, write a single-paragraph "
+        f"voice description in Parler-TTS format — describing pitch, pace, warmth, accent, "
+        f"breathiness, and emotional quality. Be specific and evocative. 2-4 sentences only.\n\n"
+        f"Character: {char_name}\n"
+        f"Personality: {persona_excerpt}\n"
+        f"Backstory: {backstory_excerpt}\n\n"
+        f"Voice description:"
+    )
+
+    cfg = load_config()
+    try:
+        from backend.llm.context_assembler import ContextAssembler
+        from backend.llm.adapters import get_adapter
+        adapter = get_adapter(cfg)
+        if adapter is None:
+            raise HTTPException(503, "LLM not configured")
+
+        messages = [
+            {"role": "system", "content": "You are a professional voice director. Be vivid and specific."},
+            {"role": "user", "content": wand_prompt},
+        ]
+
+        llm_cfg = cfg.get("llm", {})
+        result = adapter.chat_completion(
+            messages=messages,
+            model=llm_cfg.get("model", ""),
+            temperature=0.7,
+            max_tokens=200,
+        )
+        description = result.get("content", "").strip() if isinstance(result, dict) else str(result).strip()
+        # Strip trailing quotes if the LLM wrapped the output
+        description = description.strip('"').strip("'").strip()
+        logger.info(f"[VoiceWand] Generated description for char {char_id}: {description[:60]}…")
+        return {"voice_description": description, "char_name": char_name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[VoiceWand] LLM call failed: {e}")
+        raise HTTPException(503, f"LLM call failed: {e}")
+
+
+@app.post("/api/messages/{message_id}/generate-voice")
+async def generate_voice_for_message(message_id: int):
+    """Run TTS on a message and persist the audio URL as voice_message_url.
+
+    Fetches the message text, runs the active TTS adapter, saves the audio
+    file, and updates ``messages.voice_message_url`` so the inline player
+    shows on next history load.
+
+    Args:
+        message_id: ID of the message to voice.
+
+    Returns:
+        {"ok": True, "url": str, "message_id": int}
+
+    Raises:
+        HTTPException 404: Message not found.
+        HTTPException 503: TTS not available.
+
+    Example:
+        POST /api/messages/42/generate-voice
+        Response: {"ok": True, "url": "/files/audio/abc123.mp3", "message_id": 42}
+    """
+    with db_ctx() as conn:
+        row = conn.execute(
+            "SELECT content, character_id FROM messages WHERE id = ?",
+            (message_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "Message not found")
+
+    text, char_id = row
+    if not text or not text.strip():
+        raise HTTPException(400, "Message has no text content")
+
+    cfg = load_config()
+    try:
+        from backend.tts.registry import get_tts
+        from backend.tts.adapters.base import TTSAdapter
+
+        # Build tts_cfg with optional per-character voice sample for cloning adapters
+        tts_cfg: dict = {}
+        services = cfg.get("services", {})
+        s_tts = services.get("tts", {})
+        if "active_provider" in s_tts:
+            active = s_tts["active_provider"]
+            provider_cfg = s_tts.get("providers", {}).get(active, {})
+            tts_cfg = dict(provider_cfg)
+        else:
+            tts_cfg = dict(cfg.get("tts", {}) or {})
+
+        # Inject per-character voice sample path for zero-shot cloning
+        if char_id:
+            with db_ctx() as c2:
+                vs_row = c2.execute(
+                    "SELECT voice_sample_path FROM characters WHERE id = ?", (char_id,)
+                ).fetchone()
+            if vs_row and vs_row[0]:
+                raw_path = vs_row[0]
+                # URL-to-filesystem: /files/voice_samples/1/sample.wav → STORAGE/voice_samples/1/sample.wav
+                if raw_path.startswith("/files/"):
+                    rel = raw_path[len("/files/"):]
+                    tts_cfg["voice_sample_path"] = str(STORAGE / rel)
+                else:
+                    tts_cfg["voice_sample_path"] = raw_path
+
+        adapter: TTSAdapter = get_tts(cfg)
+        result = await run_in_threadpool(adapter.speak, text.strip(), tts_cfg)
+
+        if not result.get("ok"):
+            raise HTTPException(503, result.get("error", "TTS generation failed"))
+
+        filename = result["filename"]
+        audio_url = f"/files/audio/{filename}"
+
+        with db_ctx() as conn:
+            conn.execute(
+                "UPDATE messages SET voice_message_url = ? WHERE id = ?",
+                (audio_url, message_id),
+            )
+            conn.commit()
+
+        logger.info(f"[GenerateVoice] Message {message_id} → {audio_url}")
+        return {"ok": True, "url": audio_url, "message_id": message_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[GenerateVoice] Failed for message {message_id}: {e}")
+        raise HTTPException(503, f"TTS failed: {e}")
 
 
 @app.post("/api/upload/live2d")

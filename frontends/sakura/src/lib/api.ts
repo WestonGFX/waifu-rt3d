@@ -238,7 +238,7 @@ export const api = {
     patch<{ ok: boolean; tags: string[] }>(`/api/sessions/${id}/tags`, { tags }),
   deleteSession: (id: number) => del<{ ok: boolean; deleted_messages: number }>(`/api/sessions/${id}`),
   getMessages: (sessionId: number) =>
-    get<{ messages: Array<{ id: number; role: string; text: string; ts: string; emotion?: string; parent_id?: number | null; is_active?: number; pinned?: number; image_url?: string; image_prompt?: string; edited_at?: number | null }> }>(
+    get<{ messages: Array<{ id: number; role: string; text: string; ts: string; emotion?: string; parent_id?: number | null; is_active?: number; pinned?: number; image_url?: string; image_prompt?: string; edited_at?: number | null; voice_message_url?: string }> }>(
       `/api/sessions/${sessionId}/messages`
     ),
   /**
@@ -260,6 +260,14 @@ export const api = {
   /** M2-item10: Save a message directly as a Permanent memory. */
   pinMessageAsMemory: (messageId: number) =>
     post<{ memory_id: string | null; message_id: number }>(`/api/messages/${messageId}/pin-as-memory`, {}),
+
+  /** M3-item16: Run TTS on a message and persist the audio URL. */
+  generateVoiceForMessage: (messageId: number) =>
+    post<{ ok: boolean; url: string; message_id: number }>(`/api/messages/${messageId}/generate-voice`, {}),
+
+  /** M3-item15: Generate a Parler-style voice description from a character's backstory. */
+  getCharacterVoiceWand: (charId: number) =>
+    post<{ voice_description: string; char_name: string }>(`/api/characters/${charId}/voice-wand`, {}),
 
   /** Get all branch siblings of a message for swipe navigation. */
   getMessageBranches: (messageId: number) =>

@@ -876,6 +876,7 @@ function CharacterTab() {
                 <option value="edge-tts">Edge-TTS (Free)</option>
                 <option value="elevenlabs">ElevenLabs (Paid)</option>
                 <option value="fish_audio">Fish Audio</option>
+                <option value="voxtral">Voxtral (Mistral)</option>
               </optgroup>
               <optgroup label="CPU">
                 <option value="kokoro">Kokoro</option>
@@ -3440,6 +3441,24 @@ interface TabProps {
 }
 
 function VoiceTab({ save, cfg }: TabProps) {
+  const { activeCharacter } = useAppStore();
+  const [wandRunning, setWandRunning] = useState(false);
+  const [wandResult, setWandResult] = useState<string | null>(null);
+
+  const runVoiceWand = async () => {
+    if (!activeCharacter?.id || wandRunning) return;
+    setWandRunning(true);
+    setWandResult(null);
+    try {
+      const res = await api.getCharacterVoiceWand(activeCharacter.id);
+      setWandResult(res.voice_description);
+    } catch (err) {
+      console.error('[VoiceWand] failed:', err);
+    } finally {
+      setWandRunning(false);
+    }
+  };
+
   /** Trigger a TTS preview using current voice settings. */
   const previewVoice = async () => {
     try {
@@ -3481,6 +3500,7 @@ function VoiceTab({ save, cfg }: TabProps) {
                 <option value="edge-tts">Edge-TTS (Free)</option>
                 <option value="elevenlabs">ElevenLabs (Paid)</option>
                 <option value="fish_audio">Fish Audio (Cloud)</option>
+                <option value="voxtral">Voxtral (Mistral, Cloud)</option>
               </optgroup>
               <optgroup label="CPU (no GPU needed)">
                 <option value="kokoro">Kokoro (82M params)</option>
@@ -3602,6 +3622,46 @@ function VoiceTab({ save, cfg }: TabProps) {
             >
               ▶ Preview
             </button>
+          </SettingField>
+        </div>
+      </section>
+
+      <section className="mb-6">
+        <SectionHeader title="Voice Cloning" />
+        <div style={cardStyle} className="px-4">
+          <SettingField
+            label="Voice Wand"
+            description="Generate a voice description for the active character using their personality and backstory."
+            tooltip="The AI reads the character's profile and writes a Parler-style voice description. Use this as a prompt when setting up Parler-TTS or Chatterbox."
+          >
+            <button
+              onClick={runVoiceWand}
+              disabled={wandRunning || !activeCharacter}
+              className="text-sm px-3 py-1 rounded cursor-pointer disabled:opacity-50"
+              style={{ ...selectStyle, color: 'var(--color-accent)' }}
+            >
+              {wandRunning ? '✨ Generating...' : '✨ Generate Voice Description'}
+            </button>
+          </SettingField>
+          {wandResult && (
+            <SettingField label="Result" description="Copy this description into your TTS engine's voice prompt field.">
+              <textarea
+                readOnly
+                value={wandResult}
+                rows={4}
+                className="text-xs rounded w-full"
+                style={{ ...selectStyle, resize: 'vertical', fontFamily: 'monospace' }}
+              />
+            </SettingField>
+          )}
+          <SettingField
+            label="Voice Sample"
+            description="Upload a voice sample for zero-shot cloning (Chatterbox, XTTS, GPT-SoVITS)."
+            tooltip="Upload a 10-30s WAV/MP3 clip of the character's voice. Used by local cloning adapters."
+          >
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+              Upload a sample in the Character tab → Voice section.
+            </span>
           </SettingField>
         </div>
       </section>

@@ -33,13 +33,14 @@ def _add_v73_cols_to_test_db(db_path: Path) -> None:
     try:
         cols = {r[1] for r in con.execute("PRAGMA table_info(messages)").fetchall()}
         for col_name, col_type in [
-            ("pinned",           "INTEGER DEFAULT 0"),
-            ("image_url",        "TEXT"),
-            ("image_prompt",     "TEXT"),
-            ("edited_at",        "INTEGER"),
-            ("edit_history",     "TEXT"),
-            ("sibling_group_id", "TEXT"),
-            ("sibling_index",    "INTEGER"),
+            ("pinned",             "INTEGER DEFAULT 0"),
+            ("image_url",          "TEXT"),
+            ("image_prompt",       "TEXT"),
+            ("edited_at",          "INTEGER"),
+            ("edit_history",       "TEXT"),
+            ("sibling_group_id",   "TEXT"),
+            ("sibling_index",      "INTEGER"),
+            ("voice_message_url",  "TEXT"),
         ]:
             if col_name not in cols:
                 con.execute(f"ALTER TABLE messages ADD COLUMN {col_name} {col_type}")

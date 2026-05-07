@@ -234,6 +234,8 @@ export interface ChatMessage {
   editedAt?: number;
   /** Server-side audit log of prior versions. Not surfaced in UI in MVP. */
   editHistory?: { ts: number; prevContent: string }[];
+  /** M3-item16: URL of a TTS audio file generated for this message (voice messages). */
+  voiceMessageUrl?: string;
 }
 
 export interface Session {

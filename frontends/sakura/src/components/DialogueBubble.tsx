@@ -321,6 +321,8 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
   const [savedToMemory, setSavedToMemory] = useState(false);
+  const [generatingVoice, setGeneratingVoice] = useState(false);
+  const [voiceUrl, setVoiceUrl] = useState<string | undefined>(message.voiceMessageUrl);
   const [editing, setEditing] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [editText, setEditText] = useState(message.text);
@@ -411,6 +413,20 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
       setTimeout(() => setSavedToMemory(false), 3000);
     } catch (err) {
       console.error('[SaveToMemory] failed:', err);
+    }
+  };
+
+  const handleGenerateVoice = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!message.serverMessageId || generatingVoice) return;
+    setGeneratingVoice(true);
+    try {
+      const res = await api.generateVoiceForMessage(message.serverMessageId);
+      if (res.ok && res.url) setVoiceUrl(res.url);
+    } catch (err) {
+      console.error('[GenerateVoice] failed:', err);
+    } finally {
+      setGeneratingVoice(false);
     }
   };
 
@@ -803,6 +819,17 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
           )}
         </AnimatePresence>
 
+        {/* M3-item16: Voice message inline audio player */}
+        {voiceUrl && (
+          <div style={{ marginTop: 6 }}>
+            <audio
+              controls
+              src={voiceUrl}
+              style={{ width: '100%', height: 28, borderRadius: 4 }}
+            />
+          </div>
+        )}
+
         {/* Feature E: Dialogue choice buttons */}
         {message.choices && message.choices.length > 0 && onChoiceSelect && (
           <div className="mt-3 flex flex-col gap-1.5">
@@ -929,6 +956,17 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
                 title={savedToMemory ? 'Saved to memory!' : 'Remember this (save to permanent memory)'}
               >
                 <Bookmark size={11} style={{ fill: savedToMemory ? '#f59e0b' : 'none' }} />
+              </button>
+            )}
+            {message.serverMessageId != null && (
+              <button
+                onClick={handleGenerateVoice}
+                disabled={generatingVoice}
+                className="p-0.5 rounded transition-colors disabled:opacity-50"
+                style={{ color: voiceUrl ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }}
+                title={generatingVoice ? 'Generating voice...' : voiceUrl ? 'Regenerate voice' : 'Generate voice'}
+              >
+                <Volume2 size={11} className={generatingVoice ? 'animate-pulse' : ''} />
               </button>
             )}
             {onDelete && (

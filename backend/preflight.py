@@ -5240,6 +5240,57 @@ def migrate_to_v73(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v74(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v73 to v74.
+
+    Adds ``voice_message_url`` to the ``messages`` table so that TTS audio
+    generated for a message persists across reloads and renders as an inline
+    audio player in the chat (M3-item16: Voice Messages).
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.
+
+    Raises:
+        sqlite3.Error: If the SQL statement fails.
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> _ = con.execute("CREATE TABLE schema_version (version INTEGER, applied_ts REAL)")
+        >>> _ = con.execute("INSERT INTO schema_version VALUES (73, 0)")
+        >>> _ = con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, text TEXT)")
+        >>> migrate_to_v74(con)
+        True
+        >>> cols = {r[1] for r in con.execute("PRAGMA table_info(messages)")}
+        >>> "voice_message_url" in cols
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 74:
+        logger.info("Schema already at v%d, skipping v74 migration.", cur_ver)
+        return True
+
+    try:
+        msg_cols = {row[1] for row in con.execute("PRAGMA table_info(messages)")}
+        if "voice_message_url" not in msg_cols:
+            con.execute("ALTER TABLE messages ADD COLUMN voice_message_url TEXT")
+            logger.info("  - Added messages.voice_message_url (TEXT)")
+
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (74, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v74 migration complete (voice_message_url added to messages)")
+        return True
+    except Exception as e:
+        logger.error("Schema v74 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -5783,21 +5834,25 @@ def ensure_db():
             if migrate_to_v73(con):
                 version = 73
 
+        if version < 74:
+            if migrate_to_v74(con):
+                version = 74
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 73:
-            raise RuntimeError(f"Database initialization failed: Expected v73, got v{final_version}")
+        if final_version < 74:
+            raise RuntimeError(f"Database initialization failed: Expected v74, got v{final_version}")
 
-        if final_version > 73:
-            logger.warning(f"Database is newer than application (v{final_version} > v73). Some features might be unused.")
+        if final_version > 74:
+            logger.warning(f"Database is newer than application (v{final_version} > v74). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v73 adds image_url/prompt, edited_at/history, sibling cols to messages)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v74 adds voice_message_url to messages)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

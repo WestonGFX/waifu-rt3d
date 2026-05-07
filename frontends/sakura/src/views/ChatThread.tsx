@@ -475,26 +475,47 @@ export function ChatThread() {
 
   const handleRegenerate = useCallback(async (serverMessageId: number) => {
     setRegeneratingMsgId(serverMessageId);
+    const originalMsg = useChatStore.getState().messages.find(m => m.serverMessageId === serverMessageId);
+    const originalText = originalMsg?.text ?? '';
+    const originalEmotion = originalMsg?.emotion;
+
+    // Show typing indicator while waiting
+    useChatStore.setState(s => ({
+      messages: s.messages.map(m =>
+        m.serverMessageId === serverMessageId
+          ? { ...m, text: '', status: 'pending' as const }
+          : m
+      ),
+    }));
+
     try {
       const res = await api.regenerateMessage(serverMessageId);
       if (res.ok && res.new_message) {
-        // Update the message in-place: replace old text/emotion, update serverMessageId
-        const { messages: currentMsgs } = useChatStore.getState();
-        const updated = currentMsgs.map(m => {
-          if (m.serverMessageId === serverMessageId) {
-            return {
-              ...m,
-              text: res.new_message.text,
-              emotion: res.new_message.emotion ?? m.emotion,
-              serverMessageId: res.new_message.id,
-            };
-          }
-          return m;
-        });
-        useChatStore.setState({ messages: updated });
+        useChatStore.setState(s => ({
+          messages: s.messages.map(m =>
+            m.serverMessageId === serverMessageId
+              ? { ...m, text: res.new_message.text, emotion: res.new_message.emotion ?? originalEmotion, serverMessageId: res.new_message.id, status: 'sent' as const }
+              : m
+          ),
+        }));
+      } else {
+        useChatStore.setState(s => ({
+          messages: s.messages.map(m =>
+            m.serverMessageId === serverMessageId
+              ? { ...m, text: originalText, emotion: originalEmotion, status: 'sent' as const }
+              : m
+          ),
+        }));
       }
     } catch (err) {
       console.error('[Regenerate] failed:', err);
+      useChatStore.setState(s => ({
+        messages: s.messages.map(m =>
+          m.serverMessageId === serverMessageId
+            ? { ...m, text: originalText, emotion: originalEmotion, status: 'sent' as const }
+            : m
+        ),
+      }));
     } finally {
       setRegeneratingMsgId(null);
     }

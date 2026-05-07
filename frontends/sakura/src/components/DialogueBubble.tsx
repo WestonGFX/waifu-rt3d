@@ -818,6 +818,17 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
             className="flex items-center gap-0.5 mt-1"
             style={{ fontSize: '0.7rem' }}
           >
+            {onRegenerate && message.role === 'assistant' && message.serverMessageId != null && (
+              <button
+                onClick={() => onRegenerate(message.serverMessageId!)}
+                disabled={isRegenerating}
+                className="p-0.5 rounded transition-colors disabled:opacity-50"
+                style={{ color: isRegenerating ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }}
+                title={isRegenerating ? 'Regenerating...' : 'Regenerate response'}
+              >
+                <RefreshCw size={11} className={isRegenerating ? 'animate-spin' : ''} />
+              </button>
+            )}
             <button
               onClick={handleCopy}
               className="p-0.5 rounded transition-colors"

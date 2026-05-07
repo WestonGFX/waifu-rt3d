@@ -257,6 +257,10 @@ export const api = {
   pinMessage: (messageId: number, pinned: boolean) =>
     put<{ ok: boolean }>(`/api/messages/${messageId}/pin`, { pinned }),
 
+  /** M2-item10: Save a message directly as a Permanent memory. */
+  pinMessageAsMemory: (messageId: number) =>
+    post<{ memory_id: string | null; message_id: number }>(`/api/messages/${messageId}/pin-as-memory`, {}),
+
   /** Get all branch siblings of a message for swipe navigation. */
   getMessageBranches: (messageId: number) =>
     get<{

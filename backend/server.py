@@ -10417,6 +10417,60 @@ async def pin_message(message_id: int, req: Request):
     return {"message_id": message_id, "pinned": pinned_val}
 
 
+@app.post("/api/messages/{message_id}/pin-as-memory")
+async def pin_message_as_memory(message_id: int):
+    """Save a message directly as a Permanent (T3) memory.
+
+    Fetches the message text and character_id from the messages table and
+    inserts it into the tiered memory store at tier 3 (Permanent).  Useful
+    for the "Remember this" UI button.
+
+    Args:
+        message_id: ID of the message to promote to memory.
+
+    Returns:
+        {"memory_id": str, "message_id": int}
+
+    Raises:
+        HTTPException 404: If the message does not exist.
+        HTTPException 503: If the vector store is unavailable.
+
+    Example:
+        POST /api/messages/42/pin-as-memory
+        Response: {"memory_id": "123", "message_id": 42}
+    """
+    if not vector_store:
+        raise HTTPException(503, "Memory store unavailable")
+
+    with db_ctx() as conn:
+        row = conn.execute(
+            "SELECT content, character_id, session_id, role FROM messages WHERE id = ?",
+            (message_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Message not found")
+
+    text, char_id, session_id, role = row
+    if not text or not text.strip():
+        raise HTTPException(400, "Message has no text content")
+
+    from backend.memory.tiered_memory import TieredMemoryManager, TIER_PERMANENT
+    if isinstance(vector_store, TieredMemoryManager):
+        mem_id = vector_store.add(
+            session_id=session_id,
+            char_id=char_id or 0,
+            role=role or "user",
+            text=text.strip(),
+            tier=TIER_PERMANENT,
+            salience=0.9,
+        )
+    else:
+        mem_id = vector_store.add_memory(session_id, char_id or 0, role or "user", text.strip())
+
+    logger.info(f"[PinAsMemory] Message {message_id} -> memory {mem_id} (char {char_id})")
+    return {"memory_id": str(mem_id) if mem_id else None, "message_id": message_id}
+
+
 # ── Feature T1-8 — Streak & Rewards Info ──────────────────────────────────────
 
 @app.get("/api/characters/{character_id}/streak")

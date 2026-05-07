@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Volume2, Pin, ChevronLeft, ChevronRight, RefreshCw, Copy, Trash2, Pencil, Check, X } from 'lucide-react';
+import { Volume2, Pin, ChevronLeft, ChevronRight, RefreshCw, Copy, Trash2, Pencil, Check, X, Bookmark } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
 import { ChatImageLightbox } from './ChatImageLightbox';
@@ -320,6 +320,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
   const [pinned, setPinned] = useState(message.pinned ?? false);
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [savedToMemory, setSavedToMemory] = useState(false);
   const [editing, setEditing] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [editText, setEditText] = useState(message.text);
@@ -397,6 +398,19 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
     } catch (err) {
       console.error('Pin failed:', err);
       setPinned(!next); // revert
+    }
+  };
+
+  /** M2-item10: Save message as a Permanent (T3) memory. */
+  const handleSaveToMemory = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!message.serverMessageId || savedToMemory) return;
+    try {
+      await api.pinMessageAsMemory(message.serverMessageId);
+      setSavedToMemory(true);
+      setTimeout(() => setSavedToMemory(false), 3000);
+    } catch (err) {
+      console.error('[SaveToMemory] failed:', err);
     }
   };
 
@@ -906,6 +920,17 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
             >
               {copied ? <Check size={11} /> : <Copy size={11} />}
             </button>
+            {message.serverMessageId != null && (
+              <button
+                onClick={handleSaveToMemory}
+                disabled={savedToMemory}
+                className="p-0.5 rounded transition-colors"
+                style={{ color: savedToMemory ? '#f59e0b' : 'var(--color-text-tertiary)' }}
+                title={savedToMemory ? 'Saved to memory!' : 'Remember this (save to permanent memory)'}
+              >
+                <Bookmark size={11} style={{ fill: savedToMemory ? '#f59e0b' : 'none' }} />
+              </button>
+            )}
             {onDelete && (
               <button
                 onClick={handleDelete}

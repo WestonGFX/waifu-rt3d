@@ -40,6 +40,48 @@ import re
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# DSPy feature flag — off by default; enabled via configure_dspy_classifier()
+# ---------------------------------------------------------------------------
+
+_DSPY_CLASSIFIER_ENABLED: bool = False
+_COMPILED_JSON_PATH: str | None = None
+
+
+def configure_dspy_classifier(enabled: bool, compiled_json_path: str | None = None) -> None:
+    """Enable or disable DSPy-backed context classification at runtime.
+
+    When *enabled* is ``True``, :func:`classify_context` will delegate to the
+    compiled DSPy classifier (``backend.adaptive.dspy_modules.context_classifier_dspy``)
+    before falling back to the rule-based implementation.  The DSPy module
+    itself degrades gracefully when DSPy is not installed — it routes to the
+    same rule-based heuristics — so enabling this flag on a machine without DSPy
+    is safe.
+
+    Call this once during application startup after loading the app config, for
+    example from ``backend/server.py`` inside the lifespan handler.
+
+    Args:
+        enabled: When ``True`` the DSPy classifier is used as the primary
+            classification path.  When ``False`` (the default) the rule-based
+            heuristics are used directly.
+        compiled_json_path: Absolute path to a compiled DSPy program JSON file
+            produced by ``backend.adaptive.dspy_modules.optimizer_runner``.
+            Pass ``None`` to skip few-shot loading (zero-shot ChainOfThought is
+            still usable when DSPy is installed).
+
+    Example:
+        >>> configure_dspy_classifier(True, "/path/to/context_classifier_v1.json")
+    """
+    global _DSPY_CLASSIFIER_ENABLED, _COMPILED_JSON_PATH
+    _DSPY_CLASSIFIER_ENABLED = enabled
+    _COMPILED_JSON_PATH = compiled_json_path
+    logger.info(
+        "configure_dspy_classifier: enabled=%s, compiled_json=%s",
+        enabled,
+        compiled_json_path or "none",
+    )
+
+# ---------------------------------------------------------------------------
 # Valid context type identifiers
 # ---------------------------------------------------------------------------
 
@@ -388,6 +430,85 @@ def _score_context(
 
 
 # ---------------------------------------------------------------------------
+# Rule-based core (no DSPy flag — safe to call from dspy_modules as fallback)
+# ---------------------------------------------------------------------------
+
+
+def _classify_rule_based(
+    user_msg: str,
+    sentiment_score: float,
+    emoji_count: int,
+    question_count: int,
+    mood_state: str | None = None,
+) -> str:
+    """Apply rule-based heuristics and return a context type string.
+
+    This is the inner implementation of :func:`classify_context` with no
+    feature-flag check.  It is intentionally private so that callers cannot
+    bypass the flag accidentally — the one exception is the DSPy fallback path
+    in :mod:`backend.adaptive.dspy_modules.context_classifier_dspy`, which must
+    call this directly to avoid infinite recursion when the flag is enabled.
+
+    Args:
+        user_msg: Raw user message text.
+        sentiment_score: Pre-computed sentiment polarity in ``[-1.0, 1.0]``.
+        emoji_count: Number of emoji characters counted in *user_msg*.
+        question_count: Number of ``?`` characters in *user_msg*.
+        mood_state: Optional current mood label from the MoodEngine.
+
+    Returns:
+        One of the seven context type strings defined in :data:`CONTEXTS`.
+    """
+    lower_msg = _lower(user_msg)
+
+    mood_lower = _lower(mood_state) if mood_state else ""
+    is_distressed_mood = mood_lower in _DISTRESSED_MOOD_STATES
+    is_intimate_mood = mood_lower in _INTIMATE_MOOD_STATES
+
+    emotional_support_threshold = 0.0 if is_distressed_mood else -0.1
+    flirty_emoji_threshold = 1 if is_intimate_mood else 2
+
+    if sentiment_score < -0.2 and _has_comfort_keyword(lower_msg):
+        logger.debug("classify_context: comfort_reassurance (sentiment=%.2f)", sentiment_score)
+        return "comfort_reassurance"
+
+    if sentiment_score < emotional_support_threshold or _has_sadness_keyword(lower_msg):
+        logger.debug(
+            "classify_context: emotional_support (sentiment=%.2f, mood=%s)",
+            sentiment_score,
+            mood_state,
+        )
+        return "emotional_support"
+
+    if question_count >= 1 and _has_factual_phrase(lower_msg):
+        logger.debug("classify_context: factual_qa (questions=%d)", question_count)
+        return "factual_qa"
+
+    if _has_roleplay_marker(user_msg, lower_msg):
+        logger.debug("classify_context: creative_roleplay")
+        return "creative_roleplay"
+
+    if _has_depth_keyword(lower_msg) and len(user_msg) > 100:
+        logger.debug("classify_context: deep_philosophical (len=%d)", len(user_msg))
+        return "deep_philosophical"
+
+    if (
+        emoji_count >= flirty_emoji_threshold
+        and sentiment_score > 0.2
+        and _has_flirt_keyword(lower_msg)
+    ):
+        logger.debug(
+            "classify_context: playful_flirty (emoji=%d, sentiment=%.2f)",
+            emoji_count,
+            sentiment_score,
+        )
+        return "playful_flirty"
+
+    logger.debug("classify_context: casual_chat (default fallback)")
+    return "casual_chat"
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -446,82 +567,28 @@ def classify_context(
         >>> classify_context("You're so cute 😊😘", 0.5, 2, 0)
         'playful_flirty'
     """
-    lower_msg = _lower(user_msg)
+    # Delegate to DSPy classifier when the feature flag is enabled.
+    # The DSPy module falls back to _classify_rule_based() (not classify_context())
+    # on ImportError or any prediction error to prevent infinite recursion.
+    if _DSPY_CLASSIFIER_ENABLED:
+        try:
+            from backend.adaptive.dspy_modules.context_classifier_dspy import (
+                classify_context_dspy,
+            )
 
-    # Mood-state adjustments to rule thresholds.
-    mood_lower = _lower(mood_state) if mood_state else ""
-    is_distressed_mood = mood_lower in _DISTRESSED_MOOD_STATES
-    is_intimate_mood = mood_lower in _INTIMATE_MOOD_STATES
+            result = classify_context_dspy(
+                user_message=user_msg,
+                sentiment_score=sentiment_score,
+                emoji_count=emoji_count,
+                question_count=question_count,
+                compiled_json_path=_COMPILED_JSON_PATH,
+            )
+            logger.debug("classify_context: dspy path → %s", result)
+            return result
+        except Exception as exc:  # pragma: no cover
+            logger.warning("classify_context: dspy path failed (%s), falling back", exc)
 
-    # Adjusted thresholds based on mood context.
-    emotional_support_threshold = 0.0 if is_distressed_mood else -0.1
-    flirty_emoji_threshold = 1 if is_intimate_mood else 2
-
-    # -----------------------------------------------------------------------
-    # Rule 1: comfort_reassurance
-    # Requires BOTH strong negative sentiment AND a comfort keyword.
-    # -----------------------------------------------------------------------
-    if sentiment_score < -0.2 and _has_comfort_keyword(lower_msg):
-        logger.debug("classify_context: comfort_reassurance (sentiment=%.2f)", sentiment_score)
-        return "comfort_reassurance"
-
-    # -----------------------------------------------------------------------
-    # Rule 2: emotional_support
-    # Fires on moderate negative sentiment OR sadness keyword alone.
-    # -----------------------------------------------------------------------
-    if sentiment_score < emotional_support_threshold or _has_sadness_keyword(lower_msg):
-        logger.debug(
-            "classify_context: emotional_support (sentiment=%.2f, mood=%s)",
-            sentiment_score,
-            mood_state,
-        )
-        return "emotional_support"
-
-    # -----------------------------------------------------------------------
-    # Rule 3: factual_qa
-    # Requires at least one question mark AND a factual phrase opener.
-    # -----------------------------------------------------------------------
-    if question_count >= 1 and _has_factual_phrase(lower_msg):
-        logger.debug("classify_context: factual_qa (questions=%d)", question_count)
-        return "factual_qa"
-
-    # -----------------------------------------------------------------------
-    # Rule 4: creative_roleplay
-    # Fires on asterisk action patterns OR roleplay keywords.
-    # -----------------------------------------------------------------------
-    if _has_roleplay_marker(user_msg, lower_msg):
-        logger.debug("classify_context: creative_roleplay")
-        return "creative_roleplay"
-
-    # -----------------------------------------------------------------------
-    # Rule 5: deep_philosophical
-    # Requires a depth keyword AND message length > 100 characters.
-    # -----------------------------------------------------------------------
-    if _has_depth_keyword(lower_msg) and len(user_msg) > 100:
-        logger.debug("classify_context: deep_philosophical (len=%d)", len(user_msg))
-        return "deep_philosophical"
-
-    # -----------------------------------------------------------------------
-    # Rule 6: playful_flirty
-    # Requires sufficient emoji density, positive sentiment, AND a flirt keyword.
-    # -----------------------------------------------------------------------
-    if (
-        emoji_count >= flirty_emoji_threshold
-        and sentiment_score > 0.2
-        and _has_flirt_keyword(lower_msg)
-    ):
-        logger.debug(
-            "classify_context: playful_flirty (emoji=%d, sentiment=%.2f)",
-            emoji_count,
-            sentiment_score,
-        )
-        return "playful_flirty"
-
-    # -----------------------------------------------------------------------
-    # Rule 7: casual_chat (default)
-    # -----------------------------------------------------------------------
-    logger.debug("classify_context: casual_chat (default fallback)")
-    return "casual_chat"
+    return _classify_rule_based(user_msg, sentiment_score, emoji_count, question_count, mood_state)
 
 
 def get_context_confidence(

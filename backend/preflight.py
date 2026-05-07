@@ -5555,6 +5555,82 @@ def migrate_to_v77(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v78(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v77 to v78.
+
+    Adds: dspy_compiled_programs table for persisting DSPy-optimized module state.
+
+    Each row stores a compiled DSPy program (prompt + few-shot examples) that has
+    been optimized by a teleprompter (``BootstrapFewShot`` or ``MIPROv2``).  The
+    optimizer saves programs to this table so they can be loaded at runtime without
+    re-running the expensive optimization step.  At most one row per
+    ``(module_name, is_active=1)`` should be active; enforced by application logic.
+
+    Columns:
+        id (INTEGER PK AUTOINCREMENT): Surrogate primary key.
+        module_name (TEXT NOT NULL): Dotted module identifier, e.g. ``context_classifier``.
+        version (INTEGER NOT NULL): Monotonically increasing version counter per module.
+        signature (TEXT NOT NULL): DSPy signature string used when compiling.
+        fewshot_json (TEXT): JSON array of few-shot demo dicts saved by ``program.save()``.
+        compiled_at (REAL NOT NULL): Unix timestamp of compilation.
+        optimizer (TEXT NOT NULL): Optimizer class name, e.g. ``BootstrapFewShot``.
+        score (REAL): Evaluation score returned by the optimizer metric.
+        is_active (INTEGER DEFAULT 0): 1 if this compiled program is currently in use.
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.
+
+    Raises:
+        sqlite3.Error: If a SQL statement fails unexpectedly.
+
+    Example:
+        >>> import sqlite3
+        >>> con = sqlite3.connect(":memory:")
+        >>> _ = con.execute("CREATE TABLE schema_version (version INTEGER, applied_ts REAL)")
+        >>> _ = con.execute("INSERT INTO schema_version VALUES (77, 0)")
+        >>> migrate_to_v78(con)
+        True
+        >>> tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        >>> "dspy_compiled_programs" in tables
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 78:
+        logger.info("Schema already at v%d, skipping v78 migration.", cur_ver)
+        return True
+
+    try:
+        con.execute(
+            """CREATE TABLE IF NOT EXISTS dspy_compiled_programs (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                module_name  TEXT NOT NULL,
+                version      INTEGER NOT NULL,
+                signature    TEXT NOT NULL,
+                fewshot_json TEXT,
+                compiled_at  REAL NOT NULL,
+                optimizer    TEXT NOT NULL,
+                score        REAL,
+                is_active    INTEGER DEFAULT 0
+            )"""
+        )
+        logger.info("  - Created dspy_compiled_programs table")
+
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (78, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v78 migration complete (AIE Phase C Strand B: dspy_compiled_programs)")
+        return True
+    except Exception as e:
+        logger.error("Schema v78 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -6120,21 +6196,27 @@ def ensure_db():
             if migrate_to_v77(con):
                 version = 77
 
+        if version < 78:
+            logger.info("Upgrading database schema from v77 to v78...")
+            logger.info("  - AIE Phase C Strand B: dspy_compiled_programs table for DSPy optimization")
+            if migrate_to_v78(con):
+                version = 78
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 77:
-            raise RuntimeError(f"Database initialization failed: Expected v77, got v{final_version}")
+        if final_version < 78:
+            raise RuntimeError(f"Database initialization failed: Expected v78, got v{final_version}")
 
-        if final_version > 77:
-            logger.warning(f"Database is newer than application (v{final_version} > v77). Some features might be unused.")
+        if final_version > 78:
+            logger.warning(f"Database is newer than application (v{final_version} > v78). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v77 adds character_loras for LoRA fine-tuning)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v78 adds dspy_compiled_programs for DSPy optimization)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

@@ -248,8 +248,10 @@ def test_migrate_to_v70_creates_table():
     from backend.preflight import migrate_to_v70
 
     conn = sqlite3.connect(":memory:")
-    conn.execute("CREATE TABLE schema_version (version INTEGER)")
-    conn.execute("INSERT INTO schema_version VALUES (69)")
+    conn.execute(
+        "CREATE TABLE schema_version (version INTEGER PRIMARY KEY, applied_ts REAL)"
+    )
+    conn.execute("INSERT INTO schema_version VALUES (69, 0)")
     conn.execute("CREATE TABLE characters (id INTEGER PRIMARY KEY, name TEXT)")
 
     result = migrate_to_v70(conn)
@@ -261,8 +263,8 @@ def test_migrate_to_v70_creates_table():
     ).fetchone()
     assert row is not None
 
-    # Schema version must be 70.
-    ver = conn.execute("SELECT version FROM schema_version").fetchone()
+    # Schema version must include 70.
+    ver = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
     assert ver[0] == 70
 
 
@@ -271,12 +273,14 @@ def test_migrate_to_v70_is_idempotent():
     from backend.preflight import migrate_to_v70
 
     conn = sqlite3.connect(":memory:")
-    conn.execute("CREATE TABLE schema_version (version INTEGER)")
-    conn.execute("INSERT INTO schema_version VALUES (69)")
+    conn.execute(
+        "CREATE TABLE schema_version (version INTEGER PRIMARY KEY, applied_ts REAL)"
+    )
+    conn.execute("INSERT INTO schema_version VALUES (69, 0)")
     conn.execute("CREATE TABLE characters (id INTEGER PRIMARY KEY, name TEXT)")
 
     migrate_to_v70(conn)
     result = migrate_to_v70(conn)
     assert result is True
-    ver = conn.execute("SELECT version FROM schema_version").fetchone()
+    ver = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
     assert ver[0] == 70

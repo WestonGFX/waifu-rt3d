@@ -4996,7 +4996,7 @@ def migrate_to_v70(con: sqlite3.Connection) -> bool:
             "CREATE INDEX IF NOT EXISTS idx_bond_scenes_seen_char "
             "ON bond_scenes_seen(char_id)"
         )
-        con.execute("UPDATE schema_version SET version = 70")
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (70)")
         con.commit()
         logger.info(
             "\u2705 Schema v70 migration complete (bond_scenes_seen table created)"
@@ -5055,7 +5055,7 @@ def migrate_to_v71(con: sqlite3.Connection) -> bool:
         con.execute(
             "ALTER TABLE characters ADD COLUMN image_style TEXT DEFAULT NULL"
         )
-        con.execute("UPDATE schema_version SET version = 71")
+        con.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (71)")
         con.commit()
         logger.info(
             "✅ Schema v71 migration complete (image_style column added to characters)"

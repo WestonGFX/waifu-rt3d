@@ -6690,6 +6690,11 @@
                                 }
                             }, '*');
 
+                            // Auto-apply fullbody camera so first frame isn't black.
+                            // Without this the camera sits at origin (identity matrix)
+                            // until the user clicks a preset button.
+                            controls.goToPreset('fullbody', 0);
+
                             // Auto-load animation manifest so clips are available
                             // immediately when emotions start firing
                             fetch('/api/animations')
@@ -6829,6 +6834,9 @@
                                 animations: (gltf.animations || []).map(a => a.name || '(unnamed)'),
                             }
                         }, '*');
+
+                        // Auto-apply fullbody camera so first frame isn't black.
+                        controls.goToPreset('fullbody', 0);
 
                         // Start entrance animation for GLB (style-aware)
                         if (entranceConfig.enabled) {

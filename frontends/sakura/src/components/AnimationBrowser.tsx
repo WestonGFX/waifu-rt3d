@@ -212,7 +212,7 @@ export function AnimationBrowser({ isOpen }: { isOpen: boolean }) {
                   key={clip.id}
                   onClick={() => handlePlay(clip)}
                   disabled={!clip.available}
-                  title={`${clip.name} (${clip.duration.toFixed(1)}s) — ${clip.emotions.join(', ')}`}
+                  title={`${clip.name} (${clip.duration.toFixed(1)}s) — ${clip.emotions?.join(', ') ?? ''}`}
                   style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
                     gap: '2px', padding: '6px 8px',

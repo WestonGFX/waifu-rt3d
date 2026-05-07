@@ -1,7 +1,7 @@
 # Current Project Status
 
-**Last updated:** 2026-05-06 (session 32 — M1 Wave-2 Bug Cleanup COMPLETE, 8/8 items shipped)
-**Branch:** master · 8 ahead of `origin/master`.
+**Last updated:** 2026-05-06 (session 33 — M1 ✅ + M2 ✅ complete, 12/12 items shipped; next: M3 Voice Cloning)
+**Branch:** master · 12 ahead of `origin/master`.
 **Schema version:** v73 in code (chain reserved through v74: ✅ v71 Visual Content MVP, ✅ v72 character_relationships dedupe, ✅ v73 messages 6-col consolidation: edited_at/edit_history/sibling_group_id/sibling_index/image_url/image_prompt, v74 AIE LoRA/DSPy).
 **Tests:** **2,725 backend** + **256 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
@@ -9,6 +9,19 @@
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session 33 (2026-05-06) — M2 Memory Transparency: ALL 4 ITEMS SHIPPED.**
+
+| # | Item | Status | Commit |
+|---|---|---|---|
+| 9  | Memory capacity meter (tier breakdown in Overview tab) | ✅ | `b6970d7` |
+| 10 | "Remember this" pin button → saves message as T3 memory | ✅ | `175e99d` |
+| 11 | Memory Browser graph view (SVG radial mind map) | ✅ | `d256e41` |
+| 12 | Memory tier filter pills + promoted_at display | ✅ | `b6970d7` |
+
+**Next: M3 — Voice Cloning Onramp** (items 13-16). Chatterbox + Fish Audio adapters already exist (`backend/tts/adapters/`). M3 gaps: voice cloning Settings UI + voice wand + voice messages in chat.
+
+---
 
 **Session 32 (2026-05-06) — M1 Wave-2 Bug Cleanup: ALL 8 ITEMS SHIPPED.**
 
@@ -18,14 +31,12 @@
 | 2 | Retry/Regenerate AI response | ✅ | (session 31 wave) |
 | 3 | Message editing — schema v73 + UI | ✅ | (session 31 wave) |
 | 4 | Previous-generations browser hardening | ✅ | (session 31 wave) |
-| 5 | image_url + image_prompt persisted — schema v73 | ✅ | `feat(schema-v73)` |
+| 5 | image_url + image_prompt persisted — schema v73 | ✅ | `7f2f563` |
 | 6 | 3D viewer 0 FPS / black canvas on first open | ✅ | (session 31 wave) |
 | 7 | 3D viewer narrow-panel grounding (ResizeObserver fix) | ✅ browser-verify needed | `c9f6bbf` |
 | 8 | Animation packs — procedural clips now functional | ✅ | `c9f6bbf` |
 
 **Item 7 note:** ResizeObserver approach ships; requires visual browser verification in narrow-panel mode before calling fully closed (sensitive area).
-
-**Next: M2 — Memory Transparency Parity** (items 9-12 in roadmap). Authorize push first.
 
 ---
 

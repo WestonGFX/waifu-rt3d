@@ -318,3 +318,7 @@ All 7 open questions answered. `/go` against M1 is now unblocked.
 | **Q7 Bug doc re-title** | **Re-title + add note** | Renamed to `2026-05-06-retry-regenerate-and-message-edit-scaffolded-not-wired.md` + correction note prepended. |
 
 **Updated execution order:** M1 → M2 → M3 → M4 → M6 → M8 → M5 → M7 (unchanged from suggestion). Group chat scoping folds into M6 backlog pass.
+
+---
+- 2026-05-06 M1 (items 1-8): ✓ All 8 items shipped across sessions 31-32. Schema v73 landed. Browser verify needed for item 7 (viewer narrow-panel ResizeObserver — sensitive area).
+- 2026-05-06 M2 (items 9-12): ✓ All 4 items shipped in session 33. Memory tier capacity meter, "Remember this" pin→memory, SVG mind map tab, tier filter pills.

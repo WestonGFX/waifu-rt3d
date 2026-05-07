@@ -169,7 +169,7 @@ def build_corpus(config: CorpusConfig) -> CorpusStats:
         # Step 2 — fetch distinct session ids for this character.
         session_rows = con.execute(
             "SELECT DISTINCT session_id FROM messages"
-            " WHERE character_id = ?"
+            " WHERE char_id = ?"
             " ORDER BY session_id",
             (char_id,),
         ).fetchall()
@@ -284,11 +284,11 @@ def _build_conversation(
     # pre-v76 databases (without message_feedback) are still returned.
     rows = con.execute(
         """
-        SELECT m.id, m.role, m.content, mf.final_score
+        SELECT m.id, m.role, m.text, mf.final_score
           FROM messages m
           LEFT JOIN message_feedback mf ON mf.message_id = m.id
          WHERE m.session_id = ?
-           AND m.character_id = ?
+           AND m.char_id = ?
          ORDER BY m.id ASC
          LIMIT ?
         """,
@@ -304,7 +304,7 @@ def _build_conversation(
 
     for row in rows:
         role: str = row["role"]  # "user" or "assistant"
-        content: str = row["content"] or ""
+        content: str = row["text"] or ""
         final_score: float | None = row["final_score"]
 
         if role == "assistant":

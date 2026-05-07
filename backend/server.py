@@ -18685,6 +18685,171 @@ async def update_feedback_preferences(req: Request):
     return await run_in_threadpool(_write)
 
 
+# --- AIE PHASE C: LORA TRAINING MANAGEMENT ---
+
+
+@app.get("/api/training/status/{char_id}")
+async def get_training_status(char_id: int):
+    """Return the current LoRA training status for a character.
+
+    Args:
+        char_id: ID of the character.
+
+    Returns:
+        Status dict with ``has_active_lora`` flag, adapter metadata if present,
+        and a count of assistant messages available for training.
+
+    Raises:
+        HTTPException: 404 if the character does not exist.
+    """
+
+    def _read() -> dict:
+        with db_ctx() as con:
+            char_row = con.execute(
+                "SELECT name FROM characters WHERE id = ?", (char_id,)
+            ).fetchone()
+            if not char_row:
+                raise HTTPException(status_code=404, detail=f"Character {char_id} not found")
+
+            lora_row = con.execute(
+                "SELECT id, base_model, adapter_path, trained_at, eval_score, meta "
+                "FROM character_loras WHERE char_id = ? AND is_active = 1",
+                (char_id,),
+            ).fetchone()
+
+            msg_count = con.execute(
+                "SELECT COUNT(*) FROM messages WHERE char_id = ? AND role = 'assistant'",
+                (char_id,),
+            ).fetchone()[0]
+
+            if not lora_row:
+                return {
+                    "char_id": char_id,
+                    "char_name": char_row[0],
+                    "has_active_lora": False,
+                    "message_count": msg_count,
+                }
+
+            import json as _json
+
+            return {
+                "char_id": char_id,
+                "char_name": char_row[0],
+                "has_active_lora": True,
+                "base_model": lora_row[1],
+                "adapter_path": lora_row[2],
+                "trained_at": lora_row[3],
+                "eval_score": lora_row[4],
+                "meta": _json.loads(lora_row[5]) if lora_row[5] else None,
+                "message_count": msg_count,
+            }
+
+    return await run_in_threadpool(_read)
+
+
+@app.delete("/api/training/loras/{char_id}")
+async def wipe_character_loras(char_id: int):
+    """Delete all LoRA adapter records for a character.
+
+    This removes DB records only; adapter weight files on disk are not deleted
+    (they may be needed for rollback or manual recovery).
+
+    Args:
+        char_id: ID of the character whose LoRA records to wipe.
+
+    Returns:
+        ``{"ok": True, "char_id": int, "deleted": int}`` with a count of removed rows.
+
+    Raises:
+        HTTPException: 404 if the character does not exist.
+    """
+
+    def _delete() -> dict:
+        with db_ctx() as con:
+            char_row = con.execute(
+                "SELECT name FROM characters WHERE id = ?", (char_id,)
+            ).fetchone()
+            if not char_row:
+                raise HTTPException(status_code=404, detail=f"Character {char_id} not found")
+
+            count_row = con.execute(
+                "SELECT COUNT(*) FROM character_loras WHERE char_id = ?", (char_id,)
+            ).fetchone()
+            deleted = count_row[0] if count_row else 0
+            con.execute("DELETE FROM character_loras WHERE char_id = ?", (char_id,))
+            con.commit()
+        return {"ok": True, "char_id": char_id, "deleted": deleted}
+
+    return await run_in_threadpool(_delete)
+
+
+@app.post("/api/training/retrain/{char_id}")
+async def trigger_lora_retrain(char_id: int):
+    """Prepare a LoRA training corpus and return the CLI command to run on the training rig.
+
+    Builds the conversation corpus from DB (fast, no CUDA required) so the
+    caller can see how many messages are available, then returns the CLI
+    command to run on the Windows RTX training machine.
+
+    Args:
+        char_id: ID of the character to retrain.
+
+    Returns:
+        ``{"ok": True, "corpus_stats": {...}, "cli_command": str, "note": str}``
+
+    Raises:
+        HTTPException: 404 if the character does not exist.
+    """
+
+    def _prepare() -> dict:
+        import json as _json
+        import tempfile
+        from pathlib import Path as _Path
+
+        from backend.adaptive.finetune.corpus_builder import CorpusConfig, build_corpus
+
+        with db_ctx() as con:
+            char_row = con.execute(
+                "SELECT name FROM characters WHERE id = ?", (char_id,)
+            ).fetchone()
+            if not char_row:
+                raise HTTPException(status_code=404, detail=f"Character {char_id} not found")
+            char_name = char_row[0]
+
+        with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as tf:
+            corpus_path = _Path(tf.name)
+
+        cfg = CorpusConfig(
+            char_name=char_name,
+            db_path=DB_PATH,
+            output_path=corpus_path,
+        )
+        stats = build_corpus(cfg)
+
+        return {
+            "ok": True,
+            "char_id": char_id,
+            "char_name": char_name,
+            "corpus_stats": {
+                "total_sessions": stats.total_sessions,
+                "total_messages": stats.total_messages,
+                "included_messages": stats.included_messages,
+                "excluded_low_score": stats.excluded_low_score,
+                "excluded_too_short": stats.excluded_too_short,
+                "corpus_path": str(stats.output_path),
+            },
+            "cli_command": (
+                f'python scripts/train_character_lora.py --char-name "{char_name}"'
+            ),
+            "note": (
+                "Run the CLI command on your Windows training rig (requires CUDA + Unsloth). "
+                "The corpus file will be rebuilt fresh on the training machine."
+            ),
+        }
+
+    return await run_in_threadpool(_prepare)
+
+
 # --- EXCEPTION HANDLERS ---
 @app.exception_handler(Exception)
 async def generic_exception_handler(request, exc):

@@ -233,4 +233,4 @@ CREATE TABLE IF NOT EXISTS dspy_compiled_programs (
 
 ## Status Log
 
-- 2026-05-06 Phase 0: ▶ IN PROGRESS (session 35)
+- 2026-05-06 Phase 0: ✓ DONE (session 35) — commit `6af30cc`. schema v76, feedback module, 3 endpoints, FeedbackButtons UI, 57 new tests (2762 backend / 276 frontend all passing).

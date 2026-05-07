@@ -7785,6 +7785,21 @@
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
             });
+
+            // Belt-and-suspenders: watch the canvas element directly so that
+            // panel width changes driven by CSS (Framer Motion animate width)
+            // still resize the renderer + camera even if window.resize fires
+            // before the layout finishes — the most likely cause of the
+            // "character clips to right in narrow panel" regression.
+            new ResizeObserver(([entry]) => {
+                const w = entry.contentRect.width;
+                const h = entry.contentRect.height;
+                if (w < 1 || h < 1) return;
+                renderer.setSize(w, h, false); // false = don't update CSS (already sized by CSS)
+                camera.aspect = w / h;
+                camera.updateProjectionMatrix();
+                composer.setSize(w, h);
+            }).observe(canvas);
         }
         init();
     </script>

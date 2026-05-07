@@ -18,14 +18,16 @@ import { useViewerStore } from '../stores/viewerStore';
 /** Clip metadata from the animation manifest. */
 interface AnimClip {
   id: string;
-  file: string;
+  file?: string;
   name: string;
   category: string;
-  emotions: string[];
+  emotion?: string;
+  emotions?: string[];
   duration: number;
   loop: boolean;
   available: boolean;
   url: string | null;
+  type?: 'file' | 'procedural';
   packId?: string;
   packName?: string;
 }
@@ -60,6 +62,7 @@ export function AnimationBrowser({ isOpen }: { isOpen: boolean }) {
     dispatchPlayAnimation,
     dispatchStopAnimation,
     dispatchLoadAnimation,
+    dispatchExpression,
   } = useViewerStore();
 
   /** Fetch the manifest and group clips by category. */
@@ -101,23 +104,34 @@ export function AnimationBrowser({ isOpen }: { isOpen: boolean }) {
   }, [expanded, totalClips, fetchManifest]);
 
   /**
-   * Play a clip by loading it first (if needed) then dispatching play.
+   * Play a clip. Procedural clips trigger an expression directly;
+   * file-based clips load then play via the animation director.
    *
    * @param clip - The clip metadata to play.
    */
   const handlePlay = (clip: AnimClip) => {
-    if (!clip.available || !clip.url) return;
+    if (!clip.available) return;
 
     if (playing === clip.id) {
-      // Stop currently playing
       dispatchStopAnimation(0.3);
       setPlaying(null);
       return;
     }
 
-    // Load + play
+    if (clip.type === 'procedural' && clip.emotion) {
+      // Procedural clip: drive the emotion expression system directly.
+      dispatchExpression(clip.emotion, 0.9);
+      setPlaying(clip.id);
+      if (!clip.loop) {
+        setTimeout(() => setPlaying(null), (clip.duration || 3) * 1000);
+      }
+      return;
+    }
+
+    if (!clip.url) return;
+
+    // File-based clip: load then play
     dispatchLoadAnimation(clip.url, clip.id, true);
-    // Small delay to allow load to complete, then play
     setTimeout(() => {
       dispatchPlayAnimation(clip.id, { loop: clip.loop, fadeIn: 0.4 });
       setPlaying(clip.id);
@@ -212,7 +226,7 @@ export function AnimationBrowser({ isOpen }: { isOpen: boolean }) {
                   key={clip.id}
                   onClick={() => handlePlay(clip)}
                   disabled={!clip.available}
-                  title={`${clip.name} (${clip.duration.toFixed(1)}s) — ${clip.emotions?.join(', ') ?? ''}`}
+                  title={`${clip.name} (${clip.duration.toFixed(1)}s)${clip.type === 'procedural' ? ' · procedural' : ''}${clip.emotions?.length ? ' — ' + clip.emotions.join(', ') : clip.emotion ? ' — ' + clip.emotion : ''}`}
                   style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
                     gap: '2px', padding: '6px 8px',

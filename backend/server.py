@@ -12134,9 +12134,17 @@ def get_animation_manifest():
     for pack in manifest.get("packs", []):
         for clip in pack.get("clips", []):
             clip_file = clip.get("file", "")
-            clip_path = anim_dir / clip_file
-            clip["available"] = clip_path.exists()
-            clip["url"] = f"/animations/{clip_file}" if clip["available"] else None
+            if not clip_file:
+                # Procedural clip: no file required; viewer drives it via
+                # dispatchExpression using clip["emotion"].
+                clip["available"] = True
+                clip["url"] = None
+                clip["type"] = "procedural"
+            else:
+                clip_path = anim_dir / clip_file
+                clip["available"] = clip_path.exists()
+                clip["url"] = f"/animations/{clip_file}" if clip["available"] else None
+                clip["type"] = "file"
 
     return manifest
 

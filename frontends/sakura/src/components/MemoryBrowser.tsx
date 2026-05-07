@@ -74,6 +74,8 @@ interface OverviewStats {
   total_facts: number;
   total_journal_entries: number;
   has_profile: boolean;
+  total_memories?: number;
+  memories_by_tier?: Record<string, number>;
 }
 
 interface OverviewData {
@@ -264,6 +266,52 @@ function OverviewTab({ charId, charName }: { charId: number; charName: string })
                         height: '100%',
                         borderRadius: 3,
                         backgroundColor: color,
+                        transition: 'width 0.4s ease',
+                      }}
+                    />
+                  </div>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)', width: 24, textAlign: 'right' }}>
+                    {count}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Memory store tier breakdown */}
+      {(stats.total_memories ?? 0) > 0 && (
+        <div style={{ ...cardStyle, padding: '12px 14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+            <p
+              style={{
+                fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.08em', color: 'var(--color-text-tertiary)',
+              }}
+            >
+              Memory store
+            </p>
+            <span style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)' }}>
+              {stats.total_memories} total
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {[1, 2, 3].map(tier => {
+              const count = stats.memories_by_tier?.[String(tier)] ?? 0;
+              const pct = (stats.total_memories ?? 0) > 0 ? (count / stats.total_memories!) * 100 : 0;
+              return (
+                <div key={tier} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: '0.72rem', color: TIER_COLOR[tier], width: 80, flexShrink: 0 }}>
+                    T{tier} {TIER_LABEL[tier]}
+                  </span>
+                  <div style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: 'var(--color-border-subtle)', overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        width: `${pct}%`,
+                        height: '100%',
+                        borderRadius: 3,
+                        backgroundColor: TIER_COLOR[tier],
                         transition: 'width 0.4s ease',
                       }}
                     />
@@ -650,6 +698,7 @@ function MemoriesTab({ charId }: { charId: number }) {
   const [page, setPage] = useState(0);
   const [query, setQuery] = useState('');
   const [filterCharId, setFilterCharId] = useState(charId);
+  const [tierFilter, setTierFilter] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -658,11 +707,11 @@ function MemoriesTab({ charId }: { charId: number }) {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const loadPage = useCallback(async (p: number, cid: number) => {
+  const loadPage = useCallback(async (p: number, cid: number, tier = 0) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.listMemories(cid, p, PAGE_SIZE);
+      const data = await api.listMemories(cid, p, PAGE_SIZE, tier > 0 ? tier : undefined);
       setMemories(data.memories || []);
       setTotal(data.total || 0);
       setPage(p);
@@ -702,27 +751,33 @@ function MemoriesTab({ charId }: { charId: number }) {
     try {
       await api.deleteMemory(id);
       if (isSearchMode && query) doSearch(query, filterCharId);
-      else loadPage(page, filterCharId);
+      else loadPage(page, filterCharId, tierFilter);
     } catch { /* non-fatal */ }
     finally { setDeletingId(null); }
-  }, [isSearchMode, query, filterCharId, page, loadPage, doSearch]);
+  }, [isSearchMode, query, filterCharId, page, tierFilter, loadPage, doSearch]);
 
   const handlePromote = useCallback(async (id: string) => {
     setPromotingId(id);
     try {
       await api.promoteMemory(id);
       if (isSearchMode && query) doSearch(query, filterCharId);
-      else loadPage(page, filterCharId);
+      else loadPage(page, filterCharId, tierFilter);
     } catch { /* non-fatal */ }
     finally { setPromotingId(null); }
-  }, [isSearchMode, query, filterCharId, page, loadPage, doSearch]);
+  }, [isSearchMode, query, filterCharId, page, tierFilter, loadPage, doSearch]);
 
-  useEffect(() => { loadPage(0, filterCharId); }, [loadPage, filterCharId]);
+  useEffect(() => { loadPage(0, filterCharId, tierFilter); }, [loadPage, filterCharId, tierFilter]);
 
   const handleFilterChange = (cid: number) => {
     setFilterCharId(cid);
     if (isSearchMode && query) doSearch(query, cid);
-    else loadPage(0, cid);
+    else loadPage(0, cid, tierFilter);
+  };
+
+  const handleTierChange = (tier: number) => {
+    setTierFilter(tier);
+    setQuery('');
+    loadPage(0, filterCharId, tier);
   };
 
   const roleColor = (role?: string) => {
@@ -782,6 +837,31 @@ function MemoriesTab({ charId }: { charId: number }) {
         </button>
       </div>
 
+      {/* Tier filter pills */}
+      <div style={{ display: 'flex', gap: 4 }}>
+        {([0, 1, 2, 3] as const).map(tier => {
+          const active = tierFilter === tier;
+          const label = tier === 0 ? 'All' : `T${tier} ${TIER_LABEL[tier]}`;
+          const color = tier === 0 ? 'var(--color-text-secondary)' : TIER_COLOR[tier];
+          return (
+            <button
+              key={tier}
+              onClick={() => handleTierChange(tier)}
+              style={{
+                fontSize: '0.65rem', fontWeight: active ? 700 : 400,
+                padding: '3px 8px', borderRadius: 12,
+                border: `1px solid ${active ? color : 'var(--color-border)'}`,
+                backgroundColor: active ? `color-mix(in srgb, ${color} 12%, transparent)` : 'transparent',
+                color: active ? color : 'var(--color-text-tertiary)',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Memory list */}
       {loading && (
         <p className="text-center py-6" style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)' }}>
@@ -835,6 +915,11 @@ function MemoriesTab({ charId }: { charId: number }) {
             <span style={{ fontSize: '0.58rem', marginLeft: 'auto', color: 'var(--color-text-tertiary)' }}>
               {mem.created_at ? new Date(mem.created_at).toLocaleDateString() : ''}
             </span>
+            {mem.tier === 3 && mem.promoted_at && (
+              <span style={{ fontSize: '0.58rem', color: '#f59e0b' }} title={`Promoted on ${new Date(mem.promoted_at).toLocaleDateString()}`}>
+                ★ {new Date(mem.promoted_at).toLocaleDateString()}
+              </span>
+            )}
             {/* Promote button (T1/T2 only) */}
             {mem.tier != null && mem.tier < 3 && (
               <button
@@ -909,7 +994,7 @@ function MemoriesTab({ charId }: { charId: number }) {
             {total} result{total !== 1 ? 's' : ''}
           </span>
           <button
-            onClick={() => { setQuery(''); loadPage(0, filterCharId); }}
+            onClick={() => { setQuery(''); loadPage(0, filterCharId, tierFilter); }}
             style={{
               fontSize: '0.65rem', marginLeft: 8, color: 'var(--color-accent)',
               background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline',

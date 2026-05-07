@@ -7591,13 +7591,14 @@ def v2_memory_search(char_id: int, query: str, n_results: int = 5):
 
 
 @app.get("/api/v2/memory/list")
-def v2_memory_list(char_id: int = 0, page: int = 0, size: int = 20):
-    """List stored memories with pagination.
+def v2_memory_list(char_id: int = 0, page: int = 0, size: int = 20, tier: int = 0):
+    """List stored memories with pagination and optional tier filter.
 
     Args:
         char_id: Filter by character ID (0 = all characters).
         page: Page number (0-indexed).
         size: Results per page (max 50).
+        tier: Filter by memory tier (0 = all, 1 = Fleeting, 2 = Recent, 3 = Permanent).
 
     Returns:
         dict: {"memories": [...], "total": int}
@@ -7607,6 +7608,10 @@ def v2_memory_list(char_id: int = 0, page: int = 0, size: int = 20):
 
     size = max(1, min(size, 50))
     cid = char_id if char_id > 0 else None
+    tier_filter = tier if tier in (1, 2, 3) else None
+    from backend.memory.tiered_memory import TieredMemoryManager
+    if isinstance(vector_store, TieredMemoryManager):
+        return vector_store.list_memories(char_id=cid, page=page, size=size, tier=tier_filter)
     return vector_store.list_memories(char_id=cid, page=page, size=size)
 
 
@@ -11599,6 +11604,22 @@ def get_memory_overview(char_id: int):
             stats["has_profile"] = profile is not None
         except Exception:
             pass
+
+        # Tiered memory counts (item 9: memory capacity meter).
+        # Counts memories per tier for the character; falls back to empty
+        # when TieredMemoryManager is unavailable (ChromaDB path or cold start).
+        memory_tier_counts: dict[str, int] = {}
+        try:
+            tier_rows = cur.execute(
+                "SELECT tier, COUNT(*) FROM memories WHERE character_id = ? GROUP BY tier",
+                (char_id,),
+            ).fetchall()
+            memory_tier_counts = {str(r[0]): r[1] for r in tier_rows}
+            stats["total_memories"] = sum(memory_tier_counts.values())
+            stats["memories_by_tier"] = memory_tier_counts
+        except Exception:
+            stats["total_memories"] = 0
+            stats["memories_by_tier"] = {}
 
         return {
             "ok": True,

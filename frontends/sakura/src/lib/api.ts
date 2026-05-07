@@ -118,6 +118,7 @@ export interface MemoryItem {
   tier?: number;
   salience?: number;
   created_at?: string;
+  promoted_at?: string | null;
   session_id?: number;
 }
 
@@ -858,9 +859,10 @@ export const api = {
    * @param size - Page size (1-50, server clamps).
    * @returns `{memories, total}` ordered by recency.
    */
-  listMemories: (charId: number, page: number, size: number) => {
+  listMemories: (charId: number, page: number, size: number, tier?: number) => {
     const params = new URLSearchParams({ page: String(page), size: String(size) });
     if (charId > 0) params.set('char_id', String(charId));
+    if (tier && tier > 0) params.set('tier', String(tier));
     return get<{ memories: MemoryItem[]; total: number }>(`/api/v2/memory/list?${params}`);
   },
 

@@ -82,7 +82,25 @@ Perform these /checkpoint steps (do NOT run the full /checkpoint ritual):
 
 Skip the /checkpoint-only steps: master plan markers, FEATURE_MASTERLIST sync, COMPLETED_FEATURES append, RESUME_PROMPT rewrite, session summary, context-health recommendation. Those are milestone-grade ritual; /handoff is a fast exit.
 
-## Step 5 — Final Report
+## Step 5 — Propose Session Name (commit-derived)
+
+Derive a session name from the **most recent commit subject** (HEAD), not a model summary:
+
+1. Read the subject of the most recent commit on the branch (`git log -1 --pretty=%s`).
+2. Strip Conventional Commit prefix (`feat(scope):`, `fix(scope):`, `docs(scope):`, etc.) and any em-dash continuation.
+3. Trim to ≤60 chars. Lowercase. Hyphens for spaces. Drop punctuation other than hyphens.
+4. Prefix with `session-NN ` if a session number is identifiable from the commit subject (e.g. `docs(session-30): planning sprint — ...` → `session-30 planning sprint`).
+
+Examples:
+- `docs(session-30): planning sprint — 6 bug docs + 4 PRDs + competitor refresh + master roadmap` → `session-30 planning sprint`
+- `feat(viz-mvp-p2): chat image lightbox + regenerateImage` → `viz-mvp-p2 chat image lightbox regenerateimage`
+- `fix(animation-browser): guard clip.emotions?.join() against undefined` → `animation-browser emotions undefined guard`
+
+In the final report, surface the proposed name as a literal `/rename ...` line the user can copy. Do NOT attempt to invoke `/rename` yourself — it is a built-in CLI command, not a tool. The user runs it.
+
+If the harness exposes the current session name and it is already non-default, skip this step entirely. Today there is no reliable way to detect this, so always propose; the user ignores the line if they don't want to rename.
+
+## Step 6 — Final Report
 
 ```
 Session Handoff Complete
@@ -91,6 +109,9 @@ Tests: {X passed} | TSC: {clean/errors}
 Handoff: docs/SESSION_HANDOFF.md
 Status: CURRENT_STATUS.md + memory updated
 Next: {top priority for next session}
+
+Suggested session name (rename if blank):
+  /rename {commit-derived name from Step 5}
 
 Run /checkpoint if you also want FEATURE_MASTERLIST / COMPLETED_FEATURES / RESUME_PROMPT updates.
 ```

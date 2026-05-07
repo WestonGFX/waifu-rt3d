@@ -1,8 +1,8 @@
 # Current Project Status
 
-**Last updated:** 2026-05-06 (session 33 — M1 ✅ + M2 ✅ complete, 12/12 items shipped; next: M3 Voice Cloning)
-**Branch:** master · 12 ahead of `origin/master`.
-**Schema version:** v73 in code (chain reserved through v74: ✅ v71 Visual Content MVP, ✅ v72 character_relationships dedupe, ✅ v73 messages 6-col consolidation: edited_at/edit_history/sibling_group_id/sibling_index/image_url/image_prompt, v74 AIE LoRA/DSPy).
+**Last updated:** 2026-05-06 (session 33 — M1 ✅ + M2 ✅ + M3 ✅ complete, 16/16 items shipped; next: M4 Visual Content MVP Closeout)
+**Branch:** master · 13 ahead of `origin/master`.
+**Schema version:** v74 in code (✅ v71 Visual Content MVP, ✅ v72 character_relationships dedupe, ✅ v73 messages 6-col consolidation, ✅ v74 voice_message_url; next: v75 for M6 badges table).
 **Tests:** **2,725 backend** + **256 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
@@ -10,7 +10,18 @@
 
 ## Active Work
 
-**Session 33 (2026-05-06) — M2 Memory Transparency: ALL 4 ITEMS SHIPPED.**
+**Session 33 (2026-05-06) — M2 + M3 COMPLETE. 16/16 items shipped.**
+
+M3 Voice Cloning Onramp (items 13-16):
+
+| # | Item | Status | Commit |
+|---|---|---|---|
+| 13 | Voxtral TTS adapter (Mistral cloud TTS) | ✅ | `000282d` |
+| 14 | Voice Cloning section in Settings VoiceTab (wand + sample pointer) | ✅ | `000282d` |
+| 15 | Voice wand endpoint (LLM → Parler-style voice description) | ✅ | `000282d` |
+| 16 | voice_message_url (schema v74) + inline audio player + generate-voice button | ✅ | `000282d` |
+
+M2 Memory Transparency (items 9-12):
 
 | # | Item | Status | Commit |
 |---|---|---|---|
@@ -19,7 +30,7 @@
 | 11 | Memory Browser graph view (SVG radial mind map) | ✅ | `d256e41` |
 | 12 | Memory tier filter pills + promoted_at display | ✅ | `b6970d7` |
 
-**Next: M3 — Voice Cloning Onramp** (items 13-16). Chatterbox + Fish Audio adapters already exist (`backend/tts/adapters/`). M3 gaps: voice cloning Settings UI + voice wand + voice messages in chat.
+**Next: M4 — Visual Content MVP Closeout** (items 17-19).
 
 ---
 

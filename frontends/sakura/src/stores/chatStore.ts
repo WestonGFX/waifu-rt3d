@@ -502,21 +502,26 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   regenerateImage: async (messageId: string) => {
     const msg = get().messages.find((m) => m.id === messageId);
     if (!msg?.imagePrompt) return;
-    const patch = (p: Partial<ChatMessage>) => {
+    const applyPatch = (p: Partial<ChatMessage>) => {
       set((s) => ({
         messages: s.messages.map((m) => (m.id === messageId ? { ...m, ...p } : m)),
       }));
     };
-    patch({ status: 'streaming' });
+    applyPatch({ status: 'streaming' });
     try {
       const result = await api.generatePortrait({ prompt: msg.imagePrompt });
       if (result.ok && result.url) {
-        patch({ imageUrl: result.url, status: 'sent' });
+        applyPatch({ imageUrl: result.url, status: 'sent' });
+        if (msg.serverMessageId) {
+          api.updateMessageImageUrl(msg.serverMessageId, result.url).catch(() => {
+            // persist is best-effort — UI is already updated
+          });
+        }
       } else {
-        patch({ status: 'sent' });
+        applyPatch({ status: 'sent' });
       }
     } catch {
-      patch({ status: 'sent' });
+      applyPatch({ status: 'sent' });
     }
   },
 }));

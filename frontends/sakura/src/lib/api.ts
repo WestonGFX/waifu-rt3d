@@ -269,6 +269,10 @@ export const api = {
   getCharacterVoiceWand: (charId: number) =>
     post<{ voice_description: string; char_name: string }>(`/api/characters/${charId}/voice-wand`, {}),
 
+  /** M4-item17: Persist a regenerated image URL back to the messages table. */
+  updateMessageImageUrl: (messageId: number, imageUrl: string) =>
+    patch<{ ok: boolean; message_id: number }>(`/api/messages/${messageId}/image-url`, { image_url: imageUrl }),
+
   /** Get all branch siblings of a message for swipe navigation. */
   getMessageBranches: (messageId: number) =>
     get<{

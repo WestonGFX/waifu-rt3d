@@ -10645,6 +10645,48 @@ async def pin_message_as_memory(message_id: int):
     return {"memory_id": str(mem_id) if mem_id else None, "message_id": message_id}
 
 
+class ImageUrlUpdateRequest(BaseModel):
+    """Request body for PATCH /api/messages/{id}/image-url."""
+
+    image_url: str
+
+
+@app.patch("/api/messages/{message_id}/image-url")
+async def update_message_image_url(message_id: int, body: ImageUrlUpdateRequest):
+    """Persist a (re)generated image URL to the messages table.
+
+    Called by the frontend after ``regenerateImage`` completes so that the new
+    URL survives a page reload.
+
+    Args:
+        message_id: ID of the message to update.
+        body: JSON body with ``image_url`` field.
+
+    Returns:
+        {"ok": True, "message_id": int}
+
+    Raises:
+        HTTPException 404: If the message does not exist.
+
+    Example:
+        PATCH /api/messages/42/image-url
+        Body: {"image_url": "http://localhost:8080/storage/images/foo.png"}
+        Response: {"ok": true, "message_id": 42}
+    """
+    with db_ctx() as conn:
+        row = conn.execute("SELECT id FROM messages WHERE id = ?", (message_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Message not found")
+        conn.execute(
+            "UPDATE messages SET image_url = ? WHERE id = ?",
+            (body.image_url, message_id),
+        )
+        conn.commit()
+
+    logger.info(f"[ImageUrl] Message {message_id} image_url persisted")
+    return {"ok": True, "message_id": message_id}
+
+
 # ── Feature T1-8 — Streak & Rewards Info ──────────────────────────────────────
 
 @app.get("/api/characters/{character_id}/streak")

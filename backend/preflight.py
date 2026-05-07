@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v60)
+- Database schema migrations (v3 → v4 → … → v76)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -43,6 +43,9 @@ Migration Strategy:
                   privacy_settings tables
     - v60 → v61: NSFW Phase 1 — relationship_boundaries + private_vocabulary tables,
                   writing_style column on sessions, sensory_profile column on characters
+    - v74 → v75: M6 Gamification — character_achievements table
+    - v75 → v76: AIE Phase C feedback subsystem — message_feedback, aie_signal_weights tables
+                  + explicit_signals_enabled/implicit_signals_enabled on privacy_settings
     - Idempotent migrations (safe to run multiple times)
     - Proper error handling and logging
 """
@@ -5356,6 +5359,117 @@ def migrate_to_v75(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v76(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v75 to v76.
+
+    Adds the AIE Phase C feedback subsystem:
+
+    - ``message_feedback`` — per-message explicit (👍/👎) and computed implicit
+      quality signals, one row per message (primary-key = message_id).
+    - ``aie_signal_weights`` — tunable per-signal weights used when combining
+      implicit behavioural signals into ``message_feedback.implicit_score``.
+      Seeded with sensible defaults for six built-in signal names.
+    - ``privacy_settings.explicit_signals_enabled`` — INTEGER flag (default 1)
+      that gates whether the user's explicit 👍/👎 feedback is recorded.
+    - ``privacy_settings.implicit_signals_enabled`` — INTEGER flag (default 1)
+      that gates whether behavioural implicit signals are recorded.
+
+    The two ALTER TABLE statements are wrapped individually so that a column
+    that already exists (idempotent re-run) is silently tolerated.
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.
+
+    Raises:
+        sqlite3.Error: If a SQL statement fails for a reason other than the
+            column already existing.
+
+    Example:
+        >>> import sqlite3
+        >>> con = sqlite3.connect(":memory:")
+        >>> _ = con.execute("CREATE TABLE schema_version (version INTEGER, applied_ts REAL)")
+        >>> _ = con.execute("INSERT INTO schema_version VALUES (75, 0)")
+        >>> _ = con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY)")
+        >>> _ = con.execute("CREATE TABLE privacy_settings (id INTEGER PRIMARY KEY)")
+        >>> migrate_to_v76(con)
+        True
+        >>> tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        >>> "message_feedback" in tables and "aie_signal_weights" in tables
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 76:
+        logger.info("Schema already at v%d, skipping v76 migration.", cur_ver)
+        return True
+
+    try:
+        # -- privacy_settings: opt-in/opt-out columns for the two signal classes
+        for col_def in [
+            "explicit_signals_enabled INTEGER DEFAULT 1",
+            "implicit_signals_enabled INTEGER DEFAULT 1",
+        ]:
+            col_name = col_def.split()[0]
+            try:
+                con.execute(f"ALTER TABLE privacy_settings ADD COLUMN {col_def}")
+                logger.info("  - Added privacy_settings.%s", col_name)
+            except sqlite3.OperationalError:
+                logger.info("  - privacy_settings.%s already exists, skipping", col_name)
+
+        # -- message_feedback: one row per message, keyed by message_id
+        con.execute(
+            """CREATE TABLE IF NOT EXISTS message_feedback (
+                message_id      INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+                explicit_signal INTEGER,
+                implicit_score  REAL,
+                final_score     REAL,
+                computed_at     TEXT NOT NULL,
+                signal_version  INTEGER NOT NULL DEFAULT 1
+            )"""
+        )
+        logger.info("  - Created message_feedback table")
+
+        # -- aie_signal_weights: tunable coefficients for implicit signal types
+        con.execute(
+            """CREATE TABLE IF NOT EXISTS aie_signal_weights (
+                signal_name TEXT PRIMARY KEY,
+                weight      REAL NOT NULL,
+                updated_at  TEXT NOT NULL
+            )"""
+        )
+        logger.info("  - Created aie_signal_weights table")
+
+        # Seed default weights — INSERT OR IGNORE keeps this idempotent
+        default_weights = [
+            ("regenerate",            -0.5),
+            ("reply_length",           0.1),
+            ("voice_toggle",           0.15),
+            ("session_continuation",   0.1),
+            ("abrupt_close",          -0.05),
+            ("llm_judge",              0.2),
+        ]
+        con.executemany(
+            "INSERT OR IGNORE INTO aie_signal_weights (signal_name, weight, updated_at) "
+            "VALUES (?, ?, strftime('%s','now'))",
+            [(name, weight) for name, weight in default_weights],
+        )
+        logger.info("  - Seeded %d default aie_signal_weights rows", len(default_weights))
+
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (76, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v76 migration complete (AIE Phase C feedback subsystem)")
+        return True
+    except Exception as e:
+        logger.error("Schema v76 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -5909,21 +6023,27 @@ def ensure_db():
             if migrate_to_v75(con):
                 version = 75
 
+        if version < 76:
+            logger.info("Upgrading database schema from v75 to v76...")
+            logger.info("  - AIE Phase C: message_feedback, aie_signal_weights, feedback privacy columns")
+            if migrate_to_v76(con):
+                version = 76
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 75:
-            raise RuntimeError(f"Database initialization failed: Expected v75, got v{final_version}")
+        if final_version < 76:
+            raise RuntimeError(f"Database initialization failed: Expected v76, got v{final_version}")
 
-        if final_version > 75:
-            logger.warning(f"Database is newer than application (v{final_version} > v75). Some features might be unused.")
+        if final_version > 76:
+            logger.warning(f"Database is newer than application (v{final_version} > v76). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v74 adds voice_message_url to messages)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v76 adds AIE Phase C feedback subsystem)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

@@ -62,6 +62,14 @@ export function ChatThread() {
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // ── AIE Phase C: Feedback signal preferences ────────────────────────────
+  const [feedbackEnabled, setFeedbackEnabled] = useState(true);
+  useEffect(() => {
+    api.getFeedbackPreferences()
+      .then(prefs => setFeedbackEnabled(prefs.explicit_signals_enabled))
+      .catch(() => { /* default true on error */ });
+  }, []);
+
   // ── Task 2: Diary state ─────────────────────────────────────────────────
   const [diaryText, setDiaryText] = useState<string | null>(null);
   const [diaryDate, setDiaryDate] = useState<string | null>(null);
@@ -873,6 +881,7 @@ export function ChatThread() {
                   isLastAssistant={isLastAssistant}
                   isRegenerating={regeneratingMsgId === msg.serverMessageId}
                   onContinue={isLastAssistant ? continueGeneration : undefined}
+                  feedbackEnabled={feedbackEnabled}
                 />
               </div>
             );

@@ -4,6 +4,7 @@ import { Volume2, Pin, ChevronLeft, ChevronRight, ChevronsRight, RefreshCw, Copy
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
 import { ChatImageLightbox } from './ChatImageLightbox';
+import { FeedbackButtons } from './FeedbackButtons';
 import { downloadUrl } from '../lib/downloadFile';
 import { api } from '../lib/api';
 import { parseActions } from '../lib/parseActions';
@@ -109,6 +110,8 @@ interface DialogueBubbleProps {
   isRegenerating?: boolean;
   /** Called to ask the character to continue their previous response. */
   onContinue?: () => void;
+  /** Whether to show the 👍/👎 feedback buttons under assistant bubbles. */
+  feedbackEnabled?: boolean;
 }
 
 /** Highlight occurrences of `query` inside `text` using <mark> spans. */
@@ -317,7 +320,7 @@ function StageRow({ done, active, label }: { done: boolean; active: boolean; lab
  * PUT /api/messages/{serverMessageId}/pin and tracks pinned state locally.
  * Pinned messages show a filled Pin indicator in the top-right corner.
  */
-export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onRegenerateImage, onBranchSwitch, onDelete, onEdit, isLastAssistant = false, isRegenerating = false, onContinue }: DialogueBubbleProps) {
+export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onRegenerateImage, onBranchSwitch, onDelete, onEdit, isLastAssistant = false, isRegenerating = false, onContinue, feedbackEnabled = false }: DialogueBubbleProps) {
   const thinkingMode = useAppStore(s => s.thinkingIndicatorMode);
   const [pinned, setPinned] = useState(message.pinned ?? false);
   const [hovered, setHovered] = useState(false);
@@ -988,6 +991,9 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               >
                 <ChevronsRight size={11} />
               </button>
+            )}
+            {feedbackEnabled && message.role === 'assistant' && message.serverMessageId != null && (
+              <FeedbackButtons messageId={message.serverMessageId} />
             )}
             {onDelete && (
               <button

@@ -3890,6 +3890,31 @@ function SafetyTab({ save, cfg }: TabProps) {
   // ── Per-character overrides section collapse state ───────────────
   const [charOverridesOpen, setCharOverridesOpen] = useState(false);
 
+  // ── AIE Phase C: Feedback signal privacy preferences ────────────
+  const [feedbackExplicit, setFeedbackExplicit] = useState(true);
+  const [feedbackImplicit, setFeedbackImplicit] = useState(true);
+
+  useEffect(() => {
+    api.getFeedbackPreferences()
+      .then(prefs => {
+        setFeedbackExplicit(prefs.explicit_signals_enabled);
+        setFeedbackImplicit(prefs.implicit_signals_enabled);
+      })
+      .catch(() => { /* keep defaults */ });
+  }, []);
+
+  const handleFeedbackToggle = async (key: 'explicit_signals_enabled' | 'implicit_signals_enabled', val: boolean) => {
+    if (key === 'explicit_signals_enabled') setFeedbackExplicit(val);
+    else setFeedbackImplicit(val);
+    try {
+      await api.setFeedbackPreferences({ [key]: val });
+    } catch {
+      // Roll back on error
+      if (key === 'explicit_signals_enabled') setFeedbackExplicit(!val);
+      else setFeedbackImplicit(!val);
+    }
+  };
+
   /** Load content gate settings from the backend on mount. */
   useEffect(() => {
     setGateLoading(true);
@@ -4274,6 +4299,48 @@ function SafetyTab({ save, cfg }: TabProps) {
             min={10} max={100} step={5}
             onChange={(v) => save('vocab_limit', v)}
           />
+        </div>
+      </section>
+
+      {/* AIE Phase C: Feedback Signals */}
+      <section className="mb-6">
+        <SectionHeader title="Feedback Signals" />
+        <div style={cardStyle} className="px-4">
+          <p className="text-xs mb-3" style={{ color: 'var(--color-text-secondary)' }}>
+            Feedback stays local and private. When enabled, it helps your character's responses improve over time through adaptive learning.
+          </p>
+          <SettingField
+            label="Show feedback buttons on messages"
+            description="Display 👍/👎 buttons on assistant messages. Your explicit ratings are the strongest signal for personalisation."
+          >
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={feedbackExplicit}
+                onChange={(e) => handleFeedbackToggle('explicit_signals_enabled', e.target.checked)}
+                className="accent-[var(--color-accent)]"
+              />
+              <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
+                Show 👍 / 👎 buttons
+              </span>
+            </label>
+          </SettingField>
+          <SettingField
+            label="Allow implicit feedback collection"
+            description="Collect anonymous behavioural signals (regenerate rate, session length) to supplement explicit ratings. No content is read."
+          >
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={feedbackImplicit}
+                onChange={(e) => handleFeedbackToggle('implicit_signals_enabled', e.target.checked)}
+                className="accent-[var(--color-accent)]"
+              />
+              <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
+                Allow implicit signals
+              </span>
+            </label>
+          </SettingField>
         </div>
       </section>
 

@@ -17,7 +17,7 @@ import re
 import sqlite3
 import psutil
 from contextlib import asynccontextmanager, contextmanager
-from typing import Optional
+from typing import Literal, Optional
 
 # ... (Previous imports) ...
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -18556,6 +18556,133 @@ def activate_scenario_template(body: _ScenarioActivateBody):
                 detail=f"Session {body.session_id} not found",
             )
         return {"ok": True, "activated": activated}
+
+
+# --- AIE PHASE C: FEEDBACK SIGNALS ---
+
+class ExplicitFeedbackRequest(BaseModel):
+    """Request body for recording an explicit feedback signal.
+
+    Attributes:
+        signal: +1 for thumbs-up, -1 for thumbs-down, None to clear.
+    """
+
+    signal: Literal[-1, 1] | None
+
+
+@app.post("/api/feedback/explicit/{message_id}")
+async def record_explicit_feedback(message_id: int, body: ExplicitFeedbackRequest):
+    """Record an explicit 👍/👎 signal for a specific message.
+
+    Args:
+        message_id: ID of the assistant message being rated.
+        body: ``{"signal": 1}`` (thumbs-up), ``{"signal": -1}`` (thumbs-down),
+              or ``{"signal": null}`` to clear a previous click.
+
+    Returns:
+        ``{"ok": True, "message_id": int, "signal": int | None}``
+
+    Raises:
+        HTTPException: 400 if signal is not -1, 1, or null.
+        HTTPException: 404 if the message does not exist.
+    """
+    def _write() -> dict:
+        with db_ctx() as con:
+            row = con.execute(
+                "SELECT id FROM messages WHERE id = ?", (message_id,)
+            ).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail=f"Message {message_id} not found")
+
+            now = "strftime('%s','now')"
+            if body.signal is None:
+                con.execute(
+                    "UPDATE message_feedback SET explicit_signal = NULL WHERE message_id = ?",
+                    (message_id,),
+                )
+            else:
+                con.execute(
+                    "INSERT INTO message_feedback (message_id, explicit_signal, computed_at, signal_version) "
+                    "VALUES (?, ?, strftime('%s','now'), 1) "
+                    "ON CONFLICT(message_id) DO UPDATE SET "
+                    "explicit_signal = excluded.explicit_signal, "
+                    "computed_at = excluded.computed_at",
+                    (message_id, body.signal),
+                )
+            con.commit()
+        return {"ok": True, "message_id": message_id, "signal": body.signal}
+
+    return await run_in_threadpool(_write)
+
+
+@app.get("/api/feedback/preferences")
+async def get_feedback_preferences():
+    """Return the current feedback signal privacy preferences.
+
+    Returns:
+        ``{"explicit_signals_enabled": bool, "implicit_signals_enabled": bool}``
+    """
+
+    def _read() -> dict:
+        with db_ctx() as con:
+            try:
+                row = con.execute(
+                    "SELECT explicit_signals_enabled, implicit_signals_enabled "
+                    "FROM privacy_settings WHERE id = 1"
+                ).fetchone()
+                if not row:
+                    return {"explicit_signals_enabled": True, "implicit_signals_enabled": True}
+                return {
+                    "explicit_signals_enabled": bool(row[0]),
+                    "implicit_signals_enabled": bool(row[1]),
+                }
+            except Exception:
+                return {"explicit_signals_enabled": True, "implicit_signals_enabled": True}
+
+    return await run_in_threadpool(_read)
+
+
+@app.patch("/api/feedback/preferences")
+async def update_feedback_preferences(req: Request):
+    """Update feedback signal privacy preferences.
+
+    Args:
+        req: JSON body with any subset of:
+             ``{"explicit_signals_enabled": bool, "implicit_signals_enabled": bool}``
+
+    Returns:
+        ``{"ok": True, "preferences": {"explicit_signals_enabled": bool, "implicit_signals_enabled": bool}}``
+
+    Raises:
+        HTTPException: 400 if no valid keys are provided.
+    """
+    body = await req.json()
+    valid_keys = {"explicit_signals_enabled", "implicit_signals_enabled"}
+    updates = {k: int(bool(v)) for k, v in body.items() if k in valid_keys}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid preference keys provided")
+
+    def _write() -> dict:
+        with db_ctx() as con:
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
+            con.execute(
+                f"UPDATE privacy_settings SET {set_clause} WHERE id = 1",
+                tuple(updates.values()),
+            )
+            con.commit()
+            row = con.execute(
+                "SELECT explicit_signals_enabled, implicit_signals_enabled "
+                "FROM privacy_settings WHERE id = 1"
+            ).fetchone()
+            return {
+                "ok": True,
+                "preferences": {
+                    "explicit_signals_enabled": bool(row[0]) if row else True,
+                    "implicit_signals_enabled": bool(row[1]) if row else True,
+                },
+            }
+
+    return await run_in_threadpool(_write)
 
 
 # --- EXCEPTION HANDLERS ---

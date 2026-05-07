@@ -1,4 +1,4 @@
-import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse, VocabEntry, Universe, LoreEntry, UserFact, BrowseableModel, AvatarDownloadStatus, LinkDevice, LinkRoutingDecision, ExtendedHardwareInfo } from './types';
+import type { AppConfig, Character, ChatResponse, Session, VoiceEntry, TTSModelsResponse, VocabEntry, Universe, LoreEntry, UserFact, BrowseableModel, AvatarDownloadStatus, LinkDevice, LinkRoutingDecision, ExtendedHardwareInfo, FeedbackPreferences } from './types';
 
 // ─── LM Studio Model Manager types ───────────────────────────────────────────
 
@@ -1392,4 +1392,33 @@ export const api = {
       template_id: 0,
       session_id: sessionId,
     }),
+
+  /**
+   * Record an explicit 👍/👎 feedback signal for a message.
+   *
+   * @param messageId - The assistant message being rated.
+   * @param signal - +1 (thumbs-up), -1 (thumbs-down), or null to clear.
+   */
+  recordFeedback: (messageId: number, signal: 1 | -1 | null) =>
+    post<{ ok: boolean; message_id: number; signal: 1 | -1 | null }>(
+      `/api/feedback/explicit/${messageId}`,
+      { signal },
+    ),
+
+  /**
+   * Get the current feedback signal privacy preferences.
+   *
+   * @returns Whether explicit and implicit signals are enabled.
+   */
+  getFeedbackPreferences: () =>
+    get<FeedbackPreferences>('/api/feedback/preferences'),
+
+  /**
+   * Update feedback signal privacy preferences.
+   *
+   * @param prefs - Partial update: explicit_signals_enabled, implicit_signals_enabled.
+   * @returns Updated preferences.
+   */
+  setFeedbackPreferences: (prefs: Partial<FeedbackPreferences>) =>
+    patch<{ ok: boolean; preferences: FeedbackPreferences }>('/api/feedback/preferences', prefs),
 };

@@ -630,3 +630,22 @@ export interface SpectatorConfig {
 
 /** State of the spectator hook. */
 export type SpectatorState = 'idle' | 'connecting' | 'capturing' | 'error';
+
+/** Privacy preferences controlling feedback signal collection. */
+export interface FeedbackPreferences {
+  /** Whether the 👍/👎 UI buttons are shown and clicks recorded. */
+  explicit_signals_enabled: boolean;
+  /** Whether implicit signals (regenerate rate, session length, etc.) are collected. */
+  implicit_signals_enabled: boolean;
+}
+
+/** A single per-message feedback record from the backend. */
+export interface MessageFeedback {
+  message_id: number;
+  /** +1 (thumbs-up), -1 (thumbs-down), or null (no explicit click). */
+  explicit_signal: 1 | -1 | null;
+  /** Implicit score computed at session end, range [-1.0, +1.0]. */
+  implicit_score: number | null;
+  /** Weighted combination of explicit + implicit. */
+  final_score: number | null;
+}

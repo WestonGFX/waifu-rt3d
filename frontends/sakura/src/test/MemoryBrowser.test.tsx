@@ -378,8 +378,8 @@ describe('MemoryBrowser', () => {
     it('calls api.listMemories with active char id, page 0, and PAGE_SIZE on tab activation', async () => {
       vi.mocked(api.listMemories).mockResolvedValue({ memories: SAMPLE_MEMORIES, total: SAMPLE_MEMORIES.length });
       await switchToMemoriesTab();
-      // PAGE_SIZE constant in the component is 12 — assert positional args (charId, page, size).
-      expect(vi.mocked(api.listMemories)).toHaveBeenCalledWith(42, 0, 12);
+      // PAGE_SIZE constant in the component is 12 — 4th arg is optional tier filter (undefined = all tiers).
+      expect(vi.mocked(api.listMemories)).toHaveBeenCalledWith(42, 0, 12, undefined);
     });
 
     it('renders memory text and role/tier badges', async () => {
@@ -389,9 +389,10 @@ describe('MemoryBrowser', () => {
         expect(screen.getByText(/User loves ramen/)).toBeInTheDocument();
         expect(screen.getByText(/Working in Tokyo/i)).toBeInTheDocument();
       });
-      expect(screen.getByText(/T1 Fleeting/)).toBeInTheDocument();
-      expect(screen.getByText(/T2 Recent/)).toBeInTheDocument();
-      expect(screen.getByText(/T3 Permanent/)).toBeInTheDocument();
+      // Tier labels appear in both the filter pills and the badge on each memory row
+      expect(screen.getAllByText(/T1 Fleeting/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/T2 Recent/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/T3 Permanent/).length).toBeGreaterThan(0);
     });
 
     it('renders empty state when listMemories returns no memories', async () => {

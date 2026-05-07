@@ -1,93 +1,66 @@
-# Session Handoff — 2026-05-06 (Session 35)
+# Session Handoff — 2026-05-06
 
-## Branch: master · 24 ahead of origin/master
-## Test Status: 2762 backend passed, 0 failed | TSC: clean | Frontend: 276/276 passed
+## Branch: master
+## Test Status: 2843 passed | TSC: clean
 
 ## Completed This Session
 
-### AIE Phase C MVP — Phase 0: Feedback Subsystem (COMPLETE — commit `6af30cc`)
+### AIE Phase C — Phase 1: LoRA Fine-Tuning Pipeline (Strand A)
+- `backend/adaptive/finetune/corpus_builder.py` — ShareGPT JSONL corpus builder with quality filtering
+- `backend/adaptive/finetune/trainer.py` — Unsloth/SFTTrainer wrapper, graceful degradation when ML deps absent
+- `backend/adaptive/finetune/eval_harness.py` — heuristic LoRA eval with character-specific prompts
+- `backend/llm/adapters/peft_local.py` — PEFT LoRA adapter implementing LLMAdapter interface
+- `scripts/train_character_lora.py` — CLI orchestrator: corpus → train → eval → DB write
+- `backend/preflight.py` — `migrate_to_v77()` adds `character_loras` table (schema v77)
+- `backend/server.py` — 3 endpoints: `GET /api/training/status/{char_id}`, `DELETE /api/training/loras/{char_id}`, `POST /api/training/retrain/{char_id}`
+- `backend/tests/test_finetune.py` — 28 new tests (2762 → 2790 passing)
+- **CRITICAL FIX:** real messages table uses `char_id` (not `character_id`) and `text` (not `content`) — fixed in corpus_builder, server.py, and test fixtures
 
-**Schema v76 migration:**
-- `message_feedback` table (message_id PK FK→messages, explicit_signal -1/+1/null, implicit_score, final_score, computed_at, signal_version)
-- `aie_signal_weights` table (signal_name PK, weight, updated_at) + 6 seeded defaults (regenerate: -0.5, reply_length: +0.1, voice_toggle: +0.15, session_continuation: +0.1, abrupt_close: -0.05, llm_judge: +0.2)
-- `privacy_settings` gains `explicit_signals_enabled INTEGER DEFAULT 1` + `implicit_signals_enabled INTEGER DEFAULT 1` columns
-
-**Backend feedback module (`backend/adaptive/feedback/`):**
-- `signal_collector.py` — collect implicit signals at session boundary (regenerate fraction, reply-length delta, session continuation, abrupt close). Read-only DB access, fail-soft.
-- `scorer.py` — weighted-sum math: `final = alpha_explicit * s_explicit + alpha_implicit * s_implicit` (alpha_explicit=0.7 when present, else 0; alpha_implicit=0.3, normalises to 1.0 when no explicit click)
-- `__init__.py` — exports `collect_implicit_signals`, `score_message`, `record_explicit_signal`
-
-**API endpoints (server.py):**
-- `POST /api/feedback/explicit/{message_id}` — record 👍/👎; body `{"signal": 1|-1|null}`. Pydantic `Literal[-1, 1] | None` validates, returns 422 on invalid signal.
-- `GET /api/feedback/preferences` — read `explicit_signals_enabled`, `implicit_signals_enabled` from privacy_settings
-- `PATCH /api/feedback/preferences` — update same flags
-
-**Frontend:**
-- `FeedbackButtons.tsx` — hover-only 👍/👎 buttons. 30% opacity until hover (via parent group), full when latched. Click latches (aria-pressed), second click clears. Optimistic update + rollback on network error.
-- `DialogueBubble.tsx` — new `feedbackEnabled` prop. Slots `<FeedbackButtons messageId={message.serverMessageId}>` under assistant bubbles, gated by prop + message.role + serverMessageId presence.
-- `ChatThread.tsx` — fetches `api.getFeedbackPreferences()` on mount, stores in `feedbackEnabled` state, passes down to each DialogueBubble.
-- `SettingsView.tsx` (Safety tab) — "Feedback Signals" section with two toggles (show buttons / allow implicit), explainer paragraph. Calls `api.setFeedbackPreferences()` on toggle with error rollback.
-- `api.ts` — `recordFeedback`, `getFeedbackPreferences`, `setFeedbackPreferences` typed wrappers
-- `types.ts` — `FeedbackPreferences`, `MessageFeedback` interfaces
-
-**Tests:**
-- `backend/tests/test_feedback.py` — 37 new tests covering scorer math, signal weights fallback, all 3 API endpoints (2762 backend total)
-- `frontends/sakura/src/test/FeedbackButtons.test.tsx` — 20 new tests (renders, click states, toggle/clear, onSignalChange, error rollback, pending guard) (276 frontend total)
-- Fixed 2 pre-existing `MemoryBrowser.test.tsx` failures: `listMemories` 4th-arg assertion + tier-pill duplicate text
-
-### Plan filed
-- `docs/plans/2026-05-06-aie-phase-c-mvp-execution.md` — executable plan for all 3 phases (Phase 0 ✓, Phase 1 Strand A, Phase 2 basic DSPy)
+### AIE Phase C — Phase 2: Basic DSPy (Strand B)
+- `backend/adaptive/dspy_modules/__init__.py` — exports public API
+- `backend/adaptive/dspy_modules/context_classifier_dspy.py` — DSPy Signature + ChainOfThought module with graceful fallback
+- `backend/adaptive/dspy_modules/optimizer_runner.py` — BootstrapFewShot optimizer runner, DB record writer, `maybe_run_optimizer()` safe wrapper
+- `backend/preflight.py` — `migrate_to_v78()` adds `dspy_compiled_programs` table (schema v78)
+- `backend/adaptive/context_classifier.py` — `configure_dspy_classifier(enabled, compiled_json_path)` feature flag + `_classify_rule_based()` private helper to prevent infinite recursion when DSPy fallback calls back into classifier
+- `backend/tests/test_dspy_modules.py` — 53 new tests (2790 → 2843 passing)
 
 ## Work In Progress
-None — all work committed.
+- None. All three AIE Phase C MVP phases complete and committed.
 
 ## Known Issues / Bugs
-- `backend/storage/images/glitch_portrait.png` and `seraph_pixel_portrait.png` deleted (Glitch moved to `backend/storage/avatars/Glitch.png`) — git shows D, no code refs
-- `app.db` modified (DB is at v76 now; binary diff expected, do NOT commit)
-- Untracked NSFW avatar assets in `backend/storage/avatars/` — intentionally not committed
+- None introduced this session. Pre-existing: `character_relationships` duplicate rows (P1 filed in `docs/bugs/2026-05-06-character-relationships-duplicate-rows.md`), BondPill XP overshoot display (P3 filed in `docs/bugs/2026-05-06-bondpill-xp-overshoots-level-threshold.md`).
 
-## Files Modified (this session's commits)
+## Files Modified
 ```
-6af30cc: feat(aie-phase-c-p0) — 15 files, +2373/-14
-  backend/adaptive/feedback/__init__.py (NEW)
-  backend/adaptive/feedback/scorer.py (NEW)
-  backend/adaptive/feedback/signal_collector.py (NEW)
-  backend/preflight.py (migrate_to_v76 + ensure_db update)
-  backend/server.py (3 endpoints + Literal import)
-  backend/tests/test_feedback.py (NEW — 37 tests)
-  docs/plans/2026-05-06-aie-phase-c-mvp-execution.md (NEW)
-  frontends/sakura/src/components/DialogueBubble.tsx
-  frontends/sakura/src/components/FeedbackButtons.tsx (NEW)
-  frontends/sakura/src/lib/api.ts
-  frontends/sakura/src/lib/types.ts
-  frontends/sakura/src/test/FeedbackButtons.test.tsx (NEW — 20 tests)
-  frontends/sakura/src/test/MemoryBrowser.test.tsx (2 pre-existing fix)
-  frontends/sakura/src/views/ChatThread.tsx
-  frontends/sakura/src/views/SettingsView.tsx
-
-8b4822d: docs(aie-phase-c-p0) — plan status line update
+backend/adaptive/context_classifier.py          +205 lines
+backend/adaptive/dspy_modules/__init__.py        NEW
+backend/adaptive/dspy_modules/context_classifier_dspy.py  NEW
+backend/adaptive/dspy_modules/optimizer_runner.py         NEW
+backend/adaptive/finetune/__init__.py            NEW
+backend/adaptive/finetune/corpus_builder.py      NEW
+backend/adaptive/finetune/eval_harness.py        NEW
+backend/adaptive/finetune/trainer.py             NEW
+backend/llm/adapters/peft_local.py               NEW
+backend/preflight.py                             +185 lines (v77 + v78 migrations)
+backend/server.py                                +165 lines (3 training endpoints)
+backend/tests/test_dspy_modules.py               NEW (53 tests)
+backend/tests/test_finetune.py                   NEW (28 tests)
+scripts/train_character_lora.py                  NEW
+docs/plans/2026-05-06-aie-phase-c-mvp-execution.md  status lines appended
 ```
 
 ## Next Session Priorities
 
-1. **Phase 1 — Strand A: LoRA corpus builder + training script** (24-30h total)
-   - Plan: `docs/plans/2026-05-06-aie-phase-c-mvp-execution.md` Section "Phase 1"
-   - Files to create: `backend/adaptive/finetune/corpus_builder.py` (filter/dedup/format messages → JSONL), `scripts/train_character_lora.py` (Unsloth wrapper, RTX 5080 target)
-   - Schema v77: `character_loras(char_id, base_model, adapter_path, trained_at, eval_score, is_active)`
-   - Base model: Qwen 2.5 7B Instruct (locked decision from scoping doc)
-   - MVP scope: Sakura only (char_id for Sakura)
-
-2. **Phase 2 — Basic DSPy** (8-12h, can interleave with Phase 1)
-   - `backend/adaptive/dspy_modules/context_classifier_dspy.py`
-   - `backend/adaptive/dspy_modules/optimizer_runner.py`
-   - Schema v78: `dspy_compiled_programs` table
-   - Consumes `message_feedback.final_score` as optimizer signal
-
-3. **Push gate** — 24 commits ahead of origin. Gate is CLEAR — no active OPEN BUG / UNFIXED / BLOCKER markers. Push when user authorizes.
+1. **Authorize push** — 27+ local commits ahead of `origin/master`. User authorization required before push.
+2. **Memory Browser browser QA** — Ctrl+M overlay, all 4 tabs against real backend, file bugs as `docs/bugs/2026-05-*-memory-browser-*.md`. ~1-2h.
+3. **Visual Content in Chat Phase 2** — lightbox, `imagePrompt` field, `regenerateImage`. Plan: `docs/plans/2026-05-06-visual-content-mvp-execution.md`.
+4. **Apply drafted character styles** — run draft script with LLM, review JSON, write apply script.
+5. **AIE Phase C decision gate** — train Sakura LoRA on Windows RTX 5080, run 30 manual eval prompts.
 
 ## Context for Next Session
-- Schema is v76 in code AND live DB (v76 migration applied this session)
-- FeedbackButtons are wired but opacity-on-hover relies on parent `.group` class being on the message wrapper in ChatThread — verify visually before claiming UI is correct (no browser test run this session due to time)
-- Phase 1 requires Unsloth + torch + peft installed on the training rig (Windows with RTX). The Mac serves inference. `requirements.txt` currently has no ML deps — they go in commented as per the scoping doc.
-- The implicit signal collection (`signal_collector.py`) runs at session boundary — NOT yet hooked into the server. That integration (calling `collect_session_signals` when a session ends) is the next backend integration step before scorer data flows.
-- DSPy version: re-check via Context7 before implementing (DSPy ships fast, optimizer landscape changes quarterly)
+
+- **Schema:** v78. Migrations v77 (character_loras) + v78 (dspy_compiled_programs) in `backend/preflight.py`.
+- **DSPy feature flag:** Off by default. Enable via `configure_dspy_classifier(True, path)` in server lifespan after compiling. NOT yet wired into server startup — needs a compiled JSON first.
+- **LoRA training:** Requires Windows + Unsloth. Mac raises `ImportError` gracefully. CLI: `python scripts/train_character_lora.py --char-name Sakura --db-path backend/storage/app.db --output-dir /path/to/loras`.
+- **AIE Phase C plan:** `docs/plans/2026-05-06-aie-phase-c-mvp-execution.md` — all 3 phases (0/1/2) marked DONE.
+- **Recursion guard:** `context_classifier_dspy.py` fallback imports `_classify_rule_based` (private), NOT `classify_context` (public) — prevents infinite recursion when flag is enabled and DSPy is absent.

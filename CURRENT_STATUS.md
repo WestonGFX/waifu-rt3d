@@ -1,9 +1,9 @@
 # Current Project Status
 
-**Last updated:** 2026-05-06 (session 35 — AIE Phase C Phase 0 COMPLETE: feedback subsystem schema v76 + FeedbackButtons UI + 57 new tests; 24 commits ahead)
-**Branch:** master · 24 ahead of `origin/master`.
-**Schema version:** v76 in code AND live DB. ✅ v76 message_feedback + aie_signal_weights + privacy_settings feedback columns.
-**Tests:** **2,762 backend** + **276 frontend** passing, tsc clean.
+**Last updated:** 2026-05-06 (session 36 — AIE Phase C ALL PHASES DONE: Phase 1 LoRA pipeline + Phase 2 DSPy, schema v78, 2843 backend tests; 27+ commits ahead)
+**Branch:** master · 27+ ahead of `origin/master`.
+**Schema version:** v78. v77 adds character_loras (LoRA adapter records). v78 adds dspy_compiled_programs (BootstrapFewShot compiled programs).
+**Tests:** **2,843 backend** + **276 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.

@@ -1,8 +1,8 @@
 # Current Project Status
 
-**Last updated:** 2026-05-06 (session 33 — M1 ✅ + M2 ✅ + M3 ✅ + M4 ✅ + M6 ✅ complete; 22/22 items done; M18 deferred; next: M5 AIE Phase C or M8 Distribution)
-**Branch:** master · 16 ahead of `origin/master`.
-**Schema version:** v75 in code (✅ v73 messages 6-col, ✅ v74 voice_message_url, ✅ v75 character_achievements).
+**Last updated:** 2026-05-06 (session 34 — M8 ✅ + backlog quick items: item-35 Continue generation, item-50 v72 dedupe verified, preflight v70/v71 migration bug fixed; 22 commits ahead)
+**Branch:** master · 22 ahead of `origin/master`.
+**Schema version:** v75 in code AND live DB (v70+v71 INSERT bug fixed; all migrations applied). ✅ v73 messages 6-col, ✅ v74 voice_message_url, ✅ v75 character_achievements. character_relationships deduped 24,576→11 rows.
 **Tests:** **2,725 backend** + **256 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
@@ -47,6 +47,21 @@ M4 Visual Content MVP Closeout (items 17-19):
 | 19 | Settings retention slider | ✅ pre-existing | `SettingsView.tsx:4411` |
 
 **Next: M5 AIE Phase C (gated by tier decision) or M8 Distribution & Marketing.**
+
+---
+
+**Session 34 (2026-05-06) — Backlog quick items + preflight bug fix.**
+
+| Item | Status | Commit |
+|---|---|---|
+| Item-35: Continue generation ("Continue response" hover button) | ✅ | `a4d34b5` |
+| Item-37: Chat history Markdown export | ✅ pre-existing | `handleExportMarkdown` already wired |
+| Item-46: Memory Browser tab overflow + backdrop close | ✅ pre-existing | `4d95d7c` |
+| Item-47: Avatar URLs pointing to VRM files | ✅ pre-existing | DB already fixed |
+| Item-50: v72 character_relationships dedupe verification | ✅ | migration applied — 24,576→11 rows |
+| fix: preflight v70+v71 migrations used UPDATE instead of INSERT | ✅ | `41d79b6` |
+
+**Next: Item-30 (apply_character_styles.py), Item-42 (voice preset gallery), or M5 AIE Phase C.**
 
 ---
 

@@ -24,17 +24,18 @@ import {
   X, Search, Trash2, ChevronLeft, ChevronRight, Star,
   User, Heart, Clock, Smile, Tag, Plus, Edit3, Check,
   Brain, BookOpen, BarChart3, Loader2, MessageCircle,
-  Database, ArrowUpCircle, FileText,
+  Database, ArrowUpCircle, FileText, Network,
 } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { api, type MemoryItem } from '../lib/api';
 import type { UserFact } from '../lib/types';
+import { MemoryGraph } from './MemoryGraph';
 
 /* ═══════════════════════════════════════════════════════════════════════
    Types
    ═══════════════════════════════════════════════════════════════════════ */
 
-type TabId = 'overview' | 'facts' | 'memories' | 'journal';
+type TabId = 'overview' | 'facts' | 'memories' | 'journal' | 'graph';
 
 interface TabDef {
   id: TabId;
@@ -47,6 +48,7 @@ const TABS: TabDef[] = [
   { id: 'facts',     label: 'About You',  icon: <User size={13} /> },
   { id: 'memories',  label: 'Memories',   icon: <Brain size={13} /> },
   { id: 'journal',   label: 'Journal',    icon: <BookOpen size={13} /> },
+  { id: 'graph',     label: 'Mind Map',   icon: <Network size={13} /> },
 ];
 
 type FactCategory = 'identity' | 'preferences' | 'history' | 'relationship' | 'general';
@@ -1254,10 +1256,11 @@ export function MemoryBrowser() {
                 </p>
               ) : (
                 <>
-                  {activeTab === 'overview' && <OverviewTab charId={charId} charName={charName} />}
-                  {activeTab === 'facts'    && <FactsTab charId={charId} charName={charName} />}
-                  {activeTab === 'memories' && <MemoriesTab charId={charId} />}
-                  {activeTab === 'journal'  && <JournalTab charId={charId} charName={charName} />}
+                  {activeTab === 'overview'  && <OverviewTab charId={charId} charName={charName} />}
+                  {activeTab === 'facts'     && <FactsTab charId={charId} charName={charName} />}
+                  {activeTab === 'memories'  && <MemoriesTab charId={charId} />}
+                  {activeTab === 'journal'   && <JournalTab charId={charId} charName={charName} />}
+                  {activeTab === 'graph'     && <MemoryGraph charId={charId} charName={charName} />}
                 </>
               )}
             </div>

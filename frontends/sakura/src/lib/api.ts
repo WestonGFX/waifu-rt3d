@@ -273,6 +273,14 @@ export const api = {
   updateMessageImageUrl: (messageId: number, imageUrl: string) =>
     patch<{ ok: boolean; message_id: number }>(`/api/messages/${messageId}/image-url`, { image_url: imageUrl }),
 
+  /** M6-item21: List achievements earned by a character. */
+  listAchievements: (charId: number) =>
+    get<{ achievements: Array<{ key: string; label: string; description: string; icon: string; granted_at: number; meta: string | null }> }>(`/api/characters/${charId}/achievements`),
+
+  /** M6-item21: Grant an achievement to a character (idempotent). */
+  grantAchievement: (charId: number, key: string, meta?: Record<string, unknown>) =>
+    post<{ ok: boolean; granted: boolean; achievement: { key: string; label: string; description: string; icon: string; granted_at: number } }>(`/api/characters/${charId}/achievements/grant`, { key, meta }),
+
   /** Get all branch siblings of a message for swipe navigation. */
   getMessageBranches: (messageId: number) =>
     get<{

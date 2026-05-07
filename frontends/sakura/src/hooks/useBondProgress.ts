@@ -51,30 +51,58 @@ async function fetchBondState(charId: number): Promise<void> {
         previousTier: prevTier,
         unlocks,
       });
+
+      // M6-item21: Grant bond milestone achievements
+      for (const milestone of [10, 50, 90]) {
+        if (prevLevel < milestone && level >= milestone) {
+          api.grantAchievement(charId, `bond_${milestone}`).then((res) => {
+            if (res.granted) store.setPendingAchievement(res.achievement);
+          }).catch(() => {});
+          break;
+        }
+      }
     }
   } catch {
     // Bond API not available — silent fallback
   }
 }
 
+const MSG_ACHIEVEMENT_MILESTONES: Array<[number, string]> = [
+  [1, 'first_message'],
+  [100, 'messages_100'],
+  [500, 'messages_500'],
+];
+
 export function useBondProgress(charId: number | null, messageCount: number): void {
   const initialFetch = useRef(false);
+  const checkedMsgMilestones = useRef(new Set<string>());
 
-  // Fetch on character change
+  // Fetch on character change — reset milestone cache
   useEffect(() => {
     if (!charId) return;
     initialFetch.current = false;
+    checkedMsgMilestones.current.clear();
     fetchBondState(charId);
   }, [charId]);
 
-  // Fetch after each message exchange
+  // Fetch after each message exchange + check message-count achievements
   useEffect(() => {
     if (!charId || messageCount === 0) return;
-    // Skip the initial render — only fetch on actual message count changes
     if (!initialFetch.current) {
       initialFetch.current = true;
       return;
     }
     fetchBondState(charId);
+
+    // M6-item21: grant first/100/500 message achievements
+    const store = useAppStore.getState();
+    for (const [threshold, key] of MSG_ACHIEVEMENT_MILESTONES) {
+      if (messageCount === threshold && !checkedMsgMilestones.current.has(key)) {
+        checkedMsgMilestones.current.add(key);
+        api.grantAchievement(charId, key).then((res) => {
+          if (res.granted) store.setPendingAchievement(res.achievement);
+        }).catch(() => {});
+      }
+    }
   }, [charId, messageCount]);
 }

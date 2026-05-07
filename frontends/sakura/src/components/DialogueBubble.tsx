@@ -411,6 +411,14 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
       await api.pinMessageAsMemory(message.serverMessageId);
       setSavedToMemory(true);
       setTimeout(() => setSavedToMemory(false), 3000);
+      if (character?.id) {
+        api.grantAchievement(character.id, 'shared_secret').then((res) => {
+          if (res.granted) {
+            const { setPendingAchievement } = useAppStore.getState();
+            setPendingAchievement(res.achievement);
+          }
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error('[SaveToMemory] failed:', err);
     }

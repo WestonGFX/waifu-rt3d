@@ -10708,6 +10708,114 @@ async def get_character_streak(character_id: int):
                     "next_tier": "acquaintance", "xp_to_next": 100}
 
 
+# ── M6 — Achievement / Badge System ──────────────────────────────────────────
+
+#: Built-in achievement definitions.  key -> {label, description, icon}.
+ACHIEVEMENT_DEFS: dict[str, dict] = {
+    "first_message":      {"label": "First Words",       "description": "Send your first message.",             "icon": "💬"},
+    "messages_100":       {"label": "Chatterbox",         "description": "Send 100 messages.",                   "icon": "💬"},
+    "messages_500":       {"label": "True Confidant",     "description": "Send 500 messages.",                   "icon": "🗨️"},
+    "streak_3":           {"label": "Three Peas",         "description": "Chat 3 days in a row.",                "icon": "🔥"},
+    "streak_7":           {"label": "Week Warrior",       "description": "Chat 7 days in a row.",                "icon": "🔥"},
+    "streak_30":          {"label": "Devoted",            "description": "Chat 30 days in a row.",               "icon": "💫"},
+    "bond_10":            {"label": "Getting Closer",     "description": "Reach bond level 10.",                 "icon": "💛"},
+    "bond_50":            {"label": "Trusted Friend",     "description": "Reach bond level 50.",                 "icon": "💙"},
+    "bond_90":            {"label": "Soulmates",          "description": "Reach bond level 90.",                 "icon": "❤️"},
+    "shared_secret":      {"label": "Shared a Secret",   "description": "Pin a message to permanent memory.",   "icon": "🤫"},
+    "first_voice":        {"label": "Heard Your Voice",  "description": "Complete your first voice session.",   "icon": "🎙️"},
+}
+
+
+@app.get("/api/characters/{character_id}/achievements")
+async def list_character_achievements(character_id: int):
+    """List all achievements earned by a character.
+
+    Args:
+        character_id: Character whose achievements to list.
+
+    Returns:
+        dict: ``{"achievements": [{key, label, description, icon, granted_at, meta}]}``
+
+    Example:
+        GET /api/characters/1/achievements
+        Response: {"achievements": [{"key": "first_message", "label": "First Words", ...}]}
+    """
+    with db_ctx() as conn:
+        try:
+            rows = conn.execute(
+                "SELECT key, label, description, icon, granted_at, meta "
+                "FROM character_achievements WHERE char_id = ? ORDER BY granted_at ASC",
+                (character_id,),
+            ).fetchall()
+            return {"achievements": [
+                {"key": r[0], "label": r[1], "description": r[2], "icon": r[3],
+                 "granted_at": r[4], "meta": r[5]}
+                for r in rows
+            ]}
+        except Exception:
+            return {"achievements": []}
+
+
+class AchievementGrantRequest(BaseModel):
+    """Request body for POST /api/characters/{id}/achievements/grant."""
+
+    key: str
+    meta: dict | None = None
+
+
+@app.post("/api/characters/{character_id}/achievements/grant")
+async def grant_achievement(character_id: int, body: AchievementGrantRequest):
+    """Grant an achievement to a character (idempotent — second grant is a no-op).
+
+    Looks up the achievement definition from ACHIEVEMENT_DEFS.  Unknown keys
+    are accepted with empty label/description so callers can define their own
+    achievements without a server restart.
+
+    Args:
+        character_id: Character to grant the achievement to.
+        body: JSON body with ``key`` (str) and optional ``meta`` (dict).
+
+    Returns:
+        ``{"ok": True, "granted": bool, "achievement": {...}}``
+        ``granted`` is ``False`` when the achievement was already present.
+
+    Example:
+        POST /api/characters/1/achievements/grant
+        Body: {"key": "first_message"}
+        Response: {"ok": true, "granted": true, "achievement": {"key": "first_message", ...}}
+    """
+    defn = ACHIEVEMENT_DEFS.get(body.key, {"label": body.key, "description": "", "icon": "🏆"})
+    import json as _json
+    meta_json = _json.dumps(body.meta) if body.meta else None
+
+    with db_ctx() as conn:
+        try:
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO character_achievements "
+                "(char_id, key, label, description, icon, meta) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (character_id, body.key, defn["label"], defn["description"], defn["icon"], meta_json),
+            )
+            granted = cur.rowcount > 0
+            conn.commit()
+            row = conn.execute(
+                "SELECT key, label, description, icon, granted_at, meta "
+                "FROM character_achievements WHERE char_id = ? AND key = ?",
+                (character_id, body.key),
+            ).fetchone()
+        except Exception as e:
+            logger.error("[Achievement] Grant failed char=%d key=%s: %s", character_id, body.key, e)
+            raise HTTPException(500, "Failed to grant achievement")
+
+    if not row:
+        raise HTTPException(500, "Achievement grant failed — row missing after insert")
+
+    achievement = {"key": row[0], "label": row[1], "description": row[2],
+                   "icon": row[3], "granted_at": row[4], "meta": row[5]}
+    logger.info("[Achievement] char=%d key=%s granted=%s", character_id, body.key, granted)
+    return {"ok": True, "granted": granted, "achievement": achievement}
+
+
 # ── Feature T1-7 — Output Format Rules CRUD ──────────────────────────────────
 
 @app.get("/api/characters/{character_id}/format-rules")

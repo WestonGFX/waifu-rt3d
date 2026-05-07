@@ -215,6 +215,10 @@ interface AppState {
     previousTier: string;
     unlocks: Array<{ type: string; label: string }>;
   } | null;
+  /** M6-item21: Pending achievement to display in AchievementToast. */
+  pendingAchievement: { key: string; label: string; description: string; icon: string } | null;
+  setPendingAchievement: (data: AppState['pendingAchievement']) => void;
+  clearPendingAchievement: () => void;
   setBondState: (state: {
     bondLevel: number;
     bondXp: number;
@@ -460,6 +464,7 @@ export const useAppStore = create<AppState>()(
       bondTier: 'stranger',
       bondNextUnlock: null,
       pendingLevelUp: null,
+      pendingAchievement: null,
       bondStoryId: null,
       setBondState: (state) => set({
         bondLevel: state.bondLevel,
@@ -470,6 +475,8 @@ export const useAppStore = create<AppState>()(
       }),
       setPendingLevelUp: (data) => set({ pendingLevelUp: data }),
       clearPendingLevelUp: () => set({ pendingLevelUp: null }),
+      setPendingAchievement: (data) => set({ pendingAchievement: data }),
+      clearPendingAchievement: () => set({ pendingAchievement: null }),
 
       pendingMemorialScene: null,
       clearPendingMemorialScene: () => set({ pendingMemorialScene: null }),

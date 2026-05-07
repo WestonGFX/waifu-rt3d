@@ -49,6 +49,7 @@ import { GalleryOverlay } from './components/GalleryOverlay';
 import { CinematicOverlay } from './components/CinematicOverlay';
 import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
 import { LevelUpCelebration } from './components/LevelUpCelebration';
+import { AchievementToast } from './components/AchievementToast';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { ShortcutHelpModal } from './components/ShortcutHelpModal';
 // Feature tips disabled — import kept for potential re-enablement
@@ -139,6 +140,7 @@ function MainApp() {
     cinematicMode, toggleCinematicMode,
     devMode,
     pendingLevelUp, clearPendingLevelUp,
+    pendingAchievement, clearPendingAchievement,
     pendingMemorialScene, clearPendingMemorialScene,
   } = useAppStore();
 
@@ -606,6 +608,9 @@ function MainApp() {
           onDismiss={clearPendingLevelUp}
         />
       )}
+
+      {/* M6-item21: Achievement toast */}
+      <AchievementToast achievement={pendingAchievement} onDismiss={clearPendingAchievement} />
 
       <ShortcutHelpModal open={showHelp} shortcuts={shortcuts} onClose={() => setShowHelp(false)} />
 

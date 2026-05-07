@@ -5291,6 +5291,71 @@ def migrate_to_v74(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v75(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v74 to v75.
+
+    Adds the ``character_achievements`` table for the M6 achievement / badge
+    system.  Each row records that a specific character has earned a specific
+    achievement, together with its grant timestamp and any JSON metadata the
+    granting logic wants to attach (e.g. streak count at grant time).
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.
+
+    Raises:
+        sqlite3.Error: If the SQL statement fails.
+
+    Example:
+        >>> con = sqlite3.connect(":memory:")
+        >>> _ = con.execute("CREATE TABLE schema_version (version INTEGER, applied_ts REAL)")
+        >>> _ = con.execute("INSERT INTO schema_version VALUES (74, 0)")
+        >>> migrate_to_v75(con)
+        True
+        >>> tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        >>> "character_achievements" in tables
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 75:
+        logger.info("Schema already at v%d, skipping v75 migration.", cur_ver)
+        return True
+
+    try:
+        con.execute(
+            """CREATE TABLE IF NOT EXISTS character_achievements (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id     INTEGER NOT NULL,
+                key         TEXT    NOT NULL,
+                label       TEXT    NOT NULL,
+                description TEXT,
+                icon        TEXT,
+                granted_at  REAL    NOT NULL DEFAULT (strftime('%s','now')),
+                meta        TEXT,
+                UNIQUE(char_id, key)
+            )"""
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_char_achievements_char "
+            "ON character_achievements(char_id)"
+        )
+        logger.info("  - Created character_achievements table + index")
+
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (75, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v75 migration complete (character_achievements)")
+        return True
+    except Exception as e:
+        logger.error("Schema v75 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -5838,14 +5903,20 @@ def ensure_db():
             if migrate_to_v74(con):
                 version = 74
 
+        if version < 75:
+            logger.info("Upgrading database schema from v74 to v75...")
+            logger.info("  - M6 Gamification: character_achievements table")
+            if migrate_to_v75(con):
+                version = 75
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 74:
-            raise RuntimeError(f"Database initialization failed: Expected v74, got v{final_version}")
+        if final_version < 75:
+            raise RuntimeError(f"Database initialization failed: Expected v75, got v{final_version}")
 
-        if final_version > 74:
-            logger.warning(f"Database is newer than application (v{final_version} > v74). Some features might be unused.")
+        if final_version > 75:
+            logger.warning(f"Database is newer than application (v{final_version} > v75). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.

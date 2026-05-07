@@ -137,6 +137,18 @@ export function StatusBar({
   // ── Tier 2 HUD: search scope toggle (replaces separate Globe button) ────
   const [searchScope, setSearchScope] = useState<'thread' | 'global'>('thread');
 
+  // ── Narrow-header collapse — hides Search + ContextBudget at < 1100px ───
+  const headerRef = useRef<HTMLElement>(null);
+  const [isNarrow, setIsNarrow] = useState(false);
+  useEffect(() => {
+    if (!headerRef.current) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setIsNarrow((entry.contentRect.width ?? 0) < 1100);
+    });
+    ro.observe(headerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
   // ── Version click easter egg — 5 taps in 3 s → Developer Mode ──────────
   const versionClickCount = useRef(0);
   const versionClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -211,6 +223,7 @@ export function StatusBar({
 
   return (
     <header
+      ref={headerRef}
       className="sticky top-0 z-40"
       style={{
         backgroundColor: 'color-mix(in srgb, var(--color-surface) 85%, transparent)',
@@ -251,7 +264,7 @@ export function StatusBar({
             </div>
           );
         })()}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0" style={{ overflow: 'hidden' }}>
           <div className="flex items-center gap-2">
             <span className="char-name-display truncate" title={character.name} style={{ color: 'var(--color-text-primary)', fontSize: '1rem' }}>
               {character.name}
@@ -294,19 +307,24 @@ export function StatusBar({
             nextUnlock={bondNextUnlock}
             messageCount={messageCount}
             idlePhrase={idlePhrase}
+            compact={isNarrow}
           />
         </div>
 
         {/* Tier 2 HUD — visible right cluster: Search · ContextBudget · Settings · 3D · ⋯ */}
-        <button onClick={toggleSearch} className="p-2 rounded-lg transition-all duration-200"
-          style={btnStyle(searchOpen)} title="Search messages (Thread / Global toggle inside)">
-          <Search size={18} />
-        </button>
-        <ContextBudgetPill
-          sessionId={sessionId}
-          messageCount={messageCount}
-          autoCompactThreshold={85}
-        />
+        {!isNarrow && (
+          <button onClick={toggleSearch} className="p-2 rounded-lg transition-all duration-200"
+            style={btnStyle(searchOpen)} title="Search messages (Thread / Global toggle inside)">
+            <Search size={18} />
+          </button>
+        )}
+        {!isNarrow && (
+          <ContextBudgetPill
+            sessionId={sessionId}
+            messageCount={messageCount}
+            autoCompactThreshold={85}
+          />
+        )}
         <button
           onClick={() => openOverlay('settings')}
           title="Settings"
@@ -367,6 +385,39 @@ export function StatusBar({
                 overflow: 'hidden',
               }}
             >
+              {/* Narrow-mode extras: Search + ContextBudget move here */}
+              {isNarrow && (
+                <>
+                  <button
+                    role="menuitem"
+                    onClick={() => { setOverflowOpen(false); toggleSearch(); }}
+                    className="w-full text-left px-4 py-2.5 text-xs transition-all duration-150 flex items-center gap-2"
+                    style={{ color: searchOpen ? 'var(--color-accent)' : 'var(--color-text-primary)' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--color-accent-soft)')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+                  >
+                    <Search size={14} /> {searchOpen ? 'Close search' : 'Search messages'}
+                  </button>
+                  <div
+                    role="menuitem"
+                    style={{
+                      padding: '4px 16px 6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: 12,
+                      color: 'var(--color-text-secondary)',
+                    }}
+                  >
+                    <ContextBudgetPill
+                      sessionId={sessionId}
+                      messageCount={messageCount}
+                      autoCompactThreshold={85}
+                    />
+                  </div>
+                  <div style={{ borderTop: '1px solid var(--color-border-subtle)' }} />
+                </>
+              )}
               {onOpenSessions && (
                 <button
                   role="menuitem"

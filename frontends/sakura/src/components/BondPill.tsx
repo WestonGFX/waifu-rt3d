@@ -82,6 +82,8 @@ export interface BondPillProps {
   idlePhrase?: string;
   /** When > 0 and changed, spawns a "+N XP" popup animation. */
   xpDelta?: number;
+  /** Compact mode: hides progress bar and XP text to fit narrow headers. */
+  compact?: boolean;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -111,6 +113,7 @@ export function BondPill({
   messageCount,
   idlePhrase,
   xpDelta,
+  compact = false,
 }: BondPillProps) {
   const [expanded, setExpanded] = useState(false);
   const [rel, setRel] = useState<RelationshipData | null>(null);
@@ -227,51 +230,55 @@ export function BondPill({
 
         <span style={{ color: barColor, fontWeight: 500, flexShrink: 0 }}>{tierLabel}</span>
 
-        {/* Inline progress bar (80px) */}
-        <div
-          style={{
-            position: 'relative',
-            width: 80,
-            height: 6,
-            backgroundColor: 'var(--color-bg-secondary)',
-            borderRadius: 999,
-            overflow: 'hidden',
-            flexShrink: 0,
-            margin: '0 2px',
-          }}
-          role="progressbar"
-          aria-valuenow={bondXp}
-          aria-valuemin={0}
-          aria-valuemax={levelThreshold}
-          aria-label="Bond XP progress"
-        >
-          <motion.div
+        {/* Inline progress bar + XP text — hidden in compact (narrow-header) mode */}
+        {!compact && (
+          <div
             style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              height: '100%',
-              backgroundColor: barColor,
+              position: 'relative',
+              width: 80,
+              height: 6,
+              backgroundColor: 'var(--color-bg-secondary)',
               borderRadius: 999,
-              transformOrigin: 'left center',
+              overflow: 'hidden',
+              flexShrink: 0,
+              margin: '0 2px',
             }}
-            animate={{ width: `${fillPercent}%` }}
-            transition={{ type: 'spring', stiffness: 100, damping: 20 }}
-          />
-        </div>
+            role="progressbar"
+            aria-valuenow={bondXp}
+            aria-valuemin={0}
+            aria-valuemax={levelThreshold}
+            aria-label="Bond XP progress"
+          >
+            <motion.div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                height: '100%',
+                backgroundColor: barColor,
+                borderRadius: 999,
+                transformOrigin: 'left center',
+              }}
+              animate={{ width: `${fillPercent}%` }}
+              transition={{ type: 'spring', stiffness: 100, damping: 20 }}
+            />
+          </div>
+        )}
 
-        <span
-          style={{
-            color: 'var(--color-text-secondary)',
-            fontSize: 12,
-            fontVariantNumeric: 'tabular-nums',
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-          }}
-          aria-hidden
-        >
-          {fmtXp(bondXp)}/{fmtXp(levelThreshold)} XP · {fmtXp(xpToNext)} to next
-        </span>
+        {!compact && (
+          <span
+            style={{
+              color: 'var(--color-text-secondary)',
+              fontSize: 12,
+              fontVariantNumeric: 'tabular-nums',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+            aria-hidden
+          >
+            {fmtXp(bondXp)}/{fmtXp(levelThreshold)} XP · {fmtXp(xpToNext)} to next
+          </span>
+        )}
 
         {showStreak && (
           <span

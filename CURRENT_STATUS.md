@@ -1,7 +1,7 @@
 # Current Project Status
 
-**Last updated:** 2026-05-06 (session 36 — AIE Phase C ALL PHASES DONE: Phase 1 LoRA pipeline + Phase 2 DSPy, schema v78, 2843 backend tests; 27+ commits ahead)
-**Branch:** master · 27+ ahead of `origin/master`.
+**Last updated:** 2026-05-07 (session 37 — M8 docs done, statusline reviewed, voice gallery shipped, Memory Browser QA complete; pushed to origin)
+**Branch:** master · pushed to `origin/master`.
 **Schema version:** v78. v77 adds character_loras (LoRA adapter records). v78 adds dspy_compiled_programs (BootstrapFewShot compiled programs).
 **Tests:** **2,843 backend** + **276 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
@@ -9,6 +9,29 @@
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session 37 (2026-05-07) — Backlog sweep complete. 4 items shipped.**
+
+| Item | Status | Commit |
+|---|---|---|
+| M8 distribution docs (EU AI Act, privacy, Steam) | ✅ done session 30 | `cb5f8aa` (no work needed) |
+| Item 51: Statusline review (Neon Glassline v2) | ✅ | `~/.claude/statusline.sh` — removed dead RATE_7D var, fixed /tmp cache leak |
+| Item 42: Voice preset gallery | ✅ | `8b32b6a` — `VoiceGallery.tsx` card grid in Settings Voice tab (toggle) |
+| Memory Browser browser QA (all 5 tabs) | ✅ | `b0761a9` — report + 14 screenshots |
+
+**2 bugs filed from QA:**
+- P2: `/api/feedback/preferences` 404 — backend needs restart to load AIE Phase C Phase 0 endpoints
+- P3: About You fact delete has no confirmation (immediate, no undo)
+
+**Push gate:** cleared — all 29 commits pushed to `origin/master` at session start.
+
+**Next priorities (from MEMORY.md):**
+1. AIE Phase C: Advanced (LoRA training + DSPy — 7 open questions, tier pick needed)
+2. Visual Content Phase 2 (lightbox / imagePrompt / regenerateImage — gated on shared-file conflicts)
+3. Apply character styles (`scripts/apply_character_styles.py` not yet run)
+4. Backend restart to load AIE Phase C Phase 0 endpoints (`/api/feedback/preferences`)
+
+---
 
 **Session 33 (2026-05-06) — M2 + M3 COMPLETE. 16/16 items shipped.**
 

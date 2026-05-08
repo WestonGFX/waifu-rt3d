@@ -1,5 +1,5 @@
 export type MessageRole = 'user' | 'assistant' | 'system' | 'director';
-export type MessageStatus = 'pending' | 'streaming' | 'sent' | 'failed';
+export type MessageStatus = 'pending' | 'streaming' | 'sent' | 'failed' | 'timeout';
 
 export interface Character {
   id: number;
@@ -236,6 +236,8 @@ export interface ChatMessage {
   editHistory?: { ts: number; prevContent: string }[];
   /** M3-item16: URL of a TTS audio file generated for this message (voice messages). */
   voiceMessageUrl?: string;
+  /** Original user text stored on a timed-out assistant message so the retry action can re-send it. */
+  retryText?: string;
 }
 
 export interface Session {

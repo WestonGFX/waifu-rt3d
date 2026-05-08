@@ -50,6 +50,10 @@ interface ChatState {
    * and UI stay clean; the new assistant reply appears as a fresh bubble.
    */
   continueGeneration: () => Promise<void>;
+  /** Re-send the text from a timed-out turn, removing the old timeout card first. */
+  retryLastTimeout: (text: string) => Promise<void>;
+  /** Replace a timeout card with a silent failed marker (user chose not to retry). */
+  dismissTimeout: () => void;
 }
 
 const genId = () => crypto.randomUUID();
@@ -260,6 +264,19 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }));
     };
 
+    // 35-second client-side timeout — shorter than the backend's 30s so the
+    // action card always appears before the server error reaches the client.
+    let timedOut = false;
+    const TIMEOUT_MS = 35_000;
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      const elapsedMs = Math.round(performance.now() - streamStart);
+      console.warn(`[LLM Timeout] No response after ${elapsedMs}ms — aborting. Check that your LLM model is loaded and responding.`);
+      controller.abort();
+      patchAssistant({ status: 'timeout', text: '', retryText: trimmed });
+      set({ loading: false, abortController: null });
+    }, TIMEOUT_MS);
+
     try {
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
@@ -460,7 +477,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           .catch(() => {}); // non-critical, ignore failures
       }
     } catch (err: any) {
-      if (err.name === 'AbortError') {
+      if (timedOut) {
+        // Timeout callback already patched the message and reset loading state
+      } else if (err.name === 'AbortError') {
         // User cancelled — mark as sent with partial text
         patchAssistant({
           text: fullText || '(cancelled)',
@@ -473,8 +492,39 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         });
       }
     } finally {
-      set({ loading: false, abortController: null });
+      clearTimeout(timeoutId);
+      if (!timedOut) {
+        set({ loading: false, abortController: null });
+      }
     }
+  },
+
+  retryLastTimeout: async (text: string) => {
+    // Remove the timed-out assistant message and the user message before it
+    set((s) => {
+      const msgs = [...s.messages];
+      let lastTimeoutIdx = -1;
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i].status === 'timeout') { lastTimeoutIdx = i; break; }
+      }
+      if (lastTimeoutIdx === -1) return {};
+      const toRemove = new Set([msgs[lastTimeoutIdx].id]);
+      if (lastTimeoutIdx > 0 && msgs[lastTimeoutIdx - 1].role === 'user') {
+        toRemove.add(msgs[lastTimeoutIdx - 1].id);
+      }
+      return { messages: msgs.filter((m) => !toRemove.has(m.id)) };
+    });
+    await get().sendMessage(text);
+  },
+
+  dismissTimeout: () => {
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.status === 'timeout'
+          ? { ...m, status: 'failed' as const, text: '(timed out)', retryText: undefined }
+          : m
+      ),
+    }));
   },
 
   editMessage: async (messageId, newText) => {

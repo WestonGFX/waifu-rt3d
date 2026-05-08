@@ -3936,7 +3936,7 @@ async def llm_generate(req: Request):
     model = _get_llm_model_resolved(cfg)
 
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10, read=120)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10, read=30)) as client:
             resp = await client.post(
                 f"{endpoint}/chat/completions",
                 json={

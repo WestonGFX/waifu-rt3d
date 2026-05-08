@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Volume2, Pin, ChevronLeft, ChevronRight, ChevronsRight, RefreshCw, Copy, Trash2, Pencil, Check, X, Bookmark } from 'lucide-react';
+import { Volume2, Pin, ChevronLeft, ChevronRight, ChevronsRight, RefreshCw, Copy, Trash2, Pencil, Check, X, Bookmark, Clock } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
 import { ChatImageLightbox } from './ChatImageLightbox';
@@ -9,6 +9,7 @@ import { downloadUrl } from '../lib/downloadFile';
 import { api } from '../lib/api';
 import { parseActions } from '../lib/parseActions';
 import { useAppStore } from '../stores/appStore';
+import { useChatStore } from '../stores/chatStore';
 
 /**
  * Canonical 26-emotion emoji map (Phase 15).
@@ -320,6 +321,59 @@ function StageRow({ done, active, label }: { done: boolean; active: boolean; lab
  * PUT /api/messages/{serverMessageId}/pin and tracks pinned state locally.
  * Pinned messages show a filled Pin indicator in the top-right corner.
  */
+function TimeoutActionCard({ message }: { message: import('../lib/types').ChatMessage }) {
+  const { retryLastTimeout, dismissTimeout } = useChatStore();
+  const openSettingsTab = useAppStore(s => s.openSettingsTab);
+  const retryText = message.retryText ?? '';
+
+  const btnStyle: React.CSSProperties = {
+    padding: '6px 14px',
+    borderRadius: 8,
+    border: '1px solid var(--color-border, rgba(128,128,128,0.3))',
+    background: 'var(--color-surface)',
+    color: 'var(--color-text-primary)',
+    fontSize: '0.8rem',
+    cursor: 'pointer',
+    fontWeight: 500,
+  };
+
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 10,
+      padding: '12px 14px',
+      borderRadius: 10,
+      border: '1px solid var(--color-warning, #f59e0b)',
+      background: 'var(--color-surface)',
+      color: 'var(--color-text-primary)',
+      maxWidth: 340,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: '0.85rem' }}>
+        <Clock size={15} style={{ color: 'var(--color-warning, #f59e0b)', flexShrink: 0 }} />
+        Response is taking too long
+      </div>
+      <div style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+        The model didn&apos;t respond in time. Check that your LLM is loaded, then try again.
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {retryText && (
+          <button style={{ ...btnStyle, background: 'var(--color-accent)', color: 'var(--color-on-accent, #fff)', borderColor: 'transparent' }}
+            onClick={() => retryLastTimeout(retryText)}>
+            Retry
+          </button>
+        )}
+        <button style={btnStyle} onClick={() => openSettingsTab('LM Models')}>
+          Switch model
+        </button>
+        <button style={btnStyle} onClick={() => {
+          dismissTimeout();
+        }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onRegenerateImage, onBranchSwitch, onDelete, onEdit, isLastAssistant = false, isRegenerating = false, onContinue, feedbackEnabled = false }: DialogueBubbleProps) {
   const thinkingMode = useAppStore(s => s.thinkingIndicatorMode);
   const [pinned, setPinned] = useState(message.pinned ?? false);
@@ -763,6 +817,8 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
                 }}
               />
             </span>
+          ) : message.status === 'timeout' ? (
+            <TimeoutActionCard message={message} />
           ) : message.status === 'failed' ? (
             <span style={{ color: 'var(--color-danger, #f44)', fontStyle: 'italic' }}>
               {message.text}

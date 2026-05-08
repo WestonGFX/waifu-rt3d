@@ -3366,6 +3366,15 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
             format={(v) => v.toFixed(2)}
           />
 
+          <SliderField
+            label="LLM Response Timeout" description="Cancel the request if no reply arrives within this many seconds." tier={1}
+            tooltip="30s is recommended. Increase for slow hardware; decrease to get the timeout card faster."
+            value={Number(cfg('llm.timeout_seconds', 30))}
+            min={10} max={120} step={5}
+            onChange={(v) => save('llm.timeout_seconds', v)}
+            format={(v) => `${v}s`}
+          />
+
           <SettingField label="System Prompt Override" description="Override the default system prompt for all characters." tier={1}
             tooltip="Overrides character personality. Leave empty to use default persona.">
             <textarea

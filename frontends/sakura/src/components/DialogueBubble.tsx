@@ -155,7 +155,7 @@ function MarkdownText({ text, query }: { text: string; query: string }) {
             ));
             if (tok.type === 'bold') return <strong key={ti}>{inner}</strong>;
             if (tok.type === 'italic') return (
-              <em key={ti} style={{ color: 'var(--color-action)', opacity: 0.95 }}>
+              <em key={ti} style={{ color: 'var(--color-text-secondary)' }}>
                 {inner}
               </em>
             );

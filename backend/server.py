@@ -6563,14 +6563,55 @@ def list_sessions(archived: bool = False, search: str = None):
 
 @app.post("/api/sessions")
 async def create_session(req: Request):
-    """Create a new chat session."""
+    """Create or resume a chat session.
+
+    When ``character_id`` is provided, returns the most recent non-archived
+    session for that character (created within the last 90 days) instead of
+    always inserting a blank session.  This preserves chat history across app
+    restarts and character switches.  If no suitable session exists, a new one
+    is inserted with the ``character_id`` set.
+
+    Args:
+        req: JSON body with optional fields: ``title`` (str), ``character_id`` (int).
+
+    Returns:
+        ``{"id": int, "title": str, "resumed": bool}`` — ``resumed`` is True
+        when an existing session was returned rather than a new one created.
+    """
     body = await req.json()
     title = body.get("title", "New Session")
+    character_id = body.get("character_id")
+
     with db_ctx() as conn:
         cur = conn.cursor()
-        cur.execute("INSERT INTO sessions (title) VALUES (?)", (title,))
+
+        if character_id:
+            # Try to resume the most recent active session for this character
+            # (non-archived, created within 90 days)
+            cutoff = __import__("time").time() - 90 * 86400
+            cur.execute(
+                """SELECT id, title FROM sessions
+                   WHERE character_id = ?
+                     AND COALESCE(is_archived, 0) = 0
+                     AND created_ts > ?
+                   ORDER BY created_ts DESC
+                   LIMIT 1""",
+                (character_id, cutoff),
+            )
+            row = cur.fetchone()
+            if row:
+                return {"id": row[0], "title": row[1] or f"Session {row[0]}", "resumed": True}
+
+            # No existing session — create one linked to this character
+            cur.execute(
+                "INSERT INTO sessions (title, character_id) VALUES (?, ?)",
+                (title, character_id),
+            )
+        else:
+            cur.execute("INSERT INTO sessions (title) VALUES (?)", (title,))
+
         session_id = cur.lastrowid
-    return {"id": session_id, "title": title}
+    return {"id": session_id, "title": title, "resumed": False}
 
 @app.put("/api/sessions/{session_id}")
 async def update_session(session_id: int, req: Request):

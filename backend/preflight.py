@@ -5631,6 +5631,72 @@ def migrate_to_v78(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v79(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v78 to v79.
+
+    Adds: ``character_id`` column to the ``sessions`` table so each session
+    is permanently linked to the character it belongs to.  This enables the
+    "resume last session" flow: when the user switches to a character, the
+    backend returns the most recent existing session rather than creating a
+    blank one every time.
+
+    The column is nullable so that sessions created before this migration
+    remain valid.  New sessions will always have ``character_id`` set.
+
+    Also creates ``idx_sessions_char`` for O(log n) per-character lookups.
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.
+
+    Raises:
+        sqlite3.Error: If a SQL statement fails unexpectedly.
+
+    Example:
+        >>> import sqlite3
+        >>> con = sqlite3.connect(":memory:")
+        >>> _ = con.execute("CREATE TABLE schema_version (version INTEGER, applied_ts REAL)")
+        >>> _ = con.execute("INSERT INTO schema_version VALUES (78, 0)")
+        >>> _ = con.execute("CREATE TABLE sessions (id INTEGER PRIMARY KEY, title TEXT, created_ts REAL)")
+        >>> _ = con.execute("CREATE TABLE characters (id INTEGER PRIMARY KEY)")
+        >>> migrate_to_v79(con)
+        True
+        >>> cols = {r[1] for r in con.execute("PRAGMA table_info(sessions)")}
+        >>> "character_id" in cols
+        True
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 79:
+        logger.info("Schema already at v%d, skipping v79 migration.", cur_ver)
+        return True
+
+    try:
+        con.execute(
+            "ALTER TABLE sessions ADD COLUMN character_id INTEGER REFERENCES characters(id)"
+        )
+        logger.info("  - Added character_id column to sessions table")
+
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sessions_char "
+            "ON sessions(character_id, created_ts DESC)"
+        )
+        logger.info("  - Created idx_sessions_char index")
+
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (79, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v79 migration complete (sessions.character_id for session resume)")
+        return True
+    except Exception as e:
+        logger.error("Schema v79 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -6202,21 +6268,27 @@ def ensure_db():
             if migrate_to_v78(con):
                 version = 78
 
+        if version < 79:
+            logger.info("Upgrading database schema from v78 to v79...")
+            logger.info("  - sessions.character_id FK for session resume on character switch")
+            if migrate_to_v79(con):
+                version = 79
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 78:
-            raise RuntimeError(f"Database initialization failed: Expected v78, got v{final_version}")
+        if final_version < 79:
+            raise RuntimeError(f"Database initialization failed: Expected v79, got v{final_version}")
 
-        if final_version > 78:
-            logger.warning(f"Database is newer than application (v{final_version} > v78). Some features might be unused.")
+        if final_version > 79:
+            logger.warning(f"Database is newer than application (v{final_version} > v79). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v78 adds dspy_compiled_programs for DSPy optimization)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v79 adds sessions.character_id for session resume)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

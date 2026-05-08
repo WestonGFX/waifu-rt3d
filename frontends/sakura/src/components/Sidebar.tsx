@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   MessageCircle, Users, Sparkles, Brain,
-  ChevronLeft, ChevronRight, Search, Wifi, WifiOff, Pencil, BookMarked, Gamepad2, HelpCircle, Wand2, BarChart2, Cpu, MoreHorizontal
+  ChevronLeft, ChevronRight, Search, Wifi, WifiOff, Pencil, BookMarked, HelpCircle, Wand2, BarChart2, Cpu, MoreHorizontal
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
@@ -435,7 +435,6 @@ function MoreToolsDropdown({ collapsed = false }: { collapsed?: boolean }) {
   }, [open]);
 
   const items = [
-    { label: 'Games',   icon: Gamepad2,  action: () => { openOverlay('games');         setOpen(false); } },
     { label: 'Stats',   icon: BarChart2, action: () => { openOverlay('analytics');     setOpen(false); } },
     { label: 'Context', icon: Cpu,       action: () => { openOverlay('contextviewer'); setOpen(false); } },
   ];

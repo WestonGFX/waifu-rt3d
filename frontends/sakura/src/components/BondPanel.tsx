@@ -51,7 +51,7 @@ export function BondPanel({ onClose }: BondPanelProps) {
   const bondTier = useAppStore(s => s.bondTier);
   const bondXp = useAppStore(s => s.bondXp);
   const bondXpToNext = useAppStore(s => s.bondXpToNext);
-  const openOverlay = useAppStore(s => s.openOverlay);
+
 
   const [stories, setStories] = useState<BondStory[]>([]);
   const [storiesExpanded, setStoriesExpanded] = useState(true);
@@ -74,11 +74,10 @@ export function BondPanel({ onClose }: BondPanelProps) {
     return () => window.removeEventListener('keydown', handle);
   }, [onClose]);
 
-  /** Open a story in the BondStoryViewer overlay. */
-  const handleStoryClick = useCallback((storyId: number) => {
-    useAppStore.setState({ bondStoryId: storyId });
-    openOverlay('bondstory');
-  }, [openOverlay]);
+  /** Story viewer not yet wired — stub for future re-enable. */
+  const handleStoryClick = useCallback((_storyId: number) => {
+    // bondstory overlay removed; story viewer deferred
+  }, []);
 
   if (!activeChar || !activeCharId) return null;
 

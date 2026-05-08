@@ -21,10 +21,10 @@ export type LayoutMode = 'normal' | 'compact' | 'mobile';
 /** Overlay drawers that slide out over the main content. */
 type Overlay =
   | 'settings' | 'memory' | 'vocab' | 'diary' | 'stats' | 'timeline' | 'analytics'
-  | 'summary' | 'schedule' | 'compression'
-  | 'search' | 'scenarios' | 'moodboard' | 'arena'
-  | 'portfolio' | 'replay' | 'relweb'
-  | 'universes' | 'lore' | 'userknowledge' | 'games'
+  | 'summary' | 'compression'
+  | 'search' | 'scenarios'
+  | 'replay'
+  | 'lore' | 'userknowledge'
   | 'modelbrowser'
   | 'photomode' | 'gallery'
   | 'memorybrowser'
@@ -36,8 +36,7 @@ type Overlay =
   | 'intimategallery' | 'loveletter' | 'audiostories'
   | 'intimatequiz' | 'sharedfantasies'
   | 'personapicker' | 'scenereplay'
-  | 'bondpanel' | 'bondstory'
-  | 'memorialscene'
+  | 'bondpanel'
   | 'scenariopicker'
   | null;
 

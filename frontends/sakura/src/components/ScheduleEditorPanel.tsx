@@ -252,8 +252,8 @@ function ScheduleRow({
  * <ScheduleEditorPanel />
  */
 export function ScheduleEditorPanel() {
-  const { activeOverlay, closeOverlay, activeCharacter } = useAppStore();
-  const open = activeOverlay === 'schedule';
+  const { closeOverlay, activeCharacter } = useAppStore();
+  const open = false; // overlay removed
 
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(false);

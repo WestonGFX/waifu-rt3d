@@ -265,8 +265,8 @@ function PortraitCell({
  * `{emotion}.png` to auto-assign them to the correct slots.
  */
 export function MoodBoardEditor() {
-  const { activeOverlay, closeOverlay, activeCharacter, setActiveCharacter } = useAppStore();
-  const open = activeOverlay === 'moodboard';
+  const { closeOverlay, activeCharacter, setActiveCharacter } = useAppStore();
+  const open = false; // overlay removed
 
   const [portraitMap, setPortraitMap] = useState<PortraitMap>({});
   const [saving, setSaving] = useState(false);

@@ -381,8 +381,8 @@ function ConfigRow({
  * // <ModelArenaPanel />
  */
 export function ModelArenaPanel() {
-  const { activeOverlay, closeOverlay, activeCharacter } = useAppStore();
-  const open = activeOverlay === 'arena';
+  const { closeOverlay, activeCharacter } = useAppStore();
+  const open = false; // overlay removed
 
   const [prompt, setPrompt] = useState('');
   const [configs, setConfigs] = useState<ArenaConfig[]>(DEFAULT_CONFIGS);

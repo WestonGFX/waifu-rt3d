@@ -203,8 +203,8 @@ function UniverseForm({ form, saving, onNameChange, onLoreChange, onSave, onCanc
  * Reads `activeOverlay` from appStore and shows only when it equals 'universes'.
  */
 export function UniversePanel() {
-  const { activeOverlay, closeOverlay, characters, loadCharacters } = useAppStore();
-  const open = activeOverlay === 'universes';
+  const { closeOverlay, characters, loadCharacters } = useAppStore();
+  const open = false; // overlay removed
 
   // ── Data ──────────────────────────────────────────────────────────────
   const [universes, setUniverses] = useState<Universe[]>([]);

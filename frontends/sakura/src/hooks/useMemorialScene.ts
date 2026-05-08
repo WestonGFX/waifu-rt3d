@@ -26,7 +26,6 @@ import type { MemorialSceneData } from '../components/MemorialScene';
  */
 export function useMemorialScene(charId: number | null): void {
   const bondLevel = useAppStore(s => s.bondLevel);
-  const openOverlay = useAppStore(s => s.openOverlay);
   const prevLevelRef = useRef<number>(0);
   const checkedFirstMemory = useRef<number | null>(null);
 
@@ -40,7 +39,7 @@ export function useMemorialScene(charId: number | null): void {
       .then(res => {
         if (res.ok && res.scene) {
           useAppStore.setState({ pendingMemorialScene: res.scene });
-          openOverlay('memorialscene');
+          // memorialscene overlay removed — scene stored but not shown
         }
       })
       .catch(() => { /* non-critical */ });
@@ -64,7 +63,7 @@ export function useMemorialScene(charId: number | null): void {
         .then(res => {
           if (res.ok && res.scene) {
             useAppStore.setState({ pendingMemorialScene: res.scene as MemorialSceneData });
-            openOverlay('memorialscene');
+            // memorialscene overlay removed — scene stored but not shown
           }
         })
         .catch(() => { /* non-critical */ });

@@ -144,8 +144,8 @@ function truncateName(name: string): string {
  * Overlay key: 'relweb'
  */
 export function CharacterRelationshipWeb() {
-  const { activeOverlay, closeOverlay, characters, selectCharacter } = useAppStore();
-  const open = activeOverlay === 'relweb';
+  const { closeOverlay, characters, selectCharacter } = useAppStore();
+  const open = false; // overlay removed
 
   const [nodes, setNodes] = useState<CharNode[]>([]);
   const [loading, setLoading] = useState(false);

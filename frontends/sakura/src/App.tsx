@@ -8,17 +8,11 @@ import { DiaryPanel } from './components/DiaryPanel';
 import { StatsPanel } from './components/StatsPanel';
 import { TimelinePanel } from './components/TimelinePanel';
 import { SessionSummaryPanel } from './components/SessionSummaryPanel';
-import { ScheduleEditorPanel } from './components/ScheduleEditorPanel';
 import { CompressionPreviewModal } from './components/CompressionPreviewModal';
 import { GlobalSearchPanel } from './components/GlobalSearchPanel';
 import { SoundscapePlayer } from './components/SoundscapePlayer';
 import { ScenarioLibrary } from './components/ScenarioLibrary';
-import { MoodBoardEditor } from './components/MoodBoardEditor';
-import { ModelArenaPanel } from './components/ModelArenaPanel';
-import { CharacterPortfolioCard } from './components/CharacterPortfolioCard';
 import { SessionReplayModal } from './components/SessionReplayModal';
-import { CharacterRelationshipWeb } from './components/CharacterRelationshipWeb';
-import { UniversePanel } from './components/UniversePanel';
 import { LorePanel } from './components/LorePanel';
 import { UserKnowledgePanel } from './components/UserKnowledgePanel';
 import { MemoryBrowser } from './components/MemoryBrowser';
@@ -39,10 +33,7 @@ import { SharedFantasyBuilder } from './components/SharedFantasyBuilder';
 import { PersonaPicker } from './components/PersonaPicker';
 import { SceneReplayViewer } from './components/SceneReplayViewer';
 import { BondPanel } from './components/BondPanel';
-import { BondStoryViewer } from './components/BondStoryViewer';
-import { MemorialScene } from './components/MemorialScene';
 import { ScenarioPicker } from './components/ScenarioPicker';
-import { GamePanel } from './components/GamePanel';
 import { ModelBrowser } from './components/ModelBrowser';
 import { PhotoModeOverlay } from './components/PhotoModeOverlay';
 import { GalleryOverlay } from './components/GalleryOverlay';
@@ -141,7 +132,6 @@ function MainApp() {
     devMode,
     pendingLevelUp, clearPendingLevelUp,
     pendingAchievement, clearPendingAchievement,
-    pendingMemorialScene, clearPendingMemorialScene,
   } = useAppStore();
 
   // Wizard store integration — hydrate from config and manage wizard lifecycle
@@ -276,18 +266,12 @@ function MainApp() {
     { key: k('Session summary',        'alt+s'),   action: () => openOverlay('summary'),        description: 'Session summary' },
     { key: k('Character diary',        'alt+d'),   action: () => openOverlay('diary'),          description: 'Character diary' },
     { key: k('Relationship timeline',  'alt+t'),   action: () => openOverlay('timeline'),       description: 'Relationship timeline' },
-    { key: k('Message schedules',      'alt+h'),   action: () => openOverlay('schedule'),       description: 'Message schedules' },
     { key: k('Global message search',  'alt+f'),   action: () => openOverlay('search'),         description: 'Global message search' },
     { key: 'ctrl+k',                              action: () => openOverlay('search'),         description: 'Quick search (Ctrl/Cmd+K)', allowInInput: true },
     { key: k('Scenario library',       'alt+i'),   action: () => openOverlay('scenarios'),      description: 'Scenario library' },
-    { key: k('Character mood board',   'alt+b'),   action: () => openOverlay('moodboard'),      description: 'Character mood board' },
-    { key: k('Model arena',            'alt+p'),   action: () => openOverlay('arena'),          description: 'Model arena' },
     { key: k('New character',          'alt+n'),   action: () => setSidebarSection('create'),   description: 'New character' },
-    { key: k('Character portfolio',     'alt+o'),   action: () => openOverlay('portfolio'),       description: 'Character portfolio' },
     { key: k('Session replay',          'alt+r'),   action: () => openOverlay('replay'),          description: 'Session replay' },
-    { key: k('Relationship web',        'alt+w'),   action: () => openOverlay('relweb'),          description: 'Relationship web' },
     { key: k('Character stats',        'alt+z'),   action: () => openOverlay('stats'),           description: 'Character stats' },
-    { key: k('Universe builder',       'alt+u'),   action: () => openOverlay('universes'),       description: 'Universe builder' },
     { key: k('Context viewer',         'alt+c'),   action: () => openOverlay('contextviewer'),  description: 'Context viewer' },
     { key: k('Boundaries',            'alt+shift+b'), action: () => openOverlay('boundaries'),  description: 'Boundaries' },
     { key: k('Private vocabulary',    'alt+shift+v'), action: () => openOverlay('vocabulary'),  description: 'Private vocabulary' },
@@ -348,21 +332,13 @@ function MainApp() {
 
       {/* Overlay drawers — new (Phase 1 sprint) */}
       <SessionSummaryPanel />
-      <ScheduleEditorPanel />
 
       {/* Overlay drawers — Phase 2 sprint */}
       <GlobalSearchPanel />
       <ScenarioLibrary onSelect={(text) => { setDraft(text); closeOverlay(); }} />
-      <MoodBoardEditor />
-      <ModelArenaPanel />
 
       {/* Overlay drawers — Phase 3 sprint */}
-      <CharacterPortfolioCard />
       <SessionReplayModal />
-      <CharacterRelationshipWeb />
-
-      {/* Overlay drawers — Feature #23 Universe Builder */}
-      <UniversePanel />
 
       {/* Overlay drawers — Feature A6 Lorebook / World Info */}
       <LorePanel />
@@ -524,29 +500,6 @@ function MainApp() {
         <BondPanel onClose={closeOverlay} />
       )}
 
-      {/* Memorial Scene overlay — full-screen cinematic, shown after level-ups */}
-      {activeOverlay === 'memorialscene' && pendingMemorialScene && activeCharacter && (
-        <MemorialScene
-          charId={activeCharacter.id}
-          scene={pendingMemorialScene}
-          onClose={() => {
-            clearPendingMemorialScene();
-            closeOverlay();
-          }}
-        />
-      )}
-
-      {/* Bond Story Viewer overlay */}
-      {activeOverlay === 'bondstory' && activeCharacter && (
-        <BondStoryViewer
-          storyId={useAppStore.getState().bondStoryId ?? 0}
-          charId={activeCharacter.id}
-          charName={activeCharacter.name}
-          charAvatarUrl={activeCharacter.avatar_url}
-          onClose={closeOverlay}
-        />
-      )}
-
       {/* Scenario Picker overlay — per-character scene templates */}
       {activeOverlay === 'scenariopicker' && activeCharacter && sessionId && (
         <ScenarioPicker
@@ -555,25 +508,6 @@ function MainApp() {
           charId={activeCharacter.id}
           sessionId={sessionId}
         />
-      )}
-
-      {/* Overlay drawers — Feature A2 Mini Games */}
-      {activeOverlay === 'games' && activeCharacter && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 300,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
-          }}
-          onClick={closeOverlay}
-        >
-          <div
-            style={{ maxWidth: 480, width: '100%', margin: '0 16px' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <GamePanel characterId={activeCharacter.id} charName={activeCharacter.name} />
-          </div>
-        </div>
       )}
 
       {/* Floating (non-overlay) elements — Phase 2 */}

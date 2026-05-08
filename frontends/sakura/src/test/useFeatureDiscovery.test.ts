@@ -119,7 +119,7 @@ describe('useFeatureDiscovery', () => {
 
   it('does not fire tips when user has an active overlay (other than settings)', () => {
     useWizardStore.setState({ totalMessageCount: 1 });
-    useAppStore.setState({ activeOverlay: 'games' });
+    useAppStore.setState({ activeOverlay: 'diary' });
 
     renderHook(() => useFeatureDiscovery());
     vi.advanceTimersByTime(31_000);

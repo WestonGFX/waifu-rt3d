@@ -205,8 +205,8 @@ function TopEmotionsChart({ emotions }: { emotions: TopEmotion[] }) {
  * Overlay key: 'portfolio'
  */
 export function CharacterPortfolioCard() {
-  const { activeOverlay, closeOverlay, activeCharacter } = useAppStore();
-  const open = activeOverlay === 'portfolio';
+  const { closeOverlay, activeCharacter } = useAppStore();
+  const open = false; // overlay removed
 
   const [data, setData] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(false);

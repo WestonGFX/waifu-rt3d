@@ -861,31 +861,36 @@
                 // Each fidget coordinates 2–4 bones for realistic weight distribution.
                 return [
                     {
-                        name: 'weight_shift', duration: 2.5,
+                        name: 'weight_shift', duration: 3.0,
                         apply(t, p, B) {
                             // Full-body weight shift: hips lead, spine counter-rotates,
-                            // shoulders follow to maintain balance
-                            const phase = Math.sin(t * Math.PI * 0.8);
+                            // shoulders follow to maintain balance.
+                            // Uses a smooth bell envelope so the movement fades in/out
+                            // rather than relying solely on the outer time-scaling envelope.
+                            const env = Math.sin(t / 3.0 * Math.PI);
+                            const phase = Math.sin(t * Math.PI * 0.67) * env;
                             const hips = B('hips'), spine = B('spine'), chest = B('chest');
                             if (hips) {
-                                hips.rotation.y = phase * 0.04;
-                                hips.rotation.z = phase * 0.02;
+                                hips.rotation.y = phase * 0.035;
+                                hips.rotation.z = phase * 0.018;
                             }
-                            if (spine) spine.rotation.z = phase * -0.015;
-                            if (chest) chest.rotation.z = phase * -0.01;
+                            if (spine) spine.rotation.z = phase * -0.012;
+                            if (chest) chest.rotation.z = phase * -0.008;
                         }
                     },
                     {
-                        name: 'shoulder_roll', duration: 2,
+                        name: 'shoulder_roll', duration: 2.5,
                         apply(t, p, B) {
-                            // Asymmetric shoulder roll with neck sympathy
+                            // Asymmetric shoulder roll with neck sympathy.
+                            // Bell envelope prevents the mid-animation snap from the
+                            // time-collapsing outer envelope.
                             const ls = B('leftShoulder'), rs = B('rightShoulder');
                             const neck = B('neck');
-                            const phase = t * Math.PI;
-                            const v = Math.sin(phase) * 0.05;
+                            const env = Math.sin(t / 2.5 * Math.PI);
+                            const v = Math.sin(t * Math.PI * 0.8) * 0.03 * env;
                             if (ls) ls.rotation.z = v;
-                            if (rs) rs.rotation.z = -v * 0.5;   // delayed follower
-                            if (neck) neck.rotation.z = v * 0.2; // neck sympathizes
+                            if (rs) rs.rotation.z = -v * 0.5;
+                            if (neck) neck.rotation.z = v * 0.15;
                         }
                     },
                     {
@@ -899,16 +904,21 @@
                         }
                     },
                     {
-                        name: 'look_around', duration: 2.5,
+                        name: 'look_around', duration: 3.5,
                         apply(t, p, B) {
-                            // Curious look: neck turns first, head follows with slight delay
+                            // Curious look: neck turns first, head follows with slight delay.
+                            // Reduced amplitude (0.08 vs 0.15) and bell envelope for smooth
+                            // entry/exit. Head tilt is now correlated with yaw so the motion
+                            // feels more organic (people tilt their head slightly when they turn).
                             const head = B('head'), neck = B('neck');
-                            const yaw = Math.sin(t * Math.PI * 0.8) * 0.15;
-                            const pitch = Math.sin(t * Math.PI * 0.5) * 0.05;
-                            if (neck) neck.rotation.y = yaw * 0.4;
+                            const env = Math.sin(t / 3.5 * Math.PI);
+                            const yaw = Math.sin(t * Math.PI * 0.57) * 0.08 * env;
+                            const tilt = yaw * 0.25; // slight correlated head tilt
+                            if (neck) neck.rotation.y = yaw * 0.35;
                             if (head) {
                                 head.rotation.y = yaw;
-                                head.rotation.x = pitch;
+                                head.rotation.z = tilt;
+                                head.rotation.x = Math.abs(yaw) * 0.1; // nose dips slightly on turn
                             }
                         }
                     },

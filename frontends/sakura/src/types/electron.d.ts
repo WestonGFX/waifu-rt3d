@@ -12,6 +12,9 @@ export interface ElectronAPI {
   /** Whether we're running inside Electron. */
   isElectron: true;
 
+  /** Whether Electron was launched with the --dev CLI flag. */
+  isDev: boolean;
+
   /** Toggle click-through for the pet window's transparent areas. */
   setClickThrough: (shouldPassThrough: boolean) => void;
 

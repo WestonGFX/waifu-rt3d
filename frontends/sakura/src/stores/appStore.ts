@@ -38,6 +38,7 @@ type Overlay =
   | 'personapicker' | 'scenereplay'
   | 'bondpanel'
   | 'scenariopicker'
+  | 'about'
   | null;
 
 /**

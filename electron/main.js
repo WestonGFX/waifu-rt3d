@@ -627,6 +627,17 @@ function updateTrayMenu() {
     },
     { type: 'separator' },
     {
+      label: 'About Waifu RT3D',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.webContents.executeJavaScript(
+            'window.__openOverlay && window.__openOverlay("about")'
+          ).catch(() => {});
+        }
+      },
+    },
+    {
       label: 'Quit',
       click: () => {
         discord.destroyDiscordRPC();

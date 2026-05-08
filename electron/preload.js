@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** Whether we're running inside Electron (vs. a normal browser). */
   isElectron: true,
 
+  /** Whether Electron was launched with the --dev flag. */
+  isDev: process.argv.includes('--dev'),
+
   /**
    * Tell the main process whether to pass mouse clicks through
    * to the app below. Called continuously from the mousemove

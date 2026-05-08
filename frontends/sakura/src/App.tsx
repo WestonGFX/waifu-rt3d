@@ -34,6 +34,7 @@ import { PersonaPicker } from './components/PersonaPicker';
 import { SceneReplayViewer } from './components/SceneReplayViewer';
 import { BondPanel } from './components/BondPanel';
 import { ScenarioPicker } from './components/ScenarioPicker';
+import { AboutOverlay } from './components/AboutOverlay';
 import { ModelBrowser } from './components/ModelBrowser';
 import { PhotoModeOverlay } from './components/PhotoModeOverlay';
 import { GalleryOverlay } from './components/GalleryOverlay';
@@ -133,6 +134,15 @@ function MainApp() {
     pendingLevelUp, clearPendingLevelUp,
     pendingAchievement, clearPendingAchievement,
   } = useAppStore();
+
+  // Dev-only overlays visible when devMode is on OR Electron is launched with --dev
+  const effectiveDevMode = devMode || !!window.electronAPI?.isDev;
+
+  // Expose openOverlay for Electron tray menu IPC
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).__openOverlay = openOverlay;
+    return () => { delete (window as unknown as Record<string, unknown>).__openOverlay; };
+  }, [openOverlay]);
 
   // Wizard store integration — hydrate from config and manage wizard lifecycle
   const { activeWizard, openWizard, hydrate: hydrateWizard, incrementSessionCount } = useWizardStore();
@@ -272,13 +282,14 @@ function MainApp() {
     { key: k('New character',          'alt+n'),   action: () => setSidebarSection('create'),   description: 'New character' },
     { key: k('Session replay',          'alt+r'),   action: () => openOverlay('replay'),          description: 'Session replay' },
     { key: k('Character stats',        'alt+z'),   action: () => openOverlay('stats'),           description: 'Character stats' },
-    { key: k('Context viewer',         'alt+c'),   action: () => openOverlay('contextviewer'),  description: 'Context viewer' },
+    ...(effectiveDevMode ? [{ key: k('Context viewer', 'alt+c'), action: () => openOverlay('contextviewer'), description: 'Context viewer' }] : []),
     { key: k('Boundaries',            'alt+shift+b'), action: () => openOverlay('boundaries'),  description: 'Boundaries' },
     { key: k('Private vocabulary',    'alt+shift+v'), action: () => openOverlay('vocabulary'),  description: 'Private vocabulary' },
     { key: k('Bookmarks',            'alt+shift+k'), action: () => openOverlay('bookmarks'),   description: 'Scene bookmarks' },
     { key: k('Milestones',           'alt+shift+m'), action: () => openOverlay('milestones'),  description: 'Milestones timeline' },
     { key: k('Desire tree',          'alt+shift+d'), action: () => openOverlay('desiretree'),  description: 'Desire tree' },
     { key: k('Bond panel',            'alt+shift+h'), action: () => openOverlay('bondpanel'),  description: 'Bond panel' },
+    { key: k('About',                 'alt+shift+a'), action: () => openOverlay('about'),       description: 'About' },
     { key: k('Toggle sidebar',         'ctrl+\\'), action: () => toggleSidebar(),               description: 'Toggle sidebar' },
     { key: k('Cinematic mode',         'ctrl+i'),  action: () => toggleCinematicMode(),         description: 'Cinematic mode' },
     { key: k('Show keyboard shortcuts','?'),       action: () => setShowHelp(h => !h),          description: 'Show keyboard shortcuts' },
@@ -346,11 +357,11 @@ function MainApp() {
       {/* Overlay drawers — Section A: Model Browser */}
       <ModelBrowser />
 
-      {/* Photo Mode — full-viewport overlay with sidebar controls */}
-      {activeOverlay === 'photomode' && <PhotoModeOverlay />}
+      {/* Photo Mode — full-viewport overlay with sidebar controls (dev only) */}
+      {effectiveDevMode && activeOverlay === 'photomode' && <PhotoModeOverlay />}
 
-      {/* Gallery — screenshot browser with lightbox */}
-      {activeOverlay === 'gallery' && <GalleryOverlay />}
+      {/* Gallery — screenshot browser with lightbox (dev only) */}
+      {effectiveDevMode && activeOverlay === 'gallery' && <GalleryOverlay />}
 
       {/* Overlay drawers — Feature C3 User Knowledge Graph */}
       {activeOverlay === 'userknowledge' && <UserKnowledgePanel />}
@@ -358,8 +369,8 @@ function MainApp() {
       {/* Overlay drawers — Feature P5 Unified Memory Browser */}
       <MemoryBrowser />
 
-      {/* Overlay drawers — Feature P2 Context Assembly Viewer */}
-      <ContextViewer />
+      {/* Overlay drawers — Feature P2 Context Assembly Viewer (dev only) */}
+      {effectiveDevMode && <ContextViewer />}
 
       {/* Overlay drawers — Feature F40 Boundaries */}
       <BoundaryPanel
@@ -510,16 +521,21 @@ function MainApp() {
         />
       )}
 
+      {/* About overlay */}
+      <AboutOverlay />
+
       {/* Floating (non-overlay) elements — Phase 2 */}
       <SoundscapePlayer />
 
-      {/* Modals */}
-      <CompressionPreviewModal
-        open={activeOverlay === 'compression'}
-        sessionId={sessionId}
-        onClose={closeOverlay}
-        onCompressed={closeOverlay}
-      />
+      {/* Modals (dev only) */}
+      {effectiveDevMode && (
+        <CompressionPreviewModal
+          open={activeOverlay === 'compression'}
+          sessionId={sessionId}
+          onClose={closeOverlay}
+          onCompressed={closeOverlay}
+        />
+      )}
 
       {/* B1: Cinematic immersion overlay — above everything except celebration */}
       {cinematicMode && activeCharacter && <CinematicOverlay />}

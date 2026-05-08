@@ -5697,6 +5697,79 @@ def migrate_to_v79(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v80(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v79 to v80.
+
+    Backfills ``sessions.character_id`` for sessions created before v79 by
+    deriving the character from the ``char_id`` column on the session's first
+    assistant message.  Sessions with no messages, or whose messages have a
+    NULL ``char_id``, are left unchanged — they are empty placeholders and
+    will naturally be ignored by the resume-session query (which filters to
+    ``character_id = ?``).
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.
+
+    Raises:
+        sqlite3.Error: If a SQL statement fails unexpectedly.
+
+    Example:
+        >>> import sqlite3
+        >>> con = sqlite3.connect(":memory:")
+        >>> _ = con.execute("CREATE TABLE schema_version (version INTEGER, applied_ts REAL)")
+        >>> _ = con.execute("INSERT INTO schema_version VALUES (79, 0)")
+        >>> _ = con.execute("CREATE TABLE sessions (id INTEGER PRIMARY KEY, character_id INTEGER)")
+        >>> _ = con.execute("CREATE TABLE messages (id INTEGER, session_id INTEGER, char_id INTEGER, role TEXT)")
+        >>> _ = con.execute("INSERT INTO sessions VALUES (1, NULL)")
+        >>> _ = con.execute("INSERT INTO messages VALUES (1, 1, 7, 'assistant')")
+        >>> migrate_to_v80(con)
+        True
+        >>> con.execute('SELECT character_id FROM sessions WHERE id=1').fetchone()
+        (7,)
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 80:
+        logger.info("Schema already at v%d, skipping v80 migration.", cur_ver)
+        return True
+
+    try:
+        # Backfill character_id on sessions that have messages but no character_id.
+        # Pick the char_id that appears on the most messages in that session
+        # (ties broken by the largest char_id for determinism).
+        con.execute(
+            """UPDATE sessions
+               SET character_id = (
+                   SELECT char_id
+                   FROM messages
+                   WHERE session_id = sessions.id
+                     AND char_id IS NOT NULL
+                   GROUP BY char_id
+                   ORDER BY COUNT(*) DESC, char_id DESC
+                   LIMIT 1
+               )
+               WHERE character_id IS NULL"""
+        )
+        backfilled = con.execute(
+            "SELECT changes()"
+        ).fetchone()[0]
+        logger.info("  - Backfilled character_id on %d sessions from message char_id", backfilled)
+
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (80, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v80 migration complete (backfill sessions.character_id from messages)")
+        return True
+    except Exception as e:
+        logger.error("Schema v80 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -6274,21 +6347,27 @@ def ensure_db():
             if migrate_to_v79(con):
                 version = 79
 
+        if version < 80:
+            logger.info("Upgrading database schema from v79 to v80...")
+            logger.info("  - Backfill sessions.character_id from messages.char_id for pre-v79 sessions")
+            if migrate_to_v80(con):
+                version = 80
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 79:
-            raise RuntimeError(f"Database initialization failed: Expected v79, got v{final_version}")
+        if final_version < 80:
+            raise RuntimeError(f"Database initialization failed: Expected v80, got v{final_version}")
 
-        if final_version > 79:
-            logger.warning(f"Database is newer than application (v{final_version} > v79). Some features might be unused.")
+        if final_version > 80:
+            logger.warning(f"Database is newer than application (v{final_version} > v80). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v79 adds sessions.character_id for session resume)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v80 backfills sessions.character_id)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

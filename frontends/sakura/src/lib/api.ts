@@ -238,7 +238,7 @@ export const api = {
     patch<{ ok: boolean; tags: string[] }>(`/api/sessions/${id}/tags`, { tags }),
   deleteSession: (id: number) => del<{ ok: boolean; deleted_messages: number }>(`/api/sessions/${id}`),
   getMessages: (sessionId: number) =>
-    get<{ messages: Array<{ id: number; role: string; text: string; ts: string; emotion?: string; parent_id?: number | null; is_active?: number; pinned?: number; image_url?: string; image_prompt?: string; edited_at?: number | null; voice_message_url?: string }> }>(
+    get<{ messages: Array<{ id: number; role: string; text: string; ts: string; emotion?: string; parent_id?: number | null; is_active?: number; pinned?: number; image_url?: string; image_prompt?: string; edited_at?: number | null; voice_message_url?: string; reactions?: string[] }> }>(
       `/api/sessions/${sessionId}/messages`
     ),
   /**
@@ -303,6 +303,14 @@ export const api = {
     post<{ ok: boolean; message_id: number; deactivated: number[] }>(
       `/api/messages/${messageId}/activate`, {}
     ),
+
+  /**
+   * Toggle an emoji reaction on a message. Adds the emoji if not present in
+   * user's reactions, removes it if already there.
+   * Returns the updated reactions list for the message.
+   */
+  toggleReaction: (messageId: number, emoji: string) =>
+    post<{ reactions: string[] }>(`/api/messages/${messageId}/reactions/toggle`, { emoji }),
 
   // Chat
   sendChat: (req: { text: string; session_id: number; char_id: number; speak: boolean }) =>

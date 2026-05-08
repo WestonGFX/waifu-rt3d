@@ -238,6 +238,8 @@ export interface ChatMessage {
   voiceMessageUrl?: string;
   /** Original user text stored on a timed-out assistant message so the retry action can re-send it. */
   retryText?: string;
+  /** Emoji reactions added by the user. Array of emoji strings e.g. ["👍", "❤️"]. */
+  reactions?: string[];
 }
 
 export interface Session {

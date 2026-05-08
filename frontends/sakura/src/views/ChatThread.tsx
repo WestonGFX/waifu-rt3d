@@ -52,7 +52,7 @@ type MicState = 'idle' | 'recording' | 'processing';
  */
 export function ChatThread() {
   const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode, config, saveConfig } = useAppStore();
-  const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode, regenerateImage, continueGeneration } = useChatStore();
+  const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode, regenerateImage, continueGeneration, toggleReaction } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
@@ -163,9 +163,13 @@ export function ChatThread() {
       .catch(() => { /* greeting not critical */ });
   }, [activeCharacter?.id]);
 
+  // Track whether the next message update is a fresh session load (force scroll)
+  const forceScrollRef = useRef(false);
+
   // Create/resume chat session when character changes
   useEffect(() => {
     if (!activeCharacter) return;
+    forceScrollRef.current = true;
     api.createSession(activeCharacter.id)
       .then((session) => {
         setContext(session.id, activeCharacter.id);
@@ -174,10 +178,16 @@ export function ChatThread() {
       .catch(console.error);
   }, [activeCharacter, setContext, loadHistory]);
 
-  // Auto-scroll to bottom when new messages arrive or text streams in
+  // Auto-scroll to bottom when new messages arrive or text streams in.
+  // Force-scroll on session load; near-bottom check for subsequent messages.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    if (forceScrollRef.current) {
+      forceScrollRef.current = false;
+      el.scrollTo({ top: el.scrollHeight, behavior: 'instant' });
+      return;
+    }
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
     if (nearBottom) {
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
@@ -861,6 +871,7 @@ export function ChatThread() {
             }
             return visibleMessages.map((msg, idx) => {
             const isLastAssistant = msg.role === 'assistant' && idx === lastAssistantVisIdx;
+            const canReact = !!msg.serverMessageId && msg.status === 'sent';
             return (
               <div
                 key={msg.id}
@@ -883,6 +894,78 @@ export function ChatThread() {
                   onContinue={isLastAssistant ? continueGeneration : undefined}
                   feedbackEnabled={feedbackEnabled}
                 />
+                {/* Reaction picker — appears on hover */}
+                {canReact && (
+                  <div
+                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                    style={{
+                      position: 'absolute',
+                      [msg.role === 'user' ? 'right' : 'left']: 8,
+                      bottom: (msg.reactions?.length ?? 0) > 0 ? 28 : 4,
+                      display: 'flex', gap: 2,
+                      background: 'var(--color-surface)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 20,
+                      padding: '2px 6px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                      zIndex: 10,
+                    }}
+                  >
+                    {['👍', '❤️', '😂', '😮', '😭'].map((emoji) => (
+                      <button
+                        key={emoji}
+                        onClick={() => msg.serverMessageId && toggleReaction(msg.serverMessageId, emoji)}
+                        style={{
+                          background: (msg.reactions ?? []).includes(emoji)
+                            ? 'var(--color-accent-soft, rgba(var(--color-accent-rgb,100,100,200),0.15))'
+                            : 'transparent',
+                          border: 'none',
+                          borderRadius: 12,
+                          cursor: 'pointer',
+                          fontSize: 14,
+                          padding: '1px 3px',
+                          lineHeight: 1,
+                          transition: 'background 0.1s',
+                        }}
+                        title={emoji}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {/* Existing reactions row */}
+                {(msg.reactions?.length ?? 0) > 0 && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+                      gap: 4,
+                      paddingLeft: msg.role === 'user' ? 0 : 48,
+                      paddingRight: msg.role === 'user' ? 12 : 0,
+                      paddingBottom: 4,
+                    }}
+                  >
+                    {(msg.reactions ?? []).map((emoji, i) => (
+                      <button
+                        key={`${emoji}-${i}`}
+                        onClick={() => msg.serverMessageId && toggleReaction(msg.serverMessageId, emoji)}
+                        style={{
+                          background: 'var(--color-surface)',
+                          border: '1px solid var(--color-border)',
+                          borderRadius: 12,
+                          cursor: 'pointer',
+                          fontSize: 13,
+                          padding: '1px 6px',
+                          lineHeight: 1.4,
+                        }}
+                        title={`Remove ${emoji}`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           });

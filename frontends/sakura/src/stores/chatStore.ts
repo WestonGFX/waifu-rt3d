@@ -54,6 +54,8 @@ interface ChatState {
   retryLastTimeout: (text: string) => Promise<void>;
   /** Replace a timeout card with a silent failed marker (user chose not to retry). */
   dismissTimeout: () => void;
+  /** Toggle an emoji reaction on a message (optimistic update + API sync). */
+  toggleReaction: (messageId: number, emoji: string) => Promise<void>;
 }
 
 const genId = () => crypto.randomUUID();
@@ -206,6 +208,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       imagePrompt: m.image_prompt ?? undefined,
       editedAt: m.edited_at ?? undefined,
       voiceMessageUrl: m.voice_message_url ?? undefined,
+      reactions: Array.isArray(m.reactions) ? m.reactions : undefined,
     }));
     set({ messages });
   },
@@ -525,6 +528,41 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           : m
       ),
     }));
+  },
+
+  toggleReaction: async (messageId: number, emoji: string) => {
+    // Optimistic update
+    set((s) => ({
+      messages: s.messages.map((m) => {
+        if (m.serverMessageId !== messageId) return m;
+        const current = m.reactions ?? [];
+        const updated = current.includes(emoji)
+          ? current.filter((e) => e !== emoji)
+          : [...current, emoji];
+        return { ...m, reactions: updated };
+      }),
+    }));
+    try {
+      const result = await api.toggleReaction(messageId, emoji);
+      // Sync with server truth
+      set((s) => ({
+        messages: s.messages.map((m) =>
+          m.serverMessageId === messageId ? { ...m, reactions: result.reactions } : m
+        ),
+      }));
+    } catch {
+      // Revert optimistic update on error
+      set((s) => ({
+        messages: s.messages.map((m) => {
+          if (m.serverMessageId !== messageId) return m;
+          const current = m.reactions ?? [];
+          const reverted = current.includes(emoji)
+            ? current.filter((e) => e !== emoji)
+            : [...current, emoji];
+          return { ...m, reactions: reverted };
+        }),
+      }));
+    }
   },
 
   editMessage: async (messageId, newText) => {

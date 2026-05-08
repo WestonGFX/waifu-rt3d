@@ -6914,6 +6914,26 @@ def get_session_messages(session_id: int, include_branches: bool = False):
             if len(r) > 16 and r[16] is not None:
                 msg["voice_message_url"] = r[16]
             messages.append(msg)
+
+        # Batch-load reactions for all messages in one query (graceful if table absent)
+        if messages:
+            try:
+                msg_ids = [m["id"] for m in messages]
+                placeholders = ",".join("?" * len(msg_ids))
+                reaction_rows = conn.execute(
+                    f"SELECT message_id, emoji FROM message_reactions "
+                    f"WHERE message_id IN ({placeholders}) ORDER BY ts ASC, id ASC",
+                    msg_ids,
+                ).fetchall()
+                reactions_by_id: dict[int, list[str]] = {}
+                for mid, emoji in reaction_rows:
+                    reactions_by_id.setdefault(mid, []).append(emoji)
+                for msg in messages:
+                    if msg["id"] in reactions_by_id:
+                        msg["reactions"] = reactions_by_id[msg["id"]]
+            except Exception:
+                pass  # message_reactions table absent in older test DBs
+
         return {"messages": messages}
 
 
@@ -11309,6 +11329,71 @@ def delete_message_reaction(message_id: int, reaction_id: int):
 
     logger.info("[Reactions] Deleted reaction %s from message %s", reaction_id, message_id)
     return {"ok": True}
+
+
+@app.post("/api/messages/{message_id}/reactions/toggle")
+async def toggle_message_reaction(message_id: int, req: Request):
+    """Toggle an emoji reaction on a message (add if absent, remove if present).
+
+    Provides the simple one-tap reaction UX: tapping an emoji you already
+    reacted with removes it; tapping a new emoji adds it.  Returns the full
+    updated list of distinct emojis the user has reacted with on this message.
+
+    Args:
+        message_id: ID of the message to react to.
+        req: JSON body ``{"emoji": str}`` — the reaction emoji character(s).
+
+    Returns:
+        {"reactions": [str, ...]} — updated emoji list for this message.
+
+    Raises:
+        HTTPException 400: If body is malformed or ``emoji`` is missing/empty.
+        HTTPException 404: If the parent message does not exist.
+
+    Example:
+        >>> POST /api/messages/42/reactions/toggle
+        >>> Body: {"emoji": "👍"}
+        {"reactions": ["👍"]}
+    """
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+
+    emoji = body.get("emoji", "")
+    if not isinstance(emoji, str) or not emoji.strip():
+        raise HTTPException(400, "'emoji' must be a non-empty string")
+    emoji = emoji.strip()
+
+    with db_ctx() as conn:
+        msg_row = conn.execute(
+            "SELECT id FROM messages WHERE id = ?", (message_id,)
+        ).fetchone()
+        if not msg_row:
+            raise HTTPException(404, "Message not found")
+
+        existing = conn.execute(
+            "SELECT id FROM message_reactions WHERE message_id = ? AND emoji = ?",
+            (message_id, emoji),
+        ).fetchone()
+
+        if existing:
+            conn.execute("DELETE FROM message_reactions WHERE id = ?", (existing[0],))
+        else:
+            conn.execute(
+                "INSERT INTO message_reactions (message_id, emoji) VALUES (?, ?)",
+                (message_id, emoji),
+            )
+        conn.commit()
+
+        rows = conn.execute(
+            "SELECT emoji FROM message_reactions WHERE message_id = ? ORDER BY ts ASC, id ASC",
+            (message_id,),
+        ).fetchall()
+
+    reactions = [r[0] for r in rows]
+    logger.info("[Reactions] Toggled '%s' on message %s → %s", emoji, message_id, reactions)
+    return {"reactions": reactions}
 
 
 # ── Feature #27 — Character Portfolio Card (backend stub) ─────────────────────

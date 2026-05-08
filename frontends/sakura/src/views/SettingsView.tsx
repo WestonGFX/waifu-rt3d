@@ -12,6 +12,7 @@ import { useTheme } from '../hooks/useTheme';
 import type { ThemeMode } from '../hooks/useTheme';
 import { SettingField } from '../components/SettingField';
 import { VoicePicker } from '../components/VoicePicker';
+import { VoiceGallery } from '../components/VoiceGallery';
 import { VoiceSampleUploader } from '../components/VoiceSampleUploader';
 import { TTSModelsPanel } from '../components/TTSModelsPanel';
 import { ModelManagerPanel } from '../components/ModelManagerPanel';
@@ -3444,6 +3445,7 @@ function VoiceTab({ save, cfg }: TabProps) {
   const { activeCharacter } = useAppStore();
   const [wandRunning, setWandRunning] = useState(false);
   const [wandResult, setWandResult] = useState<string | null>(null);
+  const [showGallery, setShowGallery] = useState(false);
 
   const runVoiceWand = async () => {
     if (!activeCharacter?.id || wandRunning) return;
@@ -3530,15 +3532,48 @@ function VoiceTab({ save, cfg }: TabProps) {
 
           <SettingField label="Voice" description="Select a voice for the active TTS engine."
             tooltip="Browses available voices grouped by engine. Install more voices in the TTS Models tab.">
-            <VoicePicker
-              value={String(cfg('tts.voice_id', cfg('voice_id', '')))}
-              provider={String(cfg('tts.provider', 'edge-tts'))}
-              onChange={(voiceId, provider) => {
-                save('tts.voice_id', voiceId);
-                save('tts.provider', provider);
-              }}
-            />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <VoicePicker
+                value={String(cfg('tts.voice_id', cfg('voice_id', '')))}
+                provider={String(cfg('tts.provider', 'edge-tts'))}
+                onChange={(voiceId, provider) => {
+                  save('tts.voice_id', voiceId);
+                  save('tts.provider', provider);
+                }}
+              />
+              <button
+                onClick={() => setShowGallery(g => !g)}
+                title={showGallery ? 'Hide gallery' : 'Browse voice gallery'}
+                style={{
+                  flexShrink: 0,
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  border: `1px solid ${showGallery ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                  backgroundColor: showGallery ? 'var(--color-accent)' : 'var(--color-surface)',
+                  color: showGallery ? '#fff' : 'var(--color-text-secondary)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {showGallery ? 'Hide' : 'Browse'}
+              </button>
+            </div>
           </SettingField>
+
+          {showGallery && (
+            <div style={{ padding: '8px 0 4px' }}>
+              <VoiceGallery
+                value={String(cfg('tts.voice_id', cfg('voice_id', '')))}
+                provider={String(cfg('tts.provider', 'edge-tts'))}
+                onSelect={(voiceId, provider) => {
+                  save('tts.voice_id', voiceId);
+                  save('tts.provider', provider);
+                }}
+              />
+            </div>
+          )}
 
           <SettingField label="Auto-Speak" description="Automatically play TTS audio for new messages.">
             <input

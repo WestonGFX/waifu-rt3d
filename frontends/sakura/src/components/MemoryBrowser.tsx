@@ -706,6 +706,7 @@ function MemoriesTab({ charId }: { charId: number }) {
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [promotingId, setPromotingId] = useState<string | null>(null);
+  const [hoveredMemId, setHoveredMemId] = useState<string | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -885,7 +886,12 @@ function MemoriesTab({ charId }: { charId: number }) {
       )}
 
       {!loading && memories.map(mem => (
-        <div key={mem.id} className="group" style={{ ...cardStyle, padding: '8px 10px' }}>
+        <div
+          key={mem.id}
+          onMouseEnter={() => setHoveredMemId(mem.id)}
+          onMouseLeave={() => setHoveredMemId(null)}
+          style={{ ...cardStyle, padding: '8px 10px' }}
+        >
           {/* Meta row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
             <span
@@ -927,8 +933,11 @@ function MemoriesTab({ charId }: { charId: number }) {
               <button
                 onClick={() => handlePromote(mem.id)}
                 disabled={promotingId === mem.id}
-                className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f59e0b', padding: 2 }}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer', color: '#f59e0b', padding: 2,
+                  opacity: hoveredMemId === mem.id ? 1 : 0,
+                  transition: 'opacity 0.12s ease',
+                }}
                 title="Promote to Permanent"
               >
                 {promotingId === mem.id ? <span style={{ fontSize: '0.58rem' }}>...</span> : <Star size={11} />}
@@ -938,8 +947,11 @@ function MemoriesTab({ charId }: { charId: number }) {
             <button
               onClick={() => handleDelete(mem.id)}
               disabled={deletingId === mem.id}
-              className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-danger)', padding: 2 }}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-danger)', padding: 2,
+                opacity: hoveredMemId === mem.id ? 1 : 0,
+                transition: 'opacity 0.12s ease',
+              }}
               title="Delete memory"
             >
               {deletingId === mem.id ? <span style={{ fontSize: '0.58rem' }}>...</span> : <Trash2 size={11} />}

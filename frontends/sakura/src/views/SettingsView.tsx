@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Brain, Volume2, Palette, Shield, Image, Settings, Package, User, Monitor,
   Eye, Wrench, Lightbulb, Cpu, RefreshCw, CheckCircle, HelpCircle, ExternalLink, Wand2,
-  ChevronDown, ChevronRight, Upload, Lock, Heart
+  ChevronDown, ChevronRight, Upload, Lock, Heart, Zap
 } from 'lucide-react';
 import type { ModelCapabilities } from '../lib/api';
 import type { LayoutMode, ReplyLengthMode } from '../stores/appStore';
@@ -22,6 +22,7 @@ import { LinkStatusPanel } from '../components/LinkStatusPanel';
 import { useToastStore } from '../components/ToastQueue';
 import { FormatRulesEditor } from '../components/FormatRulesEditor';
 import { NsfwSettingsTab } from '../components/NsfwSettingsTab';
+import { JigglePhysicsPanel } from '../components/JigglePhysicsPanel';
 
 /* ─── Helper: deep-get nested config key like "llm.model" ──────────── */
 function cfgGet(config: Record<string, unknown>, key: string, fallback: unknown = ''): unknown {
@@ -63,7 +64,7 @@ const cardStyle: React.CSSProperties = {
 };
 
 /* ─── Tab definitions ──────────────────────────────────────────────── */
-type SettingsTab = 'general' | 'character' | 'brain' | 'voice' | 'safety' | 'intimacy' | 'aiart' | 'system' | 'tts_models' | 'lm_models';
+type SettingsTab = 'general' | 'character' | 'brain' | 'voice' | 'safety' | 'intimacy' | 'aiart' | 'system' | 'tts_models' | 'lm_models' | 'physics';
 
 interface TabDef {
   id: SettingsTab;
@@ -80,6 +81,7 @@ const TABS: TabDef[] = [
   { id: 'intimacy', label: 'Intimacy', icon: <Heart size={15} /> },
   { id: 'aiart', label: 'AI Art', icon: <Image size={15} /> },
   { id: 'system', label: 'System', icon: <Settings size={15} /> },
+  { id: 'physics', label: 'Physics', icon: <Zap size={15} /> },
   { id: 'tts_models', label: 'TTS Models', icon: <Package size={15} /> },
   { id: 'lm_models', label: 'LM Models', icon: <Monitor size={15} /> },
 ];
@@ -263,6 +265,9 @@ export function SettingsView() {
         )}
         {activeTab === 'system' && (
           <SystemTab config={config} save={save} cfg={cfg} />
+        )}
+        {activeTab === 'physics' && (
+          <JigglePhysicsPanel config={config} save={save} cfg={cfg} />
         )}
         {activeTab === 'tts_models' && (
           <section>

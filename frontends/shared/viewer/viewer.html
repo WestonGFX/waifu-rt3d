@@ -115,6 +115,7 @@
         let characterAudio = null;  // Phase 12-P5: ambient audio engine
         let timeOfDayLighting = null; // Phase 11A: time-of-day lighting
         let poseController = null;    // Phase 11A: procedural pose system
+        let jiggleManager = null;
         let blinkController = null;
         let saccadeController = null;
         let microTremorController = null;
@@ -6693,6 +6694,23 @@
 
                             console.log('[Viewer] VRM loaded successfully');
 
+                            // Jiggle physics: detect and auto-apply on model load
+                            jiggleManager = new JigglePhysicsManager();
+                            const jiggleDetected = jiggleManager.detectBones(vrm);
+                            if (jiggleManager.enabled && jiggleDetected.breast.length > 0) {
+                                jiggleManager.saveOriginalParams(vrm);
+                                jiggleManager.applyParams(vrm);
+                            }
+                            window.parent.postMessage({
+                                type: 'jiggleDetection',
+                                detected: jiggleDetected,
+                                jointCount: {
+                                    breast: jiggleManager.bodyPartJoints.breast.length,
+                                    butt:   jiggleManager.bodyPartJoints.butt.length,
+                                    thigh:  jiggleManager.bodyPartJoints.thigh.length,
+                                },
+                            }, '*');
+
                             // Collect geometry statistics
                             let triCount = 0, vertCount = 0, meshCount = 0;
                             vrm.scene.traverse((child) => {
@@ -6906,6 +6924,189 @@
 
             // Backward-compat alias
             const loadVRM = loadModel;
+
+            // ── Jiggle Physics ─────────────────────────────────
+
+            /** Regex patterns for auto-detecting jiggle-capable spring bone joints by name. */
+            const JIGGLE_BONE_PATTERNS = {
+                breast: [
+                    /^Breast[_.]?[LR]$/i, /^Breast[_.]?(Left|Right)$/i,
+                    /^J_Sec_[LR]_Bust\d?$/i, /^J_Sec_(Left|Right)_Bust\d?$/i,
+                    /^breast[_.]?[lr]$/i, /^breast[_.]?(left|right)$/i,
+                    /^[左右]胸$/, /bust[_.]?[lr]\d?$/i, /boob[_.]?[lr]\d?$/i,
+                    /chest[_.]?jiggle[_.]?[lr]$/i, /^Breast_[LR]_injected$/i,
+                ],
+                butt: [
+                    /^Butt[_.]?[LR]$/i, /^Butt[_.]?(Left|Right)$/i,
+                    /^J_Sec_[LR]_Butt\d?$/i, /^hip[_.]?jiggle[_.]?[lr]$/i,
+                    /^ass[_.]?[lr]$/i, /^glute[_.]?[lr]$/i,
+                ],
+                thigh: [
+                    /^ThighJiggle[_.]?[LR]$/i, /^ThighJiggle[_.]?(Left|Right)$/i,
+                    /^J_Sec_[LR]_Thigh\d?$/i, /^leg[_.]?jiggle[_.]?[lr]$/i,
+                    /^upper[_.]?leg[_.]?jiggle[_.]?[lr]$/i,
+                ],
+            };
+
+            /** Base spring bone parameters for each jiggle intensity preset. */
+            const JIGGLE_PRESETS = {
+                subtle:  { stiffness: 1.2, drag: 0.6, gravityPower: 0.3, hitRadius: 0.03 },
+                natural: { stiffness: 0.8, drag: 0.4, gravityPower: 0.5, hitRadius: 0.04 },
+                anime:   { stiffness: 0.5, drag: 0.3, gravityPower: 0.6, hitRadius: 0.05 },
+                bouncy:  { stiffness: 0.3, drag: 0.2, gravityPower: 0.7, hitRadius: 0.06 },
+                extreme: { stiffness: 0.15, drag: 0.1, gravityPower: 0.8, hitRadius: 0.07 },
+            };
+
+            /**
+             * Calculate final spring bone parameters for a jiggle joint.
+             *
+             * @param {string} preset - Preset tier ('subtle'|'natural'|'anime'|'bouncy'|'extreme')
+             * @param {number} intensity - Master intensity 0-1
+             * @param {number} emotionMul - Emotion state multiplier (1.0 = neutral)
+             * @param {number} movementMul - Animation state multiplier
+             * @returns {{ stiffness: number, dragForce: number, gravityPower: number }}
+             */
+            function calculateJiggleParams(preset, intensity, emotionMul, movementMul) {
+                const base = JIGGLE_PRESETS[preset] || JIGGLE_PRESETS.natural;
+                return {
+                    stiffness:    base.stiffness * (2.0 - intensity) * movementMul,
+                    dragForce:    base.drag * (1.0 - intensity * 0.5),
+                    gravityPower: base.gravityPower * intensity * emotionMul,
+                };
+            }
+
+            /**
+             * Manages jiggle physics for breast, butt, and thigh spring bone joints.
+             * Wraps VRM SpringBoneManager with presets, intensity scaling,
+             * and per-body-part controls. Does not replace the spring bone system —
+             * it adds a higher-level abstraction on top.
+             */
+            class JigglePhysicsManager {
+                constructor() {
+                    this.enabled = true;
+                    this.preset = 'subtle';
+                    this.intensity = 0.5;
+                    this.bodyPartJoints = { breast: [], butt: [], thigh: [] };
+                    this.bodyPartIntensity = { breast: 0.65, butt: 0.40, thigh: 0.20 };
+                    /** @type {Map<number, object>} Saved original params before jiggle override. */
+                    this._originalParams = new Map();
+                    this.emotionMultiplier = 1.0;
+                    this.movementMultiplier = 1.0;
+                }
+
+                /**
+                 * Scan VRM spring bone joints for breast/butt/thigh bones using
+                 * name patterns. Stores joint indices in bodyPartJoints.
+                 *
+                 * @param {object} vrm - Loaded VRM instance
+                 * @returns {{ breast: string[], butt: string[], thigh: string[] }}
+                 */
+                detectBones(vrm) {
+                    const sbm = vrm?.springBoneManager;
+                    if (!sbm?.joints) return { breast: [], butt: [], thigh: [] };
+
+                    const result = { breast: [], butt: [], thigh: [] };
+                    this.bodyPartJoints = { breast: [], butt: [], thigh: [] };
+
+                    sbm.joints.forEach((joint, index) => {
+                        const name = joint.bone?.name || '';
+                        if (!name) return;
+                        for (const [part, patterns] of Object.entries(JIGGLE_BONE_PATTERNS)) {
+                            for (const pattern of patterns) {
+                                if (pattern.test(name)) {
+                                    this.bodyPartJoints[part].push(index);
+                                    result[part].push(name);
+                                    return;
+                                }
+                            }
+                        }
+                    });
+
+                    // Fallback: hierarchy-based breast detection when name patterns fail
+                    if (result.breast.length === 0) {
+                        const chest = vrm.humanoid?.getNormalizedBoneNode('upperChest')
+                                    || vrm.humanoid?.getNormalizedBoneNode('chest');
+                        if (chest) {
+                            sbm.joints.forEach((joint, index) => {
+                                const bone = joint.bone;
+                                if (!bone?.parent) return;
+                                if (bone.parent === chest || bone.parent.parent === chest) {
+                                    const pos = bone.position;
+                                    if (Math.abs(pos.x) > 0.03 && Math.abs(pos.z) > 0.01) {
+                                        this.bodyPartJoints.breast.push(index);
+                                        result.breast.push(bone.name);
+                                    }
+                                }
+                            });
+                        }
+                    }
+
+                    console.log('[JigglePhysics] Detected bones:', result);
+                    return result;
+                }
+
+                /**
+                 * Store original spring bone params before applying jiggle overrides.
+                 * @param {object} vrm - Loaded VRM instance
+                 */
+                saveOriginalParams(vrm) {
+                    const joints = vrm?.springBoneManager?.joints;
+                    if (!joints) return;
+                    this._originalParams.clear();
+                    joints.forEach((joint, index) => {
+                        this._originalParams.set(index, {
+                            stiffness:    joint.settings.stiffness,
+                            dragForce:    joint.settings.dragForce,
+                            gravityPower: joint.settings.gravityPower,
+                        });
+                    });
+                }
+
+                /**
+                 * Restore original spring bone params, undoing jiggle overrides.
+                 * @param {object} vrm - Loaded VRM instance
+                 */
+                restoreOriginalParams(vrm) {
+                    const joints = vrm?.springBoneManager?.joints;
+                    if (!joints) return;
+                    for (const [index, orig] of this._originalParams) {
+                        if (joints[index]) {
+                            joints[index].settings.stiffness    = orig.stiffness;
+                            joints[index].settings.dragForce    = orig.dragForce;
+                            joints[index].settings.gravityPower = orig.gravityPower;
+                        }
+                    }
+                }
+
+                /**
+                 * Apply the current preset + intensity to all detected jiggle joints.
+                 * Per-body-part intensity scales the master intensity for each region.
+                 *
+                 * @param {object} vrm - Loaded VRM instance
+                 */
+                applyParams(vrm) {
+                    const joints = vrm?.springBoneManager?.joints;
+                    if (!joints) return;
+
+                    for (const [part, indices] of Object.entries(this.bodyPartJoints)) {
+                        const partScale = this.bodyPartIntensity[part] ?? 1.0;
+                        const effectiveIntensity = this.intensity * partScale;
+                        const params = calculateJiggleParams(
+                            this.preset, effectiveIntensity,
+                            this.emotionMultiplier, this.movementMultiplier,
+                        );
+                        indices.forEach((idx, chainPos) => {
+                            const joint = joints[idx];
+                            if (!joint) return;
+                            // Decay stiffness/drag along multi-bone chain
+                            const decay = Math.pow(0.6, chainPos);
+                            joint.settings.stiffness    = params.stiffness * decay;
+                            joint.settings.dragForce    = params.dragForce * (1.0 - chainPos * 0.2);
+                            joint.settings.gravityPower = params.gravityPower * (1.0 + chainPos * 0.15);
+                        });
+                    }
+                }
+            }
 
             // ── PostMessage API ─────────────────────────────────
 
@@ -7746,6 +7947,71 @@
                         console.log('[Viewer] Collider debug OFF');
                     }
                     window.parent.postMessage({ type: 'colliderDebugState', active: _colliderDebugActive }, '*');
+                }
+                // ── Jiggle Physics API ──────────────────────────────
+                else if (type === 'setJiggleEnabled') {
+                    if (!jiggleManager) return;
+                    jiggleManager.enabled = !!payload?.enabled;
+                    if (currentVrm) {
+                        if (jiggleManager.enabled) {
+                            jiggleManager.saveOriginalParams(currentVrm);
+                            jiggleManager.applyParams(currentVrm);
+                        } else {
+                            jiggleManager.restoreOriginalParams(currentVrm);
+                        }
+                    }
+                }
+                else if (type === 'setJiggleIntensity') {
+                    // payload: { intensity: 0-1, bodyPart?: 'breast'|'butt'|'thigh' }
+                    if (!jiggleManager) return;
+                    if (payload?.bodyPart && payload.bodyPart in jiggleManager.bodyPartIntensity) {
+                        jiggleManager.bodyPartIntensity[payload.bodyPart] = payload.intensity ?? 0.5;
+                    } else {
+                        jiggleManager.intensity = payload?.intensity ?? 0.5;
+                    }
+                    if (jiggleManager.enabled && currentVrm) jiggleManager.applyParams(currentVrm);
+                }
+                else if (type === 'setJigglePreset') {
+                    // payload: { preset: 'subtle'|'natural'|'anime'|'bouncy'|'extreme' }
+                    if (!jiggleManager) return;
+                    jiggleManager.preset = payload?.preset || 'subtle';
+                    if (jiggleManager.enabled && currentVrm) jiggleManager.applyParams(currentVrm);
+                }
+                else if (type === 'setJiggleProfile') {
+                    // payload: { breast?: {...}, butt?: {...}, thigh?: {...} } direct param overrides
+                    if (!jiggleManager) return;
+                    if (payload?.breast) jiggleManager._customBreast = payload.breast;
+                    if (payload?.butt)   jiggleManager._customButt   = payload.butt;
+                    if (payload?.thigh)  jiggleManager._customThigh  = payload.thigh;
+                    if (jiggleManager.enabled && currentVrm) jiggleManager.applyParams(currentVrm);
+                }
+                else if (type === 'getJiggleInfo') {
+                    if (!jiggleManager) {
+                        window.parent.postMessage({ type: 'jiggleInfo', enabled: false, detected: { breast: 0, butt: 0, thigh: 0 } }, '*');
+                        return;
+                    }
+                    window.parent.postMessage({
+                        type: 'jiggleInfo',
+                        enabled: jiggleManager.enabled,
+                        preset:  jiggleManager.preset,
+                        intensity: jiggleManager.intensity,
+                        bodyPartIntensity: { ...jiggleManager.bodyPartIntensity },
+                        detected: {
+                            breast: jiggleManager.bodyPartJoints.breast.length,
+                            butt:   jiggleManager.bodyPartJoints.butt.length,
+                            thigh:  jiggleManager.bodyPartJoints.thigh.length,
+                        },
+                    }, '*');
+                }
+                else if (type === 'setJiggleEmotionMultiplier') {
+                    if (!jiggleManager) return;
+                    jiggleManager.emotionMultiplier = payload?.multiplier ?? 1.0;
+                    if (jiggleManager.enabled && currentVrm) jiggleManager.applyParams(currentVrm);
+                }
+                else if (type === 'setJiggleMovementMultiplier') {
+                    if (!jiggleManager) return;
+                    jiggleManager.movementMultiplier = payload?.multiplier ?? 1.0;
+                    if (jiggleManager.enabled && currentVrm) jiggleManager.applyParams(currentVrm);
                 }
                 else if (type === 'showFpsOverlay') {
                     // Toggle the in-viewport FPS counter overlay.

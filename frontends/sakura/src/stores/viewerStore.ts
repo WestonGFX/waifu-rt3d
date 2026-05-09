@@ -78,7 +78,12 @@ export interface ViewerCommand {
     // Phase 17A: Animation sequencer
     | 'triggerSequence'
     | 'cancelSequence'
-    | 'getSequencerState';
+    | 'getSequencerState'
+    // Jiggle physics
+    | 'setJiggleEnabled'
+    | 'setJiggleIntensity'
+    | 'setJigglePreset'
+    | 'getJiggleInfo';
   payload: Record<string, unknown>;
   _seq: number;
 }
@@ -275,6 +280,36 @@ interface ViewerState {
    * with kind 'sequencerState'.
    */
   dispatchGetSequencerState: () => void;
+
+  // ── Jiggle Physics ──────────────────────────────────────────────────────────
+
+  /**
+   * Enable or disable jiggle physics in the 3D viewer.
+   *
+   * @param enabled - Whether jiggle physics should be active.
+   */
+  dispatchSetJiggleEnabled: (enabled: boolean) => void;
+
+  /**
+   * Set jiggle intensity, optionally scoped to one body part.
+   *
+   * @param intensity - New intensity value (0.0–1.0).
+   * @param bodyPart  - Optional body part to target; omit for global intensity.
+   */
+  dispatchSetJiggleIntensity: (intensity: number, bodyPart?: 'breast' | 'butt' | 'thigh') => void;
+
+  /**
+   * Apply a named jiggle preset to the viewer.
+   *
+   * @param preset - Preset name (e.g. 'subtle', 'bouncy').
+   */
+  dispatchSetJigglePreset: (preset: string) => void;
+
+  /**
+   * Request current jiggle state from the viewer. The viewer replies via
+   * postMessage with type 'jiggleInfo'.
+   */
+  dispatchGetJiggleInfo: () => void;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -674,6 +709,58 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     if (state.mode === 'vrm') {
       postToIframe(state.iframeRef, { type: 'toggleColliderDebug' });
     }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  // ── Jiggle Physics API ──────────────────────────────────────────────────────
+
+  /**
+   * Enable or disable jiggle physics in the 3D viewer.
+   *
+   * @param enabled - Whether jiggle physics should be active.
+   */
+  dispatchSetJiggleEnabled: (enabled: boolean) => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'setJiggleEnabled', payload: { enabled }, _seq: seq };
+    if (state.mode === 'vrm') postToIframe(state.iframeRef, { type: 'setJiggleEnabled', payload: { enabled } });
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  /**
+   * Set jiggle intensity, optionally scoped to one body part.
+   *
+   * @param intensity - 0.0 (off) to 1.0 (maximum).
+   * @param bodyPart - 'breast' | 'butt' | 'thigh', or omit for master intensity.
+   */
+  dispatchSetJiggleIntensity: (intensity: number, bodyPart?: 'breast' | 'butt' | 'thigh') => {
+    const state = get();
+    const seq = state._seq + 1;
+    const payload = bodyPart ? { intensity, bodyPart } : { intensity };
+    const cmd: ViewerCommand = { kind: 'setJiggleIntensity', payload, _seq: seq };
+    if (state.mode === 'vrm') postToIframe(state.iframeRef, { type: 'setJiggleIntensity', payload });
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  /**
+   * Apply a named jiggle preset.
+   *
+   * @param preset - 'subtle' | 'natural' | 'anime' | 'bouncy' | 'extreme'
+   */
+  dispatchSetJigglePreset: (preset: string) => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'setJigglePreset', payload: { preset }, _seq: seq };
+    if (state.mode === 'vrm') postToIframe(state.iframeRef, { type: 'setJigglePreset', payload: { preset } });
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  /** Request current jiggle info from the viewer (response arrives as 'jiggleInfo' postMessage). */
+  dispatchGetJiggleInfo: () => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'getJiggleInfo', payload: {}, _seq: seq };
+    if (state.mode === 'vrm') postToIframe(state.iframeRef, { type: 'getJiggleInfo' });
     set({ lastCommand: cmd, _seq: seq });
   },
 

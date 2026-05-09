@@ -395,9 +395,15 @@ class VoiceDuplexSession:
 
             # ASR adapters expect WAV bytes
             wav_bytes = pcm_to_wav(pcm_bytes)
+            _asr_t0 = time.perf_counter()
             result = await asyncio.get_running_loop().run_in_executor(
                 None, adapter.transcribe, wav_bytes
             )
+            try:
+                from backend.voice.latency import record_latency as _rec
+                _rec("asr", int((time.perf_counter() - _asr_t0) * 1000))
+            except Exception:
+                pass
 
             text = result.get("text", "").strip() if isinstance(result, dict) else str(result).strip()
             logger.info(f"[Voice] ASR: \"{text[:80]}\"")

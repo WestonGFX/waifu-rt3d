@@ -5081,8 +5081,16 @@ async def _tts_chunk_async(tts_client, text: str, tts_cfg: dict, index: int) -> 
     Returns:
         Dict ``{chunk_index, filename, ...}`` on success, or ``None`` on failure.
     """
+    import time as _time
     try:
+        _t0 = _time.perf_counter()
         res = await run_in_threadpool(tts_client.speak_cached, text, tts_cfg)
+        _ms = int((_time.perf_counter() - _t0) * 1000)
+        try:
+            from backend.voice.latency import record_latency as _rec
+            _rec("tts_first_chunk" if index == 0 else "tts_total", _ms)
+        except Exception:
+            pass
         if res.get("ok"):
             return {**res, "chunk_index": index}
     except Exception as e:
@@ -14761,6 +14769,25 @@ async def voice_duplex_ws(websocket: WebSocket) -> None:
         logger.error(f"[Voice] WebSocket error: {e}")
     finally:
         logger.info(f"[Voice] WebSocket disconnected (session={session_id})")
+
+
+@app.get("/api/voice/latency-stats")
+async def get_voice_latency_stats() -> JSONResponse:
+    """Return rolling p50 and p95 latency stats for recent voice sessions.
+
+    Reads from the in-memory ring buffer populated by TTS chunk synthesis
+    (server.py) and ASR transcription (duplex.py). Stats reset on server restart.
+
+    Returns:
+        dict: Keyed by phase name, each containing ``{"p50": int, "p95": int,
+              "n": int}`` values in milliseconds. Empty dict if no samples yet.
+
+    Example:
+        >>> GET /api/voice/latency-stats
+        {"asr": {"p50": 380, "p95": 920, "n": 14}, "tts_total": {"p50": 540, "p95": 1200, "n": 14}}
+    """
+    from backend.voice.latency import get_stats
+    return JSONResponse(get_stats())
 
 
 # ---------------------------------------------------------------------------

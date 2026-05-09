@@ -63,6 +63,9 @@ export function VoiceConversationPanel({
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const idCounter = useRef(0);
 
+  type PhaseStats = { p50: number; p95: number; n: number };
+  const [latencyStats, setLatencyStats] = useState<Record<string, PhaseStats>>({});
+
   // Read voice duplex config from app settings
   const appConfig = useAppStore((s) => s.config);
   const voiceConfig = useMemo<VoiceDuplexConfig>(() => ({
@@ -117,6 +120,20 @@ export function VoiceConversationPanel({
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcript, aiStreamText]);
+
+  // Poll latency telemetry while voice session is active
+  useEffect(() => {
+    if (!isActive) return;
+    const fetchStats = () => {
+      fetch('/api/voice/latency-stats')
+        .then(r => r.json())
+        .then(setLatencyStats)
+        .catch(() => {});
+    };
+    fetchStats();
+    const id = setInterval(fetchStats, 10_000);
+    return () => clearInterval(id);
+  }, [isActive]);
 
   // Auto-connect on mount, disconnect on unmount (fire-once intentional)
   useEffect(() => {
@@ -180,6 +197,34 @@ export function VoiceConversationPanel({
                   ? 'Tap the mic to start'
                   : ''}
             </div>
+            {/* Latency telemetry — only shown when samples exist */}
+            {Object.keys(latencyStats).length > 0 && (
+              <div
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: '0.65rem',
+                  color: 'var(--color-text-muted)',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '4px 12px',
+                  justifyContent: 'center',
+                  marginTop: 8,
+                }}
+              >
+                {latencyStats.asr && (
+                  <span title="ASR transcription latency">ASR p50: {latencyStats.asr.p50}ms</span>
+                )}
+                {latencyStats.llm_first_token && (
+                  <span title="LLM time to first token">LLM p50: {latencyStats.llm_first_token.p50}ms</span>
+                )}
+                {latencyStats.tts_first_chunk && (
+                  <span title="TTS time to first audio chunk">TTS p50: {latencyStats.tts_first_chunk.p50}ms</span>
+                )}
+                {latencyStats.asr && (
+                  <span style={{ opacity: 0.6 }}>({latencyStats.asr.n} samples)</span>
+                )}
+              </div>
+            )}
           </div>
         )}
 

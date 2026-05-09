@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Upload, Trash2, Play, Square, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api';
 
@@ -22,8 +22,10 @@ interface VoiceSampleUploaderProps {
  * - Drag-and-drop or click-to-browse file selection
  * - Upload progress indicator
  * - Play/stop current sample
- * - Delete current sample
- * - Format validation (WAV, MP3, OGG, FLAC, M4A)
+ * - Two-step delete (no confirm() dialog)
+ * - Canvas waveform preview before upload
+ * - Length validation: warn < 6s, reject > 60s
+ * - Explicit "Replace sample" label when a sample exists
  *
  * Connects to:
  * - POST /api/characters/{char_id}/voice-sample (upload)
@@ -32,14 +34,58 @@ interface VoiceSampleUploaderProps {
 export function VoiceSampleUploader({ charId, currentSampleUrl, onChanged }: VoiceSampleUploaderProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [waveform, setWaveform] = useState<Float32Array | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Draw waveform on canvas whenever waveform data changes
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !waveform) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const { width, height } = canvas;
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = 'var(--color-accent)';
+
+    const step = Math.ceil(waveform.length / width);
+    for (let x = 0; x < width; x++) {
+      let max = 0;
+      for (let i = x * step; i < (x + 1) * step && i < waveform.length; i++) {
+        max = Math.max(max, Math.abs(waveform[i]));
+      }
+      const barHeight = Math.max(1, max * height);
+      ctx.fillRect(x, (height - barHeight) / 2, 1, barHeight);
+    }
+  }, [waveform]);
+
+  /** Decode audio file and extract amplitude samples for waveform display. */
+  const decodeWaveform = async (file: File): Promise<{ samples: Float32Array; durationS: number } | null> => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const audioCtx = new AudioContext();
+      const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+      await audioCtx.close();
+      return {
+        samples: decoded.getChannelData(0),
+        durationS: decoded.duration,
+      };
+    } catch {
+      return null;
+    }
+  };
 
   /** Validate and upload a file. */
   const handleFile = useCallback(async (file: File) => {
     setError(null);
+    setWarning(null);
+    setWaveform(null);
 
     // Validate extension
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
@@ -54,11 +100,25 @@ export function VoiceSampleUploader({ charId, currentSampleUrl, onChanged }: Voi
       return;
     }
 
+    // Decode waveform for preview and length validation
+    const decoded = await decodeWaveform(file);
+    if (decoded) {
+      setWaveform(decoded.samples);
+      if (decoded.durationS > 60) {
+        setError(`Sample too long (${decoded.durationS.toFixed(0)}s). Keep under 60 seconds.`);
+        return;
+      }
+      if (decoded.durationS < 6) {
+        setWarning(`Short sample (${decoded.durationS.toFixed(1)}s). 10–30s gives best cloning quality.`);
+      }
+    }
+
     setUploading(true);
     try {
       const result = await api.uploadVoiceSample(charId, file);
       if (result.ok) {
         onChanged(result.path);
+        setWaveform(null);
       } else {
         setError('Upload failed — check server logs.');
       }
@@ -69,9 +129,13 @@ export function VoiceSampleUploader({ charId, currentSampleUrl, onChanged }: Voi
     }
   }, [charId, onChanged]);
 
-  /** Delete the current voice sample. */
-  const handleDelete = async () => {
-    if (!confirm('Delete voice sample? The character will use the default voice.')) return;
+  /** Two-step delete: first click → confirm state; second click → delete. */
+  const handleDeleteClick = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setConfirmDelete(false);
     try {
       await api.deleteVoiceSample(charId);
       onChanged(null);
@@ -121,10 +185,37 @@ export function VoiceSampleUploader({ charId, currentSampleUrl, onChanged }: Voi
           <span className="flex-1 truncate" style={{ color: 'var(--color-text-secondary)' }}>
             {currentSampleUrl.split('/').pop()}
           </span>
-          <button onClick={handleDelete} className="cursor-pointer" style={{ color: '#f87171' }}>
-            <Trash2 size={12} />
-          </button>
+          {/* Two-step delete */}
+          {confirmDelete ? (
+            <>
+              <span style={{ color: '#f87171', fontSize: '0.7rem' }}>Confirm?</span>
+              <button onClick={handleDeleteClick} className="cursor-pointer" style={{ color: '#f87171' }}>
+                <Trash2 size={12} />
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button onClick={handleDeleteClick} className="cursor-pointer" style={{ color: 'var(--color-text-muted)' }}
+              title="Delete voice sample">
+              <Trash2 size={12} />
+            </button>
+          )}
         </div>
+      )}
+
+      {/* Waveform preview (shown after file pick, before upload completes) */}
+      {waveform && (
+        <canvas
+          ref={canvasRef}
+          width={400}
+          height={40}
+          style={{ width: '100%', height: 40, borderRadius: 4, backgroundColor: 'var(--color-surface)', opacity: 0.8 }}
+        />
       )}
 
       {/* Drop zone / file picker */}
@@ -153,12 +244,25 @@ export function VoiceSampleUploader({ charId, currentSampleUrl, onChanged }: Voi
         />
         <Upload size={20} className="mx-auto mb-1" style={{ color: 'var(--color-text-secondary)' }} />
         <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-          {uploading ? 'Uploading...' : 'Drop a voice sample here, or click to browse'}
+          {uploading
+            ? 'Uploading...'
+            : currentSampleUrl
+              ? 'Drop a new sample here to replace, or click to browse'
+              : 'Drop a voice sample here, or click to browse'}
         </p>
         <p className="text-[10px] mt-1" style={{ color: 'var(--color-text-secondary)', opacity: 0.6 }}>
-          WAV, MP3, OGG, FLAC · 5–30 seconds of clean speech · Max 50 MB
+          WAV, MP3, OGG, FLAC · 10–30 seconds of clean speech · Max 50 MB
         </p>
       </div>
+
+      {/* Warning (short sample) */}
+      {warning && (
+        <div className="flex items-center gap-1.5 text-xs p-2 rounded"
+          style={{ backgroundColor: 'rgba(251,191,36,0.15)', color: 'rgb(251,191,36)' }}>
+          <AlertCircle size={12} />
+          {warning}
+        </div>
+      )}
 
       {/* Error display */}
       {error && (

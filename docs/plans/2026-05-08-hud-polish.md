@@ -501,6 +501,10 @@ Manual checklist:
 ## Status Log
 
 - 2026-05-08: Plan created. Tiers 0–5 + session 38/39 bloat removal confirmed via code inspection. Tiers 6 (Phase A), 7 (Phase B), command palette (Phase C), hotkey sheet (Phase D) scoped and locked. Tier 8 dropped. Effort: ~15–20h AI-assisted.
+- 2026-05-09 Phase A: ✓ ModelPanel redesigned — 4-button bottom bar, camera strip + advanced panels behind AnimatePresence sheets. Commit 37890da.
+- 2026-05-09 Phase B: ✓ Minimal density mode — LayoutMode 'minimal', Ctrl+Shift+M, StatusBar/ChatThread/Sidebar gated, Settings HUD Density selector, sidebar icon-strip via isCollapsed. Commits 37890da + 387f839.
+- 2026-05-09 Phase C: ✓ CommandPalette.tsx — 20+ commands, character switching, 8 Vitest cases. Commit 387f839.
+- 2026-05-09 Phase D: ✓ HotkeySheet.tsx — replaces ShortcutHelpModal, groups shortcuts by category. Commit 387f839.
 
 ---
 

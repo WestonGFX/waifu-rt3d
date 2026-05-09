@@ -7,7 +7,7 @@ import { ChatImageLightbox } from './ChatImageLightbox';
 import { FeedbackButtons } from './FeedbackButtons';
 import { downloadUrl } from '../lib/downloadFile';
 import { api } from '../lib/api';
-import { parseActions } from '../lib/parseActions';
+import { parseFull } from '../lib/parseActions';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
 
@@ -132,49 +132,124 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
   );
 }
 
+/** Fenced code block with language label and one-click copy button. */
+function CodeBlock({ lang, body }: { lang: string; body: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(body).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <div style={{ position: 'relative', margin: '0.6em 0' }}>
+      {lang && (
+        <span style={{
+          position: 'absolute', top: 6, left: 10,
+          fontSize: '0.68rem', fontFamily: 'monospace',
+          color: 'var(--color-text-tertiary)',
+          pointerEvents: 'none',
+        }}>
+          {lang}
+        </span>
+      )}
+      <button
+        onClick={copy}
+        title="Copy code"
+        style={{
+          position: 'absolute', top: 6, right: 6,
+          background: copied ? 'var(--color-accent-soft)' : 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 4, padding: '2px 6px',
+          fontSize: '0.68rem', cursor: 'pointer',
+          color: copied ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+          transition: 'all 0.15s',
+        }}
+      >
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+      <pre style={{
+        background: 'var(--color-surface)',
+        border: '1px solid var(--color-border)',
+        borderRadius: 8,
+        padding: lang ? '24px 12px 10px' : '10px 12px',
+        overflowX: 'auto', fontSize: '0.82rem',
+        fontFamily: 'ui-monospace, "Cascadia Code", Menlo, monospace',
+        color: 'var(--color-text-primary)',
+        margin: 0, lineHeight: 1.5,
+      }}>
+        <code>{body}</code>
+      </pre>
+    </div>
+  );
+}
+
 /**
- * Renders message text with basic markdown: **bold**, *italic*-as-action,
- * (parenthetical narration), and paragraph breaks (double newline).
- * Single newlines become <br>. Search highlighting is preserved inside
- * plain segments. Italic tokens render with the theme accent color so
- * roleplay actions (`*i hold sakura's hand*`) stand out from spoken text.
+ * Renders message text with markdown: **bold**, *italic*-as-action,
+ * (parenthetical narration), fenced code blocks, inline backtick code,
+ * and paragraph breaks (double newline). Single newlines become <br>.
+ * Search highlighting is preserved inside plain segments.
  */
 function MarkdownText({ text, query }: { text: string; query: string }) {
-  const paragraphs = text.split(/\n\n+/);
-  return (
-    <>
-      {paragraphs.map((para, pi) => (
-        <p key={pi} style={{ margin: pi === 0 ? '0' : '0.55em 0 0' }}>
-          {parseActions(para).map((tok, ti) => {
-            const parts = tok.text.split('\n');
-            const inner = parts.map((part, si) => (
-              <span key={si}>
-                {query.trim() ? <HighlightedText text={part} query={query} /> : part}
-                {si < parts.length - 1 && <br />}
-              </span>
-            ));
-            if (tok.type === 'bold') return <strong key={ti}>{inner}</strong>;
-            if (tok.type === 'italic') return (
-              <em key={ti} style={{ color: 'var(--color-text-secondary)' }}>
-                {inner}
-              </em>
-            );
-            if (tok.type === 'narration') return (
-              <span key={ti} style={{
-                fontStyle: 'italic',
-                color: 'var(--color-text-secondary)',
-                opacity: 0.85,
-                fontSize: '0.93em',
-              }}>
-                ({inner})
-              </span>
-            );
-            return <span key={ti}>{inner}</span>;
-          })}
-        </p>
-      ))}
-    </>
-  );
+  const tokens = parseFull(text);
+
+  // Group consecutive non-code tokens into <p> blocks, emitting code blocks inline.
+  const elements: React.ReactNode[] = [];
+  let pBuf: React.ReactNode[] = [];
+  let pKey = 0;
+
+  const flushPara = () => {
+    if (pBuf.length) {
+      elements.push(<p key={`p${pKey++}`} style={{ margin: elements.length === 0 ? '0' : '0.55em 0 0' }}>{pBuf}</p>);
+      pBuf = [];
+    }
+  };
+
+  tokens.forEach((tok, ti) => {
+    if (tok.type === 'code') {
+      flushPara();
+      elements.push(<CodeBlock key={`cb${ti}`} lang={tok.lang ?? ''} body={tok.text} />);
+      return;
+    }
+
+    if (tok.type === 'inline_code') {
+      pBuf.push(
+        <code key={ti} style={{
+          fontFamily: 'ui-monospace, Menlo, monospace',
+          fontSize: '0.88em',
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 3, padding: '1px 4px',
+        }}>
+          {tok.text}
+        </code>
+      );
+      return;
+    }
+
+    // Inline tokens — split on \n\n for paragraph breaks, \n for <br>
+    const paras = tok.text.split(/\n\n+/);
+    paras.forEach((para, pi) => {
+      if (pi > 0) { flushPara(); }
+      const parts = para.split('\n');
+      const inner = parts.map((part, si) => (
+        <span key={`${ti}-${pi}-${si}`}>
+          {query.trim() ? <HighlightedText text={part} query={query} /> : part}
+          {si < parts.length - 1 && <br />}
+        </span>
+      ));
+      if (tok.type === 'bold') pBuf.push(<strong key={`${ti}-${pi}`}>{inner}</strong>);
+      else if (tok.type === 'italic') pBuf.push(<em key={`${ti}-${pi}`} style={{ color: 'var(--color-text-secondary)' }}>{inner}</em>);
+      else if (tok.type === 'narration') pBuf.push(
+        <span key={`${ti}-${pi}`} style={{ fontStyle: 'italic', color: 'var(--color-text-secondary)', opacity: 0.85, fontSize: '0.93em' }}>
+          ({inner})
+        </span>
+      );
+      else pBuf.push(<span key={`${ti}-${pi}`}>{inner}</span>);
+    });
+  });
+
+  flushPara();
+  return <>{elements}</>;
 }
 
 /**

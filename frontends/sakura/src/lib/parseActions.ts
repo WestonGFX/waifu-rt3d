@@ -1,10 +1,12 @@
 /**
  * Markdown-flavoured token parser for chat message rendering.
  *
- * Supports four token types:
+ * Supports six token types:
  * - `**bold**`  → bold token (parsed first to avoid collision with italic)
  * - `*italic*` → italic / "action" token (rendered with accent color)
  * - `(narration)` → narration token (4+ chars inside parens)
+ * - fenced code blocks (``` lang\n…\n ```) → code token with lang + body
+ * - inline backtick code (`snippet`) → inline_code token
  * - plain text everywhere else
  *
  * Used by both user and assistant message renderers so that asterisk-wrapped
@@ -14,11 +16,13 @@
  * Pure function, no React/DOM dependencies — Vitest-friendly.
  */
 
-export type TokenType = 'plain' | 'bold' | 'italic' | 'narration';
+export type TokenType = 'plain' | 'bold' | 'italic' | 'narration' | 'code' | 'inline_code';
 
 export interface Token {
   type: TokenType;
   text: string;
+  /** Language hint for fenced code blocks (e.g. "python", "ts"). Empty string if none. */
+  lang?: string;
 }
 
 const TOKEN_RE = /\*\*(.+?)\*\*|\*([^*\n]+)\*|\(([^)]{4,})\)/g;
@@ -82,4 +86,78 @@ export function stripActionMarkup(text: string): string {
   return parseActions(text)
     .map(t => t.text)
     .join('');
+}
+
+// Matches fenced code blocks: ```lang\nbody\n``` (multiline, non-greedy body)
+const FENCE_RE = /```([^\n`]*)\n([\s\S]*?)```/g;
+// Matches inline backtick code: `snippet` (single backtick, no newline inside)
+const INLINE_CODE_RE = /`([^`\n]+)`/g;
+
+/**
+ * Full-featured tokeniser extending `parseActions` with fenced code blocks
+ * and inline backtick code support. Handles fences first (before inline pass)
+ * so triple-backtick regions are never mis-tokenised as italic asterisks.
+ *
+ * Returns a flat token array covering the entire input. Code block tokens have
+ * `type: 'code'` with a `lang` field; inline code tokens have `type: 'inline_code'`
+ * with `text` set to the content (backticks stripped).
+ *
+ * @param text Source string.
+ * @returns Ordered flat array of tokens.
+ *
+ * @example
+ *   parseFull('See:\n```python\nprint("hi")\n```')
+ *   // → [
+ *   //     { type: 'plain', text: 'See:\n' },
+ *   //     { type: 'code', lang: 'python', text: 'print("hi")\n' },
+ *   //   ]
+ */
+export function parseFull(text: string): Token[] {
+  if (!text) return [];
+
+  const result: Token[] = [];
+  const fenceRe = new RegExp(FENCE_RE.source, 'g');
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  // Pass 1: split on fenced code blocks
+  while ((match = fenceRe.exec(text)) !== null) {
+    const before = text.slice(lastIndex, match.index);
+    if (before) {
+      // Pass 2 for non-fence segment: inline code + inline markdown
+      result.push(...parseInlineWithCode(before));
+    }
+    result.push({ type: 'code', lang: match[1].trim(), text: match[2] });
+    lastIndex = fenceRe.lastIndex;
+  }
+
+  const tail = text.slice(lastIndex);
+  if (tail) {
+    result.push(...parseInlineWithCode(tail));
+  }
+
+  return result;
+}
+
+/**
+ * Tokenise a non-fence text segment for inline code and then regular markdown.
+ * Inline backtick code (`…`) takes precedence over bold/italic.
+ */
+function parseInlineWithCode(text: string): Token[] {
+  const result: Token[] = [];
+  const inlineRe = new RegExp(INLINE_CODE_RE.source, 'g');
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = inlineRe.exec(text)) !== null) {
+    const before = text.slice(lastIndex, match.index);
+    if (before) result.push(...parseActions(before));
+    result.push({ type: 'inline_code', text: match[1] });
+    lastIndex = inlineRe.lastIndex;
+  }
+
+  const tail = text.slice(lastIndex);
+  if (tail) result.push(...parseActions(tail));
+
+  return result;
 }

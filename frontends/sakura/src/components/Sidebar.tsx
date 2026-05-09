@@ -44,6 +44,9 @@ export function Sidebar() {
     return () => clearInterval(interval);
   }, [pollLlmStatus]);
 
+  // In minimal layout mode the sidebar shows as icon-only strip regardless of sidebarCollapsed
+  const isCollapsed = sidebarCollapsed || layoutMode === 'minimal';
+
   const filteredChars = filter
     ? characters.filter(c => c.name?.toLowerCase().includes(filter.toLowerCase()))
     : characters;
@@ -59,7 +62,7 @@ export function Sidebar() {
     <aside
       className="sidebar flex flex-col h-screen flex-shrink-0 transition-all duration-300 relative"
       style={{
-        width: sidebarCollapsed ? '56px' : '240px',
+        width: isCollapsed ? '56px' : '240px',
         backgroundColor: 'var(--color-surface)',
         borderRight: '1px solid var(--color-border-subtle)',
       }}
@@ -69,12 +72,12 @@ export function Sidebar() {
         className="flex items-center gap-2 px-3 flex-shrink-0"
         style={{
           borderBottom: '1px solid var(--color-border-subtle)',
-          minHeight: sidebarCollapsed ? '56px' : '60px',
+          minHeight: isCollapsed ? '56px' : '60px',
           paddingTop: '10px',
           paddingBottom: '10px',
         }}
       >
-        {!sidebarCollapsed ? (
+        {!isCollapsed ? (
           <div className="flex-1 min-w-0">
             <h1
               className="text-sm font-black tracking-tight leading-tight"
@@ -129,7 +132,7 @@ export function Sidebar() {
             </button>
           </div>
         )}
-        {!sidebarCollapsed && (
+        {!isCollapsed && (
           <button
             onClick={toggleSidebar}
             className="p-1.5 rounded-lg transition-colors duration-150 ml-auto flex-shrink-0"
@@ -143,7 +146,7 @@ export function Sidebar() {
       </div>
 
       {/* ── Frontend Switcher ─────────────────────── */}
-      {!sidebarCollapsed && (
+      {!isCollapsed && (
         <div className="flex gap-1 px-3 pb-1.5" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
           {[
             { id: 'neon', label: 'Neon', path: '/' },
@@ -182,15 +185,15 @@ export function Sidebar() {
                 backgroundColor: active ? 'var(--color-accent-soft)' : 'transparent',
                 color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
               }}
-              title={sidebarCollapsed ? item.label : undefined}
+              title={isCollapsed ? item.label : undefined}
               aria-label={item.label}
               aria-pressed={active}
             >
               <Icon size={18} strokeWidth={active ? 2.2 : 1.5} />
-              {!sidebarCollapsed && (
+              {!isCollapsed && (
                 <span className="text-xs font-medium flex-1 text-left">{item.label}</span>
               )}
-              {!sidebarCollapsed && item.count != null && (
+              {!isCollapsed && item.count != null && (
                 <span
                   className="text-[10px] px-1.5 py-0.5 rounded-full"
                   style={{
@@ -207,7 +210,7 @@ export function Sidebar() {
       </div>
 
       {/* ── Section Content ───────────────────────────────── */}
-      {!sidebarCollapsed && (
+      {!isCollapsed && (
         <div className="flex-1 overflow-y-auto px-2 pb-2" style={{ scrollbarWidth: 'thin', minHeight: 0 }}>
           <AnimatePresence mode="wait">
             {/* ─── Chats section: character list for opening chat threads ─── */}
@@ -345,7 +348,7 @@ export function Sidebar() {
             { action: () => openOverlay('lore'),          icon: BookMarked, label: 'Lorebook', short: 'Lore' },
           ];
 
-          return sidebarCollapsed ? (
+          return isCollapsed ? (
             /* Collapsed: vertical icon column — each icon gets full 56px width */
             <div className="flex flex-col items-center gap-0.5 py-2">
               {PRIMARY_TOOLS.map(({ action, icon: Icon, label }) => (

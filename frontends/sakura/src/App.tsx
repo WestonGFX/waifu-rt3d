@@ -43,7 +43,8 @@ import { MilestoneCelebration, useMilestoneDetection } from './components/Milest
 import { LevelUpCelebration } from './components/LevelUpCelebration';
 import { AchievementToast } from './components/AchievementToast';
 import { SettingsDrawer } from './components/SettingsDrawer';
-import { ShortcutHelpModal } from './components/ShortcutHelpModal';
+import { CommandPalette } from './components/CommandPalette';
+import { HotkeySheet } from './components/HotkeySheet';
 // Feature tips disabled — import kept for potential re-enablement
 // import { FeatureTipQueue } from './components/discovery/FeatureTipQueue';
 
@@ -134,6 +135,7 @@ function MainApp() {
     pendingLevelUp, clearPendingLevelUp,
     pendingAchievement, clearPendingAchievement,
     toggleMinimalMode,
+    layoutMode,
   } = useAppStore();
 
   // Dev-only overlays visible when devMode is on OR Electron is launched with --dev
@@ -178,6 +180,7 @@ function MainApp() {
   const showOnboarding = activeWizard === 'onboarding';
   const { theme } = useTheme();
   const [showHelp, setShowHelp] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // ── Milestone celebration (Feature #3) ─────────────────────────────────
   // Poll the relationship endpoint to detect affinity tier advances.
@@ -278,7 +281,7 @@ function MainApp() {
     { key: k('Character diary',        'alt+d'),   action: () => openOverlay('diary'),          description: 'Character diary' },
     { key: k('Relationship timeline',  'alt+t'),   action: () => openOverlay('timeline'),       description: 'Relationship timeline' },
     { key: k('Global message search',  'alt+f'),   action: () => openOverlay('search'),         description: 'Global message search' },
-    { key: 'ctrl+k',                              action: () => openOverlay('search'),         description: 'Quick search (Ctrl/Cmd+K)', allowInInput: true },
+    { key: 'ctrl+k',                              action: () => setPaletteOpen(true),          description: 'Open command palette', allowInInput: true },
     { key: k('Scenario library',       'alt+i'),   action: () => openOverlay('scenarios'),      description: 'Scenario library' },
     { key: k('New character',          'alt+n'),   action: () => setSidebarSection('create'),   description: 'New character' },
     { key: k('Session replay',          'alt+r'),   action: () => openOverlay('replay'),          description: 'Session replay' },
@@ -299,13 +302,14 @@ function MainApp() {
       key: k('Close overlay', 'escape'),
       action: () => {
         if (cinematicMode) { toggleCinematicMode(); return; }
+        if (paletteOpen) { setPaletteOpen(false); return; }
         if (showHelp) { setShowHelp(false); return; }
         if (activeOverlay) closeOverlay();
       },
       description: 'Close overlay'
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [openOverlay, closeOverlay, activeOverlay, toggleSidebar, setSidebarSection, showHelp, customKeyBindings, cinematicMode, toggleCinematicMode, toggleMinimalMode]);
+  ], [openOverlay, closeOverlay, activeOverlay, toggleSidebar, setSidebarSection, showHelp, paletteOpen, customKeyBindings, cinematicMode, toggleCinematicMode, toggleMinimalMode]);
 
   useKeyboardShortcuts(shortcuts);
 
@@ -323,7 +327,10 @@ function MainApp() {
   })();
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--color-background)' }}>
+    <div
+      className={`flex h-screen overflow-hidden${layoutMode === 'minimal' ? ' app-layout--minimal' : ''}`}
+      style={{ backgroundColor: 'var(--color-background)' }}
+    >
       {/* Floats above everything — visible signal when /api/characters fails. */}
       <BackendErrorBanner />
       {/* B1: Hide sidebar in cinematic mode */}
@@ -564,7 +571,8 @@ function MainApp() {
       {/* M6-item21: Achievement toast */}
       <AchievementToast achievement={pendingAchievement} onDismiss={clearPendingAchievement} />
 
-      <ShortcutHelpModal open={showHelp} shortcuts={shortcuts} onClose={() => setShowHelp(false)} />
+      <HotkeySheet open={showHelp} shortcuts={shortcuts} onClose={() => setShowHelp(false)} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
 
       {/* First-run onboarding wizard and quick-setup wizards — lazily loaded so their
           JS chunks only download when a user actually triggers them. fallback={null}

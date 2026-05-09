@@ -191,7 +191,7 @@ def draft_one(adapter, model: str, endpoint: str, api_key: str, system_prompt: s
         on adapter failure (the batch keeps going; the user can re-run for the
         affected row).
     """
-    user_msg = STYLE_DRAFT_PROMPT.format(system_prompt=system_prompt or "(empty)")
+    user_msg = STYLE_DRAFT_PROMPT.replace("{system_prompt}", system_prompt or "(empty)")
     messages = [
         {"role": "system", "content": "You output strict JSON. No prose."},
         {"role": "user", "content": user_msg},
@@ -203,7 +203,7 @@ def draft_one(adapter, model: str, endpoint: str, api_key: str, system_prompt: s
             endpoint=endpoint,
             api_key=api_key,
             temperature=0.4,  # mild diversity, but keep tags grounded
-            max_tokens=400,
+            max_tokens=4096,  # thinking models burn budget on reasoning_content
         )
     except Exception as exc:  # noqa: BLE001 — wide net is intentional here
         logger.error("LLM chat failed: %s", exc)

@@ -5,6 +5,7 @@ import { VoiceOrb } from './VoiceOrb';
 import { useFullDuplexVoice } from '../hooks/useFullDuplexVoice';
 import type { VoiceDuplexConfig } from '../hooks/useFullDuplexVoice';
 import { useAppStore } from '../stores/appStore';
+import { useToastStore } from './ToastQueue';
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 
@@ -113,6 +114,7 @@ export function VoiceConversationPanel({
     },
     onError: (message) => {
       console.warn('[VoicePanel]', message);
+      useToastStore.getState().addToast({ message: `Voice error: ${message}`, type: 'warning', icon: '⚠️' });
     },
   });
 

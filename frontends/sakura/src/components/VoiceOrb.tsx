@@ -25,9 +25,11 @@ interface VoiceOrbProps {
  *   - listening: input-reactive expanding rings
  *   - processing: spinning/morphing glow
  *   - speaking: output-reactive pulsing glow
+ *   - error: slow red pulse (intentionally hardcoded — semantic, not theme-colored)
  *
  * Uses CSS custom properties from the theme system (--color-accent)
- * so it adapts to all 18 themes automatically.
+ * so it adapts to all 18 themes automatically. The error state is the only
+ * exception: red is universally understood as an error signal regardless of theme.
  *
  * @param props - State, input level, and optional size.
  *
@@ -103,7 +105,9 @@ export function VoiceOrb({ state, inputLevel, outputLevel = 0.5, size = 64 }: Vo
                   ? { scale: [1, 1.1, 1], rotate: [0, 180, 360], opacity: 0.9 }
                   : state === 'speaking'
                     ? { scale: [1, 1 + outputLevel * 0.15, 1], opacity: 1 }
-                    : { scale: 1, opacity: 0.5 }
+                    : state === 'error'
+                      ? { scale: [1, 1.08, 1], opacity: [0.8, 0.4, 0.8] }
+                      : { scale: 1, opacity: 0.5 }
         }
         transition={
           state === 'idle'
@@ -114,27 +118,34 @@ export function VoiceOrb({ state, inputLevel, outputLevel = 0.5, size = 64 }: Vo
                 ? { duration: 2, repeat: Infinity, ease: 'linear' }
                 : state === 'speaking'
                   ? { duration: 0.8, repeat: Infinity, ease: 'easeInOut' }
-                  : { duration: 0.3 }
+                  : state === 'error'
+                    ? { duration: 2, repeat: Infinity, ease: 'easeInOut' }
+                    : { duration: 0.3 }
         }
         style={{
           width: size,
           height: size,
           borderRadius: '50%',
-          background: state === 'disconnected'
-            ? 'var(--color-border)'
-            : `radial-gradient(circle at 35% 35%,
-                color-mix(in srgb, var(--color-accent) 80%, white) 0%,
-                var(--color-accent) 50%,
-                color-mix(in srgb, var(--color-accent) 70%, black) 100%)`,
-          boxShadow: state === 'disconnected'
-            ? 'none'
-            : state === 'speaking'
-              ? `0 0 ${speakingGlow}px color-mix(in srgb, var(--color-accent) ${Math.round(30 + outputLevel * 30)}%, transparent),
-                 0 0 ${speakingGlow * 2}px color-mix(in srgb, var(--color-accent) ${Math.round(15 + outputLevel * 15)}%, transparent)`
-              : state === 'processing'
-                ? `0 0 15px color-mix(in srgb, var(--color-accent) 40%, transparent),
-                   0 0 30px color-mix(in srgb, var(--color-accent) 20%, transparent)`
-                : `0 0 ${10 + inputLevel * 15}px color-mix(in srgb, var(--color-accent) 35%, transparent)`,
+          // Error state uses hardcoded red — semantic signal that must not adapt to theme accent.
+          background: state === 'error'
+            ? 'radial-gradient(circle at 35% 35%, #ff6b6b 0%, #e03131 100%)'
+            : state === 'disconnected'
+              ? 'var(--color-border)'
+              : `radial-gradient(circle at 35% 35%,
+                  color-mix(in srgb, var(--color-accent) 80%, white) 0%,
+                  var(--color-accent) 50%,
+                  color-mix(in srgb, var(--color-accent) 70%, black) 100%)`,
+          boxShadow: state === 'error'
+            ? '0 0 15px rgba(224,49,49,0.4), 0 0 30px rgba(224,49,49,0.2)'
+            : state === 'disconnected'
+              ? 'none'
+              : state === 'speaking'
+                ? `0 0 ${speakingGlow}px color-mix(in srgb, var(--color-accent) ${Math.round(30 + outputLevel * 30)}%, transparent),
+                   0 0 ${speakingGlow * 2}px color-mix(in srgb, var(--color-accent) ${Math.round(15 + outputLevel * 15)}%, transparent)`
+                : state === 'processing'
+                  ? `0 0 15px color-mix(in srgb, var(--color-accent) 40%, transparent),
+                     0 0 30px color-mix(in srgb, var(--color-accent) 20%, transparent)`
+                  : `0 0 ${10 + inputLevel * 15}px color-mix(in srgb, var(--color-accent) 35%, transparent)`,
         }}
       />
 
@@ -149,9 +160,11 @@ export function VoiceOrb({ state, inputLevel, outputLevel = 0.5, size = 64 }: Vo
           fontWeight: 600,
           letterSpacing: '0.08em',
           textTransform: 'uppercase',
-          color: state === 'disconnected'
-            ? 'var(--color-text-muted)'
-            : 'var(--color-accent)',
+          color: state === 'error'
+            ? '#e03131'
+            : state === 'disconnected'
+              ? 'var(--color-text-muted)'
+              : 'var(--color-accent)',
           whiteSpace: 'nowrap',
         }}
       >

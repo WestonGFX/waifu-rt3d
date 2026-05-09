@@ -4,7 +4,7 @@ import { useViewerStore } from '../stores/viewerStore';
 // ── Types ───────────────────────────────────────────────────────────────────────
 
 /** Voice session states matching the server's SessionState enum. */
-export type VoiceSessionState = 'disconnected' | 'idle' | 'listening' | 'processing' | 'speaking';
+export type VoiceSessionState = 'disconnected' | 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
 
 /** Events received from the /ws/voice WebSocket. */
 export interface VoiceEvent {
@@ -313,6 +313,7 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
     };
 
     ws.onerror = () => {
+      setState('error');
       callbacksRef.current.onError?.('Voice WebSocket connection error');
     };
 
@@ -334,8 +335,9 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
           connect();
         }, delay);
       } else {
+        // Max reconnect attempts exhausted or user-initiated close
         reconnectAttemptsRef.current = 0;
-        setState('disconnected');
+        setState(isAbnormal ? 'error' : 'disconnected');
       }
     };
   }, [sessionId, charId, startLevelMonitor, playAudio]);
@@ -388,6 +390,7 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
         break;
 
       case 'error':
+        setState('error');
         callbacksRef.current.onError?.(msg.message || 'Unknown error');
         break;
     }

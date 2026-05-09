@@ -877,6 +877,46 @@
                 this._activeFidget = null;
                 this._fidgetTime = 0;
                 this._fidgetDuration = 0;
+                // Idle clip cycling — triggers a mood-matched clip every 30–90s of pure idle
+                this._clipCycleTimer = 30 + Math.random() * 60;
+                this._currentMood = 'neutral';
+            }
+
+            /** Update the mood tag used for clip filtering. Called by setExpression handler. */
+            setEmotion(mood) {
+                this._currentMood = mood || 'neutral';
+            }
+
+            /**
+             * Attempt to play a mood-matched idle clip from ClipLayer's clipLibrary.
+             * No-ops if clipLibrary is empty or has no clips tagged for the current mood.
+             * Clips must have a "mood" metadata tag — stored as clip.userData.mood array.
+             *
+             * @param {ClipLayer} clipLayer - The ClipLayer instance that owns clipLibrary.
+             * @param {string} mood - Current emotion state ('happy', 'sad', etc.)
+             */
+            _maybeCycleIdleClip(clipLayer, mood) {
+                if (!clipLayer?.clipLibrary) return;
+                const entries = Object.entries(clipLayer.clipLibrary);
+                if (entries.length === 0) return;
+
+                // Filter to clips tagged "idle" and mood-compatible
+                const candidates = entries.filter(([, clip]) => {
+                    const tags = clip.userData?.tags;
+                    const moods = clip.userData?.mood;
+                    if (!Array.isArray(tags) || !tags.includes('idle')) return false;
+                    if (Array.isArray(moods) && moods.length > 0) {
+                        return moods.includes(mood) || moods.includes('neutral');
+                    }
+                    return true; // untagged idle clips always eligible
+                });
+                if (candidates.length === 0) return;
+
+                const [name] = candidates[Math.floor(Math.random() * candidates.length)];
+                // Play via ClipLayer — respects blend and AnimationDirector state.
+                // loop=false so it returns to procedural idle after one play.
+                const played = clipLayer.playClip(name, { fadeIn: 0.4, loop: false });
+                if (played) console.log(`[IdleLayer] Clip cycle: "${name}" (mood=${mood})`);
             }
 
             /** @type {Array<{name:string, duration:number, requires?:(p:Object)=>boolean, apply:(t:number,p:Object,getBone:(s:string)=>any)=>void}>} */
@@ -1299,6 +1339,20 @@
                     // Energy personality reduces wait (energetic chars fidget more).
                     const baseWait = 8 + Math.random() * 10;
                     this._fidgetTimer = baseWait * (1.3 - p.energy * 0.5);
+                }
+
+                // Idle clip cycling — every 30–90s of sustained idle, play a mood-matched clip.
+                // Only fires when AnimationDirector is in idle state (no talk/gesture/clip active).
+                if (animationDirector && animationDirector.state === 'idle') {
+                    this._clipCycleTimer -= dt;
+                    if (this._clipCycleTimer <= 0) {
+                        const cl = animationDirector.getLayer('clip');
+                        this._maybeCycleIdleClip(cl, this._currentMood);
+                        this._clipCycleTimer = 30 + Math.random() * 60;
+                    }
+                } else {
+                    // Reset timer when non-idle so the first idle cycle isn't immediate
+                    this._clipCycleTimer = Math.max(this._clipCycleTimer, 15);
                 }
             }
         }
@@ -2168,13 +2222,17 @@
              * @param {string} name - Friendly name to reference this clip
              * @param {Object} [opts] - Load options
              * @param {boolean} [opts.retarget=false] - Auto-retarget Mixamo bone names to VRM
+             * @param {string[]} [opts.tags] - Semantic tags (e.g. ['idle', 'subtle']) for cycling filter
+             * @param {string[]} [opts.mood] - Mood compatibility list (e.g. ['calm', 'neutral'])
              * @returns {Promise<{name: string, duration: number, tracks: number}>}
              *
              * @example
              *   await clipLayer.loadClip('/animations/wave.glb', 'wave', { retarget: true });
+             *   await clipLayer.loadClip('/animations/idle_breathing.vrma', 'idle_breathing',
+             *     { tags: ['idle', 'subtle'], mood: ['calm', 'neutral'] });
              */
             async loadClip(url, name, opts = {}) {
-                const { retarget = false } = opts;
+                const { retarget = false, tags, mood } = opts;
 
                 // Detect BVH files → use BVHLoader instead of GLTFLoader
                 if (url.toLowerCase().endsWith('.bvh')) {
@@ -2188,11 +2246,14 @@
                     this._loader.register((parser) => new VRMLoaderPlugin(parser));
                 }
 
+                const isVRMA = url.toLowerCase().endsWith('.vrma');
                 return new Promise((resolve, reject) => {
                     this._loader.load(url, (gltf) => {
-                        // VRMA files store animations in userData.vrmAnimations
-                        // Standard GLB/GLTF stores them in gltf.animations
-                        const animations = gltf.animations || [];
+                        // VRMA files store animations in userData.vrmAnimations (via VRMAnimationLoaderPlugin).
+                        // Fall back to gltf.animations for GLB/GLTF and unregistered VRMA.
+                        const animations = (isVRMA && gltf.userData?.vrmAnimations?.length)
+                            ? gltf.userData.vrmAnimations
+                            : (gltf.animations || []);
                         if (animations.length === 0) {
                             reject(new Error(`No animations found in ${url}`));
                             return;
@@ -2213,6 +2274,9 @@
                         // Store all clips; the first one gets the requested name
                         const primary = animations[0];
                         primary.name = name;
+                        // Tag clips with metadata for idle clip cycling filter
+                        if (tags) primary.userData.tags = tags;
+                        if (mood)  primary.userData.mood  = mood;
                         this.clipLibrary[name] = primary;
 
                         // Store extras with indexed names (wave_1, wave_2, etc.)
@@ -7634,6 +7698,9 @@
                     if (animationDirector) {
                         const emotionLayer = animationDirector.getLayer('emotion');
                         if (emotionLayer) emotionLayer.setEmotion(e.data.emotion, e.data.intensity || 0.7);
+                        // Phase 4: update idle clip cycling mood filter
+                        const idleLayer = animationDirector.getLayer('idle');
+                        if (idleLayer) idleLayer.setEmotion(e.data.emotion || 'neutral');
                     }
                     // Phase 12-P1/P2: modulate blink + micro-expression rate by emotion
                     if (blinkController) blinkController.setEmotion(e.data.emotion || 'neutral');
@@ -7723,14 +7790,19 @@
                 }
                 // ── Clip Animation API (AnimationMixer) ──────────────
                 else if (type === 'loadAnimation') {
-                    // Load a .glb/.gltf animation clip into the library.
-                    // payload: { url: string, name: string, retarget?: boolean }
+                    // Load a .glb/.gltf/.vrma animation clip into the library.
+                    // payload: { url: string, name: string, retarget?: boolean, tags?: string[], mood?: string[] }
                     // When retarget=true, Mixamo bone names are remapped to VRM humanoid bones.
+                    // tags/mood are stored as clip.userData for idle cycling filter.
                     // Responds with: { type: 'animationLoaded', name, duration, tracks } or error
                     if (animationDirector && payload?.url && payload?.name) {
                         const cl = animationDirector.getLayer('clip');
                         if (cl) {
-                            cl.loadClip(payload.url, payload.name, { retarget: !!payload.retarget })
+                            cl.loadClip(payload.url, payload.name, {
+                                retarget: !!payload.retarget,
+                                tags: payload.tags,
+                                mood: payload.mood,
+                            })
                                 .then(info => {
                                     window.parent.postMessage({ type: 'animationLoaded', ...info }, '*');
                                 })

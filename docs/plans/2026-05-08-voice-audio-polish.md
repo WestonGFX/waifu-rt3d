@@ -488,3 +488,40 @@ cd frontends/sakura && npx tsc --project tsconfig.app.json --noEmit
 After this plan ships, the natural next frontier for voice is **lip sync**. The `viewerStore.ts` already has a `playTTS` route that dispatches to the VRM iframe (`frontends/sakura/src/stores/viewerStore.ts:121`). The viewer (`frontends/shared/viewer/viewer.html`) has a `ParticleSystem` and `EffectComposer` but no viseme system. A Phase 5 could wire audio amplitude from TTS binary frames into VRM blendshape weights (`VRM.expressionManager`) for a simple "mouth open/close" effect — not phoneme-accurate, but visually impactful at low implementation cost. That work belongs in a separate plan after this one ships.
 
 **Conversational pacing** (micro-pauses between sentences, end-of-utterance breath sounds) is already partially implemented via `pause_before` in the VoiceModulator emotion profiles. Completing it would require injecting silent PCM frames between TTS chunks in `_tts_chunk_async` — achievable in ~2h as a follow-on.
+
+---
+
+## Locked Decisions — Post-Draft Session 2026-05-08
+
+After the prd-writer agent drafted this plan, the user requested verification of the two open codebase-fact questions. Both verified by the orchestrator below.
+
+| # | Question | Verified Answer | Plan Impact |
+|---|----------|----------------|-------------|
+| 8 | Does duplex `/ws/voice` send `ai_token` frames? | **YES.** `backend/voice/duplex.py:501-504` emits `{"type": "ai_token", "data": {"token": ...}}` per LLM token; final `ai_text` event sent on `done`. | Phase 4 live transcript display is **unblocked**. Build directly on `ai_token` stream. Typewriter-on-`ai_text` fallback not needed. |
+| 9 | Voice gallery exact table + schema | **No dedicated table.** Cloned voice samples are stored as files at `backend/storage/voice_samples/{char_id}/voice_sample.{ext}` and tracked via the `characters.voice_sample_path` column (one sample per character). The "Voice Gallery" UI in Settings (`frontends/sakura/src/components/VoiceGallery.tsx`) is a TTS-provider-voice browser (read-only, served via `/api/tts/voices`), NOT a cloned-sample manager. | **Plan Phase 3 conflated two surfaces.** See Phase 3 re-scope below. |
+
+### Phase 3 Re-Scope (Voice Cloning Sample Management)
+
+The original Phase 3 assumed a multi-row "voice gallery" table. There isn't one. The actual surfaces are:
+
+1. **TTS provider voices** — already polished via the session-37 `VoiceGallery.tsx` card-based browser. No further work needed.
+2. **Cloned voice samples** — one-per-character, file-system + `characters.voice_sample_path`. The "preview / rename / delete / set-as-default" verbs from the original Phase 3 don't fully apply: there's only one sample per character, so "set-as-default" is automatic on upload, "rename" is meaningless (file name is fixed), and "delete" = clear the column + remove the file.
+
+Replace original Phase 3 with:
+
+**Phase 3 — Voice Cloning Sample UX Polish (3-4h)**
+
+- **Preview button on `VoiceCloning` Settings section** (frontends/sakura/src/views/SettingsView.tsx Voice tab). Plays the existing `voice_sample_path` audio inline. Audio element + Play/Pause toggle. ~30 min.
+- **Re-record / replace flow.** The current upload flow likely either appends or silently overwrites. Make replacement explicit: when a sample exists, show "Replace sample" button instead of "Upload sample"; confirmation modal. ~45 min.
+- **Two-step delete.** "Clear voice sample" button: first click reveals "Confirm delete?"; second click removes file + nulls column. New endpoint `DELETE /api/characters/{char_id}/voice-sample` (calls `unlink()` + DB UPDATE). ~1h.
+- **Waveform preview on upload.** When user picks a file, render a static waveform via `<canvas>` from sample's PCM bytes (decoded via `AudioContext.decodeAudioData`). Length validation: warn under 6s, hard-cap over 60s. ~1.5h.
+
+Total Phase 3 effort: 3-4h (was 4-5h with the original misframing).
+
+If the user wants a multi-sample-per-character gallery in the future (allow Sakura to have 5 cloned voices for variety), that's a **separate schema-design plan** requiring a `voice_samples` table with `(id, char_id, name, file_path, created_at, is_default)` columns. Out of scope for this polish plan.
+
+### Phase 4 Confirmation (No Changes)
+
+Per Decision #8, Phase 4 (VoiceOrb error state + live transcript) ships as originally planned, using the confirmed `ai_token` event stream. No re-scope.
+
+Total plan effort revised: 14-18h → **13-17h** AI-eq (Phase 3 saved ~1h via re-scope).

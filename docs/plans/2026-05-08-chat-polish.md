@@ -667,3 +667,30 @@ Items that are one step beyond this plan's scope but become natural next steps a
 - **Syntax highlighting in code blocks.** Phase A delivers structure and copy; color highlighting (e.g. `highlight.js` or hand-rolled token coloring for common languages) is a follow-on. Low priority — structure alone is a large improvement.
 - **Improved Markdown.** Tables (`| col | col |`), blockquotes (`>`), and horizontal rules are the next most common LLM output formats after code blocks. Can extend the same `parseActions` tokenizer without a library.
 - **TTFT trend in Settings.** Once `firstTokenMs` is captured per message, a simple average over the last 20 messages could surface in Settings > Brain as "average response latency," giving the user a model-performance metric without opening a separate tool.
+
+---
+
+## Locked Decisions — Post-Draft Session 2026-05-08
+
+After the prd-writer agent drafted this plan, the user locked the open question on message pinning.
+
+| # | Question | Decision | Rationale |
+|---|----------|----------|-----------|
+| 7 | Message pinning UI | **Fold into Phase D** | ~2h work fits Phase D's failed-card + timestamps budget. Pin column already exists in DB — just toggle UI + filter mode. Cohesive scope, no need for a separate plan file. |
+
+### Phase D Adjustment (Adds Pin Toggle + Filter)
+
+Per Decision #7, extend Phase D scope. Updated Phase D becomes:
+
+**Phase D — Failed Card + Timestamps + Pin UI (5h)**
+
+In addition to the originally-scoped FailedActionCard + per-message timestamps:
+
+- **Pin toggle in `DialogueBubble` hover bar:** New icon button next to Edit/Reactions/Delete. Click toggles `message.pinned: boolean`. Visual: filled gold pin icon when pinned, outline pin when unpinned. Persists via `PATCH /api/messages/{id}` (existing endpoint — verify it accepts `pinned` field; if not, extend the endpoint and `chatStore.patchAssistant` to mirror).
+- **"Pinned messages" filter mode in `ChatThread`:** A small pill toggle at the top of the thread (next to existing search input) with two states — `All` and `Pinned`. When `Pinned`, the thread filters `messages` to those with `pinned === true`, sorted by pin-toggle time. Empty state: "No pinned messages — pin a message from its hover menu."
+- **Files touched:** `DialogueBubble.tsx` (pin button), `ChatThread.tsx` (filter pill + filter logic), `chatStore.ts` (`togglePin(messageId)` action — uses existing `patchAssistant` for in-place mutation), `lib/types.ts` (verify `pinned?: boolean` on `ChatMessage` — likely already there since DB column exists).
+- **Vitest cases (3 new):** pin toggle round-trip, filter mode hides unpinned, empty-state copy.
+
+Phase D effort revised: 3h → **5h** (was 3h failed-card+timestamps; +2h for pin UI).
+
+Total plan effort: ~9h → **~11h** AI-eq.

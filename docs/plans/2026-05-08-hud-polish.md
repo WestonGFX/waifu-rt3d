@@ -501,3 +501,71 @@ Manual checklist:
 ## Status Log
 
 - 2026-05-08: Plan created. Tiers 0–5 + session 38/39 bloat removal confirmed via code inspection. Tiers 6 (Phase A), 7 (Phase B), command palette (Phase C), hotkey sheet (Phase D) scoped and locked. Tier 8 dropped. Effort: ~15–20h AI-assisted.
+
+---
+
+## Locked Decisions — Post-Draft Session 2026-05-08
+
+After the prd-writer agent drafted this plan, the user locked the three open questions surfaced in the agent's summary.
+
+| # | Question | Decision | Rationale |
+|---|----------|----------|-----------|
+| 4 | Phase A advanced sheet form | **One combined `⚙ Advanced` slide-up sheet** | Override agent's three-collapsible recommendation. User picked the more dramatic single-sheet approach — matches "minimal viewer panel" intent better. Spring Bones, VFX, and Animation Browser all live inside one slide-up overlay triggered by a single button. |
+| 5 | Cmd+K palette character switching | **Include character switching** | Power-user friendly. Type "Switch to Rin" from anywhere. Sidebar still works for click users. Avoids the palette feeling thin. |
+| 6 | Minimal mode sidebar treatment | **Sidebar shrinks to icon-only (48px strip)** | Minimal means MINIMAL. Avatar + composer + character name visible; sidebar still allows character switching but at icon-only width. The "hide sidebar entirely" alternative was rejected — would require Cmd+K palette to switch chars in minimal mode, adding friction. |
+
+### Phase A Adjustment (Combined Slide-Up Sheet)
+
+Per Decision #4, override the original Phase A "three separate collapsibles" approach. New scope:
+
+- A single `<ViewerAdvancedSheet>` component renders as a Framer Motion slide-up panel from the bottom of the viewer area, `90vh` max height, `rgba(0,0,0,0.85)` backdrop with `blur(8px)` (matches Lightbox pattern).
+- Internal layout: three vertically-stacked sections inside the sheet — Spring Bones (existing controls), VFX (EffectsPanel inline), Animation Browser. Single scroll container.
+- Trigger: a `⚙ Advanced` button replaces the current EffectsPanel + AnimationBrowser bottom-bar buttons. Single click opens the sheet.
+- Dismiss: Esc, click-outside-sheet, or the X button in the sheet header.
+- File: `frontends/sakura/src/components/ViewerAdvancedSheet.tsx` (NEW, ~250 LOC).
+- Props: `open: boolean`, `onClose: () => void`, plus the existing prop sets that EffectsPanel and AnimationBrowser already accept (passed through).
+
+### Phase B Adjustment (Sidebar Icon-Strip in Minimal Mode)
+
+Per Decision #6, when `layoutMode === 'minimal'`:
+
+```css
+/* frontends/sakura/src/index.css or appropriate scope */
+.app-layout--minimal .sidebar {
+  width: 48px;
+  --sidebar-collapsed: 1;
+}
+.app-layout--minimal .sidebar .character-name,
+.app-layout--minimal .sidebar .char-meta-row,
+.app-layout--minimal .sidebar .footer-tools {
+  display: none;
+}
+.app-layout--minimal .sidebar .character-list-item {
+  /* show avatar only — name hidden by parent rule */
+  padding: 6px;
+  justify-content: center;
+}
+```
+
+The `Sidebar.tsx` component reads `layoutMode` from `appStore` and conditionally renders an icon-only variant. Tooltips on character avatars in this mode show the character name on hover (`title="Rin"` attr at minimum; richer Framer Motion tooltip optional).
+
+### Phase C Adjustment (Cmd+K Character Commands)
+
+Per Decision #5, the Command Palette's command source list extends to include one row per character. Implementation:
+
+```typescript
+// CommandPalette.tsx or commands.ts
+const buildCommands = (characters: Character[]): Command[] => [
+  ...overlayCommands,    // existing — open Settings, Memory Browser, etc.
+  ...actionCommands,     // existing — clear chat, export thread, etc.
+  ...characters.map(ch => ({
+    id: `char-${ch.id}`,
+    label: `Switch to ${ch.name}`,
+    keywords: [ch.name.toLowerCase(), 'character', 'switch'],
+    icon: ch.avatar_url,  // mini avatar in palette row
+    action: () => useAppStore.getState().setActiveCharacter(ch.id),
+  })),
+];
+```
+
+Vitest case (added to the existing 6 in Phase C): "Cmd+K palette filters to a single character when typing the name".

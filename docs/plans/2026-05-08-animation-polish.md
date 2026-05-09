@@ -703,3 +703,36 @@ Phase 1 → Phase 2 (viewer.html) → Phase 2 (viewerStore + component) → Phas
 | VRMA sourcing from Anata animation store / community packs | Phase 4 execution time | Requires manual review of clip quality — not automatable |
 
 **When to revisit deferred items:** After Phase 2 ships, observe whether the "stiff/dead" complaint is gone. If jiggle + spring saccade + mood idle variation fix the daily pain, Phases 3–4 optimizations are quality-of-life rather than must-fix. Only escalate bone injection or full PoseSpringManager if users with custom (non-VRoid) models report broken physics.
+
+---
+
+## Locked Decisions — Post-Draft Session 2026-05-08
+
+After the prd-writer agent drafted this plan, the user locked the three open questions surfaced in the agent's summary. Recording here so the execution session has a clear final-decision trail and the agent's assumptions can be reconciled with the user's calls.
+
+| # | Question | Decision | Rationale |
+|---|----------|----------|-----------|
+| 1 | Jiggle physics default state | **Auto-on at low intensity, dial in Settings** | Compromise between "feels alive immediately" and "no surprise on first load." User can dial up or off via Settings > Physics. Override the agent's default-OFF assumption in Phase 2. |
+| 2 | VRMA file sourcing for Phase 4 | **Draft sourcing list as Phase 4 prep sub-task** | User has VRM/GLB models in `backend/storage/avatars/` + `backend/storage/models/vrm/` but ZERO VRMA files. Phase 4 must include a prep step: research Anata animation store, vroidhub.com, community packs; output a curated list with download URLs + license notes; user reviews + downloads before Phase 4 executes. |
+| 3 | Eye saccade gaze-flick trigger | **Typing-burst (debounced 2s after first keypress)** | Subtle, integrates with chat input. Character notices you typing. Hotkey-explicit option dropped — feels mechanical. |
+
+### Codebase Verification Notes (2026-05-08)
+
+- **Animation folder structure exists but is empty.** `backend/storage/animations/{vrma,bvh,fbx,glb,vrm-expression-library}/` are all 0-file directories. Phase 4 cannot proceed without populating at least `vrma/`. The sourcing-list prep step from Decision #2 is therefore a hard prerequisite.
+- **VRM characters present.** 12 .vrm files in `backend/storage/avatars/` (Glitch, Raine, Seraph, Kitsune, Tsuki, Viper, Nyx, Panicandy, melon variants) — Phase 1 spring-bone work has real models to test against.
+- **Worktree clutter.** `.claude/worktrees/agent-a0d87ae7/VRM models/` contains old VRM duplicates (Tsuki, Panicandy variants). Not in tree path; ignore.
+
+### Phase 2 Adjustment (Jiggle Default)
+
+The original plan (per agent) defaulted jiggle to `enabled: false` so the user opts in via Settings. Per Decision #1, change the default Settings shape to:
+
+```typescript
+// frontends/sakura/src/stores/settingsStore.ts (or wherever physics settings live)
+physics: {
+  jiggleEnabled: true,            // was: false
+  jiggleIntensity: 'subtle',       // new field; values: 'off' | 'subtle' | 'medium' | 'lively' | 'extreme'
+  jiggleAutoEnableOnLoad: true,   // tracks "did we auto-enable for the first time?"
+}
+```
+
+The Settings panel still has the on/off toggle (mapped to `intensity === 'off'` for clarity), plus the 5-position intensity dial. First-time users experience low-intensity motion immediately; the toggle gives an easy hard-off for shared-PC scenarios.

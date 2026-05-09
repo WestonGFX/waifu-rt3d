@@ -12238,18 +12238,24 @@ def get_memory_overview(char_id: int):
         except Exception:
             pass
 
-        # Tiered memory counts (item 9: memory capacity meter).
-        # Counts memories per tier for the character; falls back to empty
-        # when TieredMemoryManager is unavailable (ChromaDB path or cold start).
-        memory_tier_counts: dict[str, int] = {}
+        # Tiered memory counts — query via vector_store (app.db), not waifu.db cursor.
         try:
-            tier_rows = cur.execute(
-                "SELECT tier, COUNT(*) FROM memories WHERE character_id = ? GROUP BY tier",
-                (char_id,),
-            ).fetchall()
-            memory_tier_counts = {str(r[0]): r[1] for r in tier_rows}
-            stats["total_memories"] = sum(memory_tier_counts.values())
-            stats["memories_by_tier"] = memory_tier_counts
+            from backend.memory.tiered_memory import TieredMemoryManager
+            if vector_store and isinstance(vector_store, TieredMemoryManager):
+                tier_con = vector_store._conn()
+                try:
+                    tier_rows = tier_con.execute(
+                        "SELECT tier, COUNT(*) FROM memories WHERE character_id = ? GROUP BY tier",
+                        (char_id,),
+                    ).fetchall()
+                    memory_tier_counts = {str(r[0]): r[1] for r in tier_rows}
+                    stats["total_memories"] = sum(memory_tier_counts.values())
+                    stats["memories_by_tier"] = memory_tier_counts
+                finally:
+                    tier_con.close()
+            else:
+                stats["total_memories"] = 0
+                stats["memories_by_tier"] = {}
         except Exception:
             stats["total_memories"] = 0
             stats["memories_by_tier"] = {}

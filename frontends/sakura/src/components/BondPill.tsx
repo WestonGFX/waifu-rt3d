@@ -199,6 +199,7 @@ export function BondPill({
         border: '1px solid var(--color-border-subtle)',
         borderRadius: 10,
         userSelect: 'none',
+        minWidth: 0,
       }}
     >
       {/* ── Always-visible single-line pill ── */}
@@ -209,6 +210,7 @@ export function BondPill({
         aria-label={collapsedAriaLabel}
         style={{
           width: '100%',
+          minWidth: 0,
           display: 'flex',
           alignItems: 'center',
           gap: 7,
@@ -220,6 +222,7 @@ export function BondPill({
           textAlign: 'left',
           fontSize: 13,
           lineHeight: 1.4,
+          overflow: 'hidden',
         }}
       >
         <Heart size={14} style={{ color: barColor, flexShrink: 0 }} aria-hidden />

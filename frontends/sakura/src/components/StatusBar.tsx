@@ -265,8 +265,8 @@ export function StatusBar({
           );
         })()}
         <div className="flex-1 min-w-0" style={{ overflow: 'hidden' }}>
-          <div className="flex items-center gap-2">
-            <span className="char-name-display truncate" title={character.name} style={{ color: 'var(--color-text-primary)', fontSize: '1rem' }}>
+          <div className="flex items-center gap-2" style={{ overflow: 'hidden', minWidth: 0 }}>
+            <span className="char-name-display" title={character.name} style={{ color: 'var(--color-text-primary)', fontSize: '1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
               {character.name}
             </span>
             <span

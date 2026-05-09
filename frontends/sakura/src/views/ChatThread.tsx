@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles, SlidersHorizontal, Check, MessageCircle, Zap, Italic, Pin } from 'lucide-react';
+import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles, SlidersHorizontal, Check, MessageCircle, Zap, Italic, Pin, Brain } from 'lucide-react';
 import { VNTextBox } from '../components/VNTextBox';
 import { VNPortrait } from '../components/VNPortrait';
 import { useAppStore } from '../stores/appStore';
@@ -505,6 +505,7 @@ export function ChatThread() {
 
   // ── T0-3: Regenerate + branch switch ────────────────────────────────────
   const [regeneratingMsgId, setRegeneratingMsgId] = useState<number | null>(null);
+  const [pinnedAsMemoryId, setPinnedAsMemoryId] = useState<number | null>(null);
 
   const handleRegenerate = useCallback(async (serverMessageId: number) => {
     setRegeneratingMsgId(serverMessageId);
@@ -982,6 +983,51 @@ export function ChatThread() {
                         {emoji}
                       </button>
                     ))}
+                  </div>
+                )}
+                {/* "Remember this" — pin message as Permanent T3 memory */}
+                {canReact && msg.serverMessageId != null && (
+                  <div
+                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                    style={{
+                      position: 'absolute',
+                      [msg.role === 'user' ? 'left' : 'right']: 8,
+                      bottom: (msg.reactions?.length ?? 0) > 0 ? 28 : 4,
+                      zIndex: 10,
+                    }}
+                  >
+                    <button
+                      onClick={async () => {
+                        if (!msg.serverMessageId || pinnedAsMemoryId === msg.serverMessageId) return;
+                        try {
+                          await api.pinMessageAsMemory(msg.serverMessageId);
+                          setPinnedAsMemoryId(msg.serverMessageId);
+                          setTimeout(() => setPinnedAsMemoryId(null), 2000);
+                        } catch { /* silent */ }
+                      }}
+                      style={{
+                        background: pinnedAsMemoryId === msg.serverMessageId
+                          ? 'var(--color-accent-soft)'
+                          : 'var(--color-surface)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 20,
+                        padding: '3px 8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                        color: pinnedAsMemoryId === msg.serverMessageId
+                          ? 'var(--color-accent)'
+                          : 'var(--color-text-tertiary)',
+                        fontSize: '0.65rem',
+                        transition: 'all 0.15s',
+                      }}
+                      title="Remember this — save as a permanent memory"
+                    >
+                      <Brain size={11} />
+                      {pinnedAsMemoryId === msg.serverMessageId ? 'Saved!' : 'Remember'}
+                    </button>
                   </div>
                 )}
                 {/* Existing reactions row */}

@@ -10808,7 +10808,7 @@ async def pin_message_as_memory(message_id: int):
 
     with db_ctx() as conn:
         row = conn.execute(
-            "SELECT content, character_id, session_id, role FROM messages WHERE id = ?",
+            "SELECT text, char_id, session_id, role FROM messages WHERE id = ?",
             (message_id,),
         ).fetchone()
         if not row:

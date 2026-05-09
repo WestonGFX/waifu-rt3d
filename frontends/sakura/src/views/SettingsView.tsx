@@ -4046,11 +4046,13 @@ const CEILING_OPTIONS: Array<{
   description: string;
   accentColor: string;
   requiresVerification: boolean;
+  /** M6-item22: minimum bond level required with active character. 0 = no gate. */
+  requiresBondLevel: number;
 }> = [
-  { value: 'general',  label: 'General',  description: 'Family-safe. No mature themes.',       accentColor: '#22c55e', requiresVerification: false },
-  { value: 'edgy',     label: 'Edgy',     description: 'Violence, dark humor, mild language.',  accentColor: '#eab308', requiresVerification: false },
-  { value: 'mature',   label: 'Mature',   description: 'Adult themes, suggestive content.',     accentColor: '#f97316', requiresVerification: true  },
-  { value: 'explicit', label: 'Explicit', description: 'Unrestricted adult content.',           accentColor: '#ef4444', requiresVerification: true  },
+  { value: 'general',  label: 'General',  description: 'Family-safe. No mature themes.',       accentColor: '#22c55e', requiresVerification: false, requiresBondLevel: 0  },
+  { value: 'edgy',     label: 'Edgy',     description: 'Violence, dark humor, mild language.',  accentColor: '#eab308', requiresVerification: false, requiresBondLevel: 0  },
+  { value: 'mature',   label: 'Mature',   description: 'Adult themes, suggestive content.',     accentColor: '#f97316', requiresVerification: true,  requiresBondLevel: 20 },
+  { value: 'explicit', label: 'Explicit', description: 'Unrestricted adult content.',           accentColor: '#ef4444', requiresVerification: true,  requiresBondLevel: 50 },
 ];
 
 /**
@@ -4065,6 +4067,7 @@ const CEILING_OPTIONS: Array<{
  */
 function SafetyTab({ save, cfg }: TabProps) {
   const { characters } = useAppStore();
+  const bondLevel = useAppStore(s => s.bondLevel);
 
   // ── Content gate remote state ────────────────────────────────────
   const [ceiling, setCeiling] = useState<string>('general');
@@ -4252,10 +4255,13 @@ function SafetyTab({ save, cfg }: TabProps) {
             {CEILING_OPTIONS.map(opt => {
               const isSelected = ceiling === opt.value;
               const needsVerify = opt.requiresVerification && !ageVerified;
+              // M6-item22: gate mature/explicit behind bond level with active char
+              const needsBond = opt.requiresBondLevel > 0 && bondLevel < opt.requiresBondLevel;
+              const isLocked = needsVerify || needsBond;
               return (
                 <button
                   key={opt.value}
-                  disabled={controlsDisabled || (needsVerify)}
+                  disabled={controlsDisabled || isLocked}
                   onClick={() => handleCeilingChange(opt.value)}
                   style={{
                     border: isSelected
@@ -4267,8 +4273,8 @@ function SafetyTab({ save, cfg }: TabProps) {
                       : 'var(--color-surface)',
                     padding: '10px 12px',
                     textAlign: 'left',
-                    cursor: controlsDisabled || needsVerify ? 'not-allowed' : 'pointer',
-                    opacity: controlsDisabled || needsVerify ? 0.5 : 1,
+                    cursor: controlsDisabled || isLocked ? 'not-allowed' : 'pointer',
+                    opacity: controlsDisabled || isLocked ? 0.5 : 1,
                     transition: 'border-color 0.15s, background-color 0.15s',
                   }}
                 >
@@ -4276,11 +4282,16 @@ function SafetyTab({ save, cfg }: TabProps) {
                     <span className="text-sm font-semibold" style={{ color: isSelected ? opt.accentColor : 'var(--color-text)' }}>
                       {opt.label}
                     </span>
-                    {needsVerify && <Lock size={12} style={{ color: 'var(--color-text-secondary)' }} />}
+                    {(needsVerify || needsBond) && <Lock size={12} style={{ color: 'var(--color-text-secondary)' }} />}
                   </div>
                   <p className="text-xs" style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
                     {opt.description}
                   </p>
+                  {needsBond && !needsVerify && (
+                    <p className="text-xs mt-1" style={{ color: 'var(--color-warning, #f59e0b)', margin: 0 }}>
+                      🔥 Bond Lv {opt.requiresBondLevel} required
+                    </p>
+                  )}
                 </button>
               );
             })}

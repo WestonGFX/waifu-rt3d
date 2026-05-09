@@ -2110,6 +2110,32 @@
             }
 
             /**
+             * Remove animation tracks targeting spring bone joints from a clip.
+             *
+             * Mixamo exports sometimes include keyframes for VRM spring bone joints
+             * (hair, clothing). These override Verlet simulation, freezing secondary
+             * motion. Strip them before storing so physics runs on those bones freely.
+             *
+             * @param {THREE.AnimationClip} clip - Mutated in-place.
+             * @returns {THREE.AnimationClip} The same clip, filtered.
+             */
+            stripSpringBoneTracks(clip) {
+                if (!this.vrm?.springBoneManager?.joints?.length) return clip;
+                const springBoneNames = new Set(
+                    this.vrm.springBoneManager.joints.map(j => j.bone.name)
+                );
+                const before = clip.tracks.length;
+                clip.tracks = clip.tracks.filter(track => {
+                    const dotIdx = track.name.indexOf('.');
+                    if (dotIdx === -1) return true;
+                    return !springBoneNames.has(track.name.substring(0, dotIdx));
+                });
+                const removed = before - clip.tracks.length;
+                if (removed > 0) console.log(`[ClipLayer] Stripped ${removed} spring bone tracks from "${clip.name}"`);
+                return clip;
+            }
+
+            /**
              * Load an animation clip from a .glb/.gltf URL and store it by name.
              *
              * @param {string} url - URL of the .glb/.gltf animation file
@@ -2151,6 +2177,11 @@
                             for (const anim of animations) {
                                 this.retargetClip(anim);
                             }
+                        }
+
+                        // Strip spring bone tracks so Verlet physics runs freely on hair/cloth
+                        for (const anim of animations) {
+                            this.stripSpringBoneTracks(anim);
                         }
 
                         // Store all clips; the first one gets the requested name
@@ -2283,6 +2314,7 @@
 
                 const clip = new THREE.AnimationClip(name, -1, tracks);
                 if (retarget) this.retargetClip(clip);
+                this.stripSpringBoneTracks(clip);
                 this.clipLibrary[name] = clip;
 
                 console.log(`[ClipLayer] Loaded BVH "${name}" (${clip.duration.toFixed(1)}s, ${clip.tracks.length} tracks)`);
@@ -5990,10 +6022,10 @@
                     if (_now - _fpsLastRenderTime < _fpsTargetMs) return;
                     _fpsLastRenderTime = _now;
                 }
-                // Cap delta to 100ms to prevent animation pops when tab regains focus.
-                // Browsers throttle rAF to ~1fps while hidden; on resume getDelta() returns
-                // the full elapsed time, causing lerp snap and sin() position jumps.
-                const delta = Math.min(clock.getDelta(), 0.1);
+                // Cap delta to 50ms — spring bone Verlet integration diverges above this threshold;
+                // skeletal animations handle larger deltas by jumping but spring bones do not.
+                // See: docs/plans/2026-05-08-animation-polish.md Phase 1, spring-bones-spec Phase 1A
+                const delta = Math.min(clock.getDelta(), 0.05);
 
                 controls.update();
 

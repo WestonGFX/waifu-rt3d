@@ -1,66 +1,77 @@
-# Session Handoff — 2026-05-06
+# Session Handoff — 2026-05-08 (session 40 continuation)
 
 ## Branch: master
 ## Test Status: 2843 passed | TSC: clean
 
 ## Completed This Session
 
-### AIE Phase C — Phase 1: LoRA Fine-Tuning Pipeline (Strand A)
-- `backend/adaptive/finetune/corpus_builder.py` — ShareGPT JSONL corpus builder with quality filtering
-- `backend/adaptive/finetune/trainer.py` — Unsloth/SFTTrainer wrapper, graceful degradation when ML deps absent
-- `backend/adaptive/finetune/eval_harness.py` — heuristic LoRA eval with character-specific prompts
-- `backend/llm/adapters/peft_local.py` — PEFT LoRA adapter implementing LLMAdapter interface
-- `scripts/train_character_lora.py` — CLI orchestrator: corpus → train → eval → DB write
-- `backend/preflight.py` — `migrate_to_v77()` adds `character_loras` table (schema v77)
-- `backend/server.py` — 3 endpoints: `GET /api/training/status/{char_id}`, `DELETE /api/training/loras/{char_id}`, `POST /api/training/retrain/{char_id}`
-- `backend/tests/test_finetune.py` — 28 new tests (2762 → 2790 passing)
-- **CRITICAL FIX:** real messages table uses `char_id` (not `character_id`) and `text` (not `content`) — fixed in corpus_builder, server.py, and test fixtures
+Session 40 was a continuation of the same calendar day as session 38/39 — picked up from a `/pre-session` cold start finding 8 unpushed commits + stale RESUME_PROMPT, then pivoted into apply-character-styles + 4 polish-plan drafting.
 
-### AIE Phase C — Phase 2: Basic DSPy (Strand B)
-- `backend/adaptive/dspy_modules/__init__.py` — exports public API
-- `backend/adaptive/dspy_modules/context_classifier_dspy.py` — DSPy Signature + ChainOfThought module with graceful fallback
-- `backend/adaptive/dspy_modules/optimizer_runner.py` — BootstrapFewShot optimizer runner, DB record writer, `maybe_run_optimizer()` safe wrapper
-- `backend/preflight.py` — `migrate_to_v78()` adds `dspy_compiled_programs` table (schema v78)
-- `backend/adaptive/context_classifier.py` — `configure_dspy_classifier(enabled, compiled_json_path)` feature flag + `_classify_rule_based()` private helper to prevent infinite recursion when DSPy fallback calls back into classifier
-- `backend/tests/test_dspy_modules.py` — 53 new tests (2790 → 2843 passing)
+### Push + ship leftover work
+- Pushed 17 commits from sessions 36-37/38/39 + this session (`261fa1e..fd7bd71` then `..d98f7dd`). origin/master is current.
+
+### Apply character styles (RESUME_PROMPT task #2)
+- Bug fix: `scripts/draft_character_styles.py` `.format()` collided with literal `{` / `}` braces in instruction text → KeyError on first non-dry-run invocation since session 27. Switched to `.replace()`. Bumped `max_tokens` 400 → 4096 (Qwen3.5 burns budget on `reasoning_content`, finish_reason=length, empty content). Commit `1d71b62`.
+- Drafted styles for all 14 characters via LM Studio at 10.0.0.17 / qwen3.5-9b. Reviewed JSON. Applied via `scripts/apply_character_styles.py` (existed already from session 29 commit `05bf460`). All 14 rows have populated `characters.image_style`.
+
+### Verification of stale RESUME_PROMPT items
+- Visual Content Phase 2 (RESUME_PROMPT task #3) — already shipped session 29 commits `5349b42` + `99f4043`. `ChatImageLightbox.tsx`, `downloadFile.ts`, `chatStore.regenerateImage`, `imagePrompt` field on `ChatMessage` all present.
+- Phase A leftovers: response regeneration + branch switching + search-within-thread + scroll-to-bottom + message editing + reactions + image lightbox + export-to-md + timeout retry — ALL already shipped (per chat-polish prd-writer agent grep audit).
+
+### 4 polish plan drafts (today's main work)
+- 4 `prd-writer` agents dispatched in parallel (sonnet) — each grepped the codebase to verify shipped state. All four files written + committed `2c00bc6`:
+  - `docs/plans/2026-05-08-animation-polish.md` (~24h AI-eq, FIRST TICKET to execute next session) — 4 phases. Phase 1 = two one-liner outsized-ROI fixes (spring-bone delta clamp + Mixamo clip spring-bone strip). Then JigglePhysicsManager. Then saccade upgrade + mood-driven idle. Then VRMA + clip cycling.
+  - `docs/plans/2026-05-08-hud-polish.md` (~11-16h) — 4 phases. Viewer Tier 6 advanced sheet, density/minimal Tier 7, Cmd+K palette, Cmd+? hotkey sheet. Tier 8 dropped.
+  - `docs/plans/2026-05-08-chat-polish.md` (~11h after pin fold-in) — 4 phases. Code-block markdown, TTFT telemetry, stuck-gen indicator (`regenStartedAt` re-spec), failed-card retry + per-message timestamps + pin UI.
+  - `docs/plans/2026-05-08-voice-audio-polish.md` (~13-17h after Phase 3 re-scope) — 4 phases. TTS A/B benchmark, latency telemetry, voice cloning sample UX (1-per-character, NOT multi-row gallery — that was a misframe), VoiceOrb error state + live transcript.
+- 9 open questions surfaced by agents → all 9 locked by user via `AskUserQuestion`. Locked decisions appended as a "Locked Decisions — Post-Draft Session 2026-05-08" section to each plan, plus codebase-verification notes (e.g. `backend/storage/animations/vrma/` exists but is EMPTY → Phase 4 sourcing-list step is a hard prereq). Commit `d98f7dd`.
 
 ## Work In Progress
-- None. All three AIE Phase C MVP phases complete and committed.
+- None. Plans drafted + locked + pushed. Animation Polish Phase 1 is the next action item.
 
 ## Known Issues / Bugs
-- None introduced this session. Pre-existing: `character_relationships` duplicate rows (P1 filed in `docs/bugs/2026-05-06-character-relationships-duplicate-rows.md`), BondPill XP overshoot display (P3 filed in `docs/bugs/2026-05-06-bondpill-xp-overshoots-level-threshold.md`).
+- None introduced this session. Pre-existing P2 bug `docs/bugs/2026-04-27-model-picker-no-preview-images.md` still open — not addressed.
 
 ## Files Modified
+
 ```
-backend/adaptive/context_classifier.py          +205 lines
-backend/adaptive/dspy_modules/__init__.py        NEW
-backend/adaptive/dspy_modules/context_classifier_dspy.py  NEW
-backend/adaptive/dspy_modules/optimizer_runner.py         NEW
-backend/adaptive/finetune/__init__.py            NEW
-backend/adaptive/finetune/corpus_builder.py      NEW
-backend/adaptive/finetune/eval_harness.py        NEW
-backend/adaptive/finetune/trainer.py             NEW
-backend/llm/adapters/peft_local.py               NEW
-backend/preflight.py                             +185 lines (v77 + v78 migrations)
-backend/server.py                                +165 lines (3 training endpoints)
-backend/tests/test_dspy_modules.py               NEW (53 tests)
-backend/tests/test_finetune.py                   NEW (28 tests)
-scripts/train_character_lora.py                  NEW
-docs/plans/2026-05-06-aie-phase-c-mvp-execution.md  status lines appended
+scripts/draft_character_styles.py             |    4 +-     (bug fix)
+docs/plans/2026-05-08-animation-polish.md     | 738 +++  (NEW)
+docs/plans/2026-05-08-chat-polish.md          | 696 +++  (NEW)
+docs/plans/2026-05-08-hud-polish.md           | 571 +++  (NEW)
+docs/plans/2026-05-08-voice-audio-polish.md   | 527 +++  (NEW)
+backend/characters/builtin_image_styles.draft.json  | (gitignored, NEW, runtime artifact)
+DB: 14 rows in `characters.image_style` populated  | (runtime, not tracked)
 ```
+
+Plus the still-uncommitted CURRENT_STATUS.md / RESUME_PROMPT.md / COMPLETED_FEATURES.md / SESSION_2026-05-08.md updates that this handoff commit will land.
 
 ## Next Session Priorities
 
-1. **Authorize push** — 27+ local commits ahead of `origin/master`. User authorization required before push.
-2. **Memory Browser browser QA** — Ctrl+M overlay, all 4 tabs against real backend, file bugs as `docs/bugs/2026-05-*-memory-browser-*.md`. ~1-2h.
-3. **Visual Content in Chat Phase 2** — lightbox, `imagePrompt` field, `regenerateImage`. Plan: `docs/plans/2026-05-06-visual-content-mvp-execution.md`.
-4. **Apply drafted character styles** — run draft script with LLM, review JSON, write apply script.
-5. **AIE Phase C decision gate** — train Sakura LoRA on Windows RTX 5080, run 30 manual eval prompts.
+1. **Animation Polish Phase 1** — two one-liner spring-bone fixes per `docs/plans/2026-05-08-animation-polish.md` Phase 1. Estimated 2h AI-eq. Outsized-ROI flagged by drafting agent ("makes everything else visible"). Files: `frontends/shared/viewer/viewer.html` (delta clamp + Mixamo strip).
+2. **Animation Polish Phase 2** — `JigglePhysicsManager` class. Locked default = auto-on at low intensity, dial in Settings. ~6h AI-eq. Files: `frontends/shared/viewer/viewer.html` (manager class), `frontends/sakura/src/views/SettingsView.tsx` (Physics tab + dial).
+3. **Animation Polish Phase 3 prep** — saccade upgrade (typing-burst trigger, debounced 2s) + mood-driven idle. ~8h AI-eq. Schema v81 reservation for per-character spring-bone presets.
+4. **Animation Polish Phase 4 prereq** — draft VRMA sourcing list. `backend/storage/animations/vrma/` is empty; user has no VRMAs locally. Research Anata animation store, vroidhub.com, community packs; output curated list with download URLs + license notes. User reviews + downloads before Phase 4.
+
+After animation ships, the next plan to execute is whichever pain area is still top of mind — **HUD**, **chat**, or **voice** plans are all queued and locked.
 
 ## Context for Next Session
 
-- **Schema:** v78. Migrations v77 (character_loras) + v78 (dspy_compiled_programs) in `backend/preflight.py`.
-- **DSPy feature flag:** Off by default. Enable via `configure_dspy_classifier(True, path)` in server lifespan after compiling. NOT yet wired into server startup — needs a compiled JSON first.
-- **LoRA training:** Requires Windows + Unsloth. Mac raises `ImportError` gracefully. CLI: `python scripts/train_character_lora.py --char-name Sakura --db-path backend/storage/app.db --output-dir /path/to/loras`.
-- **AIE Phase C plan:** `docs/plans/2026-05-06-aie-phase-c-mvp-execution.md` — all 3 phases (0/1/2) marked DONE.
-- **Recursion guard:** `context_classifier_dspy.py` fallback imports `_classify_rule_based` (private), NOT `classify_context` (public) — prevents infinite recursion when flag is enabled and DSPy is absent.
+- **Schema:** v80 (unchanged this session). Phase 3 of animation plan reserves v81.
+- **Push state:** clean. origin/master at `d98f7dd`. Push gate clear.
+- **LLM endpoint:** 10.0.0.17:1234 (qwen3.5-9b) — confirmed reachable this session. If thinking model burns reasoning_content, bump `max_tokens` past 1500 (the apply-character-styles fix is precedent).
+- **All 14 builtin characters now have `image_style` populated** — image generation will inherit per-character art-style prefixes via `resolve_character_style` (shipped session 26 commit `d34f86f`).
+- **Sensitive area touched:** none in code this session. Plans target `viewer.html` (sensitive — 10+ regressions). Animation Phase 1 should be dispatched with extra care; consider a worktree.
+- **Hardware:** Mac M2 Pro is GPU floor + dev box. Win RTX 5080 available remote (claude-code-on-PC, claude.ai/code session, or Chrome remote desktop) — not needed for animation polish.
+- **Context heaviness:** today's session was multi-step (apply char styles + 4 parallel agents + lock-in + handoff). Recommend `/clear` before starting Phase 1 work.
+
+## Plan files referenced
+
+- `docs/plans/2026-05-08-animation-polish.md` (NEW, FIRST TICKET)
+- `docs/plans/2026-05-08-hud-polish.md` (NEW, queued)
+- `docs/plans/2026-05-08-chat-polish.md` (NEW, queued)
+- `docs/plans/2026-05-08-voice-audio-polish.md` (NEW, queued)
+- `docs/plans/2026-03-29-spring-bones-spec.md` (referenced by animation plan)
+- `docs/plans/2026-03-29-jiggle-physics-spec.md` (referenced)
+- `docs/plans/2026-03-29-humanoid-motion-spec.md` (referenced; full scope deferred)
+- `docs/plans/2026-04-27-hud-redesign-staged.md` (referenced by HUD plan)

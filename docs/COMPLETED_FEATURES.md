@@ -2,9 +2,57 @@
 
 Historical archive of all implemented features. For active tracking, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
 
-**Total completed:** 60+ features and phases
-**Schema version:** v60 (from v3)
-**Date range:** Dec 2025 — Mar 2026
+**Total completed:** 80+ features and phases
+**Schema version:** v80 (from v3)
+**Date range:** Dec 2025 — May 2026
+
+---
+
+## May 2026 (Session 38/39 — 2026-05-08)
+
+### BUG-1 — Chat History Loads on Character Select
+- Schema v80 backfills `sessions.character_id` from `messages.char_id` for all pre-v79 sessions
+- Session resume logic: `GET /api/sessions?character_id=N` returns most recent session; frontend loads it instead of creating blank
+- Commit: `9b07e86`
+
+### BUG-2 — LLM Timeout Configurable
+- `httpx.Timeout(read=N)` reads `llm.timeout_seconds` from `config/app.json` (default 30s, range 10–120s)
+- Settings > Brain tab: slider exposes the setting to users
+- Commit: `2504b5b`
+
+### BUG-3 — Italic Text Visibility Fix
+- `DialogueBubble.tsx`: italic spans changed from `var(--color-action)` to `var(--color-text-secondary)`
+- Fixes invisible italic in multiple themes (pop-bubblegum, neon-dark, etc.)
+- Commit: `6fed8c2`
+
+### BUG-4 — 3D Idle Animation Smoothing
+- `viewer.html`: weight_shift amplitude reduced, shoulder_roll snap removed (sine smoothing), look_around slowed + head tilt correlation added
+- Commit: `3bfe893`
+
+### UX Cleanup — 9 Bloat Overlays Removed
+- Removed from menu/shortcuts: universes, relweb, moodboard, portfolio, arena, memorialscene, bondstory, schedule, games
+- Dev-gated: contextviewer, compression, photomode, gallery (accessible via `--dev` flag)
+- Commit: `1a9cfa2`
+
+### Phase A — Message Reactions + Session Resume UX
+- Hover reactions (👍 ❤️ 😂 😮 😢) on all chat messages via `MessageReactions.tsx`
+- Scroll-to-bottom on session resume with smooth animation
+- Commit: `fb7e162`
+
+### Phase B — Character Content Polish
+- 13 character bibles applied (personality, speech patterns, backstory)
+- 11 characters with missing TTS providers set to `edge-tts`
+- VRM model assignments corrected for 14 characters
+- Brittney stub prompt expanded from 58 chars to full personality
+- Commit: `391cc9f`
+
+### Phase D — Electron v1.0 Packaging Prep
+- `AboutOverlay.tsx`: app version, build info, acknowledgments overlay (Alt+Shift+A)
+- Dev-mode gating via `effectiveDevMode = devMode || !!window.electronAPI?.isDev`
+- `window.__openOverlay` exposed for Electron tray IPC → `mainWindow.webContents.executeJavaScript()`
+- macOS `icon.icns` (6 sizes, 226KB) + Windows `icon.ico` (6 sizes, 36KB) generated
+- Tray menu "About Waifu RT3D" item wired
+- Commit: `894c609`
 
 ---
 
@@ -445,3 +493,19 @@ All 16 planned roadmap features shipped. Listed in completion order.
 | v58 | Content gating chat pipeline (Phase 18B) |
 | v59 | Content gating frontend + legacy migration (Phase 18C-D) |
 | v60 | On-device learning (Phase 19) |
+
+---
+
+## May 2026 (Session 40 — 2026-05-08, same-day continuation of session 38/39)
+
+### Apply Character Styles
+- `scripts/draft_character_styles.py` bug fix: `.format()` → `.replace()` (literal `{`/`}` collision in instruction text); `max_tokens` 400→4096 (thinking-model `reasoning_content` budget). Commit: `1d71b62`.
+- All 14 builtin characters now have populated `image_style` JSON in DB. Drafted via LM Studio (qwen3.5-9b), reviewed, applied via existing `apply_character_styles.py` (session 29).
+
+### 4 Polish Plans Drafted
+- `docs/plans/2026-05-08-animation-polish.md` (~24h AI-eq, FIRST TICKET) — 4 phases: spring-bone fixes, JigglePhysicsManager, saccade + mood-driven idle, VRMA + clip cycling.
+- `docs/plans/2026-05-08-hud-polish.md` (~11-16h) — viewer Tier 6 advanced sheet, density/minimal Tier 7, Cmd+K palette, Cmd+? hotkey sheet. Tier 8 dropped.
+- `docs/plans/2026-05-08-chat-polish.md` (~11h) — code-block markdown, TTFT telemetry, stuck-gen indicator re-spec, failed-card retry + timestamps + pin UI.
+- `docs/plans/2026-05-08-voice-audio-polish.md` (~13-17h) — TTS A/B benchmark, latency telemetry, voice cloning sample UX, VoiceOrb error state + live transcript.
+- 9 open questions surfaced + locked. Codebase verifications: `backend/storage/animations/vrma/` empty (Phase 4 prereq), voice gallery has no dedicated table (one sample per character), `ai_token` frames present in duplex.
+- Commits: `2c00bc6` + `d98f7dd`.

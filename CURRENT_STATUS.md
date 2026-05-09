@@ -1,8 +1,8 @@
 # Current Project Status
 
-**Last updated:** 2026-05-07 (session 37 — M8 docs done, statusline reviewed, voice gallery shipped, Memory Browser QA complete; pushed to origin)
-**Branch:** master · pushed to `origin/master`.
-**Schema version:** v78. v77 adds character_loras (LoRA adapter records). v78 adds dspy_compiled_programs (BootstrapFewShot compiled programs).
+**Last updated:** 2026-05-08 (session 40 — apply character styles + 4 polish plan drafts pushed)
+**Branch:** master · pushed to `origin/master` at `d98f7dd`.
+**Schema version:** v80 (unchanged this session). Animation polish plan reserves v81.
 **Tests:** **2,843 backend** + **276 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
@@ -10,26 +10,58 @@
 
 ## Active Work
 
-**Session 37 (2026-05-07) — Backlog sweep complete. 4 items shipped.**
+**Session 40 (2026-05-08, continuation of same calendar day) — Apply character styles + 4 polish plan drafts. 3 commits, all pushed.**
 
 | Item | Status | Commit |
 |---|---|---|
-| M8 distribution docs (EU AI Act, privacy, Steam) | ✅ done session 30 | `cb5f8aa` (no work needed) |
-| Item 51: Statusline review (Neon Glassline v2) | ✅ | `~/.claude/statusline.sh` — removed dead RATE_7D var, fixed /tmp cache leak |
-| Item 42: Voice preset gallery | ✅ | `8b32b6a` — `VoiceGallery.tsx` card grid in Settings Voice tab (toggle) |
-| Memory Browser browser QA (all 5 tabs) | ✅ | `b0761a9` — report + 14 screenshots |
+| Push 17 carried + apply-styles + plan commits | ✅ | `261fa1e..d98f7dd` |
+| Fix `draft_character_styles.py` (`.format()` brace collision + `max_tokens` 400→4096 for thinking model) | ✅ | `1d71b62` |
+| Apply 14 character `image_style` rows via existing `apply_character_styles.py` | ✅ | DB write (runtime) |
+| 4 polish plan drafts via parallel `prd-writer` agents | ✅ | `2c00bc6` |
+| Lock 9 open questions surfaced by agents (3 anim + 3 HUD + 1 chat + 2 voice verifications) | ✅ | `d98f7dd` |
 
-**2 bugs filed from QA:**
-- P2: `/api/feedback/preferences` 404 — backend needs restart to load AIE Phase C Phase 0 endpoints
-- P3: About You fact delete has no confirmation (immediate, no undo)
+**Polish plan inventory (next-session execution targets):**
 
-**Push gate:** cleared — all 29 commits pushed to `origin/master` at session start.
+| Plan | Effort | Status | First-ticket? |
+|---|---|---|---|
+| `docs/plans/2026-05-08-animation-polish.md` | ~24h AI-eq | Ready | **YES — Phase 1 (2h, two one-liner spring-bone fixes)** |
+| `docs/plans/2026-05-08-hud-polish.md` | ~11–16h AI-eq | Ready | Queued |
+| `docs/plans/2026-05-08-chat-polish.md` | ~11h AI-eq | Ready | Queued |
+| `docs/plans/2026-05-08-voice-audio-polish.md` | ~13–17h AI-eq | Ready | Queued |
 
-**Next priorities (from MEMORY.md):**
-1. AIE Phase C: Advanced (LoRA training + DSPy — 7 open questions, tier pick needed)
-2. Visual Content Phase 2 (lightbox / imagePrompt / regenerateImage — gated on shared-file conflicts)
-3. Apply character styles (`scripts/apply_character_styles.py` not yet run)
-4. Backend restart to load AIE Phase C Phase 0 endpoints (`/api/feedback/preferences`)
+**Stale-claim corrections this session (RESUME_PROMPT was misleading):**
+- Visual Content Phase 2 — already shipped session 29 (`5349b42` + `99f4043`). RESUME_PROMPT listed it as TODO.
+- 12 chat-polish items already shipped (response regeneration, branch switching, search-in-thread, scroll-to-bottom, message editing, reactions, image lightbox, export-to-md, timeout retry, quick-reply chips, typing indicator stages mode, image bubble UX). Surfaced via chat-polish agent's grep audit.
+
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers anywhere.
+
+**Next priorities (next session):**
+1. Animation Polish Phase 1 — two one-liner spring-bone fixes (`viewer.html` delta clamp + Mixamo strip). 2h AI-eq.
+2. Animation Polish Phase 2 — `JigglePhysicsManager` (auto-on at low intensity, Settings dial). 6h AI-eq.
+3. Animation Polish Phase 3 — saccade upgrade (typing-burst trigger) + mood-driven idle. Schema v81. 8h AI-eq.
+4. Animation Polish Phase 4 prereq — draft VRMA sourcing list. `backend/storage/animations/vrma/` empty; need download URLs + license notes before Phase 4 ships.
+
+---
+
+**Session 38/39 (2026-05-08) — Bug fixes + UX polish. All 8 plan items complete.**
+
+| Item | Status | Commit |
+|---|---|---|
+| BUG-3: Italic text invisible (var(--color-action) → var(--color-text-secondary)) | ✅ | `6fed8c2` |
+| BUG-4: 3D idle animation smoothing (weight_shift, shoulder_roll, look_around) | ✅ | `3bfe893` |
+| PART-2: Remove 9 bloat overlays (universes, relweb, moodboard, portfolio, arena, memorialscene, bondstory, schedule, games) | ✅ | `1a9cfa2` |
+| Phase A: Message reactions + scroll-to-bottom on session resume | ✅ | `fb7e162` |
+| Phase B: Character bibles, TTS providers, VRM assignments, Brittney prompt | ✅ | `391cc9f` |
+| Phase D: About overlay, dev-mode gating, Electron icons + tray | ✅ | `894c609` |
+| BUG-1: Chat history loads on character select (schema v80 backfill) | ✅ | `9b07e86` |
+| BUG-2: LLM timeout configurable via Settings > Brain slider | ✅ | `2504b5b` |
+
+**Push gate:** 8 commits unpushed. No known blockers — safe to push when ready.
+
+**Next priorities:**
+1. Apply character styles (`scripts/apply_character_styles.py` — run draft script first, review JSON, then apply)
+2. Visual Content Phase 2 (lightbox / imagePrompt / regenerateImage)
+3. AIE Phase C: Advanced (LoRA training + DSPy — tier pick needed)
 
 ---
 

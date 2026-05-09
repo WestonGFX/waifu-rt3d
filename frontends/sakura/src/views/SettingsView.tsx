@@ -2569,6 +2569,38 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
               ))}
             </div>
           </SettingField>
+
+          {/* HUD Density — Cozy vs Minimal chrome visibility */}
+          <SettingField
+            label="HUD Density"
+            description="Cozy shows the full toolbar. Minimal hides sidebar toolbar and status-bar extras for distraction-free chat. Toggle with Ctrl+Shift+M."
+          >
+            <div
+              className="flex gap-0.5 p-0.5 rounded-lg"
+              style={{
+                backgroundColor: 'var(--color-background)',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              {(['normal', 'minimal'] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setLayoutMode(mode)}
+                  className="px-3 py-1 rounded-md text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: layoutMode === mode
+                      ? 'var(--color-accent)'
+                      : 'transparent',
+                    color: layoutMode === mode
+                      ? 'var(--color-accent-text)'
+                      : 'var(--color-text-muted)',
+                  }}
+                >
+                  {mode === 'normal' ? 'Cozy' : 'Minimal'}
+                </button>
+              ))}
+            </div>
+          </SettingField>
         </div>
       </section>
 

@@ -1,6 +1,6 @@
 import { Component, useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Sliders, RotateCcw, Eye, EyeOff, Loader2, AlertTriangle, Box, RefreshCw, Sparkles, Wifi, WifiOff, X, Camera, MessageSquare } from 'lucide-react';
+import { ChevronLeft, Sliders, RotateCcw, Loader2, AlertTriangle, Box, RefreshCw, Sparkles, Wifi, WifiOff, X, Camera, Settings2, ChevronDown } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
 import { useViewerStore } from '../stores/viewerStore';
@@ -268,8 +268,10 @@ export function ModelPanel({ character }: ModelPanelProps) {
   const [vrmLoadState, setVrmLoadState] = useState<'idle' | 'loading' | 'loaded' | 'failed'>('idle');
   const [vrmFailReason, setVrmFailReason] = useState<string>('');
 
-  /** Whether the bottom control bar (camera presets, expressions) is visible. */
-  const [controlsVisible, setControlsVisible] = useState(true);
+  /** Whether the camera preset strip is expanded (click-to-open via 📷 button). */
+  const [cameraBarOpen, setCameraBarOpen] = useState(false);
+  /** Whether the advanced panels slide-up (EffectsPanel + AnimationBrowser) is open. */
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   /** Floating chat composer visibility — allows chatting while viewing the 3D model. */
   const [showFloatingComposer, setShowFloatingComposer] = useState(false);
@@ -304,9 +306,6 @@ export function ModelPanel({ character }: ModelPanelProps) {
   const [glbMorphTargets, setGlbMorphTargets] = useState<Array<{ meshName: string; targetName: string; index: number; value: number }>>([]);
   const [glbMorphValues, setGlbMorphValues] = useState<Record<string, number>>({});
 
-  /** Whether a screenshot capture is in-flight (postMessage sent, awaiting reply). */
-  const [screenshotPending, setScreenshotPending] = useState(false);
-  /** Timeout ref so we can reset screenshotPending if the viewer never replies. */
   const screenshotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Callback ref for the VRM iframe — syncs to viewerStore on mount/unmount. */
@@ -408,7 +407,6 @@ export function ModelPanel({ character }: ModelPanelProps) {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        setScreenshotPending(false);
       }
     };
     window.addEventListener('message', handler);
@@ -450,22 +448,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
     }, 400);
   };
 
-  /**
-   * Request a PNG screenshot of the current 3D viewport from the viewer iframe.
-   * The screenshot is delivered asynchronously via a 'screenshotReady' postMessage.
-   */
-  const handleScreenshot = useCallback(() => {
-    // Guard against double-click before the first state commit disables the button
-    if (screenshotTimeoutRef.current) return;
-    setScreenshotPending(true);
-    useViewerStore.getState().dispatchScreenshot();
-    // Safety net: if the viewer never replies (crash, reload, unhandled message),
-    // reset pending state after 8 s so the button doesn't stay permanently disabled.
-    screenshotTimeoutRef.current = setTimeout(() => {
-      screenshotTimeoutRef.current = null;
-      setScreenshotPending(false);
-    }, 8_000);
-  }, []);
+  // Screenshot available in Photo Mode overlay (openOverlay('photomode')).
 
   // Load blend shapes when expression editor opens
   const handleOpenExprEditor = useCallback(async () => {
@@ -859,8 +842,8 @@ export function ModelPanel({ character }: ModelPanelProps) {
               )}
             </div>
 
-            {/* ── LEFT side: expression editor toggle (shown when model loaded + controls visible) ── */}
-            {vrmUrl && vrmLoadState === 'loaded' && controlsVisible && (
+            {/* ── LEFT side: expression editor toggle ── */}
+            {vrmUrl && vrmLoadState === 'loaded' && (
               <div
                 style={{
                   position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
@@ -886,118 +869,125 @@ export function ModelPanel({ character }: ModelPanelProps) {
               </div>
             )}
 
-            {/* ── Horizontal camera preset strip — above bottom bar ── */}
-            {vrmUrl && vrmLoadState === 'loaded' && controlsVisible && (
-              <div
-                style={{
-                  position: 'absolute', bottom: 48, left: '50%', transform: 'translateX(-50%)',
-                  display: 'flex', alignItems: 'center', gap: 3, zIndex: 15,
-                  padding: '3px 5px',
-                  background: 'color-mix(in srgb, var(--color-surface) 80%, transparent)',
-                  backdropFilter: 'blur(8px)',
-                  borderRadius: 'var(--radius-card, 10px)',
-                  border: '1px solid var(--color-border)',
-                  boxShadow: 'var(--shadow-card)',
-                }}
-              >
-                {cameraPresets.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      setActivePreset(p.id);
-                      viewer.dispatchCameraPreset(p.id as 'fullbody' | 'bust' | 'face' | 'threeQuarter' | 'sideProfile' | 'lowAngle');
-                    }}
-                    className="px-2 py-1 text-[10px]"
-                    style={{
-                      background: activePreset === p.id ? 'var(--color-accent-soft)' : 'transparent',
-                      borderRadius: 'var(--radius-button, 6px)',
-                      color: activePreset === p.id ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontWeight: activePreset === p.id ? 700 : 500,
-                      borderBottom: activePreset === p.id ? '2px solid var(--color-accent)' : '2px solid transparent',
-                      whiteSpace: 'nowrap',
-                    }}
-                    title={`${p.label} camera view`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-                {/* Custom saved cameras — click to load, X to delete */}
-                {customCameras.map((cam, idx) => (
-                  <div
-                    key={`custom-${idx}`}
-                    style={{ display: 'flex', alignItems: 'center', gap: 1 }}
-                  >
+            {/* ── Camera preset strip — click-to-open via 📷 button ── */}
+            <AnimatePresence>
+              {vrmUrl && vrmLoadState === 'loaded' && cameraBarOpen && (
+                <motion.div
+                  key="camera-strip"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  transition={{ duration: 0.15 }}
+                  style={{
+                    position: 'absolute', bottom: 52, left: '50%', transform: 'translateX(-50%)',
+                    display: 'flex', alignItems: 'center', gap: 3, zIndex: 15,
+                    padding: '3px 5px',
+                    background: 'color-mix(in srgb, var(--color-surface) 90%, transparent)',
+                    backdropFilter: 'blur(8px)',
+                    borderRadius: 'var(--radius-card, 10px)',
+                    border: '1px solid var(--color-border)',
+                    boxShadow: 'var(--shadow-card)',
+                  }}
+                >
+                  {cameraPresets.map(p => (
                     <button
-                      onClick={() => handleLoadCamera(cam)}
+                      key={p.id}
+                      onClick={() => {
+                        setActivePreset(p.id);
+                        viewer.dispatchCameraPreset(p.id as 'fullbody' | 'bust' | 'face' | 'threeQuarter' | 'sideProfile' | 'lowAngle');
+                      }}
+                      className="px-2 py-1 text-[10px]"
+                      style={{
+                        background: activePreset === p.id ? 'var(--color-accent-soft)' : 'transparent',
+                        borderRadius: 'var(--radius-button, 6px)',
+                        color: activePreset === p.id ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: activePreset === p.id ? 700 : 500,
+                        borderBottom: activePreset === p.id ? '2px solid var(--color-accent)' : '2px solid transparent',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={`${p.label} camera view`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                  {/* Custom saved cameras — click to load, X to delete */}
+                  {customCameras.map((cam, idx) => (
+                    <div
+                      key={`custom-${idx}`}
+                      style={{ display: 'flex', alignItems: 'center', gap: 1 }}
+                    >
+                      <button
+                        onClick={() => handleLoadCamera(cam)}
+                        className="px-1.5 py-1 text-[10px]"
+                        style={{
+                          background: 'transparent',
+                          borderRadius: 'var(--radius-button, 6px)',
+                          color: 'var(--color-text-tertiary)',
+                          border: '1px dashed var(--color-border)',
+                          cursor: 'pointer',
+                          fontWeight: 500,
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={cam.name}
+                      >
+                        {cam.name}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteCamera(idx); }}
+                        style={{
+                          border: 'none', background: 'none', cursor: 'pointer',
+                          padding: '0 1px', opacity: 0.4, lineHeight: 1,
+                          color: 'var(--color-text-tertiary)',
+                          transition: 'opacity 0.15s',
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.4'; }}
+                        title="Delete saved view"
+                        aria-label={`Delete ${cam.name}`}
+                      >
+                        <X size={8} />
+                      </button>
+                    </div>
+                  ))}
+                  {/* Save current view */}
+                  {customCameras.length < 5 && (
+                    <button
+                      onClick={handleSaveCamera}
                       className="px-1.5 py-1 text-[10px]"
                       style={{
                         background: 'transparent',
                         borderRadius: 'var(--radius-button, 6px)',
                         color: 'var(--color-text-tertiary)',
-                        border: '1px dashed var(--color-border)',
+                        border: 'none',
                         cursor: 'pointer',
-                        fontWeight: 500,
-                        whiteSpace: 'nowrap',
+                        opacity: 0.6,
                       }}
-                      title={cam.name}
+                      title="Save current camera position"
                     >
-                      {cam.name}
+                      ★
                     </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteCamera(idx); }}
-                      style={{
-                        border: 'none', background: 'none', cursor: 'pointer',
-                        padding: '0 1px', opacity: 0.4, lineHeight: 1,
-                        color: 'var(--color-text-tertiary)',
-                        transition: 'opacity 0.15s',
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.4'; }}
-                      title="Delete saved view"
-                      aria-label={`Delete ${cam.name}`}
-                    >
-                      <X size={8} />
-                    </button>
-                  </div>
-                ))}
-                {/* Save current view */}
-                {customCameras.length < 5 && (
+                  )}
+                  {/* Divider + Reset */}
+                  <div style={{ width: 1, height: 16, background: 'var(--color-border)', margin: '0 2px' }} />
                   <button
-                    onClick={handleSaveCamera}
-                    className="px-1.5 py-1 text-[10px]"
+                    onClick={() => { setActivePreset('fullbody'); viewer.dispatchResetCamera(); }}
+                    className="flex items-center gap-0.5 px-1.5 py-1 text-[10px]"
                     style={{
                       background: 'transparent',
                       borderRadius: 'var(--radius-button, 6px)',
                       color: 'var(--color-text-tertiary)',
                       border: 'none',
                       cursor: 'pointer',
-                      opacity: 0.6,
                     }}
-                    title="Save current camera position"
+                    title="Reset camera to default"
                   >
-                    ★
+                    <RotateCcw size={10} />
                   </button>
-                )}
-                {/* Divider + Reset */}
-                <div style={{ width: 1, height: 16, background: 'var(--color-border)', margin: '0 2px' }} />
-                <button
-                  onClick={() => { setActivePreset('fullbody'); viewer.dispatchResetCamera(); }}
-                  className="flex items-center gap-0.5 px-1.5 py-1 text-[10px]"
-                  style={{
-                    background: 'transparent',
-                    borderRadius: 'var(--radius-button, 6px)',
-                    color: 'var(--color-text-tertiary)',
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
-                  title="Reset camera to default"
-                >
-                  <RotateCcw size={10} />
-                </button>
-              </div>
-            )}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* ── Floating chat composer (overlays 3D viewport) ── */}
             <FloatingComposer
@@ -1005,149 +995,119 @@ export function ModelPanel({ character }: ModelPanelProps) {
               onClose={() => setShowFloatingComposer(false)}
             />
 
-            {/* ── Bottom-left: browse models + right: screenshot + hide toggle ── */}
+            {/* ── Bottom bar — 4 actions: Camera, Advanced, Models, Photo ── */}
             <div
-              className="absolute bottom-0 left-0 right-0 flex items-end justify-between px-3 pb-3"
-              style={{ transition: 'opacity 0.2s', opacity: 0.85 }}
+              className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-2 px-3 pb-3"
+              style={{ transition: 'opacity 0.2s', opacity: 0.9 }}
             >
-              {/* Left: browse models (Close lives in the top "Back to Chat" pill) */}
-              <div className="flex items-center gap-2">
+              {/* 📷 Camera — toggles preset strip */}
+              {vrmLoadState === 'loaded' && (
                 <button
-                  onClick={() => openOverlay('modelbrowser')}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs"
+                  onClick={() => setCameraBarOpen(o => !o)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                  style={{
+                    backgroundColor: cameraBarOpen ? 'var(--color-accent)' : 'var(--color-surface)',
+                    borderRadius: 'var(--radius-button)',
+                    boxShadow: 'var(--shadow-card)',
+                    color: cameraBarOpen ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
+                    border: '1px solid var(--color-border)',
+                  }}
+                  title="Camera presets"
+                >
+                  <Camera size={13} /> Camera
+                </button>
+              )}
+
+              {/* ⚙ Advanced — slides up EffectsPanel + AnimationBrowser */}
+              {vrmLoadState === 'loaded' && !isLive2D && (
+                <button
+                  onClick={() => setAdvancedOpen(o => !o)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                  style={{
+                    backgroundColor: advancedOpen ? 'var(--color-accent)' : 'var(--color-surface)',
+                    borderRadius: 'var(--radius-button)',
+                    boxShadow: 'var(--shadow-card)',
+                    color: advancedOpen ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
+                    border: '1px solid var(--color-border)',
+                  }}
+                  title="Advanced panels (VFX, Animations)"
+                >
+                  <Settings2 size={13} /> Advanced
+                  <ChevronDown
+                    size={11}
+                    style={{ transform: advancedOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+                  />
+                </button>
+              )}
+
+              {/* Models browser */}
+              <button
+                onClick={() => openOverlay('modelbrowser')}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  borderRadius: 'var(--radius-button)',
+                  boxShadow: 'var(--shadow-card)',
+                  color: 'var(--color-accent)',
+                  border: '1px solid var(--color-border)',
+                }}
+                title="Browse & download 3D models"
+              >
+                <Box size={13} /> Models
+              </button>
+
+              {/* Photo Mode */}
+              {vrmLoadState === 'loaded' && (
+                <button
+                  onClick={() => openOverlay('photomode')}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs"
                   style={{
                     backgroundColor: 'var(--color-surface)',
                     borderRadius: 'var(--radius-button)',
                     boxShadow: 'var(--shadow-card)',
-                    color: 'var(--color-accent)',
+                    color: 'var(--color-text-secondary)',
                     border: '1px solid var(--color-border)',
                   }}
-                  title="Browse & download 3D models"
+                  title="Photo Mode (Ctrl+Shift+P)"
+                  aria-label="Open Photo Mode"
                 >
-                  <Box size={13} /> Models
+                  <Camera size={13} /> Photo
                 </button>
-              </div>
-
-              {/* Right: screenshot + hide-controls toggle */}
-              <div className="flex items-center gap-2">
-                {/* Photo Mode — only when model is loaded */}
-                {vrmLoadState === 'loaded' && (
-                  <button
-                    onClick={() => openOverlay('photomode')}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs"
-                    style={{
-                      backgroundColor: 'var(--color-surface)',
-                      borderRadius: 'var(--radius-button)',
-                      boxShadow: 'var(--shadow-card)',
-                      color: 'var(--color-text-secondary)',
-                      border: '1px solid var(--color-border)',
-                    }}
-                    title="Photo Mode (Ctrl+Shift+P)"
-                    aria-label="Open Photo Mode"
-                  >
-                    <Camera size={13} /> Photo
-                  </button>
-                )}
-
-                {/* Floating Chat toggle — only when model is loaded */}
-                {vrmLoadState === 'loaded' && (
-                  <button
-                    onClick={() => setShowFloatingComposer(v => !v)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs"
-                    style={{
-                      backgroundColor: showFloatingComposer ? 'var(--color-accent)' : 'var(--color-surface)',
-                      borderRadius: 'var(--radius-button)',
-                      boxShadow: 'var(--shadow-card)',
-                      color: showFloatingComposer ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
-                      border: '1px solid var(--color-border)',
-                    }}
-                    title="Floating chat (Ctrl+Shift+C)"
-                    aria-label="Toggle floating chat composer"
-                  >
-                    <MessageSquare size={13} />
-                  </button>
-                )}
-
-                {/* Screenshot — only when model is fully loaded */}
-                {vrmLoadState === 'loaded' && (
-                  <button
-                    onClick={handleScreenshot}
-                    disabled={screenshotPending}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs"
-                    style={{
-                      backgroundColor: 'var(--color-surface)',
-                      borderRadius: 'var(--radius-button)',
-                      boxShadow: 'var(--shadow-card)',
-                      color: 'var(--color-text-secondary)',
-                      border: '1px solid var(--color-border)',
-                      opacity: screenshotPending ? 0.5 : 0.85,
-                      cursor: screenshotPending ? 'not-allowed' : 'pointer',
-                    }}
-                    title="Capture 3D viewport as PNG"
-                    aria-label="Download viewport screenshot"
-                  >
-                    <Camera size={13} />
-                  </button>
-                )}
-
-                {/* Toggle: show/hide the side controls */}
-                <button
-                  onClick={() => setControlsVisible(v => !v)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs"
-                  style={{
-                    backgroundColor: controlsVisible ? 'var(--color-surface)' : 'var(--color-accent)',
-                    borderRadius: 'var(--radius-button)',
-                    boxShadow: 'var(--shadow-card)',
-                    color: controlsVisible ? 'var(--color-text-tertiary)' : 'var(--color-accent-text)',
-                    border: '1px solid var(--color-border)',
-                    opacity: controlsVisible ? 0.85 : 1,
-                  }}
-                  title={controlsVisible ? 'Hide controls for an unobstructed view' : 'Show controls'}
-                >
-                  {controlsVisible ? <EyeOff size={13} /> : <Eye size={13} />}
-                </button>
-              </div>
+              )}
             </div>
 
-            {/* ── Controls rescue pill — shows when controls are hidden so user can recover ── */}
-            {!controlsVisible && (
-              <button
-                onClick={() => setControlsVisible(true)}
-                style={{
-                  position: 'absolute', bottom: 8, right: 8, zIndex: 5,
-                  padding: '3px 10px', borderRadius: 12,
-                  background: 'color-mix(in srgb, var(--color-surface) 50%, transparent)',
-                  backdropFilter: 'blur(6px)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text-tertiary)',
-                  fontSize: '0.6rem', fontWeight: 500,
-                  cursor: 'pointer',
-                  opacity: 0.6,
-                  transition: 'opacity 0.2s',
-                }}
-                onMouseEnter={(e) => { (e.target as HTMLElement).style.opacity = '1'; }}
-                onMouseLeave={(e) => { (e.target as HTMLElement).style.opacity = '0.6'; }}
-                title="Show controls"
-              >
-                Show controls
-              </button>
-            )}
           </div>
 
-          {/* Spring Bone Physics Panel — shown when VRM model loaded */}
+          {/* Spring Bone Physics Panel — always shown when VRM loaded (stays collapsed internally) */}
           {!isLive2D && vrmLoadState === 'loaded' && (
             <SpringBonePanel isOpen={modelPanelOpen} />
           )}
 
-          {/* Phase 5: Visual Effects Panel — bloom, color grading, particles, screenshot */}
-          {!isLive2D && vrmLoadState === 'loaded' && (
-            <EffectsPanel isOpen={modelPanelOpen} />
-          )}
-
-          {/* Animation Library — clip-based animation browser */}
-          {!isLive2D && vrmLoadState === 'loaded' && (
-            <AnimationBrowser isOpen={modelPanelOpen} />
-          )}
+          {/* Advanced panels — slide up from bottom when advancedOpen */}
+          <AnimatePresence>
+            {!isLive2D && vrmLoadState === 'loaded' && advancedOpen && (
+              <motion.div
+                key="advanced-sheet"
+                initial={{ y: '100%', opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: '100%', opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+                style={{
+                  position: 'absolute', bottom: 48, left: 0, right: 0,
+                  background: 'var(--color-surface)',
+                  borderTop: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-card, 10px) var(--radius-card, 10px) 0 0',
+                  overflow: 'auto',
+                  maxHeight: '60%',
+                  zIndex: 20,
+                  boxShadow: 'var(--shadow-overlay)',
+                }}
+              >
+                <EffectsPanel isOpen={advancedOpen} />
+                <AnimationBrowser isOpen={advancedOpen} />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* B.1: GLB Morph Target Sliders — shown only when a GLB has morph targets */}
           {glbMorphTargets.length > 0 && vrmLoadState === 'loaded' && (

@@ -52,7 +52,7 @@ type MicState = 'idle' | 'recording' | 'processing';
  * - Search, export, session history drawer
  */
 export function ChatThread() {
-  const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode, config, saveConfig } = useAppStore();
+  const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode, config, saveConfig, layoutMode } = useAppStore();
   const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode, regenerateImage, continueGeneration, toggleReaction } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   // Gaze flick: fire once per typing burst, debounced 2s so holding a key doesn't spam
@@ -1233,8 +1233,8 @@ export function ChatThread() {
                 pill renders the 3 cycle controls inline. Voice icons + send
                 stay where they were. */}
             <div className="flex items-end gap-2 w-full min-w-0">
-              {/* ⚙ Modes inline popover */}
-              {(() => {
+              {/* ⚙ Modes inline popover — hidden in Minimal layout mode */}
+              {layoutMode !== 'minimal' && (() => {
                 const anyModeOn = vnMode || gesturePickerOpen || directorMode || whisperMode || quickFireMode;
                 return (
                   <div style={{ position: 'relative', flexShrink: 0 }}>

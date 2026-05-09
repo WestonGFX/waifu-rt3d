@@ -26,7 +26,7 @@ export function Sidebar() {
     sidebarSection, setSidebarSection,
     characters, activeCharacter, selectCharacter,
     llmStatus, pollLlmStatus,
-    openOverlay, openSettingsTab,
+    openOverlay, openSettingsTab, layoutMode,
   } = useAppStore();
 
   const [filter, setFilter] = useState('');
@@ -329,8 +329,8 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* ── Bottom Toolbar ─────────────────────────────────── */}
-      <div
+      {/* ── Bottom Toolbar — hidden in Minimal mode ─────────── */}
+      {layoutMode !== 'minimal' && <div
         className="flex-shrink-0"
         style={{ borderTop: '1px solid var(--color-border-subtle)' }}
       >
@@ -395,7 +395,7 @@ export function Sidebar() {
             </div>
           );
         })()}
-      </div>
+      </div>}
     </aside>
   );
 }

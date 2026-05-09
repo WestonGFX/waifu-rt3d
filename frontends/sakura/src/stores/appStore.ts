@@ -16,7 +16,7 @@ type ChatLayout = 'chat-first' | 'model-first' | 'split';
  * - compact:  hides field descriptions, tighter spacing
  * - mobile:   hides descriptions + enables touch gestures (swipe-to-archive, etc.)
  */
-export type LayoutMode = 'normal' | 'compact' | 'mobile';
+export type LayoutMode = 'normal' | 'compact' | 'mobile' | 'minimal';
 
 /** Overlay drawers that slide out over the main content. */
 type Overlay =
@@ -139,6 +139,8 @@ interface AppState {
   mobileMode: boolean;
   /** @deprecated Use setLayoutMode. Kept for backward compatibility. */
   toggleCompactMode: () => void;
+  /** Toggle between normal/compact and minimal (hide toolbar chrome). */
+  toggleMinimalMode: () => void;
 
   // Scheduled notifications (Feature C)
   scheduledNotifications: ScheduledNotification[];
@@ -392,6 +394,10 @@ export const useAppStore = create<AppState>()(
         // Legacy shim: toggles between normal ↔ compact
         const { layoutMode } = get();
         get().setLayoutMode(layoutMode === 'compact' ? 'normal' : 'compact');
+      },
+      toggleMinimalMode: () => {
+        const { layoutMode } = get();
+        get().setLayoutMode(layoutMode === 'minimal' ? 'normal' : 'minimal');
       },
 
       // Scheduled notifications (Feature C)

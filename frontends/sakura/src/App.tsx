@@ -133,6 +133,7 @@ function MainApp() {
     devMode,
     pendingLevelUp, clearPendingLevelUp,
     pendingAchievement, clearPendingAchievement,
+    toggleMinimalMode,
   } = useAppStore();
 
   // Dev-only overlays visible when devMode is on OR Electron is launched with --dev
@@ -292,6 +293,7 @@ function MainApp() {
     { key: k('About',                 'alt+shift+a'), action: () => openOverlay('about'),       description: 'About' },
     { key: k('Toggle sidebar',         'ctrl+\\'), action: () => toggleSidebar(),               description: 'Toggle sidebar' },
     { key: k('Cinematic mode',         'ctrl+i'),  action: () => toggleCinematicMode(),         description: 'Cinematic mode' },
+    { key: k('Toggle minimal mode',    'ctrl+shift+m'), action: () => toggleMinimalMode(),      description: 'Toggle minimal mode (hide UI chrome)' },
     { key: k('Show keyboard shortcuts','?'),       action: () => setShowHelp(h => !h),          description: 'Show keyboard shortcuts' },
     {
       key: k('Close overlay', 'escape'),
@@ -303,7 +305,7 @@ function MainApp() {
       description: 'Close overlay'
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [openOverlay, closeOverlay, activeOverlay, toggleSidebar, setSidebarSection, showHelp, customKeyBindings, cinematicMode, toggleCinematicMode]);
+  ], [openOverlay, closeOverlay, activeOverlay, toggleSidebar, setSidebarSection, showHelp, customKeyBindings, cinematicMode, toggleCinematicMode, toggleMinimalMode]);
 
   useKeyboardShortcuts(shortcuts);
 

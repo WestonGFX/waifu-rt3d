@@ -121,7 +121,7 @@ export function StatusBar({
   messageCount?: number;
   sessionId?: number | null;
 }) {
-  const { toggleModelPanel, modelPanelOpen, openOverlay, settingsTier, setSettingsTier, soundscapeOpen, toggleSoundscape, bondLevel, bondXp, bondXpToNext, bondTier, bondNextUnlock } = useAppStore();
+  const { toggleModelPanel, modelPanelOpen, openOverlay, settingsTier, setSettingsTier, soundscapeOpen, toggleSoundscape, bondLevel, bondXp, bondXpToNext, bondTier, bondNextUnlock, layoutMode } = useAppStore();
   const [idlePhrase, setIdlePhrase] = useState(IDLE_PHRASES[0]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -311,21 +311,22 @@ export function StatusBar({
           />
         </div>
 
-        {/* Tier 2 HUD — visible right cluster: Search · ContextBudget · Settings · 3D · ⋯ */}
-        {!isNarrow && (
+        {/* Tier 2 HUD — visible right cluster: Search · ContextBudget · Settings · 3D · ⋯
+            Hidden in Minimal mode (Cmd+Shift+M) — character name + BondPill remain. */}
+        {layoutMode !== 'minimal' && !isNarrow && (
           <button onClick={toggleSearch} className="p-2 rounded-lg transition-all duration-200"
             style={btnStyle(searchOpen)} title="Search messages (Thread / Global toggle inside)">
             <Search size={18} />
           </button>
         )}
-        {!isNarrow && (
+        {layoutMode !== 'minimal' && !isNarrow && (
           <ContextBudgetPill
             sessionId={sessionId}
             messageCount={messageCount}
             autoCompactThreshold={85}
           />
         )}
-        <button
+        {layoutMode !== 'minimal' && <button
           onClick={() => openOverlay('settings')}
           title="Settings"
           aria-label="Open settings"
@@ -333,8 +334,8 @@ export function StatusBar({
           style={btnStyle()}
         >
           <Settings size={18} />
-        </button>
-        <button
+        </button>}
+        {layoutMode !== 'minimal' && <button
           onClick={toggleModelPanel}
           title="Open 3D character viewer"
           aria-label="Open 3D character viewer"
@@ -351,10 +352,10 @@ export function StatusBar({
         >
           <Eye size={16} />
           <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.05em', color: 'var(--color-accent)', lineHeight: 1 }}>{modelPanelOpen ? 'Close' : '3D'}</span>
-        </button>
+        </button>}
 
         {/* ⋯ overflow: chat-threads · export · soundscape · model-browser · version */}
-        <div style={{ position: 'relative' }}>
+        {layoutMode !== 'minimal' && <div style={{ position: 'relative' }}>
           <button
             ref={overflowBtnRef}
             onClick={() => setOverflowOpen(o => !o)}
@@ -504,7 +505,7 @@ export function StatusBar({
               </div>
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* Search bar — slides down when open. Scope toggle replaces the

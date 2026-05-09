@@ -5770,6 +5770,60 @@ def migrate_to_v80(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v81(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v80 to v81.
+
+    Adds: ``spring_bone_presets`` TEXT (JSON) column to the ``characters``
+    table.  Stores per-character spring bone parameter overrides so tuned
+    physics survive app restarts.
+
+    JSON schema: ``{ "joints": [{ "index": int, "boneName": str,
+    "stiffness": float, "drag": float, "gravityPower": float }],
+    "wind": { "x": float, "y": float, "z": float, "strength": float } }``
+    NULL means use model defaults.
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.
+
+    Raises:
+        sqlite3.Error: If a SQL statement fails unexpectedly.
+
+    Example:
+        >>> import sqlite3
+        >>> con = sqlite3.connect(":memory:")
+        >>> _ = con.execute("CREATE TABLE schema_version (version INTEGER, applied_ts REAL)")
+        >>> _ = con.execute("INSERT INTO schema_version VALUES (80, 0)")
+        >>> _ = con.execute("CREATE TABLE characters (id INTEGER PRIMARY KEY, name TEXT)")
+        >>> migrate_to_v81(con)
+        True
+        >>> [r[1] for r in con.execute("PRAGMA table_info(characters)").fetchall() if r[1] == 'spring_bone_presets']
+        ['spring_bone_presets']
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 81:
+        logger.info("Schema already at v%d, skipping v81 migration.", cur_ver)
+        return True
+
+    try:
+        con.execute(
+            "ALTER TABLE characters ADD COLUMN spring_bone_presets TEXT DEFAULT NULL"
+        )
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (81, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v81 migration complete (characters.spring_bone_presets column)")
+        return True
+    except Exception as e:
+        logger.error("Schema v81 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -6353,21 +6407,27 @@ def ensure_db():
             if migrate_to_v80(con):
                 version = 80
 
+        if version < 81:
+            logger.info("Upgrading database schema from v80 to v81...")
+            logger.info("  - characters.spring_bone_presets TEXT column for per-character physics persistence")
+            if migrate_to_v81(con):
+                version = 81
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 80:
-            raise RuntimeError(f"Database initialization failed: Expected v80, got v{final_version}")
+        if final_version < 81:
+            raise RuntimeError(f"Database initialization failed: Expected v81, got v{final_version}")
 
-        if final_version > 80:
-            logger.warning(f"Database is newer than application (v{final_version} > v80). Some features might be unused.")
+        if final_version > 81:
+            logger.warning(f"Database is newer than application (v{final_version} > v81). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v80 backfills sessions.character_id)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v81 adds spring_bone_presets)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

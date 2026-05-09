@@ -763,6 +763,31 @@
         }
 
         /**
+         * Critically damped spring — reaches goal without overshoot, maintains velocity
+         * continuity across target changes (unlike lerp which snaps direction instantly).
+         * Algorithm: Daniel Holden's exact formulation (dt-correct at any frame rate).
+         *
+         * @param {number} x - Current position
+         * @param {number} v - Current velocity
+         * @param {number} goal - Target position
+         * @param {number} halflife - Seconds to halve remaining distance (smaller = snappier)
+         * @param {number} dt - Delta time in seconds
+         * @returns {{x: number, v: number}} Updated position and velocity
+         */
+        function springDamperExact(x, v, goal, halflife, dt) {
+            const eps = 1e-5;
+            const f   = Math.log(2) / (halflife + eps);
+            const d   = x - goal;
+            const j0  = d;
+            const j1  = v + d * f;
+            const eydt = Math.exp(-f * dt);
+            return {
+                x: eydt * (j0 + j1 * dt) + goal,
+                v: eydt * (j1 - j0 * f * dt - j1 * f * dt),
+            };
+        }
+
+        /**
          * L0: Base pose — breathing rhythm and weight distribution.
          * Write mode: SET (=) on chest/spine.
          * Personality influence:
@@ -3972,44 +3997,49 @@
         class SaccadeController {
             constructor(vrm) {
                 this.vrm = vrm;
-                this.nextSaccadeTime = 2 + Math.random() * 3;
-                this.targetYaw = 0;
-                this.targetPitch = 0;
-                this.currentYaw = 0;
-                this.currentPitch = 0;
-                this._saccadeSpeed = 0.15; // lerp factor per frame
                 this._isTalking = false;
+                this.nextSaccadeTime = 2 + Math.random() * 3;
+                // Spring state: position + velocity per axis
+                this._yaw   = { x: 0, v: 0, goal: 0 };
+                this._pitch = { x: 0, v: 0, goal: 0 };
+                // ~60ms halflife = fast saccade snap without the linear-lerp direction snap
+                this._halflife = 0.06;
             }
 
-            /** When character is talking, eyes stay more fixed on camera. */
+            /** Narrow gaze range during talking so eyes stay near camera. */
             setTalking(talking) { this._isTalking = talking; }
 
-            update(deltaTime) {
-                this.nextSaccadeTime -= deltaTime;
+            update(dt) {
+                this.nextSaccadeTime -= dt;
                 if (this.nextSaccadeTime <= 0) {
-                    // Pick new gaze target
-                    const range = this._isTalking ? 0.05 : 0.15; // narrower during speech
-                    this.targetYaw = (Math.random() - 0.5) * range;
-                    this.targetPitch = (Math.random() - 0.5) * range * 0.5;
+                    const range = this._isTalking ? 0.05 : 0.15;
+                    this._yaw.goal   = (Math.random() - 0.5) * range;
+                    this._pitch.goal = (Math.random() - 0.5) * range * 0.5;
                     this.nextSaccadeTime = 2 + Math.random() * 3;
                 }
 
-                // Smooth pursuit toward target (fast saccade, not drift)
-                this.currentYaw += (this.targetYaw - this.currentYaw) * this._saccadeSpeed;
-                this.currentPitch += (this.targetPitch - this.currentPitch) * this._saccadeSpeed;
+                const yw = springDamperExact(this._yaw.x, this._yaw.v, this._yaw.goal, this._halflife, dt);
+                const pt = springDamperExact(this._pitch.x, this._pitch.v, this._pitch.goal, this._halflife, dt);
+                this._yaw.x = yw.x; this._yaw.v = yw.v;
+                this._pitch.x = pt.x; this._pitch.v = pt.v;
 
-                // Apply to eye bones
                 if (!this.vrm?.humanoid) return;
-                const leftEye = this.vrm.humanoid.getNormalizedBoneNode('leftEye');
+                const leftEye  = this.vrm.humanoid.getNormalizedBoneNode('leftEye');
                 const rightEye = this.vrm.humanoid.getNormalizedBoneNode('rightEye');
-                if (leftEye) {
-                    leftEye.rotation.y += this.currentYaw;
-                    leftEye.rotation.x += this.currentPitch;
-                }
-                if (rightEye) {
-                    rightEye.rotation.y += this.currentYaw;
-                    rightEye.rotation.x += this.currentPitch;
-                }
+                if (leftEye)  { leftEye.rotation.y  += this._yaw.x; leftEye.rotation.x  += this._pitch.x; }
+                if (rightEye) { rightEye.rotation.y += this._yaw.x; rightEye.rotation.x += this._pitch.x; }
+            }
+
+            /**
+             * Trigger an immediate gaze flick (character notices user typing).
+             * Bypasses the timer — fires a new saccade target immediately with a
+             * slight downward bias (as if glancing toward keyboard).
+             */
+            triggerGazeFlick() {
+                const range = 0.08;
+                this._yaw.goal   = (Math.random() - 0.5) * range;
+                this._pitch.goal = -0.03 - Math.random() * 0.04; // slight downward
+                this.nextSaccadeTime = 1.5 + Math.random() * 2;
             }
         }
 
@@ -7640,6 +7670,10 @@
                     _triggerAutoAnimation(emo);
                     // Phase 12-P5: sync audio engine with emotion
                     if (characterAudio) characterAudio.setEmotion(emo);
+                }
+                else if (type === 'triggerGazeFlick') {
+                    // Character glances downward briefly, as if noticing the user typing.
+                    if (saccadeController) saccadeController.triggerGazeFlick();
                 }
                 else if (type === 'playGesture') {
                     const gesture = payload?.gesture || e.data.gesture;

@@ -736,3 +736,6 @@ physics: {
 ```
 
 The Settings panel still has the on/off toggle (mapped to `intensity === 'off'` for clarity), plus the 5-position intensity dial. First-time users experience low-intensity motion immediately; the toggle gives an easy hard-off for shared-PC scenarios.
+
+- 2026-05-08 Phase 1: ✓ delta clamp 100→50ms + stripSpringBoneTracks() in GLB+BVH paths (commit 84036b8). 2843 tests pass, tsc clean.
+- 2026-05-08 Phase 2: ✓ JigglePhysicsManager (detect/preset/apply) + 7 postMessage handlers + Physics tab + viewerStore actions (commit 4e2a0d9). Default: subtle auto-on. 2843 tests, tsc clean.

@@ -310,6 +310,28 @@ interface ViewerState {
    * postMessage with type 'jiggleInfo'.
    */
   dispatchGetJiggleInfo: () => void;
+
+  /**
+   * Trigger a brief downward gaze flick in the viewer — character glances
+   * toward keyboard, as if noticing the user has started typing.
+   */
+  dispatchTriggerGazeFlick: () => void;
+
+  /**
+   * Apply a personality profile to the AnimationDirector.
+   * Drives idle fidget selection, breath speed, and energy level.
+   *
+   * @param profile - Personality params (energy, nervousness, warmth, playfulness, etc.)
+   */
+  dispatchSetPersonality: (profile: Record<string, number>) => void;
+
+  /**
+   * Scale jiggle physics intensity by a per-emotion multiplier.
+   * Excited emotions increase movement; sad/calm reduce it.
+   *
+   * @param multiplier - Intensity scale factor (e.g. 1.3 for excited, 0.7 for sad)
+   */
+  dispatchSetJiggleEmotionMultiplier: (multiplier: number) => void;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -762,6 +784,21 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     const cmd: ViewerCommand = { kind: 'getJiggleInfo', payload: {}, _seq: seq };
     if (state.mode === 'vrm') postToIframe(state.iframeRef, { type: 'getJiggleInfo' });
     set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchTriggerGazeFlick: () => {
+    const state = get();
+    if (state.mode === 'vrm') postToIframe(state.iframeRef, { type: 'triggerGazeFlick' });
+  },
+
+  dispatchSetPersonality: (profile: Record<string, number>) => {
+    const state = get();
+    if (state.mode === 'vrm') postToIframe(state.iframeRef, { type: 'setPersonality', payload: profile });
+  },
+
+  dispatchSetJiggleEmotionMultiplier: (multiplier: number) => {
+    const state = get();
+    if (state.mode === 'vrm') postToIframe(state.iframeRef, { type: 'setJiggleEmotionMultiplier', multiplier });
   },
 
   // ── GLB Animation Controls ──────────────────────────────────────────────────

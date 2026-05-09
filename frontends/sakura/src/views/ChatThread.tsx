@@ -3,6 +3,7 @@ import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone
 import { VNTextBox } from '../components/VNTextBox';
 import { VNPortrait } from '../components/VNPortrait';
 import { useAppStore } from '../stores/appStore';
+import { useViewerStore } from '../stores/viewerStore';
 
 import type { ReplyLengthMode } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
@@ -54,6 +55,8 @@ export function ChatThread() {
   const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode, config, saveConfig } = useAppStore();
   const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode, regenerateImage, continueGeneration, toggleReaction } = useChatStore();
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Gaze flick: fire once per typing burst, debounced 2s so holding a key doesn't spam
+  const gazeFlickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   // Ref shared with WaveformVisualizer so it can attach an AnalyserNode.
@@ -480,6 +483,16 @@ export function ChatThread() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+      return;
+    }
+    // Gaze flick: character glances down on the first keypress of each typing burst.
+    // Debounce 2s — timer reset on each key, so burst = one flick.
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+      if (!gazeFlickTimer.current) {
+        useViewerStore.getState().dispatchTriggerGazeFlick();
+      }
+      if (gazeFlickTimer.current) clearTimeout(gazeFlickTimer.current);
+      gazeFlickTimer.current = setTimeout(() => { gazeFlickTimer.current = null; }, 2000);
     }
   }, [handleSend, wrapSelectionWithAction]);
 

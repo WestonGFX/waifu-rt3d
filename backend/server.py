@@ -18388,6 +18388,98 @@ def get_intimate_quiz_progress(char_id: int):
         }
 
 
+# --- Spring Bone Presets (v81) ---
+
+class _SpringBonePresetBody(BaseModel):
+    """Request body for POST /api/characters/{char_id}/spring-bone-preset.
+
+    Attributes:
+        preset: JSON-serializable preset object containing joint overrides
+            and optional wind configuration.  Set to ``None`` to clear the
+            saved preset and restore model defaults on next load.
+    """
+
+    preset: dict | None = None
+
+
+@app.get("/api/characters/{char_id}/spring-bone-preset")
+async def get_spring_bone_preset(char_id: int):
+    """Return the stored spring bone parameter preset for a character.
+
+    The 3D viewer fetches this after a VRM model loads and applies the
+    overrides so tuned physics persist across app restarts.
+
+    Args:
+        char_id: Character database ID.
+
+    Returns:
+        ``{"character_id": int, "preset": dict | None}`` — ``preset`` is the
+        stored JSON object, or ``None`` if no preset has been saved.
+
+    Raises:
+        HTTPException 404: If the character does not exist.
+
+    Example:
+        >>> response = client.get("/api/characters/1/spring-bone-preset")
+        >>> response.json()
+        {"character_id": 1, "preset": None}
+    """
+    async def _fetch():
+        with db_ctx() as conn:
+            row = conn.execute(
+                "SELECT spring_bone_presets FROM characters WHERE id = ?",
+                (char_id,),
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Character not found")
+            raw = row[0]
+            preset = json.loads(raw) if raw else None
+            return {"character_id": char_id, "preset": preset}
+
+    return await run_in_threadpool(_fetch)
+
+
+@app.post("/api/characters/{char_id}/spring-bone-preset")
+async def save_spring_bone_preset(char_id: int, body: _SpringBonePresetBody):
+    """Persist a spring bone parameter preset for a character.
+
+    Overwrites any existing preset.  Pass ``{"preset": null}`` to clear
+    saved overrides and restore model defaults on next load.
+
+    Args:
+        char_id: Character database ID.
+        body: Preset payload — see :class:`_SpringBonePresetBody`.
+
+    Returns:
+        ``{"saved": True}`` on success.
+
+    Raises:
+        HTTPException 404: If the character does not exist.
+
+    Example:
+        >>> payload = {"preset": {"joints": [], "wind": {"x": 0, "y": -1, "z": 0, "strength": 0.1}}}
+        >>> response = client.post("/api/characters/1/spring-bone-preset", json=payload)
+        >>> response.json()
+        {"saved": True}
+    """
+    async def _save():
+        with db_ctx() as conn:
+            exists = conn.execute(
+                "SELECT 1 FROM characters WHERE id = ?", (char_id,)
+            ).fetchone()
+            if not exists:
+                raise HTTPException(status_code=404, detail="Character not found")
+            raw = json.dumps(body.preset) if body.preset is not None else None
+            with conn:
+                conn.execute(
+                    "UPDATE characters SET spring_bone_presets = ? WHERE id = ?",
+                    (raw, char_id),
+                )
+            return {"saved": True}
+
+    return await run_in_threadpool(_save)
+
+
 # --- Scenario Templates ---
 
 class _ScenarioCreateBody(BaseModel):

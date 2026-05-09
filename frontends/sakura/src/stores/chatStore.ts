@@ -133,6 +133,27 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         : state.latestEmotionByChar,
     }));
     useViewerStore.getState().dispatchExpression(emotion, intensity);
+
+    // Phase 3 animation polish: drive idle personality + jiggle from mood state
+    const MOOD_PERSONALITY_MAP: Record<string, Record<string, number>> = {
+      happy:      { energy: 0.75, nervousness: 0.1,  playfulness: 0.8 },
+      excited:    { energy: 0.9,  nervousness: 0.3,  playfulness: 0.9 },
+      sad:        { energy: 0.2,  nervousness: 0.2,  playfulness: 0.1 },
+      angry:      { energy: 0.7,  nervousness: 0.7,  playfulness: 0.2 },
+      calm:       { energy: 0.4,  nervousness: 0.05, playfulness: 0.4 },
+      embarrassed:{ energy: 0.4,  nervousness: 0.8,  playfulness: 0.2 },
+      flirty:     { energy: 0.6,  nervousness: 0.2,  playfulness: 0.7 },
+      neutral:    { energy: 0.5,  nervousness: 0.1,  playfulness: 0.5 },
+    };
+    const EMOTION_JIGGLE_MAP: Record<string, number> = {
+      excited: 1.3, happy: 1.1, flirty: 1.2,
+      calm: 0.8, sad: 0.7, neutral: 1.0,
+    };
+    const normalizedEmotion = emotion.toLowerCase();
+    const personality = MOOD_PERSONALITY_MAP[normalizedEmotion] ?? MOOD_PERSONALITY_MAP.neutral;
+    const jiggleMult = EMOTION_JIGGLE_MAP[normalizedEmotion] ?? 1.0;
+    useViewerStore.getState().dispatchSetPersonality(personality);
+    useViewerStore.getState().dispatchSetJiggleEmotionMultiplier(jiggleMult);
   },
 
   setContext: (sessionId, charId) => set({ sessionId, charId, messages: [] }),

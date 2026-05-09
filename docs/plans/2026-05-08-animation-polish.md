@@ -739,3 +739,5 @@ The Settings panel still has the on/off toggle (mapped to `intensity === 'off'` 
 
 - 2026-05-08 Phase 1: ✓ delta clamp 100→50ms + stripSpringBoneTracks() in GLB+BVH paths (commit 84036b8). 2843 tests pass, tsc clean.
 - 2026-05-08 Phase 2: ✓ JigglePhysicsManager (detect/preset/apply) + 7 postMessage handlers + Physics tab + viewerStore actions (commit 4e2a0d9). Default: subtle auto-on. 2843 tests, tsc clean.
+- 2026-05-08 Phase 3: ✓ springDamperExact + SaccadeController spring upgrade + gaze flick (typing burst) + mood→personality dispatch + schema v81 spring_bone_presets + GET/POST endpoints (commit 246478d). 2843 tests, tsc clean.
+- 2026-05-08 Phase 4: ✓ idle clip cycling (30–90s mood-matched clips) + VRMA format detection in loadClip. VRMAnimationLoaderPlugin + .vrma files still needed to fully activate (commit 07b35bd). 2843 tests, tsc clean.

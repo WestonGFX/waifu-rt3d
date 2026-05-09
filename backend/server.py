@@ -6263,6 +6263,125 @@ async def tts_preview(req: Request):
         raise HTTPException(500, f"TTS preview error: {e}")
 
 
+# Benchmark paragraph that exercises prosody: declarative, question, emotional sentence,
+# list, and a short exclamation. Runs in ~3-5s per provider.
+_BENCHMARK_PARAGRAPH = (
+    "Hello, I'm running a voice benchmark. "
+    "Can you hear the difference between providers? "
+    "I find it so exciting when technology surprises me! "
+    "The test covers tone, pacing, and clarity. "
+    "Let's find the voice that feels just right."
+)
+
+
+@app.post("/api/tts/benchmark")
+async def run_tts_benchmark(req: Request):
+    """Synthesise a test paragraph with all enabled TTS providers in parallel.
+
+    Reads configured providers from ``services.tts.providers`` (new config
+    format) or falls back to a single entry for the currently active provider
+    (legacy flat config). Each provider is attempted in parallel; failures are
+    captured per-provider and do not abort the run.
+
+    Args:
+        req: JSON body with optional ``text`` (str, max 500 chars).
+
+    Returns:
+        dict: {
+            "ok": True,
+            "results": [
+                {
+                    "provider": str,      # Provider name/key
+                    "audio_url": str | None,
+                    "latency_ms": int,
+                    "error": str | None
+                }
+            ]
+        }
+
+    Example:
+        >>> POST /api/tts/benchmark
+        >>> {}
+        {"ok": true, "results": [{"provider": "edge-tts", "audio_url": "/files/audio/bench_...", ...}]}
+    """
+    import asyncio
+    import time as _time
+    from pathlib import Path as _Path
+    from backend.tts.registry import get_tts as _get_tts
+
+    body = await req.json() if req.headers.get("content-type", "").startswith("application/json") else {}
+    raw_text = (body.get("text") or _BENCHMARK_PARAGRAPH).strip()[:500]
+    text = raw_text or _BENCHMARK_PARAGRAPH
+
+    cfg = load_config()
+    audio_dir = _Path(__file__).resolve().parent / "storage" / "audio"
+
+    # Build a list of (provider_name, cfg_override) tuples to benchmark
+    services_tts = cfg.get("services", {}).get("tts", {})
+    providers_map = services_tts.get("providers", {})
+
+    if providers_map:
+        # New config format: iterate all entries (skip explicitly disabled ones)
+        entries: list[tuple[str, dict]] = [
+            (name, pcfg) for name, pcfg in providers_map.items()
+            if pcfg.get("enabled", True)
+        ]
+    else:
+        # Legacy flat config: benchmark only the current provider
+        legacy_prov = cfg.get("tts", {}).get("provider", "edge-tts")
+        legacy_voice = cfg.get("tts", {}).get("voice_id", "")
+        entries = [(legacy_prov, {"provider": legacy_prov, "voice_id": legacy_voice})]
+
+    async def _bench_one(provider_name: str, provider_cfg: dict) -> dict:
+        """Synthesise text with a single provider and return a result row."""
+        bench_cfg = cfg.copy()
+        # Inject provider so get_tts() routes correctly
+        bench_cfg["tts"] = {
+            "provider": provider_cfg.get("type", provider_name),
+            "voice_id": provider_cfg.get("voice_id", ""),
+        }
+        # Also patch services.tts.active_provider if using new format
+        if "services" in bench_cfg:
+            bench_cfg = dict(bench_cfg)
+            bench_cfg["services"] = dict(bench_cfg.get("services", {}))
+            bench_cfg["services"]["tts"] = dict(bench_cfg["services"].get("tts", {}))
+            bench_cfg["services"]["tts"]["active_provider"] = provider_name
+
+        t0 = _time.perf_counter()
+        try:
+            adapter = _get_tts(bench_cfg)
+            tts_cfg = {
+                "provider": provider_cfg.get("type", provider_name),
+                "voice_id": provider_cfg.get("voice_id", ""),
+            }
+            res = await run_in_threadpool(adapter.speak_cached, text, tts_cfg)
+            latency_ms = int((_time.perf_counter() - t0) * 1000)
+            if res.get("ok"):
+                return {
+                    "provider": provider_name,
+                    "audio_url": f"/files/audio/{res['filename']}",
+                    "latency_ms": latency_ms,
+                    "error": None,
+                }
+            return {
+                "provider": provider_name,
+                "audio_url": None,
+                "latency_ms": latency_ms,
+                "error": res.get("error", "synthesis failed"),
+            }
+        except Exception as exc:
+            latency_ms = int((_time.perf_counter() - t0) * 1000)
+            return {
+                "provider": provider_name,
+                "audio_url": None,
+                "latency_ms": latency_ms,
+                "error": str(exc),
+            }
+
+    results = await asyncio.gather(*[_bench_one(name, pcfg) for name, pcfg in entries])
+    return {"ok": True, "results": list(results)}
+
+
 @app.get("/api/tts/cache")
 def get_tts_cache_stats():
     """Return TTS audio cache statistics for the cache management UI (#76).

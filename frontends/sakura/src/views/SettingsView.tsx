@@ -3487,11 +3487,22 @@ interface TabProps {
   cfg: (k: string, fb?: unknown) => unknown;
 }
 
+type BenchResult = {
+  provider: string;
+  audio_url: string | null;
+  latency_ms: number;
+  error: string | null;
+};
+
 function VoiceTab({ save, cfg }: TabProps) {
   const { activeCharacter } = useAppStore();
   const [wandRunning, setWandRunning] = useState(false);
   const [wandResult, setWandResult] = useState<string | null>(null);
   const [showGallery, setShowGallery] = useState(false);
+  const [benchRunning, setBenchRunning] = useState(false);
+  const [benchResults, setBenchResults] = useState<BenchResult[]>([]);
+  const [benchText, setBenchText] = useState('');
+  const [benchOpen, setBenchOpen] = useState(false);
 
   const runVoiceWand = async () => {
     if (!activeCharacter?.id || wandRunning) return;
@@ -3504,6 +3515,20 @@ function VoiceTab({ save, cfg }: TabProps) {
       console.error('[VoiceWand] failed:', err);
     } finally {
       setWandRunning(false);
+    }
+  };
+
+  const runBenchmark = async () => {
+    if (benchRunning) return;
+    setBenchRunning(true);
+    setBenchResults([]);
+    try {
+      const res = await api.benchmarkTTS(benchText.trim() || undefined);
+      setBenchResults(res.results);
+    } catch (err) {
+      console.error('[TTSBenchmark] failed:', err);
+    } finally {
+      setBenchRunning(false);
     }
   };
 
@@ -3704,6 +3729,96 @@ function VoiceTab({ save, cfg }: TabProps) {
               ▶ Preview
             </button>
           </SettingField>
+
+          {/* Provider Benchmark */}
+          <SettingField
+            label="Provider Benchmark"
+            description="Compare all enabled TTS providers side-by-side."
+          >
+            <button
+              onClick={() => setBenchOpen(v => !v)}
+              className="text-sm px-3 py-1 rounded cursor-pointer"
+              style={{ ...selectStyle, color: 'var(--color-accent)' }}
+            >
+              {benchOpen ? 'Hide' : 'Compare'}
+            </button>
+          </SettingField>
+
+          {benchOpen && (
+            <div style={{ padding: '8px 0 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  placeholder="Custom text (optional, max 500 chars)"
+                  value={benchText}
+                  onChange={e => setBenchText(e.target.value.slice(0, 500))}
+                  style={{
+                    ...selectStyle, flex: 1,
+                    fontSize: '0.8rem', padding: '4px 8px',
+                  }}
+                />
+                <button
+                  onClick={runBenchmark}
+                  disabled={benchRunning}
+                  className="text-sm px-3 py-1 rounded cursor-pointer"
+                  style={{
+                    ...selectStyle, color: 'var(--color-accent)',
+                    opacity: benchRunning ? 0.6 : 1,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {benchRunning ? 'Running…' : 'Run Now'}
+                </button>
+              </div>
+
+              {benchResults.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {benchResults.map(row => (
+                    <div
+                      key={row.provider}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '6px 10px', borderRadius: 8,
+                        border: '1px solid var(--color-border)',
+                        background: 'var(--color-surface-alt)',
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      <span style={{ minWidth: 100, fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                        {row.provider}
+                      </span>
+                      {row.error ? (
+                        <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic', flex: 1 }}>
+                          {row.error}
+                        </span>
+                      ) : (
+                        <>
+                          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                          <audio controls src={row.audio_url ?? ''} style={{ height: 28, flex: 1 }} />
+                          <span style={{ color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                            {row.latency_ms}ms
+                          </span>
+                          <button
+                            onClick={() => {
+                              save('tts.provider', row.provider);
+                            }}
+                            style={{
+                              fontSize: '0.72rem', padding: '2px 8px',
+                              borderRadius: 12, border: '1px solid var(--color-accent)',
+                              color: 'var(--color-accent)', background: 'transparent',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Pick
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
 

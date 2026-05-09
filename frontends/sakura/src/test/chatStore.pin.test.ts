@@ -57,7 +57,7 @@ describe('chatStore — togglePin', () => {
   });
 
   it('optimistically flips pinned=true, then confirms via API', async () => {
-    vi.mocked(api.pinMessage).mockResolvedValue(undefined);
+    vi.mocked(api.pinMessage).mockResolvedValue({ ok: true });
 
     const togglePin = useChatStore.getState().togglePin;
     const promise = togglePin('msg-1');
@@ -83,7 +83,7 @@ describe('chatStore — togglePin', () => {
 
   it('toggles pinned=true → false (round-trip)', async () => {
     seedStore([makeMessage({ pinned: true })]);
-    vi.mocked(api.pinMessage).mockResolvedValue(undefined);
+    vi.mocked(api.pinMessage).mockResolvedValue({ ok: true });
 
     await useChatStore.getState().togglePin('msg-1');
 
@@ -110,7 +110,7 @@ describe('chatStore — togglePin', () => {
   it('only toggles the target message — other messages untouched', async () => {
     const second = makeMessage({ id: 'msg-2', serverMessageId: 99, pinned: true });
     seedStore([makeMessage({ pinned: false }), second]);
-    vi.mocked(api.pinMessage).mockResolvedValue(undefined);
+    vi.mocked(api.pinMessage).mockResolvedValue({ ok: true });
 
     await useChatStore.getState().togglePin('msg-1');
 

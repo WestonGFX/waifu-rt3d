@@ -352,6 +352,23 @@ export const api = {
   /** Delete a character's voice sample. */
   deleteVoiceSample: (charId: number) => del<{ ok: boolean }>(`/api/characters/${charId}/voice-sample`),
 
+  /**
+   * Benchmark all enabled TTS providers against a test paragraph.
+   *
+   * @param text - Optional override text (max 500 chars). Uses server default if omitted.
+   * @returns Per-provider results with audio URLs and wall-clock latency.
+   */
+  benchmarkTTS: (text?: string) =>
+    post<{
+      ok: boolean;
+      results: Array<{
+        provider: string;
+        audio_url: string | null;
+        latency_ms: number;
+        error: string | null;
+      }>;
+    }>('/api/tts/benchmark', text ? { text } : {}),
+
   // AI Motion generation
   getMotionModelStatus: () =>
     get<{ procedural: boolean; motion_diffuse: boolean; active_backend: string; model_dir: string }>('/api/motion/model-status'),

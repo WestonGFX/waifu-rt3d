@@ -62,6 +62,21 @@ async function fetchBondState(charId: number): Promise<void> {
         }
       }
     }
+
+    // M6-item21: streak achievements — check after every bond fetch
+    try {
+      const streakRes = await api.getCharacterStreak(charId);
+      const s = streakRes.streak ?? 0;
+      for (const threshold of [3, 7, 30] as const) {
+        if (s >= threshold) {
+          api.grantAchievement(charId, `streak_${threshold}`).then((res) => {
+            if (res.granted) store.setPendingAchievement(res.achievement);
+          }).catch(() => {});
+        }
+      }
+    } catch {
+      // Streak API not available — silent fallback
+    }
   } catch {
     // Bond API not available — silent fallback
   }

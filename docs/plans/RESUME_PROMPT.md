@@ -1,57 +1,37 @@
-# Resume Prompt — Next Session
+# Resume Prompt — Session 42+
 
-**Last updated:** 2026-05-08 (session 40, post-handoff)
-**Branch:** master — pushed to `origin/master` at `d98f7dd`
+**Last updated:** 2026-05-09 (session 41)
+**Branch:** master · origin/master at `9dd1744` (all pushed)
+**Schema:** v81 (spring_bone_presets on characters)
+**Tests:** 2,843 backend + 276+ frontend, tsc clean
 
-## Last Completed Work
+## What Was Done (Sessions 40–41)
 
-Session 40 was a same-day continuation of session 38/39. Three things shipped:
+Session 40 applied all 14 character image styles + drafted 4 polish plans.
 
-1. **Pushed 17 commits** that were sitting unpushed from sessions 36–37 + 38/39. origin/master is current.
-2. **Applied character styles to all 14 characters** — fixed `scripts/draft_character_styles.py` (Python `.format()` brace collision + `max_tokens` 400→4096 for thinking-model `reasoning_content` budget). Drafted via LM Studio (10.0.0.17 / qwen3.5-9b). Reviewed JSON. Applied via existing `scripts/apply_character_styles.py`. DB column `characters.image_style` now populated for all 14.
-3. **Drafted 4 polish plans** via 4 parallel `prd-writer` agents (sonnet) — animation, HUD, chat, voice/audio. 9 open questions surfaced + locked.
+Session 41 executed ALL 4 polish plans end-to-end:
+- Animation P1-P4: delta clamp, spring bone stripping, JigglePhysicsManager, saccade spring, mood→personality, idle clip cycling, VRMA detection (commits 84036b8–07b35bd)
+- HUD PA-PD: ModelPanel redesign, Minimal mode (Ctrl+Shift+M), CommandPalette (Cmd+K), HotkeySheet (commits 37890da, 387f839)
+- Chat PA-PD: composer UX, code blocks, TTFT, stuck-gen, failed card, timestamps, pin toggle (commits aa321c0, 94e837a)
+- Voice P1-P4: TTS benchmark, latency ring buffer, waveform preview/delete UX, VoiceOrb error state (commits 0e79979–9dd1744)
 
-Schema v80 (unchanged). Tests: 2,843 backend + 276 frontend, tsc clean.
+Session 41 also wired M6 achievement auto-grant:
+- streak_3/7/30 in `useBondProgress.ts`
+- shared_secret in `chatStore.ts` togglePin
+- first_voice in `useFullDuplexVoice.ts`
+- Achievements gallery section in `BondPanel.tsx`
 
 ## Next 3 Tasks
 
-**Animation Polish is the locked first ticket.** All 4 plans are ready in `docs/plans/2026-05-08-*.md`.
+1. **M6 item 22 — NSFW affinity unlock gates (~3h)** — Bond 20→Tier1 (suggestive), 50→Tier2 (explicit), 75→Tier3 (uncensored). Add `GET /api/characters/{id}/nsfw-eligibility` backend check. In `SettingsView.tsx` Settings > Intimacy tab, gate content_filter_level=-1 behind bond 50+ and show lock UI for lower bond levels.
 
-1. **Animation Polish Phase 1 (~2h AI-eq)** — Two one-liner spring-bone fixes in `frontends/shared/viewer/viewer.html`:
-   - Clamp delta time from 100ms → 50ms so spring bones don't explode after a tab switch.
-   - Strip spring bone tracks from Mixamo clips so hair moves during animations.
-   - Agent flagged these as outsized-ROI: "make everything else visible." Ship first.
-   - Plan: `docs/plans/2026-05-08-animation-polish.md` Phase 1.
+2. **M8 docs (~4h)** — Write `docs/marketing/eu-ai-act-compliance.md` (local-first = compliant by design; document before Aug 2, 2026 deadline) and `docs/marketing/privacy-comparison.md` (cite Aura breach, Char.AI face-scan, Replika fine, Oversecured audit).
 
-2. **Animation Polish Phase 2 (~6h AI-eq)** — `JigglePhysicsManager` class.
-   - **Locked default: auto-on at low intensity** (override agent's default-OFF assumption).
-   - Settings > Physics tab + 5-position intensity dial (off / subtle / medium / lively / extreme).
-   - Files: `viewer.html` (manager class), `frontends/sakura/src/views/SettingsView.tsx` (Physics tab), `appStore.ts` or `settingsStore.ts` (state).
-
-3. **Animation Polish Phase 4 prereq — VRMA sourcing list** — Can run in parallel with Phase 2/3.
-   - `backend/storage/animations/{vrma,bvh,fbx,glb,vrm-expression-library}/` are all 0-file directories.
-   - Research Anata animation store, vroidhub.com, community packs.
-   - Output: curated download list + license notes for user review.
-   - Phase 4 can't ship until vrma/ is populated.
+3. **Memory Browser QA** — Chrome hands-on, Ctrl+M overlay, all 4 tabs against real backend.
 
 ## In-Flight Context
 
-- **All 14 characters now have `image_style`** populated — image generation inherits per-character art-style prefixes via `resolve_character_style` (shipped session 26 commit `d34f86f`). Test: `curl -X POST /api/image-gen/portrait -d '{"prompt":"selfie","character_id":1}'` should produce Rin-flavored output.
-- **Polish plan inventory:** animation (~24h, FIRST), HUD (~11-16h), chat (~11h), voice (~13-17h). Total ~59-68h AI-eq across the 4 plans. Each has a "Locked Decisions — Post-Draft Session 2026-05-08" appendix capturing the 9 user decisions made during drafting.
-- **AIE Phase C (LoRA + DSPy)** complete since session 36 — no open work there. Schema v78.
-- **Visual Content MVP** complete since session 29 — RESUME_PROMPT had listed Phase 2 as TODO, but it shipped (`5349b42` + `99f4043`). Don't re-plan.
-- **Phase A leftovers** RESUME_PROMPT mentioned (response regeneration, typing indicator, search) all already shipped. The genuinely open chat work is in `2026-05-08-chat-polish.md` (code-block markdown, TTFT telemetry, stuck-gen indicator re-spec, failed-card retry, per-message timestamps, pin UI).
-
-## Key Files to Read First
-
-1. `CURRENT_STATUS.md` — current state
-2. `docs/plans/2026-05-08-animation-polish.md` — first ticket, all phases + locked decisions
-3. `docs/SESSION_HANDOFF.md` — this session's full handoff (more detail than RESUME_PROMPT)
-4. `docs/conventions/3d-viewer-and-animation.md` — viewer.html conventions before Phase 1 edits
-5. `frontends/shared/viewer/viewer.html` — sensitive area, regressed 10+ times. Read carefully before editing.
-
-## Context Health
-
-This session ran apply-character-styles + dispatched 4 prd-writer agents in parallel + locked 9 questions + handoff. Multi-step. **Recommend `/clear` before starting Phase 1.**
-
-The animation plan touches `viewer.html` which is in the Known Sensitive Areas list. Consider `--isolation worktree` when dispatching `senior-dev` for Phase 1. CLAUDE.md "Suggestion Triggers" recommends `/qa-sweep` at the next handoff if `viewer.html` is touched.
+- **Achievement system**: 11 types in `ACHIEVEMENT_DEFS` (server.py:10904). Auto-grant fires from `useBondProgress.ts` (bond/message/streak milestones) + `chatStore.ts` (shared_secret) + `useFullDuplexVoice.ts` (first_voice). Toast via `AchievementToast` in App.tsx. Gallery in `BondPanel.tsx`.
+- **NSFW tier system**: `content_filter_level` from -1 (full NSFW) to 3 (strict). DesireArcEngine gates desire arcs at bond ≥ 40. M6 item 22 adds per-tier gates at bond 20/50/75.
+- **All prior "TODO" items** (Visual Content Phase 2, AIE Phase C, apply character styles) are shipped. Don't re-plan them.
+- **Statusline review** was done 2026-05-07 (session 37). Clean. No rebuild needed.

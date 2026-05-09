@@ -602,6 +602,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
     try {
       await api.pinMessage(msg.serverMessageId, newPinned);
+      // M6-item21: grant shared_secret achievement on first pin
+      if (newPinned) {
+        const charId = get().charId;
+        if (charId != null) {
+          const { useAppStore } = await import('./appStore');
+          api.grantAchievement(charId, 'shared_secret').then((res) => {
+            if (res.granted) useAppStore.getState().setPendingAchievement(res.achievement);
+          }).catch(() => {});
+        }
+      }
     } catch {
       // Revert on error
       set((s) => ({

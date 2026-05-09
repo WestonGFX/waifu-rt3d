@@ -525,3 +525,10 @@ If the user wants a multi-sample-per-character gallery in the future (allow Saku
 Per Decision #8, Phase 4 (VoiceOrb error state + live transcript) ships as originally planned, using the confirmed `ai_token` event stream. No re-scope.
 
 Total plan effort revised: 14-18h → **13-17h** AI-eq (Phase 3 saved ~1h via re-scope).
+
+---
+## Status Log
+- 2026-05-09 Phase 1: ✓ TTS benchmark endpoint + Settings UI — commit 0e79979
+- 2026-05-09 Phase 2: ✓ Latency ring buffer, ASR/TTS instrumentation, /api/voice/latency-stats, VoiceConversationPanel stats row — commit 8cebf27
+- 2026-05-09 Phase 3: ✓ VoiceSampleUploader — waveform preview, two-step delete, explicit replace label, length validation — commit dc28c5c
+- 2026-05-09 Phase 4: ✓ VoiceOrb error state, useFullDuplexVoice error transitions, toast on voice error — commit 9dd1744

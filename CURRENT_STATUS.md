@@ -1,8 +1,8 @@
 # Current Project Status
 
-**Last updated:** 2026-05-08 (session 40 — apply character styles + 4 polish plan drafts pushed)
-**Branch:** master · pushed to `origin/master` at `d98f7dd`.
-**Schema version:** v80 (unchanged this session). Animation polish plan reserves v81.
+**Last updated:** 2026-05-09 (session 41 — all 4 polish plans shipped, M6 achievement wiring)
+**Branch:** master · pushed to `origin/master` at `9dd1744`.
+**Schema version:** v81 (spring_bone_presets on characters — animation-p3).
 **Tests:** **2,843 backend** + **276 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
@@ -10,36 +10,32 @@
 
 ## Active Work
 
-**Session 40 (2026-05-08, continuation of same calendar day) — Apply character styles + 4 polish plan drafts. 3 commits, all pushed.**
+**Session 41 (2026-05-09) — All 4 polish plans executed + M6 achievement wiring.**
 
-| Item | Status | Commit |
+### Session 40/41 Polish Plans — ALL COMPLETE
+
+| Plan | Phases | Key Commits |
 |---|---|---|
-| Push 17 carried + apply-styles + plan commits | ✅ | `261fa1e..d98f7dd` |
-| Fix `draft_character_styles.py` (`.format()` brace collision + `max_tokens` 400→4096 for thinking model) | ✅ | `1d71b62` |
-| Apply 14 character `image_style` rows via existing `apply_character_styles.py` | ✅ | DB write (runtime) |
-| 4 polish plan drafts via parallel `prd-writer` agents | ✅ | `2c00bc6` |
-| Lock 9 open questions surfaced by agents (3 anim + 3 HUD + 1 chat + 2 voice verifications) | ✅ | `d98f7dd` |
+| Animation Polish | P1 (delta+strip), P2 (JigglePhysics), P3 (saccade+mood+v81), P4 (idle cycling+VRMA) | `84036b8` `4e2a0d9` `246478d` `07b35bd` |
+| HUD Polish | PA (ModelPanel), PB (Minimal mode), PC (CommandPalette), PD (HotkeySheet) | `37890da` `387f839` |
+| Chat Polish | PA (composer UX), PB+C+D (code blocks, TTFT, stuck-gen, timestamps, pin) | `aa321c0` `94e837a` |
+| Voice Polish | P1 (TTS benchmark), P2 (latency ring buffer), P3 (waveform/delete UX), P4 (VoiceOrb error) | `0e79979` `8cebf27` `dc28c5c` `9dd1744` |
 
-**Polish plan inventory (next-session execution targets):**
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers.
 
-| Plan | Effort | Status | First-ticket? |
-|---|---|---|---|
-| `docs/plans/2026-05-08-animation-polish.md` | ~24h AI-eq | Ready | **YES — Phase 1 (2h, two one-liner spring-bone fixes)** |
-| `docs/plans/2026-05-08-hud-polish.md` | ~11–16h AI-eq | Ready | Queued |
-| `docs/plans/2026-05-08-chat-polish.md` | ~11h AI-eq | Ready | Queued |
-| `docs/plans/2026-05-08-voice-audio-polish.md` | ~13–17h AI-eq | Ready | Queued |
+**Session 41 — M6 remaining work (in-progress):**
 
-**Stale-claim corrections this session (RESUME_PROMPT was misleading):**
-- Visual Content Phase 2 — already shipped session 29 (`5349b42` + `99f4043`). RESUME_PROMPT listed it as TODO.
-- 12 chat-polish items already shipped (response regeneration, branch switching, search-in-thread, scroll-to-bottom, message editing, reactions, image lightbox, export-to-md, timeout retry, quick-reply chips, typing indicator stages mode, image bubble UX). Surfaced via chat-polish agent's grep audit.
+| Item | Status |
+|---|---|
+| streak_3/7/30 achievement auto-grant (useBondProgress.ts) | 🚧 |
+| first_voice achievement (useFullDuplexVoice.ts) | 🚧 |
+| shared_secret achievement (chatStore.ts togglePin) | 🚧 |
+| Achievements section in BondPanel | 🚧 |
 
-**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers anywhere.
-
-**Next priorities (next session):**
-1. Animation Polish Phase 1 — two one-liner spring-bone fixes (`viewer.html` delta clamp + Mixamo strip). 2h AI-eq.
-2. Animation Polish Phase 2 — `JigglePhysicsManager` (auto-on at low intensity, Settings dial). 6h AI-eq.
-3. Animation Polish Phase 3 — saccade upgrade (typing-burst trigger) + mood-driven idle. Schema v81. 8h AI-eq.
-4. Animation Polish Phase 4 prereq — draft VRMA sourcing list. `backend/storage/animations/vrma/` empty; need download URLs + license notes before Phase 4 ships.
+**Next priorities (after session 41):**
+1. M6 item 22 — Affinity-gated NSFW unlocks (~3h). Bond level threshold pick needed.
+2. M8 — EU AI Act compliance doc + privacy comparison page (~4h docs).
+3. Statusline review (Neon Glassline v2 rebuild, scheduled ~2026-05-19).
 
 ---
 

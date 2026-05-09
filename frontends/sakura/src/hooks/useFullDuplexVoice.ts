@@ -110,6 +110,8 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
   const levelIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks whether first_voice achievement was granted this hook lifetime (per-charId).
+  const firstVoiceGrantedRef = useRef(false);
 
   // Refs for stable callback access in WebSocket handlers
   const callbacksRef = useRef(options);
@@ -371,6 +373,17 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
         // Drive expression on the 3D viewer
         if (msg.emotion) {
           useViewerStore.getState().dispatchExpression(msg.emotion, msg.intensity ?? 1.0);
+        }
+        // M6-item21: first_voice achievement — first complete AI reply in a voice session
+        if (!firstVoiceGrantedRef.current && callbacksRef.current.charId != null) {
+          firstVoiceGrantedRef.current = true;
+          import('../lib/api').then(({ api: _api }) =>
+            import('../stores/appStore').then(({ useAppStore }) =>
+              _api.grantAchievement(callbacksRef.current.charId!, 'first_voice').then((res) => {
+                if (res.granted) useAppStore.getState().setPendingAchievement(res.achievement);
+              }).catch(() => {})
+            )
+          );
         }
         break;
 

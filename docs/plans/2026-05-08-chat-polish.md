@@ -694,3 +694,8 @@ In addition to the originally-scoped FailedActionCard + per-message timestamps:
 Phase D effort revised: 3h → **5h** (was 3h failed-card+timestamps; +2h for pin UI).
 
 Total plan effort: ~9h → **~11h** AI-eq.
+
+---
+## Status Log
+- 2026-05-09 Phase A: ✓ Composer UX (animated send, italic shortcut, composer hints) — earlier session
+- 2026-05-09 Phases B+C+D: ✓ Code blocks, TTFT, stuck-gen, failed card, timestamps, pin — commit 94e837a

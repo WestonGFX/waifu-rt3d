@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Heart, BookOpen, Trophy, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Heart, BookOpen, Trophy, Award, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
@@ -28,6 +28,14 @@ interface BondStory {
   bond_level_required: number;
   unlocked: boolean;
   viewed: boolean;
+}
+
+interface Achievement {
+  key: string;
+  label: string;
+  description: string;
+  icon: string;
+  granted_at: number;
 }
 
 interface BondPanelProps {
@@ -54,8 +62,10 @@ export function BondPanel({ onClose }: BondPanelProps) {
 
 
   const [stories, setStories] = useState<BondStory[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [storiesExpanded, setStoriesExpanded] = useState(true);
   const [timelineExpanded, setTimelineExpanded] = useState(true);
+  const [achievementsExpanded, setAchievementsExpanded] = useState(true);
 
   const activeCharId = activeChar?.id ?? null;
 
@@ -64,6 +74,14 @@ export function BondPanel({ onClose }: BondPanelProps) {
     if (!activeCharId) return;
     api.getBondStories(activeCharId)
       .then(res => { if (res.ok) setStories(res.stories); })
+      .catch(() => { /* silent */ });
+  }, [activeCharId]);
+
+  // Fetch achievements on mount and when charId changes
+  useEffect(() => {
+    if (!activeCharId) return;
+    api.listAchievements(activeCharId)
+      .then(res => setAchievements(res.achievements as Achievement[]))
       .catch(() => { /* silent */ });
   }, [activeCharId]);
 
@@ -248,6 +266,77 @@ export function BondPanel({ onClose }: BondPanelProps) {
                   currentTier={bondTier}
                   onStoryClick={(storyId, _title) => handleStoryClick(storyId)}
                 />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Achievements section */}
+        <div style={{ marginTop: 24 }}>
+          <button
+            onClick={() => setAchievementsExpanded(v => !v)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '8px 0',
+              color: 'var(--color-text-primary)',
+              fontWeight: 600,
+              fontSize: '0.85rem',
+            }}
+          >
+            <Award size={14} style={{ color: 'var(--color-accent)' }} />
+            Achievements ({achievements.length})
+            {achievementsExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+
+          <AnimatePresence>
+            {achievementsExpanded && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                style={{ overflow: 'hidden' }}
+              >
+                {achievements.length === 0 ? (
+                  <p style={{ color: 'var(--color-text-tertiary)', fontSize: '0.8rem', fontStyle: 'italic', margin: '8px 0 0' }}>
+                    No achievements yet — keep chatting!
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 4 }}>
+                    {achievements.map(ach => (
+                      <div
+                        key={ach.key}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: '8px 10px',
+                          borderRadius: 8,
+                          background: 'var(--color-surface-raised)',
+                          border: '1px solid var(--color-border)',
+                        }}
+                      >
+                        <span style={{ fontSize: '1.3rem', lineHeight: 1, flexShrink: 0 }}>{ach.icon}</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                            {ach.label}
+                          </div>
+                          {ach.description && (
+                            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-secondary)', marginTop: 1 }}>
+                              {ach.description}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>

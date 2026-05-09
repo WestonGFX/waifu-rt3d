@@ -11,6 +11,15 @@ import { parseFull } from '../lib/parseActions';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
 
+/** Format a Unix-ms timestamp as a relative time string ("2 min ago", "just now"). */
+function formatRelativeTime(ts: number): string {
+  const diffS = Math.floor((Date.now() - ts) / 1000);
+  if (diffS < 60) return 'just now';
+  if (diffS < 3600) return `${Math.floor(diffS / 60)} min ago`;
+  if (diffS < 86400) return `${Math.floor(diffS / 3600)}h ago`;
+  return `${Math.floor(diffS / 86400)}d ago`;
+}
+
 /**
  * Canonical 26-emotion emoji map (Phase 15).
  * Covers all 6 categories: Core, Social, Cognitive, Romantic, Energy, Playful.
@@ -444,6 +453,80 @@ function TimeoutActionCard({ message }: { message: import('../lib/types').ChatMe
         }}>
           Cancel
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** Countdown indicator shown when image regen has been in-flight for 30+ seconds. */
+function StuckImageIndicator({ regenStartedAt, onRetry }: { regenStartedAt: number; onRetry?: () => void }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - regenStartedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [regenStartedAt]);
+
+  if (elapsed < 30) return null;
+
+  return (
+    <div style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic', marginTop: 6 }}>
+      {elapsed >= 60 ? (
+        <span>
+          Image took too long.{' '}
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-accent)', cursor: 'pointer', fontStyle: 'normal', fontSize: 'inherit', textDecoration: 'underline' }}
+            >
+              Try again
+            </button>
+          )}
+        </span>
+      ) : 'Still generating image...'}
+    </div>
+  );
+}
+
+/** Retry card for status === 'failed' messages — mirrors TimeoutActionCard UX. */
+function FailedActionCard({ message, onRetry }: { message: import('../lib/types').ChatMessage; onRetry?: () => void }) {
+  const btnStyle: React.CSSProperties = {
+    padding: '6px 14px',
+    borderRadius: 8,
+    border: '1px solid var(--color-border, rgba(128,128,128,0.3))',
+    background: 'var(--color-surface)',
+    color: 'var(--color-text-primary)',
+    fontSize: '0.8rem',
+    cursor: 'pointer',
+    fontWeight: 500,
+  };
+
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 10,
+      padding: '12px 14px',
+      borderRadius: 10,
+      border: '1px solid var(--color-danger, #f44336)',
+      background: 'var(--color-surface)',
+      color: 'var(--color-text-primary)',
+      maxWidth: 340,
+    }}>
+      <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--color-danger, #f44336)' }}>
+        Message failed to send
+      </div>
+      {message.text && (
+        <div style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)', lineHeight: 1.4, fontStyle: 'italic' }}>
+          {message.text.slice(0, 120)}{message.text.length > 120 ? '…' : ''}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 6 }}>
+        {onRetry && (
+          <button style={{ ...btnStyle, background: 'var(--color-accent)', color: 'var(--color-on-accent, #fff)', borderColor: 'transparent' }}
+            onClick={onRetry}>
+            Retry
+          </button>
+        )}
       </div>
     </div>
   );
@@ -895,9 +978,10 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
           ) : message.status === 'timeout' ? (
             <TimeoutActionCard message={message} />
           ) : message.status === 'failed' ? (
-            <span style={{ color: 'var(--color-danger, #f44)', fontStyle: 'italic' }}>
-              {message.text}
-            </span>
+            <FailedActionCard
+              message={message}
+              onRetry={onRegenerate && message.serverMessageId != null ? () => onRegenerate(message.serverMessageId!) : undefined}
+            />
           ) : editing ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 200 }}>
               <textarea
@@ -944,6 +1028,14 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               }}
             />
           </div>
+        )}
+
+        {/* Stuck-gen indicator — shown when image regen has been in-flight 30+ seconds */}
+        {message.regenStartedAt != null && (
+          <StuckImageIndicator
+            regenStartedAt={message.regenStartedAt}
+            onRetry={onRegenerateImage ? () => onRegenerateImage(message.id) : undefined}
+          />
         )}
         <AnimatePresence>
           {lightboxOpen && message.imageUrl && (
@@ -1136,6 +1228,13 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
                 <Trash2 size={11} />
               </button>
             )}
+            {/* Per-message timestamp — shown on hover */}
+            <span
+              style={{ marginLeft: 'auto', color: 'var(--color-text-tertiary)', fontSize: '0.68rem', userSelect: 'none' }}
+              title={new Date(message.createdAt).toLocaleString()}
+            >
+              {formatRelativeTime(message.createdAt)}
+            </span>
           </div>
         )}
       </div>

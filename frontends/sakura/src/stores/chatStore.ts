@@ -56,6 +56,8 @@ interface ChatState {
   dismissTimeout: () => void;
   /** Toggle an emoji reaction on a message (optimistic update + API sync). */
   toggleReaction: (messageId: number, emoji: string) => Promise<void>;
+  /** Toggle the pinned flag on a message (optimistic update + API sync). */
+  togglePin: (messageId: string) => Promise<void>;
 }
 
 const genId = () => crypto.randomUUID();
@@ -327,10 +329,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             patchAssistant({ status: 'pending', stage: 'processing' });
             break;
 
-          case 'generating':
-            // First token incoming — switch from dots to streaming
-            patchAssistant({ status: 'streaming', text: '', stage: 'generating' });
+          case 'generating': {
+            // First token incoming — capture TTFT and switch from dots to streaming
+            const firstTokenMs = Math.round(performance.now() - streamStart);
+            patchAssistant({ status: 'streaming', text: '', stage: 'generating', firstTokenMs });
             break;
+          }
 
           case 'token':
             // Individual token — append to running text
@@ -586,6 +590,28 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
+  togglePin: async (messageId: string) => {
+    const msg = get().messages.find((m) => m.id === messageId);
+    if (!msg?.serverMessageId) return;
+    const newPinned = !msg.pinned;
+    // Optimistic update
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === messageId ? { ...m, pinned: newPinned } : m
+      ),
+    }));
+    try {
+      await api.pinMessage(msg.serverMessageId, newPinned);
+    } catch {
+      // Revert on error
+      set((s) => ({
+        messages: s.messages.map((m) =>
+          m.id === messageId ? { ...m, pinned: !newPinned } : m
+        ),
+      }));
+    }
+  },
+
   editMessage: async (messageId, newText) => {
     const msg = get().messages.find(m => m.id === messageId);
     if (!msg?.serverMessageId) return;
@@ -622,21 +648,21 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         messages: s.messages.map((m) => (m.id === messageId ? { ...m, ...p } : m)),
       }));
     };
-    applyPatch({ status: 'streaming' });
+    applyPatch({ status: 'streaming', regenStartedAt: Date.now() });
     try {
       const result = await api.generatePortrait({ prompt: msg.imagePrompt });
       if (result.ok && result.url) {
-        applyPatch({ imageUrl: result.url, status: 'sent' });
+        applyPatch({ imageUrl: result.url, status: 'sent', regenStartedAt: undefined });
         if (msg.serverMessageId) {
           api.updateMessageImageUrl(msg.serverMessageId, result.url).catch(() => {
             // persist is best-effort — UI is already updated
           });
         }
       } else {
-        applyPatch({ status: 'sent' });
+        applyPatch({ status: 'sent', regenStartedAt: undefined });
       }
     } catch {
-      applyPatch({ status: 'sent' });
+      applyPatch({ status: 'sent', regenStartedAt: undefined });
     }
   },
 

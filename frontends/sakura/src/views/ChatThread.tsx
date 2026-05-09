@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles, SlidersHorizontal, Check, MessageCircle, Zap, Italic } from 'lucide-react';
+import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles, SlidersHorizontal, Check, MessageCircle, Zap, Italic, Pin } from 'lucide-react';
 import { VNTextBox } from '../components/VNTextBox';
 import { VNPortrait } from '../components/VNPortrait';
 import { useAppStore } from '../stores/appStore';
@@ -64,6 +64,7 @@ export function ChatThread() {
   const textareaRef = useRef<RichComposerHandle | null>(null);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showPinnedOnly, setShowPinnedOnly] = useState(false);
 
   // ── AIE Phase C: Feedback signal preferences ────────────────────────────
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
@@ -629,12 +630,16 @@ export function ChatThread() {
     }
   }, []);
 
-  // ── Search filter ────────────────────────────────────────────────────────
+  // ── Search + pin filter ───────────────────────────────────────────────────
   const visibleMessages = useMemo(() => {
-    if (!searchQuery.trim()) return messages;
-    const q = searchQuery.toLowerCase();
-    return messages.filter(m => m.text?.toLowerCase().includes(q));
-  }, [messages, searchQuery]);
+    let filtered = messages;
+    if (showPinnedOnly) filtered = filtered.filter(m => m.pinned);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(m => m.text?.toLowerCase().includes(q));
+    }
+    return filtered;
+  }, [messages, searchQuery, showPinnedOnly]);
 
   // ── Export ───────────────────────────────────────────────────────────────
   const handleExport = useCallback(() => {
@@ -736,6 +741,26 @@ export function ChatThread() {
           />
         )}
 
+        {/* Pin filter pill — shown when there are pinned messages to filter to */}
+        {messages.some(m => m.pinned) && !cinematicMode && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 16px 4px' }}>
+            <button
+              onClick={() => setShowPinnedOnly(v => !v)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: '0.7rem', padding: '2px 8px', borderRadius: 20,
+                border: `1px solid ${showPinnedOnly ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                background: showPinnedOnly ? 'var(--color-accent-soft)' : 'transparent',
+                color: showPinnedOnly ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+            >
+              <Pin size={10} />
+              Pinned
+            </button>
+          </div>
+        )}
+
         {/* Diary snippet — "last time, character wrote..." */}
         {showDiary && (
           <div
@@ -782,14 +807,26 @@ export function ChatThread() {
         {/* ── Message list ──────────────────────────────────────────────── */}
         <div className="flex-1 min-h-0" style={{ position: 'relative' }}>
         <div ref={scrollRef} className="chat-area h-full overflow-y-auto p-4 max-w-3xl mx-auto w-full">
-          {searchQuery && (
-            <p className="text-center text-xs mb-3" style={{ color: 'var(--color-text-tertiary)' }}>
-              {visibleMessages.length === 0 ? 'No messages match' : `${visibleMessages.length} message${visibleMessages.length === 1 ? '' : 's'} found`}
-            </p>
+          {(searchQuery || showPinnedOnly) && (
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                {visibleMessages.length === 0
+                  ? showPinnedOnly ? 'No pinned messages — pin a message from its hover menu.' : 'No messages match'
+                  : `${visibleMessages.length} message${visibleMessages.length === 1 ? '' : 's'}${showPinnedOnly ? ' pinned' : ' found'}`}
+              </p>
+              {showPinnedOnly && (
+                <button
+                  onClick={() => setShowPinnedOnly(false)}
+                  style={{ fontSize: '0.7rem', color: 'var(--color-accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
+                  Show all
+                </button>
+              )}
+            </div>
           )}
 
           {/* Empty-state greeting — shown when chat is empty and not still loading */}
-          {!loading && visibleMessages.length === 0 && !searchQuery && (
+          {!loading && visibleMessages.length === 0 && !searchQuery && !showPinnedOnly && (
             <div
               className="flex flex-col items-center justify-center py-16 px-4 text-center"
               style={{ minHeight: '60vh' }}

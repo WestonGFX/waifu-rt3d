@@ -240,6 +240,17 @@ export interface ChatMessage {
   retryText?: string;
   /** Emoji reactions added by the user. Array of emoji strings e.g. ["👍", "❤️"]. */
   reactions?: string[];
+  /**
+   * Time-to-first-token in ms: elapsed from sendMessage call to receipt of the
+   * first `generating` SSE event (model prefill complete). Store-only — not persisted.
+   */
+  firstTokenMs?: number;
+  /**
+   * Epoch-ms timestamp when regenerateImage() was last called for this message.
+   * Drives the stuck-gen indicator. Cleared when a new imageUrl arrives.
+   * Store-only — not persisted.
+   */
+  regenStartedAt?: number;
 }
 
 export interface Session {

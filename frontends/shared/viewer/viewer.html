@@ -2463,6 +2463,181 @@
             'RightHand':        'rightHand',
         };
 
+        // ══════════════════════════════════════════════════════════
+        // Phase C: BoneMaskManager + InertializationBlend
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Manages bone masks for AnimationAction filtering.
+         * Enables clip-based animations to affect only a subset of bones,
+         * allowing simultaneous upper-body gestures over continuous idle lower-body motion.
+         *
+         * Primary path: filterClip() returns a NEW filtered clip before action creation.
+         * Secondary path: applyMask() uses Three.js internals (forward-compat risk noted).
+         *
+         * @example
+         *   const masked = BoneMaskManager.filterClip(clip, BoneMaskManager.UPPER_BODY);
+         *   clipLayer.playClip('wave', { mask: BoneMaskManager.UPPER_BODY });
+         */
+        class BoneMaskManager {
+            /** VRM humanoid bone names belonging to the upper body. */
+            static UPPER_BODY = new Set([
+                'spine', 'chest', 'upperChest', 'neck', 'head',
+                'leftShoulder', 'rightShoulder',
+                'leftUpperArm', 'rightUpperArm',
+                'leftLowerArm', 'rightLowerArm',
+                'leftHand', 'rightHand',
+            ]);
+
+            /** VRM humanoid bone names belonging to the lower body. */
+            static LOWER_BODY = new Set([
+                'hips',
+                'leftUpperLeg', 'rightUpperLeg',
+                'leftLowerLeg', 'rightLowerLeg',
+                'leftFoot', 'rightFoot',
+                'leftToes', 'rightToes',
+            ]);
+
+            /** No mask — all bones affected (null signals full-body to callers). */
+            static FULL_BODY = null;
+
+            /**
+             * Filter an AnimationClip to only include tracks for specified bones.
+             * Returns a NEW cloned clip; does not mutate the original.
+             *
+             * Track names use scene node names (not VRM bone names), so matching
+             * checks whether the node name contains any allowed bone name as a
+             * case-insensitive substring (handles "_mixamorig:Hips" etc.).
+             *
+             * @param {THREE.AnimationClip} clip - Source clip
+             * @param {Set<string>} allowedBones - VRM humanoid bone names to keep
+             * @returns {THREE.AnimationClip} New filtered clip
+             */
+            static filterClip(clip, allowedBones) {
+                if (!allowedBones) return clip;
+                const masked = clip.clone();
+                masked.tracks = clip.tracks.filter(track => {
+                    const dot = track.name.lastIndexOf('.');
+                    const nodeName = dot === -1 ? track.name : track.name.substring(0, dot);
+                    const lower = nodeName.toLowerCase();
+                    for (const bone of allowedBones) {
+                        if (lower.includes(bone.toLowerCase())) return true;
+                    }
+                    return false;
+                });
+                masked.name = clip.name + '_masked';
+                return masked;
+            }
+
+            /**
+             * Apply a bone mask to an existing AnimationAction by nulling bindings for
+             * excluded bones. Uses Three.js _propertyBindings internals — forward-compat risk.
+             * Prefer filterClip() for new code.
+             *
+             * @param {THREE.AnimationAction} action - Action to mask (must be created first)
+             * @param {Set<string>} allowedBones - VRM humanoid bone names to keep active
+             */
+            static applyMask(action, allowedBones) {
+                if (!allowedBones || !action?._propertyBindings) return;
+                for (const binding of action._propertyBindings) {
+                    const nodeName = binding?.binding?.node?.name || '';
+                    const lower = nodeName.toLowerCase();
+                    let keep = false;
+                    for (const bone of allowedBones) {
+                        if (lower.includes(bone.toLowerCase())) { keep = true; break; }
+                    }
+                    if (!keep) {
+                        // Zero the effective influence for this track via its mixer
+                        const idx = action._propertyBindings.indexOf(binding);
+                        if (idx !== -1 && action._interpolantSettings) {
+                            try { action._propertyBindings[idx] = null; } catch (_) {}
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
+         * Inertialization-based animation transition.
+         *
+         * At the moment of a clip transition, capture() snapshots the current bone
+         * quaternions. Each subsequent update() decays the blend weight from 1→0 using
+         * a critically damped spring — the new action runs normally while the snapshot
+         * is faded out via slerp, producing the smoothest possible pop-free transition.
+         *
+         * Usage inside ClipLayer:
+         *   const blend = new InertializationBlend(vrm, boneNames);
+         *   blend.capture();         // call before new action starts
+         *   // ... new action plays ...
+         *   blend.update(dt);        // call each frame; returns false when done
+         *
+         * @param {Object} vrm - The loaded VRM model
+         * @param {string[]} boneNames - VRM humanoid bone names to blend
+         * @param {number} [halflife=0.12] - Spring halflife for offset decay (seconds)
+         */
+        class InertializationBlend {
+            constructor(vrm, boneNames, halflife = 0.12) {
+                this.vrm = vrm;
+                this.boneNames = boneNames;
+                this.halflife = halflife;
+                this._active = false;
+                this._snapshot = {};   // boneName → THREE.Quaternion at capture time
+                this._blendX = 1.0;    // blend weight: 1 = fully old, 0 = fully new
+                this._blendV = 0.0;    // spring velocity
+                this._tmp = new THREE.Quaternion();
+            }
+
+            /**
+             * Snapshot current bone quaternions and arm the blend.
+             * Call immediately BEFORE the new AnimationAction starts playing.
+             */
+            capture() {
+                const humanoid = this.vrm?.humanoid;
+                if (!humanoid) return;
+                this._snapshot = {};
+                for (const boneName of this.boneNames) {
+                    try {
+                        const node = humanoid.getNormalizedBoneNode(boneName);
+                        if (node) this._snapshot[boneName] = node.quaternion.clone();
+                    } catch (_) {}
+                }
+                this._blendX = 1.0;
+                this._blendV = 0.0;
+                this._active = true;
+            }
+
+            /**
+             * Apply one frame of inertialization blend.
+             * Must be called AFTER AnimationMixer.update() so new-action bone values are set.
+             *
+             * @param {number} dt - Delta time in seconds
+             * @returns {boolean} true while blend is still active, false when complete
+             */
+            update(dt) {
+                if (!this._active) return false;
+                const r = springDamperExact(this._blendX, this._blendV, 0, this.halflife, dt);
+                this._blendX = r.x;
+                this._blendV = r.v;
+                if (this._blendX < 0.005) {
+                    this._active = false;
+                    return false;
+                }
+                const humanoid = this.vrm?.humanoid;
+                if (!humanoid) return false;
+                for (const boneName of Object.keys(this._snapshot)) {
+                    try {
+                        const node = humanoid.getNormalizedBoneNode(boneName);
+                        if (!node) continue;
+                        // Blend: new action's output → slerped toward old snapshot
+                        // As _blendX decays 1→0, pose transitions smoothly from old→new
+                        this._tmp.copy(node.quaternion);
+                        node.quaternion.slerpQuaternions(this._tmp, this._snapshot[boneName], this._blendX);
+                    } catch (_) {}
+                }
+                return true;
+            }
+        }
+
         class ClipLayer extends AnimationLayer {
             /**
              * @param {Object} vrm - The loaded VRM model
@@ -2478,6 +2653,12 @@
                 this._fadeOutDuration = 0.3;
                 this._loader = null;    // lazy-init GLTFLoader
                 this._nodeNameCache = null; // VRM bone name → scene node name
+                // Phase C: spring crossfade state
+                this._crossfadeTarget = 0;
+                this._crossfadeElapsed = 0;
+                this._crossfadeDuration = 0;
+                this._crossfadeEasingFn = 'exponential';
+                this._inertBlend = null;  // InertializationBlend instance
             }
 
             /**
@@ -2783,8 +2964,8 @@
              * @returns {boolean} True if playback started
              */
             playClip(name, opts = {}) {
-                const clip = this.clipLibrary[name];
-                if (!clip) {
+                const sourceClip = this.clipLibrary[name];
+                if (!sourceClip) {
                     console.warn(`[ClipLayer] Clip "${name}" not found in library`);
                     return false;
                 }
@@ -2794,7 +2975,24 @@
                     fadeIn = 0.3,
                     timeScale = 1.0,
                     weight = 1.0,
+                    mask = BoneMaskManager.FULL_BODY,   // Phase C: bone mask (null = all bones)
+                    easingFn = 'exponential',           // Phase C: 'linear' | 'exponential' | 'spring'
+                    inertialization = true,             // Phase C: use InertializationBlend on transition
                 } = opts;
+
+                // Phase C: apply bone mask by filtering clip tracks
+                const clip = mask ? BoneMaskManager.filterClip(sourceClip, mask) : sourceClip;
+
+                // Phase C: capture inertialization snapshot BEFORE fading old action
+                if (inertialization && this.currentAction) {
+                    const allBones = [
+                        ...BoneMaskManager.UPPER_BODY,
+                        ...BoneMaskManager.LOWER_BODY,
+                        'hips',
+                    ];
+                    this._inertBlend = new InertializationBlend(this.vrm, allBones, 0.12);
+                    this._inertBlend.capture();
+                }
 
                 // Fade out any currently playing action
                 if (this.currentAction) {
@@ -2806,7 +3004,19 @@
                 action.clampWhenFinished = !loop;
                 action.timeScale = timeScale;
                 action.setEffectiveWeight(weight);
-                action.reset().fadeIn(fadeIn).play();
+
+                if (easingFn === 'linear') {
+                    action.reset().fadeIn(fadeIn).play();
+                } else {
+                    // Phase C: exponential ease-in instead of Three.js linear crossfade.
+                    // Weight ramp is driven manually in update() using spring-based interpolation.
+                    action.setEffectiveWeight(0);
+                    action.reset().play();
+                    this._crossfadeTarget = weight;
+                    this._crossfadeElapsed = 0;
+                    this._crossfadeDuration = fadeIn;
+                    this._crossfadeEasingFn = easingFn;
+                }
 
                 this.currentAction = action;
                 this.isPlaying = true;
@@ -2824,7 +3034,7 @@
                     this.mixer.addEventListener('finished', onFinished);
                 }
 
-                console.log(`[ClipLayer] Playing "${name}" (loop=${loop}, speed=${timeScale})`);
+                console.log(`[ClipLayer] Playing "${name}" (loop=${loop}, speed=${timeScale}, mask=${mask ? 'yes' : 'none'})`);
                 return true;
             }
 
@@ -2859,12 +3069,31 @@
             }
 
             /**
-             * Per-frame update — advances the AnimationMixer.
+             * Per-frame update — advances the AnimationMixer and drives crossfade/blend.
              * @param {number} dt - Delta time in seconds
              */
             update(dt) {
                 if (this.mixer) {
                     this.mixer.update(dt);
+                }
+
+                // Phase C: spring-based weight ramp for non-linear crossfade
+                if (this.currentAction && this._crossfadeDuration > 0 &&
+                    this._crossfadeElapsed < this._crossfadeDuration) {
+                    this._crossfadeElapsed += dt;
+                    const rawT = Math.min(1, this._crossfadeElapsed / this._crossfadeDuration);
+                    // Exponential ease: fast-in, slow-finish — avoids abrupt Three.js linear ramp
+                    const easedT = 1 - Math.exp(-5 * rawT);
+                    this.currentAction.setEffectiveWeight(easedT * this._crossfadeTarget);
+                    if (rawT >= 1) {
+                        this._crossfadeDuration = 0;  // done
+                        this.currentAction.setEffectiveWeight(this._crossfadeTarget);
+                    }
+                }
+
+                // Phase C: apply inertialization blend (smooths pop-free transitions)
+                if (this._inertBlend?.update(dt) === false) {
+                    this._inertBlend = null;  // blend complete
                 }
             }
         }
@@ -3127,6 +3356,26 @@
                 this._headTarget = { x: 0, y: 0, z: 0 };
                 this._headCurrent = { x: 0, y: 0, z: 0 };
                 this._headTimer = 1 + Math.random() * 3;
+
+                // Phase C: Critically damped springs for cursor and gaze smoothing.
+                // Eyes use a tighter halflife (0.04s) to lead the head; head uses 0.08s.
+                // This mimics the natural eye-leads-head behavior in human tracking.
+                this._headSpringX = { x: 0, v: 0 };   // head rotation.y spring
+                this._headSpringY = { x: 0, v: 0 };   // head rotation.x spring
+                this._gazeSpringX = { x: 0, v: 0 };   // eye gaze world target X
+                this._gazeSpringY = { x: 1.3, v: 0 }; // eye gaze world target Y (default head height)
+                /** World-space lookAt override. null = cursor mode. */
+                this._worldTarget = null;
+            }
+
+            /**
+             * Override cursor tracking with a world-space position target.
+             * Pass null to return to cursor-follow mode.
+             *
+             * @param {THREE.Vector3|null} position - World-space position to look at
+             */
+            setWorldTarget(position) {
+                this._worldTarget = position;
             }
 
             update(dt) {
@@ -3138,20 +3387,45 @@
                 // not additive (+=), because these are absolute offsets from neutral
                 // that should be the final head pose each frame.
                 //
-                // Phase 6: Also drives VRM eye lookAt target for eye gaze tracking.
-                // The VRM lookAt system (vrm.lookAt) internally handles eye bone
-                // rotation or eye blend shapes depending on the model's lookAtType.
-                if (this._mouseActive) {
-                    if (head) {
-                        head.rotation.y = this._mouseX * 0.15;
-                        head.rotation.x = this._mouseY * -0.08;
+                // Phase C upgrade: all cursor/gaze targets are now spring-smoothed.
+                // Eyes use halflife=0.04s (fast, lead the head); head uses 0.08s.
+                // This mirrors natural eye-leads-head saccade behavior in humans.
+                if (this._mouseActive || this._worldTarget) {
+                    let targetX, targetY;   // head rotation targets
+                    let gazeX, gazeY;       // world-space gaze target coords
+
+                    if (this._worldTarget) {
+                        // World-space override (postMessage lookAt target)
+                        gazeX = this._worldTarget.x;
+                        gazeY = this._worldTarget.y;
+                        // Derive head rotation from world position (character ~at origin, 2m forward)
+                        targetX = Math.atan2(gazeX, 2.0) * 0.7;
+                        targetY = Math.atan2(gazeY - 1.3, 2.0) * -0.5;
+                    } else {
+                        // Cursor mode: map normalized mouse (-1..1) to rotation/gaze
+                        targetX = this._mouseX * 0.15;
+                        targetY = this._mouseY * -0.08;
+                        gazeX = this._mouseX * 0.8;
+                        gazeY = -this._mouseY * 0.5 + 1.3;
                     }
-                    // Phase 6: Eye gaze IK — set VRM lookAt target from mouse position
+
+                    // Spring-smooth head rotation (halflife 0.08s = crisp but not jittery)
+                    const rx = springDamperExact(this._headSpringX.x, this._headSpringX.v, targetX, 0.08, dt);
+                    this._headSpringX = rx;
+                    const ry = springDamperExact(this._headSpringY.x, this._headSpringY.v, targetY, 0.08, dt);
+                    this._headSpringY = ry;
+                    if (head) {
+                        head.rotation.y = rx.x;
+                        head.rotation.x = ry.x;
+                    }
+
+                    // Spring-smooth eye gaze (halflife 0.04s — eyes lead head)
                     if (this._eyeGazeEnabled && this.vrm.lookAt) {
-                        // Map mouse (-1..1) to world-space gaze target ~1m in front of character
-                        const gazeX = this._mouseX * 0.8;   // horizontal gaze range
-                        const gazeY = -this._mouseY * 0.5 + 1.3; // vertical (head height)
-                        this._gazeObject3D.position.set(gazeX, gazeY, 2.0);
+                        const gx = springDamperExact(this._gazeSpringX.x, this._gazeSpringX.v, gazeX, 0.04, dt);
+                        this._gazeSpringX = gx;
+                        const gy = springDamperExact(this._gazeSpringY.x, this._gazeSpringY.v, gazeY, 0.04, dt);
+                        this._gazeSpringY = gy;
+                        this._gazeObject3D.position.set(gx.x, gy.x, 2.0);
                         this.vrm.lookAt.target = this._gazeObject3D;
                     }
                 } else {
@@ -3164,12 +3438,17 @@
                         this._gazeTarget.y = (Math.random() - 0.5) * 0.36;  // pitch ±10°
                         this._gazeTimer = 2 + Math.random() * 3;
                     }
-                    // Smooth interpolation — slow lerp (dt*1.2) gives a 1–2s easing to target
+                    // Spring toward wander target (halflife 0.6s — lazy, dreamlike drift)
                     this._gazeCurrent.x += (this._gazeTarget.x - this._gazeCurrent.x) * dt * 1.2;
                     this._gazeCurrent.y += (this._gazeTarget.y - this._gazeCurrent.y) * dt * 1.2;
+                    // Spring-smooth wander head rotation
+                    const wx = springDamperExact(this._headSpringX.x, this._headSpringX.v, this._gazeCurrent.x, 0.18, dt);
+                    this._headSpringX = wx;
+                    const wy = springDamperExact(this._headSpringY.x, this._headSpringY.v, this._gazeCurrent.y, 0.18, dt);
+                    this._headSpringY = wy;
                     if (head) {
-                        head.rotation.y = this._gazeCurrent.x;
-                        head.rotation.x = this._gazeCurrent.y;
+                        head.rotation.y = wx.x;
+                        head.rotation.x = wy.x;
                     }
                 }
 
@@ -7847,6 +8126,31 @@
                     if (animationDirector) {
                         const lookAt = animationDirector.getLayer('lookAt');
                         if (lookAt) lookAt._eyeGazeEnabled = payload?.enabled !== false;
+                    }
+                    return;
+                }
+                // Phase C: VRMLookAt postMessage API
+                // Payloads:
+                //   { type: 'lookAt', target: { x, y, z } }     — world-space target override
+                //   { type: 'lookAt', mode: 'cursor' }           — return to cursor tracking
+                //   { type: 'lookAt', enabled: false }           — disable eye gaze + clear target
+                if (type === 'lookAt') {
+                    if (animationDirector) {
+                        const lookAtLayer = animationDirector.getLayer('lookAt');
+                        if (lookAtLayer) {
+                            if (payload?.target) {
+                                lookAtLayer.setWorldTarget(new THREE.Vector3(
+                                    payload.target.x ?? 0,
+                                    payload.target.y ?? 1.3,
+                                    payload.target.z ?? 2.0,
+                                ));
+                            } else if (payload?.mode === 'cursor' || payload?.mode === 'point' && !payload?.target) {
+                                lookAtLayer.setWorldTarget(null);
+                            } else if (payload?.enabled !== undefined) {
+                                lookAtLayer._eyeGazeEnabled = payload.enabled !== false;
+                                if (!payload.enabled) lookAtLayer.setWorldTarget(null);
+                            }
+                        }
                     }
                     return;
                 }

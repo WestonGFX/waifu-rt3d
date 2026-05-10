@@ -650,6 +650,9 @@
                     jiggleManager._gravityMovementMul = mul.gravity;
                     jiggleManager.applyParams(currentVrm);
                 }
+                // Keep FollowThroughLayer aware of state so it can modulate spring halflives.
+                const ftLayer = this.getLayer('followThrough');
+                if (ftLayer) ftLayer.setAnimState(newState);
             }
 
             /**
@@ -976,6 +979,100 @@
         }
 
         /**
+        /**
+         * Cascaded spring chain for follow-through animation (Disney principle 6).
+         * Each bone in the chain follows its parent with increasing lag,
+         * producing natural overlapping action without manual timing.
+         *
+         * @example
+         * const chain = new SpringChain(
+         *   ['hips', 'spine', 'chest', 'neck', 'head'],
+         *   { baseHalflife: 0.06, halflifeGrowth: 1.5, frequency: 3.0 }
+         * );
+         * chain.setTargets({ hips: { x: 0.1, y: 0, z: 0 }, ... });
+         * const deltas = chain.update(dt);
+         * // deltas[boneName] = { x, y, z } — apply to bone.rotation
+         */
+        class SpringChain {
+            /**
+             * @param {string[]} boneNames - Ordered list from root to tip
+             * @param {object}   opts
+             * @param {number}   opts.baseHalflife    - Root bone halflife in seconds
+             * @param {number}   opts.halflifeGrowth  - Multiplier per bone along chain
+             * @param {number}   opts.frequency       - Under-damped oscillation frequency (Hz)
+             */
+            constructor(boneNames, opts = {}) {
+                this.bones = boneNames;
+                this.baseHalflife  = opts.baseHalflife   ?? 0.06;
+                this.halflifeGrowth = opts.halflifeGrowth ?? 1.5;
+                this.frequency     = opts.frequency       ?? 3.0;
+                // Per-bone per-axis spring state { x, v }
+                this._state = boneNames.map(() => ({
+                    x: { x: 0, v: 0 },
+                    y: { x: 0, v: 0 },
+                    z: { x: 0, v: 0 },
+                }));
+                this._targets = {};
+                this._initialized = false;
+            }
+
+            /**
+             * Set the target rotations that the chain should follow.
+             * Call once per frame before update().
+             *
+             * @param {Record<string, {x:number,y:number,z:number}>} targets
+             */
+            setTargets(targets) {
+                this._targets = targets;
+            }
+
+            /**
+             * Advance chain springs and return the lagged rotation values.
+             * On the first call, snaps to targets to avoid cold-start spring-in.
+             *
+             * @param {number} dt - Delta time in seconds
+             * @returns {Record<string, {x:number,y:number,z:number}>}
+             */
+            update(dt) {
+                const result = {};
+                for (let i = 0; i < this.bones.length; i++) {
+                    const bone   = this.bones[i];
+                    const target = this._targets[bone] ?? { x: 0, y: 0, z: 0 };
+                    const state  = this._state[i];
+
+                    if (!this._initialized) {
+                        // Snap springs to current targets so first frame has no visible spring-in.
+                        state.x.x = target.x ?? 0;
+                        state.y.x = target.y ?? 0;
+                        state.z.x = target.z ?? 0;
+                    }
+
+                    const halflife = this.baseHalflife * Math.pow(this.halflifeGrowth, i);
+                    for (const axis of ['x', 'y', 'z']) {
+                        const upd = springDamperUnder(
+                            state[axis].x, state[axis].v,
+                            target[axis] ?? 0,
+                            this.frequency, halflife, dt
+                        );
+                        state[axis].x = upd.x;
+                        state[axis].v = upd.v;
+                    }
+                    result[bone] = { x: state.x.x, y: state.y.x, z: state.z.x };
+                }
+                this._initialized = true;
+                return result;
+            }
+
+            /** Snap all springs to their current targets (zero velocity). */
+            reset() {
+                this._initialized = false;
+                for (const s of this._state) {
+                    for (const ax of ['x', 'y', 'z']) { s[ax].x = 0; s[ax].v = 0; }
+                }
+            }
+        }
+
+        /**
          * L0: Base pose — breathing rhythm and weight distribution.
          * Write mode: SET (=) on chest/spine.
          * Personality influence:
@@ -1014,8 +1111,18 @@
                 // Feed targets into spring system. 0.25s halflife = "natural" breathing feel.
                 // When personality changes (energy/nervousness shift), amplitude transitions
                 // smoothly rather than snapping, eliminating discontinuities on mood change.
+                // NOTE: chest.z is set below (combined breathing + weight shift).
                 this.springs.setCritical('chest', 'x', breathX, 0.25);
-                this.springs.setCritical('chest', 'z', breathZ, 0.25);
+
+                // B3: Multi-bone breathing — spine sympathetically follows chest with slight lag.
+                // Shoulders rise on inhale (sine > 0), neck micro-extends on exhale.
+                const breathPhase = Math.sin(t * 0.8 * Math.PI * 2 * 0.15); // ~0.15 Hz breathing baseline
+                const isInhale = breathPhase > 0;
+                const shoulderRise = isInhale ? breathAmpX * 0.4 : 0;
+                this.springs.setCritical('spine', 'x', breathX * 0.4, 0.35);
+                this.springs.setCritical('leftShoulder',  'x', -shoulderRise * 0.6, 0.3);
+                this.springs.setCritical('rightShoulder', 'x', -shoulderRise * 0.55, 0.3);
+                this.springs.setCritical('neck', 'x', isInhale ? breathAmpX * 0.2 : 0, 0.4);
 
                 // Spine confidence posture — 0.50s halflife for slow postural shifts.
                 const spineGoalX = p.confidence > 0.5 ? -(p.confidence - 0.5) * 0.03 : 0;
@@ -1043,6 +1150,16 @@
                 this.springs.setCritical('rightLowerArm', 'y',   0.04,  0.40);
                 this.springs.setCritical('rightLowerArm', 'x',   0.0,   0.40);
 
+                // B4: Weight shift — low-frequency lateral hip shift produces S-curve spine counter.
+                // hips rotate in z, spine counter-rotates, chest counter-tilts, head stays level.
+                // Period ~6s so it's barely perceptible — just enough to break "statue" stillness.
+                const weightSide = noise1D(t * 0.17, 20) * 0.6 + noise1D(t * 0.09, 21) * 0.4;
+                this.springs.setCritical('hips',  'z', weightSide * 0.03,          0.6);
+                this.springs.setCritical('spine', 'z', weightSide * -0.02,         0.6);
+                // Combine breathing-z with weight-shift-z so only one spring per axis.
+                this.springs.setCritical('chest', 'z', breathZ + weightSide * -0.015, 0.25);
+                this.springs.setCritical('head',  'z', weightSide * -0.01,           0.5);
+
                 // Advance all springs and apply outputs to bones.
                 const out = this.springs.update(dt);
 
@@ -1053,14 +1170,28 @@
                 }
 
                 const spine = this.getBone('spine');
-                if (spine && out.spine?.x !== undefined) {
-                    spine.rotation.x += out.spine.x; // additive on top of chest's SET
+                if (spine) {
+                    if (out.spine?.x !== undefined) spine.rotation.x += out.spine.x;
+                    if (out.spine?.z !== undefined) spine.rotation.z += out.spine.z; // B4 weight counter
                 }
+
+                // B4: Apply hips weight shift
+                const hips = this.getBone('hips');
+                if (hips && out.hips?.z !== undefined) hips.rotation.z += out.hips.z;
+
+                // B3: Apply shoulder + neck breathing outputs
+                const lShoulder = this.getBone('leftShoulder');
+                const rShoulder = this.getBone('rightShoulder');
+                const neck = this.getBone('neck');
+                if (lShoulder && out.leftShoulder?.x !== undefined) lShoulder.rotation.x += out.leftShoulder.x;
+                if (rShoulder && out.rightShoulder?.x !== undefined) rShoulder.rotation.x += out.rightShoulder.x;
+                if (neck && out.neck?.x !== undefined) neck.rotation.x += out.neck.x;
 
                 const head = this.getBone('head');
                 if (head && out.head) {
                     if (out.head.x !== undefined) head.rotation.x += out.head.x;
                     if (out.head.y !== undefined) head.rotation.y += out.head.y;
+                    if (out.head.z !== undefined) head.rotation.z += out.head.z; // B4 VOR level
                 }
 
                 const lArm  = this.getBone('leftUpperArm');
@@ -3063,6 +3194,103 @@
                 }
             }
         }
+        // ══════════════════════════════════════════════════════════
+        // Follow-Through Layer — Phase B (Humanoid Motion Quality)
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * L7: Follow-Through — cascaded spring lag applied after all SET-mode layers.
+         *
+         * Registered as the LAST layer in AnimationDirector so it reads the final
+         * bone positions written by L0-L6, feeds them through SpringChains, and
+         * replaces them with spring-lagged versions. Each bone in a chain follows
+         * its parent with increasing delay — spine trails hips, head trails neck, etc.
+         *
+         * The follow-through effect is deliberately subtle (~60-200ms halflife).
+         * At 0.06s base halflife the root bone responds in under 100ms; tip bones
+         * (head, hands) respond in ~200ms — below conscious notice but subconsciously
+         * read as natural momentum.
+         *
+         * The layer is adaptive: when animationDirector.state is 'idle' the halflives
+         * are reduced by 30% (faster settling for subtle idle motion) and when 'clip'
+         * or 'gesture' they are increased by 50% (more pronounced follow-through for
+         * active animation).
+         */
+        class FollowThroughLayer extends AnimationLayer {
+            constructor(vrm) {
+                super(vrm, 'followThrough');
+
+                this.spineChain = new SpringChain(
+                    ['hips', 'spine', 'chest', 'neck', 'head'],
+                    { baseHalflife: 0.06, halflifeGrowth: 1.5, frequency: 3.0 }
+                );
+                this.leftArmChain = new SpringChain(
+                    ['leftShoulder', 'leftUpperArm', 'leftLowerArm', 'leftHand'],
+                    { baseHalflife: 0.04, halflifeGrowth: 1.6, frequency: 4.0 }
+                );
+                this.rightArmChain = new SpringChain(
+                    ['rightShoulder', 'rightUpperArm', 'rightLowerArm', 'rightHand'],
+                    { baseHalflife: 0.04, halflifeGrowth: 1.6, frequency: 4.0 }
+                );
+
+                /** Set externally by AnimationDirector to modulate spring parameters. */
+                this._animState = 'idle';
+            }
+
+            /**
+             * @param {string} state - AnimationDirector state name (idle/talk/gesture/clip/mocap)
+             */
+            setAnimState(state) { this._animState = state; }
+
+            update(dt) {
+                super.update(dt);
+
+                // Modulate halflives based on animation state.
+                // Active states (clip/gesture/mocap) get longer halflives = more dramatic follow-through.
+                const stateMul = (this._animState === 'clip' || this._animState === 'mocap')
+                    ? 1.5
+                    : (this._animState === 'idle' ? 0.7 : 1.0);
+
+                this.spineChain.baseHalflife   = 0.06 * stateMul;
+                this.leftArmChain.baseHalflife  = 0.04 * stateMul;
+                this.rightArmChain.baseHalflife = 0.04 * stateMul;
+
+                // Build target maps from current bone rotations (set by lower layers).
+                const spineTargets = {};
+                for (const bname of ['hips', 'spine', 'chest', 'neck', 'head']) {
+                    const b = this.getBone(bname);
+                    if (b) spineTargets[bname] = { x: b.rotation.x, y: b.rotation.y, z: b.rotation.z };
+                }
+                const lArmTargets = {};
+                for (const bname of ['leftShoulder', 'leftUpperArm', 'leftLowerArm', 'leftHand']) {
+                    const b = this.getBone(bname);
+                    if (b) lArmTargets[bname] = { x: b.rotation.x, y: b.rotation.y, z: b.rotation.z };
+                }
+                const rArmTargets = {};
+                for (const bname of ['rightShoulder', 'rightUpperArm', 'rightLowerArm', 'rightHand']) {
+                    const b = this.getBone(bname);
+                    if (b) rArmTargets[bname] = { x: b.rotation.x, y: b.rotation.y, z: b.rotation.z };
+                }
+
+                this.spineChain.setTargets(spineTargets);
+                this.leftArmChain.setTargets(lArmTargets);
+                this.rightArmChain.setTargets(rArmTargets);
+
+                const spineOut   = this.spineChain.update(dt);
+                const lArmOut    = this.leftArmChain.update(dt);
+                const rArmOut    = this.rightArmChain.update(dt);
+
+                // Apply lagged values back to bones.
+                for (const [bname, vals] of Object.entries({ ...spineOut, ...lArmOut, ...rArmOut })) {
+                    const b = this.getBone(bname);
+                    if (!b) continue;
+                    b.rotation.x = vals.x;
+                    b.rotation.y = vals.y;
+                    b.rotation.z = vals.z;
+                }
+            }
+        }
+
         // ══════════════════════════════════════════════════════════
         // Procedural Animation — emotion-driven idle modifiers
         // ══════════════════════════════════════════════════════════
@@ -6975,6 +7203,8 @@
                             animationDirector.addLayer(new GestureLayer(vrm));
                             animationDirector.addLayer(new LookAtLayer(vrm, canvas));
                             animationDirector.addLayer(new ClipLayer(vrm, scene));
+                            // L7: Follow-through — cascaded spring lag after all SET-mode layers.
+                            animationDirector.addLayer(new FollowThroughLayer(vrm));
 
                             // Phase 17B: AnimationSequencer sits above the layer system
                             // and chains gestures via GestureLayer.triggerGesture().

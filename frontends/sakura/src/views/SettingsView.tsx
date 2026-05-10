@@ -3026,6 +3026,59 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
     }).catch(() => {});
   }, [currentModel]);
 
+  // ── Voice Fine-tuning (Beta) state ────────────────────────────────────────
+  /** The most-recent active LoRA adapter for the current character, or null. */
+  const [loraStatus, setLoraStatus] = useState<import('../lib/api').LoraRecord | null>(null);
+  const [loraLoading, setLoraLoading] = useState(false);
+  /** Shell command returned after triggering corpus prep — shown to copy. */
+  const [trainingCommand, setTrainingCommand] = useState<string | null>(null);
+  /** Tracks inline confirm gate before wiping adapters. */
+  const [wipeConfirm, setWipeConfirm] = useState(false);
+  /** Copy-button feedback ("Copied!" for 2 s). */
+  const [commandCopied, setCommandCopied] = useState(false);
+
+  // Load active adapter status whenever the character changes.
+  useEffect(() => {
+    if (!activeCharacter?.id) return;
+    setLoraLoading(true);
+    setTrainingCommand(null);
+    setWipeConfirm(false);
+    api.getCharacterLoras(activeCharacter.id)
+      .then(rows => setLoraStatus(rows.find(r => r.is_active === 1) ?? null))
+      .catch(() => setLoraStatus(null))
+      .finally(() => setLoraLoading(false));
+  }, [activeCharacter?.id]);
+
+  /**
+   * Trigger corpus data preparation for LoRA training on the GPU rig.
+   * The backend writes the training corpus and returns the shell command.
+   */
+  const handleTriggerTraining = async () => {
+    if (!activeCharacter?.id) return;
+    try {
+      const res = await api.triggerLoraTraining(activeCharacter.id);
+      setTrainingCommand(res.command);
+    } catch (err) {
+      console.error('LoRA trigger failed:', err);
+    }
+  };
+
+  /**
+   * Permanently delete all LoRA adapters for the active character.
+   * Resets the character to the base model after confirmation.
+   */
+  const handleWipe = async () => {
+    if (!activeCharacter?.id) return;
+    try {
+      await api.wipeCharacterLoras(activeCharacter.id);
+      setLoraStatus(null);
+      setWipeConfirm(false);
+      setTrainingCommand(null);
+    } catch (err) {
+      console.error('LoRA wipe failed:', err);
+    }
+  };
+
   // Ollama model list (fetched separately from LM Studio)
   const [ollamaModels, setOllamaModels] = useState<LMStudioModel[]>([]);
   const [ollamaLoading, setOllamaLoading] = useState(false);
@@ -3472,6 +3525,189 @@ function BrainTab({ save, cfg, lmModels, lmLoading, fetchLmModels }: BrainTabPro
               className="w-16 text-sm text-center rounded"
               style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border)', color: 'var(--color-text)', padding: '4px 8px' }} />
           </SettingField>
+        </div>
+      </section>
+
+      {/* ── Section 5: Voice Fine-tuning (Beta) ── */}
+      <section style={{ marginBottom: 24 }}>
+        <SectionHeader title="Voice Fine-tuning (Beta)" />
+        <div style={cardStyle}>
+          <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            {/* Status row */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Adapter Status
+              </span>
+              {loraLoading ? (
+                <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
+                  Checking...
+                </span>
+              ) : loraStatus ? (
+                <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}>
+                  {'Trained '}
+                  <span style={{ color: 'var(--color-accent)', fontWeight: 600 }}>
+                    {new Date(loraStatus.trained_at).toLocaleDateString()}
+                  </span>
+                  {loraStatus.eval_score != null && (
+                    <span style={{ color: 'var(--color-text-secondary)' }}>
+                      {' · Score '}
+                      <span style={{ fontWeight: 600 }}>{loraStatus.eval_score.toFixed(2)}</span>
+                    </span>
+                  )}
+                  {' · '}
+                  <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                    {loraStatus.base_model}
+                  </span>
+                </span>
+              ) : (
+                <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
+                  No adapter trained yet
+                </span>
+              )}
+            </div>
+
+            {/* Prepare Training Data button */}
+            <div>
+              <button
+                onClick={handleTriggerTraining}
+                disabled={!activeCharacter?.id}
+                style={{
+                  fontSize: '0.8125rem',
+                  padding: '5px 14px',
+                  borderRadius: 8,
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-surface-raised, var(--color-bg-secondary))',
+                  color: 'var(--color-accent)',
+                  cursor: activeCharacter?.id ? 'pointer' : 'not-allowed',
+                  opacity: activeCharacter?.id ? 1 : 0.4,
+                  transition: 'all 0.15s',
+                }}
+              >
+                Prepare Training Data
+              </button>
+            </div>
+
+            {/* Command output box — only shown after trigger */}
+            {trainingCommand && (
+              <div style={{
+                backgroundColor: 'var(--color-background)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: 8,
+                padding: '10px 12px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+              }}>
+                <pre style={{
+                  flex: 1,
+                  margin: 0,
+                  fontSize: '0.75rem',
+                  fontFamily: 'monospace',
+                  color: 'var(--color-text-primary)',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                  lineHeight: 1.5,
+                }}>
+                  {trainingCommand}
+                </pre>
+                <button
+                  onClick={() => {
+                    void navigator.clipboard.writeText(trainingCommand);
+                    setCommandCopied(true);
+                    setTimeout(() => setCommandCopied(false), 2000);
+                  }}
+                  style={{
+                    flexShrink: 0,
+                    fontSize: '0.75rem',
+                    padding: '3px 10px',
+                    borderRadius: 6,
+                    border: '1px solid var(--color-border)',
+                    background: 'transparent',
+                    color: commandCopied ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {commandCopied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            )}
+
+            {/* Remove LoRA — only shown when an active adapter exists */}
+            {loraStatus && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {!wipeConfirm ? (
+                  <button
+                    onClick={() => setWipeConfirm(true)}
+                    style={{
+                      alignSelf: 'flex-start',
+                      fontSize: '0.8125rem',
+                      padding: '5px 14px',
+                      borderRadius: 8,
+                      border: '1px solid var(--color-danger, #f44)',
+                      background: 'transparent',
+                      color: 'var(--color-danger, #f44)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    Remove LoRA
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
+                      Confirm?
+                    </span>
+                    <button
+                      onClick={handleWipe}
+                      style={{
+                        fontSize: '0.8125rem',
+                        padding: '4px 12px',
+                        borderRadius: 8,
+                        border: 'none',
+                        background: 'var(--color-danger, #f44)',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      Yes, remove
+                    </button>
+                    <button
+                      onClick={() => setWipeConfirm(false)}
+                      style={{
+                        fontSize: '0.8125rem',
+                        padding: '4px 12px',
+                        borderRadius: 8,
+                        border: '1px solid var(--color-border)',
+                        background: 'transparent',
+                        color: 'var(--color-text-secondary)',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Info note */}
+            <p style={{
+              margin: 0,
+              fontSize: '0.75rem',
+              color: 'var(--color-text-secondary)',
+              lineHeight: 1.6,
+              borderTop: '1px solid var(--color-border-subtle)',
+              paddingTop: 10,
+            }}>
+              Training runs on your GPU rig. Click Prepare Training Data to export the corpus, copy the command above, and run it on the training machine. Restart the app after the adapter is installed.
+            </p>
+
+          </div>
         </div>
       </section>
     </>

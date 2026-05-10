@@ -122,6 +122,27 @@ export interface MemoryItem {
   session_id?: number;
 }
 
+/**
+ * A LoRA adapter record as returned by GET /api/characters/{id}/loras.
+ * Each row represents one trained adapter for a character.
+ */
+export interface LoraRecord {
+  /** Primary key in the loras table. */
+  id: number;
+  /** Foreign key to the character this adapter belongs to. */
+  char_id: number;
+  /** Base model identifier the adapter was trained on (e.g. "llama-3-8b"). */
+  base_model: string;
+  /** Filesystem path to the adapter weights directory. */
+  adapter_path: string;
+  /** ISO timestamp of when training completed. */
+  trained_at: string;
+  /** Evaluation score from the post-training eval run (null if not yet evaluated). */
+  eval_score: number | null;
+  /** 1 = currently active for inference, 0 = archived. */
+  is_active: number;
+}
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 /**
@@ -1446,4 +1467,40 @@ export const api = {
    */
   setFeedbackPreferences: (prefs: Partial<FeedbackPreferences>) =>
     patch<{ ok: boolean; preferences: FeedbackPreferences }>('/api/feedback/preferences', prefs),
+
+  // ─── Voice Fine-tuning / LoRA adapters ───────────────────────────────────
+
+  /**
+   * List all LoRA adapters trained for a character.
+   *
+   * @param charId - Character primary key.
+   * @returns Array of LoraRecord rows (may be empty if none trained yet).
+   */
+  getCharacterLoras: (charId: number) =>
+    get<LoraRecord[]>(`/api/characters/${charId}/loras`),
+
+  /**
+   * Trigger corpus preparation for LoRA fine-tuning on a character.
+   * Returns the shell command to run on the GPU training rig.
+   *
+   * @param charId - Character primary key.
+   * @returns ok flag, the training shell command, and the corpus file path.
+   */
+  triggerLoraTraining: (charId: number) =>
+    post<{ ok: boolean; command: string; corpus_path: string }>(
+      `/api/training/trigger/${charId}`,
+      {},
+    ),
+
+  /**
+   * Delete all LoRA adapters for a character and reset to base model.
+   *
+   * @param charId - Character primary key.
+   * @returns ok flag and count of deleted adapter records.
+   */
+  wipeCharacterLoras: (charId: number) =>
+    post<{ ok: boolean; deleted: number }>(
+      `/api/characters/${charId}/loras/wipe`,
+      {},
+    ),
 };

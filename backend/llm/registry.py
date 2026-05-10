@@ -12,7 +12,8 @@ def get_client(cfg):
     back to the legacy flat ``llm.provider`` key.
 
     Supported provider types:
-        ``openai``, ``ollama``, ``lmstudio-rest``, ``gemini``
+        ``openai``, ``ollama``, ``lmstudio-rest``, ``gemini``, ``claude``,
+        ``peft_local`` (requires torch + peft installed; raises ImportError otherwise)
 
     Args:
         cfg: Full application config dict (from ``load_config()``).
@@ -39,6 +40,9 @@ def get_client(cfg):
             return GeminiAdapter()
         if ptype in ("claude", "anthropic"):
             return ClaudeAPIAdapter()
+        if ptype == "peft_local":
+            from .adapters.peft_local import PeftLocalAdapter
+            return PeftLocalAdapter()
         # Fallback to generic openai compat for unknown types
         return OpenAICompatAdapter()
 
@@ -52,6 +56,9 @@ def get_client(cfg):
         return GeminiAdapter()
     if simple_provider in ("claude", "anthropic"):
         return ClaudeAPIAdapter()
+    if simple_provider == "peft_local":
+        from .adapters.peft_local import PeftLocalAdapter
+        return PeftLocalAdapter()
 
     return OpenAICompatAdapter()
 

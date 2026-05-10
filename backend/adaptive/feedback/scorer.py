@@ -23,7 +23,7 @@ v76 migration).  Missing rows fall back to the module-level
 Schema dependencies:
     - ``aie_signal_weights`` table — ``signal_name TEXT PK, weight REAL``
     - ``message_feedback`` table — ``message_id INT PK, explicit_signal INT,
-      implicit_score REAL, final_score REAL, updated_at TEXT``
+      implicit_score REAL, final_score REAL, computed_at TEXT``
 
 Example:
     >>> from backend.adaptive.feedback.scorer import compute_final_score
@@ -251,7 +251,7 @@ def score_and_save(
         ...     "  explicit_signal INTEGER,"
         ...     "  implicit_score REAL,"
         ...     "  final_score REAL,"
-        ...     "  updated_at TEXT DEFAULT (datetime('now')))"
+        ...     "  computed_at TEXT DEFAULT (datetime('now')))"
         ... )
         >>> con.commit(); con.close()
         >>> from backend.adaptive.feedback.scorer import score_and_save
@@ -268,7 +268,7 @@ def score_and_save(
     try:
         con.execute(
             """INSERT OR REPLACE INTO message_feedback
-               (message_id, explicit_signal, implicit_score, final_score, updated_at)
+               (message_id, explicit_signal, implicit_score, final_score, computed_at)
                VALUES (?, ?, ?, ?, datetime('now'))""",
             (message_id, explicit_signal, implicit_score, final_score),
         )

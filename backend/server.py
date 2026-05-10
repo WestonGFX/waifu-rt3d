@@ -14060,6 +14060,100 @@ def _run_scheduler_tick(db_path: str) -> None:
     except Exception as _e:
         logger.warning("[Scheduler] Image retention sweep error: %s", _e)
 
+    # AIE Phase C: implicit feedback signal sweep for cold sessions.
+    try:
+        _run_implicit_signal_sweep(db_path, now_ts)
+    except Exception as _e:
+        logger.debug("[Scheduler] Implicit signal sweep error: %s", _e)
+
+
+def _run_implicit_signal_sweep(db_path: str, now_ts: int) -> None:
+    """Score cold chat sessions using implicit behavioural signals.
+
+    A session is "cold" when its last assistant message is more than 30 minutes
+    old and no implicit score has been recorded yet for any message in that
+    session.  We process at most 5 sessions per tick to keep the scheduler fast.
+
+    For each cold session:
+    1. Calls :func:`collect_session_signals` to derive implicit signals.
+    2. Reads the existing ``explicit_signal`` (if any) for each assistant
+       message so ``score_and_save`` preserves prior 👍/👎 clicks.
+    3. Calls :func:`score_and_save` for each assistant message.
+
+    Args:
+        db_path: Filesystem path to the SQLite database.
+        now_ts: Current Unix timestamp (seconds).
+    """
+    from backend.adaptive.feedback.signal_collector import collect_session_signals as _collect
+    from backend.adaptive.feedback.scorer import score_and_save as _score
+
+    _COLD_SECS = 1800        # session is cold after 30 min of silence
+    _WINDOW_SECS = 86400     # only process sessions from the last 24 h
+    _MAX_SESSIONS = 5        # cap per tick to avoid scheduler overrun
+
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT m.session_id, m.char_id
+            FROM   messages m
+            WHERE  m.role = 'assistant'
+              AND  m.ts   < :cold_cutoff
+              AND  m.ts   > :window_start
+            GROUP  BY m.session_id
+            HAVING MAX(m.ts) < :cold_cutoff
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM   message_feedback mf
+                   JOIN   messages m2 ON mf.message_id = m2.id
+                   WHERE  m2.session_id = m.session_id
+                     AND  mf.implicit_score IS NOT NULL
+               )
+            LIMIT :cap
+            """,
+            {
+                "cold_cutoff":   now_ts - _COLD_SECS,
+                "window_start":  now_ts - _WINDOW_SECS,
+                "cap":           _MAX_SESSIONS,
+            },
+        ).fetchall()
+    finally:
+        con.close()
+
+    for session_id, char_id in rows:
+        try:
+            implicit_signals = _collect(session_id, char_id, db_path)
+            if not implicit_signals:
+                continue
+
+            # Retrieve all assistant messages + existing explicit signals
+            con2 = sqlite3.connect(db_path)
+            try:
+                msgs = con2.execute(
+                    """
+                    SELECT m.id, mf.explicit_signal
+                    FROM   messages m
+                    LEFT   JOIN message_feedback mf ON mf.message_id = m.id
+                    WHERE  m.session_id = ? AND m.role = 'assistant'
+                    """,
+                    (session_id,),
+                ).fetchall()
+            finally:
+                con2.close()
+
+            for msg_id, explicit_signal in msgs:
+                try:
+                    _score(msg_id, explicit_signal, implicit_signals, db_path)
+                except Exception as _me:
+                    logger.debug(
+                        "[ImplicitSweep] score_and_save failed message_id=%d: %s",
+                        msg_id, _me,
+                    )
+        except Exception as _se:
+            logger.debug(
+                "[ImplicitSweep] session_id=%d error: %s", session_id, _se
+            )
+
 
 def _run_image_retention_cleanup(cfg: dict) -> None:
     """Delete old chat-generated images from the storage directory.
@@ -18983,7 +19077,17 @@ async def record_explicit_feedback(message_id: int, body: ExplicitFeedbackReques
             con.commit()
         return {"ok": True, "message_id": message_id, "signal": body.signal}
 
-    return await run_in_threadpool(_write)
+    result = await run_in_threadpool(_write)
+    # Fire-and-forget: compute and persist final_score blending explicit with
+    # empty implicit signals.  The scheduler will later fill in implicit scores
+    # once the session goes cold; calling score_and_save is idempotent.
+    if body.signal is not None:
+        from backend.adaptive.feedback.scorer import score_and_save as _feedback_score_save
+        import asyncio as _aio
+        _aio.get_event_loop().run_in_executor(
+            None, _feedback_score_save, message_id, body.signal, {}, str(DB_PATH)
+        )
+    return result
 
 
 @app.get("/api/feedback/preferences")

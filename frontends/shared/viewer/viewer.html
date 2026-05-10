@@ -138,6 +138,10 @@
         let animationDirector = null;
         /** Phase 17B: AnimationSequencer instance — emotion→gesture sequence orchestrator. */
         let animationSequencer = null;
+        /** Phase E: PoseLibrary — tag-based clip selection for emotion-matched reactions. */
+        let poseLibrary = null;
+        /** Phase E: FootPlantController — analytical IK to prevent foot sliding. */
+        let footPlantController = null;
         // Tracks the last emotion that triggered an auto-gesture, preventing
         // repeat gestures when the same emotion fires on consecutive messages.
         let lastAutoGestureEmotion = null;
@@ -3295,6 +3299,246 @@
                 // Phase C: apply inertialization blend (smooths pop-free transitions)
                 if (this._inertBlend?.update(dt) === false) {
                     this._inertBlend = null;  // blend complete
+                }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Phase E: PoseLibrary + TwoBoneIK + FootPlantController
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * Tag-based animation clip library that loads from the backend manifest.
+         *
+         * Provides emotion/intensity/category filtering with anti-repeat logic
+         * so the same clip is never played twice in a row. Clips are loaded lazily
+         * on first use to avoid upfront network cost.
+         *
+         * @example
+         *   const lib = new PoseLibrary();
+         *   await lib.loadManifest('/api/animations/manifest');
+         *   const entry = lib.findBest('happy', 'high', 'reaction');
+         *   if (entry) clipLayer.playClip(entry.id, { mask: BoneMaskManager.UPPER_BODY });
+         */
+        class PoseLibrary {
+            constructor() {
+                /** @type {Array<{id:string,file:string,emotion:string,intensity:string,category:string,loop:boolean,duration:number,tags:string[],available:boolean,url:string|null}>} */
+                this._entries = [];
+                /** Most recently played clip ID per category (for anti-repeat). */
+                this._lastPlayed = {};
+                /** Cache of loaded THREE.AnimationClip objects, keyed by clip id. */
+                this._cache = {};
+                this._manifestLoaded = false;
+            }
+
+            /**
+             * Load the manifest from the API. Must be called before findBest().
+             *
+             * @param {string} [url='/api/animations/manifest'] - API URL
+             * @returns {Promise<void>}
+             */
+            async loadManifest(url = '/api/animations/manifest') {
+                try {
+                    const resp = await fetch(url);
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                    this._entries = await resp.json();
+                    this._manifestLoaded = true;
+                    const available = this._entries.filter(e => e.available).length;
+                    console.log(`[PoseLibrary] Manifest loaded: ${this._entries.length} clips, ${available} available`);
+                } catch (err) {
+                    console.warn('[PoseLibrary] Failed to load manifest:', err);
+                    this._entries = [];
+                }
+            }
+
+            /**
+             * Find the best matching clip for the given emotion/intensity/category.
+             * Excludes the most recently played clip in that category (anti-repeat).
+             * Falls back to any available clip in the category if no exact emotion match.
+             *
+             * @param {string} emotion - Emotion tag (e.g. 'happy', 'sad')
+             * @param {'low'|'medium'|'high'} [intensity='medium'] - Intensity tier
+             * @param {string} [category='reaction'] - Clip category
+             * @returns {{id:string,url:string,loop:boolean,duration:number}|null}
+             */
+            findBest(emotion, intensity = 'medium', category = 'reaction') {
+                const lastId = this._lastPlayed[category];
+                const candidates = this._entries.filter(e =>
+                    e.available && e.category === category && e.id !== lastId
+                );
+                if (candidates.length === 0) return null;
+
+                // Exact match: emotion + intensity
+                const exact = candidates.filter(e => e.emotion === emotion && e.intensity === intensity);
+                if (exact.length > 0) {
+                    const pick = exact[Math.floor(Math.random() * exact.length)];
+                    this._lastPlayed[category] = pick.id;
+                    return pick;
+                }
+                // Fallback: emotion only
+                const emoOnly = candidates.filter(e => e.emotion === emotion);
+                if (emoOnly.length > 0) {
+                    const pick = emoOnly[Math.floor(Math.random() * emoOnly.length)];
+                    this._lastPlayed[category] = pick.id;
+                    return pick;
+                }
+                // Last resort: any in category
+                const pick = candidates[Math.floor(Math.random() * candidates.length)];
+                this._lastPlayed[category] = pick.id;
+                return pick;
+            }
+
+            /**
+             * Get a random idle clip suitable for looping background animation.
+             * @returns {{id:string,url:string,loop:boolean,duration:number}|null}
+             */
+            getRandomIdle() {
+                return this.findBest('neutral', 'low', 'idle');
+            }
+
+            /**
+             * Get the best reaction clip for the given emotion.
+             * @param {string} emotion
+             * @returns {{id:string,url:string,loop:boolean,duration:number}|null}
+             */
+            getReaction(emotion) {
+                return this.findBest(emotion, 'high', 'reaction');
+            }
+        }
+
+        /**
+         * Analytical two-bone IK solver.
+         *
+         * Calculates upper and lower limb joint angles to place the end effector
+         * at a world-space target position. Uses the law of cosines for exact,
+         * non-iterative solution.
+         *
+         * @param {THREE.Object3D} upper - Upper bone (hip/shoulder)
+         * @param {THREE.Object3D} lower - Lower bone (knee/elbow)
+         * @param {THREE.Object3D} end - End effector bone (foot/hand)
+         * @param {THREE.Vector3} target - World-space target position for the end effector
+         * @param {THREE.Vector3} pole - World-space pole vector (hints knee/elbow bend direction)
+         */
+        function twoBoneIK(upper, lower, end, target, pole) {
+            const _tmp = new THREE.Vector3();
+            const _upperWorld = new THREE.Vector3();
+            const _lowerWorld = new THREE.Vector3();
+            const _endWorld = new THREE.Vector3();
+
+            upper.getWorldPosition(_upperWorld);
+            lower.getWorldPosition(_lowerWorld);
+            end.getWorldPosition(_endWorld);
+
+            const upperLen = _upperWorld.distanceTo(_lowerWorld);
+            const lowerLen = _lowerWorld.distanceTo(_endWorld);
+            const targetLen = _upperWorld.distanceTo(target);
+
+            // Clamp target within reach
+            const maxReach = (upperLen + lowerLen) * 0.999;
+            const clampedTarget = target.clone();
+            if (targetLen > maxReach) {
+                clampedTarget.sub(_upperWorld).normalize().multiplyScalar(maxReach).add(_upperWorld);
+            }
+
+            // Knee angle via law of cosines
+            const d = Math.min(targetLen, maxReach);
+            const cosUpper = (upperLen * upperLen + d * d - lowerLen * lowerLen) / (2 * upperLen * d);
+            const cosLower = (upperLen * upperLen + lowerLen * lowerLen - d * d) / (2 * upperLen * lowerLen);
+            const angleUpper = Math.acos(Math.max(-1, Math.min(1, cosUpper)));
+            const angleLower = Math.acos(Math.max(-1, Math.min(1, cosLower)));
+
+            // Build IK rotation for upper bone
+            const targetDir = clampedTarget.clone().sub(_upperWorld).normalize();
+            const poleDir = pole ? pole.clone().sub(_upperWorld).normalize() : new THREE.Vector3(0, 0, -1);
+
+            // Rotate upper bone toward target with knee bend via pole vector
+            const up = targetDir.clone().cross(poleDir).normalize();
+            const right = up.clone().cross(targetDir).normalize();
+
+            const bentTarget = targetDir.clone()
+                .multiplyScalar(Math.cos(angleUpper))
+                .addScaledVector(right, Math.sin(angleUpper));
+
+            const lookQ = new THREE.Quaternion();
+            const mBent = new THREE.Matrix4().lookAt(_upperWorld, _upperWorld.clone().add(bentTarget), up);
+            lookQ.setFromRotationMatrix(mBent);
+
+            // Apply in local space
+            const parentQ = new THREE.Quaternion();
+            if (upper.parent) upper.parent.getWorldQuaternion(parentQ);
+            parentQ.invert();
+            upper.quaternion.copy(parentQ).multiply(lookQ);
+
+            // Lower bone: subtract upper angle to get remaining bend
+            const lowerBend = Math.PI - angleLower;
+            lower.rotation.x = lowerBend;
+        }
+
+        /**
+         * Foot ground-plane controller using simple analytical IK.
+         *
+         * Prevents foot sliding during idle and weight-shift animations by
+         * detecting when a foot bone drifts below the ground plane and correcting
+         * the leg chain with twoBoneIK. Works independently for left and right legs.
+         *
+         * @param {Object} vrm - The loaded VRM model
+         * @param {number} [groundY=0] - Ground plane Y coordinate in world space
+         */
+        class FootPlantController {
+            constructor(vrm, groundY = 0) {
+                this.vrm = vrm;
+                this.groundY = groundY;
+                this._enabled = true;
+                this._poleL = new THREE.Vector3(-0.2, 0, 1);   // left knee bends forward-left
+                this._poleR = new THREE.Vector3(0.2, 0, 1);    // right knee bends forward-right
+                this._footTmp = new THREE.Vector3();
+                this._targetL = new THREE.Vector3();
+                this._targetR = new THREE.Vector3();
+            }
+
+            /**
+             * Enable or disable foot planting.
+             * @param {boolean} enabled
+             */
+            setEnabled(enabled) { this._enabled = enabled; }
+
+            /**
+             * Set the ground plane Y coordinate.
+             * @param {number} y
+             */
+            setGroundPlane(y) { this.groundY = y; }
+
+            /**
+             * Per-frame update. Call after AnimationDirector writes bones.
+             * @param {number} _dt - Delta time (unused — IK is frame-rate independent)
+             */
+            update(_dt) {
+                if (!this._enabled || !this.vrm?.humanoid) return;
+                const h = this.vrm.humanoid;
+                this._correctFoot(
+                    h.getNormalizedBoneNode('leftUpperLeg'),
+                    h.getNormalizedBoneNode('leftLowerLeg'),
+                    h.getNormalizedBoneNode('leftFoot'),
+                    this._poleL,
+                    this._targetL,
+                );
+                this._correctFoot(
+                    h.getNormalizedBoneNode('rightUpperLeg'),
+                    h.getNormalizedBoneNode('rightLowerLeg'),
+                    h.getNormalizedBoneNode('rightFoot'),
+                    this._poleR,
+                    this._targetR,
+                );
+            }
+
+            _correctFoot(upper, lower, foot, pole, target) {
+                if (!upper || !lower || !foot) return;
+                foot.getWorldPosition(this._footTmp);
+                if (this._footTmp.y < this.groundY) {
+                    // Foot has penetrated ground — move target up to ground plane
+                    target.copy(this._footTmp);
+                    target.y = this.groundY;
+                    twoBoneIK(upper, lower, foot, target, pole);
                 }
             }
         }
@@ -7220,6 +7464,8 @@
                     if (microExpressionController) microExpressionController.update(delta);
                     if (expressionController) expressionController.update(delta);
                     if (poseController) poseController.update(delta);
+                    // Phase E: Foot IK — correct foot penetration after all other layers run
+                    if (footPlantController) footPlantController.update(delta);
                     // Task 3B: Update eye sparkle time uniform for shimmer animation
                     if (_effectsConfig.eyeSparkle.enabled && currentVrm?.scene) {
                         updateEyeSparkleParams(currentVrm.scene, { time: clock.elapsedTime });
@@ -7781,6 +8027,13 @@
                             // Phase 17B: AnimationSequencer sits above the layer system
                             // and chains gestures via GestureLayer.triggerGesture().
                             animationSequencer = new AnimationSequencer(animationDirector);
+
+                            // Phase E: PoseLibrary — load manifest for emotion-matched clip reactions.
+                            poseLibrary = new PoseLibrary();
+                            poseLibrary.loadManifest('/api/animations/manifest');
+
+                            // Phase E: FootPlantController — prevents foot penetrating ground plane.
+                            footPlantController = new FootPlantController(vrm, 0);
 
                             // Auto-frame camera based on model's actual height
                             const headBone = vrm.humanoid.getRawBoneNode('head');

@@ -1,0 +1,102 @@
+[
+  {
+    "id": "idle_breathing",
+    "file": "clips/idle_breathing.glb",
+    "emotion": "neutral",
+    "intensity": "low",
+    "category": "idle",
+    "loop": true,
+    "duration": 4.0,
+    "tags": ["breathing", "calm", "default"]
+  },
+  {
+    "id": "idle_happy",
+    "file": "clips/idle_happy.glb",
+    "emotion": "happy",
+    "intensity": "medium",
+    "category": "idle",
+    "loop": true,
+    "duration": 5.0,
+    "tags": ["happy", "light"]
+  },
+  {
+    "id": "idle_sad",
+    "file": "clips/idle_sad.glb",
+    "emotion": "sad",
+    "intensity": "medium",
+    "category": "idle",
+    "loop": true,
+    "duration": 5.0,
+    "tags": ["sad", "slow"]
+  },
+  {
+    "id": "reaction_surprised",
+    "file": "clips/reaction_surprised.glb",
+    "emotion": "surprised",
+    "intensity": "high",
+    "category": "reaction",
+    "loop": false,
+    "duration": 2.0,
+    "tags": ["surprised", "fast", "upper-body"]
+  },
+  {
+    "id": "reaction_excited",
+    "file": "clips/reaction_excited.glb",
+    "emotion": "excited",
+    "intensity": "high",
+    "category": "reaction",
+    "loop": false,
+    "duration": 2.0,
+    "tags": ["excited", "jump", "energetic"]
+  },
+  {
+    "id": "reaction_clapping",
+    "file": "clips/reaction_clapping.glb",
+    "emotion": "happy",
+    "intensity": "high",
+    "category": "reaction",
+    "loop": false,
+    "duration": 3.0,
+    "tags": ["happy", "clap", "celebratory"]
+  },
+  {
+    "id": "gesture_wave",
+    "file": "clips/gesture_wave.glb",
+    "emotion": "happy",
+    "intensity": "medium",
+    "category": "gesture",
+    "loop": false,
+    "duration": 2.0,
+    "tags": ["greeting", "wave", "upper-body"]
+  },
+  {
+    "id": "gesture_shrug",
+    "file": "clips/gesture_shrug.glb",
+    "emotion": "neutral",
+    "intensity": "medium",
+    "category": "gesture",
+    "loop": false,
+    "duration": 2.0,
+    "tags": ["confused", "shrug", "upper-body"]
+  },
+  {
+    "id": "gesture_thinking",
+    "file": "clips/gesture_thinking.glb",
+    "emotion": "thinking",
+    "intensity": "medium",
+    "category": "gesture",
+    "loop": false,
+    "duration": 3.0,
+    "tags": ["thinking", "contemplative", "upper-body"]
+  },
+  {
+    "id": "special_bow",
+    "file": "clips/special_bow.glb",
+    "emotion": "neutral",
+    "intensity": "medium",
+    "category": "special",
+    "loop": false,
+    "duration": 3.0,
+    "tags": ["respectful", "bow", "full-body"]
+  }
+]

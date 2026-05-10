@@ -12875,6 +12875,48 @@ def get_animation_status():
     }
 
 
+@app.get("/api/animations/manifest")
+async def get_animations_manifest() -> list[dict]:
+    """Return flat-array animation manifest for PoseLibrary.
+
+    Reads ``frontends/shared/animations/manifest.json`` (Phase E format) and
+    augments each entry with ``available`` and ``url`` fields based on whether
+    the GLB file exists in the static animations storage directory.
+
+    Format differs from ``/api/animations`` (which uses the legacy nested
+    ``packs`` format). This endpoint returns a flat array where each item has:
+    id, file, emotion, intensity, category, loop, duration, tags, available, url.
+
+    Returns:
+        List of clip metadata dicts, empty list if manifest not found.
+
+    Example:
+        >>> resp = await client.get("/api/animations/manifest")
+        >>> isinstance(resp.json(), list)
+        True
+    """
+    manifest_path = Path(ROOT_DIR) / "frontends" / "shared" / "animations" / "manifest.json"
+    if not manifest_path.exists():
+        return []
+
+    try:
+        clips: list[dict] = json.loads(manifest_path.read_text())
+    except Exception:
+        return []
+
+    anim_dir = _anim_dir
+    for clip in clips:
+        clip_file = clip.get("file", "")
+        if clip_file:
+            clip_path = anim_dir / clip_file
+            clip["available"] = clip_path.exists()
+            clip["url"] = f"/animations/{clip_file}" if clip["available"] else None
+        else:
+            clip["available"] = True
+            clip["url"] = None
+    return clips
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  AI Motion Generation  (Level 3 — AI-driven procedural animation system)
 # ═══════════════════════════════════════════════════════════════════════════

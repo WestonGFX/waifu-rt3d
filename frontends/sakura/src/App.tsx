@@ -286,6 +286,7 @@ function MainApp() {
     { key: k('New character',          'alt+n'),   action: () => setSidebarSection('create'),   description: 'New character' },
     { key: k('Session replay',          'alt+r'),   action: () => openOverlay('replay'),          description: 'Session replay' },
     { key: k('Character stats',        'alt+z'),   action: () => openOverlay('stats'),           description: 'Character stats' },
+    { key: k('Gallery',               'alt+g'),   action: () => openOverlay('gallery'),         description: 'Gallery' },
     ...(effectiveDevMode ? [{ key: k('Context viewer', 'alt+c'), action: () => openOverlay('contextviewer'), description: 'Context viewer' }] : []),
     { key: k('Boundaries',            'alt+shift+b'), action: () => openOverlay('boundaries'),  description: 'Boundaries' },
     { key: k('Private vocabulary',    'alt+shift+v'), action: () => openOverlay('vocabulary'),  description: 'Private vocabulary' },
@@ -369,8 +370,8 @@ function MainApp() {
       {/* Photo Mode — full-viewport overlay with sidebar controls (dev only) */}
       {effectiveDevMode && activeOverlay === 'photomode' && <PhotoModeOverlay />}
 
-      {/* Gallery — screenshot browser with lightbox (dev only) */}
-      {effectiveDevMode && activeOverlay === 'gallery' && <GalleryOverlay />}
+      {/* Gallery — screenshot browser + AI images (all users) */}
+      {activeOverlay === 'gallery' && <GalleryOverlay />}
 
       {/* Overlay drawers — Feature C3 User Knowledge Graph */}
       {activeOverlay === 'userknowledge' && <UserKnowledgePanel />}

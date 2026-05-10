@@ -336,3 +336,4 @@ All 7 open questions answered. `/go` against M1 is now unblocked.
 - 2026-05-10 Backlog item-38 (Visual Novel mode): ✓ pre-existing — vnMode toggle + VNPortrait/VNTextBox fully implemented in ChatThread.tsx.
 - 2026-05-10 Backlog item-52 (touch interaction): ✓ viewer.html raycasting + zone detection already complete; added characterTouch→sendMessage reaction in useCharacterAudio.ts (10s cooldown, zone→action mapping).
 - 2026-05-10 Backlog item-30 (character image styles): ✓ applied 14 AI-drafted image_style prompts to characters table via apply_character_styles.py.
+- 2026-05-10 Backlog item-41 (image gallery hybrid): ✓ GalleryOverlay de-gated from effectiveDevMode; alt+g shortcut added; Screenshots/AI Images tab switcher added (AI Images = stub empty state, populates when item-39 lands).

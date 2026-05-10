@@ -6371,6 +6371,8 @@
             let _colliderDebugActive = false;
             /** Collider debug mesh references for cleanup. */
             let _colliderDebugMeshes = [];
+            /** Base spring bone params per joint index — captured on first emotion change. */
+            let _springBoneBaseParams = null;
             let _pendingGreetingGesture = null;
 
             // ── Easing Functions ──────────────────────────────────
@@ -6698,6 +6700,7 @@
                             scene.add(vrm.scene);
                             currentVrm = vrm;
                             window._vrm = vrm;
+                            _springBoneBaseParams = null; // reset on new model load
 
                             applyNaturalPose(vrm);
 
@@ -6842,6 +6845,12 @@
                                     bones: boneCount,
                                     vrmVersion,
                                 }
+                            }, '*');
+
+                            // Notify parent that spring bones are ready for preset auto-apply
+                            window.parent.postMessage({
+                                type: 'vrmSpringBonesReady',
+                                jointCount: vrm.springBoneManager?.joints?.length || 0,
                             }, '*');
 
                             // Auto-apply fullbody camera so first frame isn't black.
@@ -8013,6 +8022,38 @@
                         _originalGravity.clear();
                     }
                 }
+                else if (type === 'setSpringBoneEmotion') {
+                    // Modulate spring bone physics to reflect current emotion state.
+                    // Multipliers adjust stiffness/drag/gravity from model defaults.
+                    const sbm = currentVrm?.springBoneManager;
+                    if (!sbm?.joints?.length) return;
+                    const emotion = payload?.emotion || 'neutral';
+                    const MODS = {
+                        happy:   { s: 0.8, d: 0.8, g: 0.9 },
+                        excited: { s: 0.6, d: 0.6, g: 0.7 },
+                        sad:     { s: 1.3, d: 1.2, g: 1.3 },
+                        angry:   { s: 1.5, d: 0.7, g: 1.0 },
+                        calm:    { s: 1.1, d: 1.1, g: 1.0 },
+                        neutral: { s: 1.0, d: 1.0, g: 1.0 },
+                    };
+                    const mod = MODS[emotion] || MODS.neutral;
+                    // Capture base params on first call (preserve model defaults)
+                    if (!_springBoneBaseParams) {
+                        _springBoneBaseParams = sbm.joints.map(j => ({
+                            stiffness: j.settings.stiffness,
+                            dragForce: j.settings.dragForce,
+                            gravityPower: j.settings.gravityPower,
+                        }));
+                    }
+                    for (let i = 0; i < sbm.joints.length; i++) {
+                        const base = _springBoneBaseParams[i];
+                        if (!base) continue;
+                        const j = sbm.joints[i];
+                        j.settings.stiffness    = base.stiffness   * mod.s;
+                        j.settings.dragForce    = base.dragForce   * mod.d;
+                        j.settings.gravityPower = base.gravityPower * mod.g;
+                    }
+                }
                 else if (type === 'toggleColliderDebug') {
                     // Toggle wireframe visualization of spring bone colliders.
                     _colliderDebugActive = !_colliderDebugActive;
@@ -8022,18 +8063,40 @@
                         if (sbm?.colliderGroups) {
                             for (const cg of sbm.colliderGroups) {
                                 for (const collider of (cg.colliders || [])) {
-                                    const radius = collider.shape?.radius || 0.05;
-                                    const geo = new THREE.SphereGeometry(radius, 12, 8);
-                                    const mat = new THREE.MeshBasicMaterial({
-                                        color: 0x00ff88, wireframe: true, transparent: true, opacity: 0.5,
-                                    });
-                                    const mesh = new THREE.Mesh(geo, mat);
+                                    const shape = collider.shape;
+                                    const radius = shape?.radius || 0.05;
+                                    let mesh;
+
+                                    // Capsule collider: has a .tail property (VRM 1.0)
+                                    if (shape?.tail && (shape.tail.x !== 0 || shape.tail.y !== 0 || shape.tail.z !== 0)) {
+                                        const tailVec = new THREE.Vector3().copy(shape.tail);
+                                        const length = tailVec.length();
+                                        const geo = new THREE.CapsuleGeometry(radius, length, 4, 8);
+                                        const mat = new THREE.MeshBasicMaterial({
+                                            color: 0xff8800, wireframe: true, transparent: true, opacity: 0.5,
+                                        });
+                                        mesh = new THREE.Mesh(geo, mat);
+                                        // Position at midpoint of the capsule axis; orient along tail vector
+                                        const offset = shape.offset ? new THREE.Vector3().copy(shape.offset) : new THREE.Vector3();
+                                        mesh.position.copy(offset.clone().add(tailVec.clone().multiplyScalar(0.5)));
+                                        const quat = new THREE.Quaternion().setFromUnitVectors(
+                                            new THREE.Vector3(0, 1, 0),
+                                            tailVec.clone().normalize()
+                                        );
+                                        mesh.quaternion.copy(quat);
+                                    } else {
+                                        // Sphere collider (VRM 0.x and 1.0)
+                                        const geo = new THREE.SphereGeometry(radius, 12, 8);
+                                        const mat = new THREE.MeshBasicMaterial({
+                                            color: 0x00ff88, wireframe: true, transparent: true, opacity: 0.5,
+                                        });
+                                        mesh = new THREE.Mesh(geo, mat);
+                                        if (shape?.offset) mesh.position.copy(shape.offset);
+                                    }
+
                                     // Parent to the collider's bone so it follows animation
                                     if (collider.bone) {
                                         collider.bone.add(mesh);
-                                        if (collider.shape?.offset) {
-                                            mesh.position.copy(collider.shape.offset);
-                                        }
                                     } else {
                                         scene.add(mesh);
                                     }

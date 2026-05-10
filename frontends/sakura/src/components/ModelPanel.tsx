@@ -370,6 +370,26 @@ export function ModelPanel({ character }: ModelPanelProps) {
       } else if (e.data?.type === 'modelFailed') {
         setVrmLoadState('failed');
         setVrmFailReason(String(e.data?.reason ?? 'Unknown error'));
+      } else if (e.data?.type === 'vrmSpringBonesReady') {
+        // Auto-apply the character's saved spring bone preset (if any)
+        if (e.data.jointCount > 0 && character?.id) {
+          api.getSpringBonePreset(character.id)
+            .then(({ preset }) => {
+              if (!preset?.joints?.length) return;
+              const vs = useViewerStore.getState();
+              for (const j of preset.joints) {
+                vs.dispatchSetSpringBoneParams(j.index, {
+                  stiffness: j.stiffness,
+                  drag: j.dragForce,
+                  gravityPower: j.gravityPower,
+                });
+              }
+              if (preset.wind) {
+                vs.dispatchWind(preset.wind.x, preset.wind.y, preset.wind.z, preset.wind.strength);
+              }
+            })
+            .catch(() => {}); // silently ignore — no preset is the expected initial state
+        }
       } else if (e.data?.type === 'emotionChanged') {
         // Viewer can emit this to trigger a fresh motion clip when emotion shifts
         const emo: string = e.data?.emotion || 'neutral';
@@ -380,6 +400,13 @@ export function ModelPanel({ character }: ModelPanelProps) {
               lastMotionEmotion.current = emo;
             })
             .catch(() => {});
+        }
+        // Modulate spring bone physics to reflect the emotion (Phase 5)
+        if (useViewerStore.getState().mode === 'vrm') {
+          useViewerStore.getState().iframeRef?.contentWindow?.postMessage(
+            { type: 'setSpringBoneEmotion', payload: { emotion: emo } },
+            window.location.origin,
+          );
         }
       } else if (e.data?.type === 'glbMorphTargetList') {
         // B.1: Populate GLB morph target sliders

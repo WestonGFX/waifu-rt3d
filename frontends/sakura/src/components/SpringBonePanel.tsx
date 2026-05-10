@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, Wind, Eye, EyeOff, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronRight, Wind, Eye, EyeOff, RotateCcw, Save } from 'lucide-react';
 import { useViewerStore } from '../stores/viewerStore';
+import { useAppStore } from '../stores/appStore';
+import { api } from '../lib/api';
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 
@@ -251,6 +253,26 @@ export function SpringBonePanel({ isOpen }: SpringBonePanelProps) {
     useViewerStore.getState().dispatchGetSpringBoneInfo();
   }, []);
 
+  const [saving, setSaving] = useState(false);
+  const savePreset = useCallback(async () => {
+    const charId = useAppStore.getState().activeCharacter?.id;
+    if (!charId || !info?.joints?.length) return;
+    setSaving(true);
+    try {
+      await api.saveSpringBonePreset(charId, {
+        joints: info.joints.map(j => ({
+          index: j.index,
+          boneName: j.boneName,
+          stiffness: j.stiffness,
+          dragForce: j.drag,
+          gravityPower: j.gravityPower,
+        })),
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [info]);
+
   const jointCount = info?.joints?.length ?? 0;
   const colliderCount = info?.colliderGroups?.reduce((acc, g) => acc + g.colliders.length, 0) ?? 0;
 
@@ -499,6 +521,30 @@ export function SpringBonePanel({ isOpen }: SpringBonePanelProps) {
           {info && info.joints.length === 0 && (
             <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
               No spring bones detected. Load a VRM model with hair/clothing physics.
+            </div>
+          )}
+
+          {info && info.joints.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+              <button
+                onClick={savePreset}
+                disabled={saving}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-surface)',
+                  color: saving ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)',
+                  fontSize: '11px',
+                  cursor: saving ? 'default' : 'pointer',
+                }}
+              >
+                <Save size={11} />
+                {saving ? 'Saving…' : 'Save Preset'}
+              </button>
             </div>
           )}
         </div>

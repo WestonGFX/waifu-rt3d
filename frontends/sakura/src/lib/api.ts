@@ -143,6 +143,24 @@ export interface LoraRecord {
   is_active: number;
 }
 
+/**
+ * A persisted spring bone physics preset for a character.
+ * Saved via POST /api/characters/{id}/spring-bone-preset and
+ * auto-applied on model load via GET of the same endpoint.
+ */
+export interface SpringBonePreset {
+  /** Per-joint parameter overrides. */
+  joints: Array<{
+    index: number;
+    boneName: string;
+    stiffness: number;
+    dragForce: number;
+    gravityPower: number;
+  }>;
+  /** Optional ambient wind settings. */
+  wind?: { x: number; y: number; z: number; strength: number };
+}
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 /**
@@ -1503,4 +1521,23 @@ export const api = {
       `/api/characters/${charId}/loras/wipe`,
       {},
     ),
+
+  /**
+   * Fetch the saved spring bone preset for a character.
+   *
+   * @param charId - Character database ID
+   * @returns The preset payload, or null if none is saved
+   */
+  getSpringBonePreset: (charId: number) =>
+    get<{ preset: SpringBonePreset | null }>(`/api/characters/${charId}/spring-bone-preset`),
+
+  /**
+   * Save a spring bone preset for a character.
+   *
+   * @param charId - Character database ID
+   * @param preset - Joint params and optional wind settings to persist
+   * @returns ok: true on success
+   */
+  saveSpringBonePreset: (charId: number, preset: SpringBonePreset) =>
+    post<{ ok: boolean }>(`/api/characters/${charId}/spring-bone-preset`, preset as unknown as Record<string, unknown>),
 };

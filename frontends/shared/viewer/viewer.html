@@ -806,6 +806,176 @@
         }
 
         /**
+         * Under-damped spring — oscillates around goal before settling.
+         * Produces natural overshoot-and-settle on bone rotations (e.g. head nod, arm gesture).
+         * Falls back to springDamperExact if the discriminant is non-positive (critically-damped territory).
+         *
+         * @param {number} x - Current value
+         * @param {number} v - Current velocity
+         * @param {number} goal - Target value
+         * @param {number} frequency - Oscillation frequency in Hz
+         * @param {number} halflife - Decay halflife in seconds
+         * @param {number} dt - Delta time in seconds
+         * @returns {{x: number, v: number}} Updated position and velocity
+         */
+        function springDamperUnder(x, v, goal, frequency, halflife, dt) {
+            const d = (4.0 * 0.69314718056) / (halflife + 1e-5);
+            const s = (2.0 * Math.PI * frequency) * (2.0 * Math.PI * frequency);
+            const discrim = s - (d * d / 4.0);
+            if (discrim <= 0) return springDamperExact(x, v, goal, halflife, dt);
+            const w = Math.sqrt(discrim);
+            const y = d / 2.0;
+            const j = Math.sqrt(
+                ((v + y * (x - goal)) / w) * ((v + y * (x - goal)) / w) +
+                (x - goal) * (x - goal)
+            );
+            const p = Math.atan2(v + y * (x - goal), w * (x - goal));
+            const eydt = Math.exp(-y * dt);
+            return {
+                x: j * eydt * Math.cos(w * dt + p) + goal,
+                v: -y * j * eydt * Math.cos(w * dt + p) - w * j * eydt * Math.sin(w * dt + p),
+            };
+        }
+
+        /**
+         * Critically damped spring for THREE.Quaternion rotations.
+         * Uses scaled angle-axis (log-map) to avoid gimbal lock and ensure shortest-path rotation.
+         *
+         * @param {THREE.Quaternion} x - Current rotation
+         * @param {THREE.Vector3}    v - Current angular velocity (scaled axis)
+         * @param {THREE.Quaternion} goal - Target rotation
+         * @param {number}           halflife - Seconds
+         * @param {number}           dt - Delta time in seconds
+         * @returns {{x: THREE.Quaternion, v: THREE.Vector3}} Updated rotation and angular velocity
+         */
+        function springDamperQuaternion(x, v, goal, halflife, dt) {
+            const y = (4.0 * 0.69314718056) / (halflife + 1e-5) / 2.0;
+            const diff = new THREE.Quaternion().copy(x).multiply(
+                new THREE.Quaternion().copy(goal).invert()
+            );
+            // Ensure shortest-path rotation
+            if (diff.w < 0) { diff.x = -diff.x; diff.y = -diff.y; diff.z = -diff.z; diff.w = -diff.w; }
+            const halfAngle = Math.acos(Math.min(1.0, diff.w));
+            const sinHalf = Math.sin(halfAngle);
+            const j0 = sinHalf < 1e-5
+                ? new THREE.Vector3(0, 0, 0)
+                : new THREE.Vector3(diff.x, diff.y, diff.z).multiplyScalar(2.0 * halfAngle / sinHalf);
+            const j1 = new THREE.Vector3().copy(v).addScaledVector(j0, y);
+            const eydt = Math.exp(-y * dt);
+            const newAxis = new THREE.Vector3().copy(j0).addScaledVector(j1, dt).multiplyScalar(eydt);
+            const angle = newAxis.length();
+            const newQuat = angle < 1e-5
+                ? new THREE.Quaternion().copy(goal)
+                : new THREE.Quaternion().setFromAxisAngle(newAxis.normalize(), angle).multiply(goal);
+            const newV = new THREE.Vector3().copy(v).addScaledVector(j1, -y * dt).multiplyScalar(eydt);
+            return { x: newQuat, v: newV };
+        }
+
+        /**
+         * Manages spring-driven settling for primary skeleton bone rotations.
+         * Distinct from VRM secondary physics (hair/cloth) — this applies to the MAIN
+         * skeleton for smooth overshoot-and-settle on procedural pose changes.
+         *
+         * Use setCritical() for subtle procedural motion (breathing, head drift).
+         * Use setTarget() with under-damped params for reactions that should overshoot.
+         *
+         * @example
+         * const springs = new PoseSpringManager();
+         * springs.setCritical('chest', 'x', breathX, 0.25);
+         * const out = springs.update(dt);
+         * chest.rotation.x = out.chest?.x ?? chest.rotation.x;
+         */
+        class PoseSpringManager {
+            constructor() {
+                /** @type {Map<string, {x:number, v:number, goal:number, halflife:number, frequency:number, critical:boolean}>} */
+                this._springs = new Map();
+            }
+
+            /**
+             * Set a critically-damped spring target (no overshoot — smoothest settling).
+             *
+             * @param {string} boneName - Normalized VRM bone name (e.g. 'chest', 'head')
+             * @param {string} axis     - Rotation axis: 'x', 'y', or 'z'
+             * @param {number} goal     - Target rotation value in radians
+             * @param {number} halflife - Seconds to reduce error by half (default 0.2s = "natural")
+             */
+            setCritical(boneName, axis, goal, halflife = 0.2) {
+                const key = `${boneName}.${axis}`;
+                const s = this._springs.get(key);
+                if (s) {
+                    s.goal = goal;
+                    s.halflife = halflife;
+                    s.critical = true;
+                } else {
+                    // Initialise at goal so first-frame is instant (no from-zero spring-in on mount).
+                    this._springs.set(key, { x: goal, v: 0, goal, halflife, frequency: 2.0, critical: true });
+                }
+            }
+
+            /**
+             * Set an under-damped spring target (produces natural overshoot-and-settle).
+             *
+             * @param {string} boneName  - Normalized VRM bone name
+             * @param {string} axis      - Rotation axis: 'x', 'y', or 'z'
+             * @param {number} goal      - Target rotation value in radians
+             * @param {number} frequency - Oscillation frequency in Hz (higher = snappier overshoot)
+             * @param {number} halflife  - Decay halflife in seconds
+             */
+            setTarget(boneName, axis, goal, frequency = 2.0, halflife = 0.2) {
+                const key = `${boneName}.${axis}`;
+                const s = this._springs.get(key);
+                if (s) {
+                    s.goal = goal;
+                    s.frequency = frequency;
+                    s.halflife = halflife;
+                    s.critical = false;
+                } else {
+                    this._springs.set(key, { x: goal, v: 0, goal, halflife, frequency, critical: false });
+                }
+            }
+
+            /**
+             * Advance all springs by dt and return a map of {boneName: {axis: value}}.
+             * Apply the returned values to the corresponding bone.rotation axes.
+             *
+             * @param {number} dt - Delta time in seconds
+             * @returns {Record<string, Record<string, number>>} Map of boneName→{axis→value}
+             */
+            update(dt) {
+                const result = {};
+                for (const [key, s] of this._springs) {
+                    const dot = key.indexOf('.');
+                    const bone = key.slice(0, dot);
+                    const axis = key.slice(dot + 1);
+                    const upd = s.critical
+                        ? springDamperExact(s.x, s.v, s.goal, s.halflife, dt)
+                        : springDamperUnder(s.x, s.v, s.goal, s.frequency, s.halflife, dt);
+                    s.x = upd.x;
+                    s.v = upd.v;
+                    if (!result[bone]) result[bone] = {};
+                    result[bone][axis] = upd.x;
+                }
+                return result;
+            }
+
+            /**
+             * @param {number} [threshold=0.001] - Max acceptable error + velocity
+             * @returns {boolean} True when all springs have settled
+             */
+            isSettled(threshold = 0.001) {
+                for (const s of this._springs.values()) {
+                    if (Math.abs(s.x - s.goal) > threshold || Math.abs(s.v) > threshold) return false;
+                }
+                return true;
+            }
+
+            /** Snap all springs to their current goals (zero velocity). */
+            reset() {
+                for (const s of this._springs.values()) { s.x = s.goal; s.v = 0; }
+            }
+        }
+
+        /**
          * L0: Base pose — breathing rhythm and weight distribution.
          * Write mode: SET (=) on chest/spine.
          * Personality influence:
@@ -816,6 +986,8 @@
         class BasePoseLayer extends AnimationLayer {
             constructor(vrm) {
                 super(vrm, 'basePose');
+                /** Spring system for smooth breathing and head drift transitions. */
+                this.springs = new PoseSpringManager();
             }
 
             update(dt) {
@@ -839,43 +1011,82 @@
                 const breathZ = noise1D(t * 0.55, 1) * breathAmpZ
                               + noise1D(t * 0.18, 3) * breathAmpZ * 0.4;
 
+                // Feed targets into spring system. 0.25s halflife = "natural" breathing feel.
+                // When personality changes (energy/nervousness shift), amplitude transitions
+                // smoothly rather than snapping, eliminating discontinuities on mood change.
+                this.springs.setCritical('chest', 'x', breathX, 0.25);
+                this.springs.setCritical('chest', 'z', breathZ, 0.25);
+
+                // Spine confidence posture — 0.50s halflife for slow postural shifts.
+                const spineGoalX = p.confidence > 0.5 ? -(p.confidence - 0.5) * 0.03 : 0;
+                this.springs.setCritical('spine', 'x', spineGoalX, 0.50);
+
+                // Head micro-drift — springs smooth any velocity discontinuities when
+                // noise targets jump at personality changes. 0.30s = relaxed drift.
+                const headX = noise1D(t * 0.2, 10) * 0.010;
+                const headY = noise1D(t * 0.15, 11) * 0.014;
+                this.springs.setCritical('head', 'x', headX, 0.30);
+                this.springs.setCritical('head', 'y', headY, 0.30);
+
+                // Arm drape springs — 0.50s halflife makes arm transitions fluid on pose changes.
+                const BASE_Z = 1.4;
+                this.springs.setCritical('leftUpperArm',  'z', -BASE_Z, 0.50);
+                this.springs.setCritical('leftUpperArm',  'x',   0.08,  0.50);
+                this.springs.setCritical('leftUpperArm',  'y',   0.0,   0.50);
+                this.springs.setCritical('rightUpperArm', 'z',  BASE_Z, 0.50);
+                this.springs.setCritical('rightUpperArm', 'x',   0.08,  0.50);
+                this.springs.setCritical('rightUpperArm', 'y',   0.0,   0.50);
+                this.springs.setCritical('leftLowerArm',  'z',  -0.08,  0.40);
+                this.springs.setCritical('leftLowerArm',  'y',  -0.04,  0.40);
+                this.springs.setCritical('leftLowerArm',  'x',   0.0,   0.40);
+                this.springs.setCritical('rightLowerArm', 'z',   0.08,  0.40);
+                this.springs.setCritical('rightLowerArm', 'y',   0.04,  0.40);
+                this.springs.setCritical('rightLowerArm', 'x',   0.0,   0.40);
+
+                // Advance all springs and apply outputs to bones.
+                const out = this.springs.update(dt);
+
                 const chest = this.getBone('chest') || this.getBone('spine');
-                if (chest) {
-                    chest.rotation.x = breathX;
-                    chest.rotation.z = breathZ;    // independent from X — no more ship wobble
+                if (chest && out.chest) {
+                    if (out.chest.x !== undefined) chest.rotation.x = out.chest.x;
+                    if (out.chest.z !== undefined) chest.rotation.z = out.chest.z;
                 }
 
-                // Spine confidence posture
                 const spine = this.getBone('spine');
-                if (spine && p.confidence > 0.5) {
-                    spine.rotation.x -= (p.confidence - 0.5) * 0.03;
+                if (spine && out.spine?.x !== undefined) {
+                    spine.rotation.x += out.spine.x; // additive on top of chest's SET
                 }
 
-                // Head micro-drift — two independent low-frequency noises per axis.
-                // Amplitudes are intentionally tiny: below conscious notice but
-                // subconsciously read as "the character is alive and thinking."
                 const head = this.getBone('head');
-                if (head) {
-                    head.rotation.x += noise1D(t * 0.2, 10) * 0.010;  // slow forward/back tilt
-                    head.rotation.y += noise1D(t * 0.15, 11) * 0.014; // slow side-to-side turn
+                if (head && out.head) {
+                    if (out.head.x !== undefined) head.rotation.x += out.head.x;
+                    if (out.head.y !== undefined) head.rotation.y += out.head.y;
                 }
 
-                // Arm drape — maintained every frame so no other code needs to
-                // re-initialise the pose. After resetNormalizedPose(), the normalised
-                // leftUpperArm at rotation (0,0,0) is the T-pose (arm pointing outward).
-                // Z rotation of ±1.4 (≈80°) brings it to a natural hanging position.
-                // X rotation of 0.08 adds a slight forward lean for a relaxed look.
-                // These are SET (not additive) values; EmotionLayer / IdleLayer add
-                // small deltas on top.
                 const lArm  = this.getBone('leftUpperArm');
                 const rArm  = this.getBone('rightUpperArm');
                 const lFore = this.getBone('leftLowerArm');
                 const rFore = this.getBone('rightLowerArm');
-                const BASE_Z = 1.4;
-                if (lArm)  { lArm.rotation.z  = -BASE_Z; lArm.rotation.x  =  0.08; lArm.rotation.y  =  0.0; }
-                if (rArm)  { rArm.rotation.z  =  BASE_Z; rArm.rotation.x  =  0.08; rArm.rotation.y  =  0.0; }
-                if (lFore) { lFore.rotation.z = -0.08;   lFore.rotation.y = -0.04; lFore.rotation.x =  0.0; }
-                if (rFore) { rFore.rotation.z =  0.08;   rFore.rotation.y =  0.04; rFore.rotation.x =  0.0; }
+                if (lArm && out.leftUpperArm) {
+                    if (out.leftUpperArm.z !== undefined) lArm.rotation.z = out.leftUpperArm.z;
+                    if (out.leftUpperArm.x !== undefined) lArm.rotation.x = out.leftUpperArm.x;
+                    if (out.leftUpperArm.y !== undefined) lArm.rotation.y = out.leftUpperArm.y;
+                }
+                if (rArm && out.rightUpperArm) {
+                    if (out.rightUpperArm.z !== undefined) rArm.rotation.z = out.rightUpperArm.z;
+                    if (out.rightUpperArm.x !== undefined) rArm.rotation.x = out.rightUpperArm.x;
+                    if (out.rightUpperArm.y !== undefined) rArm.rotation.y = out.rightUpperArm.y;
+                }
+                if (lFore && out.leftLowerArm) {
+                    if (out.leftLowerArm.z !== undefined) lFore.rotation.z = out.leftLowerArm.z;
+                    if (out.leftLowerArm.y !== undefined) lFore.rotation.y = out.leftLowerArm.y;
+                    if (out.leftLowerArm.x !== undefined) lFore.rotation.x = out.leftLowerArm.x;
+                }
+                if (rFore && out.rightLowerArm) {
+                    if (out.rightLowerArm.z !== undefined) rFore.rotation.z = out.rightLowerArm.z;
+                    if (out.rightLowerArm.y !== undefined) rFore.rotation.y = out.rightLowerArm.y;
+                    if (out.rightLowerArm.x !== undefined) rFore.rotation.x = out.rightLowerArm.x;
+                }
             }
         }
 

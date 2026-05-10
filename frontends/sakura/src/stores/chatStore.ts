@@ -156,6 +156,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const jiggleMult = EMOTION_JIGGLE_MAP[normalizedEmotion] ?? 1.0;
     useViewerStore.getState().dispatchSetPersonality(personality);
     useViewerStore.getState().dispatchSetJiggleEmotionMultiplier(jiggleMult);
+    // Phase D: trigger emotion-matched procedural gesture sequence
+    if (emotion !== 'neutral') {
+      useViewerStore.getState().dispatchTriggerSequence(emotion, { energy: personality.energy });
+    }
   },
 
   setContext: (sessionId, charId) => set({ sessionId, charId, messages: [] }),

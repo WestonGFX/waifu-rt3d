@@ -2381,6 +2381,207 @@
                             if (spine) spine.rotation.y = slow * 0.08;
                         }
                     },
+                    // ── Phase D: Gestures referenced by AnimationSequencer.EMOTION_SEQUENCES ──
+                    // Mirrored from IdleLayer.FIDGETS (same motion, GestureLayer amp format)
+                    bounce: {
+                        duration: 1.2,
+                        apply(t, amp, B) {
+                            const hips = B('hips'), ls = B('leftShoulder'), rs = B('rightShoulder');
+                            const v = Math.abs(Math.sin(t * Math.PI * 1.67)) * 0.015 * amp;
+                            if (hips) hips.position.y = v;
+                            if (ls) ls.rotation.z = v * 1.5;
+                            if (rs) rs.rotation.z = -v * 1.5;
+                        }
+                    },
+                    curtsy_bob: {
+                        duration: 2.0,
+                        apply(t, amp, B) {
+                            const hips = B('hips'), spine = B('spine'), head = B('head');
+                            const dip = Math.sin(t * Math.PI * 0.5) * amp;
+                            if (hips) hips.position.y = -dip * 0.02;
+                            if (spine) spine.rotation.x = dip * 0.04;
+                            if (head) head.rotation.x = dip * 0.03;
+                        }
+                    },
+                    hip_cock: {
+                        duration: 2.5,
+                        apply(t, amp, B) {
+                            const hips = B('hips'), spine = B('spine'), chest = B('chest');
+                            const blend = Math.sin(t * Math.PI * 0.4) * amp;
+                            if (hips) { hips.rotation.z = blend * 0.06; hips.rotation.y = blend * 0.03; }
+                            if (spine) spine.rotation.z = blend * -0.03;
+                            if (chest) chest.rotation.z = blend * -0.02;
+                        }
+                    },
+                    weight_shift: {
+                        duration: 3.0,
+                        apply(t, amp, B) {
+                            const env = Math.sin(t / 3.0 * Math.PI);
+                            const phase = Math.sin(t * Math.PI * 0.67) * env * amp;
+                            const hips = B('hips'), spine = B('spine'), chest = B('chest');
+                            if (hips) { hips.rotation.y = phase * 0.035; hips.rotation.z = phase * 0.018; }
+                            if (spine) spine.rotation.z = phase * -0.012;
+                            if (chest) chest.rotation.z = phase * -0.008;
+                        }
+                    },
+                    shoulder_roll: {
+                        duration: 2.5,
+                        apply(t, amp, B) {
+                            const ls = B('leftShoulder'), rs = B('rightShoulder'), neck = B('neck');
+                            const v = Math.sin(t * Math.PI * 0.8) * 0.03 * amp;
+                            if (ls) ls.rotation.z = v;
+                            if (rs) rs.rotation.z = -v * 0.5;
+                            if (neck) neck.rotation.z = v * 0.15;
+                        }
+                    },
+                    subtle_sway: {
+                        duration: 3.0,
+                        apply(t, amp, B) {
+                            const hips = B('hips'), spine = B('spine'), head = B('head');
+                            const s = Math.sin(t * Math.PI * 0.667) * 0.02 * amp;
+                            if (hips) hips.rotation.z = s;
+                            if (spine) spine.rotation.z = s * -0.5;
+                            if (head) head.rotation.z = s * -0.3;
+                        }
+                    },
+                    head_tilt: {
+                        duration: 1.5,
+                        apply(t, amp, B) {
+                            const head = B('head'), neck = B('neck');
+                            const tilt = Math.sin(t * Math.PI / 1.5) * 0.08 * amp;
+                            if (neck) neck.rotation.z = tilt * 0.3;
+                            if (head) head.rotation.z = tilt;
+                        }
+                    },
+                    look_around: {
+                        duration: 3.5,
+                        apply(t, amp, B) {
+                            const head = B('head'), neck = B('neck');
+                            const env = Math.sin(t / 3.5 * Math.PI);
+                            const yaw = Math.sin(t * Math.PI * 0.57) * 0.08 * env * amp;
+                            if (neck) neck.rotation.y = yaw * 0.35;
+                            if (head) { head.rotation.y = yaw; head.rotation.z = yaw * 0.25; }
+                        }
+                    },
+                    deep_breath: {
+                        duration: 3.5,
+                        apply(t, amp, B) {
+                            const chest = B('chest') || B('spine');
+                            const ls = B('leftShoulder'), rs = B('rightShoulder');
+                            const inhale = Math.sin(t * Math.PI * 0.571) * 0.015 * amp;
+                            if (chest) chest.rotation.x = inhale;
+                            const lift = Math.max(0, inhale) * 2;
+                            if (ls) ls.rotation.z = lift * 0.03;
+                            if (rs) rs.rotation.z = -lift * 0.03;
+                        }
+                    },
+                    foot_tap: {
+                        duration: 2.0,
+                        apply(t, amp, B) {
+                            const leg = B('rightUpperLeg'), hips = B('hips');
+                            const tap = Math.abs(Math.sin(t * Math.PI * 3)) * 0.03 * amp;
+                            if (leg) leg.rotation.x = tap;
+                            if (hips) hips.rotation.z = tap * 0.15;
+                        }
+                    },
+                    // Phase D: New gestures (not in FIDGETS — need fresh implementations)
+                    hair_twirl: {
+                        duration: 2.0,
+                        apply(t, amp, B) {
+                            // Right hand reaches toward head — gentle, playful
+                            const ra = B('rightUpperArm'), rla = B('rightLowerArm'), head = B('head');
+                            const v = Math.sin(t * Math.PI / 2.0) * amp;
+                            if (ra) { ra.rotation.z = 1.3 - 0.55 * v; ra.rotation.x = 0.25 * v; }
+                            if (rla) rla.rotation.x = -0.15 * v;
+                            if (head) head.rotation.z = 0.08 * Math.sin(t * Math.PI);  // slight lean
+                        }
+                    },
+                    touch_face: {
+                        duration: 1.8,
+                        apply(t, amp, B) {
+                            // Hand rises toward chin/cheek — contemplative or shy
+                            const ra = B('rightUpperArm'), rla = B('rightLowerArm'), head = B('head');
+                            const v = Math.sin(t * Math.PI / 1.8) * amp;
+                            if (ra) { ra.rotation.z = 1.3 - 0.45 * v; ra.rotation.x = 0.35 * v; }
+                            if (rla) rla.rotation.x = -0.2 * v;
+                            if (head) head.rotation.z = 0.05 * v;
+                        }
+                    },
+                    hand_on_hip: {
+                        duration: 2.0,
+                        apply(t, amp, B) {
+                            // Confident pose: one hand on hip, slight hip cant
+                            const ra = B('rightUpperArm'), rla = B('rightLowerArm');
+                            const hips = B('hips'), spine = B('spine');
+                            const v = Math.sin(t * Math.PI / 2.0) * amp;
+                            if (ra) { ra.rotation.z = 1.1 * v; ra.rotation.x = 0.1 * v; }
+                            if (rla) rla.rotation.z = -0.2 * v;
+                            if (hips) hips.rotation.z = 0.04 * v;
+                            if (spine) spine.rotation.z = -0.02 * v;
+                        }
+                    },
+                    hand_clasp: {
+                        duration: 1.5,
+                        apply(t, amp, B) {
+                            // Both hands come together in front — tense or earnest
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
+                            const lla = B('leftLowerArm'), rla = B('rightLowerArm');
+                            const v = Math.sin(t * Math.PI / 1.5) * amp;
+                            if (la) { la.rotation.z = -1.3 + 0.5 * v; la.rotation.x = 0.4 * v; }
+                            if (ra) { ra.rotation.z = 1.3 - 0.5 * v; ra.rotation.x = 0.4 * v; }
+                            if (lla) lla.rotation.x = -0.25 * v;
+                            if (rla) rla.rotation.x = -0.25 * v;
+                        }
+                    },
+                    touch_hair: {
+                        duration: 1.5,
+                        apply(t, amp, B) {
+                            // Brushes hair with one hand — nervous or flirty habit
+                            const ra = B('rightUpperArm'), rla = B('rightLowerArm'), head = B('head');
+                            const v = Math.sin(t * Math.PI / 1.5) * amp;
+                            if (ra) { ra.rotation.z = 1.3 - 0.6 * v; ra.rotation.x = 0.15 * v; }
+                            if (rla) rla.rotation.x = -0.1 * v;
+                            if (head) head.rotation.z = -0.04 * v;  // slight lean into hand
+                        }
+                    },
+                    fidget_hands: {
+                        duration: 2.5,
+                        apply(t, amp, B) {
+                            // Hands fidget in front of body — nervous small movements
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
+                            const freq = 4.0;
+                            const v = amp * Math.sin(t / 2.5 * Math.PI);  // overall envelope
+                            const jitter = Math.sin(t * Math.PI * freq) * 0.06 * v;
+                            if (la) { la.rotation.z = -1.3 + 0.4 * v; la.rotation.x = 0.2 * v + jitter; }
+                            if (ra) { ra.rotation.z = 1.3 - 0.4 * v; ra.rotation.x = 0.2 * v - jitter; }
+                        }
+                    },
+                    hand_behind_back: {
+                        duration: 2.0,
+                        apply(t, amp, B) {
+                            // Both arms pulled slightly back — shy, reserved posture
+                            const la = B('leftUpperArm'), ra = B('rightUpperArm');
+                            const spine = B('spine'), chest = B('chest');
+                            const v = Math.sin(t * Math.PI / 2.0) * amp;
+                            if (la) { la.rotation.z = -1.3 + 0.15 * v; la.rotation.x = -0.25 * v; }
+                            if (ra) { ra.rotation.z = 1.3 - 0.15 * v; ra.rotation.x = -0.25 * v; }
+                            if (spine) spine.rotation.x = 0.04 * v;  // slight forward lean
+                            if (chest) chest.rotation.x = 0.02 * v;
+                        }
+                    },
+                    hand_to_chest: {
+                        duration: 1.8,
+                        apply(t, amp, B) {
+                            // Right hand rests on chest — sincere, emotional gesture
+                            const ra = B('rightUpperArm'), rla = B('rightLowerArm');
+                            const spine = B('spine'), head = B('head');
+                            const v = Math.sin(t * Math.PI / 1.8) * amp;
+                            if (ra) { ra.rotation.z = 1.3 - 0.35 * v; ra.rotation.x = 0.45 * v; }
+                            if (rla) rla.rotation.x = -0.3 * v;
+                            if (spine) spine.rotation.x = -0.03 * v;  // slight proud posture
+                            if (head) head.rotation.x = -0.04 * v;    // chin up
+                        }
+                    },
                 };
             }
         }
@@ -3095,6 +3296,96 @@
                 if (this._inertBlend?.update(dt) === false) {
                     this._inertBlend = null;  // blend complete
                 }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Phase D: BalanceLayer — Center of Gravity compensation
+        // ══════════════════════════════════════════════════════════
+
+        /**
+         * L8: Balance — tracks a virtual Center of Gravity and applies a compensating
+         * hip shift to keep the character feeling physically grounded.
+         *
+         * Uses biomechanics-standard mass weights. After all other layers write their
+         * bone rotations, this layer calculates the approximate CoG from weighted world
+         * positions and applies a spring-damped hip correction so the character always
+         * "settles" with weight above the support base.
+         *
+         * Registered LAST (after FollowThroughLayer) so it reads the final skeleton state.
+         * Effect is intentionally subtle — 1-3mm hip displacement — below conscious notice
+         * but subconsciously read as natural weight and physical presence.
+         */
+        class BalanceLayer extends AnimationLayer {
+            constructor(vrm) {
+                super(vrm, 'balance');
+                // Biomechanics-standard segment mass ratios (sums to ~1.0)
+                this._massWeights = {
+                    head:          0.08,
+                    chest:         0.25,
+                    spine:         0.25,
+                    leftUpperArm:  0.03,
+                    rightUpperArm: 0.03,
+                    leftLowerArm:  0.02,
+                    rightLowerArm: 0.02,
+                    leftUpperLeg:  0.10,
+                    rightUpperLeg: 0.10,
+                    leftLowerLeg:  0.06,
+                    rightLowerLeg: 0.06,
+                };
+                // Spring state for smooth hip correction
+                this._hipCorrX = { x: 0, v: 0 };
+                this._hipCorrZ = { x: 0, v: 0 };
+                this._cogOffset = new THREE.Vector3();
+                this._tmp = new THREE.Vector3();
+            }
+
+            /**
+             * Approximate CoG as weighted average of bone world positions.
+             * @returns {THREE.Vector3} Center of gravity in world space
+             */
+            calculateCoG() {
+                const humanoid = this.vrm?.humanoid;
+                if (!humanoid) return this._cogOffset.set(0, 0, 0);
+                let totalX = 0, totalY = 0, totalZ = 0, totalMass = 0;
+                for (const [boneName, mass] of Object.entries(this._massWeights)) {
+                    try {
+                        const node = humanoid.getNormalizedBoneNode(boneName);
+                        if (!node) continue;
+                        node.getWorldPosition(this._tmp);
+                        totalX += this._tmp.x * mass;
+                        totalY += this._tmp.y * mass;
+                        totalZ += this._tmp.z * mass;
+                        totalMass += mass;
+                    } catch (_) {}
+                }
+                if (totalMass > 0) {
+                    this._cogOffset.set(totalX / totalMass, totalY / totalMass, totalZ / totalMass);
+                }
+                return this._cogOffset;
+            }
+
+            update(dt) {
+                super.update(dt);
+                const humanoid = this.vrm?.humanoid;
+                if (!humanoid) return;
+
+                const hips = this.getBone('hips');
+                if (!hips) return;
+
+                const cog = this.calculateCoG();
+                // Target correction: shift hips opposite to CoG lateral drift.
+                // Scale factor 0.15 keeps correction very subtle (max ~2mm at ±1cm drift).
+                const targetX = -cog.x * 0.15;
+                const targetZ = -cog.z * 0.08;
+
+                const rx = springDamperExact(this._hipCorrX.x, this._hipCorrX.v, targetX, 0.25, dt);
+                this._hipCorrX = rx;
+                const rz = springDamperExact(this._hipCorrZ.x, this._hipCorrZ.v, targetZ, 0.25, dt);
+                this._hipCorrZ = rz;
+
+                hips.position.x += rx.x;
+                hips.position.z += rz.x;
             }
         }
 
@@ -7484,6 +7775,8 @@
                             animationDirector.addLayer(new ClipLayer(vrm, scene));
                             // L7: Follow-through — cascaded spring lag after all SET-mode layers.
                             animationDirector.addLayer(new FollowThroughLayer(vrm));
+                            // L8: Balance — CoG compensation (subtle hip shifts for physical grounding).
+                            animationDirector.addLayer(new BalanceLayer(vrm));
 
                             // Phase 17B: AnimationSequencer sits above the layer system
                             // and chains gestures via GestureLayer.triggerGesture().

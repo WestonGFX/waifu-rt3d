@@ -333,3 +333,5 @@ All 7 open questions answered. `/go` against M1 is now unblocked.
 - 2026-05-10 Backlog item-34 (CCv3/CHARX): ✓ chara_card.py read_charx_bytes + character_book→lore_entries; server.py import-card accepts .charx; CharacterCardImporter + CardImportWizard accept .charx.
 - 2026-05-10 Backlog item-36 (full-text search): ✓ pre-existing — GlobalSearchPanel + /api/search/messages + FTS5 v45 all implemented.
 - 2026-05-10 Backlog item-48 (model picker thumbnails): ✓ pre-existing — ModelBrowser shows thumbnails; avatar PNGs exist for all built-in VRMs in storage/avatars/.
+- 2026-05-10 Backlog item-38 (Visual Novel mode): ✓ pre-existing — vnMode toggle + VNPortrait/VNTextBox fully implemented in ChatThread.tsx.
+- 2026-05-10 Backlog item-52 (touch interaction): ✓ viewer.html raycasting + zone detection already complete; added characterTouch→sendMessage reaction in useCharacterAudio.ts (10s cooldown, zone→action mapping).

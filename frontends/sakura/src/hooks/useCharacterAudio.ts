@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useAppStore } from '../stores/appStore';
+import { useChatStore } from '../stores/chatStore';
 import { useViewerStore } from '../stores/viewerStore';
 
 /**
@@ -86,4 +87,39 @@ export function useCharacterAudio(): void {
   useEffect(() => {
     if (enabled) postAudio({ action: 'setLayers', breathing, vocals, interaction });
   }, [breathing, vocals, interaction, enabled]);
+
+  // Listen for characterTouch events from the viewer and send a reaction message
+  useEffect(() => {
+    const TOUCH_COOLDOWN_MS = 10_000;
+    const lastTouchRef = { ts: 0 };
+
+    const ZONE_ACTIONS: Record<string, (name: string) => string> = {
+      head:      (n) => `*gently pats ${n}'s head*`,
+      face:      (n) => `*lightly touches ${n}'s cheek*`,
+      shoulders: (n) => `*taps ${n}'s shoulder*`,
+      torso:     (n) => `*pokes ${n}*`,
+      legs:      (n) => `*taps ${n}'s knee*`,
+    };
+
+    function handleMessage(e: MessageEvent) {
+      if (e.data?.type !== 'characterTouch') return;
+
+      const now = Date.now();
+      if (now - lastTouchRef.ts < TOUCH_COOLDOWN_MS) return;
+
+      const chat = useChatStore.getState();
+      // Skip if streaming or no active session
+      if (chat.abortController !== null || !chat.sessionId) return;
+
+      const charName = useAppStore.getState().activeCharacter?.name ?? 'her';
+      const zone: string = e.data.zone ?? 'torso';
+      const action = (ZONE_ACTIONS[zone] ?? ZONE_ACTIONS.torso)(charName);
+
+      lastTouchRef.ts = now;
+      chat.sendMessage(action, true, false);
+    }
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 }

@@ -327,3 +327,5 @@ All 7 open questions answered. `/go` against M1 is now unblocked.
 - 2026-05-06 M6 (items 20-22): ✓ Item 20 already complete (BondPill streak counter). Item 21 ✓ (character_achievements v75 + 11 defs + AchievementToast). Item 22 ✓ (nsfw.skip_bond_gate config toggle + SafetyTab UI + 3 call sites in server.py).
 - 2026-05-06 M8 (Distribution docs): ✓ privacy-comparison.md + eu-ai-act-compliance.md + steam-distribution-evaluation.md shipped in session 33.
 - 2026-05-06 Backlog quick pass (session 34): ✓ item-35 Continue generation (chatStore.continueGeneration + DialogueBubble ChevronsRight button). fix(preflight): v70+v71 INSERT bug resolved — all migrations now applied to live DB at v75. item-50 character_relationships verified (24,576→11 rows + UNIQUE INDEX). items 37/46/47 pre-existing.
+
+- 2026-05-10 M5 (AIE Phase C MVP integration): ✓ 4 wiring gaps closed — scorer.py column fix, explicit→score_and_save fire-and-forget, implicit signal scheduler sweep, peft_local in registry, Voice Fine-tuning UI in Brain tab. commit 880ba13.

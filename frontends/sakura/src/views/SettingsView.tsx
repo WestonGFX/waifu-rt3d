@@ -358,6 +358,7 @@ function CharacterTab() {
   const [emotionPortraitsMode, setEmotionPortraitsMode] = useState(activeCharacter?.emotion_portraits_mode ?? 0);
   /** v36: Character bible deep persona injection toggle. */
   const [bibleEnabled, setBibleEnabled] = useState(activeCharacter?.bible_enabled ?? false);
+  const [showCharVoiceGallery, setShowCharVoiceGallery] = useState(false);
 
   /** Download the active character as a .json file (id stripped for portability). */
   const exportCharacter = () => {
@@ -908,12 +909,42 @@ function CharacterTab() {
           </SettingField>
 
           <SettingField label="Voice" description="Pick a voice for this character.">
-            <VoicePicker
-              value={localData.voice_id}
-              provider={localData.tts_provider}
-              onChange={(voiceId, provider) => setLocalData(d => ({ ...d, voice_id: voiceId, tts_provider: provider }))}
-            />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <VoicePicker
+                value={localData.voice_id}
+                provider={localData.tts_provider}
+                onChange={(voiceId, provider) => setLocalData(d => ({ ...d, voice_id: voiceId, tts_provider: provider }))}
+              />
+              <button
+                onClick={() => setShowCharVoiceGallery(g => !g)}
+                title={showCharVoiceGallery ? 'Hide gallery' : 'Browse voice gallery'}
+                style={{
+                  flexShrink: 0,
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  border: `1px solid ${showCharVoiceGallery ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                  backgroundColor: showCharVoiceGallery ? 'var(--color-accent)' : 'var(--color-surface)',
+                  color: showCharVoiceGallery ? '#fff' : 'var(--color-text-secondary)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {showCharVoiceGallery ? 'Hide' : 'Browse'}
+              </button>
+            </div>
           </SettingField>
+
+          {showCharVoiceGallery && (
+            <div style={{ padding: '8px 0 4px' }}>
+              <VoiceGallery
+                value={localData.voice_id}
+                provider={localData.tts_provider}
+                onSelect={(voiceId, provider) => setLocalData(d => ({ ...d, voice_id: voiceId, tts_provider: provider }))}
+              />
+            </div>
+          )}
 
           {/* Voice sample upload — only for cloning-capable providers */}
           {['chatterbox', 'gptsovits', 'xtts_server', 'f5tts', 'metavoice', 'dia', 'cosyvoice'].includes(localData.tts_provider) && (

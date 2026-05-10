@@ -161,6 +161,21 @@ export interface SpringBonePreset {
   wind?: { x: number; y: number; z: number; strength: number };
 }
 
+/** Per-character jiggle physics profile stored in character_physics_profiles. */
+export interface CharacterPhysicsProfile {
+  body_type: 'petite' | 'average' | 'athletic' | 'curvy' | 'voluptuous';
+  /** null = use global setting */
+  breast_intensity: number | null;
+  butt_intensity: number | null;
+  thigh_intensity: number | null;
+  preset_override: string | null;
+  intensity_override: number | null;
+  /** null = use global; 1 = force-enable; 0 = force-disable */
+  enabled_override: 0 | 1 | null;
+  created_at: string;
+  updated_at: string;
+}
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 /**
@@ -1540,4 +1555,38 @@ export const api = {
    */
   saveSpringBonePreset: (charId: number, preset: SpringBonePreset) =>
     post<{ ok: boolean }>(`/api/characters/${charId}/spring-bone-preset`, preset as unknown as Record<string, unknown>),
+
+  /**
+   * Fetch the jiggle physics profile for a character.
+   *
+   * @param charId - Character database ID
+   * @returns The physics profile, or null if no override is set
+   */
+  getCharacterPhysics: (charId: number) =>
+    get<{ profile: CharacterPhysicsProfile | null }>(`/api/characters/${charId}/physics`),
+
+  /**
+   * Create or update a character's jiggle physics profile.
+   *
+   * @param charId   - Character database ID
+   * @param profile  - Partial profile fields; null values clear overrides
+   * @returns ok: true and the saved profile on success
+   */
+  saveCharacterPhysics: (
+    charId: number,
+    profile: Partial<Omit<CharacterPhysicsProfile, 'created_at' | 'updated_at'>>,
+  ) =>
+    put<{ ok: boolean; profile: CharacterPhysicsProfile | null }>(
+      `/api/characters/${charId}/physics`,
+      profile as Record<string, unknown>,
+    ),
+
+  /**
+   * Delete a character's jiggle physics profile override.
+   *
+   * @param charId - Character database ID
+   * @returns ok: true
+   */
+  deleteCharacterPhysics: (charId: number) =>
+    del<{ ok: boolean }>(`/api/characters/${charId}/physics`),
 };

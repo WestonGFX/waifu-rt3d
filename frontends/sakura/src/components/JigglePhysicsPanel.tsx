@@ -20,8 +20,10 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Zap, ChevronDown, ChevronRight, RotateCcw, Info } from 'lucide-react';
+import { Zap, ChevronDown, ChevronRight, RotateCcw, Info, User } from 'lucide-react';
 import { useViewerStore } from '../stores/viewerStore';
+import { useAppStore } from '../stores/appStore';
+import { api, type CharacterPhysicsProfile } from '../lib/api';
 
 /* ─── Types ─────────────────────────────────────────────────────────────────── */
 
@@ -88,6 +90,18 @@ const PRESETS: Array<{ value: JigglePreset; label: string }> = [
 
 /** Persist debounce delay in milliseconds. */
 const PERSIST_DEBOUNCE_MS = 300;
+
+/** Body type options for per-character physics multipliers. */
+const BODY_TYPES: Array<{
+  value: CharacterPhysicsProfile['body_type'];
+  label: string;
+}> = [
+  { value: 'petite',     label: 'Petite'     },
+  { value: 'average',    label: 'Average'    },
+  { value: 'athletic',   label: 'Athletic'   },
+  { value: 'curvy',      label: 'Curvy'      },
+  { value: 'voluptuous', label: 'Voluptuous' },
+];
 
 /* ─── Sub-components ─────────────────────────────────────────────────────────── */
 
@@ -256,6 +270,13 @@ export function JigglePhysicsPanel({ config, save, cfg: _cfg }: JigglePhysicsPan
   const [detected,   setDetected]   = useState<boolean | null>(null);
   const [jointCount, setJointCount] = useState<number>(0);
 
+  /* ── Per-character override state ───────────────────────────────────── */
+  const activeCharacter = useAppStore(s => s.activeCharacter);
+  const [charProfile, setCharProfile] = useState<CharacterPhysicsProfile | null>(null);
+  const [charBodyType, setCharBodyType] = useState<CharacterPhysicsProfile['body_type']>('average');
+  const [charSaving, setCharSaving] = useState(false);
+  const [charProfileExpanded, setCharProfileExpanded] = useState(false);
+
   /* ── UI state ───────────────────────────────────────────────────────── */
   const [perPartExpanded, setPerPartExpanded] = useState(false);
 
@@ -284,6 +305,21 @@ export function JigglePhysicsPanel({ config, save, cfg: _cfg }: JigglePhysicsPan
   useEffect(() => {
     dispatchGetJiggleInfo();
   }, [dispatchGetJiggleInfo]);
+
+  /* ── Load per-character profile when active character changes ────────── */
+  useEffect(() => {
+    if (!activeCharacter?.id) {
+      setCharProfile(null);
+      setCharBodyType('average');
+      return;
+    }
+    api.getCharacterPhysics(activeCharacter.id)
+      .then(({ profile }) => {
+        setCharProfile(profile);
+        setCharBodyType(profile?.body_type ?? 'average');
+      })
+      .catch(() => {});
+  }, [activeCharacter?.id]);
 
   /* ── postMessage listener: jiggleInfo + jiggleDetection ─────────────── */
   useEffect(() => {
@@ -414,6 +450,43 @@ export function JigglePhysicsPanel({ config, save, cfg: _cfg }: JigglePhysicsPan
       intensity: d.intensity,
       body_parts: { ...d.bodyParts },
     });
+  }
+
+  /**
+   * Save the per-character body type and send the profile to the viewer.
+   */
+  async function handleSaveCharProfile() {
+    if (!activeCharacter?.id) return;
+    setCharSaving(true);
+    try {
+      const { profile } = await api.saveCharacterPhysics(activeCharacter.id, {
+        body_type: charBodyType,
+        breast_intensity: charProfile?.breast_intensity ?? null,
+        butt_intensity: charProfile?.butt_intensity ?? null,
+        thigh_intensity: charProfile?.thigh_intensity ?? null,
+        preset_override: charProfile?.preset_override ?? null,
+        intensity_override: charProfile?.intensity_override ?? null,
+        enabled_override: charProfile?.enabled_override ?? null,
+      });
+      setCharProfile(profile);
+    } finally {
+      setCharSaving(false);
+    }
+  }
+
+  /**
+   * Clear the per-character profile override — falls back to global settings.
+   */
+  async function handleClearCharProfile() {
+    if (!activeCharacter?.id) return;
+    setCharSaving(true);
+    try {
+      await api.deleteCharacterPhysics(activeCharacter.id);
+      setCharProfile(null);
+      setCharBodyType('average');
+    } finally {
+      setCharSaving(false);
+    }
   }
 
   /* ── Derived ────────────────────────────────────────────────────────── */
@@ -676,6 +749,168 @@ export function JigglePhysicsPanel({ config, save, cfg: _cfg }: JigglePhysicsPan
           {detectionLine}
         </span>
       </div>
+
+      {/* ── Per-character override (collapsible) ── */}
+      {activeCharacter && (
+        <div style={sectionStyle}>
+          <button
+            onClick={() => setCharProfileExpanded(v => !v)}
+            aria-expanded={charProfileExpanded}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              width: '100%',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '2px 0',
+              color: 'var(--color-text-secondary)',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+            }}
+          >
+            {charProfileExpanded
+              ? <ChevronDown size={13} />
+              : <ChevronRight size={13} />}
+            <User size={12} style={{ flexShrink: 0 }} />
+            {activeCharacter.name} Override
+            {charProfile && (
+              <span
+                style={{
+                  marginLeft: 'auto',
+                  fontSize: '0.6rem',
+                  color: 'var(--color-accent)',
+                  fontWeight: 400,
+                }}
+              >
+                {charProfile.body_type}
+              </span>
+            )}
+          </button>
+
+          {charProfileExpanded && (
+            <div style={{ marginTop: '8px', paddingLeft: '14px' }}>
+              {/* Body type selector */}
+              <div style={{ marginBottom: '8px' }}>
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: '0.68rem',
+                    color: 'var(--color-text-tertiary)',
+                    marginBottom: '5px',
+                  }}
+                >
+                  Body Type
+                </span>
+                <div
+                  role="group"
+                  aria-label="Body type"
+                  style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}
+                >
+                  {BODY_TYPES.map(({ value, label }) => {
+                    const active = charBodyType === value;
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => setCharBodyType(value)}
+                        aria-pressed={active}
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: '10px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '0.6rem',
+                          fontWeight: active ? 600 : 400,
+                          backgroundColor: active
+                            ? 'var(--color-accent)'
+                            : 'var(--color-background)',
+                          color: active
+                            ? 'var(--color-accent-text, #fff)'
+                            : 'var(--color-text-tertiary)',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Status note */}
+              {charProfile ? (
+                <p
+                  style={{
+                    fontSize: '0.62rem',
+                    color: 'var(--color-text-tertiary)',
+                    margin: '0 0 8px',
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Override active — body type multipliers applied on top of global preset.
+                </p>
+              ) : (
+                <p
+                  style={{
+                    fontSize: '0.62rem',
+                    color: 'var(--color-text-tertiary)',
+                    margin: '0 0 8px',
+                    lineHeight: 1.4,
+                  }}
+                >
+                  No override saved — using global settings.
+                </p>
+              )}
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  onClick={handleSaveCharProfile}
+                  disabled={charSaving}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 10px',
+                    borderRadius: '7px',
+                    border: '1px solid var(--color-accent)',
+                    background: 'var(--color-accent)',
+                    color: 'var(--color-accent-text, #fff)',
+                    cursor: charSaving ? 'default' : 'pointer',
+                    fontSize: '0.65rem',
+                    opacity: charSaving ? 0.6 : 1,
+                    transition: 'opacity 0.15s ease',
+                  }}
+                >
+                  {charSaving ? 'Saving…' : 'Save Override'}
+                </button>
+                {charProfile && (
+                  <button
+                    onClick={handleClearCharProfile}
+                    disabled={charSaving}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 10px',
+                      borderRadius: '7px',
+                      border: '1px solid var(--color-border)',
+                      background: 'none',
+                      cursor: charSaving ? 'default' : 'pointer',
+                      fontSize: '0.65rem',
+                      color: 'var(--color-text-secondary)',
+                      opacity: charSaving ? 0.6 : 1,
+                    }}
+                  >
+                    Clear Override
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Reset button ── */}
       <div

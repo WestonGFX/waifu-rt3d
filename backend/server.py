@@ -18750,6 +18750,180 @@ async def save_spring_bone_preset(char_id: int, body: _SpringBonePresetBody):
     return await run_in_threadpool(_save)
 
 
+# --- Jiggle Physics Profiles ---
+
+@app.get("/api/characters/{char_id}/physics")
+async def get_character_physics(char_id: int):
+    """Return the jiggle physics profile for a character.
+
+    Returns per-character overrides for jiggle physics (body type,
+    per-body-part intensities, preset/intensity/enabled overrides).
+    NULL fields mean "use global setting from app.json config".
+
+    Args:
+        char_id: The character's database ID.
+
+    Returns:
+        dict: ``{ "profile": { ... } | null }`` — null when no override is set.
+
+    Example:
+        >>> response = client.get("/api/characters/1/physics")
+        >>> response.json()["profile"]  # None if no override saved
+    """
+    def _get():
+        db_path = str(DB_PATH)
+        with contextlib.closing(sqlite3.connect(db_path)) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT body_type, breast_intensity, butt_intensity, thigh_intensity,
+                       preset_override, intensity_override, enabled_override,
+                       created_at, updated_at
+                FROM character_physics_profiles
+                WHERE character_id = ?
+                """,
+                (char_id,),
+            ).fetchone()
+        if row is None:
+            return {"profile": None}
+        return {"profile": dict(row)}
+
+    return await run_in_threadpool(_get)
+
+
+class _PhysicsProfileBody(BaseModel):
+    """Request body for PUT /api/characters/{char_id}/physics.
+
+    Attributes:
+        body_type: Character body type for physics multipliers.
+            One of: ``"petite"``, ``"average"``, ``"athletic"``,
+            ``"curvy"``, ``"voluptuous"``.
+        breast_intensity: Per-body-part intensity override (0.0–1.0).
+            ``None`` clears the override and uses the global value.
+        butt_intensity: Same as breast_intensity for the butt.
+        thigh_intensity: Same as breast_intensity for the thighs.
+        preset_override: Named preset to use instead of the global preset.
+            ``None`` clears the override.
+        intensity_override: Master intensity override (0.0–1.0).
+            ``None`` clears the override.
+        enabled_override: ``True``/``False`` to force enable/disable.
+            ``None`` clears the override and uses the global toggle.
+    """
+
+    body_type: str = "average"
+    breast_intensity: float | None = None
+    butt_intensity: float | None = None
+    thigh_intensity: float | None = None
+    preset_override: str | None = None
+    intensity_override: float | None = None
+    enabled_override: bool | None = None
+
+
+@app.put("/api/characters/{char_id}/physics")
+async def update_character_physics(char_id: int, body: _PhysicsProfileBody):
+    """Create or update a character's jiggle physics profile.
+
+    Upserts the profile row.  Fields set to ``None`` are stored as SQL NULL,
+    meaning "fall back to the global setting".
+
+    Args:
+        char_id: The character's database ID.
+        body: Physics profile fields to store.
+
+    Returns:
+        dict: ``{ "ok": True, "profile": { ... } }``
+
+    Raises:
+        HTTPException 404: If the character does not exist.
+
+    Example:
+        >>> payload = {"body_type": "curvy", "breast_intensity": 0.8}
+        >>> response = client.put("/api/characters/1/physics", json=payload)
+        >>> response.json()["ok"]
+        True
+    """
+    def _upsert():
+        db_path = str(DB_PATH)
+        with contextlib.closing(sqlite3.connect(db_path)) as conn:
+            conn.row_factory = sqlite3.Row
+            exists = conn.execute(
+                "SELECT id FROM characters WHERE id = ?", (char_id,)
+            ).fetchone()
+            if not exists:
+                raise HTTPException(status_code=404, detail="Character not found")
+
+            enabled_int = (
+                None if body.enabled_override is None
+                else (1 if body.enabled_override else 0)
+            )
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO character_physics_profiles
+                        (character_id, body_type, breast_intensity, butt_intensity,
+                         thigh_intensity, preset_override, intensity_override,
+                         enabled_override, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                    ON CONFLICT(character_id) DO UPDATE SET
+                        body_type          = excluded.body_type,
+                        breast_intensity   = excluded.breast_intensity,
+                        butt_intensity     = excluded.butt_intensity,
+                        thigh_intensity    = excluded.thigh_intensity,
+                        preset_override    = excluded.preset_override,
+                        intensity_override = excluded.intensity_override,
+                        enabled_override   = excluded.enabled_override,
+                        updated_at         = excluded.updated_at
+                    """,
+                    (
+                        char_id,
+                        body.body_type,
+                        body.breast_intensity,
+                        body.butt_intensity,
+                        body.thigh_intensity,
+                        body.preset_override,
+                        body.intensity_override,
+                        enabled_int,
+                    ),
+                )
+            row = conn.execute(
+                """
+                SELECT body_type, breast_intensity, butt_intensity, thigh_intensity,
+                       preset_override, intensity_override, enabled_override,
+                       created_at, updated_at
+                FROM character_physics_profiles WHERE character_id = ?
+                """,
+                (char_id,),
+            ).fetchone()
+        return {"ok": True, "profile": dict(row) if row else None}
+
+    return await run_in_threadpool(_upsert)
+
+
+@app.delete("/api/characters/{char_id}/physics")
+async def delete_character_physics(char_id: int):
+    """Delete a character's jiggle physics profile override.
+
+    After deletion the character will use global physics settings.
+
+    Args:
+        char_id: The character's database ID.
+
+    Returns:
+        dict: ``{ "ok": True }``
+    """
+    def _delete():
+        db_path = str(DB_PATH)
+        with contextlib.closing(sqlite3.connect(db_path)) as conn:
+            with conn:
+                conn.execute(
+                    "DELETE FROM character_physics_profiles WHERE character_id = ?",
+                    (char_id,),
+                )
+        return {"ok": True}
+
+    return await run_in_threadpool(_delete)
+
+
 # --- Scenario Templates ---
 
 class _ScenarioCreateBody(BaseModel):

@@ -116,6 +116,16 @@
         let timeOfDayLighting = null; // Phase 11A: time-of-day lighting
         let poseController = null;    // Phase 11A: procedural pose system
         let jiggleManager = null;
+        // Maps AnimationDirector state names to jiggle movement multipliers.
+        // Lower stiffness + higher gravity = more bounce during active animations.
+        const JIGGLE_MOVEMENT_MULTIPLIERS = {
+            idle:    { stiffness: 1.0, gravity: 1.0  },
+            talk:    { stiffness: 0.9, gravity: 1.05 },
+            gesture: { stiffness: 0.7, gravity: 1.1  },
+            clip:    { stiffness: 0.6, gravity: 1.3  },
+            mocap:   { stiffness: 0.8, gravity: 1.0  },
+            sequence:{ stiffness: 0.65,gravity: 1.2  },
+        };
         let blinkController = null;
         let saccadeController = null;
         let microTremorController = null;
@@ -632,6 +642,14 @@
                 this._state = newState;
 
                 console.log(`[AnimationDirector] State → ${newState} (fade ${this._transitionDuration.toFixed(2)}s)`);
+
+                // Update jiggle physics movement multiplier for the new state.
+                if (jiggleManager?.enabled && currentVrm) {
+                    const mul = JIGGLE_MOVEMENT_MULTIPLIERS[newState] || JIGGLE_MOVEMENT_MULTIPLIERS.idle;
+                    jiggleManager.movementMultiplier = mul.stiffness;
+                    jiggleManager._gravityMovementMul = mul.gravity;
+                    jiggleManager.applyParams(currentVrm);
+                }
             }
 
             /**
@@ -7069,12 +7087,13 @@
              * @param {number} movementMul - Animation state multiplier
              * @returns {{ stiffness: number, dragForce: number, gravityPower: number }}
              */
-            function calculateJiggleParams(preset, intensity, emotionMul, movementMul) {
+            function calculateJiggleParams(preset, intensity, emotionMul, movementMul, movementGravityMul) {
                 const base = JIGGLE_PRESETS[preset] || JIGGLE_PRESETS.natural;
+                const gMul = movementGravityMul ?? 1.0;
                 return {
                     stiffness:    base.stiffness * (2.0 - intensity) * movementMul,
                     dragForce:    base.drag * (1.0 - intensity * 0.5),
-                    gravityPower: base.gravityPower * intensity * emotionMul,
+                    gravityPower: base.gravityPower * intensity * emotionMul * gMul,
                 };
             }
 
@@ -7095,6 +7114,8 @@
                     this._originalParams = new Map();
                     this.emotionMultiplier = 1.0;
                     this.movementMultiplier = 1.0;
+                    /** Gravity multiplier from animation state (higher = bouncier during clips). */
+                    this._gravityMovementMul = 1.0;
                 }
 
                 /**
@@ -7197,6 +7218,7 @@
                         const params = calculateJiggleParams(
                             this.preset, effectiveIntensity,
                             this.emotionMultiplier, this.movementMultiplier,
+                            this._gravityMovementMul,
                         );
                         indices.forEach((idx, chainPos) => {
                             const joint = joints[idx];

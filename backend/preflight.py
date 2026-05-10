@@ -5824,6 +5824,80 @@ def migrate_to_v81(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v82(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v81 to v82.
+
+    Adds: ``character_physics_profiles`` table for per-character jiggle
+    physics overrides.  Each row stores a character's body type and
+    per-body-part parameter overrides.  NULL columns mean "use global setting".
+
+    Table columns:
+        - id (INTEGER PRIMARY KEY AUTOINCREMENT)
+        - character_id (INTEGER UNIQUE FK → characters.id CASCADE)
+        - body_type (TEXT DEFAULT 'average') — petite/average/athletic/curvy/voluptuous
+        - breast_intensity (REAL) — NULL = use global body_parts.breast
+        - butt_intensity (REAL) — NULL = use global body_parts.butt
+        - thigh_intensity (REAL) — NULL = use global body_parts.thigh
+        - preset_override (TEXT) — NULL = use global preset
+        - intensity_override (REAL) — NULL = use global intensity
+        - enabled_override (INTEGER) — NULL = use global, 0 = disabled, 1 = enabled
+        - created_at (TEXT DEFAULT datetime('now'))
+        - updated_at (TEXT DEFAULT datetime('now'))
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.
+
+    Raises:
+        sqlite3.Error: If a SQL statement fails unexpectedly.
+
+    Example:
+        >>> import sqlite3
+        >>> con = sqlite3.connect(":memory:")
+        >>> _ = con.execute("CREATE TABLE schema_version (version INTEGER, applied_ts REAL)")
+        >>> _ = con.execute("INSERT INTO schema_version VALUES (81, 0)")
+        >>> migrate_to_v82(con)
+        True
+        >>> con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='character_physics_profiles'").fetchone()[0]
+        'character_physics_profiles'
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 82:
+        logger.info("Schema already at v%d, skipping v82 migration.", cur_ver)
+        return True
+
+    try:
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS character_physics_profiles (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id      INTEGER NOT NULL UNIQUE,
+                body_type         TEXT    NOT NULL DEFAULT 'average',
+                breast_intensity  REAL,
+                butt_intensity    REAL,
+                thigh_intensity   REAL,
+                preset_override   TEXT,
+                intensity_override REAL,
+                enabled_override  INTEGER,
+                created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+                updated_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+            )
+        """)
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (82, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v82 migration complete (character_physics_profiles table)")
+        return True
+    except Exception as e:
+        logger.error("Schema v82 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -6413,21 +6487,27 @@ def ensure_db():
             if migrate_to_v81(con):
                 version = 81
 
+        if version < 82:
+            logger.info("Upgrading database schema from v81 to v82...")
+            logger.info("  - character_physics_profiles table for per-character jiggle physics overrides")
+            if migrate_to_v82(con):
+                version = 82
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 81:
-            raise RuntimeError(f"Database initialization failed: Expected v81, got v{final_version}")
+        if final_version < 82:
+            raise RuntimeError(f"Database initialization failed: Expected v82, got v{final_version}")
 
-        if final_version > 81:
-            logger.warning(f"Database is newer than application (v{final_version} > v81). Some features might be unused.")
+        if final_version > 82:
+            logger.warning(f"Database is newer than application (v{final_version} > v82). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.
         con.execute(f"PRAGMA user_version = {final_version}")
         con.commit()
 
-        logger.info(f"✅ Database ready (schema v{final_version} active — v81 adds spring_bone_presets)")
+        logger.info(f"✅ Database ready (schema v{final_version} active — v82 adds character_physics_profiles)")
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

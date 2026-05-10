@@ -1,14 +1,31 @@
 # Current Project Status
 
-**Last updated:** 2026-05-09 (session 41 — all 4 polish plans shipped, M6 achievement wiring)
-**Branch:** master · pushed to `origin/master` at `9dd1744`.
-**Schema version:** v81 (spring_bone_presets on characters — animation-p3).
+**Last updated:** 2026-05-10 (session 42 — M7 Humanoid Motion Phases A-E complete)
+**Branch:** master · local at `eaa5483`.
+**Schema version:** v82 (character_physics_profiles — jiggle overrides).
 **Tests:** **2,843 backend** + **276 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session 42 (2026-05-10) — M7 items 25+26 complete. Humanoid Motion Phases A-E shipped.**
+
+| Item | Commits |
+|---|---|
+| M7-25: Jiggle Physics (schema v82, per-char overrides, movement multipliers) | `740a78c` |
+| M7-26-A: SpringDamper math foundation + PoseSpringManager | `89dd869` |
+| M7-26-B: SpringChain + FollowThroughLayer + breathing/weight-shift | `95ff72c` |
+| M7-26-C: BoneMaskManager + InertializationBlend + spring LookAt | `5bc04de` |
+| M7-26-D: 18 new gestures + BalanceLayer (CoG) + chat→gesture wiring | `f781db4` |
+| M7-26-E: PoseLibrary + TwoBoneIK + FootPlantController + manifest endpoint | `eaa5483` |
+
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers.
+
+**M7 remaining:** Phase F (Neural Motion) explicitly deferred — GPU server required, 60-100h.
+
+---
 
 **Session 41 (2026-05-09) — All 4 polish plans executed + M6 achievement wiring.**
 

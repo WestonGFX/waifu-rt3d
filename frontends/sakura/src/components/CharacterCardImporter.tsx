@@ -69,8 +69,9 @@ export function CharacterCardImporter({ onImported }: Props) {
    * import-card endpoint.  On success, show field preview before confirming.
    */
   const processFile = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.png')) {
-      setError('Please upload a PNG file (.png)');
+    const nameLower = file.name.toLowerCase();
+    if (!nameLower.endsWith('.png') && !nameLower.endsWith('.charx')) {
+      setError('Please upload a .png or .charx character card file');
       setDropState('error');
       return;
     }
@@ -122,7 +123,7 @@ export function CharacterCardImporter({ onImported }: Props) {
       <input
         ref={inputRef}
         type="file"
-        accept=".png"
+        accept=".png,.charx"
         style={{ display: 'none' }}
         onChange={handleFileChange}
       />
@@ -216,7 +217,7 @@ export function CharacterCardImporter({ onImported }: Props) {
           }}>
             {isLoading || isSuccess ? null :
              isError ? error :
-             'or click to browse · PNG with embedded CHARA v2 data'}
+             'or click to browse · .png (CHARA v2/v3) or .charx archive'}
           </div>
         </div>
       </div>

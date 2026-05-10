@@ -8511,64 +8511,75 @@ async def import_character(req: Request):
 
 @app.post("/api/characters/import-card")
 async def import_chara_card(file: UploadFile = File(...)):
-    """Import a SillyTavern CHARA v2 character card PNG.
+    """Import a SillyTavern character card (CHARA v2/v3 PNG or CHARX archive).
 
-    Reads the embedded CHARA v2 JSON payload from the PNG's tEXt chunk (key
-    ``chara``) or EXIF UserComment fallback, maps the fields to the app's
-    character schema, saves the PNG as the character's avatar, and creates the
-    character row in the database.
+    Accepts:
+    - ``.png``: PNG with embedded CHARA v2/v3 payload (tEXt chunk ``chara``).
+    - ``.charx``: ZIP archive containing ``card.json`` (CCv3 format), plus an
+      optional ``assets/`` directory (assets ignored on import).
+
+    Reads the character payload, maps fields to the app's schema, saves the
+    PNG as the character's avatar, creates the character row, and bulk-inserts
+    any lorebook entries from ``character_book`` (CCv3 field).
 
     Args:
-        file: Multipart PNG upload containing a CHARA v2 payload.
+        file: Multipart file upload — ``.png`` or ``.charx``.
 
     Returns:
-        dict: ``{"ok": True, "id": int, "name": str}``
+        dict: ``{"ok": True, "id": int, "name": str, "lore_count": int}``
 
     Raises:
-        HTTPException 400: If the file is not a PNG or has no CHARA payload.
+        HTTPException 400: If format is unsupported or payload is missing.
         HTTPException 500: On database errors.
 
     Example::
 
-        curl -X POST /api/characters/import-card \\
-             -F "file=@my_character.png"
+        curl -X POST /api/characters/import-card -F "file=@card.png"
+        curl -X POST /api/characters/import-card -F "file=@card.charx"
     """
     from backend.characters.chara_card import CharaCardReader
 
     if not file.filename:
         raise HTTPException(400, "No file provided")
-    if not file.filename.lower().endswith(".png"):
-        raise HTTPException(400, "Character cards must be PNG files")
 
-    png_bytes = await file.read()
+    fname_lower = file.filename.lower()
+    is_png = fname_lower.endswith(".png")
+    is_charx = fname_lower.endswith(".charx")
+    if not is_png and not is_charx:
+        raise HTTPException(400, "Character cards must be .png or .charx files")
+
+    raw_bytes = await file.read()
     try:
         reader = CharaCardReader()
-        card_data = reader.read_bytes(png_bytes)
+        if is_charx:
+            card_data = reader.read_charx_bytes(raw_bytes)
+        else:
+            card_data = reader.read_bytes(raw_bytes)
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:
         raise HTTPException(400, f"Failed to parse character card: {e}")
 
-    # Save PNG as the character's avatar
-    safe_name = "".join(c for c in (card_data["name"] or "imported") if c.isalpha() or c.isdigit() or c in "_-")
-    safe_name = safe_name[:40] or "imported"
-    import time as _time
-    avatar_filename = f"card_{safe_name}_{int(_time.time())}.png"
-    avatar_path = STORAGE / "avatars" / avatar_filename
-    try:
-        avatar_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(avatar_path, "wb") as fh:
-            fh.write(png_bytes)
-        avatar_url = f"/files/avatars/{avatar_filename}"
-    except Exception:
-        avatar_url = None
+    # Save PNG as the character's avatar (skip for .charx — no embedded image)
+    avatar_url = None
+    if is_png:
+        safe_name = "".join(c for c in (card_data["name"] or "imported") if c.isalpha() or c.isdigit() or c in "_-")
+        safe_name = safe_name[:40] or "imported"
+        import time as _time
+        avatar_filename = f"card_{safe_name}_{int(_time.time())}.png"
+        avatar_path = STORAGE / "avatars" / avatar_filename
+        try:
+            avatar_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(avatar_path, "wb") as fh:
+                fh.write(raw_bytes)
+            avatar_url = f"/files/avatars/{avatar_filename}"
+        except Exception:
+            pass
 
     with db_ctx() as conn:
         cur = conn.cursor()
         try:
-            # Map CHARA v2 fields → characters table columns
-            # personality_traits stores the character description (background)
-            # greeting_text stores first_mes
+            # Map CHARA v2/v3 fields → characters table columns
             fields: list[str] = ["name"]
             values: list = [card_data["name"]]
 
@@ -8576,7 +8587,6 @@ async def import_chara_card(file: UploadFile = File(...)):
                 fields.append("system_prompt")
                 values.append(card_data["system_prompt"])
             if card_data.get("background"):
-                # description + personality + scenario joined — store as personality_traits
                 fields.append("personality_traits")
                 values.append(card_data["background"])
             if card_data.get("greeting_message"):
@@ -8586,22 +8596,12 @@ async def import_chara_card(file: UploadFile = File(...)):
                 fields.append("avatar_url")
                 values.append(avatar_url)
 
-            # CHARA V2 individual fields (v68+) — preserve each field separately
-            if card_data.get("scenario"):
-                fields.append("scenario")
-                values.append(card_data["scenario"])
-            if card_data.get("chara_description"):
-                fields.append("chara_description")
-                values.append(card_data["chara_description"])
-            if card_data.get("mes_example"):
-                fields.append("mes_example")
-                values.append(card_data["mes_example"])
-            if card_data.get("post_history_instructions"):
-                fields.append("post_history_instructions")
-                values.append(card_data["post_history_instructions"])
-            if card_data.get("creator_notes"):
-                fields.append("creator_notes")
-                values.append(card_data["creator_notes"])
+            # Individual V2/V3 fields (v68+)
+            for col in ("scenario", "chara_description", "mes_example",
+                        "post_history_instructions", "creator_notes"):
+                if card_data.get(col):
+                    fields.append(col)
+                    values.append(card_data[col])
             if card_data.get("alternate_greetings"):
                 fields.append("alternate_greetings")
                 values.append(json.dumps(card_data["alternate_greetings"]))
@@ -8610,12 +8610,36 @@ async def import_chara_card(file: UploadFile = File(...)):
                 values.append(json.dumps(card_data["chara_tags"]))
 
             placeholders = ",".join(["?"] * len(fields))
-            field_names = ",".join(fields)
-            cur.execute(f"INSERT INTO characters ({field_names}) VALUES ({placeholders})", values)
+            cur.execute(
+                f"INSERT INTO characters ({','.join(fields)}) VALUES ({placeholders})",
+                values,
+            )
             char_id = cur.lastrowid
+
+            # CCv3: bulk-insert lorebook entries from character_book
+            lore_entries = card_data.get("lorebook_entries", [])
+            for entry in lore_entries:
+                cur.execute(
+                    "INSERT INTO lore_entries (character_id, title, content, keywords, "
+                    "injection_position, priority, enabled) VALUES (?,?,?,?,?,?,?)",
+                    (
+                        char_id,
+                        entry.get("title", ""),
+                        entry.get("content", ""),
+                        json.dumps(entry.get("keywords", [])),
+                        entry.get("injection_position", "after_system_prompt"),
+                        entry.get("priority", 0),
+                        entry.get("enabled", 1),
+                    ),
+                )
+
             conn.commit()
-            logger.info("[import-card] Created character %r (id=%s) from CHARA v2 card", card_data["name"], char_id)
-            return {"ok": True, "id": char_id, "name": card_data["name"]}
+            lore_count = len(lore_entries)
+            logger.info(
+                "[import-card] Created character %r (id=%s) from %s card; lore_entries=%d",
+                card_data["name"], char_id, "CHARX" if is_charx else "PNG", lore_count,
+            )
+            return {"ok": True, "id": char_id, "name": card_data["name"], "lore_count": lore_count}
         except Exception as e:
             raise HTTPException(500, f"Import failed: {e}")
 

@@ -32,6 +32,7 @@ import base64
 import io
 import json
 import logging
+import zipfile
 from typing import Any
 
 from PIL import Image, PngImagePlugin
@@ -94,6 +95,52 @@ class CharaCardReader:
         if not raw_json:
             raise ValueError("No CHARA v2 payload found in PNG bytes")
         return self._map_fields(raw_json)
+
+    def read_charx(self, charx_path: str) -> dict[str, Any]:
+        """Parse a CHARX character card archive file.
+
+        CHARX files are ZIP archives containing ``card.json`` (CCv3 payload)
+        and an optional ``assets/`` directory.  This method extracts the JSON
+        and delegates to :meth:`_map_fields`.
+
+        Args:
+            charx_path: Filesystem path to the ``.charx`` file.
+
+        Returns:
+            Same structure as :meth:`read`, including ``lorebook_entries``
+            extracted from ``character_book`` if present.
+
+        Raises:
+            ValueError: If ``card.json`` is missing or contains no character data.
+        """
+        with open(charx_path, "rb") as fh:
+            return self.read_charx_bytes(fh.read())
+
+    def read_charx_bytes(self, charx_bytes: bytes) -> dict[str, Any]:
+        """Parse a CHARX character card from raw bytes.
+
+        Args:
+            charx_bytes: Raw ``.charx`` (ZIP) file contents.
+
+        Returns:
+            Normalised character dict including ``lorebook_entries`` list.
+
+        Raises:
+            ValueError: If not a valid ZIP, ``card.json`` is missing, or
+                the JSON has no character data.
+        """
+        try:
+            with zipfile.ZipFile(io.BytesIO(charx_bytes)) as zf:
+                names = zf.namelist()
+                if "card.json" not in names:
+                    raise ValueError("CHARX archive does not contain card.json")
+                card_json = json.loads(zf.read("card.json").decode("utf-8"))
+        except zipfile.BadZipFile as exc:
+            raise ValueError(f"Not a valid CHARX archive: {exc}") from exc
+
+        if not card_json:
+            raise ValueError("card.json is empty")
+        return self._map_fields(card_json)
 
     @staticmethod
     def _extract_json(img: Image.Image) -> dict | None:
@@ -188,6 +235,30 @@ class CharaCardReader:
         if not isinstance(tags, list):
             tags = []
 
+        # CCv3: extract character_book lorebook entries if present
+        lorebook_entries: list[dict[str, Any]] = []
+        character_book = data.get("character_book") or {}
+        if isinstance(character_book, dict):
+            for entry in character_book.get("entries", []):
+                if not isinstance(entry, dict):
+                    continue
+                if not entry.get("enabled", True):
+                    continue
+                keys = entry.get("keys", [])
+                if not isinstance(keys, list):
+                    keys = []
+                content = str(entry.get("content", "") or "").strip()
+                if not content:
+                    continue
+                lorebook_entries.append({
+                    "title": str(entry.get("name", "") or ", ".join(keys[:3])),
+                    "content": content,
+                    "keywords": keys,
+                    "injection_position": "after_system_prompt",
+                    "priority": int(entry.get("insertion_order", 0)),
+                    "enabled": 1,
+                })
+
         return {
             "name": name,
             # Legacy combined field
@@ -206,6 +277,8 @@ class CharaCardReader:
             "backstory": backstory,
             "tags": tags,
             "raw_chara": card,
+            # CCv3: lorebook entries (empty list for v2 cards)
+            "lorebook_entries": lorebook_entries,
         }
 
 

@@ -329,3 +329,7 @@ All 7 open questions answered. `/go` against M1 is now unblocked.
 - 2026-05-06 Backlog quick pass (session 34): ✓ item-35 Continue generation (chatStore.continueGeneration + DialogueBubble ChevronsRight button). fix(preflight): v70+v71 INSERT bug resolved — all migrations now applied to live DB at v75. item-50 character_relationships verified (24,576→11 rows + UNIQUE INDEX). items 37/46/47 pre-existing.
 
 - 2026-05-10 M5 (AIE Phase C MVP integration): ✓ 4 wiring gaps closed — scorer.py column fix, explicit→score_and_save fire-and-forget, implicit signal scheduler sweep, peft_local in registry, Voice Fine-tuning UI in Brain tab. commit 880ba13.
+- 2026-05-10 Backlog item-42 (voice gallery): ✓ Browse button + VoiceGallery added to Character tab > Voice section. commit a05463e.
+- 2026-05-10 Backlog item-34 (CCv3/CHARX): ✓ chara_card.py read_charx_bytes + character_book→lore_entries; server.py import-card accepts .charx; CharacterCardImporter + CardImportWizard accept .charx.
+- 2026-05-10 Backlog item-36 (full-text search): ✓ pre-existing — GlobalSearchPanel + /api/search/messages + FTS5 v45 all implemented.
+- 2026-05-10 Backlog item-48 (model picker thumbnails): ✓ pre-existing — ModelBrowser shows thumbnails; avatar PNGs exist for all built-in VRMs in storage/avatars/.

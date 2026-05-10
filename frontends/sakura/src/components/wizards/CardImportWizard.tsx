@@ -14,7 +14,7 @@ function StepUpload({ onNext, setWizardData }: WizardStepProps) {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Parse a SillyTavern character card (CHARA v2 PNG or JSON).
+   * Parse a SillyTavern character card (CHARA v2/v3 PNG, JSON, or CHARX archive).
    * Extracts character data from the file and stores it in wizardData.
    */
   const handleFile = async (file: File) => {
@@ -51,7 +51,7 @@ function StepUpload({ onNext, setWizardData }: WizardStepProps) {
         return;
       }
 
-      // PNG with embedded CHARA data — send to backend for extraction
+      // PNG or CHARX — send to backend for extraction
       const formData = new FormData();
       formData.append('file', file);
       const res = await fetch('/api/characters/import-card', { method: 'POST', body: formData });
@@ -60,6 +60,7 @@ function StepUpload({ onNext, setWizardData }: WizardStepProps) {
       setWizardData({
         importedCard: result.character || result,
         fileName: file.name,
+        loreCount: result.lore_count ?? 0,
       });
       onNext();
     } catch (e) {
@@ -72,7 +73,7 @@ function StepUpload({ onNext, setWizardData }: WizardStepProps) {
   return (
     <div>
       <p className="text-xs mb-4" style={{ color: 'var(--color-text-secondary)' }}>
-        Import a SillyTavern character card (.json or .png with embedded CHARA data).
+        Import a SillyTavern character card (.json, .png with embedded CHARA data, or .charx archive).
       </p>
 
       {/* Drop zone */}
@@ -103,7 +104,7 @@ function StepUpload({ onNext, setWizardData }: WizardStepProps) {
         <input
           ref={fileRef}
           type="file"
-          accept=".json,.png"
+          accept=".json,.png,.charx"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];

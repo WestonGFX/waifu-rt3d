@@ -1,37 +1,31 @@
-# Resume Prompt — Session 42+
+# Resume Prompt — Session 43+
 
-**Last updated:** 2026-05-09 (session 41)
-**Branch:** master · origin/master at `9dd1744` (all pushed)
-**Schema:** v81 (spring_bone_presets on characters)
-**Tests:** 2,843 backend + 276+ frontend, tsc clean
+**Last updated:** 2026-05-22 (session 43)
+**Branch:** master · local at `d5c1e48` (all pushed as of session 42; `d5c1e48` is unpushed)
+**Schema:** v82 (character_physics_profiles)
+**Tests:** 2,843 backend + 276 frontend, tsc clean
 
-## What Was Done (Sessions 40–41)
+## What Was Done (Session 43)
 
-Session 40 applied all 14 character image styles + drafted 4 polish plans.
+M6 item 22 bond gate enforcement completed:
+- `GET /api/characters/{id}/nsfw-eligibility` endpoint added to `server.py`
+- `PUT /api/content-gate` now enforces bond gates server-side (mature ≥ 20, explicit ≥ 50, reads active_character_id from config)
+- `SafetyTab` in `SettingsView.tsx` now fetches fresh bond level on mount via the eligibility endpoint (fixes stale-0 issue when ChatThread hasn't fired `useBondProgress` yet)
+- `api.ts` updated with `getNsfwEligibility` method
 
-Session 41 executed ALL 4 polish plans end-to-end:
-- Animation P1-P4: delta clamp, spring bone stripping, JigglePhysicsManager, saccade spring, mood→personality, idle clip cycling, VRMA detection (commits 84036b8–07b35bd)
-- HUD PA-PD: ModelPanel redesign, Minimal mode (Ctrl+Shift+M), CommandPalette (Cmd+K), HotkeySheet (commits 37890da, 387f839)
-- Chat PA-PD: composer UX, code blocks, TTFT, stuck-gen, failed card, timestamps, pin toggle (commits aa321c0, 94e837a)
-- Voice P1-P4: TTS benchmark, latency ring buffer, waveform preview/delete UX, VoiceOrb error state (commits 0e79979–9dd1744)
-
-Session 41 also wired M6 achievement auto-grant:
-- streak_3/7/30 in `useBondProgress.ts`
-- shared_secret in `chatStore.ts` togglePin
-- first_voice in `useFullDuplexVoice.ts`
-- Achievements gallery section in `BondPanel.tsx`
+M8 docs: both `docs/marketing/eu-ai-act-compliance.md` and `docs/marketing/privacy-comparison.md` already existed from session ~34 (2026-05-06). No work needed.
 
 ## Next 3 Tasks
 
-1. **M6 item 22 — NSFW affinity unlock gates (~3h)** — Bond 20→Tier1 (suggestive), 50→Tier2 (explicit), 75→Tier3 (uncensored). Add `GET /api/characters/{id}/nsfw-eligibility` backend check. In `SettingsView.tsx` Settings > Intimacy tab, gate content_filter_level=-1 behind bond 50+ and show lock UI for lower bond levels.
+1. **Memory Browser QA** — Start server (`.venv/bin/python -m uvicorn backend.server:app --host 0.0.0.0 --port 8080`), open Chrome, press Ctrl+M, exercise all 4 tabs (Overview, Search, Graph, Timeline) against real backend data. This is hands-on validation, not code work.
 
-2. **M8 docs (~4h)** — Write `docs/marketing/eu-ai-act-compliance.md` (local-first = compliant by design; document before Aug 2, 2026 deadline) and `docs/marketing/privacy-comparison.md` (cite Aura breach, Char.AI face-scan, Replika fine, Oversecured audit).
+2. **M5 AIE Phase C** — Advanced AIE tier. Requires a tier decision from user before starting. See `docs/plans/2026-05-06-opus-planning-roadmap.md` M5 section for options (LoRA-style fine-tuning vs DSPy prompt optimization vs behavioral steering). Estimated 60-100h AI-eq — largest remaining milestone.
 
-3. **Memory Browser QA** — Chrome hands-on, Ctrl+M overlay, all 4 tabs against real backend.
+3. **Next polish pass** — All 4 polish plans (animation/HUD/chat/voice) are complete. If anything surfaced from Memory Browser QA (UX issues, missing features), address those. Otherwise, move to M5.
 
 ## In-Flight Context
 
-- **Achievement system**: 11 types in `ACHIEVEMENT_DEFS` (server.py:10904). Auto-grant fires from `useBondProgress.ts` (bond/message/streak milestones) + `chatStore.ts` (shared_secret) + `useFullDuplexVoice.ts` (first_voice). Toast via `AchievementToast` in App.tsx. Gallery in `BondPanel.tsx`.
-- **NSFW tier system**: `content_filter_level` from -1 (full NSFW) to 3 (strict). DesireArcEngine gates desire arcs at bond ≥ 40. M6 item 22 adds per-tier gates at bond 20/50/75.
-- **All prior "TODO" items** (Visual Content Phase 2, AIE Phase C, apply character styles) are shipped. Don't re-plan them.
-- **Statusline review** was done 2026-05-07 (session 37). Clean. No rebuild needed.
+- **M6 item 22 architecture**: `_NSFW_BOND_GATES` dict in server.py drives both the eligibility endpoint and the PUT /api/content-gate enforcement. The dict and the frontend `CEILING_OPTIONS.requiresBondLevel` values must stay in sync (both at 20/50).
+- **M7 Phase F (Neural Motion)**: Explicitly deferred — needs GPU server + 60-100h. Do NOT start unless user asks.
+- **Schema**: v82, no migrations pending.
+- **All prior TODO items** from RESUME_PROMPT are done. Don't re-plan them.

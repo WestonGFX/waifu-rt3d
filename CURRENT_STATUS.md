@@ -1,7 +1,7 @@
 # Current Project Status
 
-**Last updated:** 2026-05-10 (session 42 — M7 Humanoid Motion Phases A-E complete)
-**Branch:** master · local at `eaa5483`.
+**Last updated:** 2026-05-22 (session 43 — M6 item 22 bond gates completed)
+**Branch:** master · local at `d5c1e48`.
 **Schema version:** v82 (character_physics_profiles — jiggle overrides).
 **Tests:** **2,843 backend** + **276 frontend** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
@@ -10,49 +10,30 @@
 
 ## Active Work
 
-**Session 42 (2026-05-10) — M7 items 25+26 complete. Humanoid Motion Phases A-E shipped.**
+**Session 43 (2026-05-22) — M6 item 22 bond gate enforcement complete.**
 
 | Item | Commits |
 |---|---|
-| M7-25: Jiggle Physics (schema v82, per-char overrides, movement multipliers) | `740a78c` |
-| M7-26-A: SpringDamper math foundation + PoseSpringManager | `89dd869` |
-| M7-26-B: SpringChain + FollowThroughLayer + breathing/weight-shift | `95ff72c` |
-| M7-26-C: BoneMaskManager + InertializationBlend + spring LookAt | `5bc04de` |
-| M7-26-D: 18 new gestures + BalanceLayer (CoG) + chat→gesture wiring | `f781db4` |
-| M7-26-E: PoseLibrary + TwoBoneIK + FootPlantController + manifest endpoint | `eaa5483` |
+| M6-item22: GET /api/characters/{id}/nsfw-eligibility + PUT /api/content-gate bond enforcement + SafetyTab fresh bond fetch | `d5c1e48` |
 
 **Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers.
 
-**M7 remaining:** Phase F (Neural Motion) explicitly deferred — GPU server required, 60-100h.
+**Next priorities:**
+1. Memory Browser QA — Chrome hands-on, Ctrl+M overlay, all 4 tabs vs real backend. Needs server running.
+2. M5 AIE Phase C — gated by tier decision (see `docs/plans/2026-05-06-opus-planning-roadmap.md`).
+3. M8 Distribution — `docs/marketing/eu-ai-act-compliance.md` + `privacy-comparison.md` both written (2026-05-06). Done.
 
 ---
 
-**Session 41 (2026-05-09) — All 4 polish plans executed + M6 achievement wiring.**
+**Session 41–42 (2026-05-09/10) — ALL COMPLETE.**
 
-### Session 40/41 Polish Plans — ALL COMPLETE
+M6 achievements (session 41): streak_3/7/30 ✅, first_voice ✅, shared_secret ✅, BondPanel gallery ✅
+M7 Humanoid Motion Phases A-E (session 42): all shipped. Phase F deferred (GPU server required, 60-100h).
 
-| Plan | Phases | Key Commits |
-|---|---|---|
-| Animation Polish | P1 (delta+strip), P2 (JigglePhysics), P3 (saccade+mood+v81), P4 (idle cycling+VRMA) | `84036b8` `4e2a0d9` `246478d` `07b35bd` |
-| HUD Polish | PA (ModelPanel), PB (Minimal mode), PC (CommandPalette), PD (HotkeySheet) | `37890da` `387f839` |
-| Chat Polish | PA (composer UX), PB+C+D (code blocks, TTFT, stuck-gen, timestamps, pin) | `aa321c0` `94e837a` |
-| Voice Polish | P1 (TTS benchmark), P2 (latency ring buffer), P3 (waveform/delete UX), P4 (VoiceOrb error) | `0e79979` `8cebf27` `dc28c5c` `9dd1744` |
+All 4 polish plans complete (session 40/41):
+- Animation P1-P4, HUD PA-PD, Chat PA-PD, Voice P1-P4
 
 **Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers.
-
-**Session 41 — M6 remaining work (in-progress):**
-
-| Item | Status |
-|---|---|
-| streak_3/7/30 achievement auto-grant (useBondProgress.ts) | 🚧 |
-| first_voice achievement (useFullDuplexVoice.ts) | 🚧 |
-| shared_secret achievement (chatStore.ts togglePin) | 🚧 |
-| Achievements section in BondPanel | 🚧 |
-
-**Next priorities (after session 41):**
-1. M6 item 22 — Affinity-gated NSFW unlocks (~3h). Bond level threshold pick needed.
-2. M8 — EU AI Act compliance doc + privacy comparison page (~4h docs).
-3. Statusline review (Neon Glassline v2 rebuild, scheduled ~2026-05-19).
 
 ---
 

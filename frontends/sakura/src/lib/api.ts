@@ -563,6 +563,11 @@ export const api = {
     get<{ ok: boolean; bond: { bond_level: number; bond_xp: number; xp_to_next: number; tier: string; relationship_mode: string } }>(
       `/api/characters/${charId}/bond`
     ),
+  /** Return which content ceiling tiers are unlocked based on bond level (M6-item22). */
+  getNsfwEligibility: (charId: number) =>
+    get<{ ok: boolean; char_id: number; bond_level: number; eligible_ceilings: string[]; highest_eligible: string }>(
+      `/api/characters/${charId}/nsfw-eligibility`
+    ),
   getBondUnlocks: (charId: number) =>
     get<{ ok: boolean; bond_level: number; tier: string; unlocked: Array<{ type: string; key: string; label: string; level: number }>; next_unlock: { type: string; key: string; label: string; level: number } | null }>(
       `/api/characters/${charId}/bond/unlocks`

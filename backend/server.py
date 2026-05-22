@@ -1776,6 +1776,27 @@ async def update_content_gate(req: Request):
         if ceiling in ("mature", "explicit") and not age_verified:
             raise HTTPException(403, "Age verification required for mature/explicit content")
 
+        # Bond gate: mature requires bond ≥ 20, explicit requires bond ≥ 50
+        _CEILING_BOND_GATES: dict[str, int] = {"mature": 20, "explicit": 50}
+        if ceiling in _CEILING_BOND_GATES:
+            _required = _CEILING_BOND_GATES[ceiling]
+            _active_char_id = load_config().get("active_character_id")
+            if _active_char_id:
+                try:
+                    from backend.bond.progression import get_bond_level as _get_bl
+                    _bond = _get_bl(int(_active_char_id), con.cursor())
+                    _bond_level = _bond.get("bond_level", 0)
+                    if _bond_level < _required:
+                        raise HTTPException(
+                            403,
+                            f"Bond level {_required} required for {ceiling} content "
+                            f"(current: {_bond_level})"
+                        )
+                except HTTPException:
+                    raise
+                except Exception:
+                    pass  # Bond check failed — allow the change rather than hard-blocking
+
         # Content lock: must provide password to change ceiling
         if lock_enabled:
             pw = body.get("unlock_password", "")
@@ -9939,6 +9960,61 @@ def get_bond_analytics_endpoint(char_id: int):
                     "source_breakdown": {},
                 },
             }
+
+
+# ── NSFW Eligibility (M6-item22) ──────────────────────────────────────────────
+
+#: Bond level required to unlock each content ceiling tier.
+_NSFW_BOND_GATES: dict[str, int] = {
+    "general": 0,
+    "edgy": 0,
+    "mature": 20,
+    "explicit": 50,
+}
+
+
+@app.get("/api/characters/{char_id}/nsfw-eligibility")
+def get_nsfw_eligibility(char_id: int):
+    """Return NSFW ceiling tier eligibility for a character based on bond level.
+
+    Used by the Settings > Intimacy tab to show accurate lock state for each
+    content ceiling option without relying on potentially-stale appStore bond data.
+
+    Args:
+        char_id: Character primary key.
+
+    Returns:
+        {
+            "ok": True,
+            "char_id": int,
+            "bond_level": int,
+            "eligible_ceilings": ["general", "edgy", ...],  # all tiers the user can unlock
+            "highest_eligible": "mature"  # top unlocked tier
+        }
+
+    Example:
+        >>> get_nsfw_eligibility(1)
+        {"ok": True, "char_id": 1, "bond_level": 25, "eligible_ceilings": ["general", "edgy", "mature"], "highest_eligible": "mature"}
+    """
+    with db_ctx() as conn:
+        try:
+            from backend.bond.progression import get_bond_level
+            bond = get_bond_level(char_id, conn.cursor())
+            level: int = bond.get("bond_level", 0)
+        except Exception as e:
+            logger.warning(f"[NSFW-eligibility] bond lookup failed for char {char_id}: {e}")
+            level = 0
+
+    eligible = [c for c, req in _NSFW_BOND_GATES.items() if level >= req]
+    highest = eligible[-1] if eligible else "general"
+
+    return {
+        "ok": True,
+        "char_id": char_id,
+        "bond_level": level,
+        "eligible_ceilings": eligible,
+        "highest_eligible": highest,
+    }
 
 
 # ── Character Diary (#57) ─────────────────────────────────────────────────────

@@ -4333,8 +4333,12 @@ const CEILING_OPTIONS: Array<{
  * 5. RP Style, Audio Cache, Vocabulary — pre-existing config-backed settings.
  */
 function SafetyTab({ save, cfg }: TabProps) {
-  const { characters } = useAppStore();
-  const bondLevel = useAppStore(s => s.bondLevel);
+  const { characters, activeCharacter } = useAppStore();
+  const storeBondLevel = useAppStore(s => s.bondLevel);
+  // M6-item22: freshly-fetched bond level for active character; falls back to
+  // the store value (which may be stale on first load before useBondProgress fires).
+  const [fetchedBondLevel, setFetchedBondLevel] = useState<number | null>(null);
+  const bondLevel = fetchedBondLevel ?? storeBondLevel;
 
   // ── Content gate remote state ────────────────────────────────────
   const [ceiling, setCeiling] = useState<string>('general');
@@ -4368,6 +4372,15 @@ function SafetyTab({ save, cfg }: TabProps) {
       })
       .catch(() => { /* keep defaults */ });
   }, []);
+
+  // Fetch fresh bond level for the active character so the gate UI is accurate
+  // even before useBondProgress (in ChatThread) has had a chance to run.
+  useEffect(() => {
+    if (!activeCharacter?.id) return;
+    api.getNsfwEligibility(activeCharacter.id)
+      .then(res => setFetchedBondLevel(res.bond_level))
+      .catch(() => { /* keep store value */ });
+  }, [activeCharacter?.id]);
 
   const handleFeedbackToggle = async (key: 'explicit_signals_enabled' | 'implicit_signals_enabled', val: boolean) => {
     if (key === 'explicit_signals_enabled') setFeedbackExplicit(val);

@@ -2,8 +2,22 @@ import { create } from 'zustand';
 import type { ChatMessage } from '../lib/types';
 import { api } from '../lib/api';
 import { useViewerStore } from './viewerStore';
+import type { KokoroPayload } from '../lib/kokoro';
 
 interface ChatState {
+  /**
+   * Kokoro Engine v1: last parsed embodiment payload from the backend.
+   * Populated by `finalizeKokoroTurn` after a chat stream completes when
+   * `kokoro_enabled` is on. Consumed by `KokoroDebugPanel` and by the
+   * auto-embodiment effect that drives the VRM avatar.
+   */
+  lastKokoroPayload: KokoroPayload | null;
+  /**
+   * Fire-and-forget call invoked at stream completion when Kokoro is on.
+   * On success, sets `lastKokoroPayload` and dispatches embodiment.
+   * Network/parse errors are logged and swallowed — chat must never break.
+   */
+  finalizeKokoroTurn: (rawText: string) => Promise<void>;
   messages: ChatMessage[];
   draft: string;
   loading: boolean;
@@ -121,6 +135,28 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   currentEmotion: null,
   latestEmotionByChar: {},
   directorMode: false,
+  lastKokoroPayload: null,
+
+  finalizeKokoroTurn: async (rawText) => {
+    const { charId, sessionId } = get();
+    if (!charId || !sessionId || !rawText.trim()) return;
+    try {
+      const { ok, payload } = await api.kokoroFinalize(charId, sessionId, rawText);
+      if (!ok) return;
+      set({ lastKokoroPayload: payload });
+      // Drive avatar embodiment when the gate is open.
+      if (payload.diagnostics.kokoroEnabled) {
+        try {
+          useViewerStore.getState().dispatchKokoroEmbodiment(payload);
+        } catch (e) {
+          console.warn('[kokoro] dispatchEmbodiment failed', e);
+        }
+      }
+    } catch (e) {
+      // Chat must never break on Kokoro errors — log and move on.
+      console.warn('[kokoro] finalize failed', e);
+    }
+  },
 
   setDirectorMode: (v) => set({ directorMode: v }),
   setDraft: (text) => set({ draft: text }),
@@ -397,6 +433,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
             // Fallback: fire emotion if the dedicated 'emotion' SSE event was missed
             if (data.emotion) get().setCurrentEmotion(data.emotion, 1.0);
+
+            // Kokoro v1: parse the structured reply for embodiment metadata.
+            // Fire-and-forget — chat is already complete by this point, so any
+            // network/parse failure is observed by the debug HUD only.
+            const finalReply = (data.reply || fullText || '').trim();
+            if (finalReply) void get().finalizeKokoroTurn(finalReply);
             break;
           }
 

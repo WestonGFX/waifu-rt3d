@@ -17,6 +17,7 @@ import { LorePanel } from './components/LorePanel';
 import { UserKnowledgePanel } from './components/UserKnowledgePanel';
 import { MemoryBrowser } from './components/MemoryBrowser';
 import { ContextViewer } from './components/ContextViewer';
+import { KokoroDebugPanel } from './components/KokoroDebugPanel';
 import { BoundaryPanel } from './components/BoundaryPanel';
 import { VocabularyPanel } from './components/VocabularyPanel';
 import { IntimateScenarioBrowser } from './components/IntimateScenarioBrowser';
@@ -140,6 +141,37 @@ function MainApp() {
 
   // Dev-only overlays visible when devMode is on OR Electron is launched with --dev
   const effectiveDevMode = devMode || !!window.electronAPI?.isDev;
+
+  // Kokoro debug HUD: visible when URL has ?debug=kokoro OR devMode is on.
+  const kokoroDebugVisible = useMemo(() => {
+    if (effectiveDevMode) return true;
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('debug') === 'kokoro';
+  }, [effectiveDevMode]);
+
+  // Live-poll the dial vector after each turn so the HUD shows
+  // absolute values alongside this-turn deltas.
+  const lastKokoroPayload = useChatStore(s => s.lastKokoroPayload);
+  const kokoroCharId = useChatStore(s => s.charId);
+  const kokoroSessionId = useChatStore(s => s.sessionId);
+  const [kokoroDials, setKokoroDials] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!kokoroDebugVisible || !kokoroCharId) return;
+    let cancelled = false;
+    import('./lib/api').then(({ api }) => {
+      api.kokoroState(kokoroCharId, kokoroSessionId ?? undefined)
+        .then(res => {
+          if (cancelled || !res.ok) return;
+          const numericMind: Record<string, number> = {};
+          for (const [k, v] of Object.entries(res.mind || {})) {
+            if (typeof v === 'number') numericMind[k] = v;
+          }
+          setKokoroDials(numericMind);
+        })
+        .catch(() => { /* HUD only — silent failure */ });
+    });
+    return () => { cancelled = true; };
+  }, [kokoroDebugVisible, kokoroCharId, kokoroSessionId, lastKokoroPayload]);
 
   // Expose openOverlay for Electron tray menu IPC
   useEffect(() => {
@@ -381,6 +413,21 @@ function MainApp() {
 
       {/* Overlay drawers — Feature P2 Context Assembly Viewer (dev only) */}
       {effectiveDevMode && <ContextViewer />}
+
+      {/* Kokoro v1 debug HUD — visible with ?debug=kokoro or devMode */}
+      {kokoroDebugVisible && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 16,
+            right: 16,
+            zIndex: 9000,
+            pointerEvents: 'auto',
+          }}
+        >
+          <KokoroDebugPanel payload={lastKokoroPayload} dialValues={kokoroDials} />
+        </div>
+      )}
 
       {/* Overlay drawers — Feature F40 Boundaries */}
       <BoundaryPanel

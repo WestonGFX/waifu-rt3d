@@ -1,14 +1,44 @@
 # Current Project Status
 
-**Last updated:** 2026-05-24 (session 44 — cleanup + Ctrl+M regression test)
-**Branch:** master · origin at `1fe562a` (all pushed).
-**Schema version:** v82 (character_physics_profiles — jiggle overrides).
-**Tests:** **2,843 backend** + **294 frontend** passing (1 pre-existing flake in `chatStore.pin.test.ts` — unrelated to this session), tsc clean.
+**Last updated:** 2026-05-24 (session 45 — Kokoro Engine v1 Phases 1-11)
+**Branch:** master · 4 new local commits ahead of `1fe562a` (NOT yet pushed).
+**Schema version:** v85 (kokoro_safety_events; up from v82).
+**Tests:** **2,924 backend** + **~317 frontend** passing (1 pre-existing flake in `chatStore.pin.test.ts` — unrelated), tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session 45 (2026-05-24) — Kokoro Engine v1 (tiered mind state + structured embodiment).**
+
+| Item | Commits |
+|---|---|
+| Phase 1: backend module + frontend types + debug HUD (schema v82→v84) | `9e83855` |
+| Phase 2: chat-stream injection + finalize/state endpoints + viewer wiring | `cb1b1e7` |
+| Phase 3: ChatThread SSE → finalize → avatar embodiment + HUD live polling | `d01d860` |
+| Phase 4-9: drift, traits seeder, memory writes, voice params, safety counter (schema v85) | `60fb3ab` |
+| Phase 10-11: Vitest coverage (23 new) + Settings toggle (pending commit) | — |
+
+**Kokoro architecture summary:**
+- Tier A (per-turn) + Tier B (slow drift) + Tier C (identity, bible-seeded) + Tier E (per-thread scene) + Tier F (NSFW, auto-gated by content_filter_level + M6 bond ≥ 20)
+- LLM contract: structured JSON with reply + face + gesture + gaze + voiceStyle + memoryWrite + stateDelta + (NSFW: innerArousalShift, suggestiveBid, selfConsentCheck, boundaryReinforcement)
+- Graceful plain-text fallback if model ignores the contract — chat never breaks
+- Memory writes hook into existing tiered_memory (role="knowledge"), 24h dedup window
+- Boundary reinforcement events logged for regression detection (`/api/kokoro/qa/{char_id}`)
+- Lazy drift on next turn (no background cron); 6h cap per turn
+- Debug HUD at `?debug=kokoro` or dev_mode
+
+**Flag state:** `kokoro_enabled` flipped to **true** at end of session for immediate validation.
+
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers.
+
+**Next priorities:**
+1. Run the 5-test Chrome script (Dracula recall, frustration tone-shift, hacker-girl style shift) against live LM Studio. Tune the prompt fragment if parse_ok rate is low on the user's model.
+2. Memory architecture v2 research lands at `docs/research/2026-05-24-memory-architectures.md` (agent dispatched this session). Decide what to adopt.
+3. Optional v2 ideas surfaced this session: per-character Tier C trait sliders, mood-snapshot-tagged memories, voiceStyle test coverage.
+
+---
 
 **Session 44 (2026-05-24) — cleanup pass + Ctrl+M regression coverage.**
 

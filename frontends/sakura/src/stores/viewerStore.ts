@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { KOKORO_FACE_TO_BLENDSHAPE } from '../lib/kokoro';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -431,8 +432,6 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
 
   dispatchKokoroEmbodiment: (payload) => {
     if (!payload?.diagnostics?.kokoroEnabled) return;
-    // Lazy import avoids a circular dep with lib/kokoro at module-load time.
-    const { KOKORO_FACE_TO_BLENDSHAPE } = require('../lib/kokoro') as typeof import('../lib/kokoro');
     const blendshape = KOKORO_FACE_TO_BLENDSHAPE[payload.facialExpression] || 'neutral';
     // Step 1 — set facial expression.  Intensity tracked from "softness" of
     // the chosen voice; teasing/playful run hotter than calm/sleepy.

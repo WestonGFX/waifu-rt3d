@@ -5401,6 +5401,19 @@ function SystemTab({ save, cfg }: TabProps) {
             />
           </SettingField>
 
+          <SettingField
+            label="Kokoro Engine"
+            description="Per-turn structured embodiment + tiered mind state (mood, curiosity, playfulness, vulnerability, etc.). Inject ~150 tokens per turn. Adds a debug HUD in dev mode."
+            tooltip="When ON, the character's reply, facial expression, gesture, gaze, and voice are decided in a single structured JSON response, and her dial state persists across turns. Safe to toggle mid-session."
+          >
+            <input
+              type="checkbox"
+              checked={Boolean(cfg('kokoro_enabled', false))}
+              onChange={(e) => save('kokoro_enabled', e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
+          </SettingField>
+
           <SliderField
             label="Log Buffer Size" description="Lines to keep in memory." advanced
             value={Number(cfg('log_limit', 200))}

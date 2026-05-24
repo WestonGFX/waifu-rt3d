@@ -22,7 +22,7 @@
   "log_limit": 600,
   "save_logs_auto": true,
   "onboarded": true,
-  "kokoro_enabled": false,
+  "kokoro_enabled": true,
   "llm": {
     "provider": "openai",
     "endpoint": "http://10.0.0.17:1234/v1",

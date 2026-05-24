@@ -30,6 +30,7 @@ from .mind_state import (
     ThreadState,
     TraitVector,
     apply_state_delta,
+    clamp01,
     load_mind_state,
     load_thread_state,
     load_traits,
@@ -105,6 +106,36 @@ def prepare_turn(
     traits = load_traits(con, character_id)
     thread = load_thread_state(con, session_id)
 
+    # Tier B lazy drift: step slow dials forward by elapsed time since
+    # last update.  No-op when Kokoro is disabled OR when there's no
+    # persisted timestamp yet (first turn — drift starts from "now").
+    if kokoro_enabled and mind.updated_at:
+        try:
+            from .drift import compute_drift
+            drifted = compute_drift(mind)
+            if drifted is not mind:
+                mind = drifted
+                save_mind_state(con, mind)
+        except Exception as e:
+            logger.warning("kokoro: drift failed for char %s: %s",
+                           character_id, e)
+
+    # Auto-seed Tier C traits from the character bible on first encounter.
+    # We detect "no row exists" by checking the DB directly — load_traits
+    # returns defaults regardless, so it can't tell us.
+    if kokoro_enabled:
+        try:
+            has_row = con.execute(
+                "SELECT 1 FROM character_traits WHERE character_id = ?",
+                (character_id,),
+            ).fetchone()
+            if not has_row:
+                from .traits_seeder import seed_traits_for_character
+                traits = seed_traits_for_character(con, character_id)
+        except Exception as e:
+            logger.warning("kokoro: trait seeding failed for char %s: %s",
+                           character_id, e)
+
     if not kokoro_enabled:
         return KokoroTurnContext(
             enabled=False,
@@ -132,6 +163,8 @@ def finalize_turn(
     con: sqlite3.Connection,
     ctx: KokoroTurnContext,
     raw_llm_text: str,
+    *,
+    vector_store=None,
 ) -> CompanionResponse:
     """Parse the LLM output, apply the state delta, and persist.
 
@@ -158,6 +191,65 @@ def finalize_turn(
         logger.warning("kokoro: failed to save mind state for char %s: %s",
                        ctx.mind.character_id, e)
 
+    # Memory write: when the LLM marked this turn worth saving AND a
+    # vector store is wired in, persist into the existing tiered_memory
+    # surface so it shares retrieval with AIE + manual memories.
+    # Dedup against the most-recent same-character row to absorb the
+    # LLM proposing the same memory across consecutive turns.
+    if (
+        vector_store is not None
+        and resp.memory_write.should_save
+        and resp.memory_write.summary
+        and resp.memory_write.summary.strip()
+    ):
+        text = resp.memory_write.summary.strip()
+        # Salience: take the stronger of importance / emotional_salience,
+        # clamped to [0,1].  Both fields are LLM-supplied and may be noisy.
+        salience = clamp01(max(
+            resp.memory_write.importance or 0.0,
+            resp.memory_write.emotional_salience or 0.0,
+        ))
+        try:
+            # Cheap dedup: any identical-text knowledge memory for this
+            # character in the last 24 hours blocks the write.
+            existing = con.execute(
+                "SELECT 1 FROM memories WHERE character_id = ? "
+                "AND role = 'knowledge' AND text = ? "
+                "AND created_at >= datetime('now', '-1 day') LIMIT 1",
+                (ctx.mind.character_id, text),
+            ).fetchone()
+        except sqlite3.Error:
+            existing = None
+        if not existing:
+            try:
+                vector_store.add(
+                    ctx.thread.session_id,
+                    ctx.mind.character_id,
+                    "knowledge",
+                    text,
+                    salience=salience,
+                )
+            except Exception as e:
+                logger.warning("kokoro: memory write failed for char %s: %s",
+                               ctx.mind.character_id, e)
+
+    # Tier F QA: log boundary-reinforcement events so we can detect
+    # regressions (e.g. a model update silently slipping past guardrails).
+    # Recorded whenever the LLM declines / softens an escalation, regardless
+    # of whether the gate was actually open — boundary events from a closed
+    # gate are also signal (it means the model felt the need to push back
+    # at content_filter_level=0, which is good).
+    if resp.boundary_reinforcement:
+        try:
+            con.execute(
+                "INSERT INTO kokoro_safety_events "
+                "(character_id, session_id, event_type, bond_level) "
+                "VALUES (?, ?, 'boundary_reinforcement', ?)",
+                (ctx.mind.character_id, ctx.thread.session_id, ctx.bond_level),
+            )
+        except sqlite3.Error as e:
+            logger.warning("kokoro: failed to log safety event: %s", e)
+
     # Tier F-scene side effects on thread state.
     if ctx.nsfw_active and (resp.self_consent_check or resp.boundary_reinforcement):
         new_thread = ThreadState(
@@ -178,6 +270,37 @@ def finalize_turn(
     return resp
 
 
+def _voice_params_for(voice_style: str) -> dict:
+    """Resolve voice-modulator TTS params for a Kokoro voiceStyle.
+
+    The :class:`backend.tts.voice_modulator.VoiceModulator` already knows how
+    to translate emotion-equivalent inputs into provider-agnostic abstract
+    ``speed/pitch/energy`` values.  Kokoro's voiceStyle enum is aliased to
+    existing emotion profiles at the modulator level (see
+    ``_PROFILE_ALIASES`` in voice_modulator.py).
+
+    We deliberately return the *abstract* params here — provider-specific
+    formatting (Edge-TTS "+N%" strings, ElevenLabs stability scalars) happens
+    in the TTS request path.  This keeps the Kokoro payload provider-neutral.
+    """
+    try:
+        from backend.tts.voice_modulator import VoiceModulator
+        mod = VoiceModulator()
+        # Use the same intensity bucket the avatar layer uses (see
+        # viewerStore.dispatchKokoroEmbodiment) for visual/auditory parity.
+        intensity = 1.0 if voice_style in {"bright", "teasing"} else (
+            0.6 if voice_style in {"sleepy", "calm"} else 0.85
+        )
+        # Pass the styled emotion-equivalent through the modulator's lookup
+        # so unknown values fall back to neutral instead of crashing.
+        params = mod.get_params(voice_style, intensity=intensity, provider="kokoro")
+        return dict(params)
+    except Exception as e:
+        logger.warning("kokoro: voice param resolution failed for style %s: %s",
+                       voice_style, e)
+        return {}
+
+
 def response_to_frontend_payload(
     resp: CompanionResponse, ctx: KokoroTurnContext
 ) -> dict:
@@ -185,7 +308,8 @@ def response_to_frontend_payload(
 
     The frontend expects camelCase keys to match the existing API style.
     Diagnostic fields (``parse_ok``, mind snapshot) ride along for the
-    debug HUD.
+    debug HUD.  ``voiceParams`` carries provider-neutral TTS hints derived
+    from ``voiceStyle``; the frontend forwards them to the next TTS call.
     """
     return {
         "reply": resp.reply,
@@ -195,6 +319,7 @@ def response_to_frontend_payload(
         "gesture": resp.gesture,
         "gaze": resp.gaze,
         "voiceStyle": resp.voice_style,
+        "voiceParams": _voice_params_for(resp.voice_style),
         "memoryWrite": {
             "shouldSave": resp.memory_write.should_save,
             "summary": resp.memory_write.summary,

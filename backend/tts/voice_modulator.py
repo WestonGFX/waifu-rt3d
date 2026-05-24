@@ -86,6 +86,13 @@ _PROFILE_ALIASES: dict[str, str] = {
     "loving":       "love",
     "calm":         "neutral",
     "nervous":      "fearful",
+    # Kokoro voiceStyle enum → existing emotion profiles.  Same set as in
+    # backend/kokoro/response_parser.py VALID_VOICE_STYLES.
+    "warm":         "love",
+    "bright":       "excited",
+    "sleepy":       "tired",
+    "serious":      "neutral",
+    "teasing":      "mischievous",
 }
 
 # Fallback for unknown emotions

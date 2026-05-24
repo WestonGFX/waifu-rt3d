@@ -55,6 +55,13 @@ export interface KokoroDiagnostics {
   kokoroEnabled: boolean;
 }
 
+/**
+ * Provider-neutral TTS hints derived from voiceStyle.  Forward into your
+ * next TTS request; the existing TTS layer translates these to provider-
+ * specific fields (Edge-TTS "+N%", ElevenLabs stability scalars, etc.).
+ */
+export type KokoroVoiceParams = Record<string, number | string>;
+
 export interface KokoroPayload {
   reply: string;
   innerThought: string;
@@ -63,6 +70,7 @@ export interface KokoroPayload {
   gesture: KokoroGesture;
   gaze: KokoroGaze;
   voiceStyle: KokoroVoiceStyle;
+  voiceParams: KokoroVoiceParams;
   memoryWrite: KokoroMemoryWrite;
   stateDelta: KokoroStateDelta;
   nsfw: KokoroNsfwExtras;

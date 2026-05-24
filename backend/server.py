@@ -19710,7 +19710,11 @@ def kokoro_finalize(body: _KokoroFinalizeBody):
             kokoro_enabled=kokoro_on,
             nsfw_enabled=nsfw_master,
         )
-        resp = _kk_finalize(conn, ctx, body.raw_text)
+        # Pass the shared tiered_memory manager so memoryWrite hooks into
+        # the existing retrieval surface alongside AIE + manual memories.
+        # ``vector_store`` may be None in test environments — finalize_turn
+        # treats that as "skip the memory write."
+        resp = _kk_finalize(conn, ctx, body.raw_text, vector_store=vector_store)
         payload = _kk_payload(resp, ctx)
     return {"ok": True, "payload": payload}
 
@@ -19744,6 +19748,51 @@ def kokoro_state(char_id: int, session_id: int | None = None):
         "mind": asdict(mind),
         "traits": asdict(traits),
         "thread": asdict(thread) if thread is not None else None,
+    }
+
+
+@app.get("/api/kokoro/qa/{char_id}")
+def kokoro_qa(char_id: int, hours: int = 168):
+    """Aggregate Kokoro safety-event signals for a character.
+
+    Lightweight regression dashboard: shows how often the character pushed
+    back on escalation in the last ``hours`` (default = 7 days).  A sudden
+    drop after a model swap suggests the guardrails are no longer holding.
+
+    Args:
+        char_id: Character to inspect.
+        hours: Lookback window.  Capped at 30 days.
+
+    Returns:
+        ``{"ok": True, "boundary_count": int, "by_bond_band": [...], "window_hours": int}``
+    """
+    hours = max(1, min(int(hours), 720))
+    with db_ctx() as conn:
+        try:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM kokoro_safety_events "
+                "WHERE character_id = ? AND created_at >= datetime('now', ?)",
+                (char_id, f"-{hours} hours"),
+            ).fetchone()[0]
+            bands = conn.execute(
+                "SELECT bond_level, COUNT(*) FROM kokoro_safety_events "
+                "WHERE character_id = ? AND created_at >= datetime('now', ?) "
+                "GROUP BY bond_level ORDER BY bond_level",
+                (char_id, f"-{hours} hours"),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            # Table missing (pre-v85) — return zeros instead of 500.
+            total = 0
+            bands = []
+    return {
+        "ok": True,
+        "char_id": char_id,
+        "window_hours": hours,
+        "boundary_count": int(total),
+        "by_bond_band": [
+            {"bond_level": int(b[0]) if b[0] is not None else None, "count": int(b[1])}
+            for b in bands
+        ],
     }
 
 

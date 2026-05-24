@@ -6066,6 +6066,63 @@ def migrate_to_v84(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v85(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v84 to v85.
+
+    Adds ``kokoro_safety_events`` — a thin counter table for Tier F QA.
+    Whenever a Kokoro turn surfaces ``boundaryReinforcement: true`` we log a
+    row here.  The aggregate count over a window is a regression-detection
+    signal: a sudden drop in boundary-reinforcement rate after a model
+    change means escalation might be slipping past the guardrails.
+
+    Columns:
+        - id (INTEGER PRIMARY KEY AUTOINCREMENT)
+        - character_id (INTEGER NOT NULL)
+        - session_id (INTEGER)
+        - event_type (TEXT) — currently always "boundary_reinforcement";
+          extensible for future safety signals.
+        - bond_level (INTEGER) — bond level at the time of the event.
+        - created_at (TEXT DEFAULT datetime('now'))
+
+    Args:
+        con: An open ``sqlite3.Connection``.
+
+    Returns:
+        ``True`` on success.
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 85:
+        logger.info("Schema already at v%d, skipping v85 migration.", cur_ver)
+        return True
+
+    try:
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS kokoro_safety_events (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id  INTEGER NOT NULL,
+                session_id    INTEGER,
+                event_type    TEXT    NOT NULL DEFAULT 'boundary_reinforcement',
+                bond_level    INTEGER,
+                created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_kokoro_safety_char "
+            "ON kokoro_safety_events(character_id, created_at)"
+        )
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (85, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v85 migration complete (kokoro_safety_events)")
+        return True
+    except Exception as e:
+        logger.error("Schema v85 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -6673,14 +6730,20 @@ def ensure_db():
             if migrate_to_v84(con):
                 version = 84
 
+        if version < 85:
+            logger.info("Upgrading database schema from v84 to v85...")
+            logger.info("  - kokoro_safety_events — Tier F boundary-reinforcement counter")
+            if migrate_to_v85(con):
+                version = 85
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 84:
-            raise RuntimeError(f"Database initialization failed: Expected v84, got v{final_version}")
+        if final_version < 85:
+            raise RuntimeError(f"Database initialization failed: Expected v85, got v{final_version}")
 
-        if final_version > 84:
-            logger.warning(f"Database is newer than application (v{final_version} > v84). Some features might be unused.")
+        if final_version > 85:
+            logger.warning(f"Database is newer than application (v{final_version} > v85). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.

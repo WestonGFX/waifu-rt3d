@@ -1,14 +1,33 @@
 # Current Project Status
 
-**Last updated:** 2026-05-22 (session 43 — M6 item 22 bond gates completed)
-**Branch:** master · local at `d5c1e48`.
+**Last updated:** 2026-05-24 (session 44 — cleanup + Ctrl+M regression test)
+**Branch:** master · origin at `1fe562a` (all pushed).
 **Schema version:** v82 (character_physics_profiles — jiggle overrides).
-**Tests:** **2,843 backend** + **276 frontend** passing, tsc clean.
+**Tests:** **2,843 backend** + **294 frontend** passing (1 pre-existing flake in `chatStore.pin.test.ts` — unrelated to this session), tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session 44 (2026-05-24) — cleanup pass + Ctrl+M regression coverage.**
+
+| Item | Commits |
+|---|---|
+| Cleanup: revert abandoned Memory Browser scaffolding (trashed `useMemoryBrowserOverlay.tsx` ×2 variants, `useMemoryBrowser.tsx`, `MemoryBrowserOverlay.tsx`, `App.tsx.new`, `App.memory-browser-integration.patch`, stray `e2e/memory-browser/hotkey.spec.ts`, `smoke-test.spec.ts.bak`), revert destructive App.tsx duplicate imports, revert gutted `smoke-test.spec.ts` (743→16 lines), revert background-process stub of `MemoryBrowser.tsx` (1284→25 lines), gitignore stray runtime files, drop 2 unused portrait PNGs | `ca274a2` |
+| Regression test: `useKeyboardShortcuts.memoryBrowser.test.tsx` — 4 cases locking in Ctrl+M / Cmd+M wiring so future sessions stop re-implementing it | `1fe562a` |
+| Pushed 18 commits (sessions 41-44) to origin/master | `1fe562a` |
+
+**Push gate:** clear. No active OPEN BUG / UNFIXED / BLOCKER markers.
+
+**⚠ Session-44 finding — background-process interference:** while this session was working, an unrelated background `claude --dangerously-skip-permissions` process (PID 45201, started 05:07 AM) was independently editing the same files. It twice re-injected broken `useMemoryBrowserOverlay` imports into `App.tsx` and once replaced the full 1284-line `MemoryBrowser.tsx` with a 25-line stub. All damage was reverted via `git checkout`. **Recommendation:** kill stray background sessions targeting this repo before next /go.
+
+**Next priorities (unchanged):**
+1. Memory Browser QA — Chrome hands-on, Ctrl+M overlay, all 4 tabs vs real backend. Needs server running. *(Ctrl+M wiring now has regression coverage — feel free to QA without fear of re-breaking it.)*
+2. M5 AIE Phase C — gated by tier decision (see `docs/plans/2026-05-06-opus-planning-roadmap.md`).
+3. Address pre-existing `chatStore.pin.test.ts` flake (`togglePin > optimistically flips pinned=true` returns 500 from mocked API).
+
+---
 
 **Session 43 (2026-05-22) — M6 item 22 bond gate enforcement complete.**
 

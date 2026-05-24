@@ -1054,3 +1054,14 @@ Phases 1-2 can ship as an MVP. Phases 3-4 add polish. Phases 5-6 are advanced an
 | `backend/server.py` | API endpoints — character CRUD around line 6676 |
 | `backend/config/app.json` | Global app config — add `jiggle` section |
 | `backend/mood/engine.py` | MoodEngine — emotion state source for multipliers |
+
+---
+
+## Session Status
+
+- 2026-05-10 Phase 1: ✓ JigglePhysicsManager in viewer.html — bone detection, 5 presets, all postMessage handlers
+- 2026-05-10 Phase 2: ✓ JigglePhysicsPanel.tsx (716 lines) — toggle, presets, intensity slider, per-body-part, config persist; Physics tab in SettingsView
+- 2026-05-10 Phase 3: ✓ character_physics_profiles table (schema v82), GET/PUT/DELETE /api/characters/{id}/physics, per-character body-type override UI in JigglePhysicsPanel — commit 740a78c
+- 2026-05-10 Phase 4: ✓ Emotion multiplier (EMOTION_JIGGLE_MAP in chatStore.ts → dispatchSetJiggleEmotionMultiplier). Movement multiplier (JIGGLE_MOVEMENT_MULTIPLIERS in viewer.html → AnimationDirector.transitionTo hook) — commit 740a78c
+- 2026-05-10 Phase 5 (bone injection): DEFERRED — advanced, model-agnostic models can use hierarchy fallback
+- 2026-05-10 Phase 6 (morph targets): DEFERRED — advanced, model-dependent, most VRoid models don't have body blend shapes

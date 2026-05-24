@@ -374,3 +374,16 @@ Phase 5 is independent and can be done any time after Phase 1.
 | 3 | Tune spring bone params, save preset, reload page. Params should auto-apply on model load. |
 | 4 | Open tuner, drag stiffness slider. Hair should visibly change behavior in real-time. |
 | 5 | Send a "sad" message. Over ~0.5s, hair should become heavier/droopier. Send "happy" -- hair should become bouncier. |
+
+---
+
+## Session Status
+
+- 2026-05-10 Phase 1A ✓ pre-existing (delta cap 0.05 already set)
+- 2026-05-10 Phase 1B ✓ pre-existing (stripSpringBoneTracks in ClipLayer already done)
+- 2026-05-10 Phase 2 ✓ capsule collider debug viz — commit 2a6de6d
+- 2026-05-10 Phase 3 backend ✓ pre-existing (endpoints + schema v81 spring_bone_presets)
+- 2026-05-10 Phase 3 frontend ✓ vrmSpringBonesReady event + preset auto-apply + Save button — commit 2a6de6d
+- 2026-05-10 Phase 4 ✓ pre-existing (SpringBonePanel.tsx tuning UI already complete)
+- 2026-05-10 Phase 5 ✓ setSpringBoneEmotion handler + emotionChanged dispatch — commit 2a6de6d
+- ALL PHASES COMPLETE

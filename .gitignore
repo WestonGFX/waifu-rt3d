@@ -35,7 +35,14 @@ backend/logs/
 backend/storage/app.db
 backend/storage/app.db-shm
 backend/storage/app.db-wal
+backend/storage/*.db.bak.*
+backend/data.db
 waifu.db
+# Stray SQLite files accidentally written to repo root (running scripts from wrong cwd)
+/app.db
+/data.db
+# Stray test scaffolding accidentally created at repo root (the canonical e2e lives in frontends/sakura/e2e/)
+/e2e/
 
 # ── Vector Store / ChromaDB (runtime data, not source) ──────────────────────
 backend/storage/memory/
@@ -137,6 +144,10 @@ backend/characters/builtin_image_styles.draft.json
 .claude/**/*.bak-*
 .claude/worktrees/
 .claude/plans/
+# User-local settings variants (settings.json and settings.local.json stay tracked)
+.claude/settings.auto.json
+.claude/settings.hybrid.json
+.claude/settings.waifu.json
 
 # ── Ephemeral Claude session docs (handoffs, transcripts, logs) ─────────────
 docs/SESSION_*.md

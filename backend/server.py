@@ -5545,6 +5545,25 @@ async def chat_stream(req: Request):
     except Exception:
         pass
 
+    # ── Kokoro v1: optional mind-state + JSON-contract injection ─────
+    # When kokoro_enabled is False (default) prepare_turn returns an empty
+    # fragment and the assembled prompt is byte-identical to pre-Kokoro.
+    _kokoro_fragment_s: str | None = None
+    try:
+        if cfg.get("kokoro_enabled"):
+            from backend.kokoro.service import prepare_turn as _kokoro_prepare
+            _kokoro_ctx_s = _kokoro_prepare(
+                con,
+                character_id=char_id,
+                session_id=session_id,
+                kokoro_enabled=True,
+                nsfw_enabled=int(cfg.get("content_filter_level", 0) or 0) > 0,
+            )
+            if _kokoro_ctx_s.fragment:
+                _kokoro_fragment_s = _kokoro_ctx_s.fragment
+    except Exception as _kokoro_err:
+        logger.warning("[kokoro] prepare_turn failed for char %s: %s", char_id, _kokoro_err)
+
     assembled_s = _assemble_ctx_s(
         session_id=session_id, char_id=char_id, user_text=text,
         sections=sections, cfg=cfg, cur=cur,
@@ -5554,6 +5573,7 @@ async def chat_stream(req: Request):
         vector_store=vector_store,
         cache_hints=_is_claude_s,
         post_history_instructions=_phi_text,
+        kokoro_fragment=_kokoro_fragment_s,
     )
     llm_messages = assembled_s.messages
     # Phase 2 (piggyback quick-replies): append a final system message asking the
@@ -19642,6 +19662,91 @@ async def trigger_lora_retrain(char_id: int):
 
 
 # --- EXCEPTION HANDLERS ---
+# ── Kokoro Engine v1 (#kokoro) ─────────────────────────────────────────────
+
+
+class _KokoroFinalizeBody(BaseModel):
+    """Payload for ``POST /api/kokoro/finalize``."""
+    char_id: int
+    session_id: int
+    raw_text: str
+
+
+@app.post("/api/kokoro/finalize")
+def kokoro_finalize(body: _KokoroFinalizeBody):
+    """Parse the last LLM response, apply state delta, return embodiment.
+
+    Frontend calls this after a chat stream completes (when
+    ``kokoro_enabled``) with the full accumulated reply.  The server
+    parses the structured JSON, applies the bounded state delta to the
+    character's mind state, persists it, and returns the embodiment
+    payload (face/gesture/gaze/voice + diagnostics + NSFW extras when
+    the gate is open).
+
+    When the LLM returned plain text instead of JSON, ``diagnostics.parseOk``
+    is False and embodiment fields are at their neutral defaults — the chat
+    flow still succeeds.
+
+    Args:
+        body: ``char_id``, ``session_id``, and the full raw LLM text.
+
+    Returns:
+        ``{"ok": True, "payload": {...KokoroPayload...}}`` on success.
+    """
+    cfg = load_config()
+    nsfw_master = int(cfg.get("content_filter_level", 0) or 0) > 0
+    kokoro_on = bool(cfg.get("kokoro_enabled"))
+
+    from backend.kokoro.service import (
+        prepare_turn as _kk_prepare,
+        finalize_turn as _kk_finalize,
+        response_to_frontend_payload as _kk_payload,
+    )
+    with db_ctx() as conn:
+        ctx = _kk_prepare(
+            conn,
+            character_id=body.char_id,
+            session_id=body.session_id,
+            kokoro_enabled=kokoro_on,
+            nsfw_enabled=nsfw_master,
+        )
+        resp = _kk_finalize(conn, ctx, body.raw_text)
+        payload = _kk_payload(resp, ctx)
+    return {"ok": True, "payload": payload}
+
+
+@app.get("/api/kokoro/state/{char_id}")
+def kokoro_state(char_id: int, session_id: int | None = None):
+    """Snapshot the current dial vectors for the debug HUD.
+
+    Returns Tier A + Tier B + Tier F columns from ``character_mind_state``,
+    Tier C from ``character_traits``, and (when ``session_id`` is provided)
+    Tier E + Tier F-scene from ``thread_state``.  Defaults are returned for
+    any missing rows so the panel never shows blanks.
+
+    Args:
+        char_id: Character to inspect.
+        session_id: Optional session for thread-level dials.
+
+    Returns:
+        ``{"ok": True, "mind": {...}, "traits": {...}, "thread": {...} | None}``
+    """
+    from dataclasses import asdict
+    from backend.kokoro.mind_state import (
+        load_mind_state, load_traits, load_thread_state,
+    )
+    with db_ctx() as conn:
+        mind = load_mind_state(conn, char_id)
+        traits = load_traits(conn, char_id)
+        thread = load_thread_state(conn, session_id) if session_id else None
+    return {
+        "ok": True,
+        "mind": asdict(mind),
+        "traits": asdict(traits),
+        "thread": asdict(thread) if thread is not None else None,
+    }
+
+
 @app.exception_handler(Exception)
 async def generic_exception_handler(request, exc):
     logger.error(f"Global Error: {exc}", exc_info=True)

@@ -1594,4 +1594,43 @@ export const api = {
    */
   deleteCharacterPhysics: (charId: number) =>
     del<{ ok: boolean }>(`/api/characters/${charId}/physics`),
+
+  // ── Kokoro Engine v1 ──────────────────────────────────────────────
+
+  /**
+   * Parse a finished LLM chat response into Kokoro embodiment metadata
+   * and persist the resulting state delta.  Call this *after* a chat
+   * stream finishes with the full accumulated reply.
+   *
+   * Safe to call regardless of ``kokoro_enabled``; when the flag is off
+   * the server returns a payload with ``diagnostics.kokoroEnabled: false``
+   * and skips persistence.  When the LLM emitted plain text instead of
+   * JSON, ``diagnostics.parseOk`` is false and embodiment fields are at
+   * their neutral defaults.
+   *
+   * @param charId - Active character
+   * @param sessionId - Active session
+   * @param rawText - Full accumulated LLM reply
+   */
+  kokoroFinalize: (charId: number, sessionId: number, rawText: string) =>
+    post<{ ok: boolean; payload: import('./kokoro').KokoroPayload }>(
+      '/api/kokoro/finalize',
+      { char_id: charId, session_id: sessionId, raw_text: rawText },
+    ),
+
+  /**
+   * Snapshot a character's current Kokoro dial state for the debug HUD.
+   * Returns Tier A + Tier B + Tier F mind columns, Tier C identity
+   * traits, and (when ``sessionId`` is provided) Tier E + Tier F-scene
+   * thread state.  Defaults are returned for missing rows.
+   */
+  kokoroState: (charId: number, sessionId?: number) => {
+    const qs = sessionId !== undefined ? `?session_id=${sessionId}` : '';
+    return get<{
+      ok: boolean;
+      mind: Record<string, number | string | null>;
+      traits: Record<string, number | string | null>;
+      thread: Record<string, number | string | null> | null;
+    }>(`/api/kokoro/state/${charId}${qs}`);
+  },
 };

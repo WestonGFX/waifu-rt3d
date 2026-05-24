@@ -120,6 +120,16 @@ interface ViewerState {
     intensity?: number,
   ) => void;
 
+  /**
+   * Apply a Kokoro embodiment payload to the active renderer.
+   *
+   * Maps Kokoro's vocabulary (facialExpression/gesture enums) to the
+   * existing expression + gesture postMessage protocol — no new viewer.html
+   * surface area.  Safe to call whether the gate was open or closed; when
+   * ``payload.diagnostics.kokoroEnabled`` is false this is a no-op.
+   */
+  dispatchKokoroEmbodiment: (payload: import('../lib/kokoro').KokoroPayload) => void;
+
   /** Route a background change to the VRM viewer. */
   dispatchBackground: (mode: string, value: string) => void;
 
@@ -417,6 +427,28 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
       postToUnity(state.unityIframeRef, 'PlayGesture', { gesture: gesture || '' });
     }
     set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchKokoroEmbodiment: (payload) => {
+    if (!payload?.diagnostics?.kokoroEnabled) return;
+    // Lazy import avoids a circular dep with lib/kokoro at module-load time.
+    const { KOKORO_FACE_TO_BLENDSHAPE } = require('../lib/kokoro') as typeof import('../lib/kokoro');
+    const blendshape = KOKORO_FACE_TO_BLENDSHAPE[payload.facialExpression] || 'neutral';
+    // Step 1 — set facial expression.  Intensity tracked from "softness" of
+    // the chosen voice; teasing/playful run hotter than calm/sleepy.
+    const hotVoices = new Set(['bright', 'teasing']);
+    const coolVoices = new Set(['sleepy', 'calm']);
+    const intensity = hotVoices.has(payload.voiceStyle)
+      ? 1.0
+      : coolVoices.has(payload.voiceStyle)
+        ? 0.6
+        : 0.85;
+    get().dispatchExpression(blendshape, intensity);
+    // Step 2 — gesture, unless idle (idle means "do nothing new" — let the
+    // talk/idle state machine continue).
+    if (payload.gesture && payload.gesture !== 'idle') {
+      get().dispatchGesture(payload.gesture, blendshape, intensity);
+    }
   },
 
   dispatchBackground: (mode, value) => {

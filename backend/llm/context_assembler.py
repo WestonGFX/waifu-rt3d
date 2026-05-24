@@ -73,6 +73,7 @@ def assemble_context(
     cache_hints: bool = False,
     scene_context: str | None = None,
     post_history_instructions: str | None = None,
+    kokoro_fragment: str | None = None,
 ) -> AssembledContext:
     """Assemble a token-budget-aware context for an LLM chat request.
 
@@ -126,6 +127,11 @@ def assemble_context(
 
     # ── 1. System prompt (always included) ──────────────────────────
     system_content = "".join(s["content"] for s in sections)
+    if kokoro_fragment:
+        # Kokoro v1: dial state + JSON response contract.  Appended to the
+        # system prompt so it rides at top-priority alongside persona.
+        # Empty/None → no-op; the chat path is byte-identical to pre-Kokoro.
+        system_content = system_content + "\n\n" + kokoro_fragment
     system_tokens = count_tokens(system_content)
     available -= system_tokens
 

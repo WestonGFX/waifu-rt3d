@@ -22,6 +22,7 @@
   "log_limit": 600,
   "save_logs_auto": true,
   "onboarded": true,
+  "kokoro_enabled": false,
   "llm": {
     "provider": "openai",
     "endpoint": "http://10.0.0.17:1234/v1",
@@ -101,7 +102,7 @@
   ],
   "last_seen_version": "5.34.0",
   "wizard_message_count": 0,
-  "wizard_session_count": 155,
+  "wizard_session_count": 178,
   "tips_snoozed_until": null,
   "tooltips_hidden": false,
   "voice_setup_completed": false,

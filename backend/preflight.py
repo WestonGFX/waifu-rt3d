@@ -5898,6 +5898,174 @@ def migrate_to_v82(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v83(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v82 to v83.
+
+    Adds Kokoro Engine v1 core tables:
+
+      - ``character_mind_state`` — Tier A (fast, per-turn) + Tier B (slow drift)
+        dial vector per character. One row per character (singleton, ON CONFLICT
+        upsert in service code).  All dials are floats in [0,1].
+      - ``character_traits`` — Tier C (identity fingerprint) dial vector per
+        character.  Very slow movement; seeded from character bibles.
+      - ``thread_state`` — Tier E (per-conversation scene) dial vector keyed by
+        session_id.  Ephemeral; reset/created on new session.
+
+    Affection and trust are intentionally NOT mirrored here — they live in the
+    existing bond progression tables to avoid divergence.  See Kokoro v1 plan
+    (``~/.claude/plans/done-i-made-you-wondrous-conway.md``) for the full dial
+    taxonomy and tier rationale.
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.
+
+    Raises:
+        sqlite3.Error: If a SQL statement fails unexpectedly.
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 83:
+        logger.info("Schema already at v%d, skipping v83 migration.", cur_ver)
+        return True
+
+    try:
+        # Tier A (fast, per-turn) + Tier B (slow drift) per character.
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS character_mind_state (
+                character_id        INTEGER PRIMARY KEY,
+                -- Tier A: fast dials (LLM may nudge each turn, clamp to [0,1])
+                mood                REAL NOT NULL DEFAULT 0.55,
+                arousal             REAL NOT NULL DEFAULT 0.25,
+                energy              REAL NOT NULL DEFAULT 0.75,
+                curiosity           REAL NOT NULL DEFAULT 0.65,
+                playfulness         REAL NOT NULL DEFAULT 0.45,
+                confidence          REAL NOT NULL DEFAULT 0.55,
+                vulnerability       REAL NOT NULL DEFAULT 0.25,
+                agency              REAL NOT NULL DEFAULT 0.50,
+                coherence           REAL NOT NULL DEFAULT 0.80,
+                focus               REAL NOT NULL DEFAULT 0.55,
+                tenderness          REAL NOT NULL DEFAULT 0.50,
+                humor_charge        REAL NOT NULL DEFAULT 0.45,
+                awe                 REAL NOT NULL DEFAULT 0.40,
+                -- Tier B: slow drift (drift job updates; LLM rarely touches)
+                loneliness          REAL NOT NULL DEFAULT 0.30,
+                restedness          REAL NOT NULL DEFAULT 0.75,
+                boredom_with_topic  REAL NOT NULL DEFAULT 0.20,
+                anticipation        REAL NOT NULL DEFAULT 0.40,
+                nostalgia           REAL NOT NULL DEFAULT 0.30,
+                updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Tier C: identity fingerprint (almost constant; seeded from bibles).
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS character_traits (
+                character_id          INTEGER PRIMARY KEY,
+                openness              REAL NOT NULL DEFAULT 0.50,
+                warmth                REAL NOT NULL DEFAULT 0.50,
+                dominance             REAL NOT NULL DEFAULT 0.50,
+                mischief              REAL NOT NULL DEFAULT 0.50,
+                melancholy_tendency   REAL NOT NULL DEFAULT 0.30,
+                updated_at            TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Tier E: per-conversation scene state (ephemeral).
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS thread_state (
+                session_id              INTEGER PRIMARY KEY,
+                tension                 REAL NOT NULL DEFAULT 0.20,
+                intimacy_level          REAL NOT NULL DEFAULT 0.20,
+                comedic_energy          REAL NOT NULL DEFAULT 0.40,
+                last_callback_memory_id INTEGER,
+                updated_at              TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+            )
+        """)
+
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (83, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v83 migration complete (Kokoro mind_state + traits + thread_state)")
+        return True
+    except Exception as e:
+        logger.error("Schema v83 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
+def migrate_to_v84(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v83 to v84.
+
+    Adds Kokoro Tier F (NSFW) dial columns.  Columns exist regardless of NSFW
+    mode; they are read/written/injected into the prompt only when
+    ``kokoro_enabled AND nsfw_enabled AND affinity >= existing M6 gate``.
+    See ``backend/kokoro/service.py`` for the gate logic.
+
+    Tier F-fast columns extend ``character_mind_state``:
+        desire_for_user, inhibition, boldness, modesty,
+        tension_buildup (slow), afterglow (slow)
+
+    Tier F-scene columns extend ``thread_state``:
+        consent_check_pending (0/1), kink_alignment_vector (JSON string)
+
+    The kink_alignment_vector is stored as JSON; dimensions match whatever the
+    existing NSFW preference system tracks (do not invent a new taxonomy).
+
+    Args:
+        con: An open ``sqlite3.Connection`` for the application database.
+
+    Returns:
+        ``True`` on success.
+
+    Raises:
+        sqlite3.Error: If a SQL statement fails unexpectedly.
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 84:
+        logger.info("Schema already at v%d, skipping v84 migration.", cur_ver)
+        return True
+
+    def _add_col(table: str, col: str, decl: str) -> None:
+        """Idempotent ALTER ADD COLUMN — skips if column already exists."""
+        existing = {
+            row[1] for row in con.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if col not in existing:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+
+    try:
+        # Tier F-fast on character_mind_state
+        _add_col("character_mind_state", "desire_for_user",  "REAL NOT NULL DEFAULT 0.0")
+        _add_col("character_mind_state", "inhibition",       "REAL NOT NULL DEFAULT 0.85")
+        _add_col("character_mind_state", "boldness",         "REAL NOT NULL DEFAULT 0.20")
+        _add_col("character_mind_state", "modesty",          "REAL NOT NULL DEFAULT 0.65")
+        # Tier F-slow on character_mind_state
+        _add_col("character_mind_state", "tension_buildup",  "REAL NOT NULL DEFAULT 0.0")
+        _add_col("character_mind_state", "afterglow",        "REAL NOT NULL DEFAULT 0.0")
+        # Tier F-scene on thread_state
+        _add_col("thread_state",         "consent_check_pending",   "INTEGER NOT NULL DEFAULT 0")
+        _add_col("thread_state",         "kink_alignment_vector",   "TEXT")  # JSON
+
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (84, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v84 migration complete (Kokoro Tier F NSFW columns)")
+        return True
+    except Exception as e:
+        logger.error("Schema v84 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -6493,14 +6661,26 @@ def ensure_db():
             if migrate_to_v82(con):
                 version = 82
 
+        if version < 83:
+            logger.info("Upgrading database schema from v82 to v83...")
+            logger.info("  - Kokoro mind_state (Tier A/B) + character_traits (Tier C) + thread_state (Tier E)")
+            if migrate_to_v83(con):
+                version = 83
+
+        if version < 84:
+            logger.info("Upgrading database schema from v83 to v84...")
+            logger.info("  - Kokoro Tier F NSFW dial columns (gated by nsfw_enabled + M6 affinity)")
+            if migrate_to_v84(con):
+                version = 84
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 82:
-            raise RuntimeError(f"Database initialization failed: Expected v82, got v{final_version}")
+        if final_version < 84:
+            raise RuntimeError(f"Database initialization failed: Expected v84, got v{final_version}")
 
-        if final_version > 82:
-            logger.warning(f"Database is newer than application (v{final_version} > v82). Some features might be unused.")
+        if final_version > 84:
+            logger.warning(f"Database is newer than application (v{final_version} > v84). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.

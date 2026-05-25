@@ -2409,7 +2409,20 @@ def _get_rp_style_injection(preset: str) -> str:
         >>> assert "narration" in text.lower()
     """
     _RP_STYLES: dict[str, str] = {
-        "none": "",
+        # Session-46: even in "none" mode, instruct the model to wrap
+        # physical actions in asterisks. Without this, small/local models
+        # produce inconsistent formatting — e.g. "warmth. smiles softly"
+        # (no italics) on one turn and "*smiles softly*" (rendered italic
+        # via markdown) on the next. User feedback: "i dont understand
+        # why AI character messages sometimes have their gestures properly
+        # italicized and other times not". One instruction, applied
+        # everywhere, normalizes the output.
+        "none": (
+            "\n\nFormatting:\n"
+            "- Wrap physical actions, gestures, and body language in single asterisks: *smiles softly*, *tilts head*, *leans closer*.\n"
+            "- Do NOT use bracket annotations like [emotion: happy] or [gesture: nod] — those are parsed and stripped, not displayed.\n"
+            "- Spoken dialogue stays as plain text (no quotes needed)."
+        ),
         "light_rp": (
             "\n\n[RP Style: Light]\n"
             "Use *asterisks for actions and narration*. Keep narration brief — "

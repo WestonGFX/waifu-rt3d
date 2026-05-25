@@ -67,7 +67,11 @@ export function ChatThread() {
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
 
   // ── AIE Phase C: Feedback signal preferences ────────────────────────────
-  const [feedbackEnabled, setFeedbackEnabled] = useState(true);
+  // Session-46 declutter: 👍/👎 feedback buttons under every assistant
+  // message are emoji-reaction noise that doesn't compound into anything
+  // visible. User specifically said: "i hate the feature we added that
+  // lets users emoji react to messages". Default OFF.
+  const [feedbackEnabled, setFeedbackEnabled] = useState(false);
   useEffect(() => {
     api.getFeedbackPreferences()
       .then(prefs => setFeedbackEnabled(prefs.explicit_signals_enabled))

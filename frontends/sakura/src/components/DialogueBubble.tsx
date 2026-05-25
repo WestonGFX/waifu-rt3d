@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Volume2, Pin, ChevronLeft, ChevronRight, ChevronsRight, RefreshCw, Copy, Trash2, Pencil, Check, X, Bookmark, Clock } from 'lucide-react';
+import { Volume2, Pin, ChevronLeft, ChevronRight, ChevronsRight, RefreshCw, Copy, Trash2, Pencil, Check, X, Clock } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
 import { ChatImageLightbox } from './ChatImageLightbox';
@@ -607,6 +607,8 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
    *
    * @param e - Mouse event (stopped from propagating to the bubble)
    */
+  // @ts-expect-error — intentionally unused after Pin toggle button removal
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleTogglePin = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!message.serverMessageId) return;
@@ -620,7 +622,11 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
     }
   };
 
+  // Session-46: M2-item10 `handleSaveToMemory` no longer wired to a UI
+  // button (Bookmark removed). Function kept for now in case we restore.
   /** M2-item10: Save message as a Permanent (T3) memory. */
+  // @ts-expect-error — intentionally unused after Bookmark button removal
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleSaveToMemory = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!message.serverMessageId || savedToMemory) return;
@@ -757,21 +763,9 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               <Pin size={9} />
             </span>
           )}
-          {/* Pin toggle button (visible on hover when serverMessageId exists) */}
-          {hovered && message.serverMessageId != null && (
-            <button
-              onClick={handleTogglePin}
-              className="absolute -top-1.5 -left-1.5 flex items-center justify-center w-4 h-4 rounded-full transition-all"
-              style={{
-                backgroundColor: pinned ? 'var(--color-accent)' : 'var(--color-surface)',
-                color: pinned ? 'var(--color-accent-text)' : 'var(--color-text-tertiary)',
-                border: '1px solid var(--color-border)',
-              }}
-              title={pinned ? 'Unpin message' : 'Pin message'}
-            >
-              <Pin size={9} />
-            </button>
-          )}
+          {/* Session-46 cut: pin-toggle button removed (user feedback: buggy
+              + clutter). Existing pinned indicator above still renders for
+              already-pinned messages, just no way to add/remove from here. */}
           {editing ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 200 }}>
               <textarea
@@ -871,22 +865,9 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
             <Pin size={9} />
           </span>
         )}
-        {/* Feature #10: Pin toggle button — visible on hover when serverMessageId is available */}
-        {hovered && message.serverMessageId != null && (
-          <button
-            onClick={handleTogglePin}
-            className="absolute top-2 right-2 flex items-center justify-center w-5 h-5 rounded-full transition-all"
-            style={{
-              backgroundColor: pinned ? 'var(--color-accent)' : 'var(--color-accent-soft)',
-              color: pinned ? 'var(--color-accent-text)' : 'var(--color-accent)',
-              border: '1px solid var(--color-accent)',
-              opacity: pinned ? 1 : 0.8,
-            }}
-            title={pinned ? 'Unpin message' : 'Pin message'}
-          >
-            <Pin size={10} />
-          </button>
-        )}
+        {/* Session-46 cut: second Pin toggle button removed (user feedback:
+            buggy + clutter). See the parallel removal of the assistant-bubble
+            Pin toggle and the "Remember this" Bookmark earlier in this file. */}
         {/* Phase 15: Resolve per-message emotion avatar (or static fallback) */}
         <div className="flex items-center gap-2 mb-2">
           {(() => {
@@ -1183,17 +1164,10 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
             >
               {copied ? <Check size={11} /> : <Copy size={11} />}
             </button>
-            {message.serverMessageId != null && (
-              <button
-                onClick={handleSaveToMemory}
-                disabled={savedToMemory}
-                className="p-0.5 rounded transition-colors"
-                style={{ color: savedToMemory ? '#f59e0b' : 'var(--color-text-tertiary)' }}
-                title={savedToMemory ? 'Saved to memory!' : 'Remember this (save to permanent memory)'}
-              >
-                <Bookmark size={11} style={{ fill: savedToMemory ? '#f59e0b' : 'none' }} />
-              </button>
-            )}
+            {/* Session-46 cut: "Remember this" Bookmark button removed
+                (user feedback: buggy). Memory is now driven entirely by the
+                Kokoro `memoryWrite` field on assistant turns + the existing
+                tiered_memory promotion path. Manual pinning was redundant. */}
             {message.serverMessageId != null && (
               <button
                 onClick={handleGenerateVoice}

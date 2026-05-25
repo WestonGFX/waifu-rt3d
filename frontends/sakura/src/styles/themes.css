@@ -602,3 +602,168 @@
   --bg-ambience: transparent;
   color-scheme: light;
 }
+
+/* ─── Rose Pine (Dark) — cozy dusky slate, rose gold & soft lavender ───── */
+[data-theme="rose-pine"] {
+  --color-background: #191724;
+  --color-surface: #1f1d2e;
+  --color-surface-raised: #26233a;
+  --color-border: #403c58;
+  --color-border-subtle: rgba(235, 188, 186, 0.10);
+  --color-text-primary: #e0def4;
+  --color-text-secondary: #908caa;
+  --color-text-tertiary: #5c567a;
+  --color-accent: #ebbcba;
+  --color-accent-hover: #f6c177;
+  --color-accent-soft: rgba(235, 188, 186, 0.15);
+  --color-accent-text: #191724;
+  --color-accent-gradient: linear-gradient(135deg, #ebbcba 0%, #c4a7e7 100%);
+  --color-action: #31748f;
+  --color-success: #9ccfd8;
+  --color-warning: #f6c177;
+  --color-danger: #eb6f92;
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.30), 0 0 1px rgba(235, 188, 186, 0.08);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.48), 0 0 1px rgba(235, 188, 186, 0.06);
+  --shadow-glow: 0 0 32px rgba(235, 188, 186, 0.12);
+  --blur-surface: blur(24px) saturate(1.3);
+  --radius-card: 14px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.025;
+  --bg-ambience: rgba(235, 188, 186, 0.05);
+  color-scheme: dark;
+}
+
+/* ─── Synthwave '84 (Cyberpunk Dark) — electric neon-pink & cyan ───────── */
+[data-theme="synthwave84"] {
+  --color-background: #0e0d16;
+  --color-surface: #171520;
+  --color-surface-raised: #211c30;
+  --color-border: #322550;
+  --color-border-subtle: rgba(0, 240, 255, 0.15);
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #a6a0c0;
+  --color-text-tertiary: #615b80;
+  --color-accent: #ff007f;
+  --color-accent-hover: #ff55b8;
+  --color-accent-soft: rgba(255, 0, 127, 0.15);
+  --color-accent-text: #0e0d16;
+  --color-accent-gradient: linear-gradient(135deg, #ff007f 0%, #00f0ff 100%);
+  --color-action: #00f0ff;
+  --color-success: #39ff14;
+  --color-warning: #ffff33;
+  --color-danger: #ff3333;
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35), 0 0 1px rgba(255, 0, 127, 0.12);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.55), 0 0 1px rgba(255, 0, 127, 0.10);
+  --shadow-glow: 0 0 32px rgba(255, 0, 127, 0.20);
+  --blur-surface: blur(24px) saturate(1.5);
+  --radius-card: 12px;
+  --radius-button: 8px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.035;
+  --bg-ambience: rgba(255, 0, 127, 0.08);
+  color-scheme: dark;
+}
+
+/* ─── Nord Aurora (Dark) — ice-cold Polar Night with Frost accents ────── */
+[data-theme="nord-aurora"] {
+  --color-background: #2e3440;
+  --color-surface: #242933;
+  --color-surface-raised: #3b4252;
+  --color-border: #434c5e;
+  --color-border-subtle: rgba(136, 192, 208, 0.12);
+  --color-text-primary: #eceff4;
+  --color-text-secondary: #d8dee9;
+  --color-text-tertiary: #4c566a;
+  --color-accent: #88c0d0;
+  --color-accent-hover: #8fbcbb;
+  --color-accent-soft: rgba(136, 192, 208, 0.15);
+  --color-accent-text: #2e3440;
+  --color-accent-gradient: linear-gradient(135deg, #88c0d0 0%, #81a1c1 100%);
+  --color-action: #b48ead;
+  --color-success: #a3be8c;
+  --color-warning: #ebcb8b;
+  --color-danger: #bf616a;
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.22), 0 0 1px rgba(136, 192, 208, 0.08);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.38), 0 0 1px rgba(136, 192, 208, 0.06);
+  --shadow-glow: 0 0 32px rgba(136, 192, 208, 0.10);
+  --blur-surface: blur(24px) saturate(1.2);
+  --radius-card: 14px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.020;
+  --bg-ambience: rgba(136, 192, 208, 0.06);
+  color-scheme: dark;
+}
+
+/* ─── Catppuccin Mocha (Dark) — deep dark velvet pastel ───────────────── */
+[data-theme="catppuccin-mocha"] {
+  --color-background: #1e1e2e;
+  --color-surface: #181825;
+  --color-surface-raised: #11111b;
+  --color-border: #313244;
+  --color-border-subtle: rgba(203, 166, 247, 0.12);
+  --color-text-primary: #cdd6f4;
+  --color-text-secondary: #a6adc8;
+  --color-text-tertiary: #585b70;
+  --color-accent: #cba6f7;
+  --color-accent-hover: #f5c2e7;
+  --color-accent-soft: rgba(203, 166, 247, 0.15);
+  --color-accent-text: #11111b;
+  --color-accent-gradient: linear-gradient(135deg, #cba6f7 0%, #89b4fa 100%);
+  --color-action: #f9e2af;
+  --color-success: #a6e3a1;
+  --color-warning: #f9e2af;
+  --color-danger: #f38ba8;
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.30), 0 0 1px rgba(203, 166, 247, 0.08);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.48), 0 0 1px rgba(203, 166, 247, 0.06);
+  --shadow-glow: 0 0 32px rgba(203, 166, 247, 0.12);
+  --blur-surface: blur(24px) saturate(1.3);
+  --radius-card: 14px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.030;
+  --bg-ambience: rgba(203, 166, 247, 0.06);
+  color-scheme: dark;
+}
+
+/* ─── Gruvbox Material (Dark) — retro warm organic medium-charcoal ─────── */
+[data-theme="gruvbox-material"] {
+  --color-background: #282828;
+  --color-surface: #1d2021;
+  --color-surface-raised: #32302f;
+  --color-border: #504945;
+  --color-border-subtle: rgba(215, 153, 33, 0.12);
+  --color-text-primary: #fbf1c7;
+  --color-text-secondary: #d5c4a1;
+  --color-text-tertiary: #928374;
+  --color-accent: #d79921;
+  --color-accent-hover: #fabd2f;
+  --color-accent-soft: rgba(215, 153, 33, 0.15);
+  --color-accent-text: #282828;
+  --color-accent-gradient: linear-gradient(135deg, #d79921 0%, #af3a03 100%);
+  --color-action: #8ec07c;
+  --color-success: #b8bb26;
+  --color-warning: #fabd2f;
+  --color-danger: #fb4934;
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.32), 0 0 1px rgba(215, 153, 33, 0.08);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.50), 0 0 1px rgba(215, 153, 33, 0.06);
+  --shadow-glow: 0 0 32px rgba(215, 153, 33, 0.12);
+  --blur-surface: blur(24px) saturate(1.2);
+  --radius-card: 14px;
+  --radius-button: 10px;
+  --radius-input: 8px;
+  --font-body: 'Nunito';
+  --font-display: 'Fraunces';
+  --bg-grain-opacity: 0.025;
+  --bg-ambience: rgba(215, 153, 33, 0.06);
+  color-scheme: dark;
+}

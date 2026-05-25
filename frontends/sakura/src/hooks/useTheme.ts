@@ -6,7 +6,8 @@ export type ThemeMode =
   | 'matcha' | 'lavender' | 'peach' | 'midnight'
   | 'bubblegum' | 'blurple' | 'catppuccin-latte' | 'catppuccin-macchiato'
   | 'monokai' | 'darcula' | 'dracula' | 'tokyo-night'
-  | 'pop-bubblegum' | 'pop-lemonade';
+  | 'pop-bubblegum' | 'pop-lemonade'
+  | 'rose-pine' | 'synthwave84' | 'nord-aurora' | 'catppuccin-mocha' | 'gruvbox-material';
 
 interface ThemeStore {
   theme: ThemeMode;
@@ -19,9 +20,10 @@ const CYCLE: ThemeMode[] = [
   // Light (9)
   'sakura', 'crystal', 'catppuccin-latte', 'matcha', 'lavender',
   'peach', 'bubblegum', 'pop-bubblegum', 'pop-lemonade',
-  // Dark (9)
+  // Dark (14)
   'dark-sakura', 'dark-crystal', 'midnight', 'blurple', 'catppuccin-macchiato',
   'monokai', 'darcula', 'dracula', 'tokyo-night',
+  'rose-pine', 'synthwave84', 'nord-aurora', 'catppuccin-mocha', 'gruvbox-material',
 ];
 
 export const useTheme = create<ThemeStore>()(

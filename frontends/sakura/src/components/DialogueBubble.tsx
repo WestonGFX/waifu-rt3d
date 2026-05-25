@@ -622,6 +622,13 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
     setEditing(false);
   }, [message.text]);
 
+  /** Double-click on message text to enter edit mode (onEdit prop required). */
+  const handleEditStart = useCallback(() => {
+    if (!onEdit || message.status !== 'sent' || editing) return;
+    setEditText(message.text);
+    setEditing(true);
+  }, [onEdit, message.status, message.text, editing]);
+
   // Director Mode messages: centered amber/gold cards with clapperboard icon
   if (message.role === 'director') {
     return (
@@ -671,7 +678,9 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
       >
         <div
           className="dialogue-bubble dialogue-you px-4 py-2.5 max-w-[75%] text-sm relative"
-          style={{ borderRadius: 'var(--radius-card)' }}
+          style={{ borderRadius: 'var(--radius-card)', cursor: onEdit && message.status === 'sent' && !editing ? 'text' : undefined }}
+          onDoubleClick={handleEditStart}
+          title={onEdit && message.status === 'sent' && !editing ? 'Double-click to edit' : undefined}
         >
           {/* Pin indicator (always visible when pinned) */}
           {pinned && (
@@ -826,7 +835,12 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
             </button>
           )}
         </div>
-        <div className="text-sm leading-relaxed" style={{ color: 'var(--color-text-primary)' }}>
+        <div
+          className="text-sm leading-relaxed"
+          style={{ color: 'var(--color-text-primary)', cursor: onEdit && message.status === 'sent' && !editing ? 'text' : undefined }}
+          onDoubleClick={handleEditStart}
+          title={onEdit && message.status === 'sent' && !editing ? 'Double-click to edit' : undefined}
+        >
           {message.status === 'pending' ? (
             <ThinkingPlaceholder
               charName={character?.name}

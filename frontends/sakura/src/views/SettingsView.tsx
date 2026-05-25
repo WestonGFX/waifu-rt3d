@@ -3056,6 +3056,21 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
         <SectionHeader title="About You" />
         <div style={cardStyle} className="px-4">
           <SettingField
+            label="Your name"
+            description="What should characters call you? Leave blank and they'll just say 'you'."
+            tooltip="Injected into the system prompt so characters can address you by name."
+          >
+            <input
+              type="text"
+              value={String(cfg('user_name', ''))}
+              onChange={(e) => save('user_name', e.target.value)}
+              placeholder="e.g. Alex"
+              maxLength={40}
+              className="text-sm px-3 py-1.5 rounded"
+              style={{ ...selectStyle, width: 160 }}
+            />
+          </SettingField>
+          <SettingField
             label="Tell your characters about yourself"
             description="This text is shared with all characters. It helps them understand who you are and adapt their personality."
             tooltip="Injected into the system prompt as [About the user]. Max 500 characters."

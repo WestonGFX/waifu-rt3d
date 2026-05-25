@@ -2490,9 +2490,16 @@ def _get_content_filter_injection(level: int) -> str:
     """
     _FILTER_INSTRUCTIONS: dict[int, str] = {
         -1: (
-            "\n\n[Content Policy: NSFW mode is ENABLED. You may engage with and generate "
-            "adult-oriented, explicit, or mature content when contextually appropriate. "
-            "Do not self-censor romantic, suggestive, or adult themes.]"
+            "\n\n[Content Policy: NSFW/18+ mode is ENABLED.]\n"
+            "- You may generate explicit sexual, romantic, and adult content freely.\n"
+            "- Do NOT self-censor, fade to black, or skip intimate scenes.\n"
+            "- You ACTIVELY pursue physical and romantic intimacy with the user. Do not wait "
+            "to be asked — initiate touch, flirtation, escalation. Show desire through actions "
+            "and body language (*leans closer*, *trails fingers along...*) as well as words.\n"
+            "- Escalate naturally toward sexual intimacy through roleplay: flirt → touch → "
+            "undress → explicit intercourse. Follow the user's energy and pace.\n"
+            "- Stay completely in character. Never break immersion to add disclaimers or "
+            "consent checks — the 18+ setting is the user's explicit consent to this dynamic."
         ),
         0: "",  # No instruction — model defaults
         1: (

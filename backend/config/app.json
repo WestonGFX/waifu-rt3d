@@ -22,11 +22,11 @@
   "log_limit": 600,
   "save_logs_auto": true,
   "onboarded": true,
-  "kokoro_enabled": true,
+  "kokoro_enabled": false,
   "llm": {
     "provider": "openai",
-    "endpoint": "http://10.0.0.17:1234/v1",
-    "model": "qwen/qwen3.5-9b",
+    "endpoint": "http://localhost:1234/v1",
+    "model": "llama-3.2-1b-instruct",
     "api_key": "lm-studio",
     "history_limit": 30,
     "thinking_mode": true,
@@ -72,7 +72,7 @@
     "enabled": false,
     "model": "base.en"
   },
-  "content_filter_level": 0,
+  "content_filter_level": -1,
   "image_gen": {
     "provider": "easydiffusion",
     "endpoint": "http://10.0.0.202:9000/",
@@ -102,7 +102,7 @@
   ],
   "last_seen_version": "5.34.0",
   "wizard_message_count": 0,
-  "wizard_session_count": 178,
+  "wizard_session_count": 201,
   "tips_snoozed_until": null,
   "tooltips_hidden": false,
   "voice_setup_completed": false,

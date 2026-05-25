@@ -1,14 +1,35 @@
 # Current Project Status
 
-**Last updated:** 2026-05-24 (session 45 — Kokoro Engine v1 Phases 1-11)
-**Branch:** master · 4 new local commits ahead of `1fe562a` (NOT yet pushed).
-**Schema version:** v85 (kokoro_safety_events; up from v82).
-**Tests:** **2,924 backend** + **~317 frontend** passing (1 pre-existing flake in `chatStore.pin.test.ts` — unrelated), tsc clean.
+**Last updated:** 2026-05-25 (session 46 — v1-Lite declutter pass; user feedback marathon)
+**Branch:** master · 13 new local commits ahead of `61b870c` (NOT yet pushed).
+**Schema version:** v85 (unchanged this session).
+**Tests:** **2,956 backend** (+32 new) + ~317 frontend passing (1 pre-existing `chatStore.pin.test.ts` flake — unrelated), tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session 46 (2026-05-25) — v1-Lite declutter pass. 13 commits. User feedback marathon. See `docs/SESSION_HANDOFF.md` for the full context.**
+
+User opened with a `/goal` to ship the app, did a multi-persona test session, then went hard: *"junk. unusable. never enjoyed it past 5 chat turns."* The rest of the session was a strategic declutter — cutting feature accretion that buried the chat surface.
+
+| Theme | Commits |
+|---|---|
+| qwen3 / reasoning-model compatibility (non-stream fallback, SSE fallback, /no_think, Kokoro auto-bypass, timeout 35→60s, /api/llm/probe endpoint) | `f915264` `c7c0ab5` `f0a81d6` `c2b00d2` `6fc9de5` |
+| Multi-persona test report | `db9f191` |
+| Bracket annotation strip (`[emotional expression:…]`, `[gesture:…]`, un-bracketed `EMOTION:` footer); proactive popup → chat message | `05a4377` |
+| v1-Lite UI cuts: bond pill, achievement toast, frontend switcher, quick-chips off, NSFW 8 overlays, Kokoro 22→3 contract, emoji thumbs, Pin/Bookmark, baseline asterisks instruction, GreetingCard popup, BondLevelUp + MilestoneCelebration popups, 5-emoji reaction bar, Brain "Remember" button, Rin-chan identity guardrail | `2b57283` `c874436` `9439d68` `d2a4a4d` `bea83ed` `7f662b4` |
+
+**Live status at session end:** chat surface is dramatically simpler. No gamification chrome in header. No popups. Italic actions render consistently. The qwen3 empty-bubble P0 is fully fixed across both streaming + non-streaming paths. Kokoro contract is ~70 tokens/turn (down from ~150).
+
+**Runtime drift in working tree:** `backend/config/app.json` swapped to `localhost:1234`/`llama-3.2-1b-instruct` for persona testing (chat actually works at this model size). User's intended config is `10.0.0.17:1234`/`qwen3.5-9b` — they routinely revert. Action for next session: confirm.
+
+**Push gate:** clear (no active OPEN BUG / UNFIXED / BLOCKER markers). 13 commits await user-authorized push.
+
+**Open queue (full list in `docs/SESSION_HANDOFF.md`):** AIE 12-module feature flag · Bond XP grant disable · footer chrome strip · settings collapse · settings clipping fix · settings + memory mutex · theme picker 27→4 · LLM probe wire-up · Rin-chan post-process regex (if needed) · bond burn-down · AIE rethink · Girly/Neon archive · NSFW endpoint cleanup · server.py refactor.
+
+---
 
 **Session 45 (2026-05-24) — Kokoro Engine v1 (tiered mind state + structured embodiment).**
 

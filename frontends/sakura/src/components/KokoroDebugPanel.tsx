@@ -8,8 +8,67 @@
  * The panel is rendered when `?debug=kokoro` is present in the URL or when
  * the user has dev_mode enabled in settings.  It does NOT poll — it
  * displays the last payload from chat.
+ *
+ * The optional `qa` prop surfaces rolling parse-quality metrics from
+ * `GET /api/kokoro/qa/{charId}`.  When `parse_ok_total === 0` the badge shows
+ * "n/a"; otherwise it is colour-coded green / yellow / red by rate.
  */
 import type { KokoroPayload, KokoroStateDelta } from '../lib/kokoro';
+
+/**
+ * Shape of the `/api/kokoro/qa/{charId}` response.
+ * Only the fields consumed by this panel are declared here; callers may pass
+ * the full API response without narrowing.
+ */
+export interface KokoroQaResponse {
+  ok: boolean;
+  boundary_count: number;
+  parse_ok_total: number;
+  parse_ok_count: number;
+  parse_ok_rate: number;
+  window_hours: number;
+}
+
+/**
+ * Compact inline badge showing rolling parse-OK rate from the QA endpoint.
+ *
+ * Colour semantics:
+ *   - No data (total === 0)  → muted "n/a"
+ *   - Rate ≥ 0.8             → green  "Parse ✓ NN%"
+ *   - 0.5 ≤ rate < 0.8       → yellow "Parse ⚠ NN%"
+ *   - Rate < 0.5             → red    "Parse ✗ NN%"
+ */
+function ParseOkBadge({ qa }: { qa: KokoroQaResponse | null | undefined }) {
+  if (!qa) return null;
+
+  const { parse_ok_total, parse_ok_rate } = qa;
+
+  let color: string;
+  let label: string;
+
+  if (parse_ok_total === 0) {
+    color = 'var(--color-text-tertiary, rgba(180,180,180,0.6))';
+    label = 'Parse n/a';
+  } else {
+    const pct = Math.round(parse_ok_rate * 100);
+    if (parse_ok_rate >= 0.8) {
+      color = 'var(--color-success, #4ade80)';
+      label = `Parse ✓ ${pct}%`;
+    } else if (parse_ok_rate >= 0.5) {
+      color = 'var(--color-warning, #facc15)';
+      label = `Parse ⚠ ${pct}%`;
+    } else {
+      color = 'var(--color-error, #f87171)';
+      label = `Parse ✗ ${pct}%`;
+    }
+  }
+
+  return (
+    <span style={{ color, fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>
+      {label}
+    </span>
+  );
+}
 
 /** Render a single dial row with current value + this-turn delta arrow. */
 function DialRow({
@@ -59,9 +118,16 @@ interface KokoroDebugPanelProps {
    * the panel reads deltas only.
    */
   dialValues?: Record<string, number>;
+  /**
+   * Rolling parse-quality data from `GET /api/kokoro/qa/{charId}`.
+   * When provided, a colour-coded "Parse ✓/⚠/✗" badge is displayed below
+   * the per-turn diagnostics line.  Omit until the orchestrator wires the
+   * fetch — the badge simply does not render when this prop is absent.
+   */
+  qa?: KokoroQaResponse | null;
 }
 
-export function KokoroDebugPanel({ payload, dialValues }: KokoroDebugPanelProps) {
+export function KokoroDebugPanel({ payload, dialValues, qa }: KokoroDebugPanelProps) {
   if (!payload) {
     return (
       <div style={{ padding: 12, fontSize: 12, opacity: 0.6 }}>
@@ -94,9 +160,14 @@ export function KokoroDebugPanel({ payload, dialValues }: KokoroDebugPanelProps)
     >
       <div style={{ fontWeight: 600, marginBottom: 6 }}>Kokoro · debug</div>
 
-      <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 8 }}>
+      <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
         parse={payload.diagnostics.parseOk ? 'ok' : 'fallback'} · bond={payload.diagnostics.bondLevel} · enabled={String(payload.diagnostics.kokoroEnabled)}
       </div>
+      {qa && (
+        <div style={{ marginBottom: 8 }}>
+          <ParseOkBadge qa={qa} />
+        </div>
+      )}
 
       <div style={{ marginBottom: 8 }}>
         <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 2 }}>Tier A — fast</div>

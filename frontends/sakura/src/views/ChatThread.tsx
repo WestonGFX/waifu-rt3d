@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles, SlidersHorizontal, Check, MessageCircle, Zap, Italic, Pin, Brain } from 'lucide-react';
+import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles, SlidersHorizontal, Check, MessageCircle, Zap, Italic, Pin } from 'lucide-react';
 import { VNTextBox } from '../components/VNTextBox';
 import { VNPortrait } from '../components/VNPortrait';
 import { useAppStore } from '../stores/appStore';
@@ -25,7 +25,8 @@ import { SessionDrawer } from '../components/SessionDrawer';
 import { GesturePicker } from '../components/GesturePicker';
 import type { GestureName, ExpressionName } from '../components/GesturePicker';
 import { VoiceConversationPanel } from '../components/VoiceConversationPanel';
-import { GreetingCard } from '../components/GreetingCard';
+// Session-46: GreetingCard removed from render. Import dropped.
+// import { GreetingCard } from '../components/GreetingCard';
 import { RichComposer, type RichComposerHandle } from '../components/RichComposer';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -54,6 +55,7 @@ type MicState = 'idle' | 'recording' | 'processing';
 export function ChatThread() {
   const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode, config, saveConfig, layoutMode } = useAppStore();
   const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode, regenerateImage, continueGeneration, toggleReaction } = useChatStore();
+  void toggleReaction; // session-46: emoji reactions removed.
   const scrollRef = useRef<HTMLDivElement>(null);
   // Gaze flick: fire once per typing burst, debounced 2s so holding a key doesn't spam
   const gazeFlickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -84,6 +86,7 @@ export function ChatThread() {
   const [diaryDismissed, setDiaryDismissed] = useState(false);
   const [greetingText, setGreetingText] = useState<string | null>(null);
   const [greetingEmotion, setGreetingEmotion] = useState<string | undefined>(undefined);
+  void greetingEmotion;
   const [greetingDismissed, setGreetingDismissed] = useState(false);
 
   // ── Task 3: Push-to-talk mic state ──────────────────────────────────────
@@ -517,6 +520,7 @@ export function ChatThread() {
   // ── T0-3: Regenerate + branch switch ────────────────────────────────────
   const [regeneratingMsgId, setRegeneratingMsgId] = useState<number | null>(null);
   const [pinnedAsMemoryId, setPinnedAsMemoryId] = useState<number | null>(null);
+  void pinnedAsMemoryId; void setPinnedAsMemoryId; // session-46: Brain/Remember button removed; state kept dormant.
 
   const handleRegenerate = useCallback(async (serverMessageId: number) => {
     setRegeneratingMsgId(serverMessageId);
@@ -734,6 +738,7 @@ export function ChatThread() {
 
   const showDiary = diaryText && !diaryDismissed;
   const showGreeting = greetingText && !greetingDismissed;
+  void showGreeting;
 
   return (
     <div className="flex h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
@@ -806,15 +811,15 @@ export function ChatThread() {
           </div>
         )}
 
-        {/* Feature C4: Opening greeting card */}
-        {showGreeting && (
-          <GreetingCard
-            charName={activeCharacter.name}
-            greeting={greetingText!}
-            emotion={greetingEmotion}
-            onDismiss={() => setGreetingDismissed(true)}
-          />
-        )}
+        {/* Session-46 cut: GreetingCard "WILD POPUP HAS APPEARED" banner
+            removed per user directive. Greetings now flow as normal chat
+            messages via the proactive scheduler path, OR appear via the
+            character's empty-state greeting bubble below. Banner with X
+            dismiss button was visually a popup even though we called it
+            a "card". User: "this kind of code makes our app look SO cheap
+            and buggy". */}
+        {/* GreetingCard intentionally never rendered (see comment above). */}
+        {(undefined as React.ReactNode)}
 
         {/* ── Message list ──────────────────────────────────────────────── */}
         <div className="flex-1 min-h-0" style={{ position: 'relative' }}>
@@ -933,7 +938,10 @@ export function ChatThread() {
             }
             return visibleMessages.map((msg, idx) => {
             const isLastAssistant = msg.role === 'assistant' && idx === lastAssistantVisIdx;
+            // session-46: emoji-reactions removed; canReact retained but unused.
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const canReact = !!msg.serverMessageId && msg.status === 'sent';
+            void canReact;
             return (
               <div
                 key={msg.id}
@@ -956,123 +964,14 @@ export function ChatThread() {
                   onContinue={isLastAssistant ? continueGeneration : undefined}
                   feedbackEnabled={feedbackEnabled}
                 />
-                {/* Reaction picker — appears on hover */}
-                {canReact && (
-                  <div
-                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                    style={{
-                      position: 'absolute',
-                      [msg.role === 'user' ? 'right' : 'left']: 8,
-                      bottom: (msg.reactions?.length ?? 0) > 0 ? 28 : 4,
-                      display: 'flex', gap: 2,
-                      background: 'var(--color-surface)',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 20,
-                      padding: '2px 6px',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                      zIndex: 10,
-                    }}
-                  >
-                    {['👍', '❤️', '😂', '😮', '😭'].map((emoji) => (
-                      <button
-                        key={emoji}
-                        onClick={() => msg.serverMessageId && toggleReaction(msg.serverMessageId, emoji)}
-                        style={{
-                          background: (msg.reactions ?? []).includes(emoji)
-                            ? 'var(--color-accent-soft, rgba(var(--color-accent-rgb,100,100,200),0.15))'
-                            : 'transparent',
-                          border: 'none',
-                          borderRadius: 12,
-                          cursor: 'pointer',
-                          fontSize: 14,
-                          padding: '1px 3px',
-                          lineHeight: 1,
-                          transition: 'background 0.1s',
-                        }}
-                        title={emoji}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {/* "Remember this" — pin message as Permanent T3 memory */}
-                {canReact && msg.serverMessageId != null && (
-                  <div
-                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                    style={{
-                      position: 'absolute',
-                      [msg.role === 'user' ? 'left' : 'right']: 8,
-                      bottom: (msg.reactions?.length ?? 0) > 0 ? 28 : 4,
-                      zIndex: 10,
-                    }}
-                  >
-                    <button
-                      onClick={async () => {
-                        if (!msg.serverMessageId || pinnedAsMemoryId === msg.serverMessageId) return;
-                        try {
-                          await api.pinMessageAsMemory(msg.serverMessageId);
-                          setPinnedAsMemoryId(msg.serverMessageId);
-                          setTimeout(() => setPinnedAsMemoryId(null), 2000);
-                        } catch { /* silent */ }
-                      }}
-                      style={{
-                        background: pinnedAsMemoryId === msg.serverMessageId
-                          ? 'var(--color-accent-soft)'
-                          : 'var(--color-surface)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 20,
-                        padding: '3px 8px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                        color: pinnedAsMemoryId === msg.serverMessageId
-                          ? 'var(--color-accent)'
-                          : 'var(--color-text-tertiary)',
-                        fontSize: '0.65rem',
-                        transition: 'all 0.15s',
-                      }}
-                      title="Remember this — save as a permanent memory"
-                    >
-                      <Brain size={11} />
-                      {pinnedAsMemoryId === msg.serverMessageId ? 'Saved!' : 'Remember'}
-                    </button>
-                  </div>
-                )}
-                {/* Existing reactions row */}
-                {(msg.reactions?.length ?? 0) > 0 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
-                      gap: 4,
-                      paddingLeft: msg.role === 'user' ? 0 : 48,
-                      paddingRight: msg.role === 'user' ? 12 : 0,
-                      paddingBottom: 4,
-                    }}
-                  >
-                    {(msg.reactions ?? []).map((emoji, i) => (
-                      <button
-                        key={`${emoji}-${i}`}
-                        onClick={() => msg.serverMessageId && toggleReaction(msg.serverMessageId, emoji)}
-                        style={{
-                          background: 'var(--color-surface)',
-                          border: '1px solid var(--color-border)',
-                          borderRadius: 12,
-                          cursor: 'pointer',
-                          fontSize: 13,
-                          padding: '1px 6px',
-                          lineHeight: 1.4,
-                        }}
-                        title={`Remove ${emoji}`}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {/* Session-46 cut (user directive — TWICE): 5-emoji reaction
+                    picker (👍 ❤️ 😂 😮 😭), the Brain "Remember" button, AND
+                    the existing-reactions row all removed from chat. User:
+                    "i dont like or want any of those anymore". The DialogueBubble
+                    Pin + Bookmark were removed earlier; this is a SEPARATE
+                    reaction layer in ChatThread that I missed. `canReact` and
+                    `pinnedAsMemoryId` state kept dormant for now — no UI
+                    surface to trigger them. */}
               </div>
             );
           });

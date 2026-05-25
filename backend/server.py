@@ -2866,6 +2866,29 @@ def _build_prompt_sections(
             f"\n[About the user — written by them]: {_user_persona}"
         ))
 
+    # 1c-identity. Anti-confusion rule (session-46): small models sometimes
+    # call the user by the CHARACTER's name (e.g. character "Rin" addressed
+    # the user as "Rin-chan" because the name token dominated the prompt
+    # and the user_name slot was empty). This is creepy + immersion-breaking.
+    # Explicit guardrail forbids it.
+    _user_name = (cfg.get("user_name") or "").strip()
+    _char_name_for_guard = (char_name or "").strip()
+    if _char_name_for_guard:
+        _identity_lines = [
+            "## Identity rules (strict)",
+            f"- YOU are {_char_name_for_guard}. The user is a DIFFERENT person.",
+            f"- NEVER call the user '{_char_name_for_guard}', '{_char_name_for_guard}-chan', '{_char_name_for_guard}-kun', or any variation of your own name.",
+        ]
+        if _user_name:
+            _identity_lines.append(
+                f"- The user's name is {_user_name}. Address them as {_user_name} or 'you'."
+            )
+        else:
+            _identity_lines.append(
+                "- The user has not given you their name yet. Address them as 'you' — never invent a name or borrow one from the scene."
+            )
+        sections.append(_section("Identity Rules", "\n" + "\n".join(_identity_lines)))
+
     # 1b. Feature A4: Mood context prefix (time-of-day + session gap + affinity)
     if mood_enabled and char_name:
         try:

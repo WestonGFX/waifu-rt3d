@@ -131,6 +131,10 @@ function PetApp() {
 // narrowing). Flip any of these to `true` to restore the corresponding UI.
 const SHOW_NSFW_OVERLAYS: boolean = false;
 const SHOW_ACHIEVEMENT_TOAST: boolean = false;
+// Session-46 declutter: all gamification celebration modals
+// (BOND LEVEL UP, AFFINITY MILESTONE) — user directive: "this kind of code
+// makes our app look SO cheap and buggy". Flip to true to restore.
+const SHOW_CELEBRATION_POPUPS: boolean = false;
 
 function MainApp() {
   const {
@@ -614,23 +618,27 @@ function MainApp() {
       {/* B1: Cinematic immersion overlay — above everything except celebration */}
       {cinematicMode && activeCharacter && <CinematicOverlay />}
 
-      {/* Milestone celebration (full-screen, above everything) */}
-      <MilestoneCelebration
-        tier={celebrationTier}
-        charName={charNameForCelebration}
-        onClose={clearCelebration}
-      />
-
-      {/* Bond level-up celebration */}
-      {pendingLevelUp && (
-        <LevelUpCelebration
-          newLevel={pendingLevelUp.newLevel}
-          characterName={activeCharacter?.name ?? ''}
-          tier={pendingLevelUp.tier}
-          previousTier={pendingLevelUp.previousTier}
-          unlocks={pendingLevelUp.unlocks}
-          onDismiss={clearPendingLevelUp}
-        />
+      {/* Session-46 cut: ALL celebration modals (BOND LEVEL UP, AFFINITY
+          MILESTONE) — full-screen "WILD POPUP HAS APPEARED" pattern that
+          the user explicitly hates. State still mutates underneath; no UI. */}
+      {SHOW_CELEBRATION_POPUPS && (
+        <>
+          <MilestoneCelebration
+            tier={celebrationTier}
+            charName={charNameForCelebration}
+            onClose={clearCelebration}
+          />
+          {pendingLevelUp && (
+            <LevelUpCelebration
+              newLevel={pendingLevelUp.newLevel}
+              characterName={activeCharacter?.name ?? ''}
+              tier={pendingLevelUp.tier}
+              previousTier={pendingLevelUp.previousTier}
+              unlocks={pendingLevelUp.unlocks}
+              onDismiss={clearPendingLevelUp}
+            />
+          )}
+        </>
       )}
 
       {/* Session-46 declutter: achievement toasts (XP / streaks / milestones)

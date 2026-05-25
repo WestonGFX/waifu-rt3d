@@ -1350,6 +1350,16 @@ interface ThemePreset {
   customColors: CustomThemeColors | null;
 }
 
+/**
+ * The four presets shown in the picker by default (session-47 v1-Lite
+ * declutter queue item #7).  Everything else lives behind a
+ * "Show more themes" expander so first-time users see a curated set
+ * instead of a wall of 27.  Picked per user direction —
+ * Dark / Light / Sakura / Midnight.  Add to or reorder this list to
+ * change the featured row; the underlying presets keep working.
+ */
+const FEATURED_THEME_IDS = ['dark', 'light', 'sakura-custom', 'midnight'] as const;
+
 const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'dark',
@@ -1424,6 +1434,54 @@ const THEME_PRESETS: ThemePreset[] = [
     },
   },
   {
+    id: 'crystal',
+    label: 'Crystal',
+    dataTheme: 'crystal',
+    swatchAccent: '#6B8AED',
+    swatchBg: '#F6F8FB',
+    customColors: null,
+  },
+  {
+    id: 'dark-crystal',
+    label: 'Dark Crystal',
+    dataTheme: 'dark-crystal',
+    swatchAccent: '#7B9CF0',
+    swatchBg: '#141619',
+    customColors: null,
+  },
+  {
+    id: 'matcha',
+    label: 'Matcha',
+    dataTheme: 'matcha',
+    swatchAccent: '#6A9955',
+    swatchBg: '#F5F7F2',
+    customColors: null,
+  },
+  {
+    id: 'lavender',
+    label: 'Lavender',
+    dataTheme: 'lavender',
+    swatchAccent: '#9370DB',
+    swatchBg: '#F7F5FC',
+    customColors: null,
+  },
+  {
+    id: 'peach',
+    label: 'Peach',
+    dataTheme: 'peach',
+    swatchAccent: '#E67850',
+    swatchBg: '#FDF8F4',
+    customColors: null,
+  },
+  {
+    id: 'midnight',
+    label: 'Midnight',
+    dataTheme: 'midnight',
+    swatchAccent: '#FFB950',
+    swatchBg: '#0F1117',
+    customColors: null,
+  },
+  {
     id: 'bubblegum',
     label: 'Bubblegum',
     dataTheme: 'bubblegum',
@@ -1453,6 +1511,46 @@ const THEME_PRESETS: ThemePreset[] = [
     dataTheme: 'catppuccin-macchiato',
     swatchAccent: '#B7BDF8',
     swatchBg: '#1E2030',
+    customColors: null,
+  },
+  {
+    id: 'catppuccin-mocha',
+    label: 'Catppuccin Mocha',
+    dataTheme: 'catppuccin-mocha',
+    swatchAccent: '#cba6f7',
+    swatchBg: '#1e1e2e',
+    customColors: null,
+  },
+  {
+    id: 'rose-pine',
+    label: 'Rosé Pine',
+    dataTheme: 'rose-pine',
+    swatchAccent: '#ebbcba',
+    swatchBg: '#191724',
+    customColors: null,
+  },
+  {
+    id: 'synthwave84',
+    label: "Synthwave '84",
+    dataTheme: 'synthwave84',
+    swatchAccent: '#ff007f',
+    swatchBg: '#0e0d16',
+    customColors: null,
+  },
+  {
+    id: 'nord-aurora',
+    label: 'Nord Aurora',
+    dataTheme: 'nord-aurora',
+    swatchAccent: '#88c0d0',
+    swatchBg: '#2e3440',
+    customColors: null,
+  },
+  {
+    id: 'gruvbox-material',
+    label: 'Gruvbox Material',
+    dataTheme: 'gruvbox-material',
+    swatchAccent: '#d79921',
+    swatchBg: '#282828',
     customColors: null,
   },
   {
@@ -1571,6 +1669,12 @@ function ThemeCustomizationSection({
   const [activePreset, setActivePreset] = useState<string | null>(null);
   // Whether the custom color editor is expanded
   const [expanded, setExpanded] = useState(false);
+  // Whether the "more themes" expander is open (queue item #7 — show
+  // 4 featured presets by default, hide the other 23 behind a toggle).
+  // Auto-opens on mount if the user's currently-active preset is not in
+  // the featured set, so they can see what's selected.
+  const featuredIdSet = new Set<string>(FEATURED_THEME_IDS);
+  const [showAllThemes, setShowAllThemes] = useState(false);
 
   /**
    * Derive a CustomThemeColors snapshot from the appStore's flat CSS-var map.
@@ -1670,12 +1774,21 @@ function ThemeCustomizationSection({
       <div style={cardStyle} className="px-4 py-1">
 
         {/* ── Preset cards ─────────────────────────────────────────────── */}
+        {/* Session-47 (queue #7): split into 4 featured presets + an
+            expander for the remaining 23.  If the user's active preset
+            isn't in the featured set, force the expander open so they
+            can see their current selection.  Card rendering itself is
+            unchanged below. */}
         <div className="py-3">
           <p className="text-xs mb-2" style={{ color: 'var(--color-text-secondary)' }}>
             Choose a preset or customize individual colors below.
           </p>
-          <div className="flex flex-wrap gap-2">
-            {THEME_PRESETS.map((preset) => {
+          {(() => {
+            const featured = THEME_PRESETS.filter((p) => featuredIdSet.has(p.id));
+            const extras = THEME_PRESETS.filter((p) => !featuredIdSet.has(p.id));
+            const activeIsExtra = activePreset !== null && !featuredIdSet.has(activePreset);
+            const extrasVisible = showAllThemes || activeIsExtra;
+            const renderCard = (preset: ThemePreset) => {
               const isActive = activePreset === preset.id;
               return (
                 <button
@@ -1728,8 +1841,40 @@ function ThemeCustomizationSection({
                   </div>
                 </button>
               );
-            })}
-          </div>
+            };
+            return (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {featured.map(renderCard)}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAllThemes((v) => !v)}
+                  className="text-xs mt-2 mb-1"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    color: 'var(--color-text-secondary)',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    textUnderlineOffset: 3,
+                  }}
+                  aria-expanded={extrasVisible}
+                  data-testid="theme-show-all-toggle"
+                >
+                  {extrasVisible
+                    ? 'Show fewer themes'
+                    : `Show ${extras.length} more themes`}
+                </button>
+                {extrasVisible && (
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {extras.map(renderCard)}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         {/* ── Divider ──────────────────────────────────────────────────── */}

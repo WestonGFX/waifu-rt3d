@@ -85,9 +85,9 @@ Cache `tuner.load_user_profile()` and `behavior.compute_behavior_modifiers()` wi
 
 ## Recommendation
 
-1. **Implement `aie_lite_mode` flag** (Option B) — enable it by default when user turns AIE back on. Lite mode costs ~0 extra vs. not having AIE, but gains classifier + param_tuner (LLM quality) + safety gating.
-2. **Cache behavior/tuner** (Option C) — add TTL cache keyed by `char_id`. 5-minute TTL is semantically correct (preferences don't change turn-by-turn).
-3. **Deprecate `backend/adaptive/milestones.py`** — it's a dead-end; `backend/bond/milestones.py` owns this domain.
+1. **Implement `aie_lite_mode` flag** (Option B) — enable it by default when user turns AIE back on. Lite mode costs ~0 extra vs. not having AIE, but gains classifier + param_tuner (LLM quality) + safety gating. **✅ DONE — session 48, commit `3ed7817`**
+2. **Cache behavior/tuner** (Option C) — add TTL cache keyed by `char_id`. 5-minute TTL is semantically correct (preferences don't change turn-by-turn). **✅ DONE — session 48, commit `2d59579`**
+3. **Deprecate `backend/adaptive/milestones.py`** — it's a dead-end; `backend/bond/milestones.py` owns this domain. **✅ DONE — session 48, commit `c73b017`**
 
 ## Key File References
 

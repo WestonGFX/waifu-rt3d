@@ -363,6 +363,51 @@ def _aie_enabled(cfg: dict | None) -> bool:
         return False
 
 
+def _aie_lite_mode(cfg: dict | None) -> bool:
+    """Return whether AIE is running in lite mode (reduced DB + token cost).
+
+    When both ``aie_enabled`` and ``aie_lite_mode`` are True the engine
+    runs only the zero-DB-cost modules:
+
+    - ``context_classifier`` + ``param_tuner`` — dynamic LLM params, no DB
+    - ``personalization_gate`` — safety filter, pure Python
+    - ``memory_behavior`` — converts RAG hits into character instructions
+    - ``signals.save_signals`` — cheap per-turn data collection
+
+    The heavier pre-turn injections are skipped in lite mode:
+
+    - ``tuner.load_user_profile`` (1 DB SELECT — only useful after ≥50 msgs)
+    - ``behavior.compute_behavior_modifiers`` (2-3 DB reads, vague bias floats)
+
+    Defaults to ``True`` so that re-enabling AIE after the v1-Lite declutter
+    automatically lands in the safer, cheaper tier rather than full mode.
+    Users who want the full profile/behavior injection must explicitly set
+    ``aie_lite_mode: false`` in their config.
+
+    Args:
+        cfg: Loaded app config dict (or ``None`` — treated as default).
+
+    Returns:
+        True iff ``aie_lite_mode`` is truthy or absent.  ``False`` only
+        when the key is explicitly ``False`` (or a falsy value).  Any read
+        failure yields True (safe default).
+
+    Example:
+        >>> _aie_lite_mode({"aie_enabled": True})  # key absent → lite
+        True
+        >>> _aie_lite_mode({"aie_lite_mode": False})  # full mode
+        False
+        >>> _aie_lite_mode(None)  # load failure → safe default
+        True
+    """
+    if not cfg:
+        return True
+    try:
+        return bool(cfg.get("aie_lite_mode", True))
+    except Exception:
+        return True
+
+
 AVATARS  = STORAGE / "avatars"
 AUDIO    = STORAGE / "audio"
 DB_PATH  = STORAGE / "app.db"
@@ -4440,7 +4485,13 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
 
         # ── Adaptive Intelligence: inject learned user preferences ────────
         # Gated behind ``aie_enabled`` (session-47 v1-Lite declutter).
-        if _aie_enabled(cfg):
+        # In lite mode (``aie_lite_mode=True``) only the zero-DB modules run
+        # (context_classifier, param_tuner, personalization_gate,
+        # memory_behavior, signals).  The heavier profile/behavior injections
+        # below are full-mode only — they add 2-4 DB reads per turn and are
+        # only meaningful after the reflector has gathered ≥50 messages of
+        # history.  See docs/research/2026-05-25-aie-module-analysis.md.
+        if _aie_enabled(cfg) and not _aie_lite_mode(cfg):
             try:
                 from backend.adaptive.tuner import load_user_profile, profile_to_prompt_instructions
                 _user_profile = load_user_profile(char_id, cur)

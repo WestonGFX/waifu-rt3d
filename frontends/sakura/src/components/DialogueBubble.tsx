@@ -11,6 +11,18 @@ import { parseFull } from '../lib/parseActions';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
 
+/** Strip LLM annotation brackets left behind in old DB messages. */
+function stripAnnotations(text: string): string {
+  return text
+    .replace(/\[emotional expression:[^\]]*\]/gi, '')
+    .replace(/\[gesture:[^\]]*\]/gi, '')
+    .replace(/\[action:[^\]]*\]/gi, '')
+    .replace(/\[mood:[^\]]*\]/gi, '')
+    .replace(/\[facial:[^\]]*\]/gi, '')
+    .replace(/\[emotion:[^\]]*\]/gi, '')
+    .trim();
+}
+
 /** Format a Unix-ms timestamp as a relative time string ("2 min ago", "just now"). */
 function formatRelativeTime(ts: number): string {
   const diffS = Math.floor((Date.now() - ts) / 1000);
@@ -793,7 +805,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
             </div>
           ) : (
             <>
-              <MarkdownText text={message.text} query={searchQuery} />
+              <MarkdownText text={stripAnnotations(message.text)} query={searchQuery} />
               {message.editedAt && (
                 <span
                   title={`Edited ${new Date(message.editedAt).toLocaleString()}`}
@@ -943,7 +955,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
             />
           ) : message.status === 'streaming' ? (
             <span>
-              <MarkdownText text={message.text} query={searchQuery} />
+              <MarkdownText text={stripAnnotations(message.text)} query={searchQuery} />
               <span
                 style={{
                   display: 'inline-block',
@@ -989,7 +1001,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               </div>
             </div>
           ) : (
-            <MarkdownText text={message.text} query={searchQuery} />
+            <MarkdownText text={stripAnnotations(message.text)} query={searchQuery} />
           )}
         </div>
 

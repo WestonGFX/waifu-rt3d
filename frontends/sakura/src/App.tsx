@@ -285,6 +285,14 @@ function MainApp() {
   // Apply persisted custom theme CSS variable overrides on load and whenever
   // the palette changes (e.g. after the user tweaks a color in Settings).
   useEffect(() => {
+    // Migration: clear colors from the removed sakura-custom preset so users
+    // don't load into the old wine/maroon palette after the preset was removed.
+    const removedColors = ['#e879a0', '#1a0d12', '#2a1020', '#f5e0ea', '#4a2030'];
+    const vals = Object.values(customTheme);
+    if (vals.length === 5 && removedColors.every((c) => vals.includes(c))) {
+      useAppStore.getState().resetCustomTheme();
+      return;
+    }
     const root = document.documentElement;
     Object.entries(customTheme).forEach(([varName, value]) => {
       root.style.setProperty(varName, value);

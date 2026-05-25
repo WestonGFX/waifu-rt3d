@@ -311,7 +311,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     };
 
     set((s) => ({
-      messages: [...s.messages, userMsg, assistantMsg],
+      messages: incognito ? [...s.messages, assistantMsg] : [...s.messages, userMsg, assistantMsg],
       loading: true,
       draft: '',
       abortController: controller

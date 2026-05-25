@@ -1585,7 +1585,7 @@ interface ThemePreset {
  * Dark / Light / Sakura / Midnight.  Add to or reorder this list to
  * change the featured row; the underlying presets keep working.
  */
-const FEATURED_THEME_IDS = ['dark', 'light', 'sakura-custom', 'midnight'] as const;
+const FEATURED_THEME_IDS = ['dark', 'light', 'midnight', 'dark-crystal'] as const;
 
 const THEME_PRESETS: ThemePreset[] = [
   {
@@ -1603,62 +1603,6 @@ const THEME_PRESETS: ThemePreset[] = [
     swatchAccent: '#e8788a',
     swatchBg: '#fdf5f7',
     customColors: null,
-  },
-  {
-    id: 'sakura-custom',
-    label: 'Sakura',
-    dataTheme: 'dark-sakura',
-    swatchAccent: '#e879a0',
-    swatchBg: '#1a0d12',
-    customColors: {
-      accent: '#e879a0',
-      background: '#1a0d12',
-      surface: '#2a1020',
-      textPrimary: '#f5e0ea',
-      border: '#4a2030',
-    },
-  },
-  {
-    id: 'ocean',
-    label: 'Ocean',
-    dataTheme: 'dark-crystal',
-    swatchAccent: '#38bdf8',
-    swatchBg: '#0a1628',
-    customColors: {
-      accent: '#38bdf8',
-      background: '#0a1628',
-      surface: '#0f2040',
-      textPrimary: '#e0f0ff',
-      border: '#1a3a60',
-    },
-  },
-  {
-    id: 'forest',
-    label: 'Forest',
-    dataTheme: 'dark-sakura',
-    swatchAccent: '#4ade80',
-    swatchBg: '#0d1a0d',
-    customColors: {
-      accent: '#4ade80',
-      background: '#0d1a0d',
-      surface: '#152615',
-      textPrimary: '#e0f5e0',
-      border: '#204020',
-    },
-  },
-  {
-    id: 'sunset',
-    label: 'Sunset',
-    dataTheme: 'dark-sakura',
-    swatchAccent: '#fb923c',
-    swatchBg: '#1a0e08',
-    customColors: {
-      accent: '#fb923c',
-      background: '#1a0e08',
-      surface: '#281806',
-      textPrimary: '#fff0e0',
-      border: '#402010',
-    },
   },
   {
     id: 'crystal',
@@ -1919,6 +1863,18 @@ function ThemeCustomizationSection({
   // On mount: re-apply any values the store already has (covers the case where
   // App.tsx's useEffect hasn't fired yet, e.g. when the overlay is opened fast).
   useEffect(() => {
+    // Migration: if stored colors came from the removed sakura-custom preset, clear them
+    // so users don't load into the old wine/maroon palette after the preset was removed.
+    const removedPresetColors = ['#e879a0', '#1a0d12', '#2a1020', '#f5e0ea', '#4a2030'];
+    const storedVals = Object.values(customTheme);
+    const isRemovedPreset = removedPresetColors.every((c) => storedVals.includes(c));
+    if (isRemovedPreset && storedVals.length === 5) {
+      resetCustomTheme();
+      applyCustomColors(null);
+      saveCustomTheme(null);
+      return;
+    }
+
     const saved = loadSavedCustomTheme();
     if (saved && Object.keys(customTheme).length === 0) {
       // Migrate legacy localStorage-only saves into the store on first open

@@ -1240,7 +1240,20 @@ def _parse_emotion_gesture(text: str) -> tuple:
     # Now strip every remaining [stage-direction: ...] block. Keep brackets
     # that look like inline references (e.g. "[1]", "[link]") by requiring
     # a colon inside.
-    clean = re.sub(r'\[[^\[\]]*?:[^\[\]]*?\]', '', clean).strip()
+    clean = re.sub(r'\[[^\[\]]*?:[^\[\]]*?\]', '', clean)
+
+    # Strip un-bracketed metadata footers some models append, e.g.
+    #   "...nice to chat with. EMOTION: Curiosity INTENSITY: Mild"
+    #   "...weather is lovely. MOOD: Happy GESTURE: smile"
+    # These leak from prompts that ask the model to "end with EMOTION: X".
+    # Match an ALL-CAPS-label-colon-value pair preceded by space/newline,
+    # optionally followed by more such pairs. Stop at end-of-string.
+    clean = re.sub(
+        r'\s*(?:EMOTION|EMOTIONAL\s+EXPRESSION|FACIAL\s+EXPRESSION|FACIAL|FACE|MOOD|GESTURE|ACTION|TONE|INTENSITY|VOICE\s*STYLE|GAZE)\s*:\s*[A-Za-z][\w\s\-]{0,40}?(?=\s+(?:EMOTION|EMOTIONAL|FACIAL|FACE|MOOD|GESTURE|ACTION|TONE|INTENSITY|VOICE|GAZE)\s*:|\s*$)',
+        '',
+        clean,
+        flags=re.IGNORECASE,
+    ).strip()
 
     # Strip degenerate model artifacts: any single character repeated 6+ times in a row.
     # Local LLMs occasionally produce runs like "88888888..." (digit artifact from

@@ -296,19 +296,23 @@ export function StatusBar({
             {/* Feature B4: Author's Note active badge */}
             <AuthorNoteBadge sessionId={sessionId} />
           </div>
-          {/* HUD Tier 4: single-line bond pill replaces idle phrase, RelationshipBar,
-              BondProgressBar, the inline Lv badge, and StreakBadge. Click expands. */}
-          <BondPill
-            charId={character.id}
-            bondLevel={bondLevel}
-            bondXp={bondXp}
-            xpToNext={bondXpToNext}
-            tier={bondTier}
-            nextUnlock={bondNextUnlock}
-            messageCount={messageCount}
-            idlePhrase={idlePhrase}
-            compact={isNarrow}
-          />
+          {/* Session-46 declutter: bond pill (Lv/XP/tier/streak chrome) hidden
+              by default. Gamification numbers next to a relationship is the
+              wrong metaphor for an emotional companion app. To restore: remove
+              the `false && ` guard below. */}
+          {false && (
+            <BondPill
+              charId={character.id}
+              bondLevel={bondLevel}
+              bondXp={bondXp}
+              xpToNext={bondXpToNext}
+              tier={bondTier}
+              nextUnlock={bondNextUnlock}
+              messageCount={messageCount}
+              idlePhrase={idlePhrase}
+              compact={isNarrow}
+            />
+          )}
         </div>
 
         {/* Tier 2 HUD — visible right cluster: Search · ContextBudget · Settings · 3D · ⋯

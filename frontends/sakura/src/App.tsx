@@ -616,8 +616,10 @@ function MainApp() {
         />
       )}
 
-      {/* M6-item21: Achievement toast */}
-      <AchievementToast achievement={pendingAchievement} onDismiss={clearPendingAchievement} />
+      {/* Session-46 declutter: achievement toasts (XP / streaks / milestones)
+          are gamification noise that overlaps the bond pill and breaks
+          conversational flow. Disabled. To restore: remove the `false && `. */}
+      {false && <AchievementToast achievement={pendingAchievement} onDismiss={clearPendingAchievement} />}
 
       <HotkeySheet open={showHelp} shortcuts={shortcuts} onClose={() => setShowHelp(false)} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />

@@ -456,7 +456,10 @@ export const useAppStore = create<AppState>()(
       toggleSoundscape: () => set((s) => ({ soundscapeOpen: !s.soundscapeOpen })),
 
       // Quick-reply chips
-      showQuickChips: true,
+      // Session-46 declutter: quick-reply chips break the feeling of organic
+      // conversation by spoonfeeding the user canned next-utterances. Default
+      // OFF. Toggle back via Settings > General if you actually want them.
+      showQuickChips: false,
       setShowQuickChips: (v) => set({ showQuickChips: v }),
 
       // Thinking indicator render mode (default skeleton)

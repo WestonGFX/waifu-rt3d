@@ -145,8 +145,11 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* ── Frontend Switcher ─────────────────────── */}
-      {!isCollapsed && (
+      {/* Session-46 declutter: frontend switcher hidden. Sakura is the only
+          live frontend; Neon/Nova/Girly are abandonware adding visual noise
+          and decision fatigue on first run. To restore: change `false &&`
+          back to `!isCollapsed`. */}
+      {false && !isCollapsed && (
         <div className="flex gap-1 px-3 pb-1.5" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
           {[
             { id: 'neon', label: 'Neon', path: '/' },

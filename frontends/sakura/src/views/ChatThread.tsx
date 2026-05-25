@@ -28,6 +28,7 @@ import { VoiceConversationPanel } from '../components/VoiceConversationPanel';
 // Session-46: GreetingCard removed from render. Import dropped.
 // import { GreetingCard } from '../components/GreetingCard';
 import { RichComposer, type RichComposerHandle } from '../components/RichComposer';
+import { LLMProbeAside } from '../components/LLMProbeAside';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -824,6 +825,7 @@ export function ChatThread() {
         {/* ── Message list ──────────────────────────────────────────────── */}
         <div className="flex-1 min-h-0" style={{ position: 'relative' }}>
         <div ref={scrollRef} className="chat-area h-full overflow-y-auto p-4 max-w-3xl mx-auto w-full">
+          <LLMProbeAside />
           {(searchQuery || showPinnedOnly) && (
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>

@@ -1,5 +1,6 @@
 import { Heart, MessageCircle, Users, Sparkles } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
+import { LLMProbeAside } from './LLMProbeAside';
 
 /**
  * Static petal configuration — lives outside the component to prevent
@@ -29,6 +30,21 @@ export function WelcomeScreen() {
       className="relative flex items-center justify-center h-screen overflow-hidden"
       style={{ backgroundColor: 'var(--color-background)' }}
     >
+      {/* Soft model warning aside (only renders if probe surfaces a warning) */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 16,
+          left: 0,
+          right: 0,
+          zIndex: 5,
+          maxWidth: 560,
+          margin: '0 auto',
+        }}
+      >
+        <LLMProbeAside />
+      </div>
+
       {/* Atmospheric petal drift */}
       {PETALS.map((p, i) => (
         <span

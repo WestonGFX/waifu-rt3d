@@ -1633,4 +1633,32 @@ export const api = {
       thread: Record<string, number | string | null> | null;
     }>(`/api/kokoro/state/${charId}${qs}`);
   },
+
+  /**
+   * Ping the configured LLM with a tiny prompt to surface common
+   * misconfigurations (reasoning-only models, slow first-token, endpoint
+   * unreachable) before the user types their first message. See
+   * ``backend/server.py`` ``llm_probe`` for the contract.
+   *
+   * Warning codes map 1:1 to UI copy variants in
+   * ``hooks/useLLMProbe.ts``. ``warning`` is ``null`` when no actionable
+   * issue was detected.
+   */
+  llmProbe: () =>
+    get<{
+      ok: boolean;
+      model: string;
+      endpoint: string;
+      latency_ms: number;
+      content_received: boolean;
+      reasoning_only: boolean;
+      warning:
+        | 'reasoning_only'
+        | 'slow_first_token'
+        | 'endpoint_unreachable'
+        | 'endpoint_error'
+        | 'probe_failed'
+        | null;
+      hint: string | null;
+    }>('/api/llm/probe'),
 };

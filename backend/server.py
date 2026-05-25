@@ -20154,22 +20154,26 @@ def kokoro_state(char_id: int, session_id: int | None = None):
 
 
 @app.get("/api/kokoro/qa/{char_id}")
-def kokoro_qa(char_id: int, hours: int = 168):
-    """Aggregate Kokoro safety-event signals for a character.
+def kokoro_qa(char_id: int, hours: int = 48):
+    """Aggregate Kokoro safety-event and parse-quality signals for a character.
 
-    Lightweight regression dashboard: shows how often the character pushed
-    back on escalation in the last ``hours`` (default = 7 days).  A sudden
-    drop after a model swap suggests the guardrails are no longer holding.
+    Lightweight regression dashboard: shows boundary-reinforcement frequency
+    and JSON parse success rate.  A parse_ok_rate drop after a model swap
+    suggests the model can no longer follow the Kokoro JSON contract.
 
     Args:
         char_id: Character to inspect.
-        hours: Lookback window.  Capped at 30 days.
+        hours: Lookback window.  Default 48 h (changed from 168 to surface
+            recent regressions faster); capped at 30 days.
 
     Returns:
-        ``{"ok": True, "boundary_count": int, "by_bond_band": [...], "window_hours": int}``
+        ``{"ok": True, "boundary_count": int, "by_bond_band": [...],
+           "parse_ok_total": int, "parse_ok_count": int,
+           "parse_ok_rate": float, "window_hours": int}``
     """
     hours = max(1, min(int(hours), 720))
     with db_ctx() as conn:
+        # Safety events (v85)
         try:
             total = conn.execute(
                 "SELECT COUNT(*) FROM kokoro_safety_events "
@@ -20183,9 +20187,28 @@ def kokoro_qa(char_id: int, hours: int = 168):
                 (char_id, f"-{hours} hours"),
             ).fetchall()
         except sqlite3.OperationalError:
-            # Table missing (pre-v85) — return zeros instead of 500.
             total = 0
             bands = []
+
+        # Parse-ok stats (v86)
+        try:
+            parse_total = conn.execute(
+                "SELECT COUNT(*) FROM kokoro_parse_log "
+                "WHERE character_id = ? AND created_at >= datetime('now', ?)",
+                (char_id, f"-{hours} hours"),
+            ).fetchone()[0]
+            parse_ok_count = conn.execute(
+                "SELECT COUNT(*) FROM kokoro_parse_log "
+                "WHERE character_id = ? AND parse_ok = 1 "
+                "AND created_at >= datetime('now', ?)",
+                (char_id, f"-{hours} hours"),
+            ).fetchone()[0]
+        except sqlite3.OperationalError:
+            # Table missing (pre-v86) — return zeros.
+            parse_total = 0
+            parse_ok_count = 0
+
+    parse_ok_rate = (parse_ok_count / parse_total) if parse_total > 0 else 0.0
     return {
         "ok": True,
         "char_id": char_id,
@@ -20195,6 +20218,9 @@ def kokoro_qa(char_id: int, hours: int = 168):
             {"bond_level": int(b[0]) if b[0] is not None else None, "count": int(b[1])}
             for b in bands
         ],
+        "parse_ok_total": int(parse_total),
+        "parse_ok_count": int(parse_ok_count),
+        "parse_ok_rate": round(parse_ok_rate, 4),
     }
 
 

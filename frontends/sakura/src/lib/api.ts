@@ -1635,6 +1635,23 @@ export const api = {
   },
 
   /**
+   * Aggregate Kokoro safety-event and parse-quality signals (48 h window).
+   * `parse_ok_rate` drops when the model can't follow the JSON contract —
+   * watch for regressions after model swaps.
+   */
+  kokoroQa: (charId: number, hours = 48) =>
+    get<{
+      ok: boolean;
+      char_id: number;
+      window_hours: number;
+      boundary_count: number;
+      by_bond_band: { bond_level: number | null; count: number }[];
+      parse_ok_total: number;
+      parse_ok_count: number;
+      parse_ok_rate: number;
+    }>(`/api/kokoro/qa/${charId}?hours=${hours}`),
+
+  /**
    * Ping the configured LLM with a tiny prompt to surface common
    * misconfigurations (reasoning-only models, slow first-token, endpoint
    * unreachable) before the user types their first message. See

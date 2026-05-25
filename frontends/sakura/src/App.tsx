@@ -163,6 +163,7 @@ function MainApp() {
   const kokoroCharId = useChatStore(s => s.charId);
   const kokoroSessionId = useChatStore(s => s.sessionId);
   const [kokoroDials, setKokoroDials] = useState<Record<string, number>>({});
+  const [kokoroQaData, setKokoroQaData] = useState<Parameters<typeof KokoroDebugPanel>[0]['qa']>(null);
   useEffect(() => {
     if (!kokoroDebugVisible || !kokoroCharId) return;
     let cancelled = false;
@@ -176,6 +177,9 @@ function MainApp() {
           }
           setKokoroDials(numericMind);
         })
+        .catch(() => { /* HUD only — silent failure */ });
+      api.kokoroQa(kokoroCharId)
+        .then(res => { if (!cancelled && res.ok) setKokoroQaData(res); })
         .catch(() => { /* HUD only — silent failure */ });
     });
     return () => { cancelled = true; };
@@ -420,7 +424,7 @@ function MainApp() {
             pointerEvents: 'auto',
           }}
         >
-          <KokoroDebugPanel payload={lastKokoroPayload} dialValues={kokoroDials} />
+          <KokoroDebugPanel payload={lastKokoroPayload} dialValues={kokoroDials} qa={kokoroQaData} />
         </div>
       )}
 

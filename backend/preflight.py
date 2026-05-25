@@ -4,7 +4,7 @@ Database initialization and migration system for waifu-rt3d.
 This module handles:
 - Directory structure creation
 - Configuration file initialization
-- Database schema migrations (v3 → v4 → … → v77)
+- Database schema migrations (v3 → v4 → … → v86)
 
 Migration Strategy:
     - v3 → v4: Adds characters table and schema versioning
@@ -6123,6 +6123,63 @@ def migrate_to_v85(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v86(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v85 to v86.
+
+    Adds ``kokoro_parse_log`` — a per-turn parse-success tracking table for
+    Kokoro JSON QA.  Each chat turn inserts one row: ``parse_ok=1`` when the
+    structured JSON response was parsed successfully, ``0`` when the engine
+    fell back to plain-text extraction.  The ``/api/kokoro/qa/{char_id}``
+    endpoint aggregates these rows to report parse_ok rates as a regression
+    signal for model-quality monitoring.
+
+    Columns:
+        - id (INTEGER PRIMARY KEY AUTOINCREMENT)
+        - character_id (INTEGER NOT NULL)
+        - session_id (INTEGER) — nullable soft reference to sessions.id
+        - parse_ok (INTEGER NOT NULL DEFAULT 1) — 1 = parsed, 0 = fallback
+        - raw_text_len (INTEGER NOT NULL DEFAULT 0) — length of raw LLM text
+        - created_at (TEXT) — ISO-8601 timestamp, defaults to current UTC time
+
+    Args:
+        con: An open ``sqlite3.Connection``.
+
+    Returns:
+        ``True`` on success.
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 86:
+        logger.info("Schema already at v%d, skipping v86 migration.", cur_ver)
+        return True
+
+    try:
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS kokoro_parse_log (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id  INTEGER NOT NULL,
+                session_id    INTEGER,
+                parse_ok      INTEGER NOT NULL DEFAULT 1,
+                raw_text_len  INTEGER NOT NULL DEFAULT 0,
+                created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now'))
+            )
+        """)
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_kpl_char_created "
+            "ON kokoro_parse_log(character_id, created_at)"
+        )
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (86, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v86 migration complete (kokoro_parse_log)")
+        return True
+    except Exception as e:
+        logger.error("Schema v86 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -6736,14 +6793,20 @@ def ensure_db():
             if migrate_to_v85(con):
                 version = 85
 
+        if version < 86:
+            logger.info("Upgrading database schema from v85 to v86...")
+            logger.info("  - kokoro_parse_log — per-turn parse_ok tracking for /api/kokoro/qa")
+            if migrate_to_v86(con):
+                version = 86
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 85:
-            raise RuntimeError(f"Database initialization failed: Expected v85, got v{final_version}")
+        if final_version < 86:
+            raise RuntimeError(f"Database initialization failed: Expected v86, got v{final_version}")
 
-        if final_version > 85:
-            logger.warning(f"Database is newer than application (v{final_version} > v85). Some features might be unused.")
+        if final_version > 86:
+            logger.warning(f"Database is newer than application (v{final_version} > v86). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.

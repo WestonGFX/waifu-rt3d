@@ -1,49 +1,45 @@
 # Current Project Status
 
-**Last updated:** 2026-05-25 (session 47 — v1-Lite execution, 9 queue items shipped + bond burn-down)
-**Branch:** master · 11 commits this session, all pushed (HEAD = `6ebbed0`).
-**Schema version:** v85 (unchanged this session).
-**Tests:** **2,977 backend pytest** (+21 new) + **326 vitest** passing (1 pre-existing `chatStore.pin.test.ts` flake — unrelated), tsc clean.
+**Last updated:** 2026-05-25 (session 48 — Kokoro v2 Phase 1: parse_ok rate tracking + identity fix + settings drawer clipping + AIE TTL cache)
+**Branch:** master · HEAD = `2fe8abe` (all pushed).
+**Schema version:** v86 (`kokoro_parse_log` table added).
+**Tests:** **3,051 backend pytest** + **456 vitest** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
 
-**Session 47 (2026-05-25) — v1-Lite execution sprint, 9 queue items + 1 creative-angle fresh feature. 11 commits, all pushed. See `docs/SESSION_HANDOFF.md` for the full context.**
-
-Started from user's "try new things" directive — delivered the LLM
-probe as a character-voiced italic aside (instead of the speced banner)
-in commit `906a9f6`.  Then ran 4 `/go` cycles executing session-46's
-v1-Lite declutter queue.
+**Session 48 (2026-05-25) — Kokoro v2 Phase 1: parse_ok rate tracking infrastructure, identity fix, settings drawer clipping fix, AIE TTL cache. 7 parallel agent dispatches, ~50 new tests. All pushed.**
 
 | Theme | Commits |
 |---|---|
-| Creative angle (try new things) — LLM probe character-voice aside | `906a9f6` |
-| Background-cost gating (master flags OFF by default) — AIE + Bond XP | `9a6991c` `7042dd9` |
-| Chrome strips — footer cuts, theme picker 27→4, Girly/Neon archive | `e536c3e` `78796ee` `e7f4786` |
-| Settings refactor — 3 layouts user-selectable (Anchor / Collapsibles / Sidebar) | `9732f44` |
-| Regression test pin — overlay mutex contract | `6dffef7` |
-| Bond burn-down — 10 components deleted, −4,750 LOC | `f121280` `7a38ce8` `6ebbed0` |
+| Identity fix: `## Kokoro Mind State` → `## Current Emotional State` (prompt_fragment.py) | `5e5d321` |
+| `_fix_identity_slip()` post-process guard + `_log_parse_result()` in service.py | `d892475` `d0c47ee` |
+| 10 tests for `_fix_identity_slip` / `finalize_turn` | `83a096b` |
+| AIE TTL cache (5-min in-process cache for profile/behavior DB reads) | `2d59579` |
+| `adaptive/milestones.py` deprecation notice → `bond.milestones` | `c73b017` |
+| AIE research doc updated (3 recommendations marked DONE) | `cac43a1` |
+| Settings drawer clipping: `visibility: hidden` on all viewer iframes when overlay active | `a3334e1` |
+| Schema v86: `kokoro_parse_log` table + index | `33d0918` |
+| `_log_parse_result` + 10 integration tests | `c703e52` |
+| `KokoroDebugPanel`: `ParseOkBadge` (green/yellow/red) + `KokoroQaResponse` type | `ba1ef49` |
+| QA endpoint extended + `api.ts kokoroQa()` + `App.tsx` wired | `e43035c` |
+| 13 backend tests for `/api/kokoro/qa` endpoint | `a979c16` |
+| 8 frontend tests for `KokoroDebugPanel` parse_ok badge | `8e2e043` |
+| 20 frontend tests for `useVoiceMode` hook state machine | `7c72752` |
+| Fix chatStore.pin tests: add `grantAchievement` mock (silent TypeError was reverting optimistic update) | `2fe8abe` |
 
-**Live status at session end:** chat surface, header, and overlay
-system are dramatically simpler. Gamification UI completely deleted
-(no pill, no popups, no panels). Backend grant pipeline gated
-behind `bond_xp_enabled` flag. AIE 12-module background work gated
-behind `aie_enabled` flag. Settings now ships 3 layout variants
-the user can A/B/C between in real time.
+**Live status at session end:** Kokoro v2 Phase 1 infrastructure complete. parse_ok rate visible in dev HUD (green ≥80%, yellow 50-79%, red <50%). Rin identity confusion fully mitigated (header rename + post-process regex). Settings drawer no longer clips behind viewer iframe. AIE expensive DB reads cached for 5 min.
 
-**Push state:** clean. 11 commits all on origin/master.
+**Remaining open queue:**
+1. **Kokoro v2 Phase 2 (Emotional RAG)** — schema v87, mind_state_snapshot on memories, dial-vector cosine retrieval re-ranking. Not started.
+2. **Live parse_ok validation** — run Chrome against LM Studio, confirm rate ≥ 80% on user's local model. Chrome extension was not connected this session.
+3. **Memory Browser QA** — Chrome hands-on, Ctrl+M overlay, all 4 tabs vs real backend.
+4. **#14 server.py refactor** — 17K-line split into domain modules. Multi-session.
+5. **#13 NSFW endpoint cleanup** — blocked by CLAUDE.md rule (need explicit override).
 
-**Pre-existing working-tree drift** (user routinely reverts, not
-touched this session): `backend/config/app.json`, `backend/storage/app.db`,
-e2e/smoke-test.spec.ts, useTheme.ts, themes.css.
-
-**Remaining open queue** (now 4 actionable items, see SESSION_HANDOFF.md):
-#11 AIE 12-modules rethink · #5 Settings clipping (needs Chrome) ·
-#14 server.py refactor · bond burn-down finishing pass.
-Blocked: #9 Rin-chan regex (conditional), #13 NSFW endpoint deletion
-(CLAUDE.md rule).
+**Push state:** clean. All commits on origin/master.
 
 ---
 

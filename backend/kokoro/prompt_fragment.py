@@ -86,20 +86,13 @@ def build_kokoro_fragment(
         "Return ONLY a single JSON object with this exact shape (no prose, no markdown fence):",
         "{",
         '  "reply": "string — the character\'s spoken words to the user",',
-        '  "innerThought": "string — brief private thought (for debug only, never shown)",',
-        '  "emotion": "one of: neutral|focused_warm|happy|soft|concerned|playful|shy|excited|sleepy|frustrated|proud",',
         '  "facialExpression": "one of: neutral|soft_smile|smile|concerned|surprised|smug|blush|sleepy|focused",',
         '  "gesture": "one of: idle|wave|thinking|point|hands_clasped|heart|small_nod|tilt_head",',
-        '  "gaze": "one of: user|away|thinking|object|camera",',
-        '  "voiceStyle": "one of: calm|warm|bright|sleepy|serious|teasing",',
         '  "memoryWrite": {"shouldSave": false, "summary": "", "importance": 0.0, "emotionalSalience": 0.0},',
         '  "stateDelta": { /* dial_name: number in [-0.05, 0.05] — only the dials you actually want to nudge */ }',
     ]
     if nsfw_active:
         lines += [
-            '  , "innerArousalShift": 0.0',
-            '  , "suggestiveBid": null',
-            '  , "selfConsentCheck": false',
             '  , "boundaryReinforcement": false',
         ]
     lines += [
@@ -109,11 +102,24 @@ def build_kokoro_fragment(
         "- State deltas must be small (|d| <= 0.05) and only on dials this turn actually affected.",
         "- Save a memory only if it will matter in a later conversation.",
         "- Do NOT mention JSON, state variables, or the system architecture to the user.",
-        "- Match voiceStyle and facialExpression to the user's emotional tone.",
+        "- Match facialExpression to the user's emotional tone.",
     ]
     if nsfw_active:
         lines += [
             "- ``boundaryReinforcement`` should be true whenever you decline or soften an escalation.",
-            "- ``suggestiveBid`` is optional and may only be a small first-move; the existing content gates still apply.",
         ]
     return "\n".join(lines)
+
+# Session-46 MVP prune per Kokoro audit (parallel agent dispatched session-46):
+# — DROPPED: `innerThought` (debug-only, zero consumers), `gaze` (debug-only,
+#   never reaches the avatar), `emotion` (duplicate — the SSE 'emotion'
+#   frame already drives the avatar pipeline), `voiceStyle` (only used
+#   for an intensity bucket derivable from facialExpression), `voiceParams`
+#   (computed in service but no frontend reader — full dead weight),
+#   `innerArousalShift`, `suggestiveBid`, `selfConsentCheck` (all debug-only).
+# — KEPT: `reply` (core), `facialExpression` (drives VRM blendshape),
+#   `gesture` (drives body movement), `memoryWrite` (only persistence
+#   side-effect — compounds over time), `stateDelta` (steers next-turn
+#   prompt; invisible per-turn but matters over sessions),
+#   `boundaryReinforcement` (NSFW safety event log).
+# Token cost per turn dropped from ~150 to ~70.

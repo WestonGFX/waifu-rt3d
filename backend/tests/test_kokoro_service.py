@@ -84,7 +84,11 @@ def test_high_bond_plus_nsfw_master_opens_tier_f(con, stub_bond):
     )
     assert ctx.nsfw_active is True
     assert "Intimate-mode dials" in ctx.fragment
-    assert "innerArousalShift" in ctx.fragment
+    # Session-46 MVP prune dropped `innerArousalShift` / `suggestiveBid` /
+    # `selfConsentCheck` (debug-only, zero consumers). Verify the NSFW
+    # additions still land in the fragment via `boundaryReinforcement` —
+    # the only Tier-F field that has a real side effect (safety event log).
+    assert "boundaryReinforcement" in ctx.fragment
 
 
 def test_finalize_persists_state_delta_when_enabled(con, stub_bond):

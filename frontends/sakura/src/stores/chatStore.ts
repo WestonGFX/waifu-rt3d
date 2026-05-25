@@ -263,7 +263,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       serverMessageId: m.id,
       role: m.role as ChatMessage['role'],
       text: m.text ?? '',
-      createdAt: m.ts ? new Date(m.ts).getTime() : Date.now(),
+      createdAt: m.ts ? Number(m.ts) * 1000 : Date.now(),
       status: 'sent',
       emotion: m.emotion ?? undefined,
       pinned: m.pinned === 1,

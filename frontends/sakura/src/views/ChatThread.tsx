@@ -57,7 +57,7 @@ type MicState = 'idle' | 'recording' | 'processing';
  */
 export function ChatThread() {
   const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode, config, layoutMode } = useAppStore();
-  const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode, regenerateImage, continueGeneration, toggleReaction } = useChatStore();
+  const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode, regenerateImage, toggleReaction } = useChatStore();
   void toggleReaction; // session-46: emoji reactions removed.
   const scrollRef = useRef<HTMLDivElement>(null);
   // Gaze flick: fire once per typing burst, debounced 2s so holding a key doesn't spam
@@ -76,12 +76,6 @@ export function ChatThread() {
   // message are emoji-reaction noise that doesn't compound into anything
   // visible. User specifically said: "i hate the feature we added that
   // lets users emoji react to messages". Default OFF.
-  const [feedbackEnabled, setFeedbackEnabled] = useState(false);
-  useEffect(() => {
-    api.getFeedbackPreferences()
-      .then(prefs => setFeedbackEnabled(prefs.explicit_signals_enabled))
-      .catch(() => { /* default true on error */ });
-  }, []);
 
   // ── Task 2: Diary state ─────────────────────────────────────────────────
   const [diaryText, setDiaryText] = useState<string | null>(null);
@@ -886,8 +880,6 @@ export function ChatThread() {
                   onEdit={handleEditMessage}
                   isLastAssistant={isLastAssistant}
                   isRegenerating={regeneratingMsgId === msg.serverMessageId}
-                  onContinue={isLastAssistant ? continueGeneration : undefined}
-                  feedbackEnabled={feedbackEnabled}
                 />
                 {/* Session-46 cut (user directive — TWICE): 5-emoji reaction
                     picker (👍 ❤️ 😂 😮 😭), the Brain "Remember" button, AND

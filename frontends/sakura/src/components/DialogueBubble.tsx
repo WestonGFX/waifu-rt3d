@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Volume2, Pin, ChevronLeft, ChevronRight, ChevronsRight, RefreshCw, Copy, Trash2, Pencil, Check, X, Clock } from 'lucide-react';
+import { Volume2, Pin, ChevronLeft, ChevronRight, RefreshCw, Check, X, Clock } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
 import { ChatImageLightbox } from './ChatImageLightbox';
-import { FeedbackButtons } from './FeedbackButtons';
 import { downloadUrl } from '../lib/downloadFile';
 import { api } from '../lib/api';
 import { parseFull } from '../lib/parseActions';
@@ -12,14 +11,6 @@ import { stripAnnotations } from '../lib/textUtils';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
 
-/** Format a Unix-ms timestamp as a relative time string ("2 min ago", "just now"). */
-function formatRelativeTime(ts: number): string {
-  const diffS = Math.floor((Date.now() - ts) / 1000);
-  if (diffS < 60) return 'just now';
-  if (diffS < 3600) return `${Math.floor(diffS / 60)} min ago`;
-  if (diffS < 86400) return `${Math.floor(diffS / 3600)}h ago`;
-  return `${Math.floor(diffS / 86400)}d ago`;
-}
 
 /**
  * Canonical 26-emotion emoji map (Phase 15).
@@ -119,10 +110,6 @@ interface DialogueBubbleProps {
   isLastAssistant?: boolean;
   /** Whether this message is currently being regenerated — shows spinner. */
   isRegenerating?: boolean;
-  /** Called to ask the character to continue their previous response. */
-  onContinue?: () => void;
-  /** Whether to show the 👍/👎 feedback buttons under assistant bubbles. */
-  feedbackEnabled?: boolean;
 }
 
 /** Highlight occurrences of `query` inside `text` using <mark> spans. */
@@ -533,14 +520,10 @@ function FailedActionCard({ message, onRetry }: { message: import('../lib/types'
   );
 }
 
-export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onRegenerateImage, onBranchSwitch, onDelete, onEdit, isLastAssistant = false, isRegenerating = false, onContinue, feedbackEnabled = false }: DialogueBubbleProps) {
+export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onRegenerateImage, onBranchSwitch, onEdit, isLastAssistant = false, isRegenerating = false }: DialogueBubbleProps) {
   const thinkingMode = useAppStore(s => s.thinkingIndicatorMode);
   const [pinned, setPinned] = useState(message.pinned ?? false);
-  const [hovered, setHovered] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [savedToMemory, setSavedToMemory] = useState(false);
-  const [generatingVoice, setGeneratingVoice] = useState(false);
-  const [voiceUrl, setVoiceUrl] = useState<string | undefined>(message.voiceMessageUrl);
+  const voiceUrl = message.voiceMessageUrl;
   const [editing, setEditing] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [editText, setEditText] = useState(message.text);
@@ -623,57 +606,6 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
     }
   };
 
-  // Session-46: M2-item10 `handleSaveToMemory` no longer wired to a UI
-  // button (Bookmark removed). Function kept for now in case we restore.
-  /** M2-item10: Save message as a Permanent (T3) memory. */
-  // @ts-expect-error — intentionally unused after Bookmark button removal
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleSaveToMemory = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!message.serverMessageId || savedToMemory) return;
-    try {
-      await api.pinMessageAsMemory(message.serverMessageId);
-      setSavedToMemory(true);
-      setTimeout(() => setSavedToMemory(false), 3000);
-      if (character?.id) {
-        api.grantAchievement(character.id, 'shared_secret').catch(() => {});
-      }
-    } catch (err) {
-      console.error('[SaveToMemory] failed:', err);
-    }
-  };
-
-  const handleGenerateVoice = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!message.serverMessageId || generatingVoice) return;
-    setGeneratingVoice(true);
-    try {
-      const res = await api.generateVoiceForMessage(message.serverMessageId);
-      if (res.ok && res.url) setVoiceUrl(res.url);
-    } catch (err) {
-      console.error('[GenerateVoice] failed:', err);
-    } finally {
-      setGeneratingVoice(false);
-    }
-  };
-
-  /** Copy message text to clipboard. */
-  const handleCopy = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(message.text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch { /* clipboard not available */ }
-  }, [message.text]);
-
-  /** Enter edit mode — pre-fill textarea with current text. */
-  const handleEditStart = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditText(message.text);
-    setEditing(true);
-    setTimeout(() => editRef.current?.focus(), 50);
-  }, [message.text]);
 
   /** Confirm edit — call parent callback with new text. */
   const handleEditConfirm = useCallback(() => {
@@ -689,12 +621,6 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
     setEditText(message.text);
     setEditing(false);
   }, [message.text]);
-
-  /** Delete message — call parent callback. */
-  const handleDelete = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onDelete) onDelete(message.id);
-  }, [message.id, onDelete]);
 
   // Director Mode messages: centered amber/gold cards with clapperboard icon
   if (message.role === 'director') {
@@ -742,8 +668,6 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
     return (
       <div
         className="flex justify-end mb-3"
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
       >
         <div
           className="dialogue-bubble dialogue-you px-4 py-2.5 max-w-[75%] text-sm relative"
@@ -807,31 +731,6 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               )}
             </>
           )}
-          {/* Action buttons — visible on hover; hidden while streaming */}
-          {hovered && !editing && message.status === 'sent' && (
-            <div
-              className="absolute -bottom-3 right-2 flex items-center gap-0.5 px-1 py-0.5 rounded-md"
-              style={{
-                backgroundColor: 'var(--color-surface)',
-                border: '1px solid var(--color-border)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-              }}
-            >
-              <button onClick={handleCopy} title={copied ? 'Copied!' : 'Copy'} style={{ padding: 3, borderRadius: 3, border: 'none', background: 'transparent', color: copied ? 'var(--color-success)' : 'var(--color-text-tertiary)', cursor: 'pointer' }}>
-                {copied ? <Check size={11} /> : <Copy size={11} />}
-              </button>
-              {onEdit && (
-                <button onClick={handleEditStart} title="Edit" style={{ padding: 3, borderRadius: 3, border: 'none', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer' }}>
-                  <Pencil size={11} />
-                </button>
-              )}
-              {onDelete && (
-                <button onClick={handleDelete} title="Delete" style={{ padding: 3, borderRadius: 3, border: 'none', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer' }}>
-                  <Trash2 size={11} />
-                </button>
-              )}
-            </div>
-          )}
         </div>
       </div>
     );
@@ -840,8 +739,6 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
   return (
     <div
       className="dialogue-bubble mb-3"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
       <div
         className="dialogue-her p-4 relative"
@@ -851,8 +748,8 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
           boxShadow: 'var(--shadow-card)'
         }}
       >
-        {/* Feature #10: Pinned indicator — shown when pinned and not hovering over the toggle button */}
-        {pinned && !(hovered && message.serverMessageId != null) && (
+        {/* Pinned indicator */}
+        {pinned && (
           <span
             className="absolute top-2 right-2 flex items-center justify-center w-4 h-4 rounded-full"
             style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)' }}
@@ -1125,88 +1022,6 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
           </div>
         )}
 
-        {/* Secondary action bar — copy/delete on hover */}
-        {hovered && message.status === 'sent' && (
-          <div
-            className="flex items-center gap-0.5 mt-1"
-            style={{ fontSize: '0.7rem' }}
-          >
-            {onRegenerate && message.role === 'assistant' && message.serverMessageId != null && (
-              <button
-                onClick={() => onRegenerate(message.serverMessageId!)}
-                disabled={isRegenerating}
-                className="p-0.5 rounded transition-colors disabled:opacity-50"
-                style={{ color: isRegenerating ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }}
-                title={isRegenerating ? 'Regenerating...' : 'Regenerate response'}
-              >
-                <RefreshCw size={11} className={isRegenerating ? 'animate-spin' : ''} />
-              </button>
-            )}
-            {onEdit && !editing && (
-              <button
-                onClick={handleEditStart}
-                className="p-0.5 rounded transition-colors"
-                style={{ color: 'var(--color-text-tertiary)' }}
-                title="Edit message"
-              >
-                <Pencil size={11} />
-              </button>
-            )}
-            <button
-              onClick={handleCopy}
-              className="p-0.5 rounded transition-colors"
-              style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-tertiary)' }}
-              title={copied ? 'Copied!' : 'Copy text'}
-            >
-              {copied ? <Check size={11} /> : <Copy size={11} />}
-            </button>
-            {/* Session-46 cut: "Remember this" Bookmark button removed
-                (user feedback: buggy). Memory is now driven entirely by the
-                Kokoro `memoryWrite` field on assistant turns + the existing
-                tiered_memory promotion path. Manual pinning was redundant. */}
-            {message.serverMessageId != null && (
-              <button
-                onClick={handleGenerateVoice}
-                disabled={generatingVoice}
-                className="p-0.5 rounded transition-colors disabled:opacity-50"
-                style={{ color: voiceUrl ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }}
-                title={generatingVoice ? 'Generating voice...' : voiceUrl ? 'Regenerate voice' : 'Generate voice'}
-              >
-                <Volume2 size={11} className={generatingVoice ? 'animate-pulse' : ''} />
-              </button>
-            )}
-            {onContinue && isLastAssistant && message.role === 'assistant' && (
-              <button
-                onClick={onContinue}
-                className="p-0.5 rounded transition-colors"
-                style={{ color: 'var(--color-text-tertiary)' }}
-                title="Continue response"
-              >
-                <ChevronsRight size={11} />
-              </button>
-            )}
-            {feedbackEnabled && message.role === 'assistant' && message.serverMessageId != null && (
-              <FeedbackButtons messageId={message.serverMessageId} />
-            )}
-            {onDelete && (
-              <button
-                onClick={handleDelete}
-                className="p-0.5 rounded transition-colors"
-                style={{ color: 'var(--color-text-tertiary)' }}
-                title="Delete message"
-              >
-                <Trash2 size={11} />
-              </button>
-            )}
-            {/* Per-message timestamp — shown on hover */}
-            <span
-              style={{ marginLeft: 'auto', color: 'var(--color-text-tertiary)', fontSize: '0.68rem', userSelect: 'none' }}
-              title={new Date(message.createdAt).toLocaleString()}
-            >
-              {formatRelativeTime(message.createdAt)}
-            </span>
-          </div>
-        )}
       </div>
     </div>
   );

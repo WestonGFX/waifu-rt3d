@@ -1,5 +1,12 @@
 """Relationship milestone detection for the Adaptive Intelligence Engine.
 
+.. deprecated::
+    ``backend.adaptive.milestones`` is superseded by ``backend.bond.milestones``
+    which owns the canonical milestone domain.  This module is kept only so
+    existing REST endpoints (``/api/aie/milestones/…``) do not break.
+    Do NOT add new milestone types here — add them to
+    ``backend/bond/milestones.py`` instead.
+
 Tracks and records meaningful moments in the user–character relationship —
 first conversations, loyalty session counts, emotional trust, and topic
 expertise.  Each milestone is recorded once and never duplicated.

@@ -412,6 +412,13 @@ AVATARS  = STORAGE / "avatars"
 AUDIO    = STORAGE / "audio"
 DB_PATH  = STORAGE / "app.db"
 
+# TTL cache for full-AIE tuner/behavior results (keyed by char_id).
+# Preferences don't change turn-by-turn, so a 5-minute staleness window
+# is semantically correct and cuts ~3 DB reads per turn in full-AIE mode.
+_AIE_PROFILE_CACHE: dict[int, tuple[float, dict | None]] = {}
+_AIE_BEHAVIOR_CACHE: dict[int, tuple[float, dict]] = {}
+_AIE_CACHE_TTL_S = 300  # 5 minutes
+
 # --- Environment-overridable defaults ---
 # These allow Docker/production deployments to configure endpoints without
 # editing app.json. The env var takes priority over the config file value.
@@ -4492,9 +4499,17 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         # only meaningful after the reflector has gathered ≥50 messages of
         # history.  See docs/research/2026-05-25-aie-module-analysis.md.
         if _aie_enabled(cfg) and not _aie_lite_mode(cfg):
+            import time as _time_mod
+            _now = _time_mod.monotonic()
+
             try:
                 from backend.adaptive.tuner import load_user_profile, profile_to_prompt_instructions
-                _user_profile = load_user_profile(char_id, cur)
+                _cached_profile = _AIE_PROFILE_CACHE.get(char_id)
+                if _cached_profile and (_now - _cached_profile[0]) < _AIE_CACHE_TTL_S:
+                    _user_profile = _cached_profile[1]
+                else:
+                    _user_profile = load_user_profile(char_id, cur)
+                    _AIE_PROFILE_CACHE[char_id] = (_now, _user_profile)
                 if _user_profile:
                     _adaptive_instructions = profile_to_prompt_instructions(_user_profile)
                     if _adaptive_instructions:
@@ -4504,8 +4519,13 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
 
             # ── Feature 19: Behavior adaptation modifiers ──────────────────
             try:
-                with db_ctx() as _content_con:
-                    _behavior_mods = compute_behavior_modifiers(char_id, _content_con)
+                _cached_behavior = _AIE_BEHAVIOR_CACHE.get(char_id)
+                if _cached_behavior and (_now - _cached_behavior[0]) < _AIE_CACHE_TTL_S:
+                    _behavior_mods = _cached_behavior[1]
+                else:
+                    with db_ctx() as _content_con:
+                        _behavior_mods = compute_behavior_modifiers(char_id, _content_con)
+                    _AIE_BEHAVIOR_CACHE[char_id] = (_now, _behavior_mods)
                 if _behavior_mods.get("confidence", 0) > 0.1:
                     _behavior_block = build_behavior_prompt_block(_behavior_mods)
                     if _behavior_block:
@@ -4515,6 +4535,9 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                         _regression = check_engagement_regression(char_id, _reg_con)
                         if _regression:
                             revert_adaptations(char_id, _reg_con)
+                            # Invalidate cache so the reverted profile is picked up next turn.
+                            _AIE_PROFILE_CACHE.pop(char_id, None)
+                            _AIE_BEHAVIOR_CACHE.pop(char_id, None)
                             logger.info(f"[Adaptive] Reverted adaptations for char={char_id}: {_regression}")
             except Exception as _beh_err:
                 logger.debug(f"[Adaptive] Behavior modifiers skipped: {_beh_err}")

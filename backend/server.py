@@ -825,10 +825,13 @@ def index():
     Valid values: ``"neon"``, ``"sakura"``, ``"nova"``, ``"v2"``
     """
     # Check env var first, then config file
+    # Session-47 v1-Lite (queue #12): default_frontend default flipped
+    # from "neon" to "sakura" — Neon is archived.  Legacy index serve
+    # still falls back to FRONTEND / index.html below.
     target = str(os.environ.get(DEFAULT_FRONTEND_ENV, "")).strip().lower()
     if not target:
         cfg = load_config()
-        target = str(cfg.get("default_frontend", "neon")).strip().lower()
+        target = str(cfg.get("default_frontend", "sakura")).strip().lower()
 
     if target == "sakura":
         sakura_index = FRONTEND_SAKURA_DIST / "index.html"
@@ -1761,7 +1764,7 @@ async def reset_config_route():
         "vrm_scale": 1.0,
         "vrm_offset_x": 0.0,
         "vrm_offset_y": 0.0,
-        "default_frontend": "neon",
+        "default_frontend": "sakura",
     }
     save_config(default_cfg)
     logger.info("Config reset to factory defaults")
@@ -2363,15 +2366,19 @@ async def get_frontend_info():
         the Referer header or defaulting to the configured default).
     """
     cfg = load_config()
-    default = str(cfg.get("default_frontend", "neon")).strip().lower()
+    # Session-47 v1-Lite (queue #12): Sakura is the only actively-developed
+    # frontend; Neon + Girly are archived.  Default flipped to Sakura and
+    # the archived frontends are no longer surfaced through this endpoint
+    # (route handlers below still exist per CLAUDE.md "never delete
+    # endpoints" — they serve their bundled dist if anyone navigates
+    # directly to /neon or /girly).
+    default = str(cfg.get("default_frontend", "sakura")).strip().lower()
 
-    available = [{"id": "neon", "name": "Neon (Cyberpunk)", "ready": True}]
+    available: list[dict] = []
     sakura_ready = (FRONTEND_SAKURA_DIST / "index.html").exists()
     available.append({"id": "sakura", "name": "Sakura (Modern)", "ready": sakura_ready})
     nova_ready = (FRONTEND_NOVA_DIST / "index.html").exists()
     available.append({"id": "nova", "name": "Nova (Glass)", "ready": nova_ready})
-    girly_ready = (FRONTEND_GIRLY_DIST / "index.html").exists()
-    available.append({"id": "girly", "name": "Girly (Anime)", "ready": girly_ready})
 
     return {"default": default, "available": available}
 

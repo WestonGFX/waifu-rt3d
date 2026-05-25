@@ -4,7 +4,6 @@ import type { Character } from '../lib/types';
 import { useAppStore } from '../stores/appStore';
 import { api } from '../lib/api';
 import { RELEASE_NOTES } from '../data/changelog';
-import { BondPill } from './BondPill';
 import { ContextBudgetPill } from './ContextBudgetPill';
 
 /** Current app version, sourced from the latest changelog entry. */
@@ -37,14 +36,6 @@ function getCurrentTimeSlot(): string {
   if (h >= 21) return 'night';
   return 'late night';
 }
-
-const IDLE_PHRASES = [
-  'daydreaming...',
-  'humming a song~',
-  'reading something...',
-  'thinking about you...',
-  'gazing out the window...'
-];
 
 /**
  * Chat header with character name, online indicator, idle status, relationship
@@ -121,8 +112,7 @@ export function StatusBar({
   messageCount?: number;
   sessionId?: number | null;
 }) {
-  const { toggleModelPanel, modelPanelOpen, openOverlay, settingsTier, setSettingsTier, soundscapeOpen, toggleSoundscape, bondLevel, bondXp, bondXpToNext, bondTier, bondNextUnlock, layoutMode } = useAppStore();
-  const [idlePhrase, setIdlePhrase] = useState(IDLE_PHRASES[0]);
+  const { toggleModelPanel, modelPanelOpen, openOverlay, settingsTier, setSettingsTier, soundscapeOpen, toggleSoundscape, layoutMode } = useAppStore();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -189,15 +179,7 @@ export function StatusBar({
     return () => document.removeEventListener('mousedown', handle);
   }, [overflowOpen]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setIdlePhrase(prev => {
-        const idx = IDLE_PHRASES.indexOf(prev);
-        return IDLE_PHRASES[(idx + 1) % IDLE_PHRASES.length];
-      });
-    }, 10000);
-    return () => clearInterval(interval);
-  }, []);
+  // idlePhrase rotation effect deleted with BondPill (session-47 queue #10).
 
   const toggleSearch = () => {
     if (searchOpen) {
@@ -296,23 +278,10 @@ export function StatusBar({
             {/* Feature B4: Author's Note active badge */}
             <AuthorNoteBadge sessionId={sessionId} />
           </div>
-          {/* Session-46 declutter: bond pill (Lv/XP/tier/streak chrome) hidden
-              by default. Gamification numbers next to a relationship is the
-              wrong metaphor for an emotional companion app. To restore: remove
-              the `false && ` guard below. */}
-          {false && (
-            <BondPill
-              charId={character.id}
-              bondLevel={bondLevel}
-              bondXp={bondXp}
-              xpToNext={bondXpToNext}
-              tier={bondTier}
-              nextUnlock={bondNextUnlock}
-              messageCount={messageCount}
-              idlePhrase={idlePhrase}
-              compact={isNarrow}
-            />
-          )}
+          {/* Session-47 (queue #10): bond pill deleted (was hidden behind
+              `false &&` since session-46).  XP/Level/tier/streak chrome
+              is the wrong metaphor for an emotional companion app.
+              Restore from git history if ever wanted back. */}
         </div>
 
         {/* Tier 2 HUD — visible right cluster: Search · ContextBudget · Settings · 3D · ⋯

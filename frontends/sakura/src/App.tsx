@@ -40,9 +40,10 @@ import { ModelBrowser } from './components/ModelBrowser';
 import { PhotoModeOverlay } from './components/PhotoModeOverlay';
 import { GalleryOverlay } from './components/GalleryOverlay';
 import { CinematicOverlay } from './components/CinematicOverlay';
-import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
-import { LevelUpCelebration } from './components/LevelUpCelebration';
-import { AchievementToast } from './components/AchievementToast';
+// Session-47 (queue #10): MilestoneCelebration, LevelUpCelebration,
+// AchievementToast deleted — full-screen "WILD POPUP HAS APPEARED"
+// patterns the user explicitly hates.  The flags below stayed at
+// `false` through session-46; session-47 removes the dead code too.
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { CommandPalette } from './components/CommandPalette';
 import { HotkeySheet } from './components/HotkeySheet';
@@ -130,11 +131,9 @@ function PetApp() {
 // `false &&` short-circuits type evaluation and breaks `activeCharacter`
 // narrowing). Flip any of these to `true` to restore the corresponding UI.
 const SHOW_NSFW_OVERLAYS: boolean = false;
-const SHOW_ACHIEVEMENT_TOAST: boolean = false;
 // Session-46 declutter: all gamification celebration modals
 // (BOND LEVEL UP, AFFINITY MILESTONE) — user directive: "this kind of code
 // makes our app look SO cheap and buggy". Flip to true to restore.
-const SHOW_CELEBRATION_POPUPS: boolean = false;
 
 function MainApp() {
   const {
@@ -144,8 +143,10 @@ function MainApp() {
     customKeyBindings, customTheme,
     cinematicMode, toggleCinematicMode,
     devMode,
-    pendingLevelUp, clearPendingLevelUp,
-    pendingAchievement, clearPendingAchievement,
+    // pendingLevelUp / pendingAchievement removed from this destructure
+    // session-47 — their consumers (LevelUpCelebration, AchievementToast)
+    // were deleted with queue #10.  Store fields stay for now (cleared
+    // by chatStore on send) and will be GC'd in the burn-down's last pass.
     toggleMinimalMode,
     layoutMode,
   } = useAppStore();
@@ -225,29 +226,8 @@ function MainApp() {
   const [showHelp, setShowHelp] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  // ── Milestone celebration (Feature #3) ─────────────────────────────────
-  // Poll the relationship endpoint to detect affinity tier advances.
-  const [currentAffinity, setCurrentAffinity] = useState<number | null>(null);
-  useEffect(() => {
-    if (!activeCharacter?.id) { setCurrentAffinity(null); return; }
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const res = await fetch(`/api/characters/${activeCharacter.id}/relationship`);
-        if (!cancelled && res.ok) {
-          const data = await res.json();
-          const rel = data.relationship ?? data;
-          setCurrentAffinity(typeof rel.affinity === 'number' ? rel.affinity : null);
-        }
-      } catch { /* non-critical */ }
-    };
-    poll();
-    const iv = setInterval(poll, 8000);
-    return () => { cancelled = true; clearInterval(iv); };
-  }, [activeCharacter?.id]);
-
-  const charNameForCelebration = activeCharacter?.name ?? '';
-  const { celebrationTier, clearCelebration } = useMilestoneDetection(currentAffinity, charNameForCelebration);
+  // Affinity polling + useMilestoneDetection removed session-47 (queue #10)
+  // — was only a feed for the deleted MilestoneCelebration popup.
 
   // Compression modal uses the shared overlay system ('compression' key)
   // setDraft allows ScenarioLibrary to pre-fill the chat composer from App level.
@@ -618,33 +598,10 @@ function MainApp() {
       {/* B1: Cinematic immersion overlay — above everything except celebration */}
       {cinematicMode && activeCharacter && <CinematicOverlay />}
 
-      {/* Session-46 cut: ALL celebration modals (BOND LEVEL UP, AFFINITY
-          MILESTONE) — full-screen "WILD POPUP HAS APPEARED" pattern that
-          the user explicitly hates. State still mutates underneath; no UI. */}
-      {SHOW_CELEBRATION_POPUPS && (
-        <>
-          <MilestoneCelebration
-            tier={celebrationTier}
-            charName={charNameForCelebration}
-            onClose={clearCelebration}
-          />
-          {pendingLevelUp && (
-            <LevelUpCelebration
-              newLevel={pendingLevelUp.newLevel}
-              characterName={activeCharacter?.name ?? ''}
-              tier={pendingLevelUp.tier}
-              previousTier={pendingLevelUp.previousTier}
-              unlocks={pendingLevelUp.unlocks}
-              onDismiss={clearPendingLevelUp}
-            />
-          )}
-        </>
-      )}
-
-      {/* Session-46 declutter: achievement toasts (XP / streaks / milestones)
-          are gamification noise that overlaps the bond pill and breaks
-          conversational flow. Disabled. To restore: remove the `false && `. */}
-      {SHOW_ACHIEVEMENT_TOAST && <AchievementToast achievement={pendingAchievement} onDismiss={clearPendingAchievement} />}
+      {/* Session-47 (queue #10): MilestoneCelebration, LevelUpCelebration,
+          AchievementToast deleted.  Bond progression state still mutates
+          underneath (no harm); the popup surfaces are gone.  See commit
+          history for the previous JSX. */}
 
       <HotkeySheet open={showHelp} shortcuts={shortcuts} onClose={() => setShowHelp(false)} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />

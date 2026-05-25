@@ -5,7 +5,7 @@ import { DiscoverView } from './views/DiscoverView';
 import { CreateView } from './views/CreateView';
 import { ChatThread } from './views/ChatThread';
 import { MemoryPanel } from './components/MemoryPanel';
-import { MilestoneCelebration, useMilestoneDetection } from './components/MilestoneCelebration';
+// MilestoneCelebration removed session-47 (queue #10) — gamification popup deleted.
 import { FeatureTipQueue } from './components/discovery/FeatureTipQueue';
 
 // Lazy-load SettingsView and all wizards — these are conditionally rendered
@@ -122,28 +122,7 @@ export function MobileApp() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sidebarSection]);
 
-  // ── Milestone celebration ────────────────────────────────────────────────
-  const [currentAffinity, setCurrentAffinity] = useState<number | null>(null);
-  useEffect(() => {
-    if (!activeCharacter?.id) { setCurrentAffinity(null); return; }
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const res = await fetch(`/api/characters/${activeCharacter.id}/relationship`);
-        if (!cancelled && res.ok) {
-          const data = await res.json();
-          const rel = data.relationship ?? data;
-          setCurrentAffinity(typeof rel.affinity === 'number' ? rel.affinity : null);
-        }
-      } catch { /* non-critical */ }
-    };
-    poll();
-    const iv = setInterval(poll, 8000);
-    return () => { cancelled = true; clearInterval(iv); };
-  }, [activeCharacter?.id]);
-
-  const charNameForCelebration = activeCharacter?.name ?? '';
-  const { celebrationTier, clearCelebration } = useMilestoneDetection(currentAffinity, charNameForCelebration);
+  // Milestone celebration block removed session-47 (queue #10) — fed only the deleted overlay.
 
   // ── PWA install prompt ───────────────────────────────────────────────────
   const installPromptRef = useRef<Event & { prompt: () => Promise<void> } | null>(null);
@@ -225,14 +204,8 @@ export function MobileApp() {
       {/* Fixed bottom navigation */}
       <TabBar />
 
-      {/* Overlays — shared with desktop (memory, milestone) */}
+      {/* Overlays — shared with desktop (memory) */}
       <MemoryPanel />
-
-      <MilestoneCelebration
-        tier={celebrationTier}
-        charName={charNameForCelebration}
-        onClose={clearCelebration}
-      />
 
       {/* Onboarding + quick-setup wizards — lazily loaded */}
       <Suspense fallback={null}>

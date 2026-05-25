@@ -16,6 +16,7 @@ import { useMemorialScene } from '../hooks/useMemorialScene';
 import { useAdaptivePacing } from '../hooks/useAdaptivePacing';
 import { useCharacterAudio } from '../hooks/useCharacterAudio';
 import { api } from '../lib/api';
+import { stripAnnotations } from '../lib/textUtils';
 import { useToastStore } from '../components/ToastQueue';
 import { downloadBlob } from '../lib/downloadFile';
 import { DialogueBubble } from '../components/DialogueBubble';
@@ -584,7 +585,7 @@ export function ChatThread() {
   const handleExport = useCallback(() => {
     const lines = messages.map(m => {
       const who = m.role === 'user' ? 'You' : (activeCharacter?.name ?? 'AI');
-      return `[${who}]: ${m.text}`;
+      return `[${who}]: ${stripAnnotations(m.text)}`;
     });
     const content = `${activeCharacter?.name ?? 'Chat'} — exported ${new Date().toLocaleString()}\n\n${lines.join('\n\n')}`;
     const blob = new Blob([content], { type: 'text/plain' });

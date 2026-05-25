@@ -8,20 +8,9 @@ import { FeedbackButtons } from './FeedbackButtons';
 import { downloadUrl } from '../lib/downloadFile';
 import { api } from '../lib/api';
 import { parseFull } from '../lib/parseActions';
+import { stripAnnotations } from '../lib/textUtils';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
-
-/** Strip LLM annotation brackets left behind in old DB messages. */
-function stripAnnotations(text: string): string {
-  return text
-    .replace(/\[emotional expression:[^\]]*\]/gi, '')
-    .replace(/\[gesture:[^\]]*\]/gi, '')
-    .replace(/\[action:[^\]]*\]/gi, '')
-    .replace(/\[mood:[^\]]*\]/gi, '')
-    .replace(/\[facial:[^\]]*\]/gi, '')
-    .replace(/\[emotion:[^\]]*\]/gi, '')
-    .trim();
-}
 
 /** Format a Unix-ms timestamp as a relative time string ("2 min ago", "just now"). */
 function formatRelativeTime(ts: number): string {

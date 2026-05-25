@@ -5548,19 +5548,30 @@ async def chat_stream(req: Request):
     # ── Kokoro v1: optional mind-state + JSON-contract injection ─────
     # When kokoro_enabled is False (default) prepare_turn returns an empty
     # fragment and the assembled prompt is byte-identical to pre-Kokoro.
+    #
+    # Auto-bypass for reasoning models (qwen3, deepseek-r1, o1, qwq): the
+    # structured JSON contract is too heavy for small reasoning models that
+    # already burn most of their token budget on thinking. With Kokoro on,
+    # qwen3.5-9b emits verbose meta-analysis instead of either valid Kokoro
+    # JSON or a plain reply, so chat is unusable. Session-46 live testing.
     _kokoro_fragment_s: str | None = None
     try:
         if cfg.get("kokoro_enabled"):
-            from backend.kokoro.service import prepare_turn as _kokoro_prepare
-            _kokoro_ctx_s = _kokoro_prepare(
-                con,
-                character_id=char_id,
-                session_id=session_id,
-                kokoro_enabled=True,
-                nsfw_enabled=int(cfg.get("content_filter_level", 0) or 0) > 0,
-            )
-            if _kokoro_ctx_s.fragment:
-                _kokoro_fragment_s = _kokoro_ctx_s.fragment
+            from backend.llm.adapters.openai_compat import _is_reasoning_model
+            _kokoro_model = (cfg.get("llm") or {}).get("model") or ""
+            if _is_reasoning_model(_kokoro_model):
+                logger.info("[kokoro] bypassed for reasoning model %r — plain chat path", _kokoro_model)
+            else:
+                from backend.kokoro.service import prepare_turn as _kokoro_prepare
+                _kokoro_ctx_s = _kokoro_prepare(
+                    con,
+                    character_id=char_id,
+                    session_id=session_id,
+                    kokoro_enabled=True,
+                    nsfw_enabled=int(cfg.get("content_filter_level", 0) or 0) > 0,
+                )
+                if _kokoro_ctx_s.fragment:
+                    _kokoro_fragment_s = _kokoro_ctx_s.fragment
     except Exception as _kokoro_err:
         logger.warning("[kokoro] prepare_turn failed for char %s: %s", char_id, _kokoro_err)
 

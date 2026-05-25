@@ -55,20 +55,41 @@ def _is_reasoning_model(model: str) -> bool:
 
 
 def _apply_reasoning_defaults(payload: dict, model: str) -> None:
-    """Inject `chat_template_kwargs.enable_thinking=False` for reasoning models.
+    """Disable thinking-mode output for reasoning-family models.
 
-    No-op when the caller already supplied `chat_template_kwargs` (respects
-    explicit override). Mutates `payload` in place.
+    Two-pronged because LM Studio's GGUF qwen3 builds ignore
+    `chat_template_kwargs.enable_thinking=False` (verified in session-46
+    live testing) but DO honor the message-level `/no_think` directive
+    qwen3 ships with. We send both so whichever the server honors wins.
+
+    For non-qwen3 reasoning models (deepseek-r1, o1, qwq) the message-level
+    directive is a harmless trailing token they ignore; the template kwarg
+    is the real lever for those. So sending both is safe across the family.
 
     Args:
-        payload: Request payload dict (will be mutated).
+        payload: Request payload dict (will be mutated). Must contain
+            ``messages`` list with at least one user-role message.
         model: Configured model name used to detect reasoning families.
     """
     if not _is_reasoning_model(model):
         return
-    if "chat_template_kwargs" in payload:
+    if "chat_template_kwargs" not in payload:
+        payload["chat_template_kwargs"] = {"enable_thinking": False}
+
+    # Append qwen3's `/no_think` directive to the LAST user message. This is
+    # the runtime knob qwen3 actually checks (LM Studio's chat template
+    # ignores enable_thinking for GGUF builds). The directive is invisible
+    # to the model's persona — it's stripped by the chat template before
+    # the model sees the message.
+    messages = payload.get("messages")
+    if not messages:
         return
-    payload["chat_template_kwargs"] = {"enable_thinking": False}
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].get("role") == "user":
+            current = messages[i].get("content")
+            if isinstance(current, str) and "/no_think" not in current:
+                messages[i] = {**messages[i], "content": current + " /no_think"}
+            break
 
 class OpenAICompatAdapter(LLMAdapter):
     """LLM adapter for OpenAI-compatible chat completion APIs.

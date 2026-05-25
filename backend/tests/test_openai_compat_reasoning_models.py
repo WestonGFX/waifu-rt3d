@@ -69,6 +69,40 @@ class TestApplyReasoningDefaults:
         _apply_reasoning_defaults(payload, "qwen/qwen3.5-9b")
         assert payload["chat_template_kwargs"] == {"enable_thinking": True, "extra": "keep"}
 
+    def test_appends_no_think_to_last_user_message_for_qwen3(self):
+        payload = {
+            "model": "qwen3",
+            "messages": [
+                {"role": "system", "content": "You are Rin."},
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi back"},
+                {"role": "user", "content": "tell me a story"},
+            ],
+        }
+        _apply_reasoning_defaults(payload, "qwen/qwen3.5-9b")
+        # Last user message gets the directive
+        assert payload["messages"][-1]["content"] == "tell me a story /no_think"
+        # Earlier user message is untouched
+        assert payload["messages"][1]["content"] == "hello"
+        # System message untouched
+        assert payload["messages"][0]["content"] == "You are Rin."
+
+    def test_no_think_not_duplicated_when_already_present(self):
+        payload = {
+            "model": "qwen3",
+            "messages": [{"role": "user", "content": "hello /no_think"}],
+        }
+        _apply_reasoning_defaults(payload, "qwen/qwen3.5-9b")
+        assert payload["messages"][0]["content"] == "hello /no_think"
+
+    def test_no_think_skipped_for_non_reasoning_model(self):
+        payload = {
+            "model": "gemma",
+            "messages": [{"role": "user", "content": "hello"}],
+        }
+        _apply_reasoning_defaults(payload, "gemma-4-26b-it")
+        assert payload["messages"][0]["content"] == "hello"
+
 
 class TestChatReasoningFallback:
     """Non-streaming `chat()`: empty content → reasoning_content fallback."""

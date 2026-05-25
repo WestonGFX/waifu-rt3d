@@ -125,6 +125,13 @@ function PetApp() {
 }
 
 /** Full application with sidebar, chat, settings, overlays, etc. */
+// Session-46 declutter feature flags. Typed `boolean` (not literal `false`)
+// so TypeScript still narrows the conditional chain inside the JSX (literal
+// `false &&` short-circuits type evaluation and breaks `activeCharacter`
+// narrowing). Flip any of these to `true` to restore the corresponding UI.
+const SHOW_NSFW_OVERLAYS: boolean = false;
+const SHOW_ACHIEVEMENT_TOAST: boolean = false;
+
 function MainApp() {
   const {
     loadCharacters, loadConfig, activeCharacter, sidebarSection,
@@ -442,7 +449,7 @@ function MainApp() {
 
       {/* F8: Intimate Scenario Browser — session-46 cut (bloat per NSFW audit;
           duplicate of ScenarioPicker). Restore by removing `false &&`. */}
-      {false && (
+      {SHOW_NSFW_OVERLAYS && (
         <IntimateScenarioBrowser
           isOpen={activeOverlay === 'intimatescenarios'}
           onClose={closeOverlay}
@@ -461,7 +468,7 @@ function MainApp() {
 
       {/* F11: Fantasy Journal — session-46 cut (bloat; read-only DB viewer
           with no LLM context injection). */}
-      {false && activeOverlay === 'fantasyjournal' && activeCharacter && (
+      {SHOW_NSFW_OVERLAYS && activeOverlay === 'fantasyjournal' && activeCharacter && (
         <FantasyJournal
           isOpen
           onClose={closeOverlay}
@@ -472,7 +479,7 @@ function MainApp() {
 
       {/* F1: Milestone Timeline — session-46 cut (UI; the underlying
           `intimate_milestones` table + tracker still injects context). */}
-      {false && activeOverlay === 'milestones' && activeCharacter && (
+      {SHOW_NSFW_OVERLAYS && activeOverlay === 'milestones' && activeCharacter && (
         <MilestoneTimeline
           isOpen
           onClose={closeOverlay}
@@ -501,7 +508,7 @@ function MainApp() {
 
       {/* F42: Intimate Photo Gallery — session-46 cut (bloat; pure viewer,
           no LLM context). */}
-      {false && activeOverlay === 'intimategallery' && activeCharacter && (
+      {SHOW_NSFW_OVERLAYS && activeOverlay === 'intimategallery' && activeCharacter && (
         <IntimateGallery
           isOpen
           onClose={closeOverlay}
@@ -522,7 +529,7 @@ function MainApp() {
 
       {/* F33: Audio Story Player — session-46 cut (bloat; TTS narration UI
           orthogonal to chat). */}
-      {false && activeOverlay === 'audiostories' && activeCharacter && (
+      {SHOW_NSFW_OVERLAYS && activeOverlay === 'audiostories' && activeCharacter && (
         <AudioStoryPlayer
           isOpen
           onClose={closeOverlay}
@@ -533,7 +540,7 @@ function MainApp() {
 
       {/* F22: Intimate Quiz Progress — session-46 cut (bloat; questionnaire
           UI, no prompt injection). */}
-      {false && activeOverlay === 'intimatequiz' && activeCharacter && (
+      {SHOW_NSFW_OVERLAYS && activeOverlay === 'intimatequiz' && activeCharacter && (
         <IntimateQuizPanel
           isOpen
           onClose={closeOverlay}
@@ -544,7 +551,7 @@ function MainApp() {
 
       {/* F47: Shared Fantasy Builder — session-46 cut (bloat; CRUD UI for
           rows never injected into LLM context). */}
-      {false && activeOverlay === 'sharedfantasies' && activeCharacter && (
+      {SHOW_NSFW_OVERLAYS && activeOverlay === 'sharedfantasies' && activeCharacter && (
         <SharedFantasyBuilder
           isOpen
           onClose={closeOverlay}
@@ -565,7 +572,7 @@ function MainApp() {
 
       {/* F35: Scene Replay Viewer — session-46 cut (bloat; rendered with
           replay=null anyway, suggesting it never delivered on its premise). */}
-      {false && activeOverlay === 'scenereplay' && (
+      {SHOW_NSFW_OVERLAYS && activeOverlay === 'scenereplay' && (
         <SceneReplayViewer
           isOpen
           onClose={closeOverlay}
@@ -629,7 +636,7 @@ function MainApp() {
       {/* Session-46 declutter: achievement toasts (XP / streaks / milestones)
           are gamification noise that overlaps the bond pill and breaks
           conversational flow. Disabled. To restore: remove the `false && `. */}
-      {false && <AchievementToast achievement={pendingAchievement} onDismiss={clearPendingAchievement} />}
+      {SHOW_ACHIEVEMENT_TOAST && <AchievementToast achievement={pendingAchievement} onDismiss={clearPendingAchievement} />}
 
       <HotkeySheet open={showHelp} shortcuts={shortcuts} onClose={() => setShowHelp(false)} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />

@@ -143,10 +143,6 @@ function MainApp() {
     customKeyBindings, customTheme,
     cinematicMode, toggleCinematicMode,
     devMode,
-    // pendingLevelUp / pendingAchievement removed from this destructure
-    // session-47 — their consumers (LevelUpCelebration, AchievementToast)
-    // were deleted with queue #10.  Store fields stay for now (cleared
-    // by chatStore on send) and will be GC'd in the burn-down's last pass.
     toggleMinimalMode,
     layoutMode,
   } = useAppStore();

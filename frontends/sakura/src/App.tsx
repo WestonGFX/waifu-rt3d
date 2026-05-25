@@ -440,11 +440,14 @@ function MainApp() {
 
       {/* ── NSFW Phase Overlays ──────────────────────────────────── */}
 
-      {/* F8: Intimate Scenario Browser */}
-      <IntimateScenarioBrowser
-        isOpen={activeOverlay === 'intimatescenarios'}
-        onClose={closeOverlay}
-      />
+      {/* F8: Intimate Scenario Browser — session-46 cut (bloat per NSFW audit;
+          duplicate of ScenarioPicker). Restore by removing `false &&`. */}
+      {false && (
+        <IntimateScenarioBrowser
+          isOpen={activeOverlay === 'intimatescenarios'}
+          onClose={closeOverlay}
+        />
+      )}
 
       {/* F39: Secret Desire Tree */}
       {activeOverlay === 'desiretree' && activeCharacter && (
@@ -456,8 +459,9 @@ function MainApp() {
         />
       )}
 
-      {/* F11: Fantasy Journal */}
-      {activeOverlay === 'fantasyjournal' && activeCharacter && (
+      {/* F11: Fantasy Journal — session-46 cut (bloat; read-only DB viewer
+          with no LLM context injection). */}
+      {false && activeOverlay === 'fantasyjournal' && activeCharacter && (
         <FantasyJournal
           isOpen
           onClose={closeOverlay}
@@ -466,8 +470,9 @@ function MainApp() {
         />
       )}
 
-      {/* F1: Milestone Timeline */}
-      {activeOverlay === 'milestones' && activeCharacter && (
+      {/* F1: Milestone Timeline — session-46 cut (UI; the underlying
+          `intimate_milestones` table + tracker still injects context). */}
+      {false && activeOverlay === 'milestones' && activeCharacter && (
         <MilestoneTimeline
           isOpen
           onClose={closeOverlay}
@@ -494,8 +499,9 @@ function MainApp() {
         characterName={activeCharacter?.name}
       />
 
-      {/* F42: Intimate Photo Gallery */}
-      {activeOverlay === 'intimategallery' && activeCharacter && (
+      {/* F42: Intimate Photo Gallery — session-46 cut (bloat; pure viewer,
+          no LLM context). */}
+      {false && activeOverlay === 'intimategallery' && activeCharacter && (
         <IntimateGallery
           isOpen
           onClose={closeOverlay}
@@ -514,8 +520,9 @@ function MainApp() {
         />
       )}
 
-      {/* F33: Audio Story Player */}
-      {activeOverlay === 'audiostories' && activeCharacter && (
+      {/* F33: Audio Story Player — session-46 cut (bloat; TTS narration UI
+          orthogonal to chat). */}
+      {false && activeOverlay === 'audiostories' && activeCharacter && (
         <AudioStoryPlayer
           isOpen
           onClose={closeOverlay}
@@ -524,8 +531,9 @@ function MainApp() {
         />
       )}
 
-      {/* F22: Intimate Quiz Progress */}
-      {activeOverlay === 'intimatequiz' && activeCharacter && (
+      {/* F22: Intimate Quiz Progress — session-46 cut (bloat; questionnaire
+          UI, no prompt injection). */}
+      {false && activeOverlay === 'intimatequiz' && activeCharacter && (
         <IntimateQuizPanel
           isOpen
           onClose={closeOverlay}
@@ -534,8 +542,9 @@ function MainApp() {
         />
       )}
 
-      {/* F47: Shared Fantasy Builder */}
-      {activeOverlay === 'sharedfantasies' && activeCharacter && (
+      {/* F47: Shared Fantasy Builder — session-46 cut (bloat; CRUD UI for
+          rows never injected into LLM context). */}
+      {false && activeOverlay === 'sharedfantasies' && activeCharacter && (
         <SharedFantasyBuilder
           isOpen
           onClose={closeOverlay}
@@ -554,8 +563,9 @@ function MainApp() {
         />
       )}
 
-      {/* F35: Scene Replay Viewer */}
-      {activeOverlay === 'scenereplay' && (
+      {/* F35: Scene Replay Viewer — session-46 cut (bloat; rendered with
+          replay=null anyway, suggesting it never delivered on its premise). */}
+      {false && activeOverlay === 'scenereplay' && (
         <SceneReplayViewer
           isOpen
           onClose={closeOverlay}

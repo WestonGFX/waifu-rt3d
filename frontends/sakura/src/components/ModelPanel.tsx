@@ -240,7 +240,7 @@ function ExpressionEditor({ shapes, values, onChange, onResetAll }: ExpressionEd
  * Auto-resolves VRM model by character name if not explicitly set.
  */
 export function ModelPanel({ character }: ModelPanelProps) {
-  const { modelPanelOpen, toggleModelPanel, setVrmStats, setViewportFps, cinematicMode, openOverlay } = useAppStore();
+  const { modelPanelOpen, toggleModelPanel, setVrmStats, setViewportFps, cinematicMode, openOverlay, activeOverlay } = useAppStore();
   const viewer = useViewerStore();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   /** Current emotion from chatStore — drives the emotion badge in the viewport overlay. */
@@ -694,6 +694,9 @@ export function ModelPanel({ character }: ModelPanelProps) {
           </div>
 
           {/* Viewer area — Unity iframe, Live2D canvas, or VRM/GLB iframe */}
+          {/* When any overlay is open, hide iframes via visibility:hidden (not display:none)
+              so the compositor layer doesn't paint over fixed overlays like the Settings
+              drawer. visibility:hidden keeps the GPU context alive for instant resume. */}
           <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
             {isUnity ? (
               <iframe
@@ -704,6 +707,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
                 className="w-full h-full border-0"
                 title="Unity 3D Viewer"
                 allow="autoplay"
+                style={activeOverlay ? { visibility: 'hidden' } : undefined}
               />
             ) : isLive2D ? (
               <motion.div
@@ -711,7 +715,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
                 initial={{ x: '100%' }}
                 animate={{ x: 0 }}
                 transition={{ duration: 1.2, ease: [0.33, 1, 0.68, 1] }}
-                style={{ width: '100%', height: '100%' }}
+                style={{ width: '100%', height: '100%', visibility: activeOverlay ? 'hidden' : 'visible' }}
               >
                 <Live2DErrorBoundary onError={(msg) => {
                   setVrmLoadState('failed');
@@ -743,6 +747,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
                 src="/shared/viewer/viewer.html?v=9"
                 className="w-full h-full border-0"
                 title="3D Viewer"
+                style={activeOverlay ? { visibility: 'hidden' } : undefined}
               />
             )}
 

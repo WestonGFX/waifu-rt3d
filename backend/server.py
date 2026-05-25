@@ -303,6 +303,39 @@ def load_config() -> dict:
         return {}
 
 
+class _BondGateClosed(Exception):
+    """Sentinel raised inside the bond-XP try block when
+    ``bond_xp_enabled`` is False.  Lets the existing try/except
+    structure absorb the gate without re-indenting every line.
+    Caught silently by the bond block — never propagates.
+    """
+
+
+def _bond_xp_enabled(cfg: dict | None) -> bool:
+    """Return whether per-turn Bond XP accrual is opted in.
+
+    Session-46 hid the BondPill, AchievementToast, and the celebration
+    popups from the chat surface.  Backend XP grants kept running
+    silently though — every turn ``add_bond_xp`` accumulates message /
+    daily / session-bonus XP, ``record_xp_event`` writes audit rows,
+    and ``check_and_record_unlocks`` arms milestone modals that would
+    surprise-fire if the UI was ever re-enabled.  v1-Lite ships with
+    the whole grant path behind a master flag, OFF by default.
+
+    Args:
+        cfg: Loaded app config dict (or ``None``).
+
+    Returns:
+        True iff ``bond_xp_enabled`` is truthy in the config.
+    """
+    if not cfg:
+        return False
+    try:
+        return bool(cfg.get("bond_xp_enabled", False))
+    except Exception:
+        return False
+
+
 def _aie_enabled(cfg: dict | None) -> bool:
     """Return whether the Adaptive Intelligence Engine is opted in.
 
@@ -4729,7 +4762,12 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 logger.debug(f"[Adaptive] engagement scoring skipped: {_eng_err}")
 
         # ── Bond Progression: earn XP with depth multiplier + bonuses ─────
+        # Gated behind ``bond_xp_enabled`` (session-47 v1-Lite).  When the
+        # BondPill UI is hidden, no XP accrues so re-enabling the pill
+        # later doesn't fire surprise milestone modals.
         try:
+            if not _bond_xp_enabled(cfg):
+                raise _BondGateClosed()
             from backend.bond.progression import add_bond_xp, get_xp_for_action, get_bond_level
             from backend.bond.xp_engine import calculate_message_xp, check_daily_bonus, check_session_bonus
             from backend.bond.milestones import check_and_record_unlocks, record_xp_event
@@ -4786,6 +4824,8 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 logger.info(f"[Bond] char={char_id} leveled up to {_new_level} (milestones: {len(_milestones)})")
             if _bond_result.get("unlocked_stories"):
                 logger.info(f"[Bond] char={char_id} unlocked stories: {_bond_result['unlocked_stories']}")
+        except _BondGateClosed:
+            pass  # bond_xp_enabled is False — silent skip, no log spam
         except Exception as _bond_err:
             logger.debug(f"[Bond] XP tracking skipped: {_bond_err}")
 
@@ -6354,8 +6394,11 @@ async def chat_stream(req: Request):
                     vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
 
                 # ── Bond Progression: earn XP with depth multiplier + bonuses ──
+                # Gated behind ``bond_xp_enabled`` (session-47 v1-Lite) — stream mirror.
                 if not incognito:
                     try:
+                        if not _bond_xp_enabled(cfg):
+                            raise _BondGateClosed()
                         from backend.bond.progression import add_bond_xp, get_xp_for_action, get_bond_level
                         from backend.bond.xp_engine import calculate_message_xp, check_daily_bonus, check_session_bonus
                         from backend.bond.milestones import check_and_record_unlocks, record_xp_event
@@ -6408,6 +6451,8 @@ async def chat_stream(req: Request):
                             _ms_s = check_and_record_unlocks(char_id, _old_level_s, _new_level_s, cur)
                             con.commit()
                             logger.info(f"[Bond] char={char_id} leveled up to {_new_level_s} (milestones: {len(_ms_s)})")
+                    except _BondGateClosed:
+                        pass  # bond_xp_enabled is False — silent skip
                     except Exception as _bond_err_s:
                         logger.debug(f"[Bond] XP tracking skipped (stream): {_bond_err_s}")
 

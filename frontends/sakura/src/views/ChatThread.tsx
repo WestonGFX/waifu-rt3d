@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Square, Mic, MicOff, Radio, X, BookOpen, Drama, EyeOff, Tv, Phone, Clapperboard, Shield, Sparkles, SlidersHorizontal, Check, MessageCircle, Zap, Italic, Pin } from 'lucide-react';
+import { Send, Square, Mic, MicOff, X, BookOpen, Drama, EyeOff, Tv, Clapperboard, Sparkles, SlidersHorizontal, Check, MessageCircle, Zap, Pin } from 'lucide-react';
 import { VNTextBox } from '../components/VNTextBox';
 import { VNPortrait } from '../components/VNPortrait';
 import { useAppStore } from '../stores/appStore';
 import { useViewerStore } from '../stores/viewerStore';
 
-import type { ReplyLengthMode } from '../stores/appStore';
+// ReplyLengthMode import removed session-47 — the footer cycle handler
+// that referenced it was deleted with queue item #3.
 import { useChatStore } from '../stores/chatStore';
 import { useProactive } from '../hooks/useProactive';
 import { useVoiceMode } from '../hooks/useVoiceMode';
@@ -54,7 +55,7 @@ type MicState = 'idle' | 'recording' | 'processing';
  * - Search, export, session history drawer
  */
 export function ChatThread() {
-  const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, setReplyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode, config, saveConfig, layoutMode } = useAppStore();
+  const { activeCharacter, modelPanelOpen, openOverlay, replyLengthMode, incognito, showQuickChips, cinematicMode, vnMode, toggleVnMode, config, layoutMode } = useAppStore();
   const { messages, draft, loading, setDraft, sendMessage, sendDirectorNote, abortMessage, setContext, loadHistory, sessionId, directorMode, setDirectorMode, regenerateImage, continueGeneration, toggleReaction } = useChatStore();
   void toggleReaction; // session-46: emoji reactions removed.
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -209,46 +210,12 @@ export function ChatThread() {
   // ── Feature 21: Adaptive pacing — resolve effective max_tokens ──────────
   const effectiveMaxTokens = useAdaptivePacing(replyLengthMode);
 
-  /**
-   * Cycles the reply length mode through brief → normal → detailed → auto → brief.
-   * Called when the user clicks the reply length badge in the composer bar.
-   */
-  const cycleReplyLengthMode = useCallback(() => {
-    const order: ReplyLengthMode[] = ['brief', 'normal', 'detailed', 'auto'];
-    const idx = order.indexOf(replyLengthMode);
-    setReplyLengthMode(order[(idx + 1) % order.length]);
-  }, [replyLengthMode, setReplyLengthMode]);
-
-  /**
-   * Cycles content filter level: 0 (Off) → -1 (NSFW) → 1 (SFW) → 0 (Off).
-   * Persists to backend config via appStore.saveConfig().
-   */
-  const contentFilterLevel = Number(config?.content_filter_level ?? 0);
-  const cycleContentFilter = useCallback(() => {
-    const order = [0, -1, 1];
-    const idx = order.indexOf(contentFilterLevel);
-    const next = order[(idx + 1) % order.length];
-    saveConfig({ content_filter_level: next });
-  }, [contentFilterLevel, saveConfig]);
-
-  /** Content filter display label + tint color. */
-  const filterLabel = contentFilterLevel === -1 ? 'Filter: 18+' : contentFilterLevel === 1 ? 'Filter: SFW' : 'Filter: Off';
-  const filterColor = contentFilterLevel === -1 ? '#ef4444' : contentFilterLevel === 1 ? '#22c55e' : undefined;
-
-  /**
-   * Cycles RP style preset: none → light_rp → full_rp → explicit_rp → none.
-   * Controls how much narration instruction the LLM receives.
-   */
+  // Footer-chip cycle handlers + display labels (cycleReplyLengthMode,
+  // cycleContentFilter, cycleRpStyle, filterLabel, filterColor, rpLabel)
+  // removed session-47 per v1-Lite declutter queue item #3 — the chip
+  // pill no longer renders.  ``rpStyle`` is still derived from config
+  // because the whisper-mode menu (RP-only) reads it.
   const rpStyle = String(config?.rp_style_preset ?? 'none');
-  const cycleRpStyle = useCallback(() => {
-    const order = ['none', 'light_rp', 'full_rp', 'explicit_rp'];
-    const idx = order.indexOf(rpStyle);
-    const next = order[(idx + 1) % order.length];
-    saveConfig({ rp_style_preset: next });
-  }, [rpStyle, saveConfig]);
-
-  /** RP style display label. */
-  const rpLabel = rpStyle === 'light_rp' ? 'Style: RP' : rpStyle === 'full_rp' ? 'Style: RP+' : rpStyle === 'explicit_rp' ? 'Style: 18+RP' : 'Style: Chat';
 
   // ── Proactive idle messages (Issue 8) ───────────────────────────────────
   const lastMsg = messages[messages.length - 1];
@@ -390,53 +357,10 @@ export function ChatThread() {
   }, [micState]);
 
   // ── Feature A: Web Speech API dictation callbacks ───────────────────────
-  /**
-   * Starts browser-native speech recognition using the Web Speech API.
-   * Appends interim and final transcripts to the current draft text.
-   * No-ops silently on unsupported browsers (button is hidden in that case).
-   *
-   * All SpeechRecognition types are cast via `unknown` because TypeScript's
-   * default lib does not include Web Speech API definitions.
-   */
-  const startDictation = useCallback(() => {
-    if (recognitionRef.current) return; // Guard: already running, ignore rapid double-click
-    // Resolve constructor — Chrome uses SpeechRecognition, older uses webkit prefix
-    type SRConstructor = new () => {
-      continuous: boolean;
-      interimResults: boolean;
-      lang: string;
-      onresult: ((e: {
-        resultIndex: number;
-        results: { isFinal: boolean; [0]: { transcript: string } }[];
-      }) => void) | null;
-      onerror: (() => void) | null;
-      onend: (() => void) | null;
-      start: () => void;
-      stop: () => void;
-    };
-    const win = window as unknown as Record<string, unknown>;
-    const SR = (win['SpeechRecognition'] ?? win['webkitSpeechRecognition']) as SRConstructor | undefined;
-    if (!SR) return; // Browser doesn't support — button is hidden when unsupported
-    const rec = new SR();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = 'en-US';
-    let base = draft; // snapshot of draft at click time
-    rec.onresult = (e) => {
-      let interim = '';
-      let final = base;
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) { final += e.results[i][0].transcript; base = final; }
-        else interim += e.results[i][0].transcript;
-      }
-      setDraft(final + interim);
-    };
-    rec.onerror = () => { recognitionRef.current = null; setDictating(false); };
-    rec.onend   = () => { recognitionRef.current = null; setDictating(false); };
-    recognitionRef.current = rec;
-    rec.start();
-    setDictating(true);
-  }, [draft, setDraft]);
+  // startDictation removed session-47 — Web Speech dictation button was
+  // cut from the composer footer (queue item #3).  ``stopDictation`` and
+  // the unmount-cleanup effect remain, so any in-flight session from a
+  // previous build is still released safely.
 
   /** Stops an active Web Speech recognition session. */
   const stopDictation = useCallback(() => {
@@ -445,11 +369,9 @@ export function ChatThread() {
     setDictating(false);
   }, []);
 
-  /** Toggles Web Speech dictation on/off. */
-  const toggleDictation = useCallback(() => {
-    if (dictating) stopDictation();
-    else startDictation();
-  }, [dictating, startDictation, stopDictation]);
+  // toggleDictation removed session-47 — Web Speech dictation button was
+  // cut from the composer footer (see queue item #3).  startDictation /
+  // stopDictation are still exported for the cleanup effect below.
 
   // Stop Web Speech dictation if voice-first mode activates (they can't coexist)
   useEffect(() => {
@@ -1357,67 +1279,11 @@ export function ChatThread() {
                 );
               })()}
 
-              {/* Segmented status pill — Brief · Off · 18+RP. Each segment is
-                  its own click-to-cycle button. Visually unified into one pill. */}
-              <div
-                className="flex items-center rounded-lg"
-                style={{
-                  backgroundColor: 'var(--color-background)',
-                  border: '1px solid var(--color-border-subtle)',
-                  flexShrink: 0,
-                  alignSelf: 'center',
-                }}
-              >
-                <button
-                  onClick={cycleReplyLengthMode}
-                  title={`Reply length: ${replyLengthMode}. Click to cycle.`}
-                  aria-label={`Reply length mode: ${replyLengthMode}`}
-                  className="px-2 py-1 transition-all duration-150"
-                  style={{
-                    color: replyLengthMode !== 'normal' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
-                    fontSize: 10,
-                    fontWeight: 600,
-                    lineHeight: 1.2,
-                    minWidth: 40,
-                  }}
-                >
-                  {replyLengthMode === 'brief' ? 'Brief' :
-                   replyLengthMode === 'detailed' ? 'Long' :
-                   replyLengthMode === 'auto' ? `Auto·${effectiveMaxTokens}t` : 'Norm'}
-                </button>
-                <span style={{ color: 'var(--color-text-tertiary)', fontSize: 10, opacity: 0.5 }}>·</span>
-                <button
-                  onClick={cycleContentFilter}
-                  title={`Content filter: ${filterLabel}. Click to cycle. (Off → NSFW → SFW → Off)`}
-                  aria-label={`Content filter: ${filterLabel}`}
-                  className="px-2 py-1 transition-all duration-150 flex items-center gap-1"
-                  style={{
-                    color: filterColor ?? 'var(--color-text-tertiary)',
-                    fontSize: 10,
-                    fontWeight: 600,
-                    lineHeight: 1.2,
-                  }}
-                >
-                  <Shield size={10} />
-                  {contentFilterLevel === -1 ? '18+' : contentFilterLevel === 1 ? 'SFW' : 'Off'}
-                </button>
-                <span style={{ color: 'var(--color-text-tertiary)', fontSize: 10, opacity: 0.5 }}>·</span>
-                <button
-                  onClick={cycleRpStyle}
-                  title={`RP style: ${rpLabel}. Click to cycle. (Chat → Light RP → Full RP → Explicit RP → Chat)`}
-                  aria-label={`RP style: ${rpLabel}`}
-                  className="px-2 py-1 transition-all duration-150 flex items-center gap-1"
-                  style={{
-                    color: rpStyle !== 'none' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
-                    fontSize: 10,
-                    fontWeight: 600,
-                    lineHeight: 1.2,
-                  }}
-                >
-                  <Sparkles size={10} />
-                  {rpStyle === 'light_rp' ? 'RP' : rpStyle === 'full_rp' ? 'RP+' : rpStyle === 'explicit_rp' ? '18+RP' : 'Chat'}
-                </button>
-              </div>
+              {/* Footer chips (Brief/Off/18+RP + Shield + Sparkles) removed
+                  session-47 per v1-Lite declutter queue item #3.  The
+                  underlying state (replyLengthMode, contentFilterLevel,
+                  rpStyle) is still configurable via Settings — only the
+                  always-on chip UI was the chrome the user wanted gone. */}
 
               {/* Text input — RichComposer renders *italic* tokens live as the
                   user types. onChange receives the plain text string (not an event). */}
@@ -1455,22 +1321,9 @@ export function ChatThread() {
                 }}
               />
 
-              {/* Italic / action wrap button — wraps textarea selection in
-                  `*...*` so it renders as an accent-coloured roleplay action.
-                  With no selection, drops `**` and parks cursor between. */}
-              <button
-                type="button"
-                onClick={wrapSelectionWithAction}
-                title="Wrap selection in *italic* (Ctrl/Cmd+I) — for roleplay actions"
-                aria-label="Wrap selection in italic action"
-                className="p-2 rounded-lg transition-all duration-150 flex-shrink-0"
-                style={{
-                  backgroundColor: 'transparent',
-                  color: 'var(--color-text-tertiary)',
-                }}
-              >
-                <Italic size={16} />
-              </button>
+              {/* Italic/action wrap button removed session-47 per v1-Lite
+                  declutter — Ctrl/Cmd+I keyboard shortcut still wraps
+                  selection in `*...*` via the RichComposer handler. */}
 
               {/* Push-to-talk mic button (hidden when voice mode active) */}
               {!voiceActive && (
@@ -1493,58 +1346,11 @@ export function ChatThread() {
                 </button>
               )}
 
-              {/* Voice dictation — Web Speech API (Chrome/Edge). Hidden when unsupported. */}
-              {!voiceActive && !!(
-                (window as unknown as Record<string, unknown>).SpeechRecognition ||
-                (window as unknown as Record<string, unknown>).webkitSpeechRecognition
-              ) && (
-                <button
-                  onClick={toggleDictation}
-                  title={dictating ? 'Stop dictation (Web Speech)' : 'Dictate message (Web Speech API)'}
-                  aria-label={dictating ? 'Stop voice dictation' : 'Start voice dictation'}
-                  aria-pressed={dictating}
-                  className="p-2 rounded-lg transition-all duration-150 flex-shrink-0"
-                  style={{
-                    backgroundColor: dictating ? 'var(--color-success, #39c96e)' : 'transparent',
-                    color: dictating ? '#fff' : 'var(--color-text-tertiary)',
-                  }}
-                >
-                  <Mic size={16} />
-                </button>
-              )}
-
-              {/* Voice-First Mode toggle (push-to-talk auto-send) */}
-              <button
-                onClick={toggleVoiceMode}
-                title={voiceActive ? 'Exit voice mode (Ctrl+Shift+V)' : 'Enter voice mode (Ctrl+Shift+V)'}
-                aria-label={voiceActive ? 'Exit voice-first mode' : 'Enter voice-first mode'}
-                aria-pressed={voiceActive}
-                className="p-2 rounded-lg transition-all duration-150 flex-shrink-0"
-                style={{
-                  backgroundColor: voiceActive ? 'var(--color-accent)' : 'transparent',
-                  color: voiceActive ? 'var(--color-accent-text)' : 'var(--color-text-tertiary)',
-                  boxShadow: voiceActive ? '0 0 10px var(--color-accent-soft)' : 'none',
-                  animation: voiceActive ? 'pulse 2s ease-in-out infinite' : 'none',
-                }}
-              >
-                <Radio size={16} />
-              </button>
-
-              {/* Feature A1: Full-duplex voice conversation toggle */}
-              <button
-                onClick={() => setFullDuplexVoice(v => !v)}
-                title={fullDuplexVoice ? 'Exit voice conversation' : 'Start voice conversation (full-duplex)'}
-                aria-label={fullDuplexVoice ? 'Exit voice conversation' : 'Start voice conversation'}
-                aria-pressed={fullDuplexVoice}
-                className="p-2 rounded-lg transition-all duration-150 flex-shrink-0"
-                style={{
-                  backgroundColor: fullDuplexVoice ? 'var(--color-accent)' : 'transparent',
-                  color: fullDuplexVoice ? 'var(--color-accent-text)' : 'var(--color-text-tertiary)',
-                  boxShadow: fullDuplexVoice ? '0 0 10px var(--color-accent-soft)' : 'none',
-                }}
-              >
-                <Phone size={16} />
-              </button>
+              {/* Voice dictation, Voice-First mode, Full-duplex voice buttons
+                  removed session-47 per v1-Lite declutter — push-to-talk Mic
+                  (above) is the sole voice input in v1-Lite.  Ctrl+Shift+V
+                  still toggles voice mode for power users; full-duplex stays
+                  reachable via Settings if anyone wants it back. */}
 
               {/* Send / Cancel */}
               {loading ? (

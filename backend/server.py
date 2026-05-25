@@ -302,6 +302,34 @@ def load_config() -> dict:
         logger.warning(f"Config load failed: {e} — using defaults")
         return {}
 
+
+def _aie_enabled(cfg: dict | None) -> bool:
+    """Return whether the Adaptive Intelligence Engine is opted in.
+
+    The AIE bundles ~12 modules (context_classifier, param_tuner,
+    trend_analyzer, topic_graph, milestones, reflector, self_critique,
+    tuner, personalization_gate, memory_behavior, signals, behavior)
+    that silently shape per-turn prompt context, dynamic LLM
+    parameters, and post-response scoring.  Session-46 declutter found
+    they cost tokens every turn without surfacing user-visible benefit,
+    so v1-Lite ships with the whole subsystem behind a master flag,
+    OFF by default.
+
+    Args:
+        cfg: Loaded app config dict (or ``None`` — treated as default).
+
+    Returns:
+        True iff ``aie_enabled`` is truthy in the config.  Any read
+        failure or missing key yields False.
+    """
+    if not cfg:
+        return False
+    try:
+        return bool(cfg.get("aie_enabled", False))
+    except Exception:
+        return False
+
+
 AVATARS  = STORAGE / "avatars"
 AUDIO    = STORAGE / "audio"
 DB_PATH  = STORAGE / "app.db"
@@ -4371,32 +4399,34 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         )
 
         # ── Adaptive Intelligence: inject learned user preferences ────────
-        try:
-            from backend.adaptive.tuner import load_user_profile, profile_to_prompt_instructions
-            _user_profile = load_user_profile(char_id, cur)
-            if _user_profile:
-                _adaptive_instructions = profile_to_prompt_instructions(_user_profile)
-                if _adaptive_instructions:
-                    system_prompt += "\n\n[Adaptive preferences]\n" + _adaptive_instructions
-        except Exception as _adapt_err:
-            logger.debug(f"[Adaptive] profile injection skipped: {_adapt_err}")
+        # Gated behind ``aie_enabled`` (session-47 v1-Lite declutter).
+        if _aie_enabled(cfg):
+            try:
+                from backend.adaptive.tuner import load_user_profile, profile_to_prompt_instructions
+                _user_profile = load_user_profile(char_id, cur)
+                if _user_profile:
+                    _adaptive_instructions = profile_to_prompt_instructions(_user_profile)
+                    if _adaptive_instructions:
+                        system_prompt += "\n\n[Adaptive preferences]\n" + _adaptive_instructions
+            except Exception as _adapt_err:
+                logger.debug(f"[Adaptive] profile injection skipped: {_adapt_err}")
 
-        # ── Feature 19: Behavior adaptation modifiers ──────────────────────
-        try:
-            with db_ctx() as _content_con:
-                _behavior_mods = compute_behavior_modifiers(char_id, _content_con)
-            if _behavior_mods.get("confidence", 0) > 0.1:
-                _behavior_block = build_behavior_prompt_block(_behavior_mods)
-                if _behavior_block:
-                    system_prompt += "\n\n" + _behavior_block
-                # Self-correcting: check for engagement regression
-                with db_ctx() as _reg_con:
-                    _regression = check_engagement_regression(char_id, _reg_con)
-                    if _regression:
-                        revert_adaptations(char_id, _reg_con)
-                        logger.info(f"[Adaptive] Reverted adaptations for char={char_id}: {_regression}")
-        except Exception as _beh_err:
-            logger.debug(f"[Adaptive] Behavior modifiers skipped: {_beh_err}")
+            # ── Feature 19: Behavior adaptation modifiers ──────────────────
+            try:
+                with db_ctx() as _content_con:
+                    _behavior_mods = compute_behavior_modifiers(char_id, _content_con)
+                if _behavior_mods.get("confidence", 0) > 0.1:
+                    _behavior_block = build_behavior_prompt_block(_behavior_mods)
+                    if _behavior_block:
+                        system_prompt += "\n\n" + _behavior_block
+                    # Self-correcting: check for engagement regression
+                    with db_ctx() as _reg_con:
+                        _regression = check_engagement_regression(char_id, _reg_con)
+                        if _regression:
+                            revert_adaptations(char_id, _reg_con)
+                            logger.info(f"[Adaptive] Reverted adaptations for char={char_id}: {_regression}")
+            except Exception as _beh_err:
+                logger.debug(f"[Adaptive] Behavior modifiers skipped: {_beh_err}")
 
         # ── Sprint 3: Toxicity detection ──────────────────────────────
         if cfg.get("nlp", {}).get("toxicity_detection", True):
@@ -4566,7 +4596,13 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
         # ── AIE A1+A2: Context-aware dynamic LLM parameters ────────────
         _aie_temperature = cfg.get("temperature", 0.7)
         _aie_repeat_penalty = cfg.get("repeat_penalty")
-        _aie_dynamic_enabled = cfg.get("adaptive", {}).get("dynamic_params", {}).get("enabled", True)
+        # Master AIE gate (session-47 v1-Lite): require ``aie_enabled`` AND
+        # the legacy nested ``adaptive.dynamic_params.enabled`` (default True
+        # for back-compat once the AIE master is on).
+        _aie_dynamic_enabled = (
+            _aie_enabled(cfg)
+            and cfg.get("adaptive", {}).get("dynamic_params", {}).get("enabled", True)
+        )
         if _aie_dynamic_enabled:
             try:
                 _aie_sentiment = compute_sentiment(text)
@@ -4675,20 +4711,22 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             logger.warning(f"Could not persist mood/date for char {char_id}: {_e}")
 
         # ── Adaptive Intelligence: engagement scoring + reflection check ──
-        try:
-            from backend.adaptive.reflector import compute_engagement_score, should_reflect
-            _eng_score = compute_engagement_score(text, clean_reply)
-            cur.execute(
-                "UPDATE messages SET engagement_score = ? WHERE id = ?",
-                (_eng_score, assistant_message_id)
-            )
-            con.commit()
-            # Check if we've hit the reflection threshold (async, non-blocking)
-            if should_reflect(char_id, cur, threshold=50):
-                logger.info(f"[Adaptive] Reflection threshold reached for char {char_id}")
-                # TODO: queue async reflection task (Phase 9B wiring)
-        except Exception as _eng_err:
-            logger.debug(f"[Adaptive] engagement scoring skipped: {_eng_err}")
+        # Gated behind ``aie_enabled`` (session-47 v1-Lite declutter).
+        if _aie_enabled(cfg):
+            try:
+                from backend.adaptive.reflector import compute_engagement_score, should_reflect
+                _eng_score = compute_engagement_score(text, clean_reply)
+                cur.execute(
+                    "UPDATE messages SET engagement_score = ? WHERE id = ?",
+                    (_eng_score, assistant_message_id)
+                )
+                con.commit()
+                # Check if we've hit the reflection threshold (async, non-blocking)
+                if should_reflect(char_id, cur, threshold=50):
+                    logger.info(f"[Adaptive] Reflection threshold reached for char {char_id}")
+                    # TODO: queue async reflection task (Phase 9B wiring)
+            except Exception as _eng_err:
+                logger.debug(f"[Adaptive] engagement scoring skipped: {_eng_err}")
 
         # ── Bond Progression: earn XP with depth multiplier + bonuses ─────
         try:
@@ -4760,18 +4798,20 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
             logger.debug(f"[ContentGating] Intimacy update skipped: {_intimacy_err}")
 
         # ── Feature 19: Collect engagement signals per turn ────────────────
-        try:
-            _turn_signals = collect_turn_signals(
-                user_msg=text,
-                assistant_msg=clean_reply,
-                turn_number=con.execute(
-                    "SELECT COUNT(*) FROM messages WHERE session_id = ?",
-                    (session_id,),
-                ).fetchone()[0] // 2,
-            )
-            save_signals(char_id, session_id, _turn_signals, con)
-        except Exception as _sig_err:
-            logger.debug(f"[Adaptive] Signal collection skipped: {_sig_err}")
+        # Gated behind ``aie_enabled`` (session-47 v1-Lite declutter).
+        if _aie_enabled(cfg):
+            try:
+                _turn_signals = collect_turn_signals(
+                    user_msg=text,
+                    assistant_msg=clean_reply,
+                    turn_number=con.execute(
+                        "SELECT COUNT(*) FROM messages WHERE session_id = ?",
+                        (session_id,),
+                    ).fetchone()[0] // 2,
+                )
+                save_signals(char_id, session_id, _turn_signals, con)
+            except Exception as _sig_err:
+                logger.debug(f"[Adaptive] Signal collection skipped: {_sig_err}")
 
         if vector_store:
             vector_store.add_memory(session_id, char_id, "assistant", clean_reply)
@@ -5833,7 +5873,11 @@ async def chat_stream(req: Request):
     # ── AIE A1+A2: Context-aware dynamic LLM parameters (streaming) ──
     _aie_s_temperature = cfg.get("temperature", 0.7)
     _aie_s_repeat_penalty = cfg.get("repeat_penalty")
-    _aie_s_dynamic_enabled = cfg.get("adaptive", {}).get("dynamic_params", {}).get("enabled", True)
+    # Master AIE gate (session-47 v1-Lite) — stream path mirror.
+    _aie_s_dynamic_enabled = (
+        _aie_enabled(cfg)
+        and cfg.get("adaptive", {}).get("dynamic_params", {}).get("enabled", True)
+    )
     if _aie_s_dynamic_enabled:
         try:
             _aie_s_sentiment = compute_sentiment(text)

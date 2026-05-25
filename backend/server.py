@@ -1216,7 +1216,31 @@ def _parse_emotion_gesture(text: str) -> tuple:
     emotion = normalize_emotion(raw_emotion)
     gesture = gesture_match.group(1) if gesture_match else None
     clean = re.sub(r'\[emotion:\w+\]', '', text)
-    clean = re.sub(r'\[gesture:\w+\]', '', clean).strip()
+    clean = re.sub(r'\[gesture:\w+\]', '', clean)
+
+    # Strip descriptive bracket annotations the model sometimes emits in
+    # place of (or alongside) the canonical [emotion:X]/[gesture:X] tags.
+    # Examples seen in session-46 live testing with llama-3.2-1b:
+    #   "[emotional expression: soft smile]"
+    #   "[gesture: nodding gently]"
+    #   "[facial: blush]" / "[mood: playful]" / "[action: leaning forward]"
+    # These are stage-direction style — useful as embodiment signal in
+    # principle, but currently leak into the visible chat as ugly brackets.
+    # Best-effort capture into emotion/gesture, then strip from text.
+    if not gesture_match:
+        m = re.search(r'\[(?:gesture|action)\s*:\s*([^\]]+)\]', text, re.IGNORECASE)
+        if m:
+            gesture = (m.group(1) or "").strip() or None
+    if emotion_match is None or emotion == "neutral":
+        m = re.search(
+            r'\[(?:emotional?\s*expression|facial(?:\s*expression)?|mood|emotion)\s*:\s*([^\]]+)\]',
+            text, re.IGNORECASE)
+        if m:
+            emotion = normalize_emotion((m.group(1) or "").strip().lower().split()[0] or "neutral")
+    # Now strip every remaining [stage-direction: ...] block. Keep brackets
+    # that look like inline references (e.g. "[1]", "[link]") by requiring
+    # a colon inside.
+    clean = re.sub(r'\[[^\[\]]*?:[^\[\]]*?\]', '', clean).strip()
 
     # Strip degenerate model artifacts: any single character repeated 6+ times in a row.
     # Local LLMs occasionally produce runs like "88888888..." (digit artifact from
@@ -16350,12 +16374,29 @@ async def inject_proactive_messages(char_id: int, req: Request):
     """
     body = await req.json()
     session_id = body.get("session_id")
-    if session_id is None:
-        raise HTTPException(status_code=400, detail="session_id is required")
 
     with db_ctx() as conn:
         try:
             cur = conn.cursor()
+            # If the caller didn't supply a session_id (e.g. polling for a
+            # non-active character so the proactive message just queues into
+            # their chat history silently — session-46 no-popup directive),
+            # resolve the most-recent session that has this character's
+            # messages. If none exists, create one so the message has a home.
+            if session_id is None:
+                row = cur.execute(
+                    "SELECT session_id FROM messages WHERE char_id = ? "
+                    "ORDER BY ts DESC LIMIT 1",
+                    (char_id,),
+                ).fetchone()
+                if row:
+                    session_id = row[0]
+                else:
+                    cur.execute(
+                        "INSERT INTO sessions(title) VALUES (?)",
+                        (f"Session for character {char_id}",),
+                    )
+                    session_id = cur.lastrowid
             cur.execute(
                 "SELECT id, text, trigger_type FROM scheduled_messages WHERE char_id = ? AND delivered = 0 ORDER BY triggered_at ASC",
                 (char_id,),

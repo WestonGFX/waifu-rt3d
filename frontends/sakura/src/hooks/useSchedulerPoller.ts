@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAppStore } from '../stores/appStore';
-import type { ScheduledNotification } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
 
 /** How often (ms) to poll the backend for pending scheduled messages. */
@@ -53,46 +52,36 @@ export function useSchedulerPoller(): void {
         if (seenIds.current.has(msg.id)) continue;
         seenIds.current.add(msg.id);
 
-        // For active character: inject directly into chat thread and persist to DB,
-        // then acknowledge — no toast notification needed since it's already visible.
+        // For active character: inject into chat thread + persist + acknowledge.
         if (activeCharacter?.id === msg.char_id) {
           const { injectProactiveMessage, sessionId } = useChatStore.getState();
           if (sessionId) {
             injectProactiveMessage({ text: msg.text, serverMessageId: msg.id });
-            // Persist the proactive message into the active session via the backend endpoint
             fetch(`/api/characters/${msg.char_id}/proactive/inject`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ session_id: sessionId }),
-            }).catch(() => {}); // fire-and-forget, non-critical
+            }).catch(() => {});
           }
-          // Acknowledge delivery so the backend doesn't re-send on next poll
-          fetch('/api/scheduler/acknowledge', {
+        } else {
+          // Non-active character: persist the message into THAT character's
+          // most-recent session so it's waiting in chat when the user opens
+          // them. **No popup, no toast** — session-46 user directive: "ANY
+          // 'while you were gone' content should be a normal chat message,
+          // not a popup". The backend endpoint resolves the session itself.
+          fetch(`/api/characters/${msg.char_id}/proactive/inject`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message_id: msg.id }),
-          }).catch(() => {}); // fire-and-forget, non-critical
-          seenIds.current.add(msg.id);
-          continue;
+            body: JSON.stringify({}),
+          }).catch(() => {});
         }
 
-        const notification: ScheduledNotification = {
-          id: `sched-${msg.id}-${Date.now()}`,
-          charId: msg.char_id,
-          charName: msg.char_name,
-          charAvatarUrl: msg.char_avatar_url ?? undefined,
-          preview: msg.text.length > 80 ? msg.text.slice(0, 80).trimEnd() + '…' : msg.text,
-          receivedAt: Date.now(),
-        };
-
-        addScheduledNotification(notification);
-
-        // Acknowledge delivery so the backend doesn't re-send on next poll
+        // Always acknowledge so the backend doesn't re-send on next poll.
         fetch('/api/scheduler/acknowledge', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message_id: msg.id }),
-        }).catch(() => {}); // fire-and-forget, non-critical
+        }).catch(() => {});
       }
     } catch {
       // Network error — silently skip this poll cycle

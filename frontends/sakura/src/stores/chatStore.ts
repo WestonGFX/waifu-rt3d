@@ -655,10 +655,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       if (newPinned) {
         const charId = get().charId;
         if (charId != null) {
-          const { useAppStore } = await import('./appStore');
-          api.grantAchievement(charId, 'shared_secret').then((res) => {
-            if (res.granted) useAppStore.getState().setPendingAchievement(res.achievement);
-          }).catch(() => {});
+          api.grantAchievement(charId, 'shared_secret').catch(() => {});
         }
       }
     } catch {

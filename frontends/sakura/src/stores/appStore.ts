@@ -210,17 +210,6 @@ interface AppState {
   bondNextUnlock: { level: number; label: string } | null;
   /** ID of the bond story currently being viewed in the BondStoryViewer overlay. */
   bondStoryId: number | null;
-  /** Pending level-up celebration data, consumed by LevelUpCelebration overlay */
-  pendingLevelUp: {
-    newLevel: number;
-    tier: string;
-    previousTier: string;
-    unlocks: Array<{ type: string; label: string }>;
-  } | null;
-  /** M6-item21: Pending achievement to display in AchievementToast. */
-  pendingAchievement: { key: string; label: string; description: string; icon: string } | null;
-  setPendingAchievement: (data: AppState['pendingAchievement']) => void;
-  clearPendingAchievement: () => void;
   setBondState: (state: {
     bondLevel: number;
     bondXp: number;
@@ -228,8 +217,6 @@ interface AppState {
     bondTier: string;
     bondNextUnlock?: { level: number; label: string } | null;
   }) => void;
-  setPendingLevelUp: (data: AppState['pendingLevelUp']) => void;
-  clearPendingLevelUp: () => void;
 
   /**
    * Pending memorial scene data, consumed by the MemorialScene overlay.
@@ -472,8 +459,6 @@ export const useAppStore = create<AppState>()(
       bondXpToNext: 150,
       bondTier: 'stranger',
       bondNextUnlock: null,
-      pendingLevelUp: null,
-      pendingAchievement: null,
       bondStoryId: null,
       setBondState: (state) => set({
         bondLevel: state.bondLevel,
@@ -482,10 +467,6 @@ export const useAppStore = create<AppState>()(
         bondTier: state.bondTier,
         bondNextUnlock: state.bondNextUnlock ?? null,
       }),
-      setPendingLevelUp: (data) => set({ pendingLevelUp: data }),
-      clearPendingLevelUp: () => set({ pendingLevelUp: null }),
-      setPendingAchievement: (data) => set({ pendingAchievement: data }),
-      clearPendingAchievement: () => set({ pendingAchievement: null }),
 
       pendingMemorialScene: null,
       clearPendingMemorialScene: () => set({ pendingMemorialScene: null }),

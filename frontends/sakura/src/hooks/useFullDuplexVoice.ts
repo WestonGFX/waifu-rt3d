@@ -378,11 +378,7 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
         if (!firstVoiceGrantedRef.current && callbacksRef.current.charId != null) {
           firstVoiceGrantedRef.current = true;
           import('../lib/api').then(({ api: _api }) =>
-            import('../stores/appStore').then(({ useAppStore }) =>
-              _api.grantAchievement(callbacksRef.current.charId!, 'first_voice').then((res) => {
-                if (res.granted) useAppStore.getState().setPendingAchievement(res.achievement);
-              }).catch(() => {})
-            )
+            _api.grantAchievement(callbacksRef.current.charId!, 'first_voice').catch(() => {})
           );
         }
         break;

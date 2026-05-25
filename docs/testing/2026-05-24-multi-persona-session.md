@@ -151,3 +151,55 @@ Follow-up commit needs to patch the SSE parser in `openai_compat.py` (line 218+)
 - (b) Emit a separate SSE event (`reasoning_delta`) and have the frontend choose to surface it behind a toggle.
 
 Option (a) is simpler and lets users see *something* immediately; option (b) is the cleaner long-term solution.
+
+---
+
+## Session-46 final close-out
+
+After the report was written, user said: *"its still MASSIVELY buggy and its basically not even working, dont stop"*. Another ~60 min of work followed, including a real root-cause hunt:
+
+### Real-cause discovery via DB inspection
+
+`sqlite3 app.db` showed session 399 had **8 user messages, 0 assistant messages** despite the user seeing replies render in the UI earlier. Stream replies never committed. After deploying the full stack of fixes below + swapping LM Studio to `llama-3.2-1b-instruct`, the next 2 exchanges saved correctly (rows 206 + 208 both `role=assistant`, lengths 249 and 270 chars). Root cause was that pre-fix streams produced zero `delta.content` tokens (only `reasoning_content`, which the parser dropped), so `full_reply==""` and the assistant INSERT either inserted empty rows or skipped.
+
+### All commits this session
+
+| Commit | Scope |
+|---|---|
+| `f915264` | qwen3 family auto-disable thinking (non-stream path) + reasoning_content fallback + achievement gated on `assistant.status='sent'`; +25 pytest |
+| `c7c0ab5` | TIMEOUT_MS 35s → 60s + honest report update |
+| `f0a81d6` | SSE streaming parser emits `delta.reasoning_content` for reasoning models; +4 pytest |
+| `c2b00d2` | qwen3 `/no_think` runtime directive (LM Studio's GGUF ignores `enable_thinking=False`) + Kokoro auto-bypass for reasoning models (heavy structured contract drowns small reasoning models); +4 pytest |
+| `6fc9de5` | New `/api/llm/probe` endpoint — frontend-facing compatibility check with `reasoning_only` / `slow_first_token` / `endpoint_unreachable` / `endpoint_error` classification + ready-to-render hint copy |
+
+### Live evidence of working chat
+
+After `c2b00d2` + swapping LM Studio to llama-3.2-1b:
+- Real coherent reply in ~8s: *"My name is Kokoro, and I'm a gentle soul with a heart full of warmth. \*smiles softly\* [emotional expression: soft smile] [gesture: nodding gently] The weather? It's as lovely as you are, Rin-chan! The cherry blossoms are in full bloom, don't they?"*
+- Bond level incremented 0 → 1 on first reply (XP system live)
+- No console errors, no timeouts
+
+### The "MASSIVELY buggy" diagnosis
+
+The compounding chain that made it feel broken:
+1. User's LM Studio had only qwen3.5-9b loaded (the configured model)
+2. qwen3.5 emits `reasoning_content` not `content` → adapter dropped it → empty stream
+3. Frontend's 35s timeout fired before model finished thinking → "Response is taking too long" dialog
+4. Kokoro's heavy structured JSON contract amplified the thinking spiral
+5. Failed streams left orphan user messages with no assistant rows → chat history looked broken on reload
+6. Cumulative impression: nothing works
+
+Five surgical fixes addressed each link of the chain. With a non-reasoning model loaded (llama / gemma / mistral-nemo), the app works end-to-end out of the box. With a reasoning model loaded, the app degrades to "verbose thinking-text reply, no Kokoro embodiment, longer latency" — usable but not great. The new `/api/llm/probe` endpoint is the foundation for proactively surfacing this to users before they hit the wall.
+
+### What's STILL not addressed (next session)
+
+These are the open items the user will still see as "buggy":
+
+- **Settings drawer clips off-screen left when 3D viewer is open** (P1) — needs layout reflow guard or auto-close
+- **Settings ↔ Memory Browser non-exclusive overlay** (P1) — both can be open at once, crushes chat column
+- **Theme tile ↔ Color Theme dropdown desync** (P2) — clicking a tile doesn't update the dropdown
+- **Achievement toast overlaps bond pill in header** (P3)
+- **3D Viewer occasionally renders black at 0 FPS on first open** (P3) — self-resolved on revisit in this session, not reliably reproducible
+- **Phantom "Tell me about yourself" empty-state bubble** styled identically to user messages (P2)
+- **`/api/llm/probe` is not yet wired into the frontend** (F1 follow-up) — needs an on-boot fetch + Toast component conditionally rendered on `warning != null`
+- **Streaming reply quality with reasoning models still verbose** — thinking-text is real content but not pretty. A "Show thinking" disclosure UI would be ideal; for now just dumped inline.

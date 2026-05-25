@@ -288,8 +288,15 @@ export function ChatThread() {
   );
   useAutoBackground(lastAssistantEmotion, activeCharacter?.id, modelPanelOpen);
 
-  // Bond progression: poll after each message exchange
-  useBondProgress(activeCharacter?.id ?? null, messages.length);
+  // Bond progression: poll after each *successful* assistant reply. Counting
+  // raw `messages.length` previously granted the `first_message` achievement
+  // on send-attempt — including timeouts and failures — which made the toast
+  // fire on the user's first failed connection attempt (session-46 P2).
+  const completedAssistantCount = useMemo(
+    () => messages.filter((m) => m.role === 'assistant' && m.status === 'sent').length,
+    [messages],
+  );
+  useBondProgress(activeCharacter?.id ?? null, completedAssistantCount);
 
   // Memorial scene: check for pending cinematic after level-ups
   useMemorialScene(activeCharacter?.id ?? null);

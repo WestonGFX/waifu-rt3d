@@ -8,6 +8,7 @@ When tools are passed via ``chat_stream(..., tools=[...])``, the adapter
 sends them in the request payload and parses ``tool_calls`` from the
 streamed response deltas.
 """
+import re
 import requests
 import time
 import json
@@ -15,6 +16,59 @@ import logging
 from .base import LLMAdapter
 
 logger = logging.getLogger("waifu.llm.openai")
+
+# Models that emit `reasoning_content` and burn their entire output budget on
+# thinking when `enable_thinking` is left at its template default. Without
+# `chat_template_kwargs.enable_thinking=False`, qwen3 returns `content: ""` on
+# any reasonable max_tokens (verified with qwen/qwen3.5-9b at max_tokens=4096),
+# which presents to end users as a 35-second silent timeout. Match by name
+# fragment so vendor prefixes (`qwen/`, `lmstudio-community/`) don't matter.
+# Session 46 multi-persona test surfaced this as P0 ("brutal first impression").
+_REASONING_MODEL_PATTERNS = re.compile(
+    r"qwen-?3|qwen3|deepseek-r1|deepseek_r1|/r1\b|/o1\b|^o1[-/]|qwq",
+    re.IGNORECASE,
+)
+
+
+def _is_reasoning_model(model: str) -> bool:
+    """Whether the model name looks like a reasoning/thinking-mode family.
+
+    Reasoning models emit `reasoning_content` separate from `content`. They
+    benefit from `chat_template_kwargs.enable_thinking=False` for fast chat
+    use cases where the user wants the answer, not the scratchpad.
+
+    Args:
+        model: Model identifier string (e.g. "qwen/qwen3.5-9b").
+
+    Returns:
+        True if the model name matches a known reasoning family.
+
+    Example:
+        >>> _is_reasoning_model("qwen/qwen3.5-9b")
+        True
+        >>> _is_reasoning_model("gemma-4-26b-it")
+        False
+    """
+    if not model:
+        return False
+    return bool(_REASONING_MODEL_PATTERNS.search(model))
+
+
+def _apply_reasoning_defaults(payload: dict, model: str) -> None:
+    """Inject `chat_template_kwargs.enable_thinking=False` for reasoning models.
+
+    No-op when the caller already supplied `chat_template_kwargs` (respects
+    explicit override). Mutates `payload` in place.
+
+    Args:
+        payload: Request payload dict (will be mutated).
+        model: Configured model name used to detect reasoning families.
+    """
+    if not _is_reasoning_model(model):
+        return
+    if "chat_template_kwargs" in payload:
+        return
+    payload["chat_template_kwargs"] = {"enable_thinking": False}
 
 class OpenAICompatAdapter(LLMAdapter):
     """LLM adapter for OpenAI-compatible chat completion APIs.
@@ -143,6 +197,7 @@ class OpenAICompatAdapter(LLMAdapter):
         # Merge any extra_body kwargs (e.g. Qwen3 thinking mode: {"chat_template_kwargs": {"enable_thinking": False}})
         if kw.get("extra_body"):
             payload.update(kw["extra_body"])
+        _apply_reasoning_defaults(payload, model)
 
         try:
             timeout = kw.get("timeout", (10, 300))
@@ -159,7 +214,15 @@ class OpenAICompatAdapter(LLMAdapter):
             if "choices" not in data or not data["choices"]:
                 return {"ok": False, "error": "Empty response from LLM", "code": "ERR_EMPTY"}
 
-            reply = data["choices"][0]["message"]["content"]
+            msg = data["choices"][0]["message"]
+            reply = msg.get("content") or ""
+            # Reasoning-model fallback: when the server returned only
+            # `reasoning_content` (auto-disable thinking was ignored or the
+            # template didn't honor it), surface the reasoning so the user
+            # gets *something* rather than a silent empty bubble.
+            if not reply and msg.get("reasoning_content"):
+                reply = msg["reasoning_content"]
+                logger.info("openai_compat: empty content; fell back to reasoning_content (%d chars)", len(reply))
             return {"ok": True, "reply": reply, "raw": data}
 
         except requests.exceptions.Timeout:
@@ -207,6 +270,7 @@ class OpenAICompatAdapter(LLMAdapter):
         # Merge any extra_body kwargs (e.g. Qwen3 thinking mode)
         if kw.get("extra_body"):
             payload.update(kw["extra_body"])
+        _apply_reasoning_defaults(payload, model)
 
         # Add tools if provided (already in OpenAI format)
         tools = kw.get("tools")

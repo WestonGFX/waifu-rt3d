@@ -64,10 +64,10 @@ def build_kokoro_fragment(
         parsing succeeds.
     """
     lines = [
-        "## Kokoro Mind State",
-        "You are operating an embodied anime-style companion.  Stay in character.",
+        "## Current Emotional State",
+        "You are an anime-style companion roleplaying your character.  Stay in character.",
         "Do NOT claim consciousness, sentience, or human feelings.",
-        "However, *roleplay* the character consistently using the dials below.",
+        "Roleplay the character consistently using the dials below.",
         "",
         _dial_line("Fast dials (this-moment feel)", TIER_A_FAST, mind),
         _dial_line("Slow dials (recent days)",      TIER_B_SLOW, mind),

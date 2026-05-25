@@ -19,6 +19,7 @@ import type { ChatMessage } from '../lib/types';
 vi.mock('../lib/api', () => ({
   api: {
     pinMessage: vi.fn(),
+    grantAchievement: vi.fn().mockResolvedValue({ ok: true }),
   },
 }));
 

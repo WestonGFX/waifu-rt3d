@@ -23,7 +23,7 @@ import { VocabularyPanel } from './components/VocabularyPanel';
 import { IntimateScenarioBrowser } from './components/IntimateScenarioBrowser';
 import { DesireTree } from './components/DesireTree';
 import { FantasyJournal } from './components/FantasyJournal';
-import { MilestoneTimeline } from './components/MilestoneTimeline';
+// MilestoneTimeline removed session-47 (queue #10).
 import { IntimateMemoryBrowser } from './components/IntimateMemoryBrowser';
 import { SceneBookmarks } from './components/SceneBookmarks';
 import { IntimateGallery } from './components/IntimateGallery';
@@ -33,7 +33,7 @@ import { IntimateQuizPanel } from './components/IntimateQuizPanel';
 import { SharedFantasyBuilder } from './components/SharedFantasyBuilder';
 import { PersonaPicker } from './components/PersonaPicker';
 import { SceneReplayViewer } from './components/SceneReplayViewer';
-import { BondPanel } from './components/BondPanel';
+// BondPanel removed session-47 (queue #10) — gamification chrome.
 import { ScenarioPicker } from './components/ScenarioPicker';
 import { AboutOverlay } from './components/AboutOverlay';
 import { ModelBrowser } from './components/ModelBrowser';
@@ -316,7 +316,7 @@ function MainApp() {
     { key: k('Bookmarks',            'alt+shift+k'), action: () => openOverlay('bookmarks'),   description: 'Scene bookmarks' },
     { key: k('Milestones',           'alt+shift+m'), action: () => openOverlay('milestones'),  description: 'Milestones timeline' },
     { key: k('Desire tree',          'alt+shift+d'), action: () => openOverlay('desiretree'),  description: 'Desire tree' },
-    { key: k('Bond panel',            'alt+shift+h'), action: () => openOverlay('bondpanel'),  description: 'Bond panel' },
+    // Bond panel shortcut removed session-47 (queue #10) — panel deleted.
     { key: k('About',                 'alt+shift+a'), action: () => openOverlay('about'),       description: 'About' },
     { key: k('Toggle sidebar',         'ctrl+\\'), action: () => toggleSidebar(),               description: 'Toggle sidebar' },
     { key: k('Cinematic mode',         'ctrl+i'),  action: () => toggleCinematicMode(),         description: 'Cinematic mode' },
@@ -461,16 +461,8 @@ function MainApp() {
         />
       )}
 
-      {/* F1: Milestone Timeline — session-46 cut (UI; the underlying
-          `intimate_milestones` table + tracker still injects context). */}
-      {SHOW_NSFW_OVERLAYS && activeOverlay === 'milestones' && activeCharacter && (
-        <MilestoneTimeline
-          isOpen
-          onClose={closeOverlay}
-          characterId={activeCharacter.id}
-          characterName={activeCharacter.name}
-        />
-      )}
+      {/* MilestoneTimeline deleted session-47 (queue #10) — the
+          `intimate_milestones` table + tracker still injects context. */}
 
       {/* F2: Intimate Memory Browser */}
       {activeOverlay === 'intimatememories' && activeCharacter && (
@@ -564,10 +556,7 @@ function MainApp() {
         />
       )}
 
-      {/* Bond Panel overlay */}
-      {activeOverlay === 'bondpanel' && (
-        <BondPanel onClose={closeOverlay} />
-      )}
+      {/* BondPanel deleted session-47 (queue #10). */}
 
       {/* Scenario Picker overlay — per-character scene templates */}
       {activeOverlay === 'scenariopicker' && activeCharacter && sessionId && (

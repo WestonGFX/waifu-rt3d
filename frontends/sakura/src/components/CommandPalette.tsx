@@ -40,8 +40,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     { id: 'analytics',      group: 'Navigation', label: 'Conversation Analytics',shortcut: 'Alt+A',      action: () => { openOverlay('analytics'); onClose(); } },
     { id: 'summary',        group: 'Navigation', label: 'Session Summary',       shortcut: 'Alt+S',      action: () => { openOverlay('summary'); onClose(); } },
     { id: 'scenarios',      group: 'Navigation', label: 'Scenario Library',      shortcut: 'Alt+I',      action: () => { openOverlay('scenarios'); onClose(); } },
-    { id: 'bondpanel',      group: 'Navigation', label: 'Bond Panel',            shortcut: 'Alt+Shift+H',action: () => { openOverlay('bondpanel'); onClose(); } },
-    { id: 'milestones',     group: 'Navigation', label: 'Milestones',            shortcut: 'Alt+Shift+M',action: () => { openOverlay('milestones'); onClose(); } },
+    // Bond Panel + Milestones entries removed session-47 (queue #10) — panels deleted.
     { id: 'bookmarks',      group: 'Navigation', label: 'Bookmarks',             shortcut: 'Alt+Shift+K',action: () => { openOverlay('bookmarks'); onClose(); } },
     { id: 'lore',           group: 'Navigation', label: 'Lorebook',                              action: () => { openOverlay('lore'); onClose(); } },
     { id: 'vocab',          group: 'Navigation', label: 'Vocabulary Manager',    shortcut: 'Alt+V',      action: () => { openOverlay('vocab'); onClose(); } },

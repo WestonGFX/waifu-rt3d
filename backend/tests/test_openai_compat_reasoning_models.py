@@ -147,3 +147,103 @@ class TestChatReasoningFallback:
             )
         sent_payload = mock_post.call_args.kwargs["json"]
         assert "chat_template_kwargs" not in sent_payload
+
+
+class TestChatStreamReasoningFallback:
+    """Streaming `chat_stream()`: reasoning_content deltas → visible tokens.
+
+    The actual chat UI uses chat_stream(), so the empty-bubble bug for
+    reasoning-family models lives here. Verified live against qwen3.5-9b
+    via LM Studio in session 46.
+    """
+
+    def _mock_stream(self, lines):
+        """Build a mock requests.Response that yields the given SSE lines."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.encoding = "utf-8"
+        resp.iter_lines.return_value = iter(lines)
+        return resp
+
+    def _sse(self, **delta):
+        payload = {"choices": [{"delta": delta}]}
+        return f"data: {__import__('json').dumps(payload)}"
+
+    def test_reasoning_model_yields_reasoning_content_as_tokens(self):
+        adapter = OpenAICompatAdapter()
+        lines = [
+            self._sse(reasoning_content="Hi "),
+            self._sse(reasoning_content="there!"),
+            "data: [DONE]",
+        ]
+        with patch("backend.llm.adapters.openai_compat.requests.post") as mock_post:
+            mock_post.return_value = self._mock_stream(lines)
+            tokens = list(adapter.chat_stream(
+                messages=[{"role": "user", "content": "hi"}],
+                model="qwen/qwen3.5-9b",
+                endpoint="http://localhost:1234/v1",
+                api_key=None,
+            ))
+        # Filter to string tokens only (no tool_call dicts)
+        text_tokens = [t for t in tokens if isinstance(t, str)]
+        assert text_tokens == ["Hi ", "there!"]
+
+    def test_normal_content_still_works_for_reasoning_model(self):
+        adapter = OpenAICompatAdapter()
+        lines = [
+            self._sse(content="Hello"),
+            self._sse(content=" world"),
+            "data: [DONE]",
+        ]
+        with patch("backend.llm.adapters.openai_compat.requests.post") as mock_post:
+            mock_post.return_value = self._mock_stream(lines)
+            tokens = list(adapter.chat_stream(
+                messages=[{"role": "user", "content": "hi"}],
+                model="qwen/qwen3.5-9b",
+                endpoint="http://localhost:1234/v1",
+                api_key=None,
+            ))
+        text_tokens = [t for t in tokens if isinstance(t, str)]
+        assert text_tokens == ["Hello", " world"]
+
+    def test_non_reasoning_model_ignores_reasoning_content_when_content_seen(self):
+        # If a non-reasoning model emits content first then later sends a
+        # stray reasoning_content delta, we don't suddenly start emitting
+        # it — protects against accidental thinking-text leakage.
+        adapter = OpenAICompatAdapter()
+        lines = [
+            self._sse(content="Hello"),
+            self._sse(reasoning_content="(stray)"),
+            "data: [DONE]",
+        ]
+        with patch("backend.llm.adapters.openai_compat.requests.post") as mock_post:
+            mock_post.return_value = self._mock_stream(lines)
+            tokens = list(adapter.chat_stream(
+                messages=[{"role": "user", "content": "hi"}],
+                model="gemma-4-26b-it",
+                endpoint="http://localhost:1234/v1",
+                api_key=None,
+            ))
+        text_tokens = [t for t in tokens if isinstance(t, str)]
+        assert text_tokens == ["Hello"]
+
+    def test_non_reasoning_model_falls_back_when_only_reasoning_emitted(self):
+        # Defensive fallback: if a non-reasoning-named model nevertheless
+        # only emits reasoning_content (e.g. someone runs a thinking model
+        # under a custom name we don't match), still surface it so the user
+        # gets *something* rather than a silent empty bubble.
+        adapter = OpenAICompatAdapter()
+        lines = [
+            self._sse(reasoning_content="surprise reasoning"),
+            "data: [DONE]",
+        ]
+        with patch("backend.llm.adapters.openai_compat.requests.post") as mock_post:
+            mock_post.return_value = self._mock_stream(lines)
+            tokens = list(adapter.chat_stream(
+                messages=[{"role": "user", "content": "hi"}],
+                model="some-custom-model",
+                endpoint="http://localhost:1234/v1",
+                api_key=None,
+            ))
+        text_tokens = [t for t in tokens if isinstance(t, str)]
+        assert text_tokens == ["surprise reasoning"]

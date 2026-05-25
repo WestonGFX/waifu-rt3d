@@ -297,6 +297,18 @@ class OpenAICompatAdapter(LLMAdapter):
             # We accumulate per-index and emit when the stream ends or a new
             # content delta arrives after tool call deltas.
             pending_tool_calls: dict[int, dict] = {}  # index → {id, name, args_parts}
+            # Reasoning-model streaming fallback. When a reasoning model
+            # (qwen3, deepseek-r1, etc.) ignores chat_template_kwargs.
+            # enable_thinking=False (true for the GGUF qwen3 builds shipped
+            # by LM Studio circa 2026-05), tokens arrive as
+            # `delta.reasoning_content` rather than `delta.content`. The
+            # previous parser dropped those, so chat UIs sat silent until
+            # the client-side 60s timeout fired (session-46 P0). For
+            # reasoning models we surface reasoning_content as visible
+            # content from the start of the stream. For non-reasoning models
+            # we only fall back if content is empty (defensive).
+            is_reasoning = _is_reasoning_model(model)
+            saw_any_content = False
 
             for line in r.iter_lines(decode_unicode=True):
                 if not line or not line.startswith("data: "):
@@ -313,7 +325,12 @@ class OpenAICompatAdapter(LLMAdapter):
                     # Handle text content
                     content = delta.get("content")
                     if content:
+                        saw_any_content = True
                         yield content
+                    else:
+                        reasoning = delta.get("reasoning_content")
+                        if reasoning and (is_reasoning or not saw_any_content):
+                            yield reasoning
 
                     # Handle streamed tool calls
                     tool_calls = delta.get("tool_calls")

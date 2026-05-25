@@ -211,17 +211,19 @@ describe('chatStore.loadHistory — missing optional fields', () => {
   });
 
   it('createdAt is a valid timestamp when ts is provided', async () => {
+    // Backend stores ts as Unix seconds INTEGER (strftime('%s','now')).
+    // The store converts to milliseconds via Number(ts) * 1000.
+    const unixSeconds = 1781524800; // 2026-06-15T12:00:00Z in seconds
     vi.mocked(api.getMessages).mockResolvedValue({
       messages: [
-        { id: 3, role: 'user', text: 'hello', ts: '2026-06-15T12:00:00Z' },
+        { id: 3, role: 'user', text: 'hello', ts: String(unixSeconds) },
       ],
     });
 
     await useChatStore.getState().loadHistory(1);
     const msg = useChatStore.getState().messages[0];
 
-    // new Date('2026-06-15T12:00:00Z').getTime() === 1781524800000
-    expect(msg.createdAt).toBe(new Date('2026-06-15T12:00:00Z').getTime());
+    expect(msg.createdAt).toBe(unixSeconds * 1000);
   });
 
   it('falls back to Date.now() order-of-magnitude when ts is absent', async () => {

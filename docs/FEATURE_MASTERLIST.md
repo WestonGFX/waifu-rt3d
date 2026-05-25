@@ -1,9 +1,9 @@
 # Feature Masterlist — Waifu-RT3D
 
-**Last updated:** 2026-03-25
-**Schema version:** v60
-**Tests:** 887 backend (pytest), tsc clean (frontend)
-**Total features:** 56 (49 complete, 7 post-MVP)
+**Last updated:** 2026-05-25 (session 47 — v1-Lite execution sprint + bond burn-down)
+**Schema version:** v85
+**Tests:** 2,977 backend pytest + 326 vitest passing, tsc clean
+**Total features:** 56 (49 complete, 7 post-MVP); session-47 added 2 master kill-flags + deleted 10 bond UI components
 
 ---
 
@@ -32,8 +32,8 @@
 
 | # | Feature | Status | Phase | Schema | Commit | Notes |
 |---|---------|--------|-------|--------|--------|-------|
-| A-1 | Bond Progression System | ✅ Done | 13A | — | `5846453` | XP, tiers (0–100), gifts, story scene unlocks; `backend/bond/` |
-| A-2 | Adaptive Intelligence Engine | ✅ Done | 9A-E | — | `301009c` | Trust model, mood updates, topic steering, behavior reflection; `backend/adaptive/` |
+| A-1 | Bond Progression System | ✅ Backend / 🗑 UI gone | 13A | — | `5846453` · `7042dd9` · `f121280` `7a38ce8` `6ebbed0` | XP, tiers, gifts, story scene unlocks; `backend/bond/` exists but grants are gated behind ``bond_xp_enabled`` flag (session 47). Frontend pill / panel / 3 celebration popups deleted (session 47). bondLevel still drives Kokoro NSFW Tier F gate. |
+| A-2 | Adaptive Intelligence Engine | ✅ Backend / behind flag | 9A-E | — | `301009c` · `9a6991c` | Trust model, mood updates, topic steering, behavior reflection; `backend/adaptive/`. All per-turn invocations gated behind ``aie_enabled`` master flag, OFF by default (session 47). User-triggered endpoints (trends/topics/milestones/journal) unaffected. |
 | A-3 | On-Device Learning | ✅ Done | 19 | v60 | `b03fcae` | Signal capture, behavior adaptation, privacy-safe local tuning |
 | A-4 | Content Gating System | ✅ Done | 18A-D | v58–59 | `9ab6605`, `7d394ce` | Types, ceiling resolver, intimacy tracking, frontend UI, legacy migration; `backend/content/` |
 | A-5 | Lorebook / World Info Injection | ✅ Done | A6 | v25 | `master` | Keyword-triggered context injection; `backend/lore/matcher.py` |

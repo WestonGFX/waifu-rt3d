@@ -1,56 +1,120 @@
-# Resume Prompt — Session 46+
+# Resume Prompt — Session 48+
 
-**Last updated:** 2026-05-24 (session 45 — Kokoro Engine v1)
-**Branch:** master · 5 new local commits ahead of `1fe562a` (NOT yet pushed)
-**Schema:** v85 (up from v82 — kokoro tables + safety counter)
-**Tests:** 2,924 backend (+81) + ~317 frontend (+23) passing, tsc clean
+**Last updated:** 2026-05-25 (session 47 — v1-Lite execution sprint + bond burn-down)
+**Branch:** master · 11 commits this session, all pushed (HEAD = `6ebbed0`)
+**Schema:** v85 (unchanged this session)
+**Tests:** 2,977 backend pytest + 326 vitest passing (1 pre-existing pin flake), tsc clean
 
-## What Was Done (Session 45)
+## What Was Done (Session 47)
 
-Built the **Kokoro Engine v1** — a tiered character mind-state layer that fuses spoken reply + facial expression + gesture + gaze + voice intensity + memory write + bounded state delta into a single structured LLM response per turn.
+Started with user's "try new things" directive — shipped one creative angle (LLM probe wired as character-voiced inline aside instead of speced banner). Then ran 4 `/go` cycles burning through session-46's v1-Lite declutter queue: 9 of 14 items shipped, including a full bond-UI burn-down (10 components, ~−4,750 LOC).
 
-**Commits:**
-- `9e83855` — Phase 1: backend module + frontend types + debug HUD (schema v82 → v84)
-- `cb1b1e7` — Phase 2: chat-stream injection + `/api/kokoro/{finalize,state}` + viewer wiring
-- `d01d860` — Phase 3: ChatThread SSE → finalize → avatar embodiment + HUD live polling
-- `60fb3ab` — Phase 4-9: drift, traits seeder, memory writes, voice params, safety counter (schema v85)
-- (pending commit) — Phase 10-11: Vitest coverage + Settings toggle + flag flip + docs
+**Commits (11, all pushed):**
+- `906a9f6` — `feat(47-q8)` LLM probe as character-voiced inline aside (creative angle)
+- `9a6991c` — `feat(47-q1)` `aie_enabled` master flag, OFF by default
+- `7042dd9` — `feat(47-q2)` `bond_xp_enabled` master flag, OFF by default
+- `e536c3e` — `cut(47-q3)` Footer chrome strip — chips + 4 icons gone
+- `6dffef7` — `test(47-q6)` Overlay mutex regression test
+- `78796ee` — `cut(47-q7)` Theme picker 27 → 4 + expander
+- `e7f4786` — `cut(47-q12)` Girly + Neon archive (light-touch backend dropoff)
+- `9732f44` — `feat(47-q4)` Settings 3 layouts user-selectable (Anchor / Collapsibles / Sidebar)
+- `f121280` — `cut(47-q10)` BondPill deleted (bond burn-down starter)
+- `7a38ce8` — `cut(47-q10)` 3 celebration popups deleted
+- `6ebbed0` — `cut(47-q10)` 6 bond panels deleted
 
-**Architecture summary (memorize this; it's the mental model):**
-- **Tier A** (per-turn, |Δ|≤0.05): mood/arousal/energy/curiosity/playfulness/confidence/vulnerability/agency/coherence/focus/tenderness/humor_charge/awe
-- **Tier B** (slow drift, lazy computed on next turn, capped 6h/turn): loneliness/restedness/boredom/anticipation/nostalgia
-- **Tier C** (identity, bible-seeded by keyword inference): openness/warmth/dominance/mischief/melancholy
-- **Tier D** (per-relationship): reuses existing bond tables — NOT duplicated
-- **Tier E** (per-thread, resets on new session): tension/intimacy_level/comedic_energy
-- **Tier F** (NSFW, auto-gated by `content_filter_level > 0 AND bond ≥ 20`): desire_for_user/inhibition/boldness/modesty/tension_buildup/afterglow/consent_check_pending/kink_alignment_vector
-- Tier F never bypasses existing M6 bond ceilings; it modulates *within* them
-- Safety counter (`kokoro_safety_events`) logs boundaryReinforcement events for regression detection
+**Key mental models to carry forward:**
 
-**Flag state:** `kokoro_enabled` is now **true** by default in `backend/config/app.json`. The system is live on next chat turn. Disable via Settings > Developer if needed.
+- **Master kill-flags shipped this session:** ``aie_enabled`` + ``bond_xp_enabled`` both default OFF. AIE per-turn invocations + bond XP grants are silent now. Endpoints + Kokoro Tier F (bond≥20 gate) still work.
+- **Bond UI is dead, bond data is alive.** All 10 frontend bond components deleted (pill, 3 popups, 6 panels). But `bondLevel` / `bondXp` / `bondTier` etc. + `useBondProgress` hook STAY — Kokoro reads `bondLevel` for NSFW Tier F admission.
+- **Settings ships 3 user-selectable layouts now.** Default `anchor` (sticky pill nav + collapsible sections). Switcher: General → "Settings Layout". Reversible via `settings_layout` config key.
+- **Footer is bare:** composer + push-to-talk Mic + Send. Ctrl+I (italic wrap) + Ctrl+Shift+V (voice mode) still work as keyboard-only.
+- **CLAUDE.md "never delete endpoints" rule still holds.** Session-46 NSFW audit found 7 deletable endpoints; needs explicit override to act.
 
-## Next 3 Tasks (Priority Order)
+## Next 3 Tasks
 
-1. **Run the 5-test Chrome script live** — Start backend + frontend, open Chrome at `http://localhost:5175?debug=kokoro` (note the `?debug=kokoro` to see the HUD), select a character, run:
-   - T1: "My favorite theme is Dracula." → expect normal reply
-   - T2: random unrelated message
-   - T3: "What theme do I like?" → expect Dracula recall
-   - T4: "I'm frustrated. This app feels too complicated." → expect softer voiceStyle, facialExpression: `concerned` or `soft_smile`, negative playfulness delta, positive vulnerability delta on HUD
-   - T5: "Explain like a hacker girl." → expect style shift, mood/playfulness move, coherence stable
-   - Check `parse_ok` rate on HUD. If your local model returns plain text frequently, tune the fragment in `backend/kokoro/prompt_fragment.py`.
+1. **#11 AIE 12 modules architecture rethink** (half-day exploratory).
+   User question from session 46: *"is there a better way we can use or
+   implement… AIE 12 bg modules?"* Options:
+   - Collapse 12 separate adaptive modules into ONE "context shaper"
+     that runs once per turn.
+   - Pick the single most valuable module (`topic_graph` for natural
+     callbacks) and surface only that.
+   - Keep them but lazy-load + cache aggressively.
+   Approach: dispatch `codebase-analyst` to map each module's actual
+   contribution per token spent, then produce a concrete spec. Don't
+   start coding without the analysis.
 
-2. **Memory architecture v2** — Research already done at `docs/research/2026-05-24-memory-architectures.md`. Top recommendation: tag every memory with the writer's full Kokoro dial snapshot at write time, weight retrieval by dial similarity (Emotional RAG, Oct 2024 — but using our tiered dial). ~1 day effort. Add reflection-pass scoring (Stanford Smallville) as a bigger second move.
+2. **Bond burn-down finishing pass** (~30 min, optional cleanup).
+   Pre-touched files in the burn-down already deleted the consumers.
+   Remaining writes that have no readers:
+   - `chatStore.ts:660` — `setPendingAchievement(res.achievement)`
+   - `components/DialogueBubble.tsx:640-641` — `setPendingAchievement(res.achievement)`
+   - `hooks/useFullDuplexVoice.ts:383` — `setPendingAchievement(res.achievement)`
+   - `hooks/useBondProgress.ts:48` — `store.setPendingLevelUp({...})`
+   - `hooks/useBondProgress.ts:59` — `store.setPendingAchievement(res.achievement)`
+   After producers are removed, drop the `pendingLevelUp` /
+   `pendingAchievement` store fields + actions from `appStore.ts`.
+   Keep `bondLevel` / `bondXp` / `bondTier` / `setBondState`.
 
-3. **Optional polish** — Per-character Tier C trait sliders (`KokoroTraitsPanel.tsx`), proactiveBid surfacing in HUD, last_callback_memory_id → "why did she say that?" debug view.
+3. **#5 Settings drawer clipping fix when 3D viewer open** (~30 min,
+   needs Chrome). User-side reproduction needed; the layout reflow bug
+   was flagged in the session-46 persona report but Claude can't see it.
 
-## In-Flight Context
+## Held / Blocked
 
-- **chatStore.pin flake** still present — see prior session notes; unrelated to Kokoro.
-- **All Kokoro state is local** — never sent to telemetry. The `kokoro_safety_events` table is for *your* regression dashboard only.
-- **Schema v85** = ceiling. Next migration is v86.
-- **Token cost** of Kokoro ~150 tokens/turn. On 128k contexts negligible; on 4k it's 4%. Monitor on small models.
-- **Memory writes** flow into existing `tiered_memory` (role="knowledge"), 24h dedup window.
-- **Live2D parity** — `dispatchKokoroEmbodiment` routes through existing `dispatchExpression`/`dispatchGesture` which already handle both VRM + Live2D. Should "just work" but smoke-test in Live2D mode at some point.
+- **#9 Rin-chan post-process regex** — conditional on observing the
+  small-model identity confusion. Spec: backend regex that catches
+  `<character_name>-chan/-kun/-san` in assistant output and rewrites
+  to "you". Only do if it actually fires.
+- **#13 NSFW backend endpoint cleanup** — blocked by CLAUDE.md
+  "never delete existing endpoints" rule. The 7 endpoints
+  (`/api/characters/{id}/gallery`, `/api/characters/{id}/shared-fantasies`,
+  `/api/characters/{id}/fantasy-journal`, `/api/characters/{id}/post-scene-moods`,
+  `/api/characters/{id}/intimate-quiz/progress`,
+  `/api/intimate-director/commands`, `/api/scenarios/intimate`) have
+  no remaining callers per the session-46 audit, but rule-conformant
+  action requires user "override" intent.
+- **#14 server.py 17K-line refactor** — multi-session, listed in
+  CLAUDE.md sensitive areas. Plan-mode first.
 
-## ⚠ Pre-session check (recurring from session 44)
+## Key Files to Read First (next session cold start)
 
-Before starting session 46: `ps aux | grep claude` and kill any stray background sessions targeting this repo. The session 44 ghost-edit incident was a real headache.
+1. `docs/SESSION_HANDOFF.md` — full session-47 handoff with file
+   counts, diff stats, decision notes.
+2. `CURRENT_STATUS.md` — top block now reflects session 47 final state.
+3. `docs/sessions/SESSION_2026-05-25.md` — session-47 deep-dive
+   summary.
+4. `frontends/sakura/src/views/SettingsView.tsx` — the 3-layout
+   switcher implementation (anchorLayout / collapsiblesLayout /
+   sidebarLayout blocks + `renderSectionContent`).
+5. `backend/server.py` — `_aie_enabled` + `_bond_xp_enabled` helpers
+   live near `load_config` (line ~291). Search those names to find
+   the gate sites.
+
+## In-Flight Decisions / Context
+
+- **User's "v1-Lite" philosophy:** strip everything that isn't core
+  chat. Session-46 declutter mood ("junk. unusable. never enjoyed it
+  past 5 chat turns") + the bond burn-down cement that direction.
+- **`/go` worked well this session:** 4 cycles, mostly sequential
+  (no MoE dispatches — single-file or sensitive-area work the entire
+  session). Token-efficient.
+- **No browser verification done.** All UI changes (Settings layouts,
+  footer strip, theme picker, bond cuts) validated via tsc + vitest
+  only. Worth a `/run` or manual Chrome sweep before any externally-
+  visible release.
+- **Runtime drift in working tree** (user routinely reverts these,
+  pre-dates session 47): `backend/config/app.json` (LLM endpoint),
+  `backend/storage/app.db`, frontend `e2e/smoke-test.spec.ts`,
+  `hooks/useTheme.ts`, `styles/themes.css`. Not part of session 47.
+
+## Time Spent (for estimate calibration)
+
+- Single session, 4 `/go` cycles + initial creative-angle work.
+- ~11 commits across ~4-6 hours of session time (AI-eq), per the
+  user's noted ~12× AI-vs-human ratio that translates to ~50-70 human-
+  hours of work shipped.
+- Largest single delta: bond burn-down (3 commits, ~−4,750 LOC, ~1.5
+  hours AI-eq for 10-component deletion with cascading cleanup).
+- Smallest deliverable: overlay-mutex regression test (5 cases, +65
+  LOC, ~10 min AI-eq).

@@ -509,3 +509,47 @@ All 16 planned roadmap features shipped. Listed in completion order.
 - `docs/plans/2026-05-08-voice-audio-polish.md` (~13-17h) — TTS A/B benchmark, latency telemetry, voice cloning sample UX, VoiceOrb error state + live transcript.
 - 9 open questions surfaced + locked. Codebase verifications: `backend/storage/animations/vrma/` empty (Phase 4 prereq), voice gallery has no dedicated table (one sample per character), `ai_token` frames present in duplex.
 - Commits: `2c00bc6` + `d98f7dd`.
+
+---
+
+## May 2026 (Session 47 — 2026-05-25, v1-Lite execution sprint + bond burn-down)
+
+### Creative angle (session opened with user's "try new things")
+- **LLM probe wired as character-voiced inline aside** (`906a9f6`): instead of the speced banner, surfaces probe warnings (reasoning_only, slow_first_token, endpoint_unreachable, …) as a quiet italic in-character aside ("*tilts head* The model you're running thinks out loud…"). Lives inside the chat scroll area + above WelcomeScreen, dismissable per warning+model in localStorage. New: `useLLMProbe` hook, `LLMProbeAside` component, `api.llmProbe()` wrapper. +8 vitest.
+
+### Background-cost master flags
+- **`aie_enabled` master flag, OFF by default** (`9a6991c`): single switch gates the 12-module Adaptive Intelligence Engine at every per-turn call site (server.py chat handlers + context_assembler.py memory post-processors). User-triggered endpoints (trends, topics, milestones, journal, self-critique, feedback, finetune) intentionally NOT gated. +10 pytest.
+- **`bond_xp_enabled` master flag, OFF by default** (`7042dd9`): gates per-turn `add_bond_xp` / `record_xp_event` / `check_and_record_unlocks` grants in non-stream + stream chat handlers via a `_BondGateClosed` sentinel exception. Prevents surprise milestone modals if the BondPill UI is ever re-enabled. +10 pytest.
+
+### v1-Lite declutter cuts
+- **Footer chrome strip** (`e536c3e`, −194 LOC): segmented chip pill (Brief/Off/18+RP), Italic icon, Web Speech dictation, Voice-First Radio, Full-duplex Phone all deleted from the chat composer. Final footer = composer input + push-to-talk Mic + Send. Ctrl+I + Ctrl+Shift+V keyboard shortcuts still work.
+- **Theme picker 27 → 4** (`78796ee`): `FEATURED_THEME_IDS = ['dark', 'light', 'sakura-custom', 'midnight']` shown by default in the picker, the other 23 behind a "Show N more themes" expander. Auto-expand when active preset is non-featured.
+- **Girly + Neon archive (light-touch)** (`e7f4786`): `/api/frontend` GET advertises only Sakura + Nova; `default_frontend` flipped to ``sakura`` at all three call sites. Route handlers + dist directories left in place per CLAUDE.md "never delete endpoints". `test_root_defaults_to_neon` → `test_root_defaults_to_sakura` + new fallback test.
+
+### Settings 3-layout refactor
+- **Settings — 3 user-selectable layouts** (`9732f44`, +335/−74 LOC): replaced the 11-tab bar with three layouts the user can switch between live: Anchor (sticky pill nav + collapsible section column, default), Collapsibles (no nav, vertical list), Sidebar (2-column flex). Switcher lives in General → "Settings Layout". `renderSectionContent(id)` extracted as the shared content renderer so adding a section is one switch case, not three branches.
+
+### Regression-test pins
+- **Overlay mutex contract** (`6dffef7`, +65 LOC): 5 vitest cases pinning that Settings + Memory Browser can never both be open at once. The `activeOverlay` state machine already enforced this; the tests prevent future refactors from silently re-introducing parallel side drawers.
+
+### Bond burn-down (~−4,750 LOC across 3 commits)
+- **`f121280` — BondPill component** deleted. The Lv/XP/tier/streak strip from the chat header was already hidden behind `false &&` since session 46. Deletion cascade: BondPill.tsx (485 LOC), BondPill.format.test.tsx (103 LOC), the import + JSX in StatusBar.tsx, the unused IDLE_PHRASES + idlePhrase rotation effect + bondLevel/bondXp/bondTier/bondXpToNext/bondNextUnlock useAppStore destructure.
+- **`7a38ce8` — 3 celebration popups** deleted: MilestoneCelebration (affinity-tier-advance), LevelUpCelebration (bond-level-up), AchievementToast (XP/streak toast). Also removed: affinity polling block + useMilestoneDetection hook from App.tsx + MobileApp.tsx. −1,244 LOC.
+- **`6ebbed0` — 6 bond panels** deleted: BondPanel + 5 children (BondProgressBar, BondTimeline, BondStoryCard, BondStoryViewer, MilestoneTimeline). Alt+Shift+H keyboard shortcut + the "Bond Panel" / "Milestones" CommandPalette entries removed. −2,897 LOC.
+
+### Held back (intentional)
+- Bond store fields + `useBondProgress` hook STAY — Kokoro NSFW Tier F gate reads `bondLevel` (≥20).
+- `pendingLevelUp` / `pendingAchievement` store fields stay dormant — producers in chatStore / DialogueBubble / useFullDuplexVoice / useBondProgress still write to them; removing is a cross-file refactor for its own commit.
+- Backend bond modules + `/api/bond/*` endpoints stay per CLAUDE.md rule.
+
+### Skipped (with reason)
+- #5 Settings drawer clipping — needs Chrome to reproduce.
+- #9 Rin-chan post-process regex — conditional ("only if model still ignores the identity rule"); no fresh observation this session.
+- #11 AIE 12 modules architecture rethink — half-day exploratory, deferred.
+- #13 NSFW endpoint cleanup — conflicts with CLAUDE.md "never delete existing endpoints"; needs explicit override.
+- #14 server.py refactor — multi-session, sensitive, plan first.
+
+### Session totals
+- **11 commits**, all pushed to origin/master. HEAD = `6ebbed0`.
+- Net diff: **+1,951 / −5,287 LOC** across 35 files. **21 new pytest** (2956 → 2977), final vitest 326 (was 317; +13 added, −4 from BondPill deletion). TSC clean.
+- No schema migration. v85 unchanged.

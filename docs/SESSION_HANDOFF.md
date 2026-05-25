@@ -1,99 +1,176 @@
-# Session Handoff — 2026-05-25 (session 46)
+# Session Handoff — 2026-05-25 (session 47)
 
-## Branch: master · 13 unpushed commits ahead of `61b870c`
-## Test Status: 2,956 backend pytest passing · tsc clean · vitest pre-existing pin flake unchanged
+## Branch: master · 11 commits this session · all pushed to origin
+## Test Status: **2,977 backend pytest passing** · **326 vitest passing** · TSC clean
+## Schema version: v85 (unchanged this session)
 
 ## TL;DR
 
-Session opened with a `/goal` directive to "make the app shippable" — turned into a long live-driving session through 4 personas, then a frustrated user marathon: *"it's junk, unusable, never enjoyed it past 5 chat turns."* Spent the rest of the session doing a v1-Lite declutter pass, cutting feature accretion without curation that had buried the core chat surface.
+Started from session-46's v1-Lite declutter open queue (14 items) plus
+the user's "try new things" directive.  Delivered one creative angle
+(LLM probe wired as character-voiced inline aside instead of banner)
+then executed 8 more queue items across 4 `/go` cycles.  Net session:
+**11 commits, +1,200 / −4,756 LOC, 21 new pytest cases, 13 new vitest
+cases**, all pushed.  Major declutter pass: the entire bond UI surface
+(10 components, ~4,750 LOC) deleted from the frontend.
 
-**Headline outcome: 13 commits, the chat surface is dramatically simpler, and the app actually produces real coherent replies with consistent italic actions and zero bracket leaks.** Multiple popup classes killed: GreetingCard, BondLevelUp celebration, AffinityMilestone celebration, AchievementToast, the scheduled-message banner. Multiple gamification surfaces hidden: bond pill, XP/Level/tier/streak display, 5-emoji reaction bar, 👍/👎 feedback thumbs, Pin toggle, two "Remember" buttons. Defaults flipped: showQuickChips false, feedbackEnabled false. Kokoro contract pruned 22→3 fields, ~150→70 tokens/turn. The qwen3 "empty bubble" P0 fully fixed across non-streaming + streaming paths. 32 new pytest cases.
+## Completed This Session
 
-## Critical Context for Next Session
+### Creative angle (user-directed "try new things")
+- **`906a9f6`** — `feat(47-q8)`: LLM probe wired as a quiet italic
+  character-voiced aside ("*tilts head* The model you're running thinks
+  out loud…") instead of the speced banner.  Lives inside the chat
+  scroll area + above WelcomeScreen.  Dismissal persists per warning
+  code + model in localStorage.  +8 vitest.
 
-**LLM model swap is in play.** I changed `backend/config/app.json` `llm.endpoint`/`llm.model` from `10.0.0.17:1234`/`qwen/qwen3.5-9b` to `localhost:1234`/`llama-3.2-1b-instruct` to make the persona testing actually work. The user's intended config was `10.0.0.17:1234` with qwen3.5 — they routinely revert these runtime mods per `CURRENT_STATUS.md`. **Action for next session:** confirm with the user whether to leave on llama-3.2-1b (chat works well) or revert to qwen3.5 (slower, verbose thinking even with /no_think disabled — the SSE reasoning_content fallback now surfaces SOMETHING so it's no longer empty, but still verbose).
+### Queue items completed (v1-Lite declutter)
 
-**Identity rule for character names is now in the system prompt** for every per-turn assembly (`backend/server.py` around line 2868) — explicit "YOU are <char>, never call the user '<char>'" guardrail. Llama-3.2-1b ignored it once mid-session (still suggested "Rin-chan" as a nickname for the user). If the small model keeps ignoring, the next escalation is a post-process regex that detects `<character_name>-chan/-kun/-san` in assistant output and rewrites to "you".
+| Commit | Queue | What |
+|---|---|---|
+| `9a6991c` | #1 | `aie_enabled` master flag, OFF by default.  Gates 5 per-turn AIE call sites in server.py + 2 in context_assembler.py.  Endpoints stay (user-triggered).  +10 pytest. |
+| `7042dd9` | #2 | `bond_xp_enabled` master flag, OFF by default.  Gates 2 bond-XP grant blocks (non-stream + stream chat handlers).  +10 pytest. |
+| `e536c3e` | #3 | Footer chrome strip — chips (Brief/Off/18+RP) + 4 of 6 icons (Italic, Voice dictation, Voice-First Radio, Full-duplex Phone) deleted.  Final footer = composer + push-to-talk Mic + Send.  −194 LOC. |
+| `6dffef7` | #6 | Overlay mutex contract pinned in regression tests (5 vitest cases) — Settings + Memory Browser can't coexist; already enforced via `activeOverlay`, now tested. |
+| `78796ee` | #7 | Theme picker 27 → 4 featured (`dark`, `light`, `sakura-custom`, `midnight`) + "Show more themes" expander.  Auto-expand when active preset is non-featured. |
+| `e7f4786` | #12 | Girly + Neon frontend archive (light-touch backend dropoff).  `/api/frontend` advertises only Sakura + Nova; `default_frontend` default flipped to `sakura`.  Test `test_root_defaults_to_neon` → `test_root_defaults_to_sakura` + new fallback test. |
+| `9732f44` | #4 | Settings — 3 layouts user-selectable (Anchor / Collapsibles / Sidebar).  Live switcher in General → "Settings Layout".  `renderSectionContent(id)` extracted so adding a section is one switch case, not three branches.  Default: Anchor. |
+| `f121280` | #10 | Bond burn-down starter: BondPill component deleted (was dead behind `false &&`).  −625 LOC including the unused IDLE_PHRASES + idlePhrase rotation effect. |
+| `7a38ce8` | #10 | Bond burn-down ×3: MilestoneCelebration, LevelUpCelebration, AchievementToast deleted.  Affinity polling + `useMilestoneDetection` removed from App.tsx + MobileApp.tsx.  −1,244 LOC. |
+| `6ebbed0` | #10 | Bond burn-down ×6: BondPanel + BondProgressBar + BondTimeline + BondStoryCard + BondStoryViewer + MilestoneTimeline deleted.  Alt+Shift+H shortcut + CommandPalette entries removed.  −2,897 LOC. |
 
-**Rate-limit hit** on Anthropic 5h window around end of session. Chrome MCP browser driving is blocked until ~midnight reset. Code edits / pytest / tsc are unaffected.
+### Bond burn-down totals (across 3 commits)
+- **10 components deleted** (BondPill, 3 celebration popups, 6 bond panels)
+- **−4,750 LOC net**
+- All gamification UI surfaces gone from chat header, chat content, and overlay system
 
-## All 13 Session-46 Commits
+## Work In Progress / Held Back
 
-| Commit | What |
-|---|---|
-| `f915264` | qwen3 thinking-disable + reasoning_content fallback (non-stream) + achievement gated on `status='sent'`; +25 pytest |
-| `c7c0ab5` | Client chat timeout 35s → 60s |
-| `f0a81d6` | SSE streaming parser emits `delta.reasoning_content` for reasoning models (the actual chat-UI fix); +4 pytest |
-| `c2b00d2` | qwen3 `/no_think` runtime directive + Kokoro auto-bypass for reasoning models |
-| `6fc9de5` | New `GET /api/llm/probe` endpoint with reasoning_only / slow_first_token / endpoint_unreachable warnings |
-| `db9f191` | Multi-persona test report close-out with root-cause analysis |
-| `05a4377` | Strip descriptive bracket annotations (`[emotional expression: X]`, `[gesture: Y]`) + kill proactive-message popups (route to chat instead) |
-| `2b57283` | v1-Lite declutter — bond pill / achievement toasts / frontend switcher / quick-chips defaulted off / un-bracketed `EMOTION:` footer strip |
-| `c874436` | 7 NSFW bloat overlays hidden per parallel audit (intimate gallery, shared fantasies, fantasy journal, intimate quiz, scene replay, audio stories, milestone UI, intimate scenarios) |
-| `9439d68` | Typed-boolean feature flag pattern fix (TS narrowing survives `false &&`) |
-| `d2a4a4d` | Kokoro 22-dial JSON contract → 5-field MVP per parallel audit; ~150→70 tokens/turn |
-| `bea83ed` | Emoji 👍/👎 + Pin toggle + Bookmark "Remember this" + baseline asterisks-for-actions instruction |
-| `7f662b4` | ALL celebration popups (BondLevelUp, MilestoneCelebration, GreetingCard) + 5-emoji reaction bar + "Remember" Brain button + Rin-chan identity-rules guardrail |
+These are stopping decisions, not unfinished work:
 
-## What's Live Right Now
+- **Bond store fields + `useBondProgress` hook STAY.**  `bondLevel`,
+  `bondXp`, `bondTier`, `bondXpToNext`, `bondNextUnlock` and the hook
+  that writes them are still consumed by Kokoro's NSFW Tier F gate
+  (bond ≥ 20).  Deleting them would break NSFW context resolution.
+- **`pendingLevelUp` / `pendingAchievement` store fields stay dormant.**
+  Producers still write to them from `chatStore`, `DialogueBubble`,
+  `useFullDuplexVoice`, `useBondProgress` — removing the producers is a
+  cross-file refactor that wants its own commit.
+- **Backend bond modules + `/api/bond/*` endpoints STAY** per CLAUDE.md
+  "never delete existing endpoints" rule.  They're already grant-gated
+  by the `bond_xp_enabled` flag.
 
-- **Chat:** clean, italic actions wrapped in asterisks consistently, no bracket leaks, no emoji thumbs, no Pin/Remember buttons, no greeting popup at top, no bond pill / XP / Level chrome in header
-- **Sidebar:** clean — search + character list. No frontend switcher (Neon/Nova/Girly tabs gone)
-- **Header:** avatar + character name + status dot + 3 icons (Settings/3D/More)
-- **Kokoro:** 5-field contract (reply + facialExpression + gesture + memoryWrite + stateDelta + boundaryReinforcement for NSFW). Auto-bypassed entirely for reasoning models (qwen3, deepseek-r1, o1, qwq)
-- **System prompt:** baseline "wrap actions in asterisks, no bracket annotations" instruction + identity-rules section blocking character-name-as-user-name
-- **LLM probe:** new endpoint at `GET /api/llm/probe` returns classified warnings + ready-to-render hint copy. Frontend wire-up NOT done.
+## Skipped With Reason
 
-## Audits Saved For Reference
+- **#5 Settings drawer clipping fix** — needs Chrome to reproduce.
+- **#9 Rin-chan post-process regex** — conditional ("only if model
+  still ignores the rule") — no fresh observation this session.
+- **#13 NSFW backend endpoint cleanup** — conflicts with CLAUDE.md
+  "Never delete or reorder existing endpoints" rule.  Audit identified
+  7 GET endpoints with no remaining callers; explicit user override
+  needed.
+- **#11 AIE 12 modules architecture rethink** — half-day exploratory
+  research + spec; deferred.
+- **#14 server.py 17K-line refactor** — multi-session, listed as
+  high-risk in CLAUDE.md sensitive areas.
 
-Two parallel `codebase-analyst` agents ran this session and produced detailed audits. Their output is captured in the `bea83ed` and `c874436` commit bodies. Worth re-reading before doing the deep cuts.
+## Known Issues / Bugs
 
-**Kokoro audit** classified every dial + response-contract field by downstream consumer (KEEP / MAYBE / CUT). Key finding: most of the 22 dials are prompt-only (steer LLM word choice via the injected fragment), no downstream code reads them. The 5-field MVP commit acted on the audit.
+- **Pre-existing `chatStore.pin.test.ts` flake** — `togglePin >
+  optimistically flips pinned=true` returns 500 from mocked API.
+  Unchanged from session 46.  1/331 vitest failure.
+- **3 vitest unhandled errors in `SettingsView.exportImport.test.tsx`** —
+  pre-existing test-infra noise, doesn't fail tests (3 pass + 3
+  "errors" that are async cleanup hiccups).  Not introduced this session.
 
-**NSFW audit** classified the 56-feature sprint into CORE (7) / BLOATWARE (8 overlays + 7 endpoints). The 7 keepers actually inject context into the LLM prompt every turn (content gate, intimacy states, private vocab/pet names, sensory profiles, aftercare states, relationship boundaries, arousal engine). The 8 cut were data CRUD UIs that never reach the prompt. Cuts landed in `c874436`; backend endpoint deletions deferred.
+## Files Modified (session 47 diff stat — 11 commits)
 
-## Open Queue (in priority order)
+```
+ backend/server.py                                  |  21 +-
+ backend/llm/context_assembler.py                   |  41 +-
+ backend/tests/test_v2_routing.py                   |  34 +-
+ backend/tests/test_aie_master_flag.py              | 177 +++++ (new)
+ backend/tests/test_bond_xp_flag.py                 |  88 +++ (new)
+ frontends/sakura/src/App.tsx                       |  94 +--
+ frontends/sakura/src/MobileApp.tsx                 |  33 +-
+ frontends/sakura/src/components/AchievementToast.tsx     |  79 ---
+ frontends/sakura/src/components/BondPanel.tsx      | 347 -----
+ frontends/sakura/src/components/BondPill.tsx       | 485 -----
+ frontends/sakura/src/components/BondProgressBar.tsx      | 298 -----
+ frontends/sakura/src/components/BondStoryCard.tsx  | 263 -----
+ frontends/sakura/src/components/BondStoryViewer.tsx      | 692 -----
+ frontends/sakura/src/components/BondTimeline.tsx   | 663 -----
+ frontends/sakura/src/components/CommandPalette.tsx |   3 +-
+ frontends/sakura/src/components/LevelUpCelebration.tsx   | 609 -----
+ frontends/sakura/src/components/LLMProbeAside.tsx        |  86 +++ (new)
+ frontends/sakura/src/components/MilestoneCelebration.tsx | 469 -----
+ frontends/sakura/src/components/MilestoneTimeline.tsx    | 615 -----
+ frontends/sakura/src/components/StatusBar.tsx      |  43 +-
+ frontends/sakura/src/components/WelcomeScreen.tsx        |  16 +-
+ frontends/sakura/src/hooks/useLLMProbe.ts          | 212 +++ (new)
+ frontends/sakura/src/lib/api.ts                    |  28 +-
+ frontends/sakura/src/test/BondPill.format.test.tsx | 103 --- (deleted)
+ frontends/sakura/src/test/LLMProbeAside.test.tsx   | 151 +++ (new)
+ frontends/sakura/src/test/appStore.overlayMutex.test.ts  |  65 +++ (new)
+ frontends/sakura/src/views/ChatThread.tsx          | 252 +-
+ frontends/sakura/src/views/SettingsView.tsx        | 562 ++++++++
+```
 
-These are the v1-Lite tasks the user explicitly asked for. None are started.
+## Next Session Priorities
 
-1. **AIE 12 modules → feature flag OFF by default.** 12 adaptive modules running silently with no user-visible benefit, costing tokens. Add `aie_enabled` config flag (default false), wrap each `from backend.adaptive.X import Y` call site. ~7-10 call sites in server.py + context_assembler.py. ~30 min.
-2. **Bond XP grant disable.** Bond pill UI is hidden but the backend still runs `_update_relationship` + record_interaction every turn, accumulating XP. If we ever re-enable the pill, surprise modals will fire. Add config flag + early return in the grant path. ~15 min.
-3. **Footer chrome strip.** Chat input footer has Long/Off/18+RP chips + 6 icons (italic / mic / mic / voice broadcast / phone / send). Per the declutter philosophy, reduce to just send + mic. ~30 min.
-4. **Settings drawer 8 tabs → 1 page collapsible.** Settings overwhelms; 8 tabs is too many. Single page with collapsible sections. 1-2h.
-5. **Settings drawer clipping fix when 3D viewer open.** Layout reflow bug from the persona report. ~30 min.
-6. **Settings + Memory Browser mutual-exclusion.** Both can be open at once and crush chat column. ~15 min.
-7. **Theme picker 27 → 4.** Pick Dark / Light / Sakura / Midnight as the defaults; the rest behind "more themes" expansion. ~30 min.
-8. **Onboarding LLM probe wire-up to a non-popup banner.** The `/api/llm/probe` endpoint exists from `6fc9de5` but nothing in the frontend calls it. Should be a quiet inline banner (NOT a popup — user is very clear on that), only shown when warning != null. ~45 min.
-9. **Rin-chan post-process regex.** If the identity-rules system prompt isn't enough on small models, add a backend regex that catches `<character_name>-chan/-kun/-san` in assistant output and replaces with "you". ~15 min, but only do if user confirms model still ignores the rule.
-10. **Bond progression backend burn-down.** Per the strategic plan: delete (not just hide) the XP/levels/tiers/streaks/achievements/milestones subsystem. Schema rows can stay dormant. ~2-3h.
-11. **AIE 12 modules architecture rethink.** Per user's question: "is there a better way we can use or implement... AIE 12 bg modules?" Long-term: collapse the 12 separate modules into ONE "context shaper" that runs once per turn. Or surface the most valuable one (`topic_graph` for natural callbacks). ~half-day spec + implement.
-12. **Girly + Neon frontend archive** to `_BACKUP_ROOT/`. ~15 min.
-13. **NSFW backend endpoint cleanup.** The 7 endpoints called out in the NSFW audit have no remaining callers. Safe to delete. ~30 min.
-14. **`server.py` 17K-line refactor.** Split into 5-10 modules by domain. Half-day to full-day; high-risk per CLAUDE.md "never reorder existing endpoints" rule, so likely a multi-session effort.
+Remaining queue (4 actionable items):
 
-## Known Issues Carried Forward
+1. **#11 AIE 12 modules architecture rethink** — half-day exploratory
+   research + spec.  Collapse 12 separate adaptive modules into ONE
+   "context shaper" that runs once per turn.  Or pick the most
+   valuable module (topic_graph for natural callbacks) and surface
+   only that.  User's question: "is there a better way we can use or
+   implement... AIE 12 bg modules?"
 
-- **Llama-3.2-1b name confusion**: even with the identity rules, the small model suggested "Rin-chan" as a nickname for the user once mid-session. Watch for repeats. Escalation: post-process regex.
-- **Pre-existing chatStore.pin.test.ts flake**: 1 vitest failure unrelated to anything this session.
-- **Settings drawer off-screen clipping when 3D viewer is open** (still open from persona report).
-- **Settings + Memory Browser non-exclusive overlay** (still open).
-- **Theme tile ↔ dropdown desync** (still open).
-- **3D viewer black-canvas intermittent on first open** (self-resolved during this session, marked flaky).
+2. **#5 Settings drawer clipping when 3D viewer open** — open browser,
+   exercise the bug, fix layout reflow.  Requires user-side Chrome.
 
-## Files Modified (Working Tree, Not Yet Committed)
+3. **#14 `server.py` 17K-line refactor** — split into 5-10 modules by
+   domain.  Half-day to full-day per phase.  CLAUDE.md flags as
+   sensitive area ("never reorder existing endpoints"); needs careful
+   plan.
 
-These are runtime drift — the user routinely reverts them:
-- `backend/config/app.json` — LLM endpoint swap to localhost:1234/llama-3.2-1b for testing; user may want to revert
-- `backend/storage/app.db` — runtime DB state (messages, XP rows from testing)
-- `frontends/sakura/e2e/smoke-test.spec.ts`, `frontends/sakura/src/hooks/useTheme.ts`, `frontends/sakura/src/styles/themes.css`, `frontends/sakura/src/views/SettingsView.tsx` — pre-existing uncommitted edits from sessions 41-44, not touched this session
+4. **Bond burn-down finishing pass** (optional, ~30 min):
+   - Remove `pendingLevelUp` / `pendingAchievement` writes from
+     `chatStore`, `DialogueBubble`, `useFullDuplexVoice`,
+     `useBondProgress`.
+   - Drop the `pendingLevelUp` / `pendingAchievement` store fields
+     once producers are gone.
+   - Keep `bondLevel` / `bondXp` etc. + the `useBondProgress` hook —
+     Kokoro NSFW Tier F still reads bond level.
 
-## Push State
+Blocked / conditional:
+- **#9 Rin-chan regex** — only if model still ignores identity rule.
+- **#13 NSFW endpoint deletion** — needs explicit CLAUDE.md-rule
+  override from user.
 
-13 commits ahead of `origin/master`. **NOT pushed.** No push permission requested + no `git push` in the session-46 work. Push gate clear (no active OPEN BUG / UNFIXED / BLOCKER markers).
+## Context for Next Session
 
-## Pre-Session Check for Session 47
-
-- Run `ps aux | grep claude` and kill any stray background sessions before resuming (session 44 ghost-edit incident — see prior memory).
-- Check if backend is still running on :8080 (PID from end of session was the uvicorn I spawned).
-- Confirm whether LLM endpoint should stay on llama-3.2-1b or revert to qwen3.5.
-- Pick from open queue. Recommended first: **AIE 12 modules feature flag (#1)** — fast win, removes background noise, low risk. Or **Bond XP grant disable (#2)** — prevents future surprise popups if the gamification UI is ever re-enabled.
+- **Settings layouts live now:** Default is `anchor` (sticky pill
+  nav + collapsible sections).  User can switch in Settings → General →
+  "Settings Layout".  Default flip = one-line change in SettingsView
+  fallback OR set `settings_layout` in app config.
+- **Active push state:** 11 commits this session, all pushed.
+  HEAD = `6ebbed0`.  Push gate clear (no active OPEN BUG / UNFIXED /
+  BLOCKER markers in CURRENT_STATUS.md or this file).
+- **Runtime drift in working tree (user routinely reverts):**
+  `backend/config/app.json` (LLM endpoint), `backend/storage/app.db`,
+  `frontends/sakura/e2e/smoke-test.spec.ts`,
+  `frontends/sakura/src/hooks/useTheme.ts`,
+  `frontends/sakura/src/styles/themes.css`.  These pre-date session 47
+  and were not touched this session.
+- **2 untracked files from session 41-44** still present:
+  `frontends/sakura/src/components/MemoryBrowser.md` and
+  `MemoryBrowser.PRD.md`.  Not touched this session.
+- **No active plan file for next session.**  Next session can pick
+  from the priorities above or pick a new direction.
+- **No schema migrations this session.**  `preflight.py` untouched,
+  schema_version stays at v85.
+- **No Chrome browser interaction this session.**  All UI work
+  validated via tsc + vitest only; user should browser-verify the
+  Settings 3-layout switcher + the bond burn-down before next merge
+  to anything externally visible.

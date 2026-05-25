@@ -108,6 +108,17 @@ export function SettingsView() {
   const { theme, setTheme } = useTheme();
   const { hasDiscovered, discoverFeature } = useWizardStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  // Session-47 (queue #4): the layout the user picked from the
+  // three on-offer variants — falls back to ``anchor`` (sticky pill
+  // nav + collapsible section column) when the key isn't set.  All
+  // three variants share the same section-content renderer; only
+  // the chrome around the content differs.
+  type SettingsLayout = 'anchor' | 'collapsibles' | 'sidebar';
+  const settingsLayout = (() => {
+    const v = String(cfgGet(config, 'settings_layout', 'anchor'));
+    return (v === 'collapsibles' || v === 'sidebar' || v === 'anchor' ? v : 'anchor') as SettingsLayout;
+  })();
+  const [expandedSections, setExpandedSections] = useState<Set<SettingsTab>>(new Set(['general']));
   const [savedFlash, setSavedFlash] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -131,14 +142,48 @@ export function SettingsView() {
     setVisitedTabs(prev => new Set([...prev, tabId]));
   };
 
-  // Jump to tab requested by openSettingsTab() and clear the request
+  // Jump to tab requested by openSettingsTab() and clear the request.
+  // For tab-style layouts (sidebar) this swaps the active tab; for
+  // collapsible layouts (anchor / collapsibles) it expands the target
+  // section and scrolls it into view.
   useEffect(() => {
     if (settingsInitTab && TABS.some(t => t.id === settingsInitTab)) {
-      setActiveTab(settingsInitTab as SettingsTab);
+      const target = settingsInitTab as SettingsTab;
+      setActiveTab(target);
+      setExpandedSections(prev => new Set(prev).add(target));
+      // Scroll after the section has had a chance to render.
+      setTimeout(() => {
+        document.getElementById(`settings-section-${target}`)?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+      }, 60);
       // Clear the init tab via a zero-cost store write (openOverlay keeps overlay open)
       useAppStore.setState({ settingsInitTab: null });
     }
   }, [settingsInitTab]);
+
+  /** Toggle a section's expanded state (used by anchor + collapsibles). */
+  const toggleSection = (id: SettingsTab) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  /** Expand a section AND scroll it into view (anchor nav onClick). */
+  const expandAndScrollTo = (id: SettingsTab) => {
+    setExpandedSections(prev => new Set(prev).add(id));
+    setVisitedTabs(prev => new Set([...prev, id]));
+    setTimeout(() => {
+      document.getElementById(`settings-section-${id}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 60);
+  };
 
   // LM Studio model auto-detect
   const [lmModels, setLmModels] = useState<LMStudioModel[]>([]);
@@ -181,9 +226,84 @@ export function SettingsView() {
   /** Get config value with fallback. */
   const cfg = (key: string, fallback: unknown = '') => cfgGet(config, key, fallback);
 
-  return (
+  /**
+   * Render the actual settings content for a given tab/section.
+   * Shared across all 3 layouts so feature parity is automatic — adding
+   * a new section means adding one case here, not three.
+   */
+  const renderSectionContent = (id: SettingsTab) => {
+    switch (id) {
+      case 'general':
+        return (
+          <GeneralTab
+            config={config} save={save} cfg={cfg}
+            theme={theme} setTheme={setTheme}
+            advancedMode={advancedMode} toggleAdvancedMode={toggleAdvancedMode}
+            layoutMode={layoutMode} setLayoutMode={setLayoutMode}
+          />
+        );
+      case 'character':
+        return <CharacterTab />;
+      case 'brain':
+        return <BrainTab config={config} save={save} cfg={cfg} lmModels={lmModels} lmLoading={lmLoading} fetchLmModels={fetchLmModels} />;
+      case 'voice':
+        return <VoiceTab config={config} save={save} cfg={cfg} />;
+      case 'safety':
+        return <SafetyTab config={config} save={save} cfg={cfg} />;
+      case 'intimacy':
+        return <NsfwSettingsTab config={config} save={save} cfg={cfg} />;
+      case 'aiart':
+        return <AIArtTab config={config} save={save} cfg={cfg} />;
+      case 'system':
+        return <SystemTab config={config} save={save} cfg={cfg} />;
+      case 'physics':
+        return <JigglePhysicsPanel config={config} save={save} cfg={cfg} />;
+      case 'tts_models':
+        return (
+          <section>
+            <SectionHeader title="Voice Model Manager" />
+            <div style={cardStyle} className="p-4">
+              <TTSModelsPanel />
+            </div>
+          </section>
+        );
+      case 'lm_models':
+        return (
+          <section>
+            <SectionHeader title="LM Studio Model Manager" />
+            <div style={cardStyle} className="p-4">
+              <ModelManagerPanel />
+            </div>
+          </section>
+        );
+    }
+  };
+
+  /** Right-side "Saved ✓" / "Auto-saves" indicator. Reused by every layout. */
+  const savedIndicator = (
+    <span
+      className="flex items-center gap-1 flex-shrink-0 transition-all duration-300"
+      style={{
+        fontSize: '0.68rem',
+        fontWeight: savedFlash ? 600 : 400,
+        color: savedFlash ? 'var(--color-success, #39c96e)' : 'var(--color-text-muted)',
+        opacity: savedFlash ? 1 : 0.6,
+      }}
+    >
+      {savedFlash
+        ? <><CheckCircle size={11} /> Saved</>
+        : <><span style={{ fontSize: '0.6rem' }}>●</span> Auto-saves</>}
+    </span>
+  );
+
+  /**
+   * Layout A — "Anchor nav + collapsibles" (default).
+   * Horizontal pill row at top scrolls to + expands sections below.
+   * Vertical column underneath renders ALL sections, each gated by
+   * the ``expandedSections`` Set.
+   */
+  const anchorLayout = (
     <div className="flex flex-col h-full">
-      {/* Tab bar */}
       <div
         className="flex items-center gap-1 p-2 overflow-x-auto flex-shrink-0"
         style={{
@@ -192,19 +312,19 @@ export function SettingsView() {
         }}
       >
         {TABS.map(tab => {
-          const active = activeTab === tab.id;
-          const shouldPulse = showPulse && highlightTabs.includes(tab.id) && !visitedTabs.has(tab.id) && !active;
+          const isExpanded = expandedSections.has(tab.id);
+          const shouldPulse = showPulse && highlightTabs.includes(tab.id) && !visitedTabs.has(tab.id) && !isExpanded;
           return (
             <button
               key={tab.id}
-              onClick={() => handleTabClick(tab.id)}
-              data-active={active}
+              onClick={() => expandAndScrollTo(tab.id)}
+              data-active={isExpanded}
               data-highlight={shouldPulse || undefined}
               className="settings-tab-pill relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all duration-200"
               style={{
-                background: active ? 'var(--color-accent-gradient)' : 'transparent',
-                color: active ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
-                boxShadow: active ? '0 1px 4px var(--color-accent-soft)' : 'none',
+                background: isExpanded ? 'var(--color-accent-gradient)' : 'transparent',
+                color: isExpanded ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
+                boxShadow: isExpanded ? '0 1px 4px var(--color-accent-soft)' : 'none',
               }}
             >
               {tab.icon}
@@ -218,75 +338,182 @@ export function SettingsView() {
             </button>
           );
         })}
-        {/* Right-side status: auto-save hint (idle) or "Saved ✓" flash */}
-        <span
-          className="ml-auto flex items-center gap-1 flex-shrink-0 transition-all duration-300"
-          style={{
-            fontSize: '0.68rem',
-            fontWeight: savedFlash ? 600 : 400,
-            color: savedFlash ? 'var(--color-success, #39c96e)' : 'var(--color-text-muted)',
-            opacity: savedFlash ? 1 : 0.6,
-          }}
-        >
-          {savedFlash
-            ? <><CheckCircle size={11} /> Saved</>
-            : <><span style={{ fontSize: '0.6rem' }}>●</span> Auto-saves</>
-          }
-        </span>
+        <span className="ml-auto">{savedIndicator}</span>
       </div>
-
-      {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-4 max-w-2xl mx-auto w-full">
-        {activeTab === 'general' && (
-          <GeneralTab
-            config={config} save={save} cfg={cfg}
-            theme={theme} setTheme={setTheme}
-            advancedMode={advancedMode} toggleAdvancedMode={toggleAdvancedMode}
-            layoutMode={layoutMode} setLayoutMode={setLayoutMode}
-          />
-        )}
-        {activeTab === 'character' && (
-          <CharacterTab />
-        )}
-        {activeTab === 'brain' && (
-          <BrainTab config={config} save={save} cfg={cfg} lmModels={lmModels} lmLoading={lmLoading} fetchLmModels={fetchLmModels} />
-        )}
-        {activeTab === 'voice' && (
-          <VoiceTab config={config} save={save} cfg={cfg} />
-        )}
-        {activeTab === 'safety' && (
-          <SafetyTab config={config} save={save} cfg={cfg} />
-        )}
-        {activeTab === 'intimacy' && (
-          <NsfwSettingsTab config={config} save={save} cfg={cfg} />
-        )}
-        {activeTab === 'aiart' && (
-          <AIArtTab config={config} save={save} cfg={cfg} />
-        )}
-        {activeTab === 'system' && (
-          <SystemTab config={config} save={save} cfg={cfg} />
-        )}
-        {activeTab === 'physics' && (
-          <JigglePhysicsPanel config={config} save={save} cfg={cfg} />
-        )}
-        {activeTab === 'tts_models' && (
-          <section>
-            <SectionHeader title="Voice Model Manager" />
-            <div style={cardStyle} className="p-4">
-              <TTSModelsPanel />
+        {TABS.map(tab => {
+          const isExpanded = expandedSections.has(tab.id);
+          return (
+            <div
+              key={tab.id}
+              id={`settings-section-${tab.id}`}
+              className="mb-3 rounded-lg"
+              style={{
+                border: '1px solid var(--color-border-subtle)',
+                backgroundColor: 'var(--color-surface)',
+              }}
+            >
+              <button
+                onClick={() => toggleSection(tab.id)}
+                aria-expanded={isExpanded}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left transition-colors"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--color-text-primary)',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 500,
+                }}
+              >
+                <ChevronRight
+                  size={14}
+                  style={{
+                    transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    transition: 'transform 150ms',
+                    color: 'var(--color-text-tertiary)',
+                  }}
+                />
+                {tab.icon}
+                {tab.label}
+              </button>
+              {isExpanded && (
+                <div className="px-4 pb-3" style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
+                  {renderSectionContent(tab.id)}
+                </div>
+              )}
             </div>
-          </section>
-        )}
-        {activeTab === 'lm_models' && (
-          <section>
-            <SectionHeader title="LM Studio Model Manager" />
-            <div style={cardStyle} className="p-4">
-              <ModelManagerPanel />
-            </div>
-          </section>
-        )}
+          );
+        })}
       </div>
     </div>
+  );
+
+  /**
+   * Layout B — "Pure collapsibles" (no nav).
+   * Just the vertical column.  Cleanest declutter; user scrolls to find
+   * sections.  General is auto-expanded; everything else collapsed.
+   */
+  const collapsiblesLayout = (
+    <div className="flex flex-col h-full">
+      <div
+        className="flex items-center px-3 py-2 flex-shrink-0"
+        style={{
+          borderBottom: '1px solid var(--color-border-subtle)',
+          backgroundColor: 'var(--color-surface)',
+        }}
+      >
+        <span className="text-xs font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
+          Settings
+        </span>
+        <span className="ml-auto">{savedIndicator}</span>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 max-w-2xl mx-auto w-full">
+        {TABS.map(tab => {
+          const isExpanded = expandedSections.has(tab.id);
+          return (
+            <div
+              key={tab.id}
+              id={`settings-section-${tab.id}`}
+              className="mb-3 rounded-lg"
+              style={{
+                border: '1px solid var(--color-border-subtle)',
+                backgroundColor: 'var(--color-surface)',
+              }}
+            >
+              <button
+                onClick={() => toggleSection(tab.id)}
+                aria-expanded={isExpanded}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--color-text-primary)',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 500,
+                }}
+              >
+                <ChevronRight
+                  size={14}
+                  style={{
+                    transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    transition: 'transform 150ms',
+                    color: 'var(--color-text-tertiary)',
+                  }}
+                />
+                {tab.icon}
+                {tab.label}
+              </button>
+              {isExpanded && (
+                <div className="px-4 pb-3" style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
+                  {renderSectionContent(tab.id)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  /**
+   * Layout C — "Sidebar nav + content" (2-column).
+   * Vertical section list on the left, full content on the right.
+   * Closest to the old tab behavior but rotated 90°.
+   */
+  const sidebarLayout = (
+    <div className="flex h-full">
+      <div
+        className="flex flex-col gap-0.5 p-2 overflow-y-auto flex-shrink-0"
+        style={{
+          width: 160,
+          borderRight: '1px solid var(--color-border-subtle)',
+          backgroundColor: 'var(--color-surface)',
+        }}
+      >
+        {TABS.map(tab => {
+          const isActive = activeTab === tab.id;
+          const shouldPulse = showPulse && highlightTabs.includes(tab.id) && !visitedTabs.has(tab.id) && !isActive;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => handleTabClick(tab.id)}
+              data-active={isActive}
+              className="relative flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-left transition-all duration-200"
+              style={{
+                background: isActive ? 'var(--color-accent-gradient)' : 'transparent',
+                color: isActive ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
+                boxShadow: isActive ? '0 1px 4px var(--color-accent-soft)' : 'none',
+              }}
+            >
+              {tab.icon}
+              {tab.label}
+              {shouldPulse && (
+                <span
+                  className="absolute top-1 right-1 w-2 h-2 rounded-full animate-pulse"
+                  style={{ backgroundColor: 'var(--color-accent)' }}
+                />
+              )}
+            </button>
+          );
+        })}
+        <div className="mt-auto pt-2" style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
+          {savedIndicator}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 max-w-2xl mx-auto w-full">
+        {renderSectionContent(activeTab)}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {settingsLayout === 'anchor' && anchorLayout}
+      {settingsLayout === 'collapsibles' && collapsiblesLayout}
+      {settingsLayout === 'sidebar' && sidebarLayout}
+    </>
   );
 }
 
@@ -2775,6 +3002,40 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
                   {mode === 'normal' ? 'Cozy' : 'Minimal'}
                 </button>
               ))}
+            </div>
+          </SettingField>
+
+          {/* Settings Layout — pick one of the 3 organizations of this panel.
+              Session-47 queue item #4: replaces the old 11-tab bar.  Live-
+              switchable; reopen Settings to see it apply. */}
+          <SettingField
+            label="Settings Layout"
+            description="How this Settings panel is organized. Anchor = sticky pill nav + collapsible sections. Collapsibles = no nav, just sections. Sidebar = vertical nav, content on the right."
+          >
+            <div
+              className="flex gap-0.5 p-0.5 rounded-lg"
+              style={{
+                backgroundColor: 'var(--color-background)',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              {(['anchor', 'collapsibles', 'sidebar'] as const).map(mode => {
+                const current = String(cfg('settings_layout', 'anchor'));
+                const active = current === mode;
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => save('settings_layout', mode)}
+                    className="px-3 py-1 rounded-md text-xs font-medium transition-all"
+                    style={{
+                      backgroundColor: active ? 'var(--color-accent)' : 'transparent',
+                      color: active ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
+                    }}
+                  >
+                    {mode === 'anchor' ? 'Anchor' : mode === 'collapsibles' ? 'Collapsibles' : 'Sidebar'}
+                  </button>
+                );
+              })}
             </div>
           </SettingField>
         </div>

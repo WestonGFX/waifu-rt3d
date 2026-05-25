@@ -127,3 +127,27 @@
 4. **P2**: Theme tile ↔ dropdown sync (10 min — likely a single missing setter call in `useTheme.ts`).
 5. **P2**: Achievement `first_message` grant gated on `assistant_message_received` not `user_message_sent` (10 min).
 6. **F1+F3**: Model compatibility check + diagnostics panel (1-2h — meaningful retention win).
+
+---
+
+## Actions taken this session
+
+Commit `f915264` and follow-up:
+
+- **[FIXED — non-streaming path only]** `openai_compat.py` auto-disables thinking for qwen3/deepseek-r1/o1/qwq via `chat_template_kwargs.enable_thinking=False`, with `reasoning_content` fallback when content is empty. 25 new pytest cases. Unblocks agent-loop, Kokoro finalize, capability detection. **NOT YET FIXED**: the streaming SSE path (`chat_stream`) used by the actual chat UI receives `delta.reasoning_content` separately from `delta.content` — those reasoning deltas need to be either rendered as visible tokens OR captured and revealed via a "Show thinking" disclosure when the LM Studio template ignores `enable_thinking=False`. That's a follow-up commit in the streaming parser at `openai_compat.py:218+`.
+- **[FIXED]** `useBondProgress` in `ChatThread.tsx` now keys on count of `status='sent'` assistant messages instead of raw `messages.length`. Achievement `first_message` no longer fires on timed-out / failed sends.
+- **[FIXED]** `chatStore.ts` TIMEOUT_MS bumped 35s → 60s default. Reasoning models routinely take 40-55s under full system-prompt + Kokoro injection; the old 35s default fired before they could reply. Configurable override still lives in Settings > Brain.
+- **[SELF-RESOLVED during testing]** 3D Viewer black-canvas bug. On second visit to the viewer it now renders at 120 FPS with full avatar. Earlier in this session the same surface was black — likely a warmup / state-initialization race that resolves on first interaction. Not reproducing reliably — closing without further action.
+
+## Re-verification needed for streaming path
+
+The headline P0 — "new user sends first message, sees nothing" — is **not fully solved**. With qwen3.5 + the streaming UI:
+- Backend `POST /api/chat/stream` returns 200 OK ✓
+- Frontend never renders an assistant bubble ✗ (because `delta.reasoning_content` is unhandled)
+- User experience: user message floats, nothing comes back, eventually 60s timeout fires
+
+Follow-up commit needs to patch the SSE parser in `openai_compat.py` (line 218+) to either:
+- (a) Concatenate `delta.reasoning_content` into the same output stream as `delta.content`, OR
+- (b) Emit a separate SSE event (`reasoning_delta`) and have the frontend choose to surface it behind a toggle.
+
+Option (a) is simpler and lets users see *something* immediately; option (b) is the cleaner long-term solution.

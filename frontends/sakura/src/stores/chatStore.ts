@@ -330,10 +330,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }));
     };
 
-    // 35-second client-side timeout — shorter than the backend's 30s so the
-    // action card always appears before the server error reaches the client.
+    // 60-second client-side timeout. Reasoning models (qwen3, deepseek-r1)
+    // routinely take 40–55s under the full system-prompt + Kokoro injection
+    // load before first token; the previous 35s default fired before they
+    // could reply, presenting as a silent timeout to first-time users
+    // (session-46 multi-persona test). Configurable via Settings > Brain.
     let timedOut = false;
-    const TIMEOUT_MS = 35_000;
+    const TIMEOUT_MS = 60_000;
     const timeoutId = window.setTimeout(() => {
       timedOut = true;
       const elapsedMs = Math.round(performance.now() - streamStart);

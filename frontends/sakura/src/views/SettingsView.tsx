@@ -2639,27 +2639,6 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
             />
           </SettingField>
 
-          <SettingField label="Frontend" description="Switch between Sakura and Neon interfaces.">
-            <button
-              onClick={async () => {
-                try {
-                  const res = await fetch('/api/frontend/switch', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ frontend: 'neon' }),
-                  });
-                  const data = await res.json();
-                  if (data.ok) window.location.href = data.reload_url || '/';
-                } catch (err) {
-                  console.error('Frontend switch failed:', err);
-                }
-              }}
-              className="text-sm px-3 py-1 rounded cursor-pointer"
-              style={selectStyle}
-            >
-              Switch to Neon
-            </button>
-          </SettingField>
         </div>
       </section>
 

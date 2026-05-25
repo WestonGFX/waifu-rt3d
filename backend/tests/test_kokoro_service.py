@@ -138,6 +138,87 @@ def test_finalize_consent_check_marks_thread_pending(con, stub_bond):
     assert row[0] == 1
 
 
+# --- _fix_identity_slip tests ---
+
+def _make_resp(reply: str) -> svc.CompanionResponse:
+    from backend.kokoro.response_parser import CompanionResponse
+    return CompanionResponse(reply=reply, parse_ok=True)
+
+
+def test_identity_slip_no_match_returns_unchanged(con):
+    """Reply without 'Kokoro' passes through unmodified."""
+    r = _make_resp("Hello, I am Sakura!")
+    out = svc._fix_identity_slip(con, 1, r)
+    assert out.reply == "Hello, I am Sakura!"
+
+
+def test_identity_slip_kokoro_chan_replaced(con):
+    """Kokoro-chan is replaced by the character's first name."""
+    r = _make_resp("You can call me Kokoro-chan!")
+    out = svc._fix_identity_slip(con, 1, r)
+    # Character id=1 is 'Sakura' in the fixture
+    assert "Kokoro" not in out.reply
+    assert "Sakura" in out.reply
+
+
+def test_identity_slip_kokoro_kun_replaced(con):
+    r = _make_resp("I am Kokoro-kun, nice to meet you.")
+    out = svc._fix_identity_slip(con, 1, r)
+    assert "Kokoro" not in out.reply
+
+
+def test_identity_slip_kokoro_sans_honorific_replaced(con):
+    """Plain 'Kokoro' (no honorific) is also replaced."""
+    r = _make_resp("My name is Kokoro.")
+    out = svc._fix_identity_slip(con, 1, r)
+    assert "Kokoro" not in out.reply
+    assert "Sakura" in out.reply
+
+
+def test_identity_slip_character_named_kokoro_unchanged(con):
+    """If the character IS named Kokoro, the reply is left alone."""
+    con.execute("INSERT INTO characters (id, name) VALUES (99, 'Kokoro')")
+    r = _make_resp("I am Kokoro-chan!")
+    out = svc._fix_identity_slip(con, 99, r)
+    assert out.reply == "I am Kokoro-chan!"
+
+
+def test_identity_slip_missing_character_uses_me_fallback(con):
+    """Unknown char_id falls back to 'me' as the replacement."""
+    r = _make_resp("Call me Kokoro-san.")
+    out = svc._fix_identity_slip(con, 9999, r)
+    assert "Kokoro" not in out.reply
+    assert "me" in out.reply
+
+
+def test_identity_slip_case_insensitive(con):
+    """Matching is case-insensitive (model sometimes capitalises differently)."""
+    r = _make_resp("They call me KOKORO-CHAN around here.")
+    out = svc._fix_identity_slip(con, 1, r)
+    assert "KOKORO" not in out.reply
+
+
+def test_identity_slip_multiword_char_name_uses_first(con):
+    """Multi-word character name: only the first name is substituted."""
+    con.execute("INSERT INTO characters (id, name) VALUES (42, 'Rin Akane')")
+    r = _make_resp("You can call me Kokoro-chan.")
+    out = svc._fix_identity_slip(con, 42, r)
+    assert out.reply == "You can call me Rin."
+
+
+def test_finalize_patches_identity_slip_end_to_end(con, stub_bond):
+    """finalize_turn integrates _fix_identity_slip transparently."""
+    stub_bond(5)
+    ctx = svc.prepare_turn(
+        con, character_id=1, session_id=100,
+        kokoro_enabled=True, nsfw_enabled=False,
+    )
+    raw = '{"reply": "I am Kokoro-chan, pleased to meet you!", "facialExpression": "smile"}'
+    resp = svc.finalize_turn(con, ctx, raw)
+    assert "Kokoro" not in resp.reply
+    assert "Sakura" in resp.reply
+
+
 def test_frontend_payload_shape(con, stub_bond):
     stub_bond(10)
     ctx = svc.prepare_turn(

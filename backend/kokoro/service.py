@@ -21,6 +21,7 @@ dials only become visible to the LLM once the user has earned them.
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 from dataclasses import dataclass
 from typing import Optional
@@ -159,6 +160,56 @@ def prepare_turn(
     )
 
 
+_KOKORO_NAME_RE = re.compile(
+    r"\bKokoro[-\s]?(chan|kun|san|sama|sensei|senpai)?\b",
+    re.IGNORECASE,
+)
+
+
+def _fix_identity_slip(
+    con: sqlite3.Connection,
+    character_id: int,
+    resp: CompanionResponse,
+) -> CompanionResponse:
+    """Replace stale 'Kokoro-{honorific}' self-references with the character's actual name.
+
+    Small models sometimes misread the Kokoro engine's section headers as their
+    own identity.  If the parsed reply contains a Kokoro-{honorific} pattern AND
+    the character is not actually named Kokoro, we substitute the character's
+    display name so the user never sees the engine bleed through.
+
+    Args:
+        con: Open SQLite connection (read-only query).
+        character_id: ID of the speaking character.
+        resp: Already-parsed ``CompanionResponse`` to sanitize.
+
+    Returns:
+        The same ``CompanionResponse`` with ``reply`` patched if needed.
+    """
+    if not _KOKORO_NAME_RE.search(resp.reply):
+        return resp
+    try:
+        row = con.execute(
+            "SELECT name FROM characters WHERE id = ?", (character_id,)
+        ).fetchone()
+        char_name: str = row[0] if row else "me"
+    except sqlite3.Error:
+        char_name = "me"
+
+    if char_name.lower().startswith("kokoro"):
+        return resp  # Actually named Kokoro — leave it alone.
+
+    first_name = char_name.split()[0]
+    patched = _KOKORO_NAME_RE.sub(first_name, resp.reply)
+    if patched != resp.reply:
+        logger.warning(
+            "kokoro: identity slip detected for char %s (%r) — patched reply",
+            character_id, char_name,
+        )
+        resp.reply = patched
+    return resp
+
+
 def finalize_turn(
     con: sqlite3.Connection,
     ctx: KokoroTurnContext,
@@ -179,6 +230,7 @@ def finalize_turn(
         is persisted in that case.
     """
     resp = parse_companion_response(raw_llm_text, nsfw_active=ctx.nsfw_active)
+    resp = _fix_identity_slip(con, ctx.mind.character_id, resp)
 
     if not ctx.enabled:
         return resp

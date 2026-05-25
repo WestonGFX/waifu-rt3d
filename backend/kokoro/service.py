@@ -210,6 +210,45 @@ def _fix_identity_slip(
     return resp
 
 
+def _log_parse_result(
+    con: sqlite3.Connection,
+    character_id: int,
+    session_id: int,
+    parse_ok: bool,
+    raw_text_len: int,
+) -> None:
+    """Insert one parse-outcome row into kokoro_parse_log.
+
+    Never raises — parse logging must not break the chat pipeline.  Silently
+    no-ops if the table is missing (pre-v86 DB that hasn't run preflight yet).
+
+    Args:
+        con: Open SQLite connection.
+        character_id: ID of the speaking character.
+        session_id: Current conversation/session ID.
+        parse_ok: True when the LLM output was valid JSON, False for plain-text
+            fallback.
+        raw_text_len: Length in characters of the raw LLM output, for
+            diagnostic trending (longer outputs correlate with parse failures
+            when models hit context limits).
+
+    Example:
+        >>> _log_parse_result(con, character_id=1, session_id=42,
+        ...                   parse_ok=True, raw_text_len=512)
+    """
+    try:
+        con.execute(
+            "INSERT INTO kokoro_parse_log "
+            "(character_id, session_id, parse_ok, raw_text_len) "
+            "VALUES (?, ?, ?, ?)",
+            (character_id, session_id, 1 if parse_ok else 0, raw_text_len),
+        )
+    except sqlite3.OperationalError:
+        pass  # table missing pre-v86 — silently skip
+    except sqlite3.Error as e:
+        logger.debug("kokoro: parse_log insert failed: %s", e)
+
+
 def finalize_turn(
     con: sqlite3.Connection,
     ctx: KokoroTurnContext,
@@ -231,6 +270,16 @@ def finalize_turn(
     """
     resp = parse_companion_response(raw_llm_text, nsfw_active=ctx.nsfw_active)
     resp = _fix_identity_slip(con, ctx.mind.character_id, resp)
+    try:
+        _log_parse_result(
+            con,
+            ctx.mind.character_id,
+            ctx.thread.session_id,
+            resp.parse_ok,
+            len(raw_llm_text),
+        )
+    except Exception:
+        pass  # belt-and-suspenders: never let logging crash the chat
 
     if not ctx.enabled:
         return resp

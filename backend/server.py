@@ -3977,6 +3977,137 @@ async def llm_generate(req: Request):
         raise HTTPException(502, f"LLM generation failed: {e}")
 
 
+@app.get("/api/llm/probe")
+async def llm_probe():
+    """Ping the configured LLM with a minimal prompt to surface common
+    misconfigurations to the frontend.
+
+    Use cases (session-46 feature F1):
+      - Detect reasoning-mode lock-in: model returns empty ``content`` but
+        populated ``reasoning_content``. The chat UI will look broken.
+      - Detect endpoint unreachable / wrong port / model unloaded.
+      - Surface latency so the frontend can warn about >30s first-token
+        models before the user types their first message.
+
+    Returns:
+        {
+          "ok": bool,
+          "model": str,
+          "endpoint": str,
+          "latency_ms": int,
+          "content_received": bool,
+          "reasoning_only": bool,
+          "warning": str | None,   # human-readable warning code
+          "hint": str | None,      # what the frontend should tell the user
+        }
+
+    Warnings are designed to map 1:1 to a frontend Toast message:
+      - "reasoning_only": model emits thinking, not content → bypass Kokoro,
+        consider switching to a non-reasoning model for full feature parity.
+      - "slow_first_token": >30s round-trip → first chat will time out.
+      - "endpoint_unreachable": couldn't connect → wrong port / not running.
+    """
+    import httpx
+    import time as _time
+
+    cfg = load_config() or {}
+    endpoint = _get_llm_endpoint(cfg)
+    model = _get_llm_model_resolved(cfg) or "default"
+
+    started = _time.monotonic()
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5, read=60)) as client:
+            resp = await client.post(
+                f"{endpoint}/chat/completions",
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": "reply with just: ok"}],
+                    "max_tokens": 50,
+                    "temperature": 0,
+                },
+            )
+            latency_ms = int((_time.monotonic() - started) * 1000)
+            if resp.status_code != 200:
+                return JSONResponse({
+                    "ok": False, "model": model, "endpoint": endpoint,
+                    "latency_ms": latency_ms,
+                    "content_received": False, "reasoning_only": False,
+                    "warning": "endpoint_error",
+                    "hint": f"LLM returned HTTP {resp.status_code}. Check model is loaded.",
+                })
+            data = resp.json()
+            msg = (data.get("choices") or [{}])[0].get("message") or {}
+            content = (msg.get("content") or "").strip()
+            reasoning = (msg.get("reasoning_content") or "").strip()
+            content_received = bool(content)
+            reasoning_only = (not content) and bool(reasoning)
+            warning = None
+            hint = None
+            if reasoning_only:
+                warning = "reasoning_only"
+                hint = (
+                    "Your model is a reasoning-family model (qwen3/r1/o1). "
+                    "Sakura auto-bypasses Kokoro for it and surfaces its thinking text "
+                    "as the reply. For full Kokoro embodiment, load a non-reasoning "
+                    "model (gemma-4, llama-3.x, mistral-nemo) in LM Studio."
+                )
+            elif latency_ms > 30000:
+                warning = "slow_first_token"
+                hint = (
+                    f"First-token latency is {latency_ms/1000:.0f}s — chat may feel sluggish. "
+                    "Consider a smaller / quantised model."
+                )
+            return {
+                "ok": True, "model": model, "endpoint": endpoint,
+                "latency_ms": latency_ms,
+                "content_received": content_received, "reasoning_only": reasoning_only,
+                "warning": warning, "hint": hint,
+            }
+    except httpx.ConnectError:
+        latency_ms = int((_time.monotonic() - started) * 1000)
+        return JSONResponse({
+            "ok": False, "model": model, "endpoint": endpoint,
+            "latency_ms": latency_ms,
+            "content_received": False, "reasoning_only": False,
+            "warning": "endpoint_unreachable",
+            "hint": f"Couldn't reach {endpoint}. Is LM Studio / Ollama running on that port?",
+        })
+    except httpx.ReadTimeout:
+        # Model accepted the request but didn't return a token within 60s.
+        # For a "reply with just: ok" prompt that should be sub-second on
+        # any sane model, this is a strong signal the model is either
+        # (a) very large + cold-starting, or (b) a reasoning model burning
+        # its entire budget on thinking. Either way, chat will be unusable.
+        latency_ms = int((_time.monotonic() - started) * 1000)
+        from backend.llm.adapters.openai_compat import _is_reasoning_model as _isr
+        is_reasoning = _isr(model)
+        return JSONResponse({
+            "ok": False, "model": model, "endpoint": endpoint,
+            "latency_ms": latency_ms,
+            "content_received": False, "reasoning_only": is_reasoning,
+            "warning": "reasoning_only" if is_reasoning else "slow_first_token",
+            "hint": (
+                f"Model {model!r} didn't return a token within 60s on a 'say ok' probe. "
+                "It's a reasoning model — Sakura auto-disables Kokoro and appends /no_think, "
+                "but expect 30-60s replies. For snappy chat, load gemma-4, llama-3.x, or "
+                "mistral-nemo via the LM Studio model picker."
+                if is_reasoning else
+                f"Model {model!r} took longer than 60s to first token. "
+                "Switch to a smaller / quantised model for usable chat."
+            ),
+        })
+    except Exception as e:
+        latency_ms = int((_time.monotonic() - started) * 1000)
+        logger.warning("llm/probe failed: %s", e)
+        return JSONResponse({
+            "ok": False, "model": model, "endpoint": endpoint,
+            "latency_ms": latency_ms,
+            "content_received": False, "reasoning_only": False,
+            "warning": "probe_failed",
+            "hint": f"LLM probe error: {type(e).__name__}",
+        })
+
+
 @app.post("/api/chat")
 async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
     _telemetry_inc("chat.requests_total")

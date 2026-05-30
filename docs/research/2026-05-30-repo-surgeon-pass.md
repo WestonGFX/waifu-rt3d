@@ -204,8 +204,42 @@ this session**.
 ### Honest note
 The audit's synthesis would have picked #2 (the JSON bug) as the single PR. The
 inline recon picked the gaze wiring. Both shipped — gaze as the planned clean PR,
-the JSON bug + E2E restore as audit-driven fixes. Items 3–10 remain open and are
-good next-session candidates (3, 4, 5, 8, 9, 10 are all tsc/pytest-verifiable).
+the JSON bug + E2E restore as audit-driven fixes.
+
+## 9. Follow-up sweep (same session)
+
+After the first three fixes, swept the remaining audit items. Shipped:
+
+| Item | Action | Commit |
+|---|---|---|
+| #3 scrollIntoView noise | Stubbed `Element.prototype.scrollIntoView` in `test/setup.ts` — 3 unhandled errors gone, 455→458 tests | `80670b1` |
+| #8 dispatchSetEyeGaze coverage | Pattern-1 tests (was zero) | `80670b1` |
+| #4 CommandPalette overlays | Added User Knowledge + Persona Picker (both render, no prior shortcut). Skipped contextviewer (dev-gated, not overlay-driven) | `80670b1` |
+| #5 endpoint fallback in chat | Routed both chat hot paths through `_get_llm_endpoint()` — recovers if primary LM Studio moves/dies | `c079a10` |
+| #10 postMessage seam | Documented kind→type mapping table at `ViewerCommand` (silent-no-op guard) | `babe8ca` |
+
+**Investigated and deliberately NOT changed:**
+
+- **#6 SaccadeController eye-bone "double-write" — FALSE POSITIVE.** The audit
+  flagged saccade writing eye bones after LookAt. Verified against the code: the
+  only *assignment* eye-writers (`IdleHeadMovement` L5505, `MouseTrackingController`
+  L5555) are **dead code, never instantiated** (LookAtLayer absorbed them). The
+  live order is correct: `currentVrm.update` (L7436) applies `vrm.lookAt` as the
+  base gaze (`=`), then `saccadeController` (L7458) adds micro-jitter (`+=`) on top
+  — intended additive layering, re-applied fresh each frame, no accumulation. No
+  fix; deleting the dead classes from the untestable 9641-line viewer.html carries
+  more risk than the cleanup is worth.
+
+- **#9 Type `AppConfig` — DEFERRED to a dedicated PR.** Replacing
+  `{[key:string]:unknown}` with concrete sub-config interfaces breaks the existing
+  defensive `config.llm as Record<string,unknown>` casts in `LLMSetupWizard.tsx:14`
+  and `ImageGenSetupWizard.tsx:79`, cascading into those wizard components. It's a
+  p2 refactor with real regression surface, against the repo's "don't refactor /
+  minimise changes" rule — not a safe drive-by. Recommended as its own focused PR
+  that types the sub-configs AND migrates the cast sites together.
+
+Remaining open (browser-verify-only, deferred): #6 expression↔viseme contention,
+#7 Page Visibility render-loop throttle — both need a live VRM to validate safely.
 
 ---
 

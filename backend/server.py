@@ -4640,8 +4640,19 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                     None, _ner.extract_for_knowledge_graph, text
                 )
                 if _ner_facts:
+                    # v88: don't re-store a fact the user has forgotten.
+                    try:
+                        from backend.memory.tiered_memory import _text_hash as _th_ner
+                        _ner_sup = {r[0] for r in cur.execute(
+                            "SELECT text_hash FROM memory_suppressions WHERE char_id = ?",
+                            (char_id,)).fetchall()}
+                    except Exception:
+                        _th_ner = None  # type: ignore[assignment]
+                        _ner_sup = set()
                     for _nf in _ner_facts:
                         try:
+                            if _th_ner is not None and _th_ner(_nf["fact_text"]) in _ner_sup:
+                                continue  # forgotten — don't resurrect
                             cur.execute(
                                 "INSERT OR IGNORE INTO user_facts(character_id, category, fact_text, confidence) "
                                 "VALUES (?, ?, ?, ?)",
@@ -5862,8 +5873,19 @@ async def chat_stream(req: Request):
                 None, _ner_s.extract_for_knowledge_graph, text
             )
             if _ner_facts_s:
+                # v88: don't re-store a fact the user has forgotten.
+                try:
+                    from backend.memory.tiered_memory import _text_hash as _th_ner_s
+                    _ner_sup_s = {r[0] for r in cur.execute(
+                        "SELECT text_hash FROM memory_suppressions WHERE char_id = ?",
+                        (char_id,)).fetchall()}
+                except Exception:
+                    _th_ner_s = None  # type: ignore[assignment]
+                    _ner_sup_s = set()
                 for _nf_s in _ner_facts_s:
                     try:
+                        if _th_ner_s is not None and _th_ner_s(_nf_s["fact_text"]) in _ner_sup_s:
+                            continue  # forgotten — don't resurrect
                         cur.execute(
                             "INSERT OR IGNORE INTO user_facts(character_id, category, fact_text, confidence) "
                             "VALUES (?, ?, ?, ?)",

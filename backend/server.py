@@ -4803,7 +4803,7 @@ async def chat(session_id: int = 1, char_id: int = 1, req: Request = None):
                 adapter.chat,
                 messages,
                 llm_model_name,
-                cfg["llm"]["endpoint"],
+                _get_llm_endpoint(cfg),  # smart fallback: recover if primary endpoint moved/down
                 cfg["llm"]["api_key"],
                 temperature=_aie_temperature,
                 max_tokens=_cap_max_tokens_ns,  # Phase 9: per-character output limit
@@ -6338,7 +6338,7 @@ async def chat_stream(req: Request):
                 for token in adapter.chat_stream(
                     llm_messages,
                     routed_model,
-                    cfg["llm"]["endpoint"],
+                    _get_llm_endpoint(cfg),  # smart fallback: recover if primary endpoint moved/down
                     cfg["llm"]["api_key"],
                     temperature=_aie_s_temperature,
                     max_tokens=_cap_max_tokens,  # Phase 9: per-character output limit (-1 = unlimited)

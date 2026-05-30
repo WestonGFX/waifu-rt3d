@@ -386,6 +386,7 @@ class TieredMemoryManager:
         n_results: int = 3,
         char_id: int | None = None,
         max_dist: float = 1.0,
+        cloud_eligible: bool = False,
     ) -> list[dict]:
         """Compatibility shim — same signature as the old ChromaDB VectorStore.
 
@@ -394,11 +395,16 @@ class TieredMemoryManager:
             n_results: Maximum results.
             char_id: Optional character filter.
             max_dist: Maximum distance (results with dist > max_dist excluded).
+            cloud_eligible: Forwarded to :meth:`search` — when True, excludes
+                private/local_only/do_not_store memories so a caller routing to a
+                cloud provider cannot leak private content through this shim.
 
         Returns:
             List of memory dicts compatible with old VectorStore output.
         """
-        results = self.search(text, char_id=char_id, top_k=n_results)
+        results = self.search(
+            text, char_id=char_id, top_k=n_results, cloud_eligible=cloud_eligible
+        )
         return [r for r in results if r.get("dist", 0) <= max_dist]
 
     # ------------------------------------------------------------------

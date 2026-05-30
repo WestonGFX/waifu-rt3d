@@ -3416,7 +3416,11 @@ def _build_prompt_sections(
                     _im_intimacy = _im_row[0]
             except Exception:
                 pass
-            if _im_intimacy > 50:
+            # Privacy: intimate scene summaries are the most sensitive content
+            # class — never inject them into a prompt bound for a cloud provider,
+            # regardless of intimacy level. They stay on-device, full stop.
+            from backend.llm.context_assembler import is_cloud_send as _ics_im
+            if _im_intimacy > 50 and not _ics_im(cfg):
                 _im_store = IntimateMemoryStore()
                 _recalled = _im_store.recall(char_id, user_text, _content_conn_im, limit=2)
                 if _recalled:

@@ -1302,6 +1302,46 @@ def _build_thinking_extra_body(model_name: str, enabled: bool) -> dict | None:
     return None
 
 
+def _strip_kokoro_envelope(full_reply: str, kokoro_active: bool) -> str:
+    """Extract the user-facing reply from a Kokoro turn's raw model output.
+
+    When a Kokoro turn is active the model is given a JSON-envelope contract and
+    emits something like ``{"reply": "...", "emotion": "soft", ...}``.  The
+    downstream cleaner :func:`_parse_emotion_gesture` only strips ``[tag]``
+    annotations — it does not parse JSON — so without this step the raw blob is
+    persisted to ``messages.text``.  That corrupts the visible history and, worse,
+    is re-injected verbatim into every future turn by the context assembler
+    (which reads ``text`` for active messages).  Stripping here, before the rest
+    of the cleaning pipeline, fixes all downstream consumers at once (DB insert,
+    vector memory, XP scoring, TTS, and the ``done`` SSE event).
+
+    On a plain-text turn (``kokoro_active`` False), or when the envelope can't be
+    parsed / has an empty ``reply``, the original text is returned unchanged so a
+    non-JSON reply is never mangled and an empty message is never persisted.
+
+    Args:
+        full_reply: Raw accumulated model output for the turn.
+        kokoro_active: Whether the Kokoro JSON contract was injected this turn.
+
+    Returns:
+        The reply text to persist and display.
+
+    Example:
+        >>> _strip_kokoro_envelope('{"reply": "hi", "emotion": "soft"}', True)
+        'hi'
+        >>> _strip_kokoro_envelope('plain words', True)
+        'plain words'
+    """
+    if not kokoro_active:
+        return full_reply
+    try:
+        from backend.kokoro.response_parser import parse_companion_response
+        parsed = parse_companion_response(full_reply)
+    except Exception:  # noqa: BLE001 — never let cleanup break the chat turn
+        return full_reply
+    return parsed.reply or full_reply
+
+
 def _parse_emotion_gesture(text: str) -> tuple:
     """Extract [emotion:X] and [gesture:X] tags from an LLM reply.
 
@@ -6105,6 +6145,9 @@ async def chat_stream(req: Request):
                 generation_time_ms = int(elapsed * 1000)
                 tokens_per_second = round(token_count / elapsed, 1) if elapsed > 0 else None
 
+                # Kokoro turns emit a JSON envelope; persist the reply text, not
+                # the raw blob (else it corrupts history + future-turn context).
+                full_reply = _strip_kokoro_envelope(full_reply, bool(_kokoro_fragment_s))
                 emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
                 # Phase 2 (piggyback quick-replies): see _parse_quick_replies docstring.
                 _quick_replies, clean_reply = _parse_quick_replies(clean_reply)
@@ -6400,6 +6443,9 @@ async def chat_stream(req: Request):
                             )
 
                 # Stream complete — parse emotion/gesture, save to DB, emit done event
+                # Kokoro turns emit a JSON envelope; persist the reply text, not
+                # the raw blob (else it corrupts history + future-turn context).
+                full_reply = _strip_kokoro_envelope(full_reply, bool(_kokoro_fragment_s))
                 emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
 
                 # Phase 2 (piggyback quick-replies): extract the <quick_replies>

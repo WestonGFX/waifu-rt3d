@@ -60,10 +60,16 @@ prompt section assembled under a token budget by `backend/llm/context_assembler.
 
 ## 2. Real gaps (true gaps, not re-implementations)
 
-1. **Relationship & ritual memory is dead-stored.** `private_vocabulary` (v61: pet
-   names, inside jokes) is stored but has **no reader/injection**. Relationship facts are
-   squashed into `user_facts.category='relationship'`. No ritual/habit layer ("our
-   thing", recurring greetings, callbacks). → She doesn't visibly know *us*.
+1. **No ritual/recurring-pattern memory.** *(Corrected after deeper inspection:
+   `private_vocabulary` IS injected via `VocabularyManager.get_prompt_injection` at
+   `server.py:3219` (gated intimacy≥20), and relationship facts ARE injected via
+   `user_facts` at `server.py:3115` — so pet names/inside jokes/relationship facts
+   already reach the prompt.)* The genuine gap is a **ritual layer**: recurring
+   interaction patterns ("our late-night sessions", "you always check in at night",
+   recurring greetings, callbacks). All existing milestone tables (`intimate_milestones`,
+   `relationship_milestones`, `bond_milestones`, `proactive_milestones`) track **one-time
+   firsts**, not recurring rituals. → She remembers *firsts* and *facts* but not *our
+   patterns*.
 2. **No forgetting/correction/privacy.** `tiered_memory.delete_memory()` is hard-delete
    only; deleted content can resurrect from summaries. No per-memory `privacy_level` /
    `local_only`; boundaries gate *output*, not *retrieval*. No "forget that / that's

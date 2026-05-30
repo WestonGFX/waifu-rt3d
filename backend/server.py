@@ -3224,6 +3224,19 @@ def _build_prompt_sections(
     except Exception as _pvocab_err:
         logger.debug("[PrivateVocab] injection skipped: %s", _pvocab_err)
 
+    # 1c-rituals. Recurring-pattern memory (schema v87) — "our usual" habits.
+    # Complements private vocabulary (pet names) and user_facts (semantic facts)
+    # with the third leg of shared history: rituals the pair returns to.
+    try:
+        from backend.relationship.rituals import RitualManager as _RitualMgr
+        _content_conn_ritual = cur.connection if hasattr(cur, "connection") else None
+        if _content_conn_ritual:
+            _ritual_text = _RitualMgr().get_prompt_injection(char_id, _content_conn_ritual)
+            if _ritual_text:
+                sections.append(_section("Shared Rituals", f"\n{_ritual_text}"))
+    except Exception as _ritual_err:
+        logger.debug("[Rituals] injection skipped: %s", _ritual_err)
+
     # 1c-arousal. F17: Arousal Engine — writing style modifiers based on arousal state
     try:
         from backend.content.arousal_engine import ArousalEngine
@@ -6316,6 +6329,28 @@ async def chat_stream(req: Request):
                     )
                 except Exception:
                     pass
+
+                # Recurring-ritual detection (schema v87) — cheap heuristic on
+                # the user's text (no model call); reinforces on repeat mention.
+                try:
+                    from backend.relationship.rituals import (
+                        detect_ritual_candidate as _drc,
+                        RitualManager as _RitMgr,
+                    )
+                    _rit_cand = _drc(text)
+                    if _rit_cand:
+                        _rconn = db()
+                        try:
+                            _RitMgr().record_ritual(
+                                char_id, _rit_cand["label"], _rconn,
+                                ritual_type=_rit_cand["ritual_type"],
+                                description=_rit_cand["description"],
+                            )
+                            _rconn.commit()
+                        finally:
+                            _rconn.close()
+                except Exception as _rit_err:
+                    logger.debug("[Rituals] detection skipped: %s", _rit_err)
 
             except Exception as e:
                 logger.error(f"Agentic stream error: {e}", exc_info=True)

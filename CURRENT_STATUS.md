@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-05-25 (session 48 — Kokoro v2 Phase 1: parse_ok rate tracking + identity fix + settings drawer clipping + AIE TTL cache)
 **Branch:** master · HEAD = `2fe8abe` (all pushed).
-**Schema version:** v86 (`kokoro_parse_log` table added).
+**Schema version:** v87 (`relationship_rituals` — recurring-pattern memory layer).
 **Tests:** **3,051 backend pytest** + **456 vitest** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 

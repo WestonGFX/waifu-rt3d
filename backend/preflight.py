@@ -6180,6 +6180,76 @@ def migrate_to_v86(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v87(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v86 to v87.
+
+    Adds ``relationship_rituals`` — the recurring-pattern memory layer. Unlike
+    the existing milestone tables (``intimate_milestones``,
+    ``relationship_milestones``, ``bond_milestones``), which record one-time
+    *firsts*, a ritual is a *recurring* interaction pattern the character can
+    reference to feel like she knows the user's habits: late-night sessions,
+    recurring greetings, "our usual" callbacks, anniversaries.
+
+    Pet names / inside jokes already have a home (``private_vocabulary``, v61)
+    and relationship facts live in ``user_facts``; rituals are the missing
+    third leg of shared-history memory.
+
+    Columns:
+        - id (INTEGER PK)
+        - char_id (INTEGER NOT NULL)
+        - ritual_type (TEXT) — greeting | recurring | callback | anniversary
+        - label (TEXT NOT NULL) — short stable name, e.g. "late-night coding"
+        - description (TEXT) — one-line description for prompt injection
+        - observe_count (INTEGER) — times observed; injection requires >= 2
+        - importance (REAL) — 0..1 salience weight
+        - first_observed_at / last_observed_at (TEXT)
+        - is_active (INTEGER) — soft-disable without delete
+        - UNIQUE(char_id, label) — upsert/reinforce on repeat observation
+
+    Args:
+        con: An open ``sqlite3.Connection``.
+
+    Returns:
+        ``True`` on success.
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 87:
+        logger.info("Schema already at v%d, skipping v87 migration.", cur_ver)
+        return True
+
+    try:
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS relationship_rituals (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id           INTEGER NOT NULL,
+                ritual_type       TEXT    NOT NULL DEFAULT 'recurring',
+                label             TEXT    NOT NULL,
+                description       TEXT    NOT NULL DEFAULT '',
+                observe_count     INTEGER NOT NULL DEFAULT 1,
+                importance        REAL    NOT NULL DEFAULT 0.5,
+                first_observed_at TEXT    NOT NULL DEFAULT (datetime('now')),
+                last_observed_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+                is_active         INTEGER NOT NULL DEFAULT 1,
+                UNIQUE(char_id, label)
+            )
+        """)
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_rituals_char_active "
+            "ON relationship_rituals(char_id, is_active)"
+        )
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (87, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v87 migration complete (relationship_rituals)")
+        return True
+    except Exception as e:
+        logger.error("Schema v87 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -6799,14 +6869,20 @@ def ensure_db():
             if migrate_to_v86(con):
                 version = 86
 
+        if version < 87:
+            logger.info("Upgrading database schema from v86 to v87...")
+            logger.info("  - relationship_rituals — recurring-pattern (ritual) memory layer")
+            if migrate_to_v87(con):
+                version = 87
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 86:
-            raise RuntimeError(f"Database initialization failed: Expected v86, got v{final_version}")
+        if final_version < 87:
+            raise RuntimeError(f"Database initialization failed: Expected v87, got v{final_version}")
 
-        if final_version > 86:
-            logger.warning(f"Database is newer than application (v{final_version} > v86). Some features might be unused.")
+        if final_version > 87:
+            logger.warning(f"Database is newer than application (v{final_version} > v87). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.

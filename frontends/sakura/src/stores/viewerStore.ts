@@ -18,6 +18,23 @@ export type ViewerMode = 'vrm' | 'live2d' | 'unity';
  *
  * The `_seq` counter increments on every dispatch so Zustand subscribers
  * always receive a fresh reference, even when the payload values are identical.
+ *
+ * ⚠ Dual-vocabulary seam — there is NO compile-time link between a
+ * `ViewerCommand.kind` here and the `type` string the VRM iframe listens for in
+ * `frontends/shared/viewer/viewer.html` (`window.addEventListener('message', …)`,
+ * destructures `{ type, payload }`). When adding a new `kind`, you MUST add the
+ * matching `if (type === '…')` handler in viewer.html or the dispatch is a
+ * silent no-op. Most kinds map 1:1 to their iframe `type`, but a few are
+ * renamed — keep this table current:
+ *
+ *   kind            → viewer.html `type`
+ *   ──────────────────────────────────────
+ *   expression      → setExpression
+ *   gesture         → trigger_gesture
+ *   background      → updateBackground
+ *   gaze            → lookAt            (Kokoro gaze → VRM LookAt layer)
+ *   setEyeGaze      → setEyeGaze
+ *   (Unity renderer wraps differently again: { type: 'unityCommand', command })
  */
 export interface ViewerCommand {
   kind:

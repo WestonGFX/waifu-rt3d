@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { KOKORO_FACE_TO_BLENDSHAPE } from '../lib/kokoro';
+import { KOKORO_FACE_TO_BLENDSHAPE, kokoroGazeToLookAt } from '../lib/kokoro';
+import type { KokoroGaze } from '../lib/kokoro';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,7 @@ export interface ViewerCommand {
     | 'setCameraState'
     // Phase 6: Motion capture, IK & animation
     | 'setEyeGaze'
+    | 'gaze'
     | 'loadAnimation'
     | 'playAnimation'
     | 'stopAnimation'
@@ -124,10 +126,10 @@ interface ViewerState {
   /**
    * Apply a Kokoro embodiment payload to the active renderer.
    *
-   * Maps Kokoro's vocabulary (facialExpression/gesture enums) to the
-   * existing expression + gesture postMessage protocol — no new viewer.html
-   * surface area.  Safe to call whether the gate was open or closed; when
-   * ``payload.diagnostics.kokoroEnabled`` is false this is a no-op.
+   * Maps Kokoro's vocabulary (facialExpression/gesture/gaze enums) to the
+   * existing expression + gesture + lookAt postMessage protocol — no new
+   * viewer.html surface area.  Safe to call whether the gate was open or
+   * closed; when ``payload.diagnostics.kokoroEnabled`` is false this is a no-op.
    */
   dispatchKokoroEmbodiment: (payload: import('../lib/kokoro').KokoroPayload) => void;
 
@@ -240,6 +242,13 @@ interface ViewerState {
   // Phase 6: Motion capture, IK & animation
   /** Enable/disable eye gaze tracking (VRM lookAt driven by mouse). */
   dispatchSetEyeGaze: (enabled: boolean) => void;
+  /**
+   * Steer the avatar's gaze from a Kokoro `gaze` token (user/away/thinking/
+   * object/camera). Reuses the viewer's always-on LookAt layer via the
+   * `lookAt` postMessage; `'user'` returns to cursor-follow so procedural
+   * head/neck idle motion is preserved. No-op outside VRM mode.
+   */
+  dispatchGaze: (gaze: KokoroGaze) => void;
   /** Load an animation clip. Optionally retarget Mixamo bone names. */
   dispatchLoadAnimation: (url: string, name: string, retarget?: boolean) => void;
   /** Play a loaded animation clip by name. */
@@ -447,6 +456,13 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     // talk/idle state machine continue).
     if (payload.gesture && payload.gesture !== 'idle') {
       get().dispatchGesture(payload.gesture, blendshape, intensity);
+    }
+    // Step 3 — gaze direction. Drives the always-on LookAt layer so the
+    // character actually looks where the model said it would (away when shy,
+    // up when thinking, etc.). 'user' returns to cursor-follow, preserving the
+    // procedural head/neck idle motion rather than locking the head forward.
+    if (payload.gaze) {
+      get().dispatchGaze(payload.gaze);
     }
   },
 
@@ -977,6 +993,21 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
 
     if (state.mode === 'vrm') {
       postToIframe(state.iframeRef, { type: 'setEyeGaze', payload: { enabled } });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchGaze: (gaze) => {
+    const state = get();
+    const seq = state._seq + 1;
+    // Pure mapping → either { mode: 'cursor' } or { target: {x,y,z} }.
+    const lookAt = kokoroGazeToLookAt(gaze);
+    const cmd: ViewerCommand = { kind: 'gaze', payload: { gaze, ...lookAt }, _seq: seq };
+
+    if (state.mode === 'vrm') {
+      // Reuse the existing VRMLookAt postMessage API (viewer.html). The viewer
+      // reads `payload.target` / `payload.mode`, so forward the mapping as-is.
+      postToIframe(state.iframeRef, { type: 'lookAt', payload: lookAt });
     }
     set({ lastCommand: cmd, _seq: seq });
   },

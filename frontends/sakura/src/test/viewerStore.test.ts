@@ -255,19 +255,19 @@ describe('viewerStore — dispatchKokoroEmbodiment', () => {
     expect(msg.intensity).toBe(0.85);
   });
 
-  it('gesture=idle skips dispatchGesture — only one postMessage call', () => {
+  it('gesture=idle skips dispatchGesture — expression + gaze only', () => {
     const payload = makeKokoroPayload({ gesture: 'idle', facialExpression: 'neutral', voiceStyle: 'warm' });
     useViewerStore.getState().dispatchKokoroEmbodiment(payload);
-    // Only the expression call should reach the iframe; no gesture call.
-    expect(vrmSpy).toHaveBeenCalledOnce();
+    // expression + gaze (default 'user' → cursor) = 2 calls; no gesture call.
+    expect(vrmSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('non-idle gesture triggers both expression and gesture — _seq increments by 2', () => {
+  it('non-idle gesture triggers expression + gesture + gaze — _seq increments by 3', () => {
     const payload = makeKokoroPayload({ gesture: 'wave', facialExpression: 'smile', voiceStyle: 'bright' });
     useViewerStore.getState().dispatchKokoroEmbodiment(payload);
-    // expression + gesture = 2 postMessage calls
-    expect(vrmSpy).toHaveBeenCalledTimes(2);
-    expect(useViewerStore.getState()._seq).toBe(2);
+    // expression + gesture + gaze = 3 postMessage calls
+    expect(vrmSpy).toHaveBeenCalledTimes(3);
+    expect(useViewerStore.getState()._seq).toBe(3);
   });
 
   it('concerned facialExpression maps to sad blendshape', () => {

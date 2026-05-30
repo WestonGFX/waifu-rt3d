@@ -94,3 +94,60 @@ export const KOKORO_FACE_TO_BLENDSHAPE: Record<KokoroFace, string> = {
   sleepy: 'relaxed',
   focused: 'neutral',
 };
+
+/**
+ * Instruction for the VRM viewer's always-on LookAt layer.
+ *
+ * Two shapes, matching the `{ type: 'lookAt', payload }` postMessage contract
+ * in `frontends/shared/viewer/viewer.html`:
+ *   - `{ mode: 'cursor' }`   — clear any override; resume cursor-follow + the
+ *                              procedural idle gaze-wander (head/neck motion is
+ *                              preserved, never frozen).
+ *   - `{ target: {x,y,z} }`  — world-space point the eyes (and, softly, the
+ *                              head) steer toward. The LookAt layer spring-
+ *                              smooths the transition so it never snaps.
+ */
+export type GazeLookAt =
+  | { mode: 'cursor' }
+  | { target: { x: number; y: number; z: number } };
+
+/**
+ * Map Kokoro's per-turn `gaze` enum to a LookAt instruction.
+ *
+ * Coordinate frame (from the viewer's LookAtLayer): the character stands at the
+ * origin facing +Z toward the user/camera. `y≈1.3` is eye height; `z≈2.0` is a
+ * comfortable forward distance. These offsets are deliberately gentle — the v1
+ * brief is "soft presence, not a darting VTuber."
+ *
+ * TUNABLE: these five vectors are pure feel. Edit a single line here to retune
+ * any glance; nothing else depends on the exact numbers.
+ *
+ *   - `user`     → cursor-follow (default). Looks at the person, keeps idle motion.
+ *   - `camera`   → deliberate, level eye contact straight down the lens.
+ *   - `away`     → glance off to the (character's) left and slightly down — the
+ *                  shy / evasive / "looking elsewhere" beat.
+ *   - `thinking` → up and to the side, the classic recall/contemplation gaze.
+ *   - `object`   → down and nearer, as if regarding something held or on a desk.
+ */
+export const KOKORO_GAZE_TO_LOOKAT: Record<KokoroGaze, GazeLookAt> = {
+  user: { mode: 'cursor' },
+  camera: { target: { x: 0.0, y: 1.3, z: 2.0 } },
+  away: { target: { x: 0.6, y: 1.15, z: 2.0 } },
+  thinking: { target: { x: -0.5, y: 1.7, z: 2.0 } },
+  object: { target: { x: 0.0, y: 0.7, z: 1.2 } },
+};
+
+/**
+ * Resolve a Kokoro gaze enum to a LookAt instruction, defaulting unknown values
+ * to cursor-follow so a malformed/extended enum can never freeze the gaze.
+ *
+ * @param gaze - Kokoro gaze token from the parsed companion response.
+ * @returns A {@link GazeLookAt} suitable for the viewer's `lookAt` postMessage.
+ *
+ * @example
+ * kokoroGazeToLookAt('thinking'); // { target: { x: -0.5, y: 1.7, z: 2.0 } }
+ * kokoroGazeToLookAt('user');     // { mode: 'cursor' }
+ */
+export function kokoroGazeToLookAt(gaze: KokoroGaze): GazeLookAt {
+  return KOKORO_GAZE_TO_LOOKAT[gaze] ?? { mode: 'cursor' };
+}

@@ -8700,6 +8700,26 @@
                     }
                     return;
                 }
+                // Listening cue — reflect the voice-duplex listening state.
+                // Strictly ADDITIVE: while listening she attends (gaze settles
+                // toward the user via the existing LookAt world-target, blink
+                // calms); on release she returns to cursor-follow + neutral
+                // blink so idle behaviour resumes. No new animation engine.
+                if (type === 'listeningState') {
+                    const listening = payload?.active === true;
+                    if (animationDirector) {
+                        const lookAtLayer = animationDirector.getLayer('lookAt');
+                        if (lookAtLayer) {
+                            lookAtLayer.setWorldTarget(
+                                listening ? new THREE.Vector3(0, 1.3, 2.0) : null
+                            );
+                        }
+                    }
+                    if (blinkController) {
+                        blinkController.setEmotion(listening ? 'calm' : 'neutral');
+                    }
+                    return;
+                }
                 // ── Webcam Motion Capture (Phase 6.1 — stub) ──────────────
                 // Mocap requires @mediapipe/face_mesh + kalidokit at runtime.
                 // These handlers manage the mocap lifecycle. The actual webcam

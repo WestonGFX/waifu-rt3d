@@ -351,6 +351,9 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
       case 'state':
         if (msg.state) {
           setState(msg.state as VoiceSessionState);
+          // Reflect listening on the avatar — she attends while the session
+          // is actively listening to the user, releases otherwise.
+          useViewerStore.getState().dispatchListeningState(msg.state === 'listening');
         }
         break;
 

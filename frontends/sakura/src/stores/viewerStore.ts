@@ -81,6 +81,7 @@ export interface ViewerCommand {
     // Phase 6: Motion capture, IK & animation
     | 'setEyeGaze'
     | 'gaze'
+    | 'listeningState'
     | 'loadAnimation'
     | 'playAnimation'
     | 'stopAnimation'
@@ -266,6 +267,15 @@ interface ViewerState {
    * head/neck idle motion is preserved. No-op outside VRM mode.
    */
   dispatchGaze: (gaze: KokoroGaze) => void;
+
+  /**
+   * Reflect the voice-duplex listening state on the avatar. When the session
+   * is actively listening to the user, she attends: gaze settles toward the
+   * user and blinking slows slightly. Released when listening ends so idle
+   * behaviour resumes. Additive over the always-on LookAt/Blink layers — no
+   * new animation engine. No-op outside VRM mode.
+   */
+  dispatchListeningState: (active: boolean) => void;
   /** Load an animation clip. Optionally retarget Mixamo bone names. */
   dispatchLoadAnimation: (url: string, name: string, retarget?: boolean) => void;
   /** Play a loaded animation clip by name. */
@@ -1025,6 +1035,17 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
       // Reuse the existing VRMLookAt postMessage API (viewer.html). The viewer
       // reads `payload.target` / `payload.mode`, so forward the mapping as-is.
       postToIframe(state.iframeRef, { type: 'lookAt', payload: lookAt });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchListeningState: (active) => {
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'listeningState', payload: { active }, _seq: seq };
+
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'listeningState', payload: { active } });
     }
     set({ lastCommand: cmd, _seq: seq });
   },

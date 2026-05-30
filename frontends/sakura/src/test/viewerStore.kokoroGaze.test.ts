@@ -174,3 +174,27 @@ describe('viewerStore.dispatchSetEyeGaze', () => {
     expect(useViewerStore.getState()._seq).toBe(before + 1);
   });
 });
+
+describe('viewerStore.dispatchListeningState', () => {
+  beforeEach(() => {
+    useViewerStore.setState({ mode: 'vrm', lastCommand: null });
+  });
+
+  it('emits a listeningState command with the active flag', () => {
+    useViewerStore.getState().dispatchListeningState(true);
+    const cmd = useViewerStore.getState().lastCommand;
+    expect(cmd?.kind).toBe('listeningState');
+    expect(cmd?.payload.active).toBe(true);
+  });
+
+  it('round-trips release (active=false)', () => {
+    useViewerStore.getState().dispatchListeningState(false);
+    expect(useViewerStore.getState().lastCommand?.payload.active).toBe(false);
+  });
+
+  it('bumps _seq', () => {
+    const before = useViewerStore.getState()._seq;
+    useViewerStore.getState().dispatchListeningState(true);
+    expect(useViewerStore.getState()._seq).toBe(before + 1);
+  });
+});

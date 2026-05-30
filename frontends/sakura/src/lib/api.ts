@@ -129,6 +129,51 @@ export interface MemoryItem {
 /** Memory privacy levels (schema v88). */
 export type MemoryPrivacyLevel = 'normal' | 'private' | 'local_only' | 'do_not_store';
 
+// ── Kokoro Debug Dashboard (Bundle D) ──────────────────────────────────────
+
+/**
+ * A single retrieved memory entry from the tiered vector store.
+ * Mirrors {@link _MemoryHit} in backend/server.py exactly — field names are
+ * snake_case to match Pydantic's default serialisation.
+ */
+export interface KokoroMemoryHit {
+  id: string;
+  text: string;
+  role: string;
+  tier: number;
+  salience: number;
+  dist: number;
+  status: string;
+  privacy_level: string;
+  created_at: string | null;
+}
+
+/**
+ * Full psychology snapshot from GET /api/kokoro/debug/state.
+ *
+ * Answers "why did she say / feel / retrieve that?" — mirrors the
+ * {@link KokoroDebugState} Pydantic model in backend/server.py exactly.
+ * Every section degrades gracefully: missing subsystems return empty defaults.
+ */
+export interface KokoroDebugState {
+  ok: boolean;
+  char_id: number;
+  session_id: number | null;
+  /** Tier A + B + F dial values keyed by dial name. */
+  mind_dials: Record<string, number>;
+  /** Tier C identity-fingerprint values keyed by trait name. */
+  traits: Record<string, number>;
+  /** Rolling parse-ok rate over the last 48 h; null when table absent. */
+  parse_ok_rate: number | null;
+  parse_ok_total: number;
+  /** Natural-language relationship state block injected into prompts. */
+  relationship_block: string;
+  /** Natural-language shared-rituals block. */
+  rituals_block: string;
+  /** Top memories retrieved for query q; empty when q omitted. */
+  retrieved_memories: KokoroMemoryHit[];
+}
+
 /**
  * A LoRA adapter record as returned by GET /api/characters/{id}/loras.
  * Each row represents one trained adapter for a character.
@@ -1676,6 +1721,31 @@ export const api = {
       parse_ok_count: number;
       parse_ok_rate: number;
     }>(`/api/kokoro/qa/${charId}?hours=${hours}`),
+
+  // ── Kokoro Debug Dashboard (Bundle D) ──────────────────────────────────
+
+  /**
+   * Full psychology snapshot answering "why did she say/feel/retrieve that?"
+   *
+   * Returns the character's current mind dials (Tier A/B/F), identity traits
+   * (Tier C), rolling parse-ok rate, relationship block text, shared-rituals
+   * block text, and — when a query string {@link q} is provided — the top
+   * retrieved memories from the tiered vector store with their distance,
+   * tier, salience, status, and privacy level.
+   *
+   * All sections degrade gracefully: a missing table or absent subsystem
+   * returns an empty default rather than a 500.
+   *
+   * @param charId - Character to inspect
+   * @param sessionId - Current chat session (used for intimacy + relationship lookups)
+   * @param q - Optional natural-language query to run against the vector store
+   */
+  getKokoroDebugState: (charId: number, sessionId?: number, q?: string) => {
+    const params = new URLSearchParams({ char_id: String(charId) });
+    if (sessionId !== undefined) params.set('session_id', String(sessionId));
+    if (q) params.set('q', q);
+    return get<KokoroDebugState>(`/api/kokoro/debug/state?${params.toString()}`);
+  },
 
   /**
    * Ping the configured LLM with a tiny prompt to surface common

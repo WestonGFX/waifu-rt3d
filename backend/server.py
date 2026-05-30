@@ -20352,6 +20352,200 @@ def kokoro_qa(char_id: int, hours: int = 48):
     }
 
 
+# ---------------------------------------------------------------------------
+# Bundle D — Psychology / Memory Debug Dashboard
+# READ-ONLY explainability endpoint: "why did she say/feel/retrieve that?"
+# ---------------------------------------------------------------------------
+
+
+class _MemoryHit(BaseModel):
+    """A single retrieved memory entry from the tiered vector store."""
+
+    id: str
+    text: str
+    role: str
+    tier: int
+    salience: float
+    dist: float
+    status: str
+    privacy_level: str
+    created_at: Optional[str] = None
+
+
+class KokoroDebugState(BaseModel):
+    """Full psychology snapshot for one character / session.
+
+    All sections degrade gracefully — a missing table or absent subsystem
+    returns an empty default rather than a 500.  Consumers should treat any
+    ``None`` or empty-list section as "data unavailable".
+
+    Attributes:
+        ok: Always ``True`` (errors return their own HTTP status).
+        char_id: Character the snapshot belongs to.
+        session_id: Session used for thread-state + relationship lookups.
+            May be ``None`` when the caller omits it.
+        mind_dials: Tier A + B + F dial values keyed by dial name.
+        traits: Tier C identity-fingerprint values keyed by trait name.
+        parse_ok_rate: Rolling parse-ok rate over the last 48 h
+            (``null`` when the kokoro_parse_log table is absent).
+        parse_ok_total: Number of rows in the window.
+        relationship_block: Natural-language relationship state injected
+            into prompts, or empty string when bond data is absent.
+        rituals_block: Natural-language shared-rituals block, or empty
+            string when no established rituals exist.
+        retrieved_memories: Top memories from vector search for query ``q``.
+            Empty list when ``q`` is absent or the vector store is unavailable.
+    """
+
+    ok: bool = True
+    char_id: int
+    session_id: Optional[int] = None
+    mind_dials: dict[str, float] = {}
+    traits: dict[str, float] = {}
+    parse_ok_rate: Optional[float] = None
+    parse_ok_total: int = 0
+    relationship_block: str = ""
+    rituals_block: str = ""
+    retrieved_memories: list[_MemoryHit] = []
+
+
+@app.get("/api/kokoro/debug/state", response_model=KokoroDebugState)
+def kokoro_debug_state(
+    char_id: int,
+    session_id: Optional[int] = None,
+    q: Optional[str] = None,
+) -> KokoroDebugState:
+    """Return a full psychology snapshot for a character.
+
+    Answers "why did she say / feel / retrieve that?" by surfacing Kokoro
+    mind dials, identity traits, parse-ok rate, the relationship block text,
+    shared-rituals block text, and (when a query ``q`` is provided) the top
+    memories that would have been retrieved for that query.
+
+    All sub-sections are wrapped in independent try/except guards so a
+    missing table or absent subsystem never causes a 500 — it returns an
+    empty default for that section instead.
+
+    Args:
+        char_id: Character to inspect.
+        session_id: Current chat session (used for thread state + intimacy
+            lookups inside the relationship block).  Optional.
+        q: Natural-language query to run against the vector store so the UI
+            can show "why retrieved".  Omit to skip memory search.
+
+    Returns:
+        A :class:`KokoroDebugState` populated from all available sources.
+
+    Example::
+
+        GET /api/kokoro/debug/state?char_id=1&session_id=5&q=ramen
+    """
+    from dataclasses import asdict as _asdict
+
+    from backend.kokoro.mind_state import load_mind_state, load_traits, TIER_A_FAST, TIER_B_SLOW, TIER_F_FAST, TIER_F_SLOW, ALL_MIND_DIALS, TIER_C_TRAITS
+    from backend.relationship.state_injector import build_relationship_state_block
+    from backend.relationship.rituals import RitualManager
+
+    result = KokoroDebugState(char_id=char_id, session_id=session_id)
+
+    with db_ctx() as conn:
+        # ── Section 1: Mind dials (Tier A + B + F) ────────────────────────
+        try:
+            mind = load_mind_state(conn, char_id)
+            mind_dict = _asdict(mind)
+            # Expose all numeric dial columns; skip character_id and updated_at.
+            all_dials = set(ALL_MIND_DIALS)
+            result.mind_dials = {
+                k: float(v)
+                for k, v in mind_dict.items()
+                if k in all_dials and v is not None
+            }
+        except Exception as _e:
+            logger.debug("[KokoroDebug] mind_dials unavailable: %s", _e)
+
+        # ── Section 2: Identity traits (Tier C) ───────────────────────────
+        try:
+            traits = load_traits(conn, char_id)
+            traits_dict = _asdict(traits)
+            trait_keys = set(TIER_C_TRAITS)
+            result.traits = {
+                k: float(v)
+                for k, v in traits_dict.items()
+                if k in trait_keys and v is not None
+            }
+        except Exception as _e:
+            logger.debug("[KokoroDebug] traits unavailable: %s", _e)
+
+        # ── Section 3: Parse-ok rate (last 48 h) ──────────────────────────
+        try:
+            _parse_total = conn.execute(
+                "SELECT COUNT(*) FROM kokoro_parse_log "
+                "WHERE character_id = ? AND created_at >= datetime('now', '-48 hours')",
+                (char_id,),
+            ).fetchone()[0]
+            _parse_ok_count = conn.execute(
+                "SELECT COUNT(*) FROM kokoro_parse_log "
+                "WHERE character_id = ? AND parse_ok = 1 "
+                "AND created_at >= datetime('now', '-48 hours')",
+                (char_id,),
+            ).fetchone()[0]
+            result.parse_ok_total = int(_parse_total)
+            result.parse_ok_rate = (
+                round(_parse_ok_count / _parse_total, 4) if _parse_total > 0 else 0.0
+            )
+        except Exception as _e:
+            logger.debug("[KokoroDebug] parse_ok unavailable: %s", _e)
+
+        # ── Section 4: Relationship block ─────────────────────────────────
+        try:
+            _sid = session_id if session_id is not None else 0
+            # Fetch character name for personalisation (best-effort).
+            _name_row = conn.execute(
+                "SELECT name FROM characters WHERE id = ?", (char_id,)
+            ).fetchone()
+            _char_name = str(_name_row[0]) if _name_row else ""
+            _rel_block = build_relationship_state_block(
+                char_id=char_id,
+                session_id=_sid,
+                conn=conn,
+                char_name=_char_name,
+            )
+            result.relationship_block = _rel_block or ""
+        except Exception as _e:
+            logger.debug("[KokoroDebug] relationship_block unavailable: %s", _e)
+
+        # ── Section 5: Shared rituals block ───────────────────────────────
+        try:
+            _rituals_block = RitualManager().get_prompt_injection(char_id, conn)
+            result.rituals_block = _rituals_block or ""
+        except Exception as _e:
+            logger.debug("[KokoroDebug] rituals_block unavailable: %s", _e)
+
+    # ── Section 6: Memory search (outside db_ctx — uses its own connection) ──
+    if q and q.strip():
+        try:
+            if vector_store is not None:
+                _hits = vector_store.search(q.strip(), char_id=char_id, top_k=8)
+                result.retrieved_memories = [
+                    _MemoryHit(
+                        id=str(h.get("id", "")),
+                        text=str(h.get("text", "")),
+                        role=str(h.get("role", "")),
+                        tier=int(h.get("tier", 0)),
+                        salience=float(h.get("salience", 0.0)),
+                        dist=float(h.get("dist", h.get("distance", 0.0))),
+                        status=str(h.get("status", "active")),
+                        privacy_level=str(h.get("privacy_level", "normal")),
+                        created_at=h.get("created_at"),
+                    )
+                    for h in (_hits or [])
+                ]
+        except Exception as _e:
+            logger.debug("[KokoroDebug] memory search unavailable: %s", _e)
+
+    return result
+
+
 @app.exception_handler(Exception)
 async def generic_exception_handler(request, exc):
     logger.error(f"Global Error: {exc}", exc_info=True)

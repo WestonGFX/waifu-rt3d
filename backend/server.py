@@ -3381,11 +3381,14 @@ def _build_prompt_sections(
     except Exception as _touch_err:
         logger.debug("[TouchProtocol] injection skipped: %s", _touch_err)
 
-    # 1c-milestones. F1: Intimate Milestones — relationship firsts + anniversary hints
+    # 1c-milestones. F1: Intimate Milestones — relationship firsts + anniversary hints.
+    # Privacy: intimate milestones (first_kiss, first_intimate, …) are stored
+    # intimate content — keep them on-device, like intimate scene memories.
     try:
         from backend.milestones.intimate_tracker import MilestoneStore, build_milestone_prompt, build_anniversary_hint
+        from backend.llm.context_assembler import is_cloud_send as _ics_ms
         _content_conn_ms = cur.connection if hasattr(cur, "connection") else None
-        if _content_conn_ms:
+        if _content_conn_ms and not _ics_ms(cfg):
             _ms_store = MilestoneStore()
             _milestones = _ms_store.get_timeline(char_id, _content_conn_ms)
             if _milestones:

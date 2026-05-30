@@ -92,19 +92,85 @@ Claims below are cited to `file:line` from inspection. Items marked **(INFERRED)
 ---
 
 ## 3. Ranked Improvements
-*(filled after audit workflow synthesis — see §4)*
+
+Scored 1–5 (payoff = user-visible value, diff = build effort, risk = regression danger,
+fit = alignment with local-first companion direction). **Verif** = can it be proven to
+work *this session* with existing assets/harness. Derived from direct inspection; the
+6-agent audit workflow (`wf_16c925cd-628`) corroborates/reorders separately.
+
+| # | Improvement | Pay | Diff | Risk | Fit | Verif | Evidence |
+|---|---|---|---|---|---|---|---|
+| 1 | **Kokoro `gaze` → VRM LookAt** *(SHIPPED this session)* | 4 | 1 | 1 | 5 | ✅ unit | `viewerStore.ts:433` dropped `payload.gaze`; lookAt API `viewer.html:8682` |
+| 2 | Spring-bone / VRM **dispose-on-model-swap** leak audit | 3 | 3 | 3 | 4 | ⚠ browser | `VRMUtils` imported `viewer.html:94`; confirm `deepDispose` on every swap |
+| 3 | **VRMA support** (vendor `three-vrm-animation` + `createVRMAnimationClip` + sample asset) | 4 | 3 | 2 | 5 | ❌ no assets | dead code `viewer.html:2991`; empty `animations/clips/` |
+| 4 | **Emotion → gaze/gesture coupling** (bias `away` when shy, etc.) | 3 | 2 | 1 | 4 | ✅ unit | builds on shipped gaze wiring + `response_parser.py` emotion |
+| 5 | **Expression blend** — ensure talk visemes don't stomp emotion expression | 3 | 3 | 3 | 4 | ⚠ browser | `expressionManager.setValue` viseme `:4317` vs emotion `:5307` |
+| 6 | **LLM cloud-fallback when explicitly enabled** (privacy-gated) | 3 | 2 | 2 | 4 | ✅ pytest | `endpoint_fallback.py` probes local-only; no opt-in cloud tier |
+| 7 | **Viewer debug overlay** — layer/gaze/spring HUD | 3 | 2 | 1 | 3 | ⚠ browser | `overlay.html` exists; no live layer-state inspector |
+| 8 | **Memory recall** reranker surfacing / tuning | 3 | 3 | 2 | 4 | ✅ pytest | `memory/reranker.py`, `tiered_memory.py` |
+| 9 | **Kokoro parse-fail auto-repair** (re-ask once on `parse_ok=False`) | 2 | 2 | 2 | 3 | ✅ pytest | `response_parser.py:148` falls back but never retries |
+| 10 | **Hand-pose preset** coverage expansion | 2 | 2 | 2 | 3 | ⚠ browser | `PoseController.setPose` `viewer.html:5110` |
+
+Note: items already **mature** (so NOT ranked as gaps): VRM lookAt core, endpoint
+fallback robustness, Kokoro parser graceful-degrade — all verified solid in §2.
 
 ## 4. Chosen Feature + Rationale
-*(filled after synthesis)*
+
+**Picked: #1 — Kokoro `gaze` → VRM LookAt.**
+
+- **Highest score-weight:** payoff 4 / diff 1 / risk 1 / fit 5, and the only top
+  candidate that is **unit-verifiable this session** (no avatar assets needed —
+  we assert on dispatched commands, not rendered pixels).
+- **Real, evidence-backed gap, not vibes:** the data already flowed end-to-end
+  except the last hop. `viewerStore.dispatchKokoroEmbodiment` applied face +
+  gesture and silently discarded `gaze`.
+- **Matches the project's #1 stated avatar candidate** verbatim: "proper VRM
+  lookAt integration while preserving procedural head/neck motion."
+- **whyNotVRMA:** VRMA (#3) is a clean dead-code story but **unverifiable** — no
+  `.vrma`/`.glb` assets exist and `@pixiv/three-vrm-animation` isn't vendored.
+  Shipping it would violate the "don't pretend code works" mandate.
+- **Low blast radius:** reuses the existing `lookAt` postMessage API; **zero**
+  viewer.html and zero backend changes.
 
 ## 5. Implementation Plan / Patch Summary
-*(filled during implementation)*
+
+Shipped as commit `dc8c518` on branch `feat/kokoro-gaze-lookat`.
+
+- `frontends/sakura/src/lib/kokoro.ts` — `GazeLookAt` type, `KOKORO_GAZE_TO_LOOKAT`
+  map (5 tunable vectors), `kokoroGazeToLookAt()` pure fn (unknown → cursor).
+- `frontends/sakura/src/stores/viewerStore.ts` — `'gaze'` command kind,
+  `dispatchGaze()`, Step 3 in `dispatchKokoroEmbodiment` forwarding `payload.gaze`.
+- `frontends/sakura/src/test/viewerStore.kokoroGaze.test.ts` — new (mapping +
+  dispatch + forwarding + gate).
+- `frontends/sakura/src/test/viewerStore.test.ts` — updated 2 call-count asserts.
+- No new deps, no schema change, no backend change, no viewer.html change.
+
+Full design + tunable table + visual-QA checklist: `docs/2026-05-30-kokoro-gaze-lookat.md`.
 
 ## 6. Verification
-*(filled after running checks)*
+
+| Check | Command | Result |
+|---|---|---|
+| Type-check | `npx tsc --project tsconfig.app.json --noEmit` | ✅ 0 errors |
+| New tests | `npx vitest run src/test/viewerStore.kokoroGaze.test.ts` | ✅ pass |
+| Frontend suite | `npx vitest run` | ✅ 455/455 (3 pre-existing unrelated unhandled-error warnings) |
+| Backend suite | `.venv/bin/python -m pytest backend/tests/ -q` | ✅ 3051 passed, 21.81s |
+
+**NOT done (honest gap):** browser/visual QA — no live VRM avatar this session.
+Gaze vectors are reasoned from the coordinate frame, not eyeballed. Checklist in
+the dev note covers neutral idle / shy / thinking / speaking / tab hidden / model
+load failure / long session for whoever runs it next.
 
 ## 7. Risks / Rollback / Next Action
-*(filled at end)*
+
+**Risks**
+- Gaze vectors may need a small retune after seeing them render (pure feel; one-line edits in `KOKORO_GAZE_TO_LOOKAT`).
+- `gaze:'user'` = cursor-follow, not fixed camera stare — intentional (preserves idle motion); use `camera` for hard eye contact.
+- Sensitive-area adjacency (avatar): change is additive on an always-on layer, but visual confirmation is still owed.
+
+**Rollback:** `git revert dc8c518` (single self-contained commit), or delete branch `feat/kokoro-gaze-lookat`. No migration, no data, no external state to undo.
+
+**Next action (recommended):** load a VRM and walk the visual-QA checklist; if vectors feel off, retune the five lines. Then consider #4 (emotion→gaze coupling) as the natural follow-on — it stacks on this wiring and is also unit-verifiable.
 
 ---
 

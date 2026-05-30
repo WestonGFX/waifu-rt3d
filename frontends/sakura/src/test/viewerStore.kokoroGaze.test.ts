@@ -150,3 +150,27 @@ describe('dispatchKokoroEmbodiment → gaze forwarding', () => {
     expect(gazeSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('viewerStore.dispatchSetEyeGaze', () => {
+  beforeEach(() => {
+    useViewerStore.setState({ mode: 'vrm', lastCommand: null });
+  });
+
+  it('emits a setEyeGaze command carrying the enabled flag', () => {
+    useViewerStore.getState().dispatchSetEyeGaze(false);
+    const cmd = useViewerStore.getState().lastCommand;
+    expect(cmd?.kind).toBe('setEyeGaze');
+    expect(cmd?.payload.enabled).toBe(false);
+  });
+
+  it('round-trips enable=true', () => {
+    useViewerStore.getState().dispatchSetEyeGaze(true);
+    expect(useViewerStore.getState().lastCommand?.payload.enabled).toBe(true);
+  });
+
+  it('bumps _seq so subscribers re-fire', () => {
+    const before = useViewerStore.getState()._seq;
+    useViewerStore.getState().dispatchSetEyeGaze(true);
+    expect(useViewerStore.getState()._seq).toBe(before + 1);
+  });
+});

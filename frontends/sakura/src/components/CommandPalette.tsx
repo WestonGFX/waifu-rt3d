@@ -48,6 +48,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     { id: 'desiretree',     group: 'Navigation', label: 'Desire Tree',           shortcut: 'Alt+Shift+D',action: () => { openOverlay('desiretree'); onClose(); } },
     { id: 'replay',         group: 'Navigation', label: 'Session Replay',        shortcut: 'Alt+R',      action: () => { openOverlay('replay'); onClose(); } },
     { id: 'modelbrowser',   group: 'Navigation', label: 'Model Browser',                         action: () => { openOverlay('modelbrowser'); onClose(); } },
+    { id: 'userknowledge',  group: 'Navigation', label: 'User Knowledge',                         action: () => { openOverlay('userknowledge'); onClose(); } },
+    { id: 'personapicker',  group: 'Navigation', label: 'Persona Picker',                         action: () => { openOverlay('personapicker'); onClose(); } },
     { id: 'about',          group: 'Navigation', label: 'About',                 shortcut: 'Alt+Shift+A',action: () => { openOverlay('about'); onClose(); } },
     // Mode toggles
     { id: 'minimal',        group: 'Mode',       label: 'Toggle Minimal Mode',   shortcut: 'Ctrl+Shift+M', action: () => { toggleMinimalMode(); onClose(); } },

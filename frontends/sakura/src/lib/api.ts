@@ -120,7 +120,14 @@ export interface MemoryItem {
   created_at?: string;
   promoted_at?: string | null;
   session_id?: number;
+  /** Lifecycle (schema v88): active | corrected | suppressed. */
+  status?: string;
+  /** Privacy (schema v88): normal | private | local_only | do_not_store. */
+  privacy_level?: string;
 }
+
+/** Memory privacy levels (schema v88). */
+export type MemoryPrivacyLevel = 'normal' | 'private' | 'local_only' | 'do_not_store';
 
 /**
  * A LoRA adapter record as returned by GET /api/characters/{id}/loras.
@@ -1002,8 +1009,27 @@ export const api = {
    * @param memoryId - Vector store document ID.
    * @returns `{ok: true}` on success.
    */
-  deleteMemory: (memoryId: string) =>
-    del<{ ok: boolean }>(`/api/v2/memory/${encodeURIComponent(memoryId)}`),
+  deleteMemory: (memoryId: string, hard = false) =>
+    del<{ ok: boolean }>(
+      `/api/v2/memory/${encodeURIComponent(memoryId)}${hard ? '?hard=true' : ''}`,
+    ),
+
+  /**
+   * Set a memory's privacy level (schema v88). `private` / `local_only` /
+   * `do_not_store` memories are kept out of cloud-bound prompts.
+   *
+   * Wraps `PATCH /api/v2/memory/{id}/privacy`. Requires the TieredMemoryManager
+   * backend; otherwise the server returns 501.
+   *
+   * @param memoryId - Vector store document ID.
+   * @param level - The new privacy level.
+   * @returns `{ok: true}` on success.
+   */
+  setMemoryPrivacy: (memoryId: string, level: MemoryPrivacyLevel) =>
+    patch<{ ok: boolean }>(
+      `/api/v2/memory/${encodeURIComponent(memoryId)}/privacy?level=${level}`,
+      {},
+    ),
 
   /**
    * Promote a memory to Tier 3 (permanent — never pruned).

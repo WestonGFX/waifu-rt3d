@@ -38,6 +38,7 @@ Usage::
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import sqlite3
 import struct
@@ -58,6 +59,36 @@ TIER_PERMANENT = 3
 _TOP_K_T1 = 3
 _TOP_K_T2 = 4
 _TOP_K_T3 = 2
+
+
+def _text_hash(text: str) -> str:
+    """Stable content hash for memory suppression (schema v88).
+
+    Normalises whitespace and case so trivially-different re-extractions of the
+    same fact collapse to one suppression entry — the mechanism that stops a
+    forgotten memory from resurrecting via re-extraction or summary.
+
+    Args:
+        text: The memory text.
+
+    Returns:
+        A hex SHA-256 digest of the normalised text.
+    """
+    normalised = " ".join((text or "").lower().split())
+    return hashlib.sha256(normalised.encode("utf-8")).hexdigest()
+
+
+def _is_suppressed(con: sqlite3.Connection, char_id: int, text: str) -> bool:
+    """Return True if this memory text has been forgotten for this character."""
+    try:
+        row = con.execute(
+            "SELECT 1 FROM memory_suppressions WHERE char_id = ? AND text_hash = ?",
+            (char_id, _text_hash(text)),
+        ).fetchone()
+        return row is not None
+    except sqlite3.OperationalError:
+        # Table absent (pre-v88 DB) — nothing is suppressed.
+        return False
 
 
 def _pack_vec(floats: list[float]) -> bytes:
@@ -182,10 +213,14 @@ class TieredMemoryManager:
             42
         """
         try:
-            embedding = self._embed(text)
             con = self._conn()
             self._load_vec_ext(con)
             try:
+                # v88: a forgotten memory must not resurrect via re-extraction.
+                if _is_suppressed(con, char_id, text):
+                    logger.debug("[TieredMemory] add skipped — text is suppressed")
+                    return None
+                embedding = self._embed(text)
                 cur = con.execute(
                     """
                     INSERT INTO memories
@@ -234,6 +269,7 @@ class TieredMemoryManager:
         char_id: int | None = None,
         top_k: int | None = None,
         tier_filter: int | None = None,
+        cloud_eligible: bool = False,
     ) -> list[dict[str, Any]]:
         """Semantic similarity search over stored memories.
 
@@ -241,11 +277,18 @@ class TieredMemoryManager:
         memories table for full row data. Applies per-tier K limits so
         permanent memories don't crowd out recent ones.
 
+        Only ``status='active'`` memories are returned — soft-deleted /
+        suppressed / corrected rows (schema v88) are excluded so a forgotten
+        memory never resurfaces.
+
         Args:
             query: Natural-language query to embed and search against.
             char_id: Optional character filter.
             top_k: Override default top-k. Uses ``self.top_k`` if None.
             tier_filter: Only return memories from this tier.
+            cloud_eligible: When True, also exclude privacy-restricted memories
+                (``private`` / ``local_only`` / ``do_not_store``) so private
+                content never enters a prompt bound for a cloud provider.
 
         Returns:
             List of memory dicts, sorted by relevance (most relevant first):
@@ -277,7 +320,9 @@ class TieredMemoryManager:
                         m.salience,
                         m.session_id,
                         m.character_id,
-                        m.created_at
+                        m.created_at,
+                        COALESCE(m.status, 'active'),
+                        COALESCE(m.privacy_level, 'normal')
                     FROM memories_vec v
                     JOIN memories m ON m.id = v.memory_id
                     WHERE v.embedding MATCH ?
@@ -288,10 +333,19 @@ class TieredMemoryManager:
 
                 results = []
                 for row in rows:
-                    mem_id, dist, text, role, tier, salience, sess_id, cid, created_at = row
+                    (mem_id, dist, text, role, tier, salience, sess_id, cid,
+                     created_at, status, privacy_level) = row
                     if char_id is not None and cid != char_id:
                         continue
                     if tier_filter is not None and tier != tier_filter:
+                        continue
+                    # v88: never surface soft-deleted / suppressed / corrected memories.
+                    if status != "active":
+                        continue
+                    # v88: keep private memories out of cloud-bound prompts.
+                    if cloud_eligible and privacy_level in (
+                        "private", "local_only", "do_not_store"
+                    ):
                         continue
                     results.append({
                         "id": str(mem_id),
@@ -304,6 +358,8 @@ class TieredMemoryManager:
                         "dist": dist,
                         "distance": dist,
                         "created_at": created_at,
+                        "status": status,
+                        "privacy_level": privacy_level,
                         # legacy compat fields
                         "timestamp": None,
                     })
@@ -417,19 +473,35 @@ class TieredMemoryManager:
         finally:
             con.close()
 
-    def delete_memory(self, memory_id: str) -> bool:
-        """Delete a memory by ID.
+    def delete_memory(
+        self,
+        memory_id: str,
+        *,
+        hard: bool = False,
+        reason: str = "user_forget",
+    ) -> bool:
+        """Forget a memory by ID.
 
-        Removes from both ``memories`` and ``memories_vec``.
+        Default (``hard=False``) is a *soft* delete — the trust-spine behaviour
+        (schema v88): the row's ``status`` is set to ``'suppressed'`` and a
+        content hash is recorded in ``memory_suppressions`` so the same memory
+        can never resurface via re-extraction or summary.  The vector row is
+        removed so it stops matching KNN queries.
+
+        ``hard=True`` permanently deletes the row (admin / GDPR-style purge).
 
         Args:
             memory_id: String or int primary key.
+            hard: When True, permanently delete instead of suppressing.
+            reason: Audit reason recorded on the suppression row.
 
         Returns:
             True on success, False on error.
 
         Example:
-            >>> mgr.delete_memory("42")
+            >>> mgr.delete_memory("42")              # soft — she forgets it
+            True
+            >>> mgr.delete_memory("42", hard=True)   # purge the row entirely
             True
         """
         try:
@@ -437,14 +509,67 @@ class TieredMemoryManager:
             con = self._conn()
             self._load_vec_ext(con)
             try:
-                con.execute("DELETE FROM memories WHERE id = ?", (mid,))
+                if hard:
+                    con.execute("DELETE FROM memories WHERE id = ?", (mid,))
+                    con.execute("DELETE FROM memories_vec WHERE memory_id = ?", (mid,))
+                    con.commit()
+                    return True
+
+                row = con.execute(
+                    "SELECT character_id, text FROM memories WHERE id = ?", (mid,)
+                ).fetchone()
+                if row is None:
+                    return False
+                cid, text = int(row[0]), str(row[1])
+                con.execute(
+                    "UPDATE memories SET status = 'suppressed' WHERE id = ?", (mid,)
+                )
+                # Drop the vector so it stops matching KNN immediately.
                 con.execute("DELETE FROM memories_vec WHERE memory_id = ?", (mid,))
+                con.execute(
+                    "INSERT OR IGNORE INTO memory_suppressions "
+                    "(char_id, text_hash, reason) VALUES (?, ?, ?)",
+                    (cid, _text_hash(text), reason),
+                )
                 con.commit()
                 return True
             finally:
                 con.close()
         except Exception as e:
             logger.warning("[TieredMemory] delete_memory failed: %s", e)
+            return False
+
+    _PRIVACY_LEVELS = ("normal", "private", "local_only", "do_not_store")
+
+    def set_privacy(self, memory_id: str, level: str) -> bool:
+        """Set a memory's privacy level (schema v88).
+
+        ``private`` / ``local_only`` / ``do_not_store`` memories are excluded
+        from cloud-bound prompts (see :meth:`search` ``cloud_eligible``).
+
+        Args:
+            memory_id: String or int primary key.
+            level: One of ``normal | private | local_only | do_not_store``.
+
+        Returns:
+            True on success, False on invalid level or error.
+        """
+        if level not in self._PRIVACY_LEVELS:
+            logger.warning("[TieredMemory] invalid privacy level: %s", level)
+            return False
+        try:
+            mid = int(memory_id)
+            con = self._conn()
+            try:
+                con.execute(
+                    "UPDATE memories SET privacy_level = ? WHERE id = ?", (level, mid)
+                )
+                con.commit()
+                return True
+            finally:
+                con.close()
+        except Exception as e:
+            logger.warning("[TieredMemory] set_privacy failed: %s", e)
             return False
 
     def promote_to_permanent(self, memory_id: str) -> bool:

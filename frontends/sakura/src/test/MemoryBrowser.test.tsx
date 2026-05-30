@@ -440,7 +440,8 @@ describe('MemoryBrowser', () => {
       await switchToMemoriesTab();
       await waitFor(() => expect(screen.getByText(/User loves ramen/)).toBeInTheDocument());
 
-      const deleteBtns = screen.getAllByTitle('Delete memory');
+      // v88: the delete action is now a soft "Forget" (title changed).
+      const deleteBtns = screen.getAllByTitle(/Forget this memory/);
       fireEvent.click(deleteBtns[0]);
 
       await waitFor(() => expect(vi.mocked(api.deleteMemory)).toHaveBeenCalledWith('m1'));

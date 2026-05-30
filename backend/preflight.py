@@ -6250,6 +6250,82 @@ def migrate_to_v87(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v88(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v87 to v88.
+
+    Adds the memory-control trust spine: per-memory lifecycle ``status`` and
+    ``privacy_level`` on both ``memories`` and ``user_facts``, plus a
+    ``memory_suppressions`` table so a forgotten memory cannot resurrect.
+
+    Why a suppression table (vs. plain hard delete): the engine summarises and
+    re-extracts, so a hard-deleted fact can reappear from a session summary or a
+    later extraction.  Recording a content hash on "forget" lets retrieval and
+    re-insertion stay silent about it permanently — the difference between
+    "deleted the row" and "she actually forgot."
+
+    Columns added:
+        - memories.status / user_facts.status (TEXT DEFAULT 'active')
+          — active | corrected | suppressed
+        - memories.privacy_level / user_facts.privacy_level (TEXT DEFAULT 'normal')
+          — normal | private | local_only | do_not_store
+    New table:
+        - memory_suppressions (id, char_id, text_hash, reason, created_at)
+          with UNIQUE(char_id, text_hash) for idempotent re-suppression.
+
+    Args:
+        con: An open ``sqlite3.Connection``.
+
+    Returns:
+        ``True`` on success.
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 88:
+        logger.info("Schema already at v%d, skipping v88 migration.", cur_ver)
+        return True
+
+    try:
+        for table in ("memories", "user_facts"):
+            for col, col_type, default in [
+                ("status", "TEXT", "'active'"),
+                ("privacy_level", "TEXT", "'normal'"),
+            ]:
+                try:
+                    con.execute(
+                        f"ALTER TABLE {table} ADD COLUMN {col} {col_type} DEFAULT {default}"
+                    )
+                except sqlite3.OperationalError:
+                    pass  # Column already exists (idempotent re-run)
+
+        con.execute("CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_user_facts_status ON user_facts(status)")
+
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS memory_suppressions (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                char_id    INTEGER NOT NULL,
+                text_hash  TEXT    NOT NULL,
+                reason     TEXT    NOT NULL DEFAULT 'user_forget',
+                created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now')),
+                UNIQUE(char_id, text_hash)
+            )
+        """)
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_suppressions_char "
+            "ON memory_suppressions(char_id, text_hash)"
+        )
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (88, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v88 migration complete (memory status/privacy + suppressions)")
+        return True
+    except Exception as e:
+        logger.error("Schema v88 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -6875,14 +6951,20 @@ def ensure_db():
             if migrate_to_v87(con):
                 version = 87
 
+        if version < 88:
+            logger.info("Upgrading database schema from v87 to v88...")
+            logger.info("  - memory status/privacy columns + memory_suppressions (forget trust spine)")
+            if migrate_to_v88(con):
+                version = 88
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 87:
-            raise RuntimeError(f"Database initialization failed: Expected v87, got v{final_version}")
+        if final_version < 88:
+            raise RuntimeError(f"Database initialization failed: Expected v88, got v{final_version}")
 
-        if final_version > 87:
-            logger.warning(f"Database is newer than application (v{final_version} > v87). Some features might be unused.")
+        if final_version > 88:
+            logger.warning(f"Database is newer than application (v{final_version} > v88). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.

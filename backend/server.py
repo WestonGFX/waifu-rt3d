@@ -8323,24 +8323,64 @@ def v2_memory_list(char_id: int = 0, page: int = 0, size: int = 20, tier: int = 
 
 
 @app.delete("/api/v2/memory/{memory_id}")
-def v2_memory_delete(memory_id: str):
-    """Delete a single memory by its ChromaDB ID.
+def v2_memory_delete(memory_id: str, hard: bool = False):
+    """Forget a single memory by its ID.
+
+    Default is a *soft* forget (schema v88): the memory is suppressed and a
+    content hash is recorded so it can never resurface via re-extraction — i.e.
+    she actually forgets it. Pass ``?hard=true`` to permanently purge the row.
 
     Args:
-        memory_id: The memory document ID to delete.
+        memory_id: The memory row ID to forget.
+        hard: When true, permanently delete instead of suppressing.
 
     Returns:
         dict: {"ok": True} on success.
 
     Raises:
-        HTTPException 500: If vector store is unavailable or deletion fails.
+        HTTPException 500: If vector store is unavailable or the op fails.
     """
     if not vector_store:
         raise HTTPException(500, "Vector store not available")
 
-    ok = vector_store.delete_memory(memory_id)
+    # delete_memory is soft by default on TieredMemoryManager; older stores
+    # ignore the keyword and hard-delete (their only mode).
+    try:
+        ok = vector_store.delete_memory(memory_id, hard=hard)
+    except TypeError:
+        ok = vector_store.delete_memory(memory_id)
     if not ok:
-        raise HTTPException(500, "Failed to delete memory")
+        raise HTTPException(500, "Failed to forget memory")
+    return {"ok": True}
+
+
+@app.patch("/api/v2/memory/{memory_id}/privacy")
+def v2_memory_set_privacy(memory_id: str, level: str):
+    """Set a memory's privacy level (schema v88).
+
+    ``private`` / ``local_only`` / ``do_not_store`` memories are kept out of
+    prompts bound for cloud providers; ``normal`` may go anywhere.
+
+    Args:
+        memory_id: The memory row ID.
+        level: One of ``normal | private | local_only | do_not_store``.
+
+    Returns:
+        dict: {"ok": True} on success.
+
+    Raises:
+        HTTPException 400: Invalid privacy level.
+        HTTPException 501: If the active store doesn't support privacy levels.
+        HTTPException 500: If the update fails.
+    """
+    from backend.memory.tiered_memory import TieredMemoryManager
+    if not vector_store or not isinstance(vector_store, TieredMemoryManager):
+        raise HTTPException(501, "Privacy levels require TieredMemoryManager")
+    if level not in ("normal", "private", "local_only", "do_not_store"):
+        raise HTTPException(400, f"Invalid privacy level: {level}")
+    ok = vector_store.set_privacy(memory_id, level)
+    if not ok:
+        raise HTTPException(500, "Failed to set memory privacy")
     return {"ok": True}
 
 

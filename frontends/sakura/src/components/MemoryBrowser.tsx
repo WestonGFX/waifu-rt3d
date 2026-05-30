@@ -21,7 +21,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  X, Search, Trash2, ChevronLeft, ChevronRight, Star,
+  X, Search, Trash2, ChevronLeft, ChevronRight, Star, Lock, Unlock,
   User, Heart, Clock, Smile, Tag, Plus, Edit3, Check,
   Brain, BookOpen, BarChart3, Loader2, MessageCircle,
   Database, ArrowUpCircle, FileText, Network,
@@ -769,6 +769,17 @@ function MemoriesTab({ charId }: { charId: number }) {
     finally { setPromotingId(null); }
   }, [isSearchMode, query, filterCharId, page, tierFilter, loadPage, doSearch]);
 
+  // Toggle a memory between cloud-shareable (normal) and on-device (local_only).
+  // local_only memories are excluded from prompts bound for cloud providers.
+  const handleTogglePrivacy = useCallback(async (id: string, current?: string) => {
+    const next = current === 'local_only' ? 'normal' : 'local_only';
+    try {
+      await api.setMemoryPrivacy(id, next);
+      if (isSearchMode && query) doSearch(query, filterCharId);
+      else loadPage(page, filterCharId, tierFilter);
+    } catch { /* non-fatal (older store returns 501) */ }
+  }, [isSearchMode, query, filterCharId, page, tierFilter, loadPage, doSearch]);
+
   useEffect(() => { loadPage(0, filterCharId, tierFilter); }, [loadPage, filterCharId, tierFilter]);
 
   const handleFilterChange = (cid: number) => {
@@ -943,7 +954,23 @@ function MemoriesTab({ charId }: { charId: number }) {
                 {promotingId === mem.id ? <span style={{ fontSize: '0.58rem' }}>...</span> : <Star size={11} />}
               </button>
             )}
-            {/* Delete button */}
+            {/* Privacy toggle — local-only memories never reach cloud prompts */}
+            <button
+              onClick={() => handleTogglePrivacy(mem.id, mem.privacy_level)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: mem.privacy_level === 'local_only' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                padding: 2,
+                opacity: mem.privacy_level === 'local_only' || hoveredMemId === mem.id ? 1 : 0,
+                transition: 'opacity 0.12s ease',
+              }}
+              title={mem.privacy_level === 'local_only'
+                ? 'On-device only — kept out of cloud prompts. Click to allow.'
+                : 'Mark on-device only (keep out of cloud prompts)'}
+            >
+              {mem.privacy_level === 'local_only' ? <Lock size={11} /> : <Unlock size={11} />}
+            </button>
+            {/* Forget button — soft-forget (she stops recalling it; no resurrection) */}
             <button
               onClick={() => handleDelete(mem.id)}
               disabled={deletingId === mem.id}
@@ -952,7 +979,7 @@ function MemoriesTab({ charId }: { charId: number }) {
                 opacity: hoveredMemId === mem.id ? 1 : 0,
                 transition: 'opacity 0.12s ease',
               }}
-              title="Delete memory"
+              title="Forget this memory — she'll stop recalling it"
             >
               {deletingId === mem.id ? <span style={{ fontSize: '0.58rem' }}>...</span> : <Trash2 size={11} />}
             </button>

@@ -509,18 +509,25 @@ class TieredMemoryManager:
             con = self._conn()
             self._load_vec_ext(con)
             try:
-                if hard:
-                    con.execute("DELETE FROM memories WHERE id = ?", (mid,))
-                    con.execute("DELETE FROM memories_vec WHERE memory_id = ?", (mid,))
-                    con.commit()
-                    return True
-
                 row = con.execute(
                     "SELECT character_id, text FROM memories WHERE id = ?", (mid,)
                 ).fetchone()
                 if row is None:
                     return False
                 cid, text = int(row[0]), str(row[1])
+
+                if hard:
+                    # Even a hard purge records the suppression hash, so a later
+                    # re-extraction/summary cannot resurrect the forgotten text.
+                    con.execute(
+                        "INSERT OR IGNORE INTO memory_suppressions "
+                        "(char_id, text_hash, reason) VALUES (?, ?, ?)",
+                        (cid, _text_hash(text), reason),
+                    )
+                    con.execute("DELETE FROM memories WHERE id = ?", (mid,))
+                    con.execute("DELETE FROM memories_vec WHERE memory_id = ?", (mid,))
+                    con.commit()
+                    return True
                 con.execute(
                     "UPDATE memories SET status = 'suppressed' WHERE id = ?", (mid,)
                 )

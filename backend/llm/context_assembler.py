@@ -33,6 +33,57 @@ from backend.llm.token_counter import count_tokens, count_messages_tokens, is_ti
 
 logger = logging.getLogger(__name__)
 
+# Providers that always send off-device.
+_ALWAYS_CLOUD = {"claude", "anthropic", "gemini", "google", "openai", "openrouter"}
+# Providers that always stay on-device.
+_ALWAYS_LOCAL = {"lmstudio", "lmstudio_rest", "ollama", "koboldcpp", "peft_local", "local"}
+
+
+def is_cloud_send(cfg: dict) -> bool:
+    """Decide whether this turn's LLM call leaves the device.
+
+    Drives the privacy filter: a memory marked ``private`` / ``local_only`` /
+    ``do_not_store`` must never enter a prompt bound for a cloud provider.
+
+    Provider name alone is insufficient — ``openai_compat`` serves BOTH local
+    (LM Studio / llama.cpp on localhost) and cloud (OpenRouter, OpenAI). For the
+    ambiguous case we inspect the endpoint host: loopback / RFC-1918 LAN
+    addresses count as local, everything else as cloud. When in doubt we default
+    to **cloud** (fail-closed for privacy).
+
+    Args:
+        cfg: App config; reads ``cfg['llm']['provider']`` and ``['endpoint']``.
+
+    Returns:
+        True if the call should be treated as leaving the device.
+
+    Example:
+        >>> is_cloud_send({"llm": {"provider": "claude"}})
+        True
+        >>> is_cloud_send({"llm": {"provider": "ollama"}})
+        False
+        >>> is_cloud_send({"llm": {"provider": "openai_compat",
+        ...                        "endpoint": "http://localhost:1234/v1"}})
+        False
+    """
+    llm = (cfg or {}).get("llm", {}) or {}
+    provider = str(llm.get("provider", "")).lower().strip()
+    if provider in _ALWAYS_CLOUD:
+        return True
+    if provider in _ALWAYS_LOCAL:
+        return False
+    # Ambiguous (openai_compat / unknown) → judge by endpoint host.
+    endpoint = str(llm.get("endpoint", "")).lower()
+    if any(h in endpoint for h in (
+        "localhost", "127.0.0.1", "0.0.0.0", "::1",
+        "192.168.", "10.", "172.16.", "172.17.", "172.18.", "172.19.",
+        "172.2", "172.30.", "172.31.", ".local",
+    )):
+        return False
+    # A configured remote endpoint with no local marker → cloud. An empty /
+    # unconfigured endpoint defaults to local (this is a local-first app).
+    return bool(endpoint)
+
 
 @dataclass
 class AssembledContext:
@@ -232,7 +283,16 @@ def assemble_context(
     _aie_on = bool(cfg.get("aie_enabled", False))
     if vector_store and user_text:
         try:
-            hits = vector_store.search(user_text, char_id=char_id, top_k=8)
+            # Privacy routing: when this turn goes to a cloud provider, exclude
+            # private / local_only / do_not_store memories from the prompt.
+            _cloud = is_cloud_send(cfg)
+            try:
+                hits = vector_store.search(
+                    user_text, char_id=char_id, top_k=8, cloud_eligible=_cloud
+                )
+            except TypeError:
+                # Older store without the cloud_eligible kwarg.
+                hits = vector_store.search(user_text, char_id=char_id, top_k=8)
             # AIE A4: Filter through personalization gate before injection
             if _aie_on:
                 try:

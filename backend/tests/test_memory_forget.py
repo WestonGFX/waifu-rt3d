@@ -150,15 +150,21 @@ def test_suppression_is_per_character(mgr):
     assert other is not None
 
 
-def test_hard_delete_purges_row(mgr):
+def test_hard_delete_purges_row_and_records_suppression(mgr):
     mid = mgr.add(1, 1, "user", "purge me")
     assert mgr.delete_memory(str(mid), hard=True) is True
     con = sqlite3.connect(mgr.db_path)
     try:
         row = con.execute("SELECT 1 FROM memories WHERE id=?", (int(mid),)).fetchone()
+        sup = con.execute(
+            "SELECT COUNT(*) FROM memory_suppressions WHERE char_id=1"
+        ).fetchone()[0]
     finally:
         con.close()
-    assert row is None
+    assert row is None          # row purged
+    assert sup == 1             # but suppression hash recorded
+    # ...so even a hard-purged memory cannot resurrect via re-extraction.
+    assert mgr.add(1, 1, "user", "purge me") is None
 
 
 # --- privacy ----------------------------------------------------------------

@@ -132,6 +132,20 @@ def _store_new_facts(
         )
     }
 
+    # v88 trust spine: never re-insert a fact the user has forgotten. Load the
+    # suppression hashes once so re-extraction of a deleted fact is a no-op.
+    try:
+        from backend.memory.tiered_memory import _text_hash as _th
+        suppressed = {
+            row[0]
+            for row in conn.execute(
+                "SELECT text_hash FROM memory_suppressions WHERE char_id = ?", (char_id,)
+            )
+        }
+    except Exception:
+        _th = None  # type: ignore[assignment]
+        suppressed = set()
+
     inserted = 0
     for item in facts:
         try:
@@ -145,6 +159,8 @@ def _store_new_facts(
                 continue
             if fact_text.lower() in existing:
                 continue  # already known
+            if _th is not None and _th(fact_text) in suppressed:
+                continue  # forgotten — must not resurrect
 
             conn.execute(
                 """INSERT INTO user_facts (character_id, category, fact_text, source, confidence)

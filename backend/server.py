@@ -3109,18 +3109,36 @@ def _build_prompt_sections(
     if vocal_emotion_hint:
         sections.append(_section("Vocal Emotion", f"\n[{vocal_emotion_hint}]"))
 
-    # 1c. Feature C3: User knowledge graph — inject top user facts
+    # 1c. Feature C3: User knowledge graph — inject top user facts.
+    # v88 trust spine: exclude suppressed (forgotten) facts; on a cloud send,
+    # exclude non-normal privacy facts; and drop any fact whose text was
+    # forgotten (memory_suppressions) so re-extraction cannot resurrect it.
     try:
+        from backend.llm.context_assembler import is_cloud_send as _ics_facts
+        from backend.memory.tiered_memory import _text_hash as _th_facts
+        _facts_cloud = _ics_facts(cfg)
         _fact_rows = cur.execute(
             """SELECT category, fact_text FROM user_facts
                WHERE character_id = ?
+                 AND COALESCE(status,'active') = 'active'
+                 AND (? = 0 OR COALESCE(privacy_level,'normal') = 'normal')
                ORDER BY confidence DESC, created_at DESC
-               LIMIT 10""",
-            (char_id,),
+               LIMIT 20""",
+            (char_id, 1 if _facts_cloud else 0),
         ).fetchall()
-        if _fact_rows:
+        try:
+            _fact_sup = {
+                r[0] for r in cur.execute(
+                    "SELECT text_hash FROM memory_suppressions WHERE char_id = ?",
+                    (char_id,),
+                ).fetchall()
+            }
+        except Exception:
+            _fact_sup = set()
+        _fact_kept = [(c, t) for (c, t) in _fact_rows if _th_facts(t) not in _fact_sup][:10]
+        if _fact_kept:
             _facts_text = "\n\n[WHAT YOU KNOW ABOUT THE USER]\n"
-            for _cat, _txt in _fact_rows:
+            for _cat, _txt in _fact_kept:
                 _facts_text += f"- [{_cat}] {_txt}\n"
             sections.append(_section("User Facts", _facts_text))
     except Exception:
@@ -12691,11 +12709,23 @@ def delete_user_fact(char_id: int, fact_id: int):
     """
     with db_ctx() as conn:
         row = conn.execute(
-            "SELECT id FROM user_facts WHERE id = ? AND character_id = ?",
+            "SELECT fact_text FROM user_facts WHERE id = ? AND character_id = ?",
             (fact_id, char_id),
         ).fetchone()
         if not row:
             raise HTTPException(404, "User fact not found")
+        # v88 trust spine: soft-forget — suppress the row and record a content
+        # hash so re-extraction cannot resurrect it. Hard-delete the row too
+        # (facts have no vector index to keep in sync).
+        try:
+            from backend.memory.tiered_memory import _text_hash as _th
+            conn.execute(
+                "INSERT OR IGNORE INTO memory_suppressions (char_id, text_hash, reason) "
+                "VALUES (?, ?, 'user_forget_fact')",
+                (char_id, _th(str(row[0]))),
+            )
+        except Exception as _sup_err:
+            logger.debug("[UserFacts] suppression record skipped: %s", _sup_err)
         conn.execute("DELETE FROM user_facts WHERE id = ?", (fact_id,))
         conn.commit()
 
@@ -20455,6 +20485,24 @@ def kokoro_debug_state(
             mind_dict = _asdict(mind)
             # Expose all numeric dial columns; skip character_id and updated_at.
             all_dials = set(ALL_MIND_DIALS)
+            # Gate Tier F (intimate) dials behind the same NSFW + bond gate the
+            # engine uses, so a debug query can't infer intimate state without it.
+            try:
+                _dbg_nsfw = bool(load_config().get("nsfw_enabled"))
+            except Exception:
+                _dbg_nsfw = False
+            try:
+                # Direct read — must NOT use get_bond_level(), which lazily
+                # creates a default bond row (side effect in a read-only HUD).
+                _br = conn.execute(
+                    "SELECT bond_level FROM character_relationships WHERE char_id = ?",
+                    (char_id,),
+                ).fetchone()
+                _dbg_bond_level = int(_br[0]) if _br and _br[0] is not None else 0
+            except Exception:
+                _dbg_bond_level = 0
+            if not (_dbg_nsfw and _dbg_bond_level >= 20):
+                all_dials = all_dials - set(TIER_F_FAST) - set(TIER_F_SLOW)
             result.mind_dials = {
                 k: float(v)
                 for k, v in mind_dict.items()

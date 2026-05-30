@@ -174,5 +174,40 @@ load failure / long session for whoever runs it next.
 
 ---
 
+## 8. Independent 7-Agent Audit Corroboration (`wf_16c925cd-628`)
+
+A 6-perspective audit + synthesis (7 agents, 598k tokens, ~15 min) ran in parallel
+and **challenged the feature pick** rather than rubber-stamping it. Its value: it
+surfaced two issues the inline (rendering-focused) recon missed, both now **fixed
+this session**.
+
+### Synthesis ranked top-10 (independent of §3)
+1. **Restore `smoke-test.spec.ts` from `.bak`** — E2E net was syntactically broken (35 missing `}`). `[p5/d1/r1/f5]` ✅ **FIXED** (`git checkout` from HEAD; 259/259 balanced).
+2. **Kokoro streaming stores raw JSON in `messages.text`** — chat-continuity corruption. `[p5/d2/r2/f5]` ✅ **FIXED** (commit `64ed9bf`).
+3. Stub `scrollIntoView` in `setup.ts` — removes 3 vitest noise errors. `[p2/d1/r1/f3]`
+4. Add missing overlays to CommandPalette (contextviewer/personapicker/userknowledge). `[p4/d1/r1/f4]`
+5. Wire endpoint fallback into chat hot paths — offline LM Studio currently dead-ends. `[p4/d2/r2/f5]`
+6. Fix expression↔viseme contention (MicroExpressionController vs ExpressionController). `[p4/d2/r2/f5]`
+7. Page Visibility API throttle — pause render loop when tab hidden. `[p3/d1/r1/f4]`
+8. Pattern-1 tests for `dispatchSetEyeGaze` (zero coverage). `[p3/d2/r1/f4]`
+9. Type `AppConfig` in `types.ts` (currently `{[k:string]:unknown}` — zero config type safety). `[p2/d2/r2/f4]`
+10. Document the dual-vocabulary postMessage seam (ViewerCommand.kind vs untyped `type` strings). `[p2/d1/r1/f4]`
+
+### Per-audit headlines (evidence in `wf_16c925cd-628` output)
+- **Architecture:** 3 deferred-import circular-dep workarounds (`agent/runner.py:101`, `image_gen/registry.py:8`, `agent/tools/image_gen.py:71`) → extract `db()`/`load_config()`/`DB_PATH` to `backend/db.py`+`config.py`. `AppConfig` untyped. Dual-vocabulary viewer seam.
+- **Rendering:** confirms VRMA dead code (`viewer.html:2992`); flags expression-viseme contention + a **SaccadeController double-writing eye bones after LookAtLayer** (relevant to the gaze work shipped here — watch for interaction) + a model-swap clip-data soft leak.
+- **LLM/Memory:** the raw-JSON storage bug (fixed); endpoint fallback not wired into chat hot paths; `LMStudioRESTAdapter` non-streaming.
+- **UX:** debug surface split across 3 places; orphaned FPS-overlay controls; hardcoded hex in DevConsole/KokoroDebugPanel/ModelPanel (theme risk).
+- **Tests:** 3051 backend pass; frontend 3 noise errors trace to `SettingsView.tsx:181` `scrollIntoView`; `dispatchSetEyeGaze`/animation dispatchers have zero coverage.
+- **Regression:** the broken smoke-test (fixed); otherwise the vocab-prune branch is clean.
+
+### Honest note
+The audit's synthesis would have picked #2 (the JSON bug) as the single PR. The
+inline recon picked the gaze wiring. Both shipped — gaze as the planned clean PR,
+the JSON bug + E2E restore as audit-driven fixes. Items 3–10 remain open and are
+good next-session candidates (3, 4, 5, 8, 9, 10 are all tsc/pytest-verifiable).
+
+---
+
 ### For the next agent
 This doc is the running record of the 2026-05-30 repo-surgeon pass. Sections 1–2 are complete and cited. Sections 3–7 are filled as the audit workflow (`wf_16c925cd-628`) returns and the chosen feature lands. Key gotcha discovered: **VRMA is dead code AND has no test assets — do not pick it as a "shippable" feature without first vendoring `@pixiv/three-vrm-animation` (matched to three r157 / three-vrm-core 2.0.6) AND adding a sample `.vrma`.**

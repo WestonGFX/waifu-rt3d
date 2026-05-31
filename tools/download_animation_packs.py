@@ -85,7 +85,25 @@ PACKS = {
         "type": "manual",
         "description": "High-quality locomotion and transition MoCap; requires BVH-to-GLB conversion",
     },
+    "threejs-mixamo": {
+        "name": "three.js Example Models (Mixamo-rigged)",
+        "license": "CC (three.js examples)",
+        "url": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/models/gltf/",
+        "type": "cdn",
+        "description": (
+            "Xbot.glb (idle/walk/run/agree/headShake/sad_pose/sneak_pose) + "
+            "Soldier.glb (Idle/Walk/Run). Real mixamorig-named skeletons with embedded "
+            "AnimationClips — exercises the ClipLayer retarget path end-to-end. The only "
+            "verified-LIVE auto source as of 2026-05-31."
+        ),
+    },
 }
+
+# Sources verified DEAD on 2026-05-31 (kept for history; do not rely on auto-download):
+#   - sillytavern: GitHub repo returns 404 (repository removed)
+#   - vrm-expression-library: jsdelivr pixiv/three-vrm@dev animation paths 404 (repo restructured)
+#   - cmu / 100style / lafan1: always manual (no direct download)
+# Use the `threejs-mixamo` pack for a working clip, or import Mixamo FBX→GLB manually.
 
 
 def download_sillytavern() -> bool:
@@ -364,6 +382,57 @@ def download_lafan1() -> bool:
     return True
 
 
+_THREEJS_MIXAMO_CLIPS: list[str] = ["Xbot.glb", "Soldier.glb"]
+_THREEJS_MIXAMO_BASE_URL = (
+    "https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/models/gltf/"
+)
+
+
+def download_threejs_mixamo() -> bool:
+    """Download three.js example GLB models with Mixamo-rigged skeletons.
+
+    These are the only verified-live auto-download clips as of 2026-05-31 (all
+    other pack sources 404). Each GLB carries ``mixamorig:*`` bone names plus
+    embedded :class:`THREE.AnimationClip` objects (idle/walk/run/gestures), which
+    is exactly what ``ClipLayer.loadClip(url, name, {retarget: true})`` consumes —
+    so they prove the retarget pipeline end-to-end.
+
+    Files land in ``backend/storage/animations/threejs-mixamo/``.
+
+    Returns:
+        True if every clip downloaded successfully, False if any failed.
+
+    Example:
+        >>> download_threejs_mixamo()
+        True
+    """
+    import urllib.request
+    import urllib.error
+
+    pack_dir = ANIMATIONS_DIR / "threejs-mixamo"
+    pack_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("Downloading three.js Mixamo-rigged example models...")
+
+    success = True
+    for filename in _THREEJS_MIXAMO_CLIPS:
+        dest = pack_dir / filename
+        if dest.exists() and dest.stat().st_size > 0:
+            logger.info(f"  Already present: {filename}")
+            continue
+        url = _THREEJS_MIXAMO_BASE_URL + filename
+        try:
+            logger.info(f"  Fetching {filename} ...")
+            urllib.request.urlretrieve(url, dest)
+            logger.info(f"  Saved -> {dest} ({dest.stat().st_size} bytes)")
+        except (urllib.error.URLError, OSError) as exc:
+            logger.error(f"  Failed to download {filename}: {exc}")
+            success = False
+
+    if success:
+        logger.info(f"  three.js Mixamo pack ready in {pack_dir}")
+    return success
+
+
 def list_packs():
     """Print available animation packs with their status."""
     print("\nAvailable Animation Packs:")
@@ -388,6 +457,7 @@ DOWNLOADERS = {
     "procedural-emotions": download_procedural_emotions,
     "vrm-expression-library": download_vrm_expression_library,
     "lafan1": download_lafan1,
+    "threejs-mixamo": download_threejs_mixamo,
 }
 
 

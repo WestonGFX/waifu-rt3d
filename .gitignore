@@ -156,3 +156,6 @@ docs/session-logs/
 docs/CODEX_*.md
 docs/CLAUDE_CODE_HANDOFF.md
 docs/claude-code-handoff/
+
+# Downloaded animation clip binaries — reproducible via tools/download_animation_packs.py
+backend/storage/animations/

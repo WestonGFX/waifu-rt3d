@@ -124,3 +124,45 @@ Claude Code drives headless Blender (`bpy`) beyond retargeting: generate/modify 
 - **Grounding/foot-slide** is the make-or-break of Stage 1 and historically fragile — budget real time for it, verify visually every step.
 - **Clip sourcing** is thin: only SillyTavern git + jsdelivr VRMA auto-download; Mixamo is manual; CMU/100STYLE/LaFAN1 dead. Curate a small proven set, don't chase "100 clips."
 - **Two filenames** for the library (`animation_manifest.json` vs `animation_library.json`) — reconcile to one in Step 1.3.
+
+---
+
+# Follow-up Execution Plan (2026-05-31 cont.) — Finish VRM Retarget → Library → Kokoro Wiring
+
+## Where we are now (this session's outcome)
+
+Stage 1 is largely done and committed on `feat/avatar-motion` (10 commits): the clip→VRM pipeline is **proven** (fixed the colon-stripped-bone-name no-op; Xbot Y-up walk renders grounded + cycling), `loadClip` selects by name, the Blender FBX→GLB bake infra works, and **28/28 Mixamo clips were browser-downloaded** (`tools/mixamo_grab.mjs` → `~/Downloads/mixamo-fbx/`).
+
+The remaining blocker is the **Mixamo→VRM retarget**. A runtime bone-name remap can't work (Mixamo is Z-up/cm with different rest orientations — 4 coordinate fixes all failed). Pivoted to retargeting onto the VRM's own rig in Blender (`tools/blender/retarget_to_vrm.py`, rest-relative formula). That **validated the approach — produced an upright, recognizable walk** — but has two WIP bugs that block batching.
+
+This follow-up fixes those bugs, batches the library, and wires it into Kokoro. **Three phases; Phase C is gated on Phase B looking good visually.**
+
+## Constraints (unchanged)
+- Avatar grounding is a Known Sensitive Area — **visually verify every clip** via `tools/verify/render_clip.mjs --frames 4`, never trust the math.
+- **Never edit `viewer.html` and `viewerStore.ts` in the same commit** (tightly coupled).
+- One commit per sub-step; pytest + tsc green between steps.
+
+## Phase A — Fix the VRM-rig retarget bake (the blocker)
+All in `tools/blender/retarget_to_vrm.py` `_bake_rest_relative()` (~lines 177–193).
+- **A1 — Stale per-frame source read (root cause of "idle == walking").** After `scene.frame_set(f)` the Mixamo pose isn't re-evaluated, so `mix_pb[mx].matrix` (line 180) returns the rest pose every frame → every clip bakes near-identical motion. Fix: read from the **evaluated depsgraph** — `deg = bpy.context.evaluated_depsgraph_get(); mev = mix_arm.evaluated_get(deg); src = mev.matrix_world @ mev.pose.bones[mx].matrix` — and/or `bpy.context.view_layer.update()`. Likely also resolves most forearm/limb weirdness.
+- **A2 — Parent→child propagation.** Setting `pbone.matrix` parent-first (line 187) needs the parent's new matrix live before the child; add `view_layer.update()` between sets, or compute the child's local `rotation_quaternion` directly from the parent's posed world matrix. Rotation-only; preserve rest translation.
+- **A3 — Drop the leftover source action + mesh** (stray `Armature.001|mixamo.com|Layer0`) so only the named action exports; optionally export armature-only to shrink files.
+- **A4 — Re-verify (gate).** Re-bake `walking`/`idle`/`waving`/`thinking`, render each `--frames 4`: distinct motion (hash + visible), upright, grounded, no gross clipping. If forearm twist persists after A1–A2, drop the lower-arm/hand pairs or surface it — **do NOT spiral (hypothesis limit)**.
+
+## Phase B — Batch the library
+- **B1** — `tools/retarget_library.py` (mirror `tools/bake_animation.py`): locate Blender, run `retarget_to_vrm.py` per FBX in `~/Downloads/mixamo-fbx/` against `backend/storage/avatars/Raine.vrm` → `backend/storage/animations/vrm-baked/<slug>.glb`.
+- **B2** — Batch 28, spot-verify 6 (`idle`, `walking`, `waving`, `thinking`, `sitting`, `pointing`).
+- **B3** — Baked clips are VRoid `J_Bip_*` space → play on any VRoid VRM; procedural is the fallback for non-VRoid rigs.
+
+## Phase C — Wire Kokoro gesture → baked clips (Step 1.4) *(gated on B2)*
+Integration: `viewerStore.ts` `dispatchKokoroEmbodiment` (line 469) → `dispatchGesture` (line 447), currently posts `trigger_gesture` (procedural). Viewer exposes `loadAnimation`/`playAnimation` (`viewer.html:9134/9157`).
+- **C1** — Gesture→clip map: 8 Kokoro gestures (`response_parser.py:34`) → baked names (wave→waving, thinking→thinking, point→pointing, hands_clasped→hands_forward_gesture, heart→blow_a_kiss, small_nod→head_nod_yes; tilt_head → procedural fallback).
+- **C2** (separate store vs viewer commits) — in `dispatchGesture`, if mapped, post `loadAnimation` (cache in a `Set`) + `playAnimation` of `/files/animations/vrm-baked/<clip>.glb`; else fall back to `trigger_gesture`. **Default: augment + procedural fallback**, not replacement.
+- **C3** — Keep procedural `noise1D` idle (already organic); don't override idle this pass.
+- **C4** — Vitest: mapped gesture loads+plays clip; unmapped fires `trigger_gesture`.
+- **C5** — In-app: chat-trigger gestures → real mocap clips play, idle resumes.
+
+## Open risks / decisions
+- Forearm-roll clipping may survive A1–A2 → drop lower-arm/hand pairs or defer.
+- Per-VRM baking: clips are Raine-baked (VRoid space); revisit for non-VRoid VRMs.
+- Augment-vs-replace gestures (C2): defaulting to clip-with-fallback; reversible via the map (`null` forces procedural).

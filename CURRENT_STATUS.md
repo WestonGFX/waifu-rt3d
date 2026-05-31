@@ -1,14 +1,29 @@
 # Current Project Status
 
-**Last updated:** 2026-05-25 (session 48 — Kokoro v2 Phase 1: parse_ok rate tracking + identity fix + settings drawer clipping + AIE TTL cache)
-**Branch:** master · HEAD = `2fe8abe` (all pushed).
+**Last updated:** 2026-05-31 (avatar realistic motion — clip→VRM pipeline proven, Mixamo browser-download, VRM-rig retarget WIP)
+**Branch:** `feat/avatar-motion` · HEAD = `5f3f946` (10 commits LOCAL, unpushed).
 **Schema version:** v88 (memory `status`/`privacy_level` + `memory_suppressions` — forget/privacy trust spine).
-**Tests:** **3,051 backend pytest** + **456 vitest** passing, tsc clean.
+**Tests:** **3,104 backend pytest** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session (2026-05-31) — Avatar Realistic Motion, branch `feat/avatar-motion` (10 commits, LOCAL/unpushed). See `docs/SESSION_HANDOFF.md` + plan `docs/plans/2026-05-31-avatar-motion-staged.md` ("Follow-up Execution Plan").**
+
+Turned "can avatar movement look real / is Three.js the only option / Claude-drives-Blender-and-my-browser" into a working pipeline:
+- **Clip→VRM retarget proven** — fixed a silent no-op bug (three.js strips the colon from track bone names; `MIXAMO_BONE_MAP` kept it). Rotation-only retarget; Xbot walk renders grounded + cycling. `322f630` `45cb483` `17f71e0`.
+- **Headless Blender FBX→GLB bake** (`tools/blender/`, `tools/bake_animation.py`) — unlocks the Mixamo FBX library. `ec42dd6`.
+- **Browser-drove Chrome over CDP** → downloaded 28/28 Mixamo clips to `~/Downloads/mixamo-fbx/` (`tools/mixamo_grab.mjs`). `68560d0`.
+- **Headless render harness** with motion-burst (`tools/verify/render_clip.mjs --frames N`).
+- **VRM-rig retarget WIP** (`tools/blender/retarget_to_vrm.py`) — validated upright walk; blocked by ONE depsgraph bug (per-frame Mixamo pose reads static → all clips bake identical). `a642a99`. Fix + batch + Kokoro wiring = next session (Phase A/B/C in the plan).
+
+Decisions: stay Three.js (renderer ≠ bottleneck); VRM+GLB formats; Mixamo→VRM MUST retarget onto the VRM rig in Blender. Nothing pushed — push is the user's call.
+
+**Live status:** push gate clear (no active OPEN BUG/UNFIXED/BLOCKER markers). 3104 pytest, tsc clean.
+
+---
 
 **Session 48 (2026-05-25) — Kokoro v2 Phase 1: parse_ok rate tracking infrastructure, identity fix, settings drawer clipping fix, AIE TTL cache. 7 parallel agent dispatches, ~50 new tests. All pushed.**
 

@@ -50,10 +50,17 @@ describe('viewer.html · ClipLayer.retargetClip', () => {
     ).toBe(false);
   });
 
-  it('drops scale and non-hips translation tracks (rotation-only + hips retarget)', () => {
-    expect(region, 'must special-case hips').toMatch(/isHips/);
-    expect(region, 'must drop .scale and non-hips .position tracks').toMatch(
-      /\.scale['"]\s*\|\|\s*\(\s*property\s*===\s*['"]\.position['"]\s*&&\s*!isHips\s*\)/,
+  it('retargets rotation-only — drops every non-quaternion (position + scale) track', () => {
+    // Mixamo clips are Z-up + centimeters; their hips track carries the standing height
+    // on the Z axis (~104), which flings the VRM ~100m off-camera if applied. Rotation-only
+    // retarget sidesteps all source units/up-axis: keep .quaternion, drop the rest.
+    expect(region, 'must keep only .quaternion tracks').toMatch(
+      /property\s*!==\s*['"]\.quaternion['"]/,
     );
+    // The old hips-translation special-case must be gone (it reintroduced the off-camera bug).
+    expect(
+      /&&\s*!isHips/.test(region),
+      'hips .position is no longer special-cased — retarget is rotation-only',
+    ).toBe(false);
   });
 });

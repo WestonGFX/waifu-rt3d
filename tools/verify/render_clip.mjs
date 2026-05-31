@@ -20,6 +20,7 @@
 import { chromium } from '/Users/chris/Code/waifu-rt3d/frontends/sakura/node_modules/playwright/index.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 
 const arg = (flag, def) => {
   const i = process.argv.indexOf(flag);
@@ -31,6 +32,7 @@ const VRM = arg('--vrm', '/files/avatars/Raine.vrm');
 const CLIP = arg('--clip', '/files/animations/threejs-mixamo/Xbot.glb');
 const CLIP_NAME = arg('--name', 'walk'); // Xbot clip names: idle, walk, run, agree, ...
 const OUT = arg('--out', 'docs/testing/screenshots/2026-05-31-retarget-proof');
+const FRAMES = parseInt(arg('--frames', '1'), 10); // >1 = motion burst (distinct-frame check)
 
 mkdirSync(resolve(OUT), { recursive: true });
 
@@ -113,12 +115,22 @@ const post = (page, msg) => page.evaluate((m) => window.postMessage(m, '*'), msg
     if (animMsg.type === 'animationError') throw new Error(`clip load failed: ${animMsg.error}`);
     console.log(`animationLoaded: name=${animMsg.name} duration=${animMsg.duration} tracks=${animMsg.tracks}`);
 
-    // 3. Play it, let it settle into mid-stride, screenshot.
+    // 3. Play it, then capture a short burst of frames. Distinct frames prove the
+    //    clip is genuinely animating, not just holding a static retargeted pose.
     await post(page, { type: 'playAnimation', payload: { name: CLIP_NAME, loop: true, fadeIn: 0.3 } });
-    await page.waitForTimeout(1400);
-    const playing = await page.screenshot();
+    await page.waitForTimeout(500);
+    const hashes = [];
+    let playing = null;
+    for (let i = 0; i < FRAMES; i++) {
+      await page.waitForTimeout(240);
+      const shot = await page.screenshot();
+      if (i === 0) playing = shot;
+      hashes.push(createHash('md5').update(shot).digest('hex').slice(0, 8));
+      if (FRAMES > 1) writeFileSync(resolve(OUT, `clip-${CLIP_NAME}-f${i}.png`), shot);
+    }
     const playPath = resolve(OUT, `clip-${CLIP_NAME}.png`);
     writeFileSync(playPath, playing);
+    const distinct = new Set(hashes).size;
 
     // 4. Blank-frame guard: a real render is not uniformly one color.
     const stats = await page.evaluate(() => {
@@ -130,6 +142,9 @@ const post = (page, msg) => page.evaluate((m) => window.postMessage(m, '*'), msg
     console.log('\n=== RESULT ===');
     console.log(`canvas: ${stats.w}x${stats.h}`);
     console.log(`tracks retargeted into clip: ${animMsg.tracks}`);
+    if (FRAMES > 1) {
+      console.log(`motion: ${distinct}/${FRAMES} distinct frames → ${distinct > 1 ? 'ANIMATING' : 'STATIC (clip not driving the body)'}`);
+    }
     console.log(`screenshots: ${OUT}/baseline-idle.png, clip-${CLIP_NAME}.png`);
   } catch (e) {
     failed = e;

@@ -2930,18 +2930,18 @@
                 // clips ship per-bone .position (translation) and .scale tracks computed for
                 // the SOURCE skeleton's bone lengths/proportions. Applying those to a VRM with
                 // different proportions folds and stretches the rig (verified 2026-05-31:
-                // a walk clip bent the avatar 90° forward). So we KEEP rotation (.quaternion)
-                // tracks for every mapped bone, KEEP the hips .position track (root translation,
-                // scaled to the VRM's hip height), and DROP all other .position and all .scale
-                // tracks. See docs/research/2026-05-31-retarget-pipeline.md.
+                // a walk clip bent the avatar 90° forward). Worse, Mixamo clips are Z-up +
+                // centimeters: a baked hips track carries the standing height (~104) on the
+                // Z axis, and applying that raw to the VRM flings the model ~100m off-camera.
+                // Rather than chase per-source scale/axis fixes, retarget ROTATION-ONLY: keep
+                // every mapped bone's .quaternion track, drop ALL .position and .scale tracks.
+                // The VRM's own rest pose grounds the feet; leg/spine ROTATIONS produce the
+                // visible motion (stride, sway, gesture) in place. This is robust across
+                // Mixamo/BVH/GLB sources regardless of their units or up-axis.
+                // See docs/research/2026-05-31-retarget-pipeline.md.
                 let remapped = 0;
                 let dropped = 0;
                 const kept = [];
-
-                // Hip-height ratio keeps feet on the floor across differently-proportioned
-                // rigs: scale the source hips translation by (VRM hip height / source hip height).
-                const hipsNode = nodeNames['hips'] ? currentVrm?.scene?.getObjectByName(nodeNames['hips']) : null;
-                const vrmHipHeight = hipsNode ? hipsNode.getWorldPosition(new THREE.Vector3()).y : 0;
 
                 for (const track of clip.tracks) {
                     // Track names are "boneName.property" (e.g., "mixamorig:Hips.quaternion")
@@ -2959,32 +2959,20 @@
                     const nodeName = nodeNames[vrmBoneName];
                     if (!nodeName) { dropped++; continue; } // VRM lacks this bone — drop
 
-                    const isHips = vrmBoneName === 'hips';
-
-                    // Drop scale tracks entirely, and translation tracks for everything but hips.
-                    if (property === '.scale' || (property === '.position' && !isHips)) {
+                    // Rotation-only: drop position + scale on every mapped bone (incl. hips).
+                    if (property !== '.quaternion') {
                         dropped++;
                         continue;
                     }
 
                     track.name = nodeName + property;
-
-                    // Rescale hips translation to the VRM's proportions to avoid foot float/sink.
-                    if (isHips && property === '.position' && vrmHipHeight > 0 && track.values?.length) {
-                        const srcHip = track.values[1]; // first keyframe Y ≈ source standing hip height
-                        if (srcHip > 1e-4) {
-                            const s = vrmHipHeight / srcHip;
-                            for (let i = 0; i < track.values.length; i++) track.values[i] *= s;
-                        }
-                    }
-
                     kept.push(track);
                     remapped++;
                 }
 
                 clip.tracks = kept;
                 if (remapped > 0 || dropped > 0) {
-                    console.log(`[ClipLayer] Retargeted ${remapped} rotation/hips tracks, dropped ${dropped} translation/scale (Mixamo/BVH → VRM)`);
+                    console.log(`[ClipLayer] Retargeted ${remapped} rotation tracks, dropped ${dropped} position/scale (Mixamo/BVH → VRM)`);
                 }
                 return clip;
             }

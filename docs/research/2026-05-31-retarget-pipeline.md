@@ -49,6 +49,27 @@ A working clip source is now wired (`threejs-mixamo` pack) and real assets are o
 
 ---
 
+## Finding 3b — THE root-cause bug: colon-stripped bone names (found via render test)
+
+Headless render testing (Playwright + Chromium, `tools/verify/render_clip.mjs`) exposed the
+real problem, which is bigger than the translation theory below:
+
+**`retargetClip` has always been a silent no-op for GLB Mixamo clips.** three.js's
+GLTFLoader sanitizes node names in animation-track bindings and **strips the colon**:
+a bone exported as `mixamorig:Hips` arrives in the clip as track `mixamorigHips.quaternion`
+(no colon). But `MIXAMO_BONE_MAP` keys keep the colon (`'mixamorig:Hips'`), so the literal
+lookup `MIXAMO_BONE_MAP[boneName]` matched **nothing** — every track fell through unchanged,
+targeting `mixamorigHips` nodes that don't exist in the VRM → the clip played as a pure no-op
+and the avatar sat in its rest pose. (The contorted first render was the *entrance* animation,
+not retarget distortion — a second red herring.)
+
+**Fix applied** (`viewer.html` `retargetClip`): build a normalization-keyed lookup
+(`s.replace(/[^a-z0-9]/gi,'').toLowerCase()`) so `mixamorigHips`, `mixamorig:Hips`, and
+case variants all resolve. After the fix, the same Xbot clip retargets **25 rotation/hips
+tracks + drops 47 translation/scale** per clip (201→154 tracks) and the avatar renders in a
+clean, grounded, undistorted pose. Visual proof:
+`docs/testing/screenshots/2026-05-31-retarget-proof/clip-walk.png`.
+
 ## Finding 3 — The grounding gap (the real work)
 
 Real clips obtained: `Xbot.glb` (agree, headShake, idle, run, sad_pose, sneak_pose, walk) and `Soldier.glb` (Idle, Walk, Run). Parsed track structure:

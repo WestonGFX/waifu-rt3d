@@ -49,16 +49,22 @@ The loop searches a term, clicks the first result tile (`tile.dispatchEvent('cli
 line ~100), waits, and downloads. One of these never actually changes the applied animation,
 so the character keeps whatever loaded first and all 28 downloads are that clip.
 
-Two untested hypotheses (cannot distinguish without a live Mixamo session — Chrome on
-CDP :9222 was closed by the time this was found):
+### RESOLVED 2026-05-31 — H1 confirmed, fixed
 
-- **H1 — search not filtering.** `input[placeholder="Search"]` (line 87) may not match
-  Mixamo's real search box, so `fill`/`type` no-op, the grid stays on its default set, and
-  "first tile" is the same default animation every term. *(Favoured — explains 28 *identical*
-  cleanly; a working search with a broken click would still vary as the default grid scrolls.)*
-- **H2 — tile selection not registering.** `dispatchEvent('click')` (chosen to bypass the
-  sticky search-options overlay) may not trigger Mixamo's React selection handler, so the
-  applied animation never changes.
+Re-launched the logged-in Chrome profile (`/tmp/mixamo-chrome-profile`, still authenticated
+as "Chris") and inspected the live DOM via Playwright/CDP:
+
+- **H1 confirmed.** Typing "Walking" into `input[placeholder="Search"]` (the selector IS
+  correct) did **not** change the grid — it stayed on the unfiltered default tiles (Body
+  Block, Double Dagger Stab, Zombie Stand Up, …). So every term clicked the same first
+  default tile → 28 copies of one clip. **Fix: `await search.press('Enter')` after typing.**
+  Verified live: type+Enter → "Waving" filters to Waving Gesture/Waving/…, "Jumping" →
+  Jumping Jacks/Jumping Down/… The grid filters correctly.
+- **H2 refuted.** The `dispatchEvent('click')` tile selection works fine (`anySelected:1`
+  after the click). It was never the problem.
+- **Re-grab succeeded:** 28/28 with the fix; clips are now distinct (27 distinct byte sizes,
+  383KB idle → 927KB sitting, 28 distinct md5). Old dupes archived at
+  `/tmp/mixamo-fbx-dupes-backup/`.
 
 ## Recommendation (next session — needs the user)
 

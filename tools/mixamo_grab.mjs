@@ -83,23 +83,20 @@ async function waitForDownload(before, page, timeoutMs = 45000) {
       await page.locator('button:has-text("Cancel")').first().click({ timeout: 1500 }).catch(() => {});
       await page.waitForTimeout(400);
 
-      // search
+      // search — Enter is REQUIRED. Mixamo's search input does not filter on the React
+      // onChange/debounce alone; without submitting, the grid stays on the unfiltered
+      // default and every term clicks the same first default tile (the 2026-05-31 bug:
+      // 28 downloads of one animation). Verified live: type+Enter filters correctly.
       const search = page.locator('input[placeholder="Search"]').first();
       await search.click();
       await search.fill('');
       await search.type(term, { delay: 35 });
+      await search.press('Enter');
       await page.waitForTimeout(2600);
 
       // apply first single animation (skip packs); dispatchEvent bypasses the sticky
-      // search-options bar that overlaps the top tile.
-      //
-      // ⚠ KNOWN BUG (2026-05-31, docs/research/2026-05-31-mixamo-duplicate-downloads.md):
-      // a prior run downloaded the SAME clip 28× — every FBX was byte-identical motion.
-      // Download exports whatever animation is *applied to the character*, so either the
-      // search isn't filtering (H1: `input[placeholder="Search"]` selector wrong) or this
-      // dispatchEvent click isn't registering Mixamo's React selection (H2). Re-verify with
-      // a HEADED Chrome and watch the first few terms — does the grid filter? does the
-      // character's motion change on tile click? The end-of-run guard below flags recurrence.
+      // search-options bar that overlaps the top tile. (This click works correctly —
+      // the 2026-05-31 duplicate bug was the missing search Enter above, now fixed.)
       const tile = page.locator('.product.product-animation').first();
       if (!(await tile.count())) {
         results.push(`SKIP  ${term} — no single-animation result`);

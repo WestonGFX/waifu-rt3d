@@ -53,6 +53,13 @@ MIXAMO_TO_VRM = {
     "mixamorig:RightToeBase": "J_Bip_R_ToeBase",
 }
 
+# Target bones to leave at rest (not retargeted). Empty = retarget the full humanoid subset.
+# Populate this to amputate problematic chains (e.g. arms) if a clip needs it. Tested
+# 2026-05-31: dropping hands/forearms did NOT fix the arm distortion seen in the headless
+# render harness — the spiky-arm artifact tracks fast arm motion + spring-bone cloth under
+# the harness's large frame-dt, not the retarget math (see docs/research file). Left empty.
+SKIP_TARGET_BONES: set[str] = set()
+
 
 def _args(argv: list[str]) -> argparse.Namespace:
     after = argv[argv.index("--") + 1:] if "--" in argv else []
@@ -153,7 +160,8 @@ def _bake_rest_relative(
 
     # Resolve mapped pairs that exist on both rigs, ordered root→tip on the target so the
     # parent is already posed when a child's matrix is set.
-    pairs = [(mx, vr) for mx, vr in MIXAMO_TO_VRM.items() if mx in mix_pb and vr in vrm_pb]
+    pairs = [(mx, vr) for mx, vr in MIXAMO_TO_VRM.items()
+             if mx in mix_pb and vr in vrm_pb and vr not in SKIP_TARGET_BONES]
     def depth(bone):
         d, b = 0, bone
         while b.parent:

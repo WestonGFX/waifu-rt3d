@@ -158,3 +158,48 @@ arms down at the sides, grounded. That is a decisive step past every earlier fai
 - Stage 1.2 (idle easing) — re-scoped: idle already uses `noise1D` (organic), not raw
   sine; no rewrite warranted. Optional future win: a retargeted mocap idle *loop*.
 - Stage 1.4 (Kokoro gesture → clip wiring) — next, once a gesture clip set is baked.
+
+---
+
+## Finding 6 (2026-05-31, cont.) — Arm retarget is broken for large arm rotations
+
+After fixing the duplicate-download bug (28 distinct clips re-grabbed — see
+`2026-05-31-mixamo-duplicate-downloads.md`), baked + rendered real gesture clips and found a
+genuine retarget-math bug isolated to the **arms**.
+
+**Symptom:** On arm-centric clips (waving), the arms **splay outward toward the Mixamo T-pose**
+with the forearms/hands collapsed into spiky geometry — instead of following the animated wave.
+This is exactly the "snapping to absolute Mixamo orientations leaves arms splayed" failure the
+rest-relative formula was meant to prevent. Legs, torso, hips, and head retarget correctly; the
+walk clip renders upright + grounded + mid-stride. The bug is **arm-specific.**
+
+**Why arm-specific (hypothesis for next session, NOT yet confirmed):** Mixamo's rest is a T-pose
+(arms horizontal); VRoid/Raine's rest is an A-pose (arms angled down). Legs/torso rest
+orientations nearly match between the two rigs, so any formula error is invisible there; the arms
+have a large rest-orientation gap that exposes it. The rendered arms sitting near the *source*
+T-pose orientation suggests `want_world ≈ src_pose_world` (absolute) rather than
+`delta @ tgt_rest` — i.e. `tgt_rest[vr]` or the delta is not being respected for the arm chain.
+
+**Hypotheses tested + ruled out (hypothesis limit reached — stopped per project rule):**
+1. Full 22-bone retarget → arms distorted.
+2. Drop hand pairs (`J_Bip_*_Hand`) → forearms still distorted.
+3. Drop forearm + hand pairs → arms *still* distorted (so the **upper arm** is the wrong part,
+   not the wrist/hand — amputating the lower chain cannot fix an upper-arm orientation error).
+4. Headless-harness artifact? → **No.** Rendered in real Chrome at true 60fps (spring bones allowed
+   to settle); the splay persists identically. Not a frame-dt / spring-bone instability artifact.
+
+**Screenshots:** `docs/testing/screenshots/2026-05-31-vrm-retarget/`
+(`clip-waving*` headless, `realchrome-waving-*` real Chrome, `baseline-idle` = clean rest pose).
+
+**Next session (focused, single hypothesis):** pick the L/R UpperArm at one wave frame, hand-compute
+the expected VRoid-space rotation from the source delta, and compare to what
+`_bake_rest_relative` produces — isolate whether the bug is in `delta`, `tgt_rest`, or the
+armature-space conversion (`vrm_world_inv @ want_world`). Likely a rest-frame / basis issue that
+only manifests when the rest-orientation gap is large. Candidate fixes: compute the target's local
+rotation relative to its parent's posed frame directly, or use a Copy-Rotation constraint bake
+(`bpy.ops.nla.bake(visual_keying=True)`) which resolves cross-rig frames natively.
+
+**Pipeline status:** the clip→VRM→GLB→viewer path is fully proven end-to-end. Locomotion/idle
+(leg+torso-dominant) clips are shippable now. **Arm-dominant gesture clips are blocked on the
+arm-retarget fix** — do NOT wire arm gestures (wave/point/thinking/heart/clap) to baked clips until
+this is resolved. `SKIP_TARGET_BONES` in `retarget_to_vrm.py` is left empty (amputation rejected).

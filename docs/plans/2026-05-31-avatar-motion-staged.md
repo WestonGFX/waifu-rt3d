@@ -188,3 +188,24 @@ Integration: `viewerStore.ts` `dispatchKokoroEmbodiment` (line 469) → `dispatc
   - **Phase B is BLOCKED** until distinct clips exist. **Next action (needs user):** relaunch
     a headed Chrome logged into Mixamo (CDP :9222), re-run the grab watching the first terms to
     pick H1 vs H2, fix, re-grab (the new duplicate-size guard will flag recurrence). Then B → C.
+
+- **2026-05-31 (cont.) — re-grab DONE; arm-retarget bug now the blocker.** User said "do it all
+  agentially." Re-launched the still-logged-in Chrome profile over CDP, inspected the live DOM:
+  the search box selector was correct but Mixamo **does not filter without an Enter keypress**
+  (H1 confirmed, H2 refuted). Fixed (`mixamo_grab.mjs` + `search.press('Enter')`, commit
+  `f38db03`) and re-grabbed **28 distinct clips** (27 distinct sizes, 28 md5; old dupes at
+  `/tmp/mixamo-fbx-dupes-backup/`).
+  - **New blocker — arm retarget is broken for large arm rotations.** Baked + rendered real
+    gesture clips: arms splay toward the Mixamo T-pose with spiky forearms/hands; legs+torso+walk
+    are perfect. Confirmed a real retarget-math bug (persists in real Chrome at 60fps — not a
+    harness artifact) and isolated to the **upper-arm** chain (dropping forearm/hand didn't fix
+    it). Hypothesis limit reached — stopped. Full evidence + next-session debug plan in
+    `docs/research/2026-05-31-retarget-pipeline.md` (Finding 6).
+  - **Phase B (batch 28):** deferred — batching now produces 28 clips with broken arms. Locomotion/
+    idle clips (walk/run/idle) are usable; arm-gesture clips are not.
+  - **Phase C (Kokoro gesture→clip wiring):** deferred — most Kokoro gestures are arm-centric
+    (wave/point/thinking/heart/clap), so wiring them to broken-arm clips would regress the avatar.
+    Wire only after the arm-retarget fix lands. Procedural gestures remain the live path meanwhile.
+  - **AIE rethink (parallel track):** done as analysis → `docs/research/2026-05-31-aie-12-module-consolidation.md`.
+    Answer: don't consolidate; the AIE's dead modules are a 3-missing-wires problem. Spec written;
+    NOT implemented (per-turn sensitive path + AIE is OFF by default under v1-Lite — product call).

@@ -3071,19 +3071,30 @@
                             this.stripSpringBoneTracks(anim);
                         }
 
-                        // Store all clips; the first one gets the requested name
-                        const primary = animations[0];
+                        // Pick the clip whose ORIGINAL name matches the requested name
+                        // (case-/separator-insensitive), so loading a multi-clip GLB like
+                        // Xbot.glb (agree/idle/walk/run/...) with name "walk" stores the walk
+                        // clip — not animations[0]. Falls back to the first clip when nothing
+                        // matches (single-clip files, or a custom name).
+                        const normName = (s) => String(s || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+                        const wanted = normName(name);
+                        const matchIdx = animations.findIndex((a) => normName(a.name) === wanted);
+                        const primaryIdx = matchIdx >= 0 ? matchIdx : 0;
+
+                        const primary = animations[primaryIdx];
                         primary.name = name;
                         // Tag clips with metadata for idle clip cycling filter
                         if (tags) primary.userData.tags = tags;
                         if (mood)  primary.userData.mood  = mood;
                         this.clipLibrary[name] = primary;
 
-                        // Store extras with indexed names (wave_1, wave_2, etc.)
-                        for (let i = 1; i < animations.length; i++) {
-                            const extraName = `${name}_${i}`;
+                        // Store the remaining clips under their own (sanitized) original names
+                        // so a multi-clip GLB exposes all of them (e.g. load once, play "run").
+                        for (let i = 0; i < animations.length; i++) {
+                            if (i === primaryIdx) continue;
+                            const extraName = normName(animations[i].name) || `${name}_${i}`;
                             animations[i].name = extraName;
-                            this.clipLibrary[extraName] = animations[i];
+                            if (!(extraName in this.clipLibrary)) this.clipLibrary[extraName] = animations[i];
                         }
 
                         console.log(`[ClipLayer] Loaded "${name}" (${primary.duration.toFixed(1)}s, ${primary.tracks.length} tracks)`);

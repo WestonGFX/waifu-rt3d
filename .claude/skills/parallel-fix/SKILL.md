@@ -37,8 +37,26 @@ Fix N independent issues simultaneously by dispatching one agent per issue.
 
 5. If any agent's fix conflicts with another, flag it and ask the user how to resolve.
 
+## Escalation — Flat Swarm vs Agent Team
+
+Pick the shape by issue count:
+
+| Count | Shape | How |
+|-------|-------|-----|
+| 1 | Just fix it | No agents. Main Claude edits directly. |
+| 2–8 | **Flat swarm** | One worktree agent per issue, single parallel message (the steps above). |
+| 9+ | **Agent team** | Don't raw-fan-out. Build a structured team via the `Workflow` tool — needs explicit user opt-in (the word "workflow" or a direct ask). |
+
+**Why a team past 8:** a flat swarm has no coordinator, no verification pass, and no conflict resolution — it just fixes and hopes. At scale that breaks. An agent team adds roles:
+- **Fix agents** (one per issue, worktree-isolated) — same as the swarm.
+- **Verify agents** — adversarially re-check each fix actually resolves the issue + passes tests, before merge.
+- **Synthesizer** — dedup overlapping edits, flag cross-issue conflicts, merge in dependency order, run the full smoke suite once at the end.
+
+Encode it as a `pipeline()`: `fix → verify → merge`, so each issue verifies as soon as its fix lands (no barrier). Batch fix agents to the 8-concurrency cap; the queue drains automatically.
+
 ## Rules
-- Maximum 5 parallel agents (to avoid overwhelming the system)
+- Maximum 8 concurrent fix agents (2–8 = flat swarm; 9+ = team mode, batched to 8 at a time)
 - Each agent runs in a worktree for isolation
 - If issues are NOT independent (they touch the same function), run them sequentially instead
 - Always run smoke tests after merging fixes back
+- Team mode (`Workflow`) requires explicit user opt-in per the harness rules — if 9+ issues arrive without it, ask once before launching

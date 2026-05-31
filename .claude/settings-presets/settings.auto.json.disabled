@@ -1,0 +1,18 @@
+{
+  "model": "{{CURRENT_MODEL}}",
+  "maxTokens": 262144,
+  "thinkingLevel": "deep",
+  "autoMode": true,
+  "agentRoster": {
+    "default": ["senior-dev"],
+    "testing": ["qa-hunter"],
+    "parallelMax": 2
+  },
+  "systemAccess": {
+    "internetSearch": true,
+    "fileSystemReadWrite": true,
+    "chromeControl": true,
+    "processControl": true,
+    "subprocessSpawning": true
+  }
+}

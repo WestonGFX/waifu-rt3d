@@ -159,3 +159,4 @@ docs/claude-code-handoff/
 
 # Downloaded animation clip binaries — reproducible via tools/download_animation_packs.py
 backend/storage/animations/
+.claude/*.lock

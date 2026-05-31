@@ -1,0 +1,37 @@
+# waifu-rt3d - Full Opus + Parallel Agents Setup
+# Flagship app: 3D AI companion platform with complex reasoning needs
+
+{
+  "model": "opus",
+  "maxTokens": 25000,
+  "thinkingLevel": "deep",
+  
+  "agentRoster": {
+    "default": ["senior-dev", "ux-architect"],
+    "testing": ["qa-hunter", "frontend-tester", "perf-reviewer"],
+    "parallelMax": 3
+  },
+  
+  "systemAccess": {
+    "internetSearch": true,
+    "fileSystemReadWrite": true,
+    "chromeControl": true,      // For Memory Browser QA
+    "processControl": true,
+    "subprocessSpawning": true
+  },
+  
+  "specializedAgents": [
+    "memory-browser-auditor",   // Custom: waifu-rt3d memory system expert
+    "bond-progression-analyst"  // Custom: NSFW bond gate specialist
+  ],
+  
+  "autoEscalationRules": {
+    "alwaysUseOpusFor": [
+      "NSFW safety logic",
+      "bond gate enforcement", 
+      "humanoid motion physics",
+      "voice cloning pipelines",
+      "3D viewer optimization"
+    ]
+  }
+}

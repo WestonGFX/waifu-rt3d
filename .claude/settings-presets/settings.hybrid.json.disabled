@@ -1,0 +1,21 @@
+{
+  "model": "qwen2.5:7b",
+  "maxTokens": 262144,
+  "thinkingLevel": "deep",
+  "hybridOrchestrator": {
+    "localModel": "http://localhost:1234/qwen-2.5-7b",
+    "paidFallback": "claude-opus",
+    "weights": {"local": 0.60, "paid": 0.40}
+  },
+  "agentRoster": {
+    "default": ["senior-dev", "ux-architect"], 
+    "testing": ["qa-hunter", "production-readiness-auditor"]
+  },
+  "systemAccess": {
+    "internetSearch": true,
+    "fileSystemReadWrite": true,
+    "chromeControl": true,       // Browser QA tools needed
+    "processControl": true,
+    "subprocessSpawning": true
+  }
+}

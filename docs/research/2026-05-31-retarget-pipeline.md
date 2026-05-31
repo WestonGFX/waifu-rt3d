@@ -122,8 +122,36 @@ round-tripping Xbot.glb → FBX → GLB.
 handles GLB/VRMA clips already on disk; the Blender bake unlocks the FBX-only Mixamo
 library and produces cleaner in-place loops once. They share the same VRM target rig.
 
+## Finding 5 — Mixamo→VRM needs rig retarget, not runtime bone-copy (partial)
+
+Driving real Mixamo FBX clips through the bake exposed that a runtime bone-name remap
+cannot work for Mixamo→VRM: Mixamo is Z-up + cm with different rest-pose bone
+orientations/rolls than a VRoid VRM. Four runtime/bake-coordinate fixes were tried and
+all failed (folded 90°, ejected ~100m off-camera via the −104cm Z hips, upside-down after
+`transform_apply`, splayed limbs). The three.js **Xbot.glb** (already Y-up, authored to
+match) retargets fine — confirming the *runtime* path is correct and the gap is purely the
+Mixamo source frame.
+
+**Chosen fix (user): retarget onto the VRM's own rig in Blender** —
+`tools/blender/retarget_to_vrm.py`. Loads the VRM via the glTF importer (a .vrm *is* glTF;
+no VRM addon needed — VRoid bones are `J_Bip_*`), imports the Mixamo FBX, and applies the
+**rest-relative** retarget formula per bone:
+`tgt_pose = (src_pose · src_rest⁻¹) · tgt_rest` (rotation only), baked frame-by-frame,
+exported as a GLB in VRM bone-space that plays directly on any VRoid-named VRM.
+
+**Progress (validated):** this produces an **upright, recognizable walk** — legs mid-stride,
+arms down at the sides, grounded. That is a decisive step past every earlier failure mode.
+
+**Open issues (WIP — stopped here per the hypothesis limit, needs a focused follow-up):**
+1. Forearm/hand twist + mesh self-clipping (lower-arm bone-roll on the rotation-only delta).
+2. Suspected bake bug: `idle.glb` and `walking.glb` came out with an identical
+   `J_Bip_L_UpperLeg` rotation range — leg motion not varying per source clip. Investigate
+   whether the leftover `mixamo.com` source action is bleeding into the bake, or the
+   per-frame `pbone.matrix` set order is wrong, before batch-processing all 28.
+3. Fingers/twist bones not mapped (left at VRM rest) — usually fine, revisit if hands read odd.
+
 ## Status
-- Stage 1.1 (prove pipeline) — **DONE**, runtime retarget fixed, visual proof.
+- Stage 1.1 (prove pipeline) — **DONE**, runtime retarget fixed, visual proof (Xbot).
 - Stage 1.3a (Blender bake tooling) — **DONE**, FBX+GLB verified.
 - Stage 1.3b (curated 20–40 clip library) — pending the user's Mixamo FBX downloads;
   drop them in a folder and run `tools/bake_animation.py --in-dir <folder> --in-place`.

@@ -203,3 +203,37 @@ rotation relative to its parent's posed frame directly, or use a Copy-Rotation c
 (leg+torso-dominant) clips are shippable now. **Arm-dominant gesture clips are blocked on the
 arm-retarget fix** — do NOT wire arm gestures (wave/point/thinking/heart/clap) to baked clips until
 this is resolved. `SKIP_TARGET_BONES` in `retarget_to_vrm.py` is left empty (amputation rejected).
+
+### Finding 6b (2026-05-31, cont.) — formula A vs B both fail; needs a constraint bake
+
+Derived and tested the two candidate rotation-retarget formulas on the now-distinct clips
+(rendered in real Chrome + headless; `fixB_*` screenshots):
+
+- **Formula A** (committed) — world-space pre-multiplied delta: `want = src_pose @ src_rest⁻¹ @ tgt_rest`.
+  Waving → arms splay outward toward the Mixamo T-pose (catastrophic). Legs/torso fine.
+- **Formula B** — rest-offset / local-frame: `want = tgt_rest @ src_rest⁻¹ @ src_pose` (= `C @ src_pose`,
+  `C = tgt_rest @ src_rest⁻¹`). Waving → arms correctly raise (FIXED). Thinking → ok. **But**
+  pointing → legs bend up; walking → arms overhead. Trades the wave-splay for other-clip breakage.
+
+Why neither works: Mixamo and VRoid differ in BOTH rest pose (T vs A) AND per-bone local axis
+convention (roll). A pure rotation copy can correct for one rig-difference but not both at once
+across all clips. The tell: **every animated clip shows dark-red shading on the distal limbs
+(forearms, shins)** — backfaces/inverted normals from the skin deforming past what its weights
+support, i.e. the bone orientations are wrong enough to evert the mesh. The baseline rest pose is
+clean, so it is purely a retarget-orientation artifact, not the model.
+
+**Hypothesis limit reached** (formula A, formula B, bone-amputation = 3 approaches). Stopping per
+project rule rather than trying a 4th hand-rolled variant.
+
+**Recommendation — switch to a constraint-based bake (the module's original stated intent).**
+Replace the manual matrix math in `_bake_rest_relative` with: add **Copy Rotation** constraints
+from each VRoid bone to its Mixamo counterpart (with the correct target/owner space + per-bone
+rest-offset that Blender computes natively), then `bpy.ops.nla.bake(visual_keying=True,
+clear_constraints=True, bake_types={'POSE'})`. Blender's constraint system resolves cross-rig
+rest + roll differences that the closed-form rotation copy keeps getting wrong. This is a focused
+single-session rewrite of one function — NOT more formula tweaking. Alternative: an established
+retarget addon (Rokoko / Auto-Rig-Pro) if constraint tuning proves fiddly.
+
+**Code left at committed baseline (formula A).** Formula B was reverted — it is more principled and
+fixes waving, but introduces walking/pointing regressions, so it is not a clean win to commit.
+Both formulas are captured here for the next session.

@@ -98,7 +98,35 @@ This is the change that makes the difference between "robotic but grounded" and 
 | `retargetClip` translation-strip + hip-height fix | ⏳ next (touches sensitive `viewer.html`) |
 | Visual render proof (clip on a VRM, no foot-slide) | ⏳ needs Playwright headless harness (Chromium is installed locally) |
 
-## Next actions
-1. Build a Playwright headless harness that serves `viewer.html`, loads a VRM (e.g. `backend/storage/avatars/Raine.vrm`) + an Xbot clip, and screenshots the canvas → real visual evidence for the gate.
-2. Implement the `retargetClip` rotation-only + hips-height fix; verify before/after with the harness.
-3. Only then scale to the offline Blender bake (Step 1.3).
+## Finding 4 — Blender FBX→GLB bake pipeline (Stage 1.3a, DONE)
+
+The single biggest unlock for "realistic movement": **Mixamo** is the largest free
+humanoid-mocap source, but it exports **FBX**, which three.js / the browser cannot load.
+Headless Blender bridges the gap.
+
+- `tools/blender/bake_clip.py` — bpy worker (runs as `blender --background --python`):
+  imports FBX/GLB, optionally zeroes hips horizontal translation (`--in-place`, so
+  locomotion loops without drifting), cleans FBX-mangled action names
+  (`Armature|Armature|walk_Armature` → `walk`), and exports GLB with `mixamorig:` bone
+  names preserved so the viewer's runtime retarget consumes it directly.
+- `tools/bake_animation.py` — launcher that auto-locates Blender (`$BLENDER` / PATH /
+  standard install dirs) and bakes one file or a whole folder of Mixamo downloads into
+  `backend/storage/animations/baked/`.
+
+Verified end-to-end with Blender 4.0: GLB→GLB and FBX→GLB both bake (7 actions, root
+motion zeroed), clip names come out clean, and the baked walk clip retargets (154
+tracks) and renders grounded on the VRM via the harness. The FBX path was proven by
+round-tripping Xbot.glb → FBX → GLB.
+
+**Why keep BOTH runtime retarget and the Blender bake:** runtime retarget (now fixed)
+handles GLB/VRMA clips already on disk; the Blender bake unlocks the FBX-only Mixamo
+library and produces cleaner in-place loops once. They share the same VRM target rig.
+
+## Status
+- Stage 1.1 (prove pipeline) — **DONE**, runtime retarget fixed, visual proof.
+- Stage 1.3a (Blender bake tooling) — **DONE**, FBX+GLB verified.
+- Stage 1.3b (curated 20–40 clip library) — pending the user's Mixamo FBX downloads;
+  drop them in a folder and run `tools/bake_animation.py --in-dir <folder> --in-place`.
+- Stage 1.2 (idle easing) — re-scoped: idle already uses `noise1D` (organic), not raw
+  sine; no rewrite warranted. Optional future win: a retargeted mocap idle *loop*.
+- Stage 1.4 (Kokoro gesture → clip wiring) — next, once a gesture clip set is baked.

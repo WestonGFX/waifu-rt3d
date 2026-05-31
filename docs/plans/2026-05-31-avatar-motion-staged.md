@@ -66,6 +66,14 @@ What exists today:
 ### Step 1.5 — (conditional) Blender bake pulled forward
 - Only if Step 1.1 shows runtime retarget can't achieve clean grounding. Otherwise this is just the Step 1.3 mechanism.
 
+### Status log
+- **2026-05-31 — Step 1.1 DONE.** Gate passed with headless visual proof.
+  - All advertised auto-download sources dead; added live `threejs-mixamo` pack (Xbot/Soldier GLBs). Commit `68ab038`.
+  - Root-cause bug found via render test: `retargetClip` was a silent no-op — three.js strips the colon from track bone names (`mixamorigHips`) but `MIXAMO_BONE_MAP` keys kept it (`mixamorig:Hips`). Fixed with normalized lookup + rotation-only/hips-translation strip. Avatar now renders upright + grounded + undistorted. Commit `322f630`.
+  - Reusable headless harness `tools/verify/render_clip.mjs` (Playwright + Chromium) → screenshots in `docs/testing/screenshots/2026-05-31-retarget-proof/`. Structural regression test added.
+  - Runtime retarget achieves clean grounding → Step 1.5 NOT triggered; offline Blender bake stays the Step 1.3 library mechanism.
+  - **Follow-ups surfaced:** (a) `loadClip` always stores `animations[0]` under the requested name (asking for `walk` actually loaded Xbot's `agree`) — needs find-by-name. (b) Walk *stride* not expressive yet — clip rotations apply but idle/base layers blend over the lower body → Step 1.4 (drive clips via director `clip` state) + Step 1.2 (idle easing). (c) VRMA unsupported by bundled lib (separate task).
+
 **Stage 1 verification:** `.venv/bin/python -m pytest backend/tests/ -q` green · `npx tsc` clean · in-app visual check of ≥3 clips + idle at 1 light + 1 dark theme, 60fps on M2 Pro, no foot-slide. Screenshots committed.
 
 **Files touched:** `viewer.html` (idle easing, clip wiring — sensitive), `viewerStore.ts` (gesture dispatch — separate commit), `backend/kokoro/` (gesture→clip map), `tools/blender/retarget_clip.py` (new), `tools/build_animation_library.py` (new), `backend/data/animation_manifest.json`, `backend/storage/animations/glb/` (assets).

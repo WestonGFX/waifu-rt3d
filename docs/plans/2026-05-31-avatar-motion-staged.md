@@ -166,3 +166,25 @@ Integration: `viewerStore.ts` `dispatchKokoroEmbodiment` (line 469) → `dispatc
 - Forearm-roll clipping may survive A1–A2 → drop lower-arm/hand pairs or defer.
 - Per-VRM baking: clips are Raine-baked (VRoid space); revisit for non-VRoid VRMs.
 - Augment-vs-replace gestures (C2): defaulting to clip-with-fallback; reversible via the map (`null` forces procedural).
+
+## Follow-up status log
+
+- **2026-05-31 Phase A: ✗ premise was a MISDIAGNOSIS — real blocker is upstream.** The
+  documented "depsgraph bake bug" (A1) does not exist: `scene.frame_set(f)` already syncs the
+  source datablock pose (probed — original == evaluated-depsgraph read, identical per frame).
+  The bake itself is correct (target pose varies per frame; clean `anims=1` export). The
+  reason "idle == walking" is that **all 28 FBX in `~/Downloads/mixamo-fbx/` are the SAME
+  animation** — `tools/mixamo_grab.mjs` downloaded one clip 28× under 28 names (proved:
+  `idle/jumping/sitting` source curves byte-identical to `walking`; files differ only in
+  ~0.9% metadata bytes). Full evidence + grab-bug hypotheses (H1 search-not-filtering /
+  H2 tile-click-not-registering) in `docs/research/2026-05-31-mixamo-duplicate-downloads.md`.
+  - **Kept:** A3 (purge stray Mixamo source action → single clean exported clip) + a
+    `--retarget` flag on `render_clip.mjs` (baked J_Bip-space clips must skip re-retarget).
+  - **Reverted:** A1 (evaluated-read) + A2 (per-bone `view_layer.update`) — fixed a non-bug,
+    added cost, no render benefit. Bake loop is back to its known-good form.
+  - **Validated:** `walking.glb` renders upright + grounded + mid-stride (5/5 distinct frames,
+    `docs/testing/screenshots/2026-05-31-vrm-retarget/`). Pre-existing forearm/hand distortion
+    remains (deferred per hypothesis limit — needs distinct clips to evaluate against).
+  - **Phase B is BLOCKED** until distinct clips exist. **Next action (needs user):** relaunch
+    a headed Chrome logged into Mixamo (CDP :9222), re-run the grab watching the first terms to
+    pick H1 vs H2, fix, re-grab (the new duplicate-size guard will flag recurrence). Then B → C.

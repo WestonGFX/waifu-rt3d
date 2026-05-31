@@ -130,6 +130,11 @@ def _bake_rest_relative(
 
     Bones are processed parent-first each frame so the matrix setter sees posed parents.
 
+    Note: ``scene.frame_set(f)`` already re-evaluates the source action onto the original
+    datablock pose (verified: original == evaluated-depsgraph read, identical per frame),
+    so ``mix_pb[mx].matrix`` is the live posed source — no evaluated-depsgraph dance is
+    needed here.
+
     Args:
         vrm_arm: Target VRM armature.
         mix_arm: Source Mixamo armature (carrying the action).
@@ -204,10 +209,16 @@ def main() -> None:
     scene = bpy.context.scene
     scene.frame_start, scene.frame_end = f0, f1
 
-    linked = _bake_rest_relative(vrm_arm, mix_arm, f0, f1, args.name or "clip")
+    baked_name = args.name or "clip"
+    linked = _bake_rest_relative(vrm_arm, mix_arm, f0, f1, baked_name)
 
     # Drop the Mixamo source so only the VRM (with baked action) exports.
     bpy.data.objects.remove(mix_arm, do_unlink=True)
+    # Purge every action except the one we just baked — otherwise the glTF ACTIONS
+    # exporter ships the leftover Mixamo source action as a second animation track.
+    for act in list(bpy.data.actions):
+        if act.name != baked_name:
+            bpy.data.actions.remove(act)
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     bpy.ops.export_scene.gltf(

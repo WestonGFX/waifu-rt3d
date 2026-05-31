@@ -33,6 +33,9 @@ const CLIP = arg('--clip', '/files/animations/threejs-mixamo/Xbot.glb');
 const CLIP_NAME = arg('--name', 'walk'); // Xbot clip names: idle, walk, run, agree, ...
 const OUT = arg('--out', 'docs/testing/screenshots/2026-05-31-retarget-proof');
 const FRAMES = parseInt(arg('--frames', '1'), 10); // >1 = motion burst (distinct-frame check)
+// Raw Mixamo-rigged clips need runtime retarget; clips already baked onto the VRM rig
+// (J_Bip_* track names, via tools/blender/retarget_to_vrm.py) must NOT be re-retargeted.
+const RETARGET = arg('--retarget', 'true') !== 'false';
 
 mkdirSync(resolve(OUT), { recursive: true });
 
@@ -106,7 +109,7 @@ const post = (page, msg) => page.evaluate((m) => window.postMessage(m, '*'), msg
     // 2. Load the Mixamo clip WITH retarget.
     await post(page, {
       type: 'loadAnimation',
-      payload: { url: CLIP, name: CLIP_NAME, retarget: true },
+      payload: { url: CLIP, name: CLIP_NAME, retarget: RETARGET },
     });
     const animMsg = await Promise.race([
       waitForMsg(page, 'animationLoaded'),

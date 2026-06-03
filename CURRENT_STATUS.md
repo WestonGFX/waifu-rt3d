@@ -1,14 +1,30 @@
 # Current Project Status
 
-**Last updated:** 2026-05-31 (avatar realistic motion — clip→VRM pipeline proven, Mixamo browser-download, VRM-rig retarget WIP)
-**Branch:** `feat/avatar-motion` · HEAD = `5f3f946` (10 commits LOCAL, unpushed).
+**Last updated:** 2026-06-03 (CI pipeline fixed — master red→GREEN; useTwoPhaseChips hook extraction)
+**Branch:** `master` · HEAD = `8b50c56` · CI GREEN (fast-forwarded 42 commits from `feat/avatar-motion`, pushed to origin).
 **Schema version:** v88 (memory `status`/`privacy_level` + `memory_suppressions` — forget/privacy trust spine).
-**Tests:** **3,104 backend pytest** passing, tsc clean.
+**Tests:** **3,104 backend pytest** + **479 sakura vitest** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session (2026-06-03) — CI pipeline fix + useTwoPhaseChips extraction, branch `master` (CI GREEN). See `docs/SESSION_HANDOFF.md`.**
+
+Master CI was red across runs #54→#75. A pasted plan blamed "unpinned deps/caching" but `test.yml` already pinned 3.12 / used `npm ci` / cached. Real causes (from actual run logs + a throwaway CI-matching venv):
+- **Python:** `advanced_sentiment.py` imported `transformers`/`torch` at module top → conftest import died. Made lazy (`934ce22`). Then `numpy`+`PIL` missing from CI's hand-curated pip list (`a7d9407`). Then `sentence_transformers` heavy-dep patch target → lightweight stub guard in `test_embedding_provider.py` (`a7d9407`).
+- **Lint:** dead `neon` job (no lockfile, lints nothing) removed (`934ce22`).
+- **Vitest:** `FeedbackButtons` toggle flake — 2nd click hit the `pending` re-entry guard under CI timing; test waits for re-enable now (`8b50c56`).
+- **tsc:** completed the in-flight `isMountedRef` wiring (`e6de28d`).
+- Fast-forwarded `master` 42 commits → caught up to `feat/avatar-motion` (user approved). Verified by 3 green CI runs.
+- **Separately:** extracted `useTwoPhaseChips` hook in `ChatThread.tsx` on branch `claude/continue-prepared-plan-6CHFX` (`70811de`) — NOT on master (different chip lineage).
+
+CI dependency philosophy reaffirmed: heavy ML libs (torch/transformers/sentence-transformers/chromadb) stay OUT of CI — tests mock/stub them.
+
+**Live status:** push gate clear (no active OPEN BUG/UNFIXED/BLOCKER markers). 3104 pytest + 479 vitest, tsc clean, CI green. Heads-up: GitHub Node-20 action deprecation auto-migrates 2026-06-16 (warning only).
+
+---
 
 **Session (2026-05-31) — Avatar Realistic Motion, branch `feat/avatar-motion` (10 commits, LOCAL/unpushed). See `docs/SESSION_HANDOFF.md` + plan `docs/plans/2026-05-31-avatar-motion-staged.md` ("Follow-up Execution Plan").**
 

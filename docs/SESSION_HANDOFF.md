@@ -1,39 +1,87 @@
-# Session Handoff — 2026-05-31 (avatar realistic motion)
+# Session Handoff — 2026-06-03
 
-## Branch: `feat/avatar-motion` · 10 session commits, all LOCAL (unpushed) · HEAD `5f3f946`
-## Test Status: 3104 backend pytest passed · TSC clean
-## Active plan: `docs/plans/2026-05-31-avatar-motion-staged.md` → "Follow-up Execution Plan" section (Phase A first)
+## Branch: master
+## Test Status: 3104 passed, 0 failed (backend) · 479 passed (sakura vitest) | TSC: clean
 
-## TL;DR
-Took "can avatar movement look real / is Three.js the only option / can Claude drive Blender + my browser" → a **working realistic-motion pipeline**. Proved clip→VRM retarget (fixed a real silent-no-op bug), built a headless Blender bake, **browser-drove Chrome over CDP to download 28/28 Mixamo clips**, and validated VRM-rig retargeting (upright walk). One depsgraph bug blocks batching the library.
+No active `OPEN BUG` / `UNFIXED` / `BLOCKER` markers. Push gate clear. CI green on master.
 
 ## Completed This Session
-- **Clip→VRM pipeline proven.** Root-cause bug: three.js strips the colon from animation-track bone names (`mixamorigHips`) but `MIXAMO_BONE_MAP` kept it (`mixamorig:Hips`) → retarget was a silent no-op. Fixed with rotation-only retarget. Xbot Y-up walk renders grounded + cycling. (`322f630`, `45cb483`)
-- `loadClip` selects the requested clip from multi-clip GLBs + exposes all (`17f71e0`).
-- **Step 1.2 (idle) re-scoped, NOT rewritten** — idle already uses organic `noise1D`, not raw sine; rewriting = needless churn in a sensitive area.
-- **Blender FBX→GLB bake** (`tools/blender/bake_clip.py` + `tools/bake_animation.py`) — unlocks Mixamo FBX (`ec42dd6`).
-- **Browser-driving:** `tools/mixamo_grab.mjs` drives a CDP-connected, user-logged-in Chrome → 28/28 companion+locomotion clips to `~/Downloads/mixamo-fbx/` (`68560d0`).
-- **Headless render harness** with motion-burst (`tools/verify/render_clip.mjs --frames N`).
-- **VRM-rig retarget (WIP)** `tools/blender/retarget_to_vrm.py` — rest-relative formula; validated upright walk (`a642a99`).
 
-## Work In Progress / Known Issue (THE blocker)
-`tools/blender/retarget_to_vrm.py` `_bake_rest_relative()` line ~180: reads `mix_pb[mx].matrix` after `scene.frame_set(f)` **without re-evaluating the depsgraph** → Mixamo pose reads static every frame → **every clip bakes near-identical motion** (confirmed: `idle.glb` and `walking.glb` share `J_Bip_L_UpperLeg` rotation range). Fix = evaluated-depsgraph read + `view_layer.update()`. The VRM-rig approach is validated (upright); this is the one bug + possible forearm-roll polish. Details in `docs/research/2026-05-31-retarget-pipeline.md` (Finding 5).
+### 1. CI/CD pipeline fix — master went from red (#54→#75) to GREEN ✅
+A pasted plan misdiagnosed the failures as "unpinned deps / caching" — but `test.yml`
+already pinned Python 3.12, used `npm ci`, and cached pip/npm. The real causes were
+different, found by reading the actual run logs + simulating CI in a throwaway venv:
 
-## Files Modified (this session's commits)
-viewer.html (retarget fixes), tools/verify/render_clip.mjs, tools/mixamo_grab.mjs, tools/bake_animation.py, tools/blender/{bake_clip,retarget_to_vrm}.py, tools/download_animation_packs.py, frontends/sakura/src/test/viewer.retargetClip.test.ts, .gitignore, docs/plans/2026-05-31-avatar-motion-staged.md, docs/research/2026-05-31-retarget-pipeline.md.
+- **Python — `transformers` ModuleNotFoundError:** `backend/emotion/advanced_sentiment.py`
+  imported `transformers`/`torch` at module top; `conftest → import backend.server` pulled
+  it in. Moved the imports into `__init__` (lazy), matching the pattern already used in
+  `mood.py` / `sarcasm_detector.py` / `toxicity_detector.py`. (`934ce22`)
+- **Python — `numpy` + `PIL` missing:** CI's hand-curated pip list had drifted from the
+  import graph. Added `numpy pillow` to the install step. (`a7d9407`)
+- **Python — `sentence_transformers` (heavy ML dep, excluded from CI):** 8 embedding tests
+  patch it; 2 instantiate a real provider. Added a lightweight `_StubModel` in
+  `test_embedding_provider.py` that activates only when the real package is absent (CI),
+  preserving full coverage locally. (`a7d9407`)
+- **Lint — dead `neon` job:** targeted `frontends/neon` (legacy, no lockfile); its
+  `cache-dependency-path` hard-failed every run while linting nothing. Removed the job.
+  Sakura is covered by the Vitest gate. (`934ce22`)
+- **Vitest — `FeedbackButtons` flake:** component guards re-entrant clicks with
+  `if (pending) return`; the mock resolved before `pending` cleared, so under CI's slower
+  timing the 2nd click in the toggle tests was dropped. Test-only fix: wait for the button
+  to re-enable (`not.toBeDisabled()`) between clicks in the 3 rapid-double-click tests.
+  (`8b50c56`)
+- **tsc — `isMountedRef` declared-unused (TS6133):** completed the in-flight bugfix —
+  flips false in unmount cleanup + guards the `ws.onclose` reconnect path. (`e6de28d`)
+
+Also fast-forwarded `master` 42 commits → caught up to `feat/avatar-motion` (user
+approved whole-branch). Verified by 3 successive green CI runs (final: `26916206004`).
+
+### 2. useTwoPhaseChips hook extraction (branch `claude/continue-prepared-plan-6CHFX`)
+Extracted the inline two-phase quick-reply chip machinery (3 useState, 2 useRef, the
+60-line effect with the 1.5s reveal timer + phase-2 LLM abort) out of `ChatThread.tsx`
+into a `useTwoPhaseChips` hook in the same file, with plain-English comments + an
+AGENTIC-INSTRUCTION block documenting the timer/abort contract. Caught a second
+chip-clear site (composer onChange). Behavior identical. TSC clean, 37 chip tests pass.
+Committed as `70811de` on that branch (NOT on master — different lineage; master/avatar
+stripped chips in the session-46/47 declutter).
+
+## Work In Progress
+- None open. Both tasks finished + verified.
+
+## Known Issues / Bugs
+- **Node 20 deprecation (warning, not failure):** `actions/checkout@v4` + `setup-node@v4`
+  + `setup-python@v5` run on Node 20; GitHub force-migrates to Node 24 on **2026-06-16**.
+  Auto-handled by GitHub — no action needed, but the CI annotation will keep appearing
+  until the runner default flips. Optional: bump action majors when newer tags ship.
+
+## Files Modified (this session's commits, master)
+```
+ .github/workflows/test.yml                          | neon job removed, numpy+pillow added
+ backend/emotion/advanced_sentiment.py               | lazy transformers/torch import
+ backend/tests/test_embedding_provider.py            | sentence_transformers stub guard
+ frontends/sakura/src/hooks/useFullDuplexVoice.ts    | isMountedRef wired
+ frontends/sakura/src/stores/chatStore.ts            | session-switch guards (81c2175)
+ frontends/sakura/src/test/FeedbackButtons.test.tsx  | de-flake toggle tests
+```
+(Plus `70811de` on `claude/continue-prepared-plan-6CHFX`: ChatThread.tsx useTwoPhaseChips.)
 
 ## Next Session Priorities
-1. **Phase A — fix the retarget depsgraph bug** (`retarget_to_vrm.py:~180`), re-verify walking/idle/waving/thinking are *distinct* + upright via the harness (gate). See plan.
-2. **Phase B — batch 28 clips** → new `tools/retarget_library.py` → `vrm-baked/`, spot-verify 6.
-3. **Phase C — wire Kokoro gesture→clips** in `viewerStore.ts:dispatchGesture` (line 447), augment+procedural fallback, Vitest + in-app verify.
+1. **(Optional) Phase 2 commenting pass** — the pasted plan's "comprehensive plain-English
+   commenting" is worth doing. SKIP its "consolidate into monolithic managers" part —
+   it fights repo rules ("minimum change / no big refactors") and `server.py` is already a
+   17K-line monolith. Decision was deferred to user at session end.
+2. **Pre-existing MEMORY.md backlog** (unchanged): M6 item 22 (NSFW affinity unlock gates,
+   bond 20/50/75 in Settings > Intimacy), M8 marketing docs.
+3. **Untracked cruft** in `git status` (avatars, screenshots, e2e/memory-browser) —
+   decide keep/commit/trash. Not touched this session.
 
 ## Context for Next Session
-- Backend may still be running on :8080; Chrome may still be open on the Mixamo profile (`/tmp/mixamo-chrome-profile`, CDP :9222) — leave or kill.
-- 28 Mixamo FBX are in `~/Downloads/mixamo-fbx/`. Baked GLBs go in `backend/storage/animations/` (gitignored — reproducible).
-- Verify VRM = `backend/storage/avatars/Raine.vrm`. Render cmd: `node tools/verify/render_clip.mjs --vrm /files/avatars/Raine.vrm --clip /files/animations/vrm-baked/<name>.glb --name <name> --frames 4`.
-- Decisions: stay Three.js (renderer ≠ bottleneck); VRM+GLB formats; Mixamo→VRM MUST retarget onto the VRM rig in Blender (runtime remap can't fix the Z-up/cm/rest-orientation mismatch); `.vrm` loads via Blender's glTF importer (no VRM addon needed; VRoid bones = `J_Bip_*`).
-- **Hypothesis-limit guard** is written into Phase A — don't spiral on forearm roll.
-- Nothing pushed (push is the user's call).
-
-## Push Gate Check
-No active `OPEN BUG` / `UNFIXED` / `BLOCKER` markers in tracked files. The retarget WIP is tracked as plan/research notes, not a blocker marker.
+- **master == feat/avatar-motion** after the fast-forward (both pushed to origin). CI green.
+- The `useTwoPhaseChips` work lives only on `claude/continue-prepared-plan-6CHFX` — that
+  branch has a DIFFERENT `ChatThread.tsx` lineage (still has chips). master/avatar removed
+  chips in session-46/47. Don't expect the hook on master.
+- CI dependency philosophy: heavy ML libs (torch/transformers/sentence-transformers/
+  chromadb) are intentionally NOT installed — tests mock/stub them. If a new test needs a
+  heavy dep as a patch target, add a stub guard (see `test_embedding_provider.py`) rather
+  than installing the real package.
+- No active plan file driving this session — it was reactive (user-pasted plan + /handoff).

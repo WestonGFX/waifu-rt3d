@@ -23,10 +23,14 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          # Core server dependencies (chromadb excluded — tests mock the vector store)
+          # Core server dependencies. Heavy ML libs (torch, transformers,
+          # sentence-transformers, chromadb) are intentionally EXCLUDED — the
+          # tests mock them (vector store, embedding model, emotion model), so
+          # CI stays fast. numpy + pillow are lightweight hard deps imported at
+          # module load (numpy across the server, PIL by the CHARA-card tests).
           pip install \
             fastapi uvicorn starlette python-multipart psutil requests httpx \
-            edge-tts huggingface_hub
+            edge-tts huggingface_hub numpy pillow
           # Test runner
           pip install pytest pytest-asyncio
 

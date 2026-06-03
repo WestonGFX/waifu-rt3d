@@ -18,6 +18,44 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+# CI runs without the heavy `sentence_transformers` package (it pulls torch and
+# multi-GB model weights). Every test here fully MOCKS SentenceTransformer, so
+# the real library is never needed — only an importable patch target. When the
+# real package is absent (CI), register a lightweight stub module so the
+# mock-based tests still run exactly as they do locally, rather than erroring on
+# `patch("sentence_transformers.SentenceTransformer")`. Locally, where the real
+# package is installed, this branch is skipped and the genuine module is used.
+try:  # pragma: no cover - environment-dependent
+    import sentence_transformers  # noqa: F401
+except ModuleNotFoundError:
+    import types as _types
+
+    _st_stub = _types.ModuleType("sentence_transformers")
+
+    class _StubModel:
+        """Minimal stand-in for a loaded SentenceTransformer.
+
+        Most tests patch `SentenceTransformer` directly, so this default is only
+        exercised by the two protocol-compliance tests that instantiate a real
+        provider and touch `.dimension` (which calls `.encode("probe")` and
+        takes `len()` of the result). They assert only that the attribute exists
+        and doesn't raise, not any specific dimension value.
+        """
+
+        def encode(self, text, *args, **kwargs):
+            if isinstance(text, list):
+                return np.zeros((len(text), 384), dtype=np.float32)
+            return np.zeros(384, dtype=np.float32)
+
+        def get_sentence_embedding_dimension(self) -> int:
+            return 384
+
+    def _StubSentenceTransformer(*args, **kwargs):
+        return _StubModel()
+
+    _st_stub.SentenceTransformer = _StubSentenceTransformer
+    sys.modules["sentence_transformers"] = _st_stub
+
 # Ensure project root is on sys.path regardless of invocation CWD.
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:

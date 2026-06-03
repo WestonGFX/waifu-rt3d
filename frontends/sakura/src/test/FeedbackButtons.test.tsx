@@ -144,6 +144,12 @@ describe('FeedbackButtons', () => {
       expect(vi.mocked(api.recordFeedback)).toHaveBeenLastCalledWith(42, 1)
     );
 
+    // The component sets `pending` while the API call is in flight and ignores
+    // re-entrant clicks (`if (pending) return`). recordFeedback resolves before
+    // pending clears, so we must wait for the button to re-enable before the
+    // second click — otherwise it's silently dropped (flaky under CI timing).
+    await waitFor(() => expect(getThumbsUp()).not.toBeDisabled());
+
     // Second click → same button toggled off → null
     fireEvent.click(getThumbsUp());
     await waitFor(() =>
@@ -158,6 +164,9 @@ describe('FeedbackButtons', () => {
     fireEvent.click(getThumbsUp());
     await waitFor(() => expect(getThumbsUp()).toHaveAttribute('aria-pressed', 'true'));
 
+    // Wait for the in-flight call's `pending` to clear (button re-enabled) so the
+    // second click isn't swallowed by the re-entry guard. See note above.
+    await waitFor(() => expect(getThumbsUp()).not.toBeDisabled());
     fireEvent.click(getThumbsUp());
     await waitFor(() => expect(getThumbsUp()).toHaveAttribute('aria-pressed', 'false'));
   });
@@ -189,6 +198,10 @@ describe('FeedbackButtons', () => {
       expect(vi.mocked(api.recordFeedback)).toHaveBeenLastCalledWith(42, -1)
     );
 
+    // Wait for `pending` to clear (button re-enabled) before the second click,
+    // or the re-entry guard drops it and the toggle-to-null never fires. See note
+    // in the thumbs-up toggle test above.
+    await waitFor(() => expect(getThumbsDown()).not.toBeDisabled());
     fireEvent.click(getThumbsDown());
     await waitFor(() =>
       expect(vi.mocked(api.recordFeedback)).toHaveBeenLastCalledWith(42, null)

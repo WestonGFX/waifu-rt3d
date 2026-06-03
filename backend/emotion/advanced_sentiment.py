@@ -12,8 +12,12 @@ Example:
     >>> print(result["intensity"])  # 0.95
 """
 
-from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
-import torch
+# NOTE: `transformers` and `torch` are heavy, optional runtime deps. They are
+# imported lazily inside __init__ (not at module level) so that simply importing
+# this module — e.g. via `backend.emotion.__init__` during app startup or in CI
+# where transformers isn't installed — does not require them. The model is only
+# pulled in when an analyzer is actually instantiated. This matches the lazy
+# pattern in mood.py / sarcasm_detector.py / toxicity_detector.py.
 from typing import Dict, List, Optional
 import logging
 
@@ -50,6 +54,11 @@ class AdvancedSentimentAnalyzer:
             >>> analyzer = AdvancedSentimentAnalyzer()
             >>> # Model loads in ~2-3 seconds on first use
         """
+        # Lazy import — see module-level note. Pulls transformers/torch only
+        # at instantiation time, keeping bare module import dependency-free.
+        from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+        import torch
+
         self.model_name = model_name
         self.device = 0 if (use_gpu and torch.cuda.is_available()) else -1
 

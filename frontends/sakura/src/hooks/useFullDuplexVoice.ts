@@ -330,7 +330,9 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
       const isAbnormal = event.code !== 1000;
       const maxAttempts = 5;
 
-      if (isAbnormal && reconnectAttemptsRef.current < maxAttempts) {
+      // Don't reconnect (which would re-create a WebSocket + AudioContext) once
+      // the hook has unmounted — isMountedRef is flipped false in the cleanup.
+      if (isMountedRef.current && isAbnormal && reconnectAttemptsRef.current < maxAttempts) {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000);
         reconnectAttemptsRef.current++;
         console.log(`[Voice] Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${maxAttempts})`);
@@ -498,6 +500,9 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
 
   useEffect(() => {
     return () => {
+      // Mark unmounted first so any in-flight ws.onclose can't schedule a
+      // reconnect after teardown.
+      isMountedRef.current = false;
       cleanup();
     };
   }, [cleanup]);

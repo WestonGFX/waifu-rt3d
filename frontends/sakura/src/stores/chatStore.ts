@@ -494,6 +494,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           .then(r => r.ok ? r.json() : null)
           .then(budgetData => {
             if (!budgetData) return;
+            // Guard: user may have switched sessions during the async budget fetch.
+            if (get().sessionId !== _sessionId) return;
             const threshold = 85;
             if (budgetData.usage_pct > threshold) {
               // Inject compaction system message
@@ -516,6 +518,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
               })
                 .then(r => r.ok ? r.json() : null)
                 .then(result => {
+                  // Guard: user may have switched sessions during the async compress call.
+                  if (get().sessionId !== _sessionId) return;
                   if (result?.ok) {
                     set((s) => ({
                       messages: s.messages.map((m) =>
@@ -530,6 +534,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                   }
                 })
                 .catch(() => {
+                  // Guard: user may have switched sessions during the async compress call.
+                  if (get().sessionId !== _sessionId) return;
                   set((s) => ({ messages: s.messages.filter((m) => m.id !== compactMsgId) }));
                 });
             }

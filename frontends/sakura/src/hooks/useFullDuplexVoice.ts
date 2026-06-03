@@ -110,6 +110,9 @@ export function useFullDuplexVoice(options: UseFullDuplexVoiceOptions): UseFullD
   const levelIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** True while the hook is mounted; set false in the unmount cleanup to prevent
+   *  post-unmount reconnects and AudioContext creation from onclose callbacks. */
+  const isMountedRef = useRef(true);
   // Tracks whether first_voice achievement was granted this hook lifetime (per-charId).
   const firstVoiceGrantedRef = useRef(false);
 

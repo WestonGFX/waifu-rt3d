@@ -209,3 +209,17 @@ Integration: `viewerStore.ts` `dispatchKokoroEmbodiment` (line 469) → `dispatc
   - **AIE rethink (parallel track):** done as analysis → `docs/research/2026-05-31-aie-12-module-consolidation.md`.
     Answer: don't consolidate; the AIE's dead modules are a 3-missing-wires problem. Spec written;
     NOT implemented (per-turn sensitive path + AIE is OFF by default under v1-Lite — product call).
+
+- **2026-06-03 Phase A: bake bug FIXED (real root cause found) — render still blocked on a SEPARATE viewer bug.**
+  Deterministic Blender probes split the conflated "arm splay" into two bugs. (1) The bake posed child
+  bones against stale parents (no `view_layer.update()` between `pose_bone.matrix` sets) → chain error
+  compounded 0°→72°→119°→145° down the arm; invisible on legs (hips barely rotate). One-line fix
+  (per-bone `view_layer.update()`); bake AND export now provably correct (upper-arm peaks 82.7°,
+  matching source, in both Blender and the exported GLB). NOT formula A/B — both were red herrings.
+  (2) The render is STILL distorted because the viewer applies the baked clip's **raw** `J_Bip_*` local
+  rotations where `@pixiv/three-vrm` expects **normalized**-space rotations (rest-offset eversion = the
+  dark-red distal-limb backfaces). Confirmed read-only in `viewer.html` (mixer on `vrm.scene`:2854;
+  retarget path renames to normalized nodes:2881). Bug 2 needs a rest-space conversion in viewer.html
+  (#1 sensitive area) — deferred to a focused session per hypothesis limit. Full evidence:
+  `docs/research/2026-05-31-retarget-pipeline.md` Finding 7. Probes kept: `tools/blender/_probe_chain.py`,
+  `_probe_exported.py`. Phase B unblocked on bake side; Phase C still blocked on Bug 2.

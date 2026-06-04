@@ -237,3 +237,72 @@ retarget addon (Rokoko / Auto-Rig-Pro) if constraint tuning proves fiddly.
 **Code left at committed baseline (formula A).** Formula B was reverted — it is more principled and
 fixes waving, but introduces walking/pointing regressions, so it is not a clean win to commit.
 Both formulas are captured here for the next session.
+
+## Finding 7 (2026-06-03) — The bake had a stale-parent chain bug; the *render* break is a SEPARATE viewer-runtime bug
+
+Two bugs were conflated under "arm splay." Deterministic Blender probes (`tools/blender/_probe_chain.py`,
+`_probe_exported.py`) separated them.
+
+### Bug 1 (FIXED) — bake loop posed children against stale parents
+`_bake_rest_relative` set every mapped bone's `pose_bone.matrix` in one pass, then keyframed in a
+second pass, with **no `view_layer.update()` between bone sets**. `pose_bone.matrix` is a world-space
+setter that back-solves the bone's *local* rotation against its parent's **current** matrix. With no
+update between sets, each child solved against its parent's **rest** (stale) matrix and absorbed the
+parent's rotation on top of its own. Error compounds down the chain.
+
+Measured at the extreme wave frame (`_probe_chain.py`, L-arm chain, source upper-arm delta 82.7°):
+
+| bone | world-delta err, no update (old) | with per-bone update (fix) |
+|---|---|---|
+| L_Shoulder | 0.04° | 0.04° |
+| L_UpperArm | **71.60°** | **0.00°** |
+| L_LowerArm | **118.91°** | **0.00°** |
+| L_Hand | **145.01°** | **0.00°** |
+
+Invisible on legs (hips barely rotate → tiny stale-parent error) — which is why "formula A passed
+legs / failed arms." It was never a formula problem: single-bone formula A is exact (`_probe_arm`
+earlier: 0.000° invariant error). The earlier "A2 view_layer.update gives no benefit → reverted"
+conclusion was drawn on the **duplicate-clip** data (all 28 FBX identical near-static idle, arms barely
+moving) so the benefit was below the noise floor.
+
+**Fix:** one `bpy.context.view_layer.update()` after each `pose_bone.matrix` set in the bake loop.
+Bake cost ~4–6s/clip (22 bones × ~45 frames). `_probe_exported.py` confirms the **exported GLB** also
+carries the correct motion (J_Bip_L_UpperArm peaks 82.7° about axis (+0.97,+0.23,+0.07) = arm-raise).
+So **bake ✓ and export ✓, both proven numerically.**
+
+### Bug 2 (OPEN — the actual render blocker) — raw vs normalized VRM bone space in the viewer
+With the bake provably correct, the **rendered** clip is still distorted: arms spiky, dark-red
+backface eversion on distal limbs (forearms/shins). Crucially, the OLD formula-A walking render
+(`docs/testing/screenshots/2026-05-31-vrm-retarget/clip-walking-f2.png`) shows the **same** distortion
+— the "grounded mid-stride" claim only ever described the legs being roughly upright; the arms were
+always broken. So the render break is independent of the bake fix and lives in the three.js viewer.
+
+Mechanism (read-only confirmed in `frontends/shared/viewer/viewer.html`):
+- The clip mixer binds to `vrm.scene` (`viewer.html:2854`).
+- The runtime retarget path renames tracks to **normalized** bone nodes via
+  `humanoid.getNormalizedBoneNode(...)` (`viewer.html:2881–2886`).
+- A **baked** clip loaded with `retarget:false` keeps **raw** glTF-node names (`J_Bip_*`). Those are
+  raw-space local rotations applied where `@pixiv/three-vrm` expects **normalized**-space rotations
+  (normalized bones have identity world rest; VRoid raw bones have the A-pose rest). The per-bone rest
+  offset is exactly what everts the mesh.
+
+**Why a pure track-name rename (J_Bip_* → normalized node) is NOT enough:** raw-local and
+normalized-local rotations differ by each bone's rest orientation, so the rename needs an accompanying
+**rest-space conversion** (`q_normalized = R_rest⁻¹ · q_raw · R_rest`-style, per bone), or the clip
+must be baked directly in normalized space. This is a viewer.html change in the #1 regression hotspot
+(avatar grounding/animation) and was deliberately **not** attempted this session (one-attempt /
+hypothesis-limit discipline; needs its own focused session).
+
+### Status after this session
+- **Bake pipeline: FIXED and proven** (`tools/blender/retarget_to_vrm.py`). Re-baking any of the 28
+  distinct Mixamo clips now produces a correct VRoid-space GLB.
+- **Phase B (batch 28): unblocked on the bake side** but pointless to ship until the clips render
+  correctly.
+- **Phase C (Kokoro gesture→clip): still blocked** on Bug 2 (the viewer raw/normalized fix).
+- **Next session, single focused hypothesis:** add a normalized-space conversion to the baked-clip
+  load path in `viewer.html` (new `vrmBaked` load mode that maps J_Bip_* raw tracks → normalized bone
+  nodes WITH per-bone rest conversion), OR bake directly into normalized space in
+  `retarget_to_vrm.py`. Verify with `tools/verify/render_clip.mjs --retarget false` on waving (arm)
+  + walking (leg) + pointing. Pass = no dark-red eversion, arms follow the wave.
+- Evidence screenshots: `docs/testing/screenshots/2026-06-03-arm-fix/` (post-bake-fix renders, still
+  showing Bug 2). Probes: `tools/blender/_probe_chain.py`, `_probe_exported.py`.

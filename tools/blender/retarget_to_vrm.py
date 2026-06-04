@@ -54,10 +54,11 @@ MIXAMO_TO_VRM = {
 }
 
 # Target bones to leave at rest (not retargeted). Empty = retarget the full humanoid subset.
-# Populate this to amputate problematic chains (e.g. arms) if a clip needs it. Tested
-# 2026-05-31: dropping hands/forearms did NOT fix the arm distortion seen in the headless
-# render harness — the spiky-arm artifact tracks fast arm motion + spring-bone cloth under
-# the harness's large frame-dt, not the retarget math (see docs/research file). Left empty.
+# Populate this to amputate problematic chains (e.g. arms) if a clip needs it. Left empty:
+# the arm-splay distortion that earlier prompted amputation experiments was NOT a per-bone
+# retarget-math error and NOT a harness artifact — it was a stale-parent chain-propagation
+# bug in the bake loop (missing per-bone ``view_layer.update()``), now fixed. Full humanoid
+# subset retargets cleanly. See docs/research/2026-05-31-retarget-pipeline.md Finding 7.
 SKIP_TARGET_BONES: set[str] = set()
 
 
@@ -198,6 +199,18 @@ def _bake_rest_relative(
             loc = pbone.matrix.to_translation()
             m = vrm_world_inv @ want_world
             pbone.matrix = Matrix.Translation(loc) @ m.to_3x3().to_4x4()
+            # CRITICAL: propagate this bone's new pose through the dependency graph
+            # BEFORE posing its children. ``pose_bone.matrix`` is a world-space setter
+            # that back-solves the bone's local rotation against its PARENT's *current*
+            # matrix — if the parent was just set in this same loop without an update,
+            # the child solves against the stale (rest) parent and ends up rotated by
+            # the parent's delta on top of its own. The error compounds down the chain
+            # (measured: UpperArm 72deg / LowerArm 119deg / Hand 145deg off without this
+            # update; 0.00deg with it). Invisible on legs — hips barely rotate — but
+            # catastrophic on arms where shoulder+upper-arm both swing hard, which is
+            # why arm-gesture clips splayed toward the source T-pose. See
+            # docs/research/2026-05-31-retarget-pipeline.md Finding 7.
+            bpy.context.view_layer.update()
         # keyframe after the whole chain is posed this frame
         for _, vr in pairs:
             vrm_pb[vr].keyframe_insert("rotation_quaternion", frame=f)

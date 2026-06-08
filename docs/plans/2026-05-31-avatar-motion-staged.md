@@ -236,3 +236,10 @@ Integration: `viewerStore.ts` `dispatchKokoroEmbodiment` (line 469) → `dispatc
   Commits this session: 49d9011, f331be4, 3040f33. AI-motion-model research (Stage 3 refresh) dispatched
   to a background agent → docs/research/2026-06-08-ai-motion-models.md. NET: bake pipeline correct; Bug 2
   is the sole remaining blocker for arm-gesture clips, fully scoped; Phase B/C still gated on it.
+
+- **2026-06-08 Stage 3 (AI motion) picks refreshed from research** — see `docs/research/2026-06-08-ai-motion-models.md` (+ deep/wide Addendum). Replaces the stale MotionLCM/MoMask plan picks:
+  - **General motion (text→motion): DART** (Apache-2.0, real-time streaming, outputs SMPL rotations → no IK). Prototype first on the RTX 5080. Same-lineage complements: CAMDM (60+FPS, the only one with an Apple-Silicon claim), CLoSD (streaming, but needs a physics sim in the loop). MLD = portable fallback.
+  - **Co-speech gesture (gesture WHILE talking): EMAGE** — best fit for us as a voice companion (body language synced to speech, outputs SMPL-X+FLAME rotations). ⚠ **trained on non-commercial BEAT2 data → prototype-only until retrained on a commercial corpus.** Real-time sibling: DiffSHEG.
+  - **Not usable:** Bernini (ByteDance, the video's "full body waifus") + StreamChar (Alibaba) are **2D reference→video** generators, NOT 3D skeletal motion — cannot drive the three-vrm rig. Marketing-clip value only.
+  - **No model runs in-browser today** (no ONNX/WebGPU/transformers.js packaging) → motion generation stays server-side. All benchmarks are CUDA; Apple-Silicon/MPS perf unverified.
+  - **Shared prerequisite:** all of the above output bone rotations that must be injected onto the VRM normalized rig — i.e. they ALL depend on the same Bug-2 rotation-injection harness scoped today (Findings 7–9). Solve Bug 2 once → unblocks both Mixamo clips AND AI motion.

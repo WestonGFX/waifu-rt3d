@@ -346,3 +346,37 @@ Recommended: **Lane 2.** Same work as the abandoned Lane 1 but keeps the correct
 bake already has, stays out of viewer.html, and is verifiable with a deterministic single-bone assert
 harness (try the conversion, assert the rendered normalized-bone world orientation against the known
 82.7° source delta — no eyeballing, no spiral). Lane 1 (Mixamo-rest runtime route) is abandoned.
+
+## Finding 9 (2026-06-08) — Lane 2 is not pure-tooling; it needs a three-vrm ground-truth harness
+
+Traced Lane 2 (bake normalized in `retarget_to_vrm.py`) to its requirements. It cannot be done in
+Blender alone, and the conversion must NOT be guessed blind. Two coupled requirements:
+
+1. **Normalized track NAMES.** The proven runtime path animates *normalized* bone nodes — `retargetClip`
+   renames each track to `humanoid.getNormalizedBoneNode(vrmName).name` (viewer.html:2886). The clip
+   mixer (`new AnimationMixer(vrm.scene)`, :2854) then drives those normalized nodes; three-vrm's
+   `humanoid.update()` copies normalized→raw. A baked clip uses raw `J_Bip_*` names → either it must be
+   renamed (needs a J_Bip→humanoid entry in the viewer's bone map — an additive viewer edit) or carry
+   three-vrm's normalized node names, which Blender does not know.
+2. **Normalized-space VALUES.** Even renamed, the baked `J_Bip` local rotations are in the VRM **raw**
+   rest frame; normalized bones have **identity** rest in three-vrm's canonical (Y-up) frame. The needed
+   value is `normalized_local(bone) = inv(normalized_world(parent)) @ normalized_world(bone)` where
+   `normalized_world(bone) = the bone's world rotation-delta-from-rest, expressed in three-vrm's canonical
+   frame`. `retarget_to_vrm` already computes that delta correctly **in Blender's Z-up world** — but the
+   canonical-frame conversion (a constant similarity transform `R⁻¹·Δ·R`, R = the glTF y-up import
+   rotation) is an unknown that must be MEASURED, not guessed (guessing it is the formula-A/B spiral).
+
+**Spiral-proof next-session recipe (do in this order):**
+1. Build a headless three-vrm **ground-truth harness**: load Raine.vrm in the real viewer, for one bone
+   (leftUpperArm) at one frame, set a known normalized-local rotation and read back the rendered raw-bone
+   world orientation. This gives the exact normalized↔world mapping three-vrm uses — no guessing.
+2. From that, pin the constant frame `R` and confirm `normalized_local = inv(nw_parent) @ nw_bone`
+   reproduces a target world orientation for that one bone (deterministic assert, the advisor's method).
+3. Implement the conversion in `retarget_to_vrm.py`; add the additive `J_Bip_*→humanoidBoneName` entries
+   to the viewer bone map so baked clips load with `retarget:true`.
+4. Bake waving/walking/pointing, render-gate (arm + leg): arms follow the wave, upright, grounded, no
+   dark-red eversion.
+
+**Why stop here this session:** steps 1–2 are real three-vrm work, and shipping a guessed conversion
+would produce a third broken bake. Bug 1 is fixed + committed; Bug 2 is now fully scoped with a
+spiral-proof plan. This is a clean focused-session boundary.

@@ -223,3 +223,16 @@ Integration: `viewerStore.ts` `dispatchKokoroEmbodiment` (line 469) → `dispatc
   (#1 sensitive area) — deferred to a focused session per hypothesis limit. Full evidence:
   `docs/research/2026-05-31-retarget-pipeline.md` Finding 7. Probes kept: `tools/blender/_probe_chain.py`,
   `_probe_exported.py`. Phase B unblocked on bake side; Phase C still blocked on Bug 2.
+
+- **2026-06-08 Bug 2 lanes explored — Lane 1 abandoned, Lane 2 scoped (not shipped), AI-motion research dispatched.**
+  User picked Lane 1 (route baked clips via the proven runtime retargetClip path). On implementation it
+  collapsed: retargetClip applies clip local quaternions AS-IS to normalized VRM bones, so it needs
+  Xbot-style identity bone rests; Mixamo rests (UpLeg 180°, shoulders 120°) are intrinsic and no import
+  flag neutralizes them (GLB node-rotation dump proved it). So "fix the root axis" = full rest surgery,
+  not a flag → abandoned honestly (Finding 8). Traced Lane 2 (normalized bake): needs BOTH normalized
+  track names AND normalized-space values; the canonical-frame constant must be measured via a three-vrm
+  ground-truth harness, not guessed (Finding 9) → scoped with a spiral-proof next-session recipe, NOT
+  shipped (a guessed conversion = broken bake #3). Bug 1 (bake chain) remains fixed + committed (49d9011).
+  Commits this session: 49d9011, f331be4, 3040f33. AI-motion-model research (Stage 3 refresh) dispatched
+  to a background agent → docs/research/2026-06-08-ai-motion-models.md. NET: bake pipeline correct; Bug 2
+  is the sole remaining blocker for arm-gesture clips, fully scoped; Phase B/C still gated on it.

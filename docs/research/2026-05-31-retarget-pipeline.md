@@ -306,3 +306,43 @@ hypothesis-limit discipline; needs its own focused session).
   + walking (leg) + pointing. Pass = no dark-red eversion, arms follow the wave.
 - Evidence screenshots: `docs/testing/screenshots/2026-06-03-arm-fix/` (post-bake-fix renders, still
   showing Bug 2). Probes: `tools/blender/_probe_chain.py`, `_probe_exported.py`.
+
+## Finding 8 (2026-06-08) — Runtime-retarget path needs Xbot-style identity rests; Mixamo rests are intrinsic
+
+Explored Lane 1 ("route baked clips through the proven runtime `retargetClip` path instead of
+fixing the viewer"). Result: the runtime path's ARMS render clean (no eversion — it handles
+normalized space natively) but the whole body inverts ~90–180°. Root-caused decisively:
+
+**`retargetClip` (viewer.html:2908) renames each `.quaternion` track to the normalized VRM node
+and applies the track values AS-IS** (drops position/scale). That only works if the clip's bone
+**local rotations already live in three-vrm's normalized frame.**
+
+GLB node-rotation dump (`backend/storage/animations/threejs-mixamo/Xbot.glb` vs a `bake_clip.py`
+output):
+- **Xbot (renders upright):** every bone rest = identity `[0,0,0,1]`; `Armature` node carries only
+  `scale=0.01`. Animation quaternions are effectively absolute → match normalized VRM bones.
+- **bake_clip Mixamo output (inverts):** bones keep **Mixamo-native rests** — `LeftUpLeg`/`RightUpLeg`
+  = `[0,-0.01,-1,0]` (**180°**), shoulders ≈ `[0.48,0.57,-0.53,0.40]` (~120°). Hips ≈ identity (the
+  object-level Z-up→Y-up transform IS applied), but per-bone rests are not neutralized → the 180°
+  UpLeg rest is exactly what flips the body.
+
+**Neither FBX import flag fixes it.** `automatic_bone_orientation` True and False both export the
+same intrinsic Mixamo rests (UpLeg still 180°). The rest orientations are a property of the Mixamo
+skeleton itself, not an import artifact. So "make bake_clip emit Xbot-convention clips" requires
+**rebuilding the skeleton with straightened/identity-rest bones and re-baking the animation into that
+frame** — full rest surgery, the SAME magnitude of work as the Lane-2 raw→normalized conversion, NOT
+a one-flag tooling change. Lane 1 as originally scoped ("fix the root axis") is not achievable cheaply.
+
+**The decision therefore narrows to a per-bone rest-frame conversion, done in one of two places:**
+- **Lane 2 — in `retarget_to_vrm.py` (VRM-rig bake, now chain-fixed):** the bake already produces the
+  correct WORLD pose on the VRM rig. Add a per-bone conversion that exports each bone's NORMALIZED
+  local rotation (raw VRM-bone local → three-vrm normalized local = a fixed per-bone rest multiply,
+  computable once from the VRM). Output then plays directly with `retarget:false`. Stays in tooling.
+- **Lane 3 — in `viewer.html` `retargetClip`:** when applying a baked clip, compose in the source
+  clip's rest pose so non-identity rests are accounted for. Most general (any clip), but edits the #1
+  regression hotspot.
+
+Recommended: **Lane 2.** Same work as the abandoned Lane 1 but keeps the correct grounding the VRM-rig
+bake already has, stays out of viewer.html, and is verifiable with a deterministic single-bone assert
+harness (try the conversion, assert the rendered normalized-bone world orientation against the known
+82.7° source delta — no eyeballing, no spiral). Lane 1 (Mixamo-rest runtime route) is abandoned.

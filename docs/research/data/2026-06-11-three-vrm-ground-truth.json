@@ -1,0 +1,424 @@
+{
+  "vrm": {
+    "metaVersion": "1",
+    "sceneRotationY": 0
+  },
+  "naturalPose": {
+    "hips": {
+      "normalizedNodeName": "Normalized_J_Bip_C_Hips",
+      "rawNodeName": "J_Bip_C_Hips",
+      "normLocal": [
+        -0.000002,
+        0.00023,
+        -0.007164,
+        0.999974
+      ],
+      "normWorld": [
+        -0.000002,
+        0.00023,
+        -0.007164,
+        0.999974
+      ],
+      "rawLocal": [
+        0.062896,
+        -0.000119,
+        -0.005376,
+        0.998006
+      ],
+      "rawWorld": [
+        0.062896,
+        -0.000119,
+        -0.005376,
+        0.998006
+      ]
+    },
+    "spine": {
+      "normalizedNodeName": "Normalized_J_Bip_C_Spine",
+      "rawNodeName": "J_Bip_C_Spine",
+      "normLocal": [
+        0.026001,
+        0.0001,
+        0.003828,
+        0.999655
+      ],
+      "normWorld": [
+        0.026001,
+        0.000144,
+        -0.003339,
+        0.999656
+      ],
+      "rawLocal": [
+        0.032151,
+        0.00055,
+        0.002826,
+        0.999479
+      ],
+      "rawWorld": [
+        0.094953,
+        0.00008,
+        -0.002514,
+        0.995479
+      ]
+    },
+    "leftUpperArm": {
+      "normalizedNodeName": "Normalized_J_Bip_L_UpperArm",
+      "rawNodeName": "J_Bip_L_UpperArm",
+      "normLocal": [
+        0.030586,
+        0.025762,
+        -0.643702,
+        0.76423
+      ],
+      "normWorld": [
+        0.049368,
+        0.043348,
+        -0.645278,
+        0.761117
+      ],
+      "rawLocal": [
+        0.02869,
+        0.027857,
+        -0.58813,
+        0.807777
+      ],
+      "rawWorld": [
+        0.047275,
+        0.041326,
+        -0.644764,
+        0.761798
+      ]
+    },
+    "leftLowerArm": {
+      "normalizedNodeName": "Normalized_J_Bip_L_LowerArm",
+      "rawNodeName": "J_Bip_L_LowerArm",
+      "normLocal": [
+        0.0008,
+        -0.019983,
+        -0.039981,
+        0.999
+      ],
+      "normWorld": [
+        0.0353,
+        0.029553,
+        -0.676085,
+        0.735384
+      ],
+      "rawLocal": [
+        0.0008,
+        -0.019983,
+        -0.039981,
+        0.999
+      ],
+      "rawWorld": [
+        0.033301,
+        0.027436,
+        -0.675555,
+        0.736046
+      ]
+    },
+    "leftHand": {
+      "normalizedNodeName": "Normalized_J_Bip_L_Hand",
+      "rawNodeName": "J_Bip_L_Hand",
+      "normLocal": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "normWorld": [
+        0.0353,
+        0.029553,
+        -0.676085,
+        0.735384
+      ],
+      "rawLocal": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "rawWorld": [
+        0.033301,
+        0.027436,
+        -0.675555,
+        0.736046
+      ]
+    },
+    "leftUpperLeg": {
+      "normalizedNodeName": "Normalized_J_Bip_L_UpperLeg",
+      "rawNodeName": "J_Bip_L_UpperLeg",
+      "normLocal": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "normWorld": [
+        -0.000002,
+        0.00023,
+        -0.007164,
+        0.999974
+      ],
+      "rawLocal": [
+        -0.052455,
+        0,
+        0,
+        0.998623
+      ],
+      "rawWorld": [
+        0.01046,
+        0.000163,
+        -0.005375,
+        0.999931
+      ]
+    }
+  },
+  "tPose": {
+    "hips": {
+      "rawWorld": [
+        0.062898,
+        0,
+        0,
+        0.99802
+      ],
+      "identityError_deg": 7.212
+    },
+    "spine": {
+      "rawWorld": [
+        0.075665,
+        0,
+        0,
+        0.997133
+      ],
+      "identityError_deg": 8.679
+    },
+    "leftUpperArm": {
+      "rawWorld": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "identityError_deg": 0
+    },
+    "leftLowerArm": {
+      "rawWorld": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "identityError_deg": 0
+    },
+    "leftHand": {
+      "rawWorld": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "identityError_deg": 0
+    },
+    "leftUpperLeg": {
+      "rawWorld": [
+        0.010461,
+        0,
+        0,
+        0.999945
+      ],
+      "identityError_deg": 1.199
+    }
+  },
+  "probeB": [
+    {
+      "label": "X+90",
+      "set_normalizedLocal": [
+        0.707107,
+        0,
+        0,
+        0.707107
+      ],
+      "measured_rawWorldDelta": [
+        0.707107,
+        0,
+        0,
+        0.707107
+      ],
+      "predictionError_deg": 0
+    },
+    {
+      "label": "Y+90",
+      "set_normalizedLocal": [
+        0,
+        0.707107,
+        0,
+        0.707107
+      ],
+      "measured_rawWorldDelta": [
+        0,
+        0.707107,
+        0,
+        0.707107
+      ],
+      "predictionError_deg": 0
+    },
+    {
+      "label": "Z+90",
+      "set_normalizedLocal": [
+        0,
+        0,
+        0.707107,
+        0.707107
+      ],
+      "measured_rawWorldDelta": [
+        0,
+        0,
+        0.707107,
+        0.707107
+      ],
+      "predictionError_deg": 0
+    },
+    {
+      "label": "wave82.7-yup",
+      "set_normalizedLocal": [
+        0.641254,
+        0.046276,
+        -0.15205,
+        0.750688
+      ],
+      "measured_rawWorldDelta": [
+        0.641254,
+        0.046276,
+        -0.15205,
+        0.750688
+      ],
+      "predictionError_deg": 0.01
+    }
+  ],
+  "probeC": {
+    "set_parent": [
+      0,
+      0,
+      0.382683,
+      0.92388
+    ],
+    "set_child": [
+      0.258819,
+      0,
+      0,
+      0.965926
+    ],
+    "measured_parentWorldDelta": [
+      0,
+      0,
+      0.382683,
+      0.92388
+    ],
+    "measured_childWorldDelta": [
+      0.239118,
+      0.099046,
+      0.369644,
+      0.892399
+    ],
+    "predicted_childWorldDelta": [
+      0.239118,
+      0.099046,
+      0.369644,
+      0.892399
+    ],
+    "parentError_deg": 0,
+    "childError_deg": 0.008
+  },
+  "probeD": {
+    "hips": {
+      "bindWorld": [
+        0.062898,
+        0,
+        0,
+        0.99802
+      ],
+      "tPoseRawWorld": [
+        0.062898,
+        0,
+        0,
+        0.99802
+      ],
+      "bindVsTPose_deg": 0.013
+    },
+    "spine": {
+      "bindWorld": [
+        0.075665,
+        0,
+        0,
+        0.997133
+      ],
+      "tPoseRawWorld": [
+        0.075665,
+        0,
+        0,
+        0.997133
+      ],
+      "bindVsTPose_deg": 0
+    },
+    "leftUpperArm": {
+      "bindWorld": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "tPoseRawWorld": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "bindVsTPose_deg": 0
+    },
+    "leftLowerArm": {
+      "bindWorld": [
+        0,
+        -0.000846,
+        0,
+        1
+      ],
+      "tPoseRawWorld": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "bindVsTPose_deg": 0.095
+    },
+    "leftHand": {
+      "bindWorld": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "tPoseRawWorld": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "bindVsTPose_deg": 0
+    },
+    "leftUpperLeg": {
+      "bindWorld": [
+        0.010461,
+        0,
+        0,
+        0.999945
+      ],
+      "tPoseRawWorld": [
+        0.010461,
+        0,
+        0,
+        0.999945
+      ],
+      "bindVsTPose_deg": 0
+    }
+  }
+}

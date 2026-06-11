@@ -2668,6 +2668,41 @@
             'RightHand':        'rightHand',
         };
 
+        /**
+         * VRoid raw bone name (J_Bip_*) → VRM humanoid bone name mapping.
+         * Used by ClipLayer.retargetClip() for clips baked onto the VRM's own
+         * rig in NORMALIZED space (tools/blender/retarget_to_vrm.py +
+         * tools/convert_to_normalized.py). The bake keeps VRoid raw node names,
+         * but the values are normalized-space rotations — this map lets
+         * retargetClip rename those tracks onto three-vrm's normalized bone
+         * nodes, where the values apply verbatim. Ground truth measured by
+         * tools/verify/ground_truth.mjs (see retarget-pipeline.md Findings 7-9).
+         */
+        const VRM_BONE_MAP = {
+            'J_Bip_C_Hips':         'hips',
+            'J_Bip_C_Spine':        'spine',
+            'J_Bip_C_Chest':        'chest',
+            'J_Bip_C_UpperChest':   'upperChest',
+            'J_Bip_C_Neck':         'neck',
+            'J_Bip_C_Head':         'head',
+            'J_Bip_L_Shoulder':     'leftShoulder',
+            'J_Bip_L_UpperArm':     'leftUpperArm',
+            'J_Bip_L_LowerArm':     'leftLowerArm',
+            'J_Bip_L_Hand':         'leftHand',
+            'J_Bip_R_Shoulder':     'rightShoulder',
+            'J_Bip_R_UpperArm':     'rightUpperArm',
+            'J_Bip_R_LowerArm':     'rightLowerArm',
+            'J_Bip_R_Hand':         'rightHand',
+            'J_Bip_L_UpperLeg':     'leftUpperLeg',
+            'J_Bip_L_LowerLeg':     'leftLowerLeg',
+            'J_Bip_L_Foot':         'leftFoot',
+            'J_Bip_L_ToeBase':      'leftToes',
+            'J_Bip_R_UpperLeg':     'rightUpperLeg',
+            'J_Bip_R_LowerLeg':     'rightLowerLeg',
+            'J_Bip_R_Foot':         'rightFoot',
+            'J_Bip_R_ToeBase':      'rightToes',
+        };
+
         // ══════════════════════════════════════════════════════════
         // Phase C: BoneMaskManager + InertializationBlend
         // ══════════════════════════════════════════════════════════
@@ -2880,7 +2915,7 @@
 
                 // VRM 1.0: getNormalizedBoneNode(boneName) returns the Three.js Object3D
                 // Merge VRM bone names from both Mixamo and BVH maps
-                const vrmBoneNames = [...new Set([...Object.values(MIXAMO_BONE_MAP), ...Object.values(BVH_BONE_MAP)])];
+                const vrmBoneNames = [...new Set([...Object.values(MIXAMO_BONE_MAP), ...Object.values(BVH_BONE_MAP), ...Object.values(VRM_BONE_MAP)])];
                 for (const vrmName of vrmBoneNames) {
                     try {
                         const node = humanoid.getNormalizedBoneNode(vrmName);
@@ -2921,6 +2956,10 @@
                     this._normBoneMap = {};
                     for (const [k, v] of Object.entries(MIXAMO_BONE_MAP)) this._normBoneMap[norm(k)] = v;
                     for (const [k, v] of Object.entries(BVH_BONE_MAP)) {
+                        if (!(norm(k) in this._normBoneMap)) this._normBoneMap[norm(k)] = v;
+                    }
+                    // VRoid raw names from normalized-space VRM-rig bakes (Bug 2 fix).
+                    for (const [k, v] of Object.entries(VRM_BONE_MAP)) {
                         if (!(norm(k) in this._normBoneMap)) this._normBoneMap[norm(k)] = v;
                     }
                 }

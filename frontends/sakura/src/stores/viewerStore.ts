@@ -413,6 +413,36 @@ function postToUnity(
   );
 }
 
+/**
+ * Kokoro gesture → baked mocap clip mapping (Stage 1 Step 1.4 / Phase C).
+ *
+ * Values are clip stems under /files/animations/vrm-baked/<stem>.normalized.glb —
+ * Mixamo motion baked onto a VRM rig in Blender, then converted to three-vrm
+ * NORMALIZED bone space (tools/convert_to_normalized.py), so they play on any
+ * VRM via the viewer's retarget:true path. A `null` value (or a missing key)
+ * forces the procedural gesture — the reversible escape hatch if a clip
+ * regresses. tilt_head stays procedural: no matching Mixamo clip and the
+ * head-only procedural version reads better than a full-body clip.
+ */
+const KOKORO_GESTURE_CLIPS: Record<string, string | null> = {
+  wave: 'waving',
+  thinking: 'thinking',
+  point: 'pointing',
+  hands_clasped: 'hands_forward_gesture',
+  heart: 'blow_a_kiss',
+  small_nod: 'head_nod_yes',
+  tilt_head: null,
+};
+
+/**
+ * Clips already sent to the viewer with loadAnimation. The viewer's ClipLayer
+ * keeps its own library, but it is rebuilt on every model load — so this set
+ * is cleared in dispatchLoadModel. First use of a gesture plays the procedural
+ * fallback while its clip loads (playClip on an unloaded name is a no-op);
+ * every later use plays the real mocap clip.
+ */
+const loadedGestureClips = new Set<string>();
+
 // ─── Store ──────────────────────────────────────────────────────────────────────
 
 export const useViewerStore = create<ViewerState>()((set, get) => ({
@@ -454,12 +484,35 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     };
 
     if (state.mode === 'vrm') {
-      postToIframe(state.iframeRef, {
-        type: 'trigger_gesture',
-        gesture,
-        expression,
-        intensity,
-      });
+      // Prefer a baked mocap clip when one is mapped for this gesture; fall
+      // back to the procedural gesture otherwise. The first occurrence of a
+      // mapped gesture also falls back (clip still loading) — by the next
+      // occurrence the clip is in the viewer's library and plays for real.
+      const clip = gesture ? KOKORO_GESTURE_CLIPS[gesture] : null;
+      if (clip && loadedGestureClips.has(clip)) {
+        postToIframe(state.iframeRef, {
+          type: 'playAnimation',
+          payload: { name: clip, loop: false, fadeIn: 0.25 },
+        });
+      } else {
+        if (clip) {
+          loadedGestureClips.add(clip);
+          postToIframe(state.iframeRef, {
+            type: 'loadAnimation',
+            payload: {
+              url: `/files/animations/vrm-baked/${clip}.normalized.glb`,
+              name: clip,
+              retarget: true,
+            },
+          });
+        }
+        postToIframe(state.iframeRef, {
+          type: 'trigger_gesture',
+          gesture,
+          expression,
+          intensity,
+        });
+      }
     } else if (state.mode === 'unity') {
       postToUnity(state.unityIframeRef, 'PlayGesture', { gesture: gesture || '' });
     }
@@ -622,6 +675,9 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
   dispatchLoadModel: (modelUrl) => {
     const state = get();
     const seq = state._seq + 1;
+    // New model = the viewer rebuilds its AnimationDirector and clip library,
+    // so previously-loaded gesture clips are gone — reload them on next use.
+    loadedGestureClips.clear();
     const cmd: ViewerCommand = {
       kind: 'loadModel',
       payload: { modelUrl },

@@ -185,14 +185,18 @@ describe('viewerStore — dispatchGesture', () => {
   });
 
   it('vrm mode — posts trigger_gesture with the supplied values', () => {
-    useViewerStore.getState().dispatchGesture('wave', 'happy', 0.9);
-    const [msg] = vrmSpy.mock.calls[0];
-    expect(msg).toMatchObject({ type: 'trigger_gesture', gesture: 'wave', expression: 'happy', intensity: 0.9 });
+    // tilt_head is permanently procedural (no baked clip mapped), so this test
+    // is independent of the gesture-clip cache. Mapped gestures (wave, ...) may
+    // post loadAnimation/playAnimation instead — covered in
+    // viewerStore.kokoroGestureClips.test.ts.
+    useViewerStore.getState().dispatchGesture('tilt_head', 'happy', 0.9);
+    const msg = vrmSpy.mock.calls.map((c) => c[0]).find((m) => m.type === 'trigger_gesture');
+    expect(msg).toMatchObject({ type: 'trigger_gesture', gesture: 'tilt_head', expression: 'happy', intensity: 0.9 });
   });
 
   it('defaults intensity to 1.0 when not supplied', () => {
-    useViewerStore.getState().dispatchGesture('thinking', 'neutral');
-    const [msg] = vrmSpy.mock.calls[0];
+    useViewerStore.getState().dispatchGesture('tilt_head', 'neutral');
+    const msg = vrmSpy.mock.calls.map((c) => c[0]).find((m) => m.type === 'trigger_gesture');
     expect(msg.intensity).toBe(1.0);
   });
 

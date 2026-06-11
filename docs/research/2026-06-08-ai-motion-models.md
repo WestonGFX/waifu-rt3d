@@ -252,3 +252,30 @@ The first report's ordering **still stands** — nothing here dethrones **DART**
 - DiffSHEG (real-time co-speech) — https://arxiv.org/pdf/2503.09942 (Cosh-DiT context); DiffSHEG CVPR 2024
 - GlobalDiff (global-rotation co-speech) arXiv — https://arxiv.org/abs/2511.10076
 - Motion Generation survey (2026) — https://arxiv.org/pdf/2507.05419
+
+## Video link triage (2026-06-08, from the AI Search "full body waifus" video description)
+
+Full chapter/link list from the video (`CzxqQJOswvo`) triaged for relevance to our 3D-VRM pipeline.
+Only TWO items are relevant; everything else is 2D-video / LLM / image / audio / hardware / unrelated.
+
+- **Mamma** (`mamma.is.tue.mpg.de`, GitHub `cuevhv/mamma`, CVPR 2026 Oral) — **NEW USEFUL LEAD.** Markerless
+  motion *capture* (NOT generation): recovers **SMPL-X parameters** (body+hands+face rotations) from
+  multi-view RGB video, including consumer setups ("four iPhones") for two-person interaction. Value to us:
+  a cheap content-creation path — film real motion on a few phones → SMPL-X → existing retarget → VRM clip
+  library, same pipeline as Mixamo clips. Output is rotations (rig-friendly). Not real-time / not generative.
+  License not stated on page (research dataset/code — verify before any commercial use). Depends on the same
+  Bug-2 rotation-injection harness as everything else.
+- **PaGeR** (`pager360.github.io`, GitHub `prs-eth/PaGeR`, HF `prs-eth/PaGeR`) — 🟡 maybe-later for **Stage 2a
+  (environment backdrops)**, NOT motion. Single 360° panorama → metric depth + surface normals + sky mask
+  (3D scene geometry). Could help place the avatar in a real room with correct floor grounding. Tangential.
+- **NOT usable (2D video character gen, can't drive a 3D rig):** Bernini (ByteDance, `bernini-ai.github.io`,
+  the "full body waifus" headline — reference images → character video), StreamChar (Alibaba HumanAIGC,
+  streaming audio-driven character video), NAVA (Baidu ERNIE, audio+video co-generation, 720p 2D).
+- **Off-topic for motion:** Deja View (NVIDIA, multi-view 3D *scene* reconstruction, non-commercial),
+  OmniDreams (NVIDIA, autonomous-vehicle world model), Magenta Realtime / WavTTS / Higgs Audio v3 (music/TTS),
+  Reve 2 / Ideogram v4 / Stable Layers (image gen), Gemma4 / Qwen 3.7 / Minimax M3 / Nemotron 3 Ultra / MAI
+  (LLMs — could power chat, separate concern), GPT Dreaming (ChatGPT memory), Majorana 2 (quantum), RTX Spark /
+  Cosmos 3 (hardware), Hubspot (CRM), humanoid robot news.
+
+Net: the video added ONE motion lead (Mamma, a capture path) and one Stage-2 maybe (PaGeR). The headline
+"full body waifus" (Bernini) is 2D video and does not apply to our `three-vrm` rig.

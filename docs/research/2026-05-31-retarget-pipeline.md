@@ -380,3 +380,65 @@ Blender alone, and the conversion must NOT be guessed blind. Two coupled require
 **Why stop here this session:** steps 1–2 are real three-vrm work, and shipping a guessed conversion
 would produce a third broken bake. Bug 1 is fixed + committed; Bug 2 is now fully scoped with a
 spiral-proof plan. This is a clean focused-session boundary.
+
+## Finding 10 (2026-06-11) — Bug 2 CLOSED: measured normalized contract + pure-Python GLB conversion
+
+Executed Finding 9's spiral-proof recipe exactly. No guessing — every constant measured.
+
+### Step 1 — ground-truth harness (`tools/verify/ground_truth.mjs`)
+Headless Chromium drives the REAL viewer; probes run synchronously inside one `evaluate`
+(the RAF loop cannot interleave), via the pre-existing `window._vrm` handle (viewer.html:8028
+— no viewer edit needed). First naive run measured against the **natural pose** (applyNaturalPose
+arms-down ≈80°) and mis-measured every probe by ~80° — the T-pose reference must be established
+by zeroing ALL normalized bone locals first. Results (Raine.vrm, VRM 1, scene.rotation.y=0):
+
+| Probe | Result |
+|---|---|
+| A' T-pose | arm chain identity world EXACTLY; hips 7.2° / spine 8.7° fixed offsets |
+| B single-bone | set normalized local q → raw world delta == q, **0° error** (X/Y/Z 90° + wave 82.7°) |
+| C chain | child world delta == q_parent ⊗ q_child, ≤0.008° |
+| D bind | bind world (skeleton.boneInverses) == T-pose raw world, ≤0.1° per bone |
+
+Probe D is the keystone: **three-vrm's normalized-identity pose reproduces the bind pose** —
+so a world delta-from-rest measured anywhere (Blender included) maps 1:1 onto normalized space.
+Report: `docs/research/data/2026-06-11-three-vrm-ground-truth.json`.
+
+### Step 2 — the conversion reduces to a constant per-bone sandwich
+Expanding `normalized_local = Δ_world(parent)⁻¹ ⊗ Δ_world(bone)` down the ancestor chain,
+every time-dependent parent term CANCELS:
+
+    normalized_local(b, t) = bind_world(parent(b)) ⊗ raw_local(b, t) ⊗ bind_world(b)⁻¹
+
+All in the GLB's own glTF Y-up frame — **no Blender axis math, no R to pin**. (Finding 9's
+feared "canonical frame constant" dissolves: the GLB post-process never leaves glTF space.)
+Sanity anchor: `raw_local == rest(b)` telescopes to identity — bind → T-pose, matching Probe D.
+
+### Step 3 — implementation
+- `tools/convert_to_normalized.py` — pure-Python GLB post-converter (no Blender, no deps
+  beyond numpy). Rewrites rotation samplers value-for-value; strips the exporter's 99
+  non-humanoid channel dumps (121 → 22; spring bones stay free for physics, fingers keep
+  natural rest); refuses double conversion (`asset.extras.vrmNormalizedSpace`). Per-channel
+  independence means exporter constant-channel dedup (2-key samplers) is harmless — this
+  killed the cross-channel frame-alignment problem Finding 9 anticipated.
+- `viewer.html` — additive `VRM_BONE_MAP` (J_Bip_* → humanoid names) unioned into
+  `retargetClip`'s lookup + node-name cache. Normalized bakes load with `retarget:true`;
+  values apply verbatim on normalized nodes. Two map-union lines, zero logic change.
+- 10 pytest cases (`backend/tests/test_convert_to_normalized.py`): rest→identity invariant,
+  world-delta preservation (recomposed chains agree ≤0.01°), non-humanoid strip, double-convert
+  guard, GLB container roundtrip.
+
+### Step 4 — render gate PASSED
+waving / walking / pointing (the post-chain-fix bakes), 22/22 tracks retargeted, 4/4 distinct
+frames each: arms follow the wave/point, upright, grounded, **no dark-red eversion**. The wave
+frame shows a clean raised-palm wave — the first correct arm-gesture render in this pipeline.
+Screenshots: `docs/testing/screenshots/2026-06-11-normalized-gate/`. Commit `7885320`.
+
+### Status
+- **Bug 2: CLOSED.** Bake (Bug 1, `49d9011`) + conversion + viewer map = arm-gesture clips render.
+- **Phase B (batch 28): UNBLOCKED** — `idle`/`thinking` on disk are stale (pre-chain-fix,
+  duplicate-download era) and need re-baking; the other 26 bake fresh via `tools/retarget_library.py`
+  then convert via `tools/convert_to_normalized.py --in-dir`.
+- **Phase C (Kokoro gesture→clip): UNBLOCKED** — wire `dispatchGesture` to the normalized clips
+  (viewerStore commit separate from any viewer.html commit, per repo rule).
+- **Stage 3 (DART/EMAGE AI motion): same injection path** — model output → world deltas →
+  this exact normalized contract.

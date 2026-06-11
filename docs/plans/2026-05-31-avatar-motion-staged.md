@@ -243,3 +243,15 @@ Integration: `viewerStore.ts` `dispatchKokoroEmbodiment` (line 469) → `dispatc
   - **Not usable:** Bernini (ByteDance, the video's "full body waifus") + StreamChar (Alibaba) are **2D reference→video** generators, NOT 3D skeletal motion — cannot drive the three-vrm rig. Marketing-clip value only.
   - **No model runs in-browser today** (no ONNX/WebGPU/transformers.js packaging) → motion generation stays server-side. All benchmarks are CUDA; Apple-Silicon/MPS perf unverified.
   - **Shared prerequisite:** all of the above output bone rotations that must be injected onto the VRM normalized rig — i.e. they ALL depend on the same Bug-2 rotation-injection harness scoped today (Findings 7–9). Solve Bug 2 once → unblocks both Mixamo clips AND AI motion.
+
+- **2026-06-11 — Bug 2 CLOSED (Lane 2 via GLB post-process); Phase B/C UNBLOCKED.** Followed
+  Finding 9's recipe exactly: (1) built `tools/verify/ground_truth.mjs` — measured three-vrm's
+  normalized↔raw contract in the real viewer with 0° error (bind == T-pose, Probe D = keystone);
+  (2) the conversion algebra collapses to a constant per-bone sandwich entirely in glTF space —
+  no Blender frame constant exists to guess; (3) shipped `tools/convert_to_normalized.py`
+  (pure-Python GLB post-converter, 10 pytest) + additive `VRM_BONE_MAP` in viewer.html;
+  (4) render gate PASSED on waving/walking/pointing — arms track the motion, grounded, zero
+  eversion (`docs/testing/screenshots/2026-06-11-normalized-gate/`). Commit `7885320`. Full
+  evidence: retarget-pipeline.md Finding 10. NEXT: Phase B batch (re-bake stale idle/thinking +
+  25 more via `tools/retarget_library.py`, convert, spot-verify 6) → Phase C Kokoro wiring
+  (C1 map, C2 store dispatch — separate commits from viewer.html).

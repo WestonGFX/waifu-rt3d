@@ -1,7 +1,7 @@
 # Resume Prompt
 
 **Last updated:** 2026-06-14 (Stage 2b Phase 1 — click-to-walk navigation)
-**Branch:** master · HEAD = `b5c8857` · **13 commits LOCAL/unpushed** (`4838386`→`b5c8857`)
+**Branch:** master · HEAD = `140c3f8` · **fully synced with origin/master** (Stage 2b P1 pushed `cd27227..140c3f8` on 2026-06-14)
 **Schema:** v89 (unchanged this session)
 **Tests:** 3,121 backend pytest + 498 sakura vitest passing, tsc clean
 
@@ -26,8 +26,7 @@ AI-driven movement, no run/turn clips — those are Phase 2 (see below).
 
 ## Next Tasks
 
-1. **Push when ready** — 13 local commits (`4838386`→`b5c8857`). Push gate clear (no active
-   OPEN BUG/UNFIXED/BLOCKER). Scan `docs/SESSION_HANDOFF.md` + `CURRENT_STATUS.md` first per rule.
+1. ~~**Push when ready**~~ ✅ DONE 2026-06-14 — Stage 2b P1 pushed `cd27227..140c3f8`, origin synced.
 2. **Stage 2b Phase 2** (separate future plan, when the user wants it): pathfinding AROUND
    obstacles (navmesh/A*), run/turn-in-place clips, camera follow-distance clamp (walking toward
    the camera currently near-plane clips — minor), then Kokoro-driven destinations (embodiment seam).

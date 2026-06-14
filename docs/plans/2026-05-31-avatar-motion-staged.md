@@ -321,3 +321,20 @@ Replace the transparent void behind the avatar with a real 3D location so the co
     will light correctly); watch env lighting in P5.
   - **NEXT — P5:** source 2–3 CC0/CC-BY room GLBs, present for user visual pick, drop in, full gate
     (light/dark theme, 60fps, spring bones, grounding). Then **P6:** Settings environment picker UI.
+- **2026-06-14 — P5 DONE (asset sourced + verified); P2 hardened (X/Z centring).**
+  - User chose the "lofi cozy" aesthetic. First pick (Chilled Cow Apt) was an EXTERIOR building
+    diorama — sealed box, avatar trapped inside → solid-brown render. Diagnosed via wide pullback
+    (`screenshots/2026-06-14-stage2a-lofi/wide-pullback.png`). Lesson: preview the thumbnail
+    (`static.poly.pizza/<uuid>.jpg`) before downloading — exterior dioramas vs open interiors are
+    indistinguishable by name.
+  - Hardened `loadEnvironment` (`26a62c0`): centre the room on the avatar in X/Z (bbox centre), not
+    just floor-align Y — otherwise the avatar lands in a corner and the camera buries in a wall.
+  - Shipped asset: **"Living Room" by Alex Safayan, CC-BY 3.0** (`backend/storage/environments/lofi_room.glb`,
+    open-front lofi interior — speakers, couch, plant, rug). Render gate PASSED: avatar grounded on
+    the rug with contact shadow, room renders around her, camera framed on avatar, clear/dispose
+    restores the void. Proof: `screenshots/2026-06-14-stage2a-lofiroom/`. Attribution recorded in
+    `backend/storage/environments/CREDITS.md` (CC-BY — surface in an in-app credits screen at ship).
+  - To see it live: restart the backend (picks up P1–P4 code), then set via P6 UI or
+    `PUT /api/characters/{id}/environment {"environment_url":"/files/environments/lofi_room.glb"}`.
+  - **NEXT — P6:** Settings environment picker (list `/files/environments/*.glb`, set/clear per
+    character via `api.setCharacterEnvironment`, call `dispatchLoadEnvironment` on character load).

@@ -3767,6 +3767,17 @@
                 }
                 if (totalMass > 0) {
                     this._cogOffset.set(totalX / totalMass, totalY / totalMass, totalZ / totalMass);
+                    // Measure CoG RELATIVE to the avatar root, not in absolute world space.
+                    // The hip correction below assumes CoG ≈ 0 when balanced; that only holds
+                    // while the avatar stands at the origin. Once Stage 2b walks the root to
+                    // (x,z), the world-space CoG picks up that translation and the "correction"
+                    // yanks the hips ~9cm backward → a pronounced forward hunch. Subtracting the
+                    // root world position leaves only genuine in-body lateral drift.
+                    const root = this.vrm?.scene?.position;
+                    if (root) {
+                        this._cogOffset.x -= root.x;
+                        this._cogOffset.z -= root.z;
+                    }
                 }
                 return this._cogOffset;
             }

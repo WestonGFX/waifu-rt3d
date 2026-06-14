@@ -175,11 +175,30 @@ start/mid/arrival), avatar translated and arrived on-target (avatarMoved), and a
 prop stopped short (walkBlocked). 3121 backend pytest + 498 vitest pass, tsc clean. Screenshots:
 `docs/testing/screenshots/2026-06-14-stage2b-p1/`.
 
-**⚠ Flagged limitation (clip quality, not mechanic):** the existing `walking.normalized.glb`
-clip renders with a pronounced **forward torso hunch** during locomotion on the Raine VRM
-(visible in `2-mid-walk.png` / `3-arrival.png`). The walkTo *mechanic* (turn/translate/collide/
-arrive/ground) is correct; the posture is the retargeted clip's pose (or BalanceLayer CoG
-compensation reacting to root translation). Phase 1 deliberately reused the existing clip and
-deferred clip-quality work — so this is a **Phase 2 item**: a walk-clip posture/retarget pass
-(and/or tuning the BalanceLayer response to root translation). Do NOT call the walk visually
-polished until that pass lands.
+### Posture investigation (2026-06-14) — RESOLVED: headless artifact
+
+The headless render-gate showed a pronounced forward torso hunch + hair-whip during the walk
+(`2-mid-walk.png` / `3-arrival.png`). Investigated under the hypothesis limit:
+
+| Hypothesis | Test | Verdict |
+|---|---|---|
+| Walk clip is bad | Play `walking` in-place at origin (`render_clip`) → `…/inplace/clip-walking.png` | clip is **upright/good** |
+| BalanceLayer world-space CoG | mid-frame is at origin (CoG≈0) yet still hunched | **falsified** as the hunch cause |
+| FollowThrough reacts to root | reads bone-*local* rotations; root transform doesn't feed it | explains hair-whip (spring bones), not torso |
+| Headless low-framerate spring instability | re-ran HEADED on real GPU (`render_walk_headed.mjs`) | **confirmed** — upright at 60fps (`…/headed/h2-t240ms.png`) |
+
+**Conclusion:** the hunch is a **headless swiftshader artifact** (capped Δt + low framerate
+destabilises the spring/follow-through integration). At native 60fps the walk posture is
+**upright and natural**. No clip-quality work needed for Phase 1.
+
+**Kept fix (separate latent bug):** `BalanceLayer.calculateCoG()` now measures CoG **relative
+to the avatar root** instead of absolute world space. Previously, walking the root to (x,z)
+fed that translation into the CoG and triggered a bogus hip shift (up to ~9cm) — a whole-body
+position error once translated. Zero regression at origin (root=0). `viewer.html` BalanceLayer.
+
+**Known minor (Phase 2 tuning, not a bug):** camera-follow keeps the orbit target on the
+avatar, so walking *toward* the camera brings her very close / near-plane clips. Acceptable for
+the dev tool; revisit with a follow-distance clamp when navigation graduates from dev-gated.
+
+**Verification scripts added:** `tools/verify/render_walk_headed.mjs` (real-GPU posture check),
+plus in-place + headed screenshots under `docs/testing/screenshots/2026-06-14-stage2b-p1/`.

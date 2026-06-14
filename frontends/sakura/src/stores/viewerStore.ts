@@ -96,6 +96,9 @@ export interface ViewerCommand {
     // Phase 11A: Environment
     | 'setPose'
     | 'setTimeOfDay'
+    // Stage 2a: avatar in a real 3D location
+    | 'loadEnvironment'
+    | 'clearEnvironment'
     // Phase 17A: Animation sequencer
     | 'triggerSequence'
     | 'cancelSequence'
@@ -278,6 +281,8 @@ interface ViewerState {
   dispatchListeningState: (active: boolean) => void;
   /** Load an animation clip. Optionally retarget Mixamo bone names. */
   dispatchLoadAnimation: (url: string, name: string, retarget?: boolean) => void;
+  /** Stage 2a: load a static environment GLB behind the avatar, or pass null to clear it. */
+  dispatchLoadEnvironment: (url: string | null) => void;
   /** Play a loaded animation clip by name. */
   dispatchPlayAnimation: (name: string, opts?: { loop?: boolean; fadeIn?: number; timeScale?: number }) => void;
   /** Stop the current animation clip. */
@@ -1113,6 +1118,21 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
 
     if (state.mode === 'vrm') {
       postToIframe(state.iframeRef, { type: 'loadAnimation', payload: { url, name, retarget } });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchLoadEnvironment: (url) => {
+    // Stage 2a: render a static room/cafe GLB behind the avatar. A null url clears
+    // it (and the grounding floor), restoring the transparent-void look. Only the
+    // VRM viewer supports environments — Live2D is 2D, so this is a no-op there.
+    const state = get();
+    const seq = state._seq + 1;
+    const kind = url ? 'loadEnvironment' : 'clearEnvironment';
+    const cmd: ViewerCommand = { kind, payload: { url }, _seq: seq };
+
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'loadEnvironment', payload: { url } });
     }
     set({ lastCommand: cmd, _seq: seq });
   },

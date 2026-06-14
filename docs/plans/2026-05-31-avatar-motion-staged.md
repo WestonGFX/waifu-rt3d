@@ -255,3 +255,17 @@ Integration: `viewerStore.ts` `dispatchKokoroEmbodiment` (line 469) → `dispatc
   evidence: retarget-pipeline.md Finding 10. NEXT: Phase B batch (re-bake stale idle/thinking +
   25 more via `tools/retarget_library.py`, convert, spot-verify 6) → Phase C Kokoro wiring
   (C1 map, C2 store dispatch — separate commits from viewer.html).
+- **2026-06-13 Phase B: ✓ DONE — full 28-clip normalized library built; closes the Phase C 404 gap.**
+  Discovered Phase C (`f88fa90`) wired `KOKORO_GESTURE_CLIPS` to fetch
+  `/files/animations/vrm-baked/<stem>.normalized.glb` (retarget:true), but only 5 stale
+  normalized clips existed on disk (01:54 pre-chain-fix bake) and 3 of the 6 mapped gestures
+  (`hands_forward_gesture`, `blow_a_kiss`, `head_nod_yes`) had NO normalized file — so half of
+  Kokoro's gestures 404'd. The 28 RAW bakes (02:0X Jun 11) were already present; ran
+  `tools/convert_to_normalized.py --in-dir backend/storage/animations/vrm-baked` → 28/28
+  normalized clips (22 humanoid nodes each, non-humanoid channels stripped), overwriting the
+  stale 5 with fresh conversions from the current raws. Render gate PASSED on the 3
+  previously-missing gestures: 22/22 tracks retargeted, 4/4 distinct frames, arms track the
+  gesture, upright, grounded, zero eversion (`docs/testing/screenshots/2026-06-13-phaseB-gestures/`).
+  convert pytest 10/10. Clips are gitignored (per-machine runtime assets — regenerate on other
+  boxes via the same two-step bake→convert). NEXT: re-bake idle/thinking from fresh source if a
+  visual idle-drift shows; Stage 2 (real 3D location) or Stage 3 (AI motion) per user priority.

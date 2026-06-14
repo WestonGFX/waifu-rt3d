@@ -10,6 +10,17 @@
 
 ## Active Work
 
+**Session (2026-06-13) — Retarget Phase B (clip library) + backlog reconciliation + CC model-fallback config fix. Branch `master`, HEAD `4838386`.**
+
+- **Retarget Phase B DONE** (`4838386`): Phase C (`f88fa90`) had wired `KOKORO_GESTURE_CLIPS` to fetch `/files/animations/vrm-baked/<stem>.normalized.glb`, but only 5 stale normalized clips were on disk and 3 of the 6 mapped gestures had no normalized file — half of Kokoro's gestures 404'd. Ran `tools/convert_to_normalized.py --in-dir` over the 28 raw bakes → full 28-clip normalized library (22 humanoid nodes each). Render gate PASSED on the 3 previously-missing gestures (`hands_forward_gesture`, `blow_a_kiss`, `head_nod_yes`): 22/22 tracks, 4/4 distinct frames, arms track, grounded, zero eversion. convert pytest 10/10. Clips gitignored (per-machine runtime assets). Proof: `docs/testing/screenshots/2026-06-13-phaseB-gestures/`.
+- **Backlog reconciliation** — stale "pending" items confirmed already DONE in code: M6 item 22 (`/api/characters/{id}/nsfw-eligibility` endpoint live, session 43 `d5c1e48`), bond burn-down finishing pass (zero `setPendingAchievement`/`setPendingLevelUp` writes remain), M8 marketing docs (`docs/marketing/eu-ai-act-compliance.md` + `privacy-comparison.md` both exist). MEMORY.md NEXT SESSION TASKS were stale.
+- **CC install fix** (global `~/.claude/settings.json`, not repo): Fable 5 was pinned as a specific default model; Anthropic disabled it → forced manual model reselect every session. Set `"model": "opus[1m]"` (tier alias, auto-resolves, never dangles) + `"fallbackModel": ["sonnet","haiku"]` (auto-switch on unavailability). Survives future model add/remove.
+- **Avatar-motion remaining stages are plan-gated:** Stage 2 (avatar in real 3D location — design decisions), Stage 3 (on-the-fly AI motion — needs RTX box, not the M2 Pro), Stage 4 (Blender full asset pipeline — as-needed). Awaiting user direction on which, if any.
+
+**Live status:** push gate clear (no active OPEN BUG/UNFIXED/BLOCKER markers). 3114 pytest + 484 vitest, tsc clean, server up (v5.34.0). 1 local commit (`4838386`) unpushed.
+
+---
+
 **Session (2026-06-03) — CI pipeline fix + useTwoPhaseChips extraction, branch `master` (CI GREEN). See `docs/SESSION_HANDOFF.md`.**
 
 Master CI was red across runs #54→#75. A pasted plan blamed "unpinned deps/caching" but `test.yml` already pinned 3.12 / used `npm ci` / cached. Real causes (from actual run logs + a throwaway CI-matching venv):

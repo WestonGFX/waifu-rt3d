@@ -8,6 +8,19 @@ Historical archive of all implemented features. For active tracking, see [CURREN
 
 ---
 
+## June 2026
+
+### Stage 2a — Avatar in a 3D Room (environment backdrop)
+- Schema v89 `characters.environment_url`; viewer `loadEnvironment` (room GLB behind avatar + ShadowMaterial grounding floor at y=0, X/Z centring, leak-safe dispose); `GET/PUT /api/characters/{id}/environment` + `GET /api/environments`; ModelPanel 🏠 picker. Shipped asset: "Living Room" by Alex Safayan (CC-BY 3.0).
+- Commits: `61f0eea`→`cd27227` · plan `docs/plans/2026-05-31-avatar-motion-staged.md`
+
+### Stage 2b Phase 1 — Click-to-Walk Navigation
+- Dev-gated floor-click → avatar turns to face, plays `walking` clip, translates root at 1.1 m/s (y grounded), stops short of walls/props via real `THREE.Raycaster` collision (floor-pick + forward capsule sweep), settles to idle, camera follows. `viewer.html` WalkController + `setWalkMode`/`walkTo`/`stopWalk`/`getAvatarPose`; `viewerStore` dispatch trio; `ModelPanel` dev-only 🚶 toggle. Straight-line walk only (pathfinding-around-obstacles, run/turn clips, AI-driven destinations = Phase 2).
+- Also fixed: `BalanceLayer` CoG now root-relative (was absolute world space → bogus hip shift once translated). Posture hunch confirmed a headless-renderer artifact (upright at 60fps).
+- Schema: v89 (unchanged) · Commits: `df6e99f` + `b5c8857` · plan `docs/plans/2026-06-14-stage2b-p1-click-to-walk.md`
+
+---
+
 ## May 2026 (Session 38/39 — 2026-05-08)
 
 ### BUG-1 — Chat History Loads on Character Select

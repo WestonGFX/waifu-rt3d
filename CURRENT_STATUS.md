@@ -1,14 +1,24 @@
 # Current Project Status
 
-**Last updated:** 2026-06-03 (CI pipeline fixed — master red→GREEN; useTwoPhaseChips hook extraction)
-**Branch:** `master` · HEAD = `8b50c56` · CI GREEN (fast-forwarded 42 commits from `feat/avatar-motion`, pushed to origin).
+**Last updated:** 2026-06-14 (Stage 2b Phase 1 — click-to-walk navigation with real raycast collision)
+**Branch:** `master` · HEAD = `b5c8857` · **13 local commits unpushed** (`4838386`→`b5c8857`; push is the user's call).
 **Schema version:** v89 (`characters.environment_url` — Stage 2a avatar 3D location; v88 = memory forget/privacy trust spine).
-**Tests:** **3,121 backend pytest** + **487 sakura vitest** passing, tsc clean.
+**Tests:** **3,121 backend pytest** + **498 sakura vitest** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
 
 ## Active Work
+
+**Session (2026-06-14) — Stage 2b Phase 1: click-to-walk navigation. Branch `master`, HEAD `b5c8857` (2 commits, LOCAL).** Plan: `docs/plans/2026-06-14-stage2b-p1-click-to-walk.md`.
+
+- **`df6e99f` feat(stage2b-P1): click-to-walk navigation with real raycast collision.** The avatar can now walk around her loaded 3D room. Dev-gated floor-click → she turns to face the point, plays the `walking` clip, translates the root at 1.1 m/s (y glued to floor), stops short of walls/props via real `THREE.Raycaster` collision (floor-pick + forward capsule sweep), settles to idle, camera target follows. `viewer.html` WalkController + `setWalkMode`/`walkTo`/`stopWalk`/`getAvatarPose` postMessage handlers + drag-vs-click guard; `viewerStore.ts` `dispatchSetWalkMode`/`dispatchWalkTo`/`dispatchStopWalk`; `ModelPanel.tsx` dev-mode-only 🚶 Walk toggle beside the environment picker. Scope is bounded: straight-line walk only — **pathfinding AROUND obstacles, run/turn clips, and Kokoro-driven destinations are deferred to a future Phase 2 plan**. New render-gate `tools/verify/render_walk.mjs` PASS (grounding y==0 at start/mid/arrival, on-target arrival, collision stop). +11 vitest. Caught + fixed a TDZ crash via the render-gate (`_walk` declared after the animate loop → hoisted to module scope).
+- **`b5c8857` fix(stage2b-P1): BalanceLayer root-relative CoG + posture investigation.** The headless render-gate showed a forward hunch; investigated under the hypothesis limit and confirmed it's a **headless swiftshader artifact** — at native 60fps (`tools/verify/render_walk_headed.mjs`, real GPU) the walk posture is upright/natural (`docs/testing/screenshots/2026-06-14-stage2b-p1/headed/h2-t240ms.png`). Kept one real latent fix: `BalanceLayer.calculateCoG()` measured CoG in absolute world space → walking the root to (x,z) triggered a bogus ~9cm hip shift; now root-relative (zero change at origin).
+- **Known minor (Phase 2 tuning, not a bug):** camera-follow keeps the orbit target on her, so walking *toward* the camera brings her close enough to near-plane clip. Acceptable for the dev tool.
+
+**Live status:** push gate clear (no active OPEN BUG/UNFIXED/BLOCKER markers). 3121 pytest + 498 vitest, tsc clean. 13 local commits unpushed (`4838386`→`b5c8857`).
+
+---
 
 **Session (2026-06-13) — Retarget Phase B (clip library) + backlog reconciliation + CC model-fallback config fix. Branch `master`, HEAD `4838386`.**
 

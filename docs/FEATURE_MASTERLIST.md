@@ -1,9 +1,9 @@
 # Feature Masterlist — Waifu-RT3D
 
-**Last updated:** 2026-05-25 (session 47 — v1-Lite execution sprint + bond burn-down)
-**Schema version:** v85
-**Tests:** 2,977 backend pytest + 326 vitest passing, tsc clean
-**Total features:** 56 (49 complete, 7 post-MVP); session-47 added 2 master kill-flags + deleted 10 bond UI components
+**Last updated:** 2026-06-14 (Stage 2b Phase 1 — click-to-walk navigation)
+**Schema version:** v89
+**Tests:** 3,121 backend pytest + 498 vitest passing, tsc clean
+**Total features:** 56 (49 complete, 7 post-MVP); session-47 added 2 master kill-flags + deleted 10 bond UI components. Avatar-motion staged work (Stage 1 retarget, Stage 2a environment, Stage 2b Phase 1 click-to-walk) tracked in `docs/plans/2026-05-31-avatar-motion-staged.md` + `docs/COMPLETED_FEATURES.md`.
 
 ---
 

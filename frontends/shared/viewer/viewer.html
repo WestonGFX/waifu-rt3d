@@ -109,6 +109,8 @@
         let currentGlb = null;        // Currently loaded GLB scene (null when VRM or empty)
         let currentGlbMixer = null;   // THREE.AnimationMixer for GLB embedded animations
         let currentGlbClips = [];     // Embedded AnimationClip[] from GLB
+        let currentEnvironment = null; // Stage 2a: loaded environment (room/cafe) GLB scene
+        let environmentFloor = null;   // Stage 2a: shadow-catching floor plane at world y=0
         let _currentGlbAction = null; // Currently playing GLB AnimationAction (for crossfade)
         let clock = new THREE.Clock();
         let lipSync = null;
@@ -7976,6 +7978,117 @@
             }
             // exitAnimator declared above animate() to avoid TDZ
 
+            // ── Stage 2a: avatar in a real 3D location ──────────────────────────────
+            // A static environment GLB (room/cafe) renders behind the avatar. The avatar's
+            // feet are grounded by its VRM rest pose at world y≈0; an invisible
+            // shadow-catching floor at y=0 anchors that grounding visually (the avatar
+            // always casts a soft contact shadow, even if the room GLB's own floor sits
+            // elsewhere). The camera is intentionally NOT re-framed onto the room — it
+            // stays framed on the avatar, who is the subject.
+
+            /**
+             * Ensure the invisible shadow-catching floor exists at world y=0.
+             *
+             * Uses ShadowMaterial so only the avatar's cast shadow shows — the plane
+             * itself is transparent, letting the environment GLB's real floor remain
+             * visible underneath. This is the grounding anchor (regression hotspot #2).
+             *
+             * @returns {THREE.Mesh} the floor mesh
+             */
+            function ensureEnvironmentFloor() {
+                if (environmentFloor) return environmentFloor;
+                const geo = new THREE.PlaneGeometry(20, 20);
+                // ShadowMaterial draws nothing except where shadows fall — no z-fight
+                // with the room's own floor, no color contribution.
+                const mat = new THREE.ShadowMaterial({ opacity: 0.28 });
+                const floor = new THREE.Mesh(geo, mat);
+                floor.rotation.x = -Math.PI / 2;   // lie flat in the XZ plane
+                floor.position.y = 0;
+                floor.receiveShadow = true;
+                floor.renderOrder = -1;
+                scene.add(floor);
+                environmentFloor = floor;
+                return floor;
+            }
+
+            /**
+             * Remove and fully dispose the current environment GLB (GPU-leak safe,
+             * regression hotspot #7). No-op when no environment is loaded.
+             */
+            function clearEnvironment() {
+                if (!currentEnvironment) return;
+                scene.remove(currentEnvironment);
+                currentEnvironment.traverse((child) => {
+                    if (!child.isMesh) return;
+                    if (child.geometry) child.geometry.dispose();
+                    const mats = Array.isArray(child.material) ? child.material : [child.material];
+                    mats.forEach((m) => {
+                        if (!m) return;
+                        for (const key in m) {
+                            const val = m[key];
+                            if (val && val.isTexture) val.dispose();
+                        }
+                        m.dispose();
+                    });
+                });
+                currentEnvironment = null;
+            }
+
+            /**
+             * Load a static environment scene behind the avatar (Stage 2a).
+             *
+             * A null/empty url clears the environment AND the grounding floor, fully
+             * restoring the legacy transparent-void look. A real url loads the GLB,
+             * drops it so its bounding-box floor sits on world y=0, and makes its
+             * meshes receive (but not cast) shadows. The camera is left untouched so
+             * the avatar stays framed.
+             *
+             * @param {string|null} url - GLB url under /files/environments/, or null to clear
+             */
+            function loadEnvironment(url) {
+                clearEnvironment();
+                if (!url) {
+                    if (environmentFloor) {
+                        scene.remove(environmentFloor);
+                        environmentFloor.geometry.dispose();
+                        environmentFloor.material.dispose();
+                        environmentFloor = null;
+                    }
+                    window.parent.postMessage({ type: 'environmentCleared' }, '*');
+                    return;
+                }
+                ensureEnvironmentFloor();
+                const loader = new GLTFLoader();
+                console.log('[Viewer] Loading environment:', url);
+                loader.load(
+                    url,
+                    (gltf) => {
+                        clearEnvironment();   // guard against a rapid second load
+                        const env = gltf.scene;
+                        // Floor-align: drop the scene so its lowest point rests on y=0,
+                        // matching the avatar's grounded feet.
+                        const bbox = new THREE.Box3().setFromObject(env);
+                        env.position.y -= bbox.min.y;
+                        env.traverse((child) => {
+                            if (child.isMesh) {
+                                child.receiveShadow = true;
+                                child.castShadow = false;
+                            }
+                        });
+                        scene.add(env);
+                        currentEnvironment = env;
+                        window.parent.postMessage({ type: 'environmentLoaded', url }, '*');
+                        console.log('[Viewer] Environment loaded; floor-aligned (min.y was',
+                            bbox.min.y.toFixed(3), ')');
+                    },
+                    undefined,
+                    (err) => {
+                        console.warn('[Viewer] Environment load failed:', url, err);
+                        window.parent.postMessage({ type: 'environmentError', url, error: String(err) }, '*');
+                    }
+                );
+            }
+
             /**
              * Loads a 3D model (VRM or GLB/GLTF) into the scene.
              *
@@ -8638,6 +8751,16 @@
                 }
                 if (type === 'updateBackground') {
                     setBackground(e.data.mode, e.data.value);
+                    return;
+                }
+                if (type === 'loadEnvironment') {
+                    // Stage 2a: render a static room/cafe GLB behind the avatar.
+                    // payload: { url: string | null }  (null clears it)
+                    loadEnvironment(payload?.url || null);
+                    return;
+                }
+                if (type === 'clearEnvironment') {
+                    loadEnvironment(null);
                     return;
                 }
                 if (type === 'setLighting') {

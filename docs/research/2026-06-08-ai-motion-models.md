@@ -5,6 +5,8 @@
 **Hardware reality check (the spine of every recommendation below):** RTX 5080 = 16 GB · RTX 3070 = 8 GB · Mac M2 Pro = **no NVIDIA / no CUDA** (Metal/MPS only). The M2 Pro is the GPU floor.
 **Prior picks (older plan):** MotionLCM (~30 ms/seq, the only thing fast enough to feel "live") and MoMask (generate-then-play). This report identifies what is newer/better and re-grades the old picks against current hardware constraints.
 
+**→ Acted on in:** [`docs/plans/2026-06-14-stage3-ai-motion.md`](../plans/2026-06-14-stage3-ai-motion.md) — Stage 3 execution plan (DART first, Claude-driven over SSH to the RTX 5080).
+
 ---
 
 ## Honesty notes up front

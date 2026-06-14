@@ -338,3 +338,4 @@ Replace the transparent void behind the avatar with a real 3D location so the co
     `PUT /api/characters/{id}/environment {"environment_url":"/files/environments/lofi_room.glb"}`.
   - **NEXT — P6:** Settings environment picker (list `/files/environments/*.glb`, set/clear per
     character via `api.setCharacterEnvironment`, call `dispatchLoadEnvironment` on character load).
+- **2026-06-14 — P6 DONE + browser-verified; Stage 2a COMPLETE.** 🏠 picker in Model-panel toolbar (user chose Model panel). Live app verification (backend restart + Vite + headless Chrome): dropdown renders, lists No room/lofi room/test room, selecting lofi room loads it, Raine renders in the room. All 11 Stage 2a commits pushed (`61f0eea`→`eeffa9c`). NEXT (future): Stage 2b (navigation, separate plan) or Stage 3 (AI motion, RTX box).

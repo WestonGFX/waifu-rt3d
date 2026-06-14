@@ -269,3 +269,39 @@ Integration: `viewerStore.ts` `dispatchKokoroEmbodiment` (line 469) → `dispatc
   convert pytest 10/10. Clips are gitignored (per-machine runtime assets — regenerate on other
   boxes via the same two-step bake→convert). NEXT: re-bake idle/thinking from fresh source if a
   visual idle-drift shows; Stage 2 (real 3D location) or Stage 3 (AI motion) per user priority.
+
+---
+
+# Stage 2a Execution Plan (2026-06-13) — Avatar in a Real 3D Location (static environment backdrop)
+
+**Decision (2026-06-13, user):** proceed with Stage 2a. Environment source = **download a CC-licensed GLB scene** (room/cafe), not procedural or Blender-generated. Stage 2b (character navigation) stays out — separate future plan.
+
+## Why / Soul
+Replace the transparent void behind the avatar with a real 3D location so the companion feels *somewhere* — a bedroom/cafe she lives in. Warmth over efficiency (project soul). Desktop-only, local assets.
+
+## Current state (measured this session)
+- `viewer.html`: `scene.background` is **transparent**; there is **no floor plane, no GridHelper, no environment**. The avatar is grounded purely by its VRM rest pose (`viewer.html:~2977`). A CSS "video background layer" exists behind the canvas but no 3D environment.
+- No `environment_url` column on `characters` (schema v88). Needs v89.
+- Clip/grounding pipeline (Stage 1) is proven and must not regress — adding a floor/scene lands on the **#1 regression hotspot (grounding + camera framing)**. Visual verification mandatory at every step.
+
+## Constraints
+- **viewer.html is sacred** (10+ regressions). Sequential only, no parallel edits. Never commit viewer.html and viewerStore.ts in the same commit (repo rule).
+- Grounding: the scene's floor must sit at the avatar's foot level (avatar feet at world y≈0 in VRM rest). Align the GLB so its floor = y0, OR offset the loaded environment so its floor meets y0. Verify feet-on-floor, no float, no penetration.
+- One environment at a time. Light + dark theme both checked. 60fps on M2 Pro preserved. Spring-bone hair/cloth must still simulate (environment must not steal the render budget or freeze physics).
+- Asset licensing: only CC0 / CC-BY (with attribution recorded). No unlicensed art.
+
+## Phases (each its own commit)
+- **P1 — Schema v89:** `characters.environment_url TEXT DEFAULT NULL`. Append-only migrate_to_v89 + dispatch + ceiling bump. pytest test_preflight. *(self / schema-architect)*
+- **P2 — viewer.html `loadEnvironment` handler:** postMessage `{type:'loadEnvironment', payload:{url}}` → GLTFLoader the scene, add to scene graph, add a real floor (shadow-receiving), set a soft backdrop, frame camera. `clearEnvironment` to remove. Guard: dispose old environment on reload (no GPU leak). Render-verify grounding. *(self — sacred file, sequential)*
+- **P3 — viewerStore `loadEnvironment` command + types:** mirror the existing `loadAnimation` command plumbing (ViewerCommand kind, action, postToIframe). Vitest. *(separate commit from P2)*
+- **P4 — backend endpoint + api.ts mirror:** `PUT /api/characters/{id}/environment` (set environment_url) + serve GLB under `/files/environments/`. Mirror the Pydantic response shape into `api.ts`. pytest. *(self — server.py + api.ts together, Pydantic↔TS drift trap)*
+- **P5 — source + drop in the art asset:** present 2–3 sourced CC0/CC-BY room GLB candidates (URL + license) for user pick (visual identity = user taste). Place under `backend/storage/environments/`, set on a test character, align floor, full visual gate (light/dark, 60fps, spring bones, grounding). Screenshots committed.
+- **P6 — Settings UI:** environment picker in the character/appearance settings (set/clear environment_url). *(ux-architect or self)*
+
+## Open risks
+- **Floor alignment** is the make-or-break (mirrors Stage 1 grounding). An arbitrary GLB's floor height is unknown — may need a per-environment y-offset field or auto-detect via bounding box min-y.
+- **Render budget:** a heavy room GLB could drop FPS below 60 on M2 Pro. Pick low-poly assets; measure FPS overlay before/after.
+- **Camera framing:** adding a room changes what's visible; the existing camera presets may need an environment-aware default. Don't auto-add new UI chrome (repo rule).
+
+## Status log
+- **2026-06-13 — Stage 2a planned + approach chosen (download GLB scene). Starting P1 (schema v89).**

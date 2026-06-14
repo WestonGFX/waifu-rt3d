@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-06-03 (CI pipeline fixed — master red→GREEN; useTwoPhaseChips hook extraction)
 **Branch:** `master` · HEAD = `8b50c56` · CI GREEN (fast-forwarded 42 commits from `feat/avatar-motion`, pushed to origin).
-**Schema version:** v88 (memory `status`/`privacy_level` + `memory_suppressions` — forget/privacy trust spine).
+**Schema version:** v89 (`characters.environment_url` — Stage 2a avatar 3D location; v88 = memory forget/privacy trust spine).
 **Tests:** **3,104 backend pytest** + **479 sakura vitest** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 

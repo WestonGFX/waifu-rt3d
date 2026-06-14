@@ -6326,6 +6326,52 @@ def migrate_to_v88(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v89(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v88 to v89.
+
+    Adds ``characters.environment_url`` — the static 3D location (room/cafe GLB)
+    rendered behind the avatar (Stage 2a of the avatar-motion plan). NULL means
+    "no environment" (legacy transparent-void behaviour, fully backward compatible).
+
+    The value is a path served under ``/files/environments/<name>.glb`` and loaded
+    by the viewer's ``loadEnvironment`` postMessage handler. Kept on the character
+    (not global) so each companion can live somewhere of her own.
+
+    Columns added:
+        - characters.environment_url (TEXT DEFAULT NULL)
+
+    Args:
+        con: An open ``sqlite3.Connection``.
+
+    Returns:
+        ``True`` on success.
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 89:
+        logger.info("Schema already at v%d, skipping v89 migration.", cur_ver)
+        return True
+
+    try:
+        try:
+            con.execute(
+                "ALTER TABLE characters ADD COLUMN environment_url TEXT DEFAULT NULL"
+            )
+        except sqlite3.OperationalError:
+            pass  # Column already exists (idempotent re-run)
+
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (89, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v89 migration complete (characters.environment_url)")
+        return True
+    except Exception as e:
+        logger.error("Schema v89 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -6957,14 +7003,20 @@ def ensure_db():
             if migrate_to_v88(con):
                 version = 88
 
+        if version < 89:
+            logger.info("Upgrading database schema from v88 to v89...")
+            logger.info("  - characters.environment_url (Stage 2a: avatar in a real 3D location)")
+            if migrate_to_v89(con):
+                version = 89
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 88:
-            raise RuntimeError(f"Database initialization failed: Expected v88, got v{final_version}")
+        if final_version < 89:
+            raise RuntimeError(f"Database initialization failed: Expected v89, got v{final_version}")
 
-        if final_version > 88:
-            logger.warning(f"Database is newer than application (v{final_version} > v88). Some features might be unused.")
+        if final_version > 89:
+            logger.warning(f"Database is newer than application (v{final_version} > v89). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.

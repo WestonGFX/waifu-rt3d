@@ -1,14 +1,31 @@
 # Resume Prompt
 
-**Last updated:** 2026-06-14 (Stage 2b Phase 1 — click-to-walk navigation)
-**Branch:** master · HEAD = `140c3f8` · **fully synced with origin/master** (Stage 2b P1 pushed `cd27227..140c3f8` on 2026-06-14)
-**Schema:** v89 (unchanged this session)
+**Last updated:** 2026-06-14 (Stage 3 AI motion — Phase 0 done, Phase 1 in progress)
+**Branch:** master · 4 local commits ahead of origin (Stage 3 plan + Phase 0/1 checkpoints)
+**Schema:** v89 (unchanged)
 **Tests:** 3,121 backend pytest + 498 sakura vitest passing, tsc clean
 
-## What Was Done (2026-06-14)
+## RESUME HERE → Stage 3 AI Motion (Phase 1 continuation)
+
+**Plan:** `docs/plans/2026-06-14-stage3-ai-motion.md` (read its status log — has full detail + the agentic-access runbook).
+
+**Done:** Phase 0 (agentic SSH to the RTX 5080 — `ssh rtx5080` works) + Phase 1 Blackwell de-risk (WSL2 Ubuntu, conda env `dart`, **torch 2.11.0+cu128 runs GPU matmul on the 5080, sm_120**). DART cloned at WSL `/root/DART`.
+
+**Next steps (in order):**
+1. **Get SMPL-X + SMPL-H body models** (the blocker). Gated behind MPI account login at `smpl-x.is.tue.mpg.de` + `mano.is.tue.mpg.de` (license accept). User chose "Claude drives the download via browser" — needs the user logged into those MPI sites (or creds). Place per DART README under `/root/DART/data/`. ⚠ non-commercial license = prototype-only.
+2. **gdown the DART checkpoints** (Google Drive link in DART README) into `/root/DART`.
+3. **Install DART deps** in the `dart` conda env: `pytorch3d` (easy on Linux) + the env.yml pip list, MINUS the CUDA-11.8 torch pins (keep the working cu128 torch). Adapt any torch-2.0→2.11 API breaks.
+4. **Run a DART demo** (`/root/DART/demos/run_demo.sh` etc.) → measure VRAM + latency on the 5080. Write `docs/research/2026-06-14-dart-on-5080.md`.
+5. → **Phase 2:** SMPL-X axis-angle → normalized-VRM via the Bug-2 harness (`tools/convert_to_normalized.py` + `ground_truth.mjs`). New `tools/dart_to_glb.py`. Render-gate it.
+
+**Access cheat-sheet:** `ssh rtx5080 "<cmd>"` (cmd shell; use `&` separators). WSL: `ssh rtx5080 "wsl -d Ubuntu-24.04 -u root -e bash -c \"...\""` (base64-pipe complex scripts to dodge quoting). conda env: `source /root/miniconda3/etc/profile.d/conda.sh; conda activate dart`.
+
+---
+
+## Earlier this session (2026-06-14): Stage 2b Phase 1 shipped + pushed
 
 Planned + shipped **Stage 2b Phase 1: click-to-walk navigation** — the avatar can now walk
-around her loaded 3D room. Plan: `docs/plans/2026-06-14-stage2b-p1-click-to-walk.md`.
+around her loaded 3D room. Plan: `docs/plans/2026-06-14-stage2b-p1-click-to-walk.md`. (Pushed `cd27227..140c3f8`.)
 
 - `df6e99f` — WalkController in `viewer.html` (turn → `walking` clip → root translate at
   1.1 m/s with y glued to floor → real `THREE.Raycaster` collision: floor-pick on click +

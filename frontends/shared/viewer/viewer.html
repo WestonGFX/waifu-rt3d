@@ -8065,9 +8065,17 @@
                     (gltf) => {
                         clearEnvironment();   // guard against a rapid second load
                         const env = gltf.scene;
-                        // Floor-align: drop the scene so its lowest point rests on y=0,
-                        // matching the avatar's grounded feet.
+                        // Align the room to the avatar, who stands at world origin:
+                        //   - X/Z: centre the room's footprint on the avatar (room GLBs are
+                        //     rarely authored with their floor centre at the origin — without
+                        //     this the avatar lands jammed in a corner and the camera ends up
+                        //     buried inside a wall).
+                        //   - Y: drop the scene so its lowest point rests on y=0, matching the
+                        //     avatar's grounded feet (the grounding anchor).
                         const bbox = new THREE.Box3().setFromObject(env);
+                        const envCenter = bbox.getCenter(new THREE.Vector3());
+                        env.position.x -= envCenter.x;
+                        env.position.z -= envCenter.z;
                         env.position.y -= bbox.min.y;
                         env.traverse((child) => {
                             if (child.isMesh) {

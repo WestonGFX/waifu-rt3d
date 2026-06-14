@@ -1,6 +1,6 @@
 import { Component, useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Sliders, RotateCcw, Loader2, AlertTriangle, Box, RefreshCw, Sparkles, Wifi, WifiOff, X, Camera, Settings2, ChevronDown } from 'lucide-react';
+import { ChevronLeft, Sliders, RotateCcw, Loader2, AlertTriangle, Box, RefreshCw, Sparkles, Wifi, WifiOff, X, Camera, Settings2, ChevronDown, Home } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
 import { useViewerStore } from '../stores/viewerStore';
@@ -268,6 +268,10 @@ export function ModelPanel({ character }: ModelPanelProps) {
   const [vrmLoadState, setVrmLoadState] = useState<'idle' | 'loading' | 'loaded' | 'failed'>('idle');
   const [vrmFailReason, setVrmFailReason] = useState<string>('');
 
+  /** Stage 2a: available 3D environments (room GLBs) + the character's current pick. */
+  const [environments, setEnvironments] = useState<Array<{ name: string; url: string }>>([]);
+  const [envUrl, setEnvUrl] = useState<string>(character.environment_url ?? '');
+
   /** Whether the camera preset strip is expanded (click-to-open via 📷 button). */
   const [cameraBarOpen, setCameraBarOpen] = useState(false);
   /** Whether the advanced panels slide-up (EffectsPanel + AnimationBrowser) is open. */
@@ -462,6 +466,26 @@ export function ModelPanel({ character }: ModelPanelProps) {
       setVrmLoadState('idle');
     }
   }, [modelPanelOpen, vrmUrl]);
+
+  // Stage 2a: load the environment list once, and keep the picker in sync with
+  // the active character's saved environment.
+  useEffect(() => {
+    api.listEnvironments().then(r => setEnvironments(r.environments)).catch(() => {});
+  }, []);
+  useEffect(() => {
+    setEnvUrl(character.environment_url ?? '');
+  }, [character.id, character.environment_url]);
+
+  /**
+   * Stage 2a: change the avatar's 3D room — persist on the character and render
+   * it immediately. Empty string clears the environment (transparent void).
+   */
+  const handleEnvironmentChange = useCallback((url: string) => {
+    setEnvUrl(url);
+    const value = url || null;
+    viewer.dispatchLoadEnvironment(value);
+    api.setCharacterEnvironment(character.id, value).catch(() => {});
+  }, [character.id, viewer]);
 
   /**
    * Retry loading the VRM model after a failure.
@@ -1108,6 +1132,43 @@ export function ModelPanel({ character }: ModelPanelProps) {
                 >
                   <Camera size={13} /> Photo
                 </button>
+              )}
+
+              {/* 🏠 Environment — place her in a 3D room (Stage 2a) */}
+              {vrmLoadState === 'loaded' && !isLive2D && (
+                <div
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                  style={{
+                    backgroundColor: envUrl ? 'var(--color-accent)' : 'var(--color-surface)',
+                    borderRadius: 'var(--radius-button)',
+                    boxShadow: 'var(--shadow-card)',
+                    color: envUrl ? 'var(--color-accent-text)' : 'var(--color-text-secondary)',
+                    border: '1px solid var(--color-border)',
+                  }}
+                  title="Place the avatar in a 3D room"
+                >
+                  <Home size={13} />
+                  <select
+                    value={envUrl}
+                    onChange={(e) => handleEnvironmentChange(e.target.value)}
+                    aria-label="Avatar environment"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'inherit',
+                      font: 'inherit',
+                      cursor: 'pointer',
+                      outline: 'none',
+                    }}
+                  >
+                    <option value="">No room</option>
+                    {environments.map((env) => (
+                      <option key={env.url} value={env.url} style={{ color: 'var(--color-text-primary)' }}>
+                        {env.name.replace(/_/g, ' ')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
             </div>
 

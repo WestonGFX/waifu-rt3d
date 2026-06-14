@@ -3,7 +3,7 @@
 **Last updated:** 2026-06-03 (CI pipeline fixed — master red→GREEN; useTwoPhaseChips hook extraction)
 **Branch:** `master` · HEAD = `8b50c56` · CI GREEN (fast-forwarded 42 commits from `feat/avatar-motion`, pushed to origin).
 **Schema version:** v89 (`characters.environment_url` — Stage 2a avatar 3D location; v88 = memory forget/privacy trust spine).
-**Tests:** **3,104 backend pytest** + **479 sakura vitest** passing, tsc clean.
+**Tests:** **3,121 backend pytest** + **487 sakura vitest** passing, tsc clean.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
@@ -15,9 +15,11 @@
 - **Retarget Phase B DONE** (`4838386`): Phase C (`f88fa90`) had wired `KOKORO_GESTURE_CLIPS` to fetch `/files/animations/vrm-baked/<stem>.normalized.glb`, but only 5 stale normalized clips were on disk and 3 of the 6 mapped gestures had no normalized file — half of Kokoro's gestures 404'd. Ran `tools/convert_to_normalized.py --in-dir` over the 28 raw bakes → full 28-clip normalized library (22 humanoid nodes each). Render gate PASSED on the 3 previously-missing gestures (`hands_forward_gesture`, `blow_a_kiss`, `head_nod_yes`): 22/22 tracks, 4/4 distinct frames, arms track, grounded, zero eversion. convert pytest 10/10. Clips gitignored (per-machine runtime assets). Proof: `docs/testing/screenshots/2026-06-13-phaseB-gestures/`.
 - **Backlog reconciliation** — stale "pending" items confirmed already DONE in code: M6 item 22 (`/api/characters/{id}/nsfw-eligibility` endpoint live, session 43 `d5c1e48`), bond burn-down finishing pass (zero `setPendingAchievement`/`setPendingLevelUp` writes remain), M8 marketing docs (`docs/marketing/eu-ai-act-compliance.md` + `privacy-comparison.md` both exist). MEMORY.md NEXT SESSION TASKS were stale.
 - **CC install fix** (global `~/.claude/settings.json`, not repo): Fable 5 was pinned as a specific default model; Anthropic disabled it → forced manual model reselect every session. Set `"model": "opus[1m]"` (tier alias, auto-resolves, never dangles) + `"fallbackModel": ["sonnet","haiku"]` (auto-switch on unavailability). Survives future model add/remove.
-- **Avatar-motion remaining stages are plan-gated:** Stage 2 (avatar in real 3D location — design decisions), Stage 3 (on-the-fly AI motion — needs RTX box, not the M2 Pro), Stage 4 (Blender full asset pipeline — as-needed). Awaiting user direction on which, if any.
+- **Stage 2a DONE (avatar in a real 3D location) — P1–P6 core, 9 commits (`61f0eea`→`7f97989`).** User chose "download a GLB scene" + "lofi cozy" aesthetic. Pipeline: schema v89 `characters.environment_url` → viewer `loadEnvironment` (room GLB behind avatar + ShadowMaterial grounding floor + X/Z centring + leak-safe dispose, camera stays on avatar) → `viewerStore.dispatchLoadEnvironment` → `GET/PUT /api/characters/{id}/environment` + `GET /api/environments` + api.ts mirror → ModelPanel renders the room on character load. Shipped asset: **"Living Room" by Alex Safayan, CC-BY 3.0** (`backend/storage/environments/lofi_room.glb`), attribution in `environments/CREDITS.md`. Render-gate verified (avatar grounded on the rug, room around her, dispose restores void): `docs/testing/screenshots/2026-06-14-stage2a-lofiroom/`. New tool `tools/verify/render_environment.mjs`. **First asset pick was an exterior diorama (sealed box) — lesson logged: preview `static.poly.pizza/<uuid>.jpg` thumbnails before downloading.**
+- **Stage 2a remaining:** P6 visible Settings environment-picker control (deferred — "no surprise UI" rule needs placement sign-off; env settable via API + renders on load today). To see it live: **restart backend** (running server v5.34.0 predates the new endpoints) → set via API/picker.
+- **Other avatar-motion stages still gated:** Stage 2b character navigation (separate multi-month plan), Stage 3 AI motion (needs RTX box, not M2 Pro), Stage 4 Blender pipeline (as-needed).
 
-**Live status:** push gate clear (no active OPEN BUG/UNFIXED/BLOCKER markers). 3114 pytest + 484 vitest, tsc clean, server up (v5.34.0). 1 local commit (`4838386`) unpushed.
+**Live status:** push gate clear (no active OPEN BUG/UNFIXED/BLOCKER markers). 3121 pytest + 487 vitest, tsc clean. Backend running on OLD code (v5.34.0) — restart to pick up v89 + environment endpoints. 11 local commits unpushed (`4838386`→`7f97989`).
 
 ---
 

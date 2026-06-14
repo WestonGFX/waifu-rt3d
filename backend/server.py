@@ -18618,6 +18618,30 @@ class EnvironmentUpdate(BaseModel):
     environment_url: str | None = None
 
 
+@app.get("/api/environments")
+def list_environments() -> dict:
+    """List the available static 3D environments (room/cafe GLBs).
+
+    Scans ``storage/environments/`` for ``*.glb`` files and returns each as a
+    pickable option for the environment selector (Stage 2a). The ``url`` is the
+    ``/files/...`` path the viewer's ``loadEnvironment`` handler expects.
+
+    Returns:
+        ``{"ok": True, "environments": [{"name": str, "url": str}, ...]}``
+
+    Example:
+        >>> GET /api/environments
+        >>> {"ok": True, "environments": [
+        ...     {"name": "lofi_room", "url": "/files/environments/lofi_room.glb"}]}
+    """
+    env_dir = STORAGE / "environments"
+    items: list[dict] = []
+    if env_dir.is_dir():
+        for f in sorted(env_dir.glob("*.glb")):
+            items.append({"name": f.stem, "url": f"/files/environments/{f.name}"})
+    return {"ok": True, "environments": items}
+
+
 @app.get("/api/characters/{char_id}/environment")
 def get_character_environment(char_id: int) -> dict:
     """Get the character's static 3D environment (room/cafe) URL.

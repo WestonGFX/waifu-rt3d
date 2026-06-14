@@ -1667,6 +1667,16 @@ export const api = {
     del<{ ok: boolean }>(`/api/characters/${charId}/physics`),
 
   /**
+   * List available static 3D environments (room GLBs under storage/environments/).
+   *
+   * @returns ok + array of { name, url } pickable environments
+   */
+  listEnvironments: () =>
+    get<{ ok: boolean; environments: Array<{ name: string; url: string }> }>(
+      '/api/environments',
+    ),
+
+  /**
    * Fetch the character's static 3D environment (Stage 2a).
    *
    * @param charId - Character database ID

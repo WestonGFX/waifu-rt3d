@@ -68,6 +68,19 @@ def test_missing_body_field_clears(client, char_id):
     assert resp.json()["environment_url"] is None
 
 
+def test_list_environments_shape(client):
+    """The environments list endpoint returns the expected shape."""
+    resp = client.get("/api/environments")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert isinstance(body["environments"], list)
+    # Each entry (if any) carries name + url.
+    for entry in body["environments"]:
+        assert set(entry.keys()) == {"name", "url"}
+        assert entry["url"].startswith("/files/environments/")
+
+
 def test_get_unknown_character_404(client):
     """Unknown character id returns 404 on GET."""
     assert client.get("/api/characters/999999/environment").status_code == 404

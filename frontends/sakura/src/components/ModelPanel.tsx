@@ -454,6 +454,8 @@ export function ModelPanel({ character }: ModelPanelProps) {
         }
         useViewerStore.getState().dispatchLoadModel(vrmUrl);
         useViewerStore.getState().dispatchCameraPreset('bust');
+        // Stage 2a: place her in her 3D room (or clear it if she has none set).
+        useViewerStore.getState().dispatchLoadEnvironment(character.environment_url ?? null);
       }, 800);
       return () => clearTimeout(timer);
     } else if (!vrmUrl) {
@@ -472,6 +474,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
     setTimeout(() => {
       useViewerStore.getState().dispatchLoadModel(vrmUrl);
       useViewerStore.getState().dispatchCameraPreset('bust');
+      useViewerStore.getState().dispatchLoadEnvironment(character.environment_url ?? null);
     }, 400);
   };
 

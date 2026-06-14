@@ -305,3 +305,19 @@ Replace the transparent void behind the avatar with a real 3D location so the co
 
 ## Status log
 - **2026-06-13 — Stage 2a planned + approach chosen (download GLB scene). Starting P1 (schema v89).**
+- **2026-06-14 — P1–P4 DONE; full pipeline wired + verified end-to-end.**
+  - **P1** (`61f0eea`): schema v89, `characters.environment_url`. Idempotent, 187 DB tests pass.
+  - **P2** (`c8bb009`): viewer.html `loadEnvironment`/`clearEnvironment` — room GLB behind avatar +
+    invisible ShadowMaterial floor at y=0 (grounding anchor) + bbox floor-alignment + leak-safe
+    dispose. Camera deliberately NOT reframed (stays on avatar). Visually verified via new
+    `tools/verify/render_environment.mjs`: avatar grounds on the room floor with contact shadow,
+    room renders behind, clear restores the void. Screenshots `docs/testing/screenshots/2026-06-14-stage2a-environment/`.
+  - **P3** (`6c7a634`): `viewerStore.dispatchLoadEnvironment(url|null)` + ViewerCommand kinds. 3 vitest.
+  - **P4** (`f652f1b`): `GET`/`PUT /api/characters/{id}/environment` (Pydantic `EnvironmentUpdate`) +
+    `api.getCharacterEnvironment`/`setCharacterEnvironment` + `Character.environment_url` mirror + 6 pytest.
+    Added `environment_url` to conftest character DDL (test-schema drift). 3120 backend pass, tsc clean.
+  - Test asset `backend/storage/environments/test_room.glb` (Blender floor+2 walls) — placeholder; real
+    art lands in P5. NOTE: floor reads dark under the 3-point rig (test asset only — real textured room
+    will light correctly); watch env lighting in P5.
+  - **NEXT — P5:** source 2–3 CC0/CC-BY room GLBs, present for user visual pick, drop in, full gate
+    (light/dark theme, 60fps, spring bones, grounding). Then **P6:** Settings environment picker UI.

@@ -14,6 +14,8 @@ export interface Character {
   live2d_model?: string;
   background_url?: string;
   background_mode?: string;
+  /** Stage 2a: static 3D environment GLB under /files/environments/, or null/absent for none. */
+  environment_url?: string | null;
   greeting_message?: string;
   llm_endpoint?: string;
   llm_model?: string;

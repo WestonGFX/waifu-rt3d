@@ -1666,6 +1666,30 @@ export const api = {
   deleteCharacterPhysics: (charId: number) =>
     del<{ ok: boolean }>(`/api/characters/${charId}/physics`),
 
+  /**
+   * Fetch the character's static 3D environment (Stage 2a).
+   *
+   * @param charId - Character database ID
+   * @returns ok + environment_url (null = no environment / transparent void)
+   */
+  getCharacterEnvironment: (charId: number) =>
+    get<{ ok: boolean; environment_url: string | null }>(
+      `/api/characters/${charId}/environment`,
+    ),
+
+  /**
+   * Set or clear the character's static 3D environment GLB.
+   *
+   * @param charId          - Character database ID
+   * @param environmentUrl  - GLB path under /files/environments/, or null to clear
+   * @returns ok + the saved environment_url
+   */
+  setCharacterEnvironment: (charId: number, environmentUrl: string | null) =>
+    put<{ ok: boolean; environment_url: string | null }>(
+      `/api/characters/${charId}/environment`,
+      { environment_url: environmentUrl },
+    ),
+
   // ── Kokoro Engine v1 ──────────────────────────────────────────────
 
   /**

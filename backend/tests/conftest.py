@@ -124,7 +124,8 @@ def _create_schema(db_path: Path) -> None:
                 proactive_enabled INTEGER DEFAULT 0,
                 proactive_frequency TEXT DEFAULT 'normal',
                 proactive_hours TEXT DEFAULT '9-22',
-                active_outfit_id INTEGER
+                active_outfit_id INTEGER,
+                environment_url TEXT DEFAULT NULL
             );
 
             CREATE TABLE IF NOT EXISTS scheduled_messages (

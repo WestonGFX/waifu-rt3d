@@ -8913,6 +8913,7 @@ async def update_character(character_id: int, req: Request):
             "scenario", "chara_description", "mes_example",
             "post_history_instructions", "creator_notes",
             "alternate_greetings", "chara_tags",
+            "environment_url",  # v89: Stage 2a static 3D location (room/cafe GLB)
         ]
         _json_fields = {"capability_profile", "voice_config", "vocab_categories", "animation_profile",
                         "emotion_voice_overrides", "bible_sections", "alternate_greetings", "chara_tags"}
@@ -18601,6 +18602,86 @@ def set_character_default_writing_style(char_id: int, request: Request):
         )
         conn.commit()
         return {"ok": True, "style": style}
+
+
+# ── Stage 2a: Avatar Environment (static 3D location) ────────────────────────
+
+
+class EnvironmentUpdate(BaseModel):
+    """Request body for setting a character's static 3D environment.
+
+    Attributes:
+        environment_url: GLB path under ``/files/environments/``, or ``None`` to
+            clear the environment (restore the transparent-void backdrop).
+    """
+
+    environment_url: str | None = None
+
+
+@app.get("/api/characters/{char_id}/environment")
+def get_character_environment(char_id: int) -> dict:
+    """Get the character's static 3D environment (room/cafe) URL.
+
+    The environment is a GLB served under ``/files/environments/`` and rendered
+    behind the avatar by the viewer's ``loadEnvironment`` handler (Stage 2a). A
+    ``null`` value means no environment (the legacy transparent-void backdrop).
+
+    Args:
+        char_id: Character ID.
+
+    Returns:
+        ``{"ok": True, "environment_url": str | None}``
+
+    Raises:
+        HTTPException: 404 if the character does not exist.
+
+    Example:
+        >>> GET /api/characters/1/environment
+        >>> {"ok": True, "environment_url": "/files/environments/cozy_room.glb"}
+    """
+    with db_ctx() as conn:
+        row = conn.execute(
+            "SELECT environment_url FROM characters WHERE id = ?", (char_id,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Character not found")
+        return {"ok": True, "environment_url": row[0]}
+
+
+@app.put("/api/characters/{char_id}/environment")
+def set_character_environment(char_id: int, body: EnvironmentUpdate) -> dict:
+    """Set (or clear) the character's static 3D environment URL.
+
+    Pass ``environment_url`` to place the avatar in a room, or ``null`` to clear
+    it (restoring the transparent-void backdrop). The value is stored verbatim on
+    the character and loaded by the viewer on next render.
+
+    Args:
+        char_id: Character ID.
+        body: ``EnvironmentUpdate`` carrying ``environment_url``.
+
+    Returns:
+        ``{"ok": True, "environment_url": str | None}``
+
+    Raises:
+        HTTPException: 404 if the character does not exist.
+
+    Example:
+        >>> PUT /api/characters/1/environment
+        >>> Body: {"environment_url": "/files/environments/cozy_room.glb"}
+    """
+    with db_ctx() as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM characters WHERE id = ?", (char_id,)
+        ).fetchone()
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Character not found")
+        conn.execute(
+            "UPDATE characters SET environment_url = ? WHERE id = ?",
+            (body.environment_url, char_id),
+        )
+        conn.commit()
+        return {"ok": True, "environment_url": body.environment_url}
 
 
 # ── F15: Sensory Profiles ────────────────────────────────────────────────────

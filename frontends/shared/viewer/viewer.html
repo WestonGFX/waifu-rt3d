@@ -111,6 +111,14 @@
         let currentGlbClips = [];     // Embedded AnimationClip[] from GLB
         let currentEnvironment = null; // Stage 2a: loaded environment (room/cafe) GLB scene
         let environmentFloor = null;   // Stage 2a: shadow-catching floor plane at world y=0
+        // Stage 2b: click-to-walk navigation state (module scope — survives model swaps)
+        /** When true, canvas left-clicks ray-pick the floor and drive walkTo. Default false. */
+        let _walkModeEnabled = false;
+        /** Flat cache of meshes from currentEnvironment for forward-collision rays. Rebuilt on loadEnvironment. */
+        let _collidableEnvMeshes = [];
+        /** VRM scene.rotation.y captured at model load — the "facing -Z" baseline for yaw tweens.
+         *  VRM 0.x: π (VRMUtils.rotateVRM0 applied). VRM 1.x: 0 (already faces -Z in gltf). */
+        let _walkNeutralYaw = 0;
         let _currentGlbAction = null; // Currently playing GLB AnimationAction (for crossfade)
         let clock = new THREE.Clock();
         let lipSync = null;
@@ -412,6 +420,66 @@
         const _raycaster = new THREE.Raycaster();
         const _pointerNDC = new THREE.Vector2();
         let _touchCooldowns = {};
+        // Stage 2b: walk controller — pre-allocated so animate() never calls `new` per frame
+        const _walkRaycaster = new THREE.Raycaster();       // forward collision rays
+        const _walkClickRaycaster = new THREE.Raycaster();  // floor pick on canvas click
+        const _walkClickNDC = new THREE.Vector2();
+        const _walkCamTarget = new THREE.Vector3();         // camera lerp destination (reused each tick)
+        const _walkRayOrigin = new THREE.Vector3();         // scratch for ray origins
+        const _walkRayDir = new THREE.Vector3();            // scratch for ray direction + normal check
+        const _walkHits = [];                               // reusable intersect result buffer (cleared before use)
+        // Drag-vs-click guard: browsers still fire a `click` after an orbit drag ends on the
+        // same element, which would walk the avatar to wherever the cursor landed. Track the
+        // pointer-down position and ignore "clicks" whose pointer moved beyond DRAG_CLICK_PX.
+        let _walkDownX = 0, _walkDownY = 0;
+        const DRAG_CLICK_PX = 6;
+        /**
+         * Walk controller state + tunable constants. Declared at module scope so it is
+         * initialized before the animate loop first ticks (it calls _tickWalkController,
+         * which reads _walk — declaring this inside init() after animate starts caused a
+         * temporal-dead-zone "Cannot access '_walk' before initialization" every frame).
+         * Tunable constants live here — calibrate by eye in the browser.
+         * @type {Object}
+         */
+        const _walk = {
+            // ─── Tunable constants ────────────────────────────────────────────────
+            /** Ground speed in m/s. Calibrate against the walk clip's foot-cycle to
+             *  minimise foot-slide. At 1.1 m/s the normalised clip slides ~10 cm/step
+             *  on a standard 60-frame loop — acceptable for Phase 1. */
+            WALK_SPEED:        1.1,
+            /** Arrival radius in metres. */
+            ARRIVE_EPSILON:    0.05,
+            /** Stop-before-wall distance in metres (half-body clearance). */
+            STOP_MARGIN:       0.3,
+            /** Seconds for the yaw tween from current heading to target heading. */
+            TURN_DURATION:     0.25,
+            /** Walk clip crossfade in/out durations (seconds). */
+            WALK_FADE_IN:      0.3,
+            WALK_FADE_OUT:     0.3,
+            /** Camera follow lerp factor per frame (gentle — avoids orbit snap). */
+            CAM_FOLLOW_LERP:   0.05,
+            /** Camera orbit-target Y, metres (avatar eye height). */
+            CAM_TARGET_Y:      1.2,
+            /** Walk animation clip URL (in-place, rotation-only, Mixamo retargeted). */
+            CLIP_URL:          '/files/animations/vrm-baked/walking.normalized.glb',
+            CLIP_NAME:         'walking',
+            /** Ray heights for the forward capsule approximation: ankle / hip / head. */
+            COLLISION_HEIGHTS: [0.1, 0.9, 1.5],
+            /** Forward offset for ray origin — places ray ahead of avatar centre. */
+            COLLISION_OFFSET:  0.2,
+            // ─── Runtime state ────────────────────────────────────────────────────
+            active:       false,   // currently translating toward a target
+            clipLoaded:   false,   // walk clip in ClipLayer library
+            clipLoading:  false,   // async load in-flight (prevent double-load)
+            clipPlaying:  false,   // walk clip currently playing (prevent re-trigger)
+            targetX:      0,
+            targetZ:      0,
+            groundedY:    0,       // captured at walk-start; enforced every frame
+            fromYaw:      0,
+            toYaw:        0,
+            turnElapsed:  0,
+            turning:      false,   // yaw tween in progress
+        };
 
         /**
          * Handle pointer click on canvas — raycast to detect character touch.
@@ -7487,6 +7555,10 @@
                 // See: docs/plans/2026-05-08-animation-polish.md Phase 1, spring-bones-spec Phase 1A
                 const delta = Math.min(clock.getDelta(), 0.05);
 
+                // Stage 2b: advance walk controller BEFORE controls.update() so the
+                // lerped camera target is picked up by orbit recalculation this frame.
+                _tickWalkController(delta);
+
                 controls.update();
 
                 // Tick entrance animation (multi-style) for any model type
@@ -8085,6 +8157,7 @@
                         });
                         scene.add(env);
                         currentEnvironment = env;
+                        rebuildCollidableCache(); // Stage 2b: refresh collision mesh cache
                         window.parent.postMessage({ type: 'environmentLoaded', url }, '*');
                         console.log('[Viewer] Environment loaded; floor-aligned (min.y was',
                             bbox.min.y.toFixed(3), ')');
@@ -8247,6 +8320,9 @@
 
                             // Phase E: FootPlantController — prevents foot penetrating ground plane.
                             footPlantController = new FootPlantController(vrm, 0);
+
+                            // Stage 2b: capture neutral yaw + pre-load walk clip for this VRM
+                            initWalkController();
 
                             // Auto-frame camera based on model's actual height
                             const headBone = vrm.humanoid.getRawBoneNode('head');
@@ -8710,6 +8786,320 @@
                         });
                     }
                 }
+            }
+
+            // ── Stage 2b: Walk Navigation ───────────────────────────────────────────
+            //
+            // WalkController — drives avatar translation along the floor with:
+            //   A) yaw tween so she faces the destination before walking
+            //   B) per-frame root translation (in-place clip + separate position advance)
+            //   C) forward capsule-ray collision that stops her short of walls/props
+            //   D) camera-target follow so framing stays on her throughout
+            //
+            // All Three.js objects are pre-allocated at module scope (_walkRay*, _walkHits …)
+            // so the render loop allocates NOTHING.  Grounding invariant: position.y is
+            // captured once at walk-start and enforced every frame — never drifts.
+            //
+            // Tunable constants live in _walk.* (declared at module scope near the top of
+            // this <script> so it initializes before the animate loop first ticks).
+
+            /**
+             * Capture the neutral yaw for the newly loaded VRM and pre-load the walk clip.
+             * Must be called after animationDirector + ClipLayer are fully set up.
+             *
+             * Neutral yaw differs by VRM version:
+             *   VRM 0.x — scene.rotation.y = π after VRMUtils.rotateVRM0 (local +Z → world -Z)
+             *   VRM 1.x — scene.rotation.y = 0  (local -Z already world -Z)
+             * The unified yaw formula  neutralYaw + atan2(-dx, -dz)  works for both.
+             */
+            function initWalkController() {
+                if (!currentVrm) return;
+                _walkNeutralYaw = currentVrm.scene.rotation.y;
+                _walk.active      = false;
+                _walk.turning     = false;
+                _walk.clipLoaded  = false;
+                _walk.clipLoading = false;
+                _walk.clipPlaying = false;
+                _ensureWalkClip();
+                console.log('[WalkController] Initialized; neutralYaw =',
+                    _walkNeutralYaw.toFixed(3), '(VRM', currentVrm.meta?.metaVersion ?? '?', ')');
+            }
+
+            /**
+             * Background-load the walk clip via ClipLayer. Idempotent: no-op when already
+             * loaded or loading. Silent on network error.
+             */
+            function _ensureWalkClip() {
+                if (_walk.clipLoaded || _walk.clipLoading) return;
+                const cl = animationDirector?.getLayer('clip');
+                if (!cl) return;
+                _walk.clipLoading = true;
+                cl.loadClip(_walk.CLIP_URL, _walk.CLIP_NAME, { retarget: true })
+                    .then(() => {
+                        _walk.clipLoaded  = true;
+                        _walk.clipLoading = false;
+                        console.log('[WalkController] Walk clip ready');
+                    })
+                    .catch((err) => {
+                        _walk.clipLoading = false;
+                        console.warn('[WalkController] Walk clip load failed:', err);
+                    });
+            }
+
+            /**
+             * Rebuild the flat mesh cache for forward-collision raycasting.
+             * Call once after each environment load — never per-frame.
+             * Stores references into _collidableEnvMeshes (module scope).
+             */
+            function rebuildCollidableCache() {
+                _collidableEnvMeshes = [];
+                if (currentEnvironment) {
+                    currentEnvironment.traverse((child) => {
+                        if (child.isMesh) _collidableEnvMeshes.push(child);
+                    });
+                }
+                console.log('[WalkController] Collidable cache rebuilt:',
+                    _collidableEnvMeshes.length, 'meshes');
+            }
+
+            /**
+             * Command the avatar to walk to world-space (targetX, *, targetZ).
+             * Interruptible: a new walkTo mid-walk retargets without clip restart.
+             *
+             * Phase 1 grounding invariant: groundedY is captured at call time and enforced
+             * every frame — position.y never changes during locomotion.
+             *
+             * @param {number} targetX - World X destination
+             * @param {number} targetZ - World Z destination
+             */
+            function walkTo(targetX, targetZ) {
+                if (!currentVrm) return;
+                const pos = currentVrm.scene.position;
+                const dx = targetX - pos.x;
+                const dz = targetZ - pos.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist < _walk.ARRIVE_EPSILON) {
+                    _finishWalk(pos.x, pos.z); // already at destination
+                    return;
+                }
+                _walk.groundedY = pos.y; // capture grounded Y (must be 0 at runtime)
+                _walk.targetX   = targetX;
+                _walk.targetZ   = targetZ;
+                // Unified yaw formula (works for VRM 0.x neutralYaw=π and 1.x neutralYaw=0):
+                //   After scene.rotation.y = neutralYaw + atan2(-dx, -dz) the model's
+                //   world forward vector equals (dx, 0, dz)/|d| for both VRM types.
+                const desiredYaw = _walkNeutralYaw + Math.atan2(-dx, -dz);
+                _walk.fromYaw    = currentVrm.scene.rotation.y;
+                _walk.toYaw      = desiredYaw;
+                _walk.turnElapsed = 0;
+                _walk.turning    = true;
+                _walk.active     = true;
+                _ensureWalkClip();
+                console.log('[WalkController] walkTo', targetX.toFixed(2), targetZ.toFixed(2));
+            }
+
+            /**
+             * Settle at finalX/finalZ: fade walk clip, post avatarMoved to parent.
+             *
+             * @param {number} finalX
+             * @param {number} finalZ
+             */
+            function _finishWalk(finalX, finalZ) {
+                if (!_walk.active && !_walk.turning) return;
+                _walk.active  = false;
+                _walk.turning = false;
+                if (_walk.clipPlaying) {
+                    const cl = animationDirector?.getLayer('clip');
+                    if (cl) cl.stopClip(_walk.WALK_FADE_OUT);
+                    _walk.clipPlaying = false;
+                }
+                window.parent.postMessage({ type: 'avatarMoved', x: finalX, z: finalZ }, '*');
+                console.log('[WalkController] Arrived at', finalX.toFixed(2), finalZ.toFixed(2));
+            }
+
+            /**
+             * Cancel any active walk and settle to idle. Callable from stopWalk postMessage.
+             */
+            function stopWalk() {
+                if (!_walk.active && !_walk.turning) return;
+                const pos = currentVrm?.scene?.position;
+                _finishWalk(pos?.x ?? 0, pos?.z ?? 0);
+            }
+
+            /**
+             * Per-frame walk tick. Call BEFORE controls.update() so the camera follow
+             * target is updated before the orbit position is recomputed.
+             *
+             * @param {number} delta - Frame delta in seconds (already capped at 0.05)
+             */
+            function _tickWalkController(delta) {
+                if ((!_walk.active && !_walk.turning) || !currentVrm) return;
+
+                const pos = currentVrm.scene.position;
+
+                // Camera follow: gently lerp controls.target toward the avatar's head.
+                // Runs during both the turn and walk phases.
+                // No controls._updateSpherical() call needed — controls.update() will
+                // position the camera at (lerped_target + unchanged_spherical_offset),
+                // which naturally follows the avatar at the same radius and angles.
+                _walkCamTarget.set(pos.x, _walk.CAM_TARGET_Y, pos.z);
+                controls.target.lerp(_walkCamTarget, _walk.CAM_FOLLOW_LERP);
+
+                // ── Turn phase: smooth yaw tween over TURN_DURATION ─────────────────
+                if (_walk.turning) {
+                    _walk.turnElapsed += delta;
+                    const t = Math.min(_walk.turnElapsed / _walk.TURN_DURATION, 1.0);
+                    const s = t * t * (3.0 - 2.0 * t); // smoothstep easing
+                    currentVrm.scene.rotation.y =
+                        _walk.fromYaw + (_walk.toYaw - _walk.fromYaw) * s;
+                    if (t >= 1.0) {
+                        currentVrm.scene.rotation.y = _walk.toYaw; // snap exact
+                        _walk.turning = false;
+                        // Start walk clip on first turn completion (not on retarget mid-walk)
+                        if (!_walk.clipPlaying && _walk.clipLoaded) {
+                            const cl = animationDirector?.getLayer('clip');
+                            if (cl) {
+                                cl.playClip(_walk.CLIP_NAME, {
+                                    loop:   true,
+                                    fadeIn: _walk.WALK_FADE_IN,
+                                });
+                                _walk.clipPlaying = true;
+                            }
+                        }
+                    }
+                    pos.y = _walk.groundedY; // GROUNDING INVARIANT — hold Y during turn
+                    return; // no translation while turning
+                }
+
+                // ── Walk phase: translate toward target ──────────────────────────────
+                const dx   = _walk.targetX - pos.x;
+                const dz   = _walk.targetZ - pos.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+
+                if (dist < _walk.ARRIVE_EPSILON) {
+                    pos.x = _walk.targetX;
+                    pos.z = _walk.targetZ;
+                    pos.y = _walk.groundedY; // GROUNDING INVARIANT
+                    _finishWalk(_walk.targetX, _walk.targetZ);
+                    return;
+                }
+
+                const nx = dx / dist; // normalised heading
+                const nz = dz / dist;
+
+                // Forward capsule collision — stop short of walls/props
+                if (_checkWallCollision(pos.x, _walk.groundedY, pos.z, nx, nz)) {
+                    pos.y = _walk.groundedY; // GROUNDING INVARIANT
+                    _walkBlockedStop(pos.x, pos.z);
+                    return;
+                }
+
+                // Advance position — cap step to remaining distance
+                const step = Math.min(_walk.WALK_SPEED * delta, dist);
+                pos.x += nx * step;
+                pos.z += nz * step;
+                pos.y  = _walk.groundedY; // GROUNDING INVARIANT — never let walk drift Y
+            }
+
+            /**
+             * Cast three forward horizontal rays at ankle/hip/head heights.
+             * Uses pre-allocated module-scope objects; never allocates per-call.
+             *
+             * @param {number} ax  Avatar world X
+             * @param {number} ay  Avatar world Y (grounded, 0)
+             * @param {number} az  Avatar world Z
+             * @param {number} nx  Normalised heading X
+             * @param {number} nz  Normalised heading Z
+             * @returns {boolean}  true when a wall/prop is within STOP_MARGIN
+             */
+            function _checkWallCollision(ax, ay, az, nx, nz) {
+                if (_collidableEnvMeshes.length === 0) return false;
+                _walkRayDir.set(nx, 0, nz); // horizontal ray — walls only
+                for (const h of _walk.COLLISION_HEIGHTS) {
+                    _walkRayOrigin.set(
+                        ax + nx * _walk.COLLISION_OFFSET,
+                        ay + h,
+                        az + nz * _walk.COLLISION_OFFSET,
+                    );
+                    _walkRaycaster.set(_walkRayOrigin, _walkRayDir);
+                    _walkHits.length = 0; // clear buffer without allocating
+                    _walkRaycaster.intersectObjects(_collidableEnvMeshes, false, _walkHits);
+                    if (_walkHits.length > 0 && _walkHits[0].distance < _walk.STOP_MARGIN) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            /**
+             * Halt due to wall/prop collision; post walkBlocked to parent.
+             *
+             * @param {number} finalX
+             * @param {number} finalZ
+             */
+            function _walkBlockedStop(finalX, finalZ) {
+                _walk.active  = false;
+                _walk.turning = false;
+                if (_walk.clipPlaying) {
+                    const cl = animationDirector?.getLayer('clip');
+                    if (cl) cl.stopClip(_walk.WALK_FADE_OUT);
+                    _walk.clipPlaying = false;
+                }
+                window.parent.postMessage({ type: 'walkBlocked', x: finalX, z: finalZ }, '*');
+                console.log('[WalkController] Blocked at', finalX.toFixed(2), finalZ.toFixed(2));
+            }
+
+            /**
+             * Canvas click handler for click-to-walk mode.
+             * No-op when _walkModeEnabled is false — orbit/touch behaviour is unchanged.
+             *
+             * Raycasts against cached environment meshes + shadow floor plane.
+             * Accepts only floor-like hits (world normal.y ≥ 0.7, hit y < 0.5 m).
+             * Rejects clicks that land on the avatar mesh (avatar hit would be closer).
+             *
+             * @param {MouseEvent} event
+             */
+            function _onWalkClick(event) {
+                if (!_walkModeEnabled || !currentVrm) return;
+
+                // Ignore clicks that were really orbit drags (pointer travelled too far).
+                if (Math.hypot(event.clientX - _walkDownX, event.clientY - _walkDownY) > DRAG_CLICK_PX) return;
+
+                const rect = renderer.domElement.getBoundingClientRect();
+                _walkClickNDC.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                _walkClickNDC.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+                _walkClickRaycaster.setFromCamera(_walkClickNDC, camera);
+
+                // Targets: environment mesh cache + the invisible shadow floor at y=0
+                const targets = _collidableEnvMeshes.slice(); // shallow copy of module cache
+                if (environmentFloor) targets.push(environmentFloor);
+                if (targets.length === 0) return; // no environment loaded — nowhere to walk
+
+                _walkHits.length = 0;
+                _walkClickRaycaster.intersectObjects(targets, false, _walkHits);
+                if (_walkHits.length === 0) return;
+
+                const hit = _walkHits[0];
+
+                // Require floor-like face: world-space normal must point mostly upward
+                if (!hit.face) return;
+                _walkRayDir.copy(hit.face.normal).transformDirection(hit.object.matrixWorld);
+                if (_walkRayDir.y < 0.7) return; // wall / ceiling / steep ramp — reject
+
+                // Height sanity: destination must be at ground level (< 0.5 m above y=0)
+                if (Math.abs(hit.point.y) > 0.5) return;
+
+                // Reject if the avatar mesh is closer (user clicked on the character, not floor)
+                const avatarMeshes = [];
+                currentVrm.scene.traverse((c) => { if (c.isMesh) avatarMeshes.push(c); });
+                if (avatarMeshes.length > 0) {
+                    _walkHits.length = 0;
+                    _walkClickRaycaster.intersectObjects(avatarMeshes, false, _walkHits);
+                    if (_walkHits.length > 0 && _walkHits[0].distance < hit.distance) return;
+                }
+
+                walkTo(hit.point.x, hit.point.z);
             }
 
             // ── PostMessage API ─────────────────────────────────
@@ -9801,6 +10191,34 @@
                     }
                 }
 
+                // Stage 2b: Click-to-walk navigation ────────────────────────────────
+                else if (type === 'setWalkMode') {
+                    // Enable/disable click-to-walk. Disabled by default — zero change to
+                    // normal-user behaviour when off.
+                    // payload: { enabled: boolean }
+                    _walkModeEnabled = payload?.enabled === true;
+                    console.log('[WalkController] Walk mode:', _walkModeEnabled);
+                }
+                else if (type === 'walkTo') {
+                    // Direct walk command (from viewerStore.dispatchWalkTo or AI).
+                    // payload: { x: number, z: number }
+                    if (typeof payload?.x === 'number' && typeof payload?.z === 'number') {
+                        walkTo(payload.x, payload.z);
+                    }
+                }
+                else if (type === 'stopWalk') {
+                    // Cancel any active walk and settle to idle.
+                    stopWalk();
+                }
+                else if (type === 'getAvatarPose') {
+                    // Debug/verification: report the avatar root world position so a headless
+                    // render harness can assert the grounding invariant (y ≈ 0) while walking.
+                    if (currentVrm) {
+                        const p = currentVrm.scene.position;
+                        window.parent.postMessage({ type: 'avatarPose', x: p.x, y: p.y, z: p.z }, '*');
+                    }
+                }
+
                 // Phase 12-P3: Camera preset commands
                 else if (type === 'cameraPreset') {
                     if (controls) {
@@ -9812,6 +10230,9 @@
 
             // Phase 12-P3: Touch/poke detection on character
             renderer.domElement.addEventListener('click', _onCharacterTouch);
+            // Stage 2b: Floor pick for click-to-walk (no-op when _walkModeEnabled is false)
+            renderer.domElement.addEventListener('pointerdown', (e) => { _walkDownX = e.clientX; _walkDownY = e.clientY; });
+            renderer.domElement.addEventListener('click', _onWalkClick);
 
             window.addEventListener('resize', () => {
                 renderer.setSize(window.innerWidth, window.innerHeight);

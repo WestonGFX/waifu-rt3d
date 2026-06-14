@@ -34,6 +34,9 @@ export type ViewerMode = 'vrm' | 'live2d' | 'unity';
  *   background      → updateBackground
  *   gaze            → lookAt            (Kokoro gaze → VRM LookAt layer)
  *   setEyeGaze      → setEyeGaze
+ *   setWalkMode     → setWalkMode       (Stage 2b: click-to-walk dev gate)
+ *   walkTo          → walkTo            (Stage 2b: direct walk command)
+ *   stopWalk        → stopWalk          (Stage 2b: cancel active walk)
  *   (Unity renderer wraps differently again: { type: 'unityCommand', command })
  */
 export interface ViewerCommand {
@@ -107,7 +110,11 @@ export interface ViewerCommand {
     | 'setJiggleEnabled'
     | 'setJiggleIntensity'
     | 'setJigglePreset'
-    | 'getJiggleInfo';
+    | 'getJiggleInfo'
+    // Stage 2b: click-to-walk navigation
+    | 'setWalkMode'
+    | 'walkTo'
+    | 'stopWalk';
   payload: Record<string, unknown>;
   _seq: number;
 }
@@ -384,6 +391,33 @@ interface ViewerState {
    * @param multiplier - Intensity scale factor (e.g. 1.3 for excited, 0.7 for sad)
    */
   dispatchSetJiggleEmotionMultiplier: (multiplier: number) => void;
+
+  // ── Stage 2b: Click-to-Walk Navigation ─────────────────────────────────────
+
+  /**
+   * Enable or disable click-to-walk mode in the viewer.
+   * When disabled (default) canvas clicks behave exactly as before.
+   * When enabled, clicking a floor surface drives the avatar to that point.
+   *
+   * @param enabled - Whether click-to-walk should be active.
+   */
+  dispatchSetWalkMode: (enabled: boolean) => void;
+
+  /**
+   * Command the avatar to walk to a world-space XZ position.
+   * Interruptible: a new call while walking retargets cleanly.
+   * The viewer posts `{ type: 'avatarMoved', x, z }` on arrival and
+   * `{ type: 'walkBlocked', x, z }` when stopped by a wall.
+   *
+   * @param x - World X destination
+   * @param z - World Z destination
+   */
+  dispatchWalkTo: (x: number, z: number) => void;
+
+  /**
+   * Cancel any active walk and settle the avatar to idle.
+   */
+  dispatchStopWalk: () => void;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -1303,6 +1337,46 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
 
     if (state.mode === 'vrm') {
       postToIframe(state.iframeRef, { type: 'getSequencerState', payload: {} });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  // Stage 2b: Click-to-Walk Navigation ───────────────────────────────────────
+
+  dispatchSetWalkMode: (enabled) => {
+    // Enable or disable click-to-walk. Off by default — no user-visible change unless
+    // a dev panel flips it. Only the VRM viewer supports walking (Live2D is 2D).
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'setWalkMode', payload: { enabled }, _seq: seq };
+
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'setWalkMode', payload: { enabled } });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchWalkTo: (x, z) => {
+    // Command the avatar to walk to world-space (x, *, z).
+    // Viewer posts back avatarMoved {x, z} on arrival, walkBlocked {x, z} on collision.
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'walkTo', payload: { x, z }, _seq: seq };
+
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'walkTo', payload: { x, z } });
+    }
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchStopWalk: () => {
+    // Cancel any active walk and settle the avatar to idle.
+    const state = get();
+    const seq = state._seq + 1;
+    const cmd: ViewerCommand = { kind: 'stopWalk', payload: {}, _seq: seq };
+
+    if (state.mode === 'vrm') {
+      postToIframe(state.iframeRef, { type: 'stopWalk' });
     }
     set({ lastCommand: cmd, _seq: seq });
   },

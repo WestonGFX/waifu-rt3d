@@ -1,24 +1,32 @@
 # Resume Prompt
 
-**Last updated:** 2026-06-14 (Stage 3 AI motion — Phase 0 done, Phase 1 in progress)
-**Branch:** master · 4 local commits ahead of origin (Stage 3 plan + Phase 0/1 checkpoints)
+**Last updated:** 2026-06-20 (Stage 3 AI motion — Phase 1 env ~90% up; **blocked on user-supplied SMPL-X/H**)
+**Branch:** master · local commits ahead of origin (Stage 3 plan + Phase 0/1 checkpoints + this session's docs)
 **Schema:** v89 (unchanged)
 **Tests:** 3,121 backend pytest + 498 sakura vitest passing, tsc clean
 
-## RESUME HERE → Stage 3 AI Motion (Phase 1 continuation)
+## RESUME HERE → Stage 3 AI Motion (Phase 1 — ONE blocker left, it's the user's)
 
-**Plan:** `docs/plans/2026-06-14-stage3-ai-motion.md` (read its status log — has full detail + the agentic-access runbook).
+**Plan:** `docs/plans/2026-06-14-stage3-ai-motion.md` · **Full reality report:** `docs/research/2026-06-14-dart-on-5080.md` (read this first — has exact paths, file-IDs, the pytorch3d-shim decision, and access lessons).
 
-**Done:** Phase 0 (agentic SSH to the RTX 5080 — `ssh rtx5080` works) + Phase 1 Blackwell de-risk (WSL2 Ubuntu, conda env `dart`, **torch 2.11.0+cu128 runs GPU matmul on the 5080, sm_120**). DART cloned at WSL `/root/DART`.
+**Done (2026-06-20, all autonomous over SSH):** the `dart` conda env on the 5080 (torch 2.11+cu128) now has **all 25 demo pip deps importing clean**, **modern spacy 3.8.14**, a **pytorch3d transforms-only shim** (full build fails on Blackwell C++ — shim is pure-torch rotation math, all DART's rollout + Phase-2 need), and the **model checkpoints downloaded + placed + verified loadable** (denoiser 23.13 M params loads under torch 2.11). Body-model drop-in dirs pre-created.
 
-**Next steps (in order):**
-1. **Get SMPL-X + SMPL-H body models** (the blocker). Gated behind MPI account login at `smpl-x.is.tue.mpg.de` + `mano.is.tue.mpg.de` (license accept). User chose "Claude drives the download via browser" — needs the user logged into those MPI sites (or creds). Place per DART README under `/root/DART/data/`. ⚠ non-commercial license = prototype-only.
-2. **gdown the DART checkpoints** (Google Drive link in DART README) into `/root/DART`.
-3. **Install DART deps** in the `dart` conda env: `pytorch3d` (easy on Linux) + the env.yml pip list, MINUS the CUDA-11.8 torch pins (keep the working cu128 torch). Adapt any torch-2.0→2.11 API breaks.
-4. **Run a DART demo** (`/root/DART/demos/run_demo.sh` etc.) → measure VRAM + latency on the 5080. Write `docs/research/2026-06-14-dart-on-5080.md`.
-5. → **Phase 2:** SMPL-X axis-angle → normalized-VRM via the Bug-2 harness (`tools/convert_to_normalized.py` + `ground_truth.mjs`). New `tools/dart_to_glb.py`. Render-gate it.
+**THE BLOCKER (user, one-time, login-gated) — do this to unblock everything:**
+`utils/smpl_utils.py` loads SMPL-X **at import time**, so the demo can't even import without the body models.
+1. **SMPL-X** — login at `smpl-x.is.tue.mpg.de`, get `smplx_lockedhead_20230207.zip`.
+2. **SMPL-H** — login at `mano.is.tue.mpg.de`, get `smplh.tar.xz` (needs PKL conversion per DART README).
+   Plan's chosen path = "Claude drives the browser download over CDP" once the user is logged into both MPI sites.
+   Drop files into (dirs already exist on box):
+   `/root/DART/data/smplx_lockedhead_20230207/models_lockedhead/{smplx/*.npz, smplh/*.pkl}`
+   ⚠ non-commercial license = prototype-only (commercial ship needs Meshcapade SMPL + data-license review).
 
-**Access cheat-sheet:** `ssh rtx5080 "<cmd>"` (cmd shell; use `&` separators). WSL: `ssh rtx5080 "wsl -d Ubuntu-24.04 -u root -e bash -c \"...\""` (base64-pipe complex scripts to dodge quoting). conda env: `source /root/miniconda3/etc/profile.d/conda.sh; conda activate dart`.
+**Next steps once body models land:**
+1. gdown `data/seq_data_zero_male` (norm stats) by file-ID from the public Drive folder (same method as the checkpoints).
+2. `bash /root/DART/demos/run_demo.sh` → **measure real VRAM (`nvidia-smi` during run) + per-step latency on the 5080** → fill the unmeasured row in the research doc. (Every published number is RTX 4090 — unverified on the 5080.)
+3. → **Phase 2:** SMPL-X axis-angle `.npz` → normalized-VRM GLB via `tools/dart_to_glb.py` + the Bug-2 harness (`tools/convert_to_normalized.py` + `ground_truth.mjs`), render-gated. The transforms shim already provides the rotation math.
+
+**Access cheat-sheet:** `ssh rtx5080 "<cmd>"` (cmd shell). WSL needs the **base64-pipe with escaped double quotes**:
+`ssh rtx5080 "wsl -d Ubuntu-24.04 -u root -e bash -lc \"echo <BASE64> | base64 -d | bash\""` (cmd eats `|` inside *single* quotes). Detached box jobs **must** use `nohup`. `gdown --folder` chokes on the big `policy_train/` tree → download by **file-ID** (`gdown <id> -O <path>`). conda: `source /root/miniconda3/etc/profile.d/conda.sh; conda activate dart`.
 
 ---
 

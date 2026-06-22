@@ -1,29 +1,27 @@
 # Resume Prompt
 
-**Last updated:** 2026-06-20 (Stage 3 AI motion — Phase 1 env ~90% up; **blocked on user-supplied SMPL-X/H**)
-**Branch:** master · local commits ahead of origin (Stage 3 plan + Phase 0/1 checkpoints + this session's docs)
+**Last updated:** 2026-06-22 (Stage 3 AI motion — **✅ PHASE 1 COMPLETE: DART runs on the 5080**)
+**Branch:** master · local commits ahead of origin (Stage 3 plan + Phase 0/1 + Phase-1-complete docs)
 **Schema:** v89 (unchanged)
 **Tests:** 3,121 backend pytest + 498 sakura vitest passing, tsc clean
 
-## RESUME HERE → Stage 3 AI Motion (Phase 1 — ONE blocker left, it's the user's)
+## RESUME HERE → Stage 3 AI Motion — Phase 1 DONE, start **Phase 2**
 
-**Plan:** `docs/plans/2026-06-14-stage3-ai-motion.md` · **Full reality report:** `docs/research/2026-06-14-dart-on-5080.md` (read this first — has exact paths, file-IDs, the pytorch3d-shim decision, and access lessons).
+**Plan:** `docs/plans/2026-06-14-stage3-ai-motion.md` · **Full results:** `docs/research/2026-06-14-dart-on-5080.md` (read first — exact paths, file-IDs, measured numbers, access lessons).
 
-**Done (2026-06-20, all autonomous over SSH):** the `dart` conda env on the 5080 (torch 2.11+cu128) now has **all 25 demo pip deps importing clean**, **modern spacy 3.8.14**, a **pytorch3d transforms-only shim** (full build fails on Blackwell C++ — shim is pure-torch rotation math, all DART's rollout + Phase-2 need), and the **model checkpoints downloaded + placed + verified loadable** (denoiser 23.13 M params loads under torch 2.11). Body-model drop-in dirs pre-created.
+**✅ Phase 1 complete (2026-06-22): DART generates text→motion on the RTX 5080.**
+- **Measured:** peak VRAM **2.8 GB / 16** (fits easily), 20-primitive rollout **~1.3 s (~17 it/s)**, Blackwell sm_120 + torch 2.11 cu128 end-to-end. Output `sample_0_smplx.npz` = `poses (162,165)` axis-angle + `trans (162,3)`, 30 fps, no NaN.
+- **Env on the box (WSL `dart` conda):** all deps + spacy 3.8.14 + **pytorch3d transforms-shim** (full build fails on Blackwell C++; shim = pure-torch rotation math, sufficient for rollout + Phase 2) + **numpy-2 patch** (DART's `np.float`/etc → builtins, 6 files). Checkpoints at `/root/DART/mld_denoiser/...` + `/root/DART/mvae/...`; SMPL-X at `data/smplx_lockedhead_20230207/models_lockedhead/smplx/`; norm stats at `data/seq_data_zero_male/`.
+- **SMPL-X** supplied by Chris (`smplx_lockedhead_20230207.zip` — the "removed head bun / locked head" NPZ). **SMPL-H NOT needed** for the default BABEL/SMPL-X demo (HML3D-only).
+- **Re-run the demo:** `ssh rtx5080`, WSL, `conda activate dart`, `cd /root/DART`, `bash demos/run_demo.sh` (interactive viz — needs display) **or** the headless `mld.rollout_mld` line in the research doc (exports `.npz`).
 
-**THE BLOCKER (user, one-time, login-gated) — do this to unblock everything:**
-`utils/smpl_utils.py` loads SMPL-X **at import time**, so the demo can't even import without the body models.
-1. **SMPL-X** — login at `smpl-x.is.tue.mpg.de`, get `smplx_lockedhead_20230207.zip`.
-2. **SMPL-H** — login at `mano.is.tue.mpg.de`, get `smplh.tar.xz` (needs PKL conversion per DART README).
-   Plan's chosen path = "Claude drives the browser download over CDP" once the user is logged into both MPI sites.
-   Drop files into (dirs already exist on box):
-   `/root/DART/data/smplx_lockedhead_20230207/models_lockedhead/{smplx/*.npz, smplh/*.pkl}`
-   ⚠ non-commercial license = prototype-only (commercial ship needs Meshcapade SMPL + data-license review).
+**→ Phase 2 (next): SMPL-X `.npz` → normalized-VRM GLB.**
+- Build `tools/dart_to_glb.py`: read DART's `sample_0_smplx.npz` (`poses` axis-angle 165-dim + `trans`) → per-bone local quaternions → the **proven Bug-2 normalized conversion** (`tools/convert_to_normalized.py` algebra / `VRM_BONE_MAP`) → GLB with normalized `J_Bip_*` tracks, non-humanoid channels stripped, root y glued to floor.
+- **Render-gate it** (`tools/verify/render_clip.mjs --frames N`): distinct frames, upright, grounded, arms track, **zero red-backface eversion**. Don't guess the normalized constant — reuse Bug-2 (`ground_truth.mjs`). Screenshots → `docs/testing/screenshots/2026-06-22-stage3-dart/`.
+- The transforms-shim on the box provides the axis-angle→quat math; the Mac side reuses the Stage-1 normalized pipeline.
 
-**Next steps once body models land:**
-1. gdown `data/seq_data_zero_male` (norm stats) by file-ID from the public Drive folder (same method as the checkpoints).
-2. `bash /root/DART/demos/run_demo.sh` → **measure real VRAM (`nvidia-smi` during run) + per-step latency on the 5080** → fill the unmeasured row in the research doc. (Every published number is RTX 4090 — unverified on the 5080.)
-3. → **Phase 2:** SMPL-X axis-angle `.npz` → normalized-VRM GLB via `tools/dart_to_glb.py` + the Bug-2 harness (`tools/convert_to_normalized.py` + `ground_truth.mjs`), render-gated. The transforms shim already provides the rotation math.
+**Access cheat-sheet:** `ssh rtx5080 "<cmd>"` (cmd shell). WSL needs the **base64-pipe with escaped double quotes**:
+`ssh rtx5080 "wsl -d Ubuntu-24.04 -u root -e bash -lc \"echo <BASE64> | base64 -d | bash\""`. Detached box jobs **must** use `nohup`. conda: `source /root/miniconda3/etc/profile.d/conda.sh; conda activate dart`.
 
 **Access cheat-sheet:** `ssh rtx5080 "<cmd>"` (cmd shell). WSL needs the **base64-pipe with escaped double quotes**:
 `ssh rtx5080 "wsl -d Ubuntu-24.04 -u root -e bash -lc \"echo <BASE64> | base64 -d | bash\""` (cmd eats `|` inside *single* quotes). Detached box jobs **must** use `nohup`. `gdown --folder` chokes on the big `policy_train/` tree → download by **file-ID** (`gdown <id> -O <path>`). conda: `source /root/miniconda3/etc/profile.d/conda.sh; conda activate dart`.

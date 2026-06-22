@@ -310,6 +310,48 @@ async function patch<T>(url: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/**
+ * One frame of procedural motion: a timestamp + per-VRM-bone euler rotation.
+ * Forwarded to the viewer's `applyKeyframes` postMessage.
+ */
+export interface MotionKeyframe {
+  time: number;
+  bones: Record<string, { x: number; y: number; z: number }>;
+}
+
+/** Procedural keyframe motion response (the always-available fallback). */
+export interface MotionKeyframesResponse {
+  kind?: 'keyframes';
+  label: string;
+  backend: string;
+  duration: number;
+  loop: boolean;
+  keyframes: MotionKeyframe[];
+  latency_ms?: number;
+}
+
+/**
+ * AI clip motion response (Stage 3 DART): a normalized-VRM GLB already converted
+ * Mac-side, served at `url`. Played via the viewer's `loadAnimation` clip path.
+ */
+export interface MotionClipResponse {
+  kind: 'clip';
+  format: 'glb';
+  url: string;
+  name: string;
+  backend: string;
+  duration?: number;
+  loop?: boolean;
+  prompt?: string | null;
+  latency_ms?: number;
+}
+
+/**
+ * Tagged-union motion response from `/api/motion/generate`. Discriminate on
+ * `kind`: `'clip'` → load the GLB at `url`; otherwise treat as keyframes.
+ */
+export type MotionGenerateResponse = MotionKeyframesResponse | MotionClipResponse;
+
 /** Typed API client for the waifu-rt3d backend. */
 export const api = {
   // Config
@@ -478,8 +520,8 @@ export const api = {
   // AI Motion generation
   getMotionModelStatus: () =>
     get<{ procedural: boolean; motion_diffuse: boolean; active_backend: string; model_dir: string }>('/api/motion/model-status'),
-  generateMotion: (body: { emotion: string; intensity?: number; duration?: number; context?: string; label?: string; loop?: boolean }) =>
-    post<{ label: string; backend: string; duration: number; loop: boolean; keyframes: Array<{ time: number; bones: Record<string, { x: number; y: number; z: number }> }>; latency_ms?: number }>('/api/motion/generate', body),
+  generateMotion: (body: { emotion: string; intensity?: number; duration?: number; context?: string; label?: string; loop?: boolean; prompt?: string; seed?: number }) =>
+    post<MotionGenerateResponse>('/api/motion/generate', body),
 
   /** Scan local network for GPU motion servers via UDP broadcast (blocks ~8s). */
   discoverMotion: () =>

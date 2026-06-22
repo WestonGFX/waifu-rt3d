@@ -184,6 +184,23 @@ interface ViewerState {
   /** Route AI-generated keyframe animation to the VRM viewer. */
   dispatchKeyframes: (data: Record<string, unknown>) => void;
 
+  /**
+   * Load + play an arbitrary normalized-VRM clip by URL (Stage 3 Phase 3).
+   *
+   * Used for AI-generated DART clips served at `/files/…`. Loads on first use
+   * and plays on subsequent use (same load-then-play pattern as the gesture
+   * clips); VRM-only. A missing/failed URL is a no-op.
+   */
+  dispatchClip: (url: string, name: string, opts?: { loop?: boolean; fadeIn?: number }) => void;
+
+  /**
+   * Dispatch a `/api/motion/generate` response to the viewer (Stage 3 Phase 3).
+   *
+   * Discriminates on the tagged union: a `clip` response loads its GLB via
+   * {@link dispatchClip}; anything else is forwarded as keyframes.
+   */
+  dispatchMotionResponse: (resp: import('../lib/api').MotionGenerateResponse) => void;
+
   /** Request a screenshot from the active renderer. */
   dispatchScreenshot: (opts?: { quality?: number; transparent?: boolean; requestId?: string }) => void;
 
@@ -512,6 +529,13 @@ const loadedDartClips = new Set<string>();
 let _kokoroTurn = 0;
 let _lastDartGestureTurn = -DART_GESTURE_COOLDOWN_TURNS;
 
+/**
+ * Generated DART motion clips (Phase 3) already sent to the viewer, keyed by
+ * clip name. Like the gesture sets, cleared on model load (the viewer rebuilds
+ * its clip library). Names are URL-content-hashed Mac-side so they never collide.
+ */
+const loadedClips = new Set<string>();
+
 // ─── Store ──────────────────────────────────────────────────────────────────────
 
 export const useViewerStore = create<ViewerState>()((set, get) => ({
@@ -712,6 +736,50 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     set({ lastCommand: cmd, _seq: seq });
   },
 
+  dispatchClip: (url, name, opts = {}) => {
+    const state = get();
+    if (state.mode !== 'vrm' || !url || !name) return;
+    const seq = state._seq + 1;
+    const loop = !!opts.loop;
+    const fadeIn = opts.fadeIn ?? 0.25;
+    if (loadedClips.has(name)) {
+      postToIframe(state.iframeRef, {
+        type: 'playAnimation',
+        payload: { name, loop, fadeIn },
+      });
+    } else {
+      // First use: load into the viewer's clip library, then request play.
+      // playAnimation on a not-yet-loaded clip is a no-op (the GLB fetch is
+      // async); the next call plays it for real — same pattern as the gesture
+      // clip path. retarget:true runs the normalized-bone retarget the GLB
+      // expects (the dart_to_glb output uses normalized J_Bip_* tracks).
+      loadedClips.add(name);
+      postToIframe(state.iframeRef, {
+        type: 'loadAnimation',
+        payload: { url, name, retarget: true },
+      });
+      postToIframe(state.iframeRef, {
+        type: 'playAnimation',
+        payload: { name, loop, fadeIn },
+      });
+    }
+    const cmd: ViewerCommand = {
+      kind: 'keyframes',
+      payload: { clipUrl: url, name },
+      _seq: seq,
+    };
+    set({ lastCommand: cmd, _seq: seq });
+  },
+
+  dispatchMotionResponse: (resp) => {
+    if (resp && resp.kind === 'clip') {
+      get().dispatchClip(resp.url, resp.name, { loop: resp.loop ?? false });
+    } else {
+      // Keyframes (or legacy untagged) → the existing applyKeyframes path.
+      get().dispatchKeyframes(resp as unknown as Record<string, unknown>);
+    }
+  },
+
   dispatchScreenshot: (opts = {}) => {
     const state = get();
     const seq = state._seq + 1;
@@ -798,6 +866,7 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     // so previously-loaded gesture clips are gone — reload them on next use.
     loadedGestureClips.clear();
     loadedDartClips.clear();
+    loadedClips.clear();
     const cmd: ViewerCommand = {
       kind: 'loadModel',
       payload: { modelUrl },

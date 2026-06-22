@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import logging
 import math
 import os
@@ -67,8 +68,63 @@ logger = logging.getLogger("waifu-motion")
 MODELS_DIR = _ROOT / "models" / "motion"
 
 # ─── Global state ─────────────────────────────────────────────────────────────
-_ai_backend: str | None = None   # None = procedural; "motionlcm" = AI loaded
+_ai_backend: str | None = None   # None = procedural; "dart" = DART loaded
 _server_start_time = time.time()
+_no_ai = False                   # set by --no-ai: never attempt the AI backend
+
+# DART resident engine (Stage 3 Phase 3). Lazily constructed in
+# _try_load_ai_backend; only importable on the box (WSL ``dart`` conda env, run
+# from the DART repo root). Stays None on machines without DART.
+_dart_runner: Any | None = None
+
+# Clip cache keyed by (prompt, primitives, seed) → npz bytes. A companion reuses
+# a small recurring gesture vocabulary, so the second ask for the same motion is
+# free. Bounded to avoid unbounded growth on a long-running box service.
+_dart_cache: "dict[tuple[str, int, int], bytes]" = {}
+_DART_CACHE_MAX = 64
+
+# Emotion → DART text-prompt fallback. Used only when the request carries no
+# explicit ``prompt``. Deliberately small; richer emotion→motion mapping is the
+# Mac-side Phase 5.1 concern. BABEL/HML3D-style action words.
+_EMOTION_TO_PROMPT: dict[str, str] = {
+    "neutral":   "stand",
+    "happy":     "wave",
+    "excited":   "jump for joy",
+    "sad":       "look down sadly",
+    "angry":     "cross arms",
+    "shy":       "look away shyly",
+    "surprised": "step back in surprise",
+    "thinking":  "scratch head",
+    "proud":     "raise both hands",
+    "sleepy":    "stretch",
+}
+
+
+def _emotion_to_prompt(emotion: str) -> str:
+    """Map an emotion label to a DART text prompt (fallback when none given).
+
+    Args:
+        emotion: Emotion label (already lowercased/stripped).
+
+    Returns:
+        A BABEL-style action prompt; ``"stand"`` for unknown emotions.
+    """
+    return _EMOTION_TO_PROMPT.get(emotion, "stand")
+
+
+def _duration_to_primitives(duration: float) -> int:
+    """Convert a clip duration in seconds to DART rollout primitives.
+
+    ~8 primitives ≈ 2.2 s @ 30 fps (the measured rollout cadence), so each
+    primitive is ~0.275 s. Clamped to a sane 2–24 range.
+
+    Args:
+        duration: Requested clip length in seconds.
+
+    Returns:
+        Primitive count for the DART rollout.
+    """
+    return max(2, min(24, round(duration / 0.275)))
 
 # Per-request timing ring buffer (last 50 requests)
 _latency_ring: list[float] = []
@@ -158,6 +214,8 @@ class GenerateRequest(BaseModel):
     context:   Optional[str] = None
     label:     Optional[str] = None
     loop:      bool  = True
+    prompt:    Optional[str] = None   # explicit DART text prompt (overrides emotion map)
+    seed:      int   = 0              # DART RNG seed (cache key + reproducibility)
 
 
 @app.get("/status")
@@ -165,14 +223,15 @@ def get_status() -> dict:
     """Health check and capability report.
 
     Returns:
-        dict: Service info, active backend, available models, uptime.
+        dict: Service info, active backend, available capabilities, uptime.
     """
     uptime = int(time.time() - _server_start_time)
     return {
         "service":        "waifu-motion",
-        "version":        "1.0",
+        "version":        "1.1",
         "backend":        _ai_backend or "procedural",
         "procedural":     True,
+        "dart":           _ai_backend == "dart",
         "motionlcm":      _ai_backend == "motionlcm",
         "uptime_seconds": uptime,
         "models_dir":     str(MODELS_DIR),
@@ -216,15 +275,50 @@ def list_models() -> dict:
     return {"models": entries}
 
 
-@app.post("/generate")
-async def generate(req: GenerateRequest) -> dict:
-    """Generate bone keyframe data for the given emotion.
+def _generate_dart_npz(prompt: str, primitives: int, seed: int) -> bytes:
+    """Generate (or cache-hit) a DART SMPL-X clip and return its npz bytes.
 
-    Uses the best available backend (AI if loaded, else procedural).
-    Tracks latency for the /stats endpoint.
+    Runs the resident :class:`DartRunner` synchronously (call from a threadpool
+    executor — DART rollout is GPU-blocking). Results are cached by
+    ``(prompt, primitives, seed)``; the cache is bounded to ``_DART_CACHE_MAX``.
+
+    Args:
+        prompt: DART text prompt (e.g. ``"wave"``).
+        primitives: Rollout length in motion primitives.
+        seed: RNG seed.
 
     Returns:
-        dict: {label, backend, duration, loop, keyframes}
+        Raw bytes of the generated ``sample_0_smplx.npz``.
+
+    Raises:
+        RuntimeError: If the DART runner is not loaded.
+    """
+    key = (prompt, primitives, seed)
+    cached = _dart_cache.get(key)
+    if cached is not None:
+        return cached
+    if _dart_runner is None:
+        raise RuntimeError("DART runner not loaded")
+    npz_path = _dart_runner.generate(prompt, primitives=primitives, seed=seed)
+    data = Path(npz_path).read_bytes()
+    if len(_dart_cache) >= _DART_CACHE_MAX:
+        _dart_cache.pop(next(iter(_dart_cache)))   # evict oldest (FIFO)
+    _dart_cache[key] = data
+    return data
+
+
+@app.post("/generate")
+async def generate(req: GenerateRequest) -> dict:
+    """Generate motion for the given emotion/prompt.
+
+    Uses the best available backend: DART (clip artifact) if loaded, else the
+    procedural keyframe generator. Tracks latency for the /stats endpoint.
+
+    Returns:
+        dict: For DART, a clip artifact
+        ``{kind:"clip", format:"npz", npz_b64, name, fps, primitives, backend,
+        duration, loop, latency_ms}``; otherwise the procedural keyframe shape
+        ``{kind:"keyframes", label, backend, duration, loop, keyframes, latency_ms}``.
     """
     global _requests_total, _requests_ok
     _requests_total += 1
@@ -234,14 +328,38 @@ async def generate(req: GenerateRequest) -> dict:
     duration = max(1.0, min(req.duration, 10.0))
     label    = req.label or f"motion_{emotion}"
 
-    # ── AI backend (stub — plug in MotionLCM runner here) ─────────────────
-    # if _ai_backend == "motionlcm":
-    #     from backend.motion.motionlcm_runner import generate_clip
-    #     keyframes = await asyncio.get_event_loop().run_in_executor(
-    #         None, generate_clip, emotion, req.context, duration)
-    # else:
+    # ── DART AI backend — return a normalized-clip artifact (npz) ─────────────
+    if _ai_backend == "dart" and _dart_runner is not None:
+        prompt = (req.prompt or "").strip() or _emotion_to_prompt(emotion)
+        primitives = _duration_to_primitives(duration)
+        try:
+            npz_bytes = await asyncio.get_event_loop().run_in_executor(
+                None, _generate_dart_npz, prompt, primitives, req.seed
+            )
+            elapsed_ms = (time.monotonic() - t0) * 1000
+            _latency_ring.append(elapsed_ms)
+            if len(_latency_ring) > 50:
+                _latency_ring.pop(0)
+            _requests_ok += 1
+            return {
+                "kind":       "clip",
+                "format":     "npz",
+                "npz_b64":    base64.b64encode(npz_bytes).decode("ascii"),
+                "name":       label,
+                "prompt":     prompt,
+                "primitives": primitives,
+                "fps":        30,
+                "backend":    "dart",
+                "duration":   duration,
+                "loop":       req.loop,
+                "latency_ms": round(elapsed_ms, 1),
+            }
+        except Exception as exc:   # noqa: BLE001
+            logger.warning("DART generate failed (%s) — falling back to procedural.", exc)
+
+    # ── Procedural fallback (always available, no dependencies) ───────────────
     keyframes = _procedural_keyframes(emotion, duration)
-    backend   = _ai_backend or "procedural"
+    backend   = "procedural"
 
     # Scale by intensity
     if abs(req.intensity - 1.0) > 0.01:
@@ -261,6 +379,7 @@ async def generate(req: GenerateRequest) -> dict:
     _requests_ok += 1
 
     return {
+        "kind":      "keyframes",
         "label":     label,
         "backend":   backend,
         "duration":  duration,
@@ -273,26 +392,37 @@ async def generate(req: GenerateRequest) -> dict:
 # ─── Background AI model loader ───────────────────────────────────────────────
 
 async def _try_load_ai_backend() -> None:
-    """Try to load the best available AI model in the background.
+    """Try to load the DART resident engine in the background.
 
-    Runs once at startup.  If a model directory is found under models/motion/,
-    attempts to import and initialise the corresponding runner.
-    Silently falls back to procedural if anything fails.
+    Runs once at startup. Attempts to construct + load :class:`DartRunner` (the
+    Stage-3 DART text→motion engine). This only succeeds on the GPU box, run from
+    the DART repo root in the WSL ``dart`` conda env — DART's ``mld.*`` modules
+    are not importable elsewhere. On any failure (ImportError on a non-box
+    machine, missing checkpoint, CUDA error) it logs and stays on the procedural
+    backend, so the server is always usable.
+
+    Honors ``--no-ai`` (sets :data:`_no_ai`). The checkpoint path may be
+    overridden via the ``WAIFU_DART_CHECKPOINT`` env var (default is
+    DART-repo-relative, matching ``demos/run_demo.sh``).
     """
-    global _ai_backend
+    global _ai_backend, _dart_runner
+    if _no_ai:
+        logger.info("--no-ai set: procedural backend only.")
+        return
     await asyncio.sleep(2)   # let the server finish starting first
 
-    motionlcm_dir = MODELS_DIR / "motionlcm"
-    if motionlcm_dir.exists():
-        logger.info("MotionLCM model found — attempting to load…")
-        try:
-            # Placeholder — real import added in motionlcm sprint:
-            # from backend.motion.motionlcm_runner import load_model
-            # await asyncio.get_event_loop().run_in_executor(None, load_model, motionlcm_dir)
-            # _ai_backend = "motionlcm"
-            logger.info("MotionLCM runner not yet wired — using procedural.")
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("MotionLCM load failed: %s — using procedural.", exc)
+    try:
+        from backend.motion.dart_runner import DartRunner, DEFAULT_CHECKPOINT  # noqa: PLC0415
+        checkpoint = os.environ.get("WAIFU_DART_CHECKPOINT", DEFAULT_CHECKPOINT)
+        logger.info("Loading DART engine (checkpoint=%s)… one-time, ~10–15 s.", checkpoint)
+        runner = DartRunner(checkpoint)
+        # load() is heavy + blocking (model into VRAM) — run off the event loop.
+        await asyncio.get_event_loop().run_in_executor(None, runner.load)
+        _dart_runner = runner
+        _ai_backend = "dart"
+        logger.info("DART engine loaded — AI motion active.")
+    except Exception as exc:  # noqa: BLE001
+        logger.info("DART engine unavailable (%s) — using procedural backend.", exc)
 
     logger.info("Active backend: %s", _ai_backend or "procedural")
 
@@ -341,8 +471,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.no_ai:
-        global _ai_backend
+        global _ai_backend, _no_ai
         _ai_backend = None
+        _no_ai = True
         logger.info("--no-ai flag set: using procedural generator only")
 
     # Start UDP beacon so the Mac app discovers this server automatically

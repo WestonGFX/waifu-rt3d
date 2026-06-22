@@ -373,7 +373,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
         // Auto-generate a neutral idle motion clip when the model first loads
         api.generateMotion({ emotion: 'neutral', duration: 4, loop: true })
           .then(data => {
-            useViewerStore.getState().dispatchKeyframes(data);
+            useViewerStore.getState().dispatchMotionResponse(data);
             lastMotionEmotion.current = 'neutral';
           })
           .catch(() => {});
@@ -406,7 +406,7 @@ export function ModelPanel({ character }: ModelPanelProps) {
         if (emo !== lastMotionEmotion.current) {
           api.generateMotion({ emotion: emo, duration: 3.5, loop: true })
             .then(data => {
-              useViewerStore.getState().dispatchKeyframes(data);
+              useViewerStore.getState().dispatchMotionResponse(data);
               lastMotionEmotion.current = emo;
             })
             .catch(() => {});

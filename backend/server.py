@@ -13710,6 +13710,8 @@ class MotionGenerateRequest(BaseModel):
     context:   Optional[str] = None
     label:     Optional[str] = None
     loop:      bool  = True
+    prompt:    Optional[str] = None   # explicit DART text prompt (AI backend; overrides emotion)
+    seed:      int   = 0              # DART RNG seed (cache key + reproducibility)
 
 
 @app.post("/api/motion/generate")
@@ -13745,7 +13747,13 @@ async def generate_motion(req: MotionGenerateRequest):
                 "duration": duration, "label": label,
                 "loop": req.loop,
                 "context": req.context,
+                "prompt": req.prompt,
+                "seed": req.seed,
             }
+            # forward_generate already collapses a DART clip artifact to
+            # {kind:"clip", format:"glb", url, …} (npz converted Mac-side); a
+            # procedural remote returns {kind:"keyframes", …}. Pass either
+            # through unchanged save for the round-trip latency stamp.
             data = await forward_generate(remote_url, payload)
             data["latency_ms"] = round((_time.monotonic() - _t0) * 1000, 1)
             return data
@@ -13774,6 +13782,7 @@ async def generate_motion(req: MotionGenerateRequest):
                     euler["z"] *= req.intensity
 
     return {
+        "kind":       "keyframes",
         "label":      label,
         "backend":    backend,
         "duration":   duration,

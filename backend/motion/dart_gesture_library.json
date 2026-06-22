@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "description": "Pre-baked DART gesture vocabulary for the avatar. Each gesture is a DART text->motion clip generated once on the RTX box and converted to a normalized-VRM GLB via tools/dart_to_glb.py (--face-camera). The GLBs are per-machine runtime assets (gitignored) and regenerable with tools/build_dart_gestures.py. 'triggers' maps Kokoro emotion/intent labels to the gesture for embodiment playback (Phase 5.1). 'prompt' is the DART text prompt; 'primitives' is the *N rollout length (~8 primitives ~= 2.2s @ 30fps).",
+  "fps": 30,
+  "guidance": 5.0,
+  "face_camera": true,
+  "clip_dir": "backend/storage/animations/dart-gestures",
+  "url_base": "/files/animations/dart-gestures",
+  "gestures": [
+    {
+      "name": "wave",
+      "prompt": "wave",
+      "primitives": 8,
+      "triggers": ["greeting", "hello", "goodbye", "hi"],
+      "note": "Hand up beside the head, open palm. Greeting on session start / farewell."
+    },
+    {
+      "name": "clap",
+      "prompt": "clap",
+      "primitives": 8,
+      "triggers": ["praise", "approval", "impressed", "well_done"],
+      "note": "Applause. Celebrating the user / reacting to good news."
+    },
+    {
+      "name": "cheer",
+      "prompt": "raise both hands",
+      "primitives": 8,
+      "triggers": ["joy", "celebration", "victory", "excited"],
+      "note": "Both arms up. Peak-positive moments."
+    },
+    {
+      "name": "point",
+      "prompt": "point forward",
+      "primitives": 8,
+      "triggers": ["indicating", "explaining", "showing", "look"],
+      "note": "Deictic point. Directing attention while explaining."
+    },
+    {
+      "name": "cross_arms",
+      "prompt": "cross arms",
+      "primitives": 8,
+      "triggers": ["skeptical", "annoyed", "defensive", "pouty"],
+      "note": "Arms folded. Playful sulk / skepticism."
+    },
+    {
+      "name": "bow",
+      "prompt": "bow",
+      "primitives": 8,
+      "triggers": ["gratitude", "apology", "formal_greeting", "thank_you"],
+      "note": "Forward torso bow (spine pitch; in-place). Thanks / sorry."
+    },
+    {
+      "name": "stretch",
+      "prompt": "stretch",
+      "primitives": 8,
+      "triggers": ["relaxed", "bored", "sleepy", "idle_transition"],
+      "note": "Body stretch. Low-arousal / idle-break filler."
+    },
+    {
+      "name": "shrug",
+      "prompt": "shrug",
+      "primitives": 8,
+      "triggers": ["unsure", "dismissive", "dont_know", "whatever"],
+      "note": "Shoulders up, palms out. 'I don't know.'"
+    }
+  ]
+}

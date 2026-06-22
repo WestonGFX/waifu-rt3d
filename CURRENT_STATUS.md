@@ -10,6 +10,15 @@
 
 ## Active Work
 
+**Session (2026-06-22) — Stage 3 Phase 2 COMPLETE: DART SMPL-X → normalized-VRM GLB, render-gated. Branch `master`, HEAD `1214e09` (1 commit, LOCAL).** Plan: `docs/plans/2026-06-14-stage3-ai-motion.md`.
+
+- **`1214e09` feat(stage3-P2): DART SMPL-X `.npz` → normalized-VRM GLB.** New `tools/dart_to_glb.py` + 20 pytest. Bridges DART's text→motion output to the avatar: SMPL-X axis-angle `poses (162,165)` → per-VRM-bone three-vrm **normalized** quaternion tracks → a `J_Bip_*`-named GLB the viewer's `retargetClip` path ingests like the Stage-1 baked clips. The SMPL frame was **measured** (real SMPL-X forward pass on the RTX box), not guessed: rest is Y-up template, posed seq is Z-up (AMASS) via `global_orient`. Conversion = rigid stand-up `G_pre=Rx(-90°)` on the **root (hips) only** (left-mult); children keep raw SMPL local (rigid root cancels in the chain). First attempt conjugated every bone → laid her on her side; render gate caught it → fixed to root-only + locked with a regression test. **Render gate PASS** (`render_clip.mjs --frames 6 --retarget`): 22/22 tracks, 6/6 distinct frames, upright, grounded, arms track, zero eversion — clean walk-in-circles. Proof: `docs/testing/screenshots/2026-06-22-stage3-dart/`. Generated GLBs gitignored (per-machine). 3141 pytest + tsc clean.
+- **Next → Stage 3 Phase 3:** wire `dart_runner.py` into the motion server's stubbed `/generate` AI branch (generate-then-play MVP). Has a transport fork (serve GLB from box vs stream npz → convert on Mac) and needs the box live — see report.
+
+**Live status:** push gate clear (no active OPEN BUG/UNFIXED/BLOCKER markers). 3141 pytest + 498 vitest, tsc clean. **1 local commit unpushed (`1214e09`).**
+
+---
+
 **Session (2026-06-14) — Stage 2b Phase 1: click-to-walk navigation. Branch `master`, HEAD `b5c8857` (2 commits, LOCAL).** Plan: `docs/plans/2026-06-14-stage2b-p1-click-to-walk.md`.
 
 - **`df6e99f` feat(stage2b-P1): click-to-walk navigation with real raycast collision.** The avatar can now walk around her loaded 3D room. Dev-gated floor-click → she turns to face the point, plays the `walking` clip, translates the root at 1.1 m/s (y glued to floor), stops short of walls/props via real `THREE.Raycaster` collision (floor-pick + forward capsule sweep), settles to idle, camera target follows. `viewer.html` WalkController + `setWalkMode`/`walkTo`/`stopWalk`/`getAvatarPose` postMessage handlers + drag-vs-click guard; `viewerStore.ts` `dispatchSetWalkMode`/`dispatchWalkTo`/`dispatchStopWalk`; `ModelPanel.tsx` dev-mode-only 🚶 Walk toggle beside the environment picker. Scope is bounded: straight-line walk only — **pathfinding AROUND obstacles, run/turn clips, and Kokoro-driven destinations are deferred to a future Phase 2 plan**. New render-gate `tools/verify/render_walk.mjs` PASS (grounding y==0 at start/mid/arrival, on-target arrival, collision stop). +11 vitest. Caught + fixed a TDZ crash via the render-gate (`_walk` declared after the animate loop → hoisted to module scope).

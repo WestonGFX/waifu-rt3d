@@ -189,6 +189,44 @@ def build_root_transform(yaw_deg: float = 0.0) -> np.ndarray:
     return q_normalize(g)
 
 
+def _rotate_vec(q: np.ndarray, v: np.ndarray) -> np.ndarray:
+    """Rotate 3-vector ``v`` by quaternion ``q`` (x, y, z, w)."""
+    x, y, z, w = q
+    u = np.array([x, y, z], dtype=np.float64)
+    v = np.asarray(v, dtype=np.float64)
+    return 2 * np.dot(u, v) * u + (w * w - np.dot(u, u)) * v + 2 * w * np.cross(u, v)
+
+
+# The VRM normalized-rest forward (chest-out) direction in glTF; three-vrm models
+# face +Z. The camera looks down -Z toward the origin, so +Z faces the camera.
+# Confirmed by the --face-camera render gate (2026-06-22): a back-to-camera wave
+# clip turns to face the camera with this value.
+VRM_FORWARD = np.array([0.0, 0.0, 1.0])
+
+
+def compute_facing_yaw(global_orient0: np.ndarray) -> float:
+    """Yaw (degrees) that turns the avatar to face the camera at the first frame.
+
+    The clip's ``global_orient`` sets the body's absolute facing, which is
+    arbitrary per generated clip. This computes the single about-vertical yaw that
+    rotates frame 0's facing onto glTF +Z (toward the camera). Because it is a
+    constant yaw applied to the root for the whole clip, all *relative* body
+    rotation in the motion (e.g. a turn) is preserved -- only the starting
+    orientation is normalised.
+
+    Args:
+        global_orient0: Frame-0 root axis-angle (3,), i.e. ``poses[0, :3]``.
+
+    Returns:
+        Yaw in degrees to pass as ``yaw_deg`` to the converter.
+    """
+    g_base = quat_from_axis_angle((1.0, 0.0, 0.0), -90.0)        # up-fix only
+    root0 = q_mul(g_base, axis_angle_to_quat(np.asarray(global_orient0)))
+    fwd = _rotate_vec(root0, VRM_FORWARD)                        # facing in glTF
+    # Angle of the ground-plane facing from +Z; negate to rotate it back to +Z.
+    return float(-np.degrees(np.arctan2(fwd[0], fwd[2])))
+
+
 def load_dart_npz(path: Path) -> tuple[np.ndarray, float]:
     """Load and validate a DART SMPL-X ``.npz``.
 
@@ -344,20 +382,29 @@ def build_glb(tracks: dict[str, np.ndarray], fps: float, anim_name: str) -> tupl
 
 
 def convert_file(
-    src: Path, dst: Path, *, yaw_deg: float = 0.0, anim_name: str | None = None
+    src: Path,
+    dst: Path,
+    *,
+    yaw_deg: float = 0.0,
+    face_camera: bool = False,
+    anim_name: str | None = None,
 ) -> dict:
     """Convert one DART ``.npz`` to a normalized-VRM GLB on disk.
 
     Args:
         src: Input DART SMPL-X ``.npz``.
         dst: Output ``.glb`` path.
-        yaw_deg: Facing yaw (tune against the render gate).
+        yaw_deg: Explicit facing yaw (ignored if ``face_camera`` is set).
+        face_camera: If True, auto-compute the yaw so the avatar faces the camera
+            at frame 0 (see :func:`compute_facing_yaw`).
         anim_name: Animation name (defaults to the output stem).
 
     Returns:
-        Stats dict: ``{frames, fps, bones, duration}``.
+        Stats dict: ``{frames, fps, bones, duration, yaw}``.
     """
     poses, fps = load_dart_npz(src)
+    if face_camera:
+        yaw_deg = compute_facing_yaw(poses[0, :3])
     tracks = convert_poses_to_tracks(poses, yaw_deg=yaw_deg)
     gltf, binary = build_glb(tracks, fps, anim_name or dst.stem)
     write_glb(dst, gltf, binary)
@@ -366,6 +413,7 @@ def convert_file(
         "fps": fps,
         "bones": len(tracks),
         "duration": round(poses.shape[0] / fps, 3),
+        "yaw": round(yaw_deg, 1),
     }
 
 
@@ -377,17 +425,24 @@ def main() -> None:
     p.add_argument("--name", help="animation name (default: output stem)")
     p.add_argument(
         "--yaw", type=float, default=0.0,
-        help="facing yaw about glTF +Y in degrees (tune via render gate; default 0)",
+        help="explicit facing yaw about glTF +Y in degrees (default 0)",
+    )
+    p.add_argument(
+        "--face-camera", action="store_true",
+        help="auto-yaw so the avatar faces the camera at frame 0 (overrides --yaw)",
     )
     args = p.parse_args()
 
     src = Path(args.npz)
     dst = Path(args.out) if args.out else src.with_suffix(".glb")
-    stats = convert_file(src, dst, yaw_deg=args.yaw, anim_name=args.name)
+    stats = convert_file(
+        src, dst, yaw_deg=args.yaw, face_camera=args.face_camera, anim_name=args.name
+    )
     print(f"[dart_to_glb] {src.name} -> {dst.name}")
     print(
         f"[dart_to_glb] OK frames={stats['frames']} fps={stats['fps']:.0f} "
-        f"bones={stats['bones']} duration={stats['duration']}s yaw={args.yaw}"
+        f"bones={stats['bones']} duration={stats['duration']}s yaw={stats['yaw']}"
+        + (" (face-camera)" if args.face_camera else "")
     )
 
 

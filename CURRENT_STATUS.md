@@ -10,6 +10,14 @@
 
 ## Active Work
 
+**Session (2026-06-22b) — Stage 3 Phase 5.1 COMPLETE + verified: emotion→motion gap-fill gestures. Branch `master` — 2 LOCAL commits unpushed (`2361c07` feat + a plan-line docs commit).** Plan: `docs/plans/2026-06-14-stage3-ai-motion.md`.
+
+- **Phase 5.1 — emotion→motion wired** (`2361c07`): `dart_gesture_library.json` now drives the avatar's body. New `frontends/sakura/src/lib/dartGestures.ts` maps Kokoro per-turn `emotion` → a pre-baked DART gesture (excited/proud→cheer, frustrated→cross_arms, sleepy→stretch, playful→shrug; common/gentle emotions stay still by design). `viewerStore.dispatchDartGesture(name)` loads-then-plays the normalized-VRM GLB via the gate-proven `loadAnimation`/`playAnimation` retarget path (`dart_`-prefixed names, VRM-only, cleared on model load). **Firing policy (Chris chose): gap-fill + throttled** — `dispatchKokoroEmbodiment` Step 4 fires only when the LLM picked NO explicit gesture, the emotion maps, and `DART_GESTURE_COOLDOWN_TURNS=3` elapsed; explicit Kokoro gestures keep using the proven Mixamo clips. **No viewer.html change** (sensitive area). +12 vitest (510 total), tsc clean, 3154 pytest green.
+- **Verified this session:** all 8 gesture GLBs present on disk (`backend/storage/animations/dart-gestures/`, built prior session); `/files` → `backend/storage` mount confirms URLs resolve; **render-gated `cheer` via the exact `--retarget` path the seam triggers — 22 tracks, 6/6 distinct frames, upright + grounded + arms-spread, zero eversion** (`docs/testing/screenshots/2026-05-31-retarget-proof/clip-walk.png`). Full live chat→Kokoro→embodiment browser pass deferred (covered by unit tests + asset render gate).
+- **NEXT (still externally gated):** Phase 3 networked service (needs the waifu repo deployed to the RTX box as a persistent `dart`-env daemon); Phase 6 EMAGE (CC-BY-NC-SA license decision). Phase 5.1's clip-load seam is now also the runtime sink Phase 3 will feed.
+
+---
+
 **Session (2026-06-22) — Stage 3 AI motion: Phase 2 COMPLETE + hardened, gesture library, Phase 3 engine, EMAGE scoped. Branch `master`, HEAD `96a9feb` — ALL PUSHED (0 unpushed).** Plan: `docs/plans/2026-06-14-stage3-ai-motion.md`. Design: `docs/research/2026-06-22-stage3-phase3-design.md`.
 
 Big session — 9 commits, all pushed (incl. the 10 prior Stage-3 doc commits):

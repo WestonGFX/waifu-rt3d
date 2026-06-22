@@ -10,12 +10,22 @@
 
 ## Active Work
 
-**Session (2026-06-22) — Stage 3 Phase 2 COMPLETE: DART SMPL-X → normalized-VRM GLB, render-gated. Branch `master`, HEAD `1214e09` (1 commit, LOCAL).** Plan: `docs/plans/2026-06-14-stage3-ai-motion.md`.
+**Session (2026-06-22) — Stage 3 AI motion: Phase 2 COMPLETE + hardened, gesture library, Phase 3 engine, EMAGE scoped. Branch `master`, HEAD `96a9feb` — ALL PUSHED (0 unpushed).** Plan: `docs/plans/2026-06-14-stage3-ai-motion.md`. Design: `docs/research/2026-06-22-stage3-phase3-design.md`.
 
-- **`1214e09` feat(stage3-P2): DART SMPL-X `.npz` → normalized-VRM GLB.** New `tools/dart_to_glb.py` + 20 pytest. Bridges DART's text→motion output to the avatar: SMPL-X axis-angle `poses (162,165)` → per-VRM-bone three-vrm **normalized** quaternion tracks → a `J_Bip_*`-named GLB the viewer's `retargetClip` path ingests like the Stage-1 baked clips. The SMPL frame was **measured** (real SMPL-X forward pass on the RTX box), not guessed: rest is Y-up template, posed seq is Z-up (AMASS) via `global_orient`. Conversion = rigid stand-up `G_pre=Rx(-90°)` on the **root (hips) only** (left-mult); children keep raw SMPL local (rigid root cancels in the chain). First attempt conjugated every bone → laid her on her side; render gate caught it → fixed to root-only + locked with a regression test. **Render gate PASS** (`render_clip.mjs --frames 6 --retarget`): 22/22 tracks, 6/6 distinct frames, upright, grounded, arms track, zero eversion — clean walk-in-circles. Proof: `docs/testing/screenshots/2026-06-22-stage3-dart/`. Generated GLBs gitignored (per-machine). 3141 pytest + tsc clean.
-- **Next → Stage 3 Phase 3:** wire `dart_runner.py` into the motion server's stubbed `/generate` AI branch (generate-then-play MVP). Has a transport fork (serve GLB from box vs stream npz → convert on Mac) and needs the box live — see report.
+Big session — 9 commits, all pushed (incl. the 10 prior Stage-3 doc commits):
+- **Phase 2 — `tools/dart_to_glb.py`** (`1214e09`): SMPL-X axis-angle `poses (162,165)` → per-VRM-bone three-vrm **normalized** quaternion GLB the viewer's `retargetClip` path plays like Stage-1 clips. Frame **measured** on the box (SMPL rest=Y-up template, posed=Z-up AMASS): conversion = rigid stand-up `G_pre=Rx(-90°)` on the **root (hips) only**; children keep raw SMPL local (cancels in chain). First attempt conjugated every bone → laid her on her side; render gate caught it → root-only fix + regression test. Gate PASS on walk: 22/22 tracks, upright, grounded, arms track, zero eversion.
+- **Phase 2 hardening** (`4e7f9e7`): gate-proven on **wave** (clean arm-wave, correct reach — 16° rest-arm offset is a non-issue) + **turn**. Generalizes across locomotion/gesture/yaw.
+- **`--face-camera`** (`c9369dd`): auto-yaw so generated clips face the user (back-to-camera wave → greets the camera). +tests.
+- **Pre-baked gesture library** (`7eaa2e5`): `backend/motion/dart_gesture_library.json` (8 gestures: wave/clap/cheer/point/cross_arms/bow/stretch/shrug, each mapped to Kokoro emotion/intent triggers) + `tools/build_dart_gestures.py`. All 8 render-gated clean. **Zero runtime GPU** — the pragmatic bridge. GLBs gitignored/regenerable.
+- **Phase 3 ENGINE** (`9ec261e`): `backend/motion/dart_runner.py` — resident-model DART wrapper (load once / generate ~1.3 s), DART imports lazy (Mac-importable). **Live-verified on the box** (nod-head clip → npz → GLB → gate). +4 Mac-side pytest.
+- **Design + EMAGE scoping** (`a2a9489`, `96a9feb`): Phase 3 networked-service design grounded in `motion_server.py`/`remote_client.py`; Phase 6 EMAGE stand-up plan (license-gated).
 
-**Live status:** push gate clear (no active OPEN BUG/UNFIXED/BLOCKER markers). 3141 pytest + 498 vitest, tsc clean. **1 local commit unpushed (`1214e09`).**
+**Next (gated, next-session):**
+1. **Phase 3 networked service** — deploy the waifu repo to the box as a persistent daemon in the `dart` conda env (both waifu + DART importable), wire `motion_server` AI branch → `DartRunner` → clip-artifact response, `remote_client` decode→`dart_to_glb`→`/files` URL, `api.ts` mirror, `/status` advert, live round-trip verify. Design: `docs/research/2026-06-22-stage3-phase3-design.md`.
+2. **Phase 5.1 emotion→motion** — wire `dart_gesture_library.json` triggers into the Kokoro/embodiment seam (play the mapped gesture on emotion).
+3. **Phase 6 EMAGE** — resolve license intent, then stand up (separate session).
+
+**Live status:** push gate clear (no active OPEN BUG/UNFIXED/BLOCKER markers). **3154 backend pytest** (+33 this session) + 498 vitest, tsc clean. **0 commits unpushed — origin/master synced at `96a9feb`.**
 
 ---
 

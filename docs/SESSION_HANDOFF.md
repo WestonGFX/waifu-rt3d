@@ -1,87 +1,61 @@
-# Session Handoff — 2026-06-03
+# Session Handoff — 2026-06-22
 
-## Branch: master
-## Test Status: 3104 passed, 0 failed (backend) · 479 passed (sakura vitest) | TSC: clean
+## Branch: master · HEAD `96a9feb` · ALL PUSHED (0 unpushed)
+## Test Status: 3154 backend pytest (+33 this session) · 498 vitest · tsc clean
 
-No active `OPEN BUG` / `UNFIXED` / `BLOCKER` markers. Push gate clear. CI green on master.
+No active `OPEN BUG` / `UNFIXED` / `BLOCKER` markers. Push gate clear.
 
-## Completed This Session
+## What this session did — Stage 3 AI Motion (DART)
 
-### 1. CI/CD pipeline fix — master went from red (#54→#75) to GREEN ✅
-A pasted plan misdiagnosed the failures as "unpinned deps / caching" — but `test.yml`
-already pinned Python 3.12, used `npm ci`, and cached pip/npm. The real causes were
-different, found by reading the actual run logs + simulating CI in a throwaway venv:
+Picked up the active in-repo thread (Stage 3 Phase 2) via `/go` and went broad at
+Chris's request ("do all these things"). 9 commits, all pushed.
 
-- **Python — `transformers` ModuleNotFoundError:** `backend/emotion/advanced_sentiment.py`
-  imported `transformers`/`torch` at module top; `conftest → import backend.server` pulled
-  it in. Moved the imports into `__init__` (lazy), matching the pattern already used in
-  `mood.py` / `sarcasm_detector.py` / `toxicity_detector.py`. (`934ce22`)
-- **Python — `numpy` + `PIL` missing:** CI's hand-curated pip list had drifted from the
-  import graph. Added `numpy pillow` to the install step. (`a7d9407`)
-- **Python — `sentence_transformers` (heavy ML dep, excluded from CI):** 8 embedding tests
-  patch it; 2 instantiate a real provider. Added a lightweight `_StubModel` in
-  `test_embedding_provider.py` that activates only when the real package is absent (CI),
-  preserving full coverage locally. (`a7d9407`)
-- **Lint — dead `neon` job:** targeted `frontends/neon` (legacy, no lockfile); its
-  `cache-dependency-path` hard-failed every run while linting nothing. Removed the job.
-  Sakura is covered by the Vitest gate. (`934ce22`)
-- **Vitest — `FeedbackButtons` flake:** component guards re-entrant clicks with
-  `if (pending) return`; the mock resolved before `pending` cleared, so under CI's slower
-  timing the 2nd click in the toggle tests was dropped. Test-only fix: wait for the button
-  to re-enable (`not.toBeDisabled()`) between clicks in the 3 rapid-double-click tests.
-  (`8b50c56`)
-- **tsc — `isMountedRef` declared-unused (TS6133):** completed the in-flight bugfix —
-  flips false in unmount cleanup + guards the `ws.onclose` reconnect path. (`e6de28d`)
+1. **Phase 2 COMPLETE — `tools/dart_to_glb.py`** (`1214e09`). DART SMPL-X `.npz`
+   (axis-angle `poses (162,165)` + `trans`, 30fps) → per-VRM-bone three-vrm
+   **normalized** quaternion GLB, played via the viewer's proven `retargetClip` path.
+   - Frame **measured**, not guessed: ran a real SMPL-X forward pass on the box →
+     SMPL rest is Y-up template, the posed sequence is Z-up (AMASS) via `global_orient`.
+   - Conversion = rigid stand-up `G_pre=Rx(-90°)` on the **root (hips) only**;
+     children keep their raw SMPL local (the rigid root rotation cancels in the FK
+     chain). **The first attempt conjugated every bone → she rendered lying on her
+     side; the render gate caught it** → fixed to root-only + a regression test.
+   - Render gate PASS: 22/22 tracks, upright, grounded, arms track, zero eversion.
+2. **Hardening** (`4e7f9e7`): generated + gated **wave** (clean arm-wave, correct
+   reach — the 16° SMPL-rest-arm offset is empirically a non-issue) and **turn**.
+   Converter generalizes across locomotion / gesture / yaw.
+3. **`--face-camera`** (`c9369dd`): auto-yaw so generated clips face the user.
+4. **Pre-baked gesture library** (`7eaa2e5`): `backend/motion/dart_gesture_library.json`
+   (8 gestures mapped to Kokoro emotion/intent triggers) + `tools/build_dart_gestures.py`.
+   All 8 render-gated clean. **Zero runtime GPU** — the pragmatic bridge to usable
+   AI gestures now. GLBs gitignored/regenerable.
+5. **Phase 3 ENGINE** (`9ec261e`): `backend/motion/dart_runner.py` — resident-model
+   DART wrapper (load once, ~1.3s/clip), DART imports lazy so it's Mac-importable.
+   **Live-verified on the box** (nod-head clip → npz → GLB → gate). +4 Mac pytest.
+6. **Docs** (`a2a9489`, `96a9feb`): Phase 3 networked-service design grounded in
+   `motion_server.py`/`remote_client.py`; Phase 6 EMAGE stand-up scoping (license-gated).
 
-Also fast-forwarded `master` 42 commits → caught up to `feat/avatar-motion` (user
-approved whole-branch). Verified by 3 successive green CI runs (final: `26916206004`).
+## Verification done
+- `dart_to_glb` render-gated on 11 clips total (walk/wave/turn/nod + 8 gestures):
+  upright, grounded, arms track, zero eversion. Screenshots in
+  `docs/testing/screenshots/2026-06-22-stage3-dart/`.
+- `dart_runner` generation live-verified on the RTX 5080 (resident model).
+- 3154 backend pytest green; tsc clean.
 
-### 2. useTwoPhaseChips hook extraction (branch `claude/continue-prepared-plan-6CHFX`)
-Extracted the inline two-phase quick-reply chip machinery (3 useState, 2 useRef, the
-60-line effect with the 1.5s reveal timer + phase-2 LLM abort) out of `ChatThread.tsx`
-into a `useTwoPhaseChips` hook in the same file, with plain-English comments + an
-AGENTIC-INSTRUCTION block documenting the timer/abort contract. Caught a second
-chip-clear site (composer onChange). Behavior identical. TSC clean, 37 chip tests pass.
-Committed as `70811de` on that branch (NOT on master — different lineage; master/avatar
-stripped chips in the session-46/47 declutter).
+## Next session (gated)
+1. **Phase 3 networked service** — needs the waifu repo deployed to the box as a
+   persistent daemon in the `dart` conda env (waifu + DART both importable). Then wire
+   `motion_server` AI branch → `DartRunner` → clip-artifact, `remote_client` decode →
+   `dart_to_glb` → `/files` URL, `api.ts` mirror, `/status` advert, live round-trip.
+   Full design: `docs/research/2026-06-22-stage3-phase3-design.md`.
+2. **Phase 5.1 emotion→motion** — wire `dart_gesture_library.json` triggers into the
+   Kokoro/embodiment seam.
+3. **Phase 6 EMAGE** — resolve CC BY-NC-SA license intent, then stand up (separate
+   session). Plan: `docs/research/2026-06-22-emage-cospeech-scoping.md`.
 
-## Work In Progress
-- None open. Both tasks finished + verified.
-
-## Known Issues / Bugs
-- **Node 20 deprecation (warning, not failure):** `actions/checkout@v4` + `setup-node@v4`
-  + `setup-python@v5` run on Node 20; GitHub force-migrates to Node 24 on **2026-06-16**.
-  Auto-handled by GitHub — no action needed, but the CI annotation will keep appearing
-  until the runner default flips. Optional: bump action majors when newer tags ship.
-
-## Files Modified (this session's commits, master)
-```
- .github/workflows/test.yml                          | neon job removed, numpy+pillow added
- backend/emotion/advanced_sentiment.py               | lazy transformers/torch import
- backend/tests/test_embedding_provider.py            | sentence_transformers stub guard
- frontends/sakura/src/hooks/useFullDuplexVoice.ts    | isMountedRef wired
- frontends/sakura/src/stores/chatStore.ts            | session-switch guards (81c2175)
- frontends/sakura/src/test/FeedbackButtons.test.tsx  | de-flake toggle tests
-```
-(Plus `70811de` on `claude/continue-prepared-plan-6CHFX`: ChatThread.tsx useTwoPhaseChips.)
-
-## Next Session Priorities
-1. **(Optional) Phase 2 commenting pass** — the pasted plan's "comprehensive plain-English
-   commenting" is worth doing. SKIP its "consolidate into monolithic managers" part —
-   it fights repo rules ("minimum change / no big refactors") and `server.py` is already a
-   17K-line monolith. Decision was deferred to user at session end.
-2. **Pre-existing MEMORY.md backlog** (unchanged): M6 item 22 (NSFW affinity unlock gates,
-   bond 20/50/75 in Settings > Intimacy), M8 marketing docs.
-3. **Untracked cruft** in `git status` (avatars, screenshots, e2e/memory-browser) —
-   decide keep/commit/trash. Not touched this session.
-
-## Context for Next Session
-- **master == feat/avatar-motion** after the fast-forward (both pushed to origin). CI green.
-- The `useTwoPhaseChips` work lives only on `claude/continue-prepared-plan-6CHFX` — that
-  branch has a DIFFERENT `ChatThread.tsx` lineage (still has chips). master/avatar removed
-  chips in session-46/47. Don't expect the hook on master.
-- CI dependency philosophy: heavy ML libs (torch/transformers/sentence-transformers/
-  chromadb) are intentionally NOT installed — tests mock/stub them. If a new test needs a
-  heavy dep as a patch target, add a stub guard (see `test_embedding_provider.py`) rather
-  than installing the real package.
-- No active plan file driving this session — it was reactive (user-pasted plan + /handoff).
+## Box access (reusable)
+`ssh rtx5080 "<cmd>"` (cmd.exe). WSL: base64-pipe with escaped double quotes, OR
+`scp file rtx5080:C:/dev/` then WSL reads `/mnt/c/dev/`. cmd line-length limit (~8KB)
+kills large base64 inline → use scp for files. conda: `source
+/root/miniconda3/etc/profile.d/conda.sh; conda activate dart; cd /root/DART`.
+DART generate: `python -m mld.rollout_mld --text_prompt <file|"action*N"> --export_smpl 1
+--use_predicted_joints 1 --denoiser_checkpoint ./mld_denoiser/.../checkpoint_300000.pt`.

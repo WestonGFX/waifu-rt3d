@@ -1,61 +1,86 @@
-# Session Handoff — 2026-06-22
+# Session Handoff — 2026-06-22 (session "b" — Stage 3 Phase 5.1 + Phase 3)
 
-## Branch: master · HEAD `96a9feb` · ALL PUSHED (0 unpushed)
-## Test Status: 3154 backend pytest (+33 this session) · 498 vitest · tsc clean
+## Branch: master · HEAD `8c642d5` · ALL PUSHED (0 unpushed)
+## Test Status: 3166 backend pytest (+12) · 514 sakura vitest (+4) · tsc clean
 
 No active `OPEN BUG` / `UNFIXED` / `BLOCKER` markers. Push gate clear.
 
-## What this session did — Stage 3 AI Motion (DART)
+## Completed This Session
 
-Picked up the active in-repo thread (Stage 3 Phase 2) via `/go` and went broad at
-Chris's request ("do all these things"). 9 commits, all pushed.
+### Stage 3 Phase 5.1 — emotion→motion gap-fill gestures (pushed `f0bf3bd..96328a4`)
+- New `frontends/sakura/src/lib/dartGestures.ts`: maps Kokoro per-turn `emotion` →
+  a pre-baked DART gesture (excited/proud→cheer, frustrated→cross_arms, sleepy→
+  stretch, playful→shrug; gentle/common emotions intentionally unmapped). Tunable
+  map + `DART_GESTURE_COOLDOWN_TURNS=3` + `dartGestureUrl`/`resolveDartGesture`.
+- `viewerStore.dispatchDartGesture(name)` — load-then-play the normalized-VRM GLB
+  via the gate-proven `loadAnimation`/`playAnimation` retarget path (`dart_`-prefix,
+  VRM-only, cleared on model load).
+- **Firing policy (Chris chose): gap-fill + throttled** — `dispatchKokoroEmbodiment`
+  Step 4 fires ONLY when the LLM picked no explicit gesture, the emotion maps, and
+  the cooldown elapsed. Explicit Kokoro gestures keep using the proven Mixamo clips.
+- No viewer.html change. +12 vitest. Render-gated `cheer` upright/grounded.
 
-1. **Phase 2 COMPLETE — `tools/dart_to_glb.py`** (`1214e09`). DART SMPL-X `.npz`
-   (axis-angle `poses (162,165)` + `trans`, 30fps) → per-VRM-bone three-vrm
-   **normalized** quaternion GLB, played via the viewer's proven `retargetClip` path.
-   - Frame **measured**, not guessed: ran a real SMPL-X forward pass on the box →
-     SMPL rest is Y-up template, the posed sequence is Z-up (AMASS) via `global_orient`.
-   - Conversion = rigid stand-up `G_pre=Rx(-90°)` on the **root (hips) only**;
-     children keep their raw SMPL local (the rigid root rotation cancels in the FK
-     chain). **The first attempt conjugated every bone → she rendered lying on her
-     side; the render gate caught it** → fixed to root-only + a regression test.
-   - Render gate PASS: 22/22 tracks, upright, grounded, arms track, zero eversion.
-2. **Hardening** (`4e7f9e7`): generated + gated **wave** (clean arm-wave, correct
-   reach — the 16° SMPL-rest-arm offset is empirically a non-issue) and **turn**.
-   Converter generalizes across locomotion / gesture / yaw.
-3. **`--face-camera`** (`c9369dd`): auto-yaw so generated clips face the user.
-4. **Pre-baked gesture library** (`7eaa2e5`): `backend/motion/dart_gesture_library.json`
-   (8 gestures mapped to Kokoro emotion/intent triggers) + `tools/build_dart_gestures.py`.
-   All 8 render-gated clean. **Zero runtime GPU** — the pragmatic bridge to usable
-   AI gestures now. GLBs gitignored/regenerable.
-5. **Phase 3 ENGINE** (`9ec261e`): `backend/motion/dart_runner.py` — resident-model
-   DART wrapper (load once, ~1.3s/clip), DART imports lazy so it's Mac-importable.
-   **Live-verified on the box** (nod-head clip → npz → GLB → gate). +4 Mac pytest.
-6. **Docs** (`a2a9489`, `96a9feb`): Phase 3 networked-service design grounded in
-   `motion_server.py`/`remote_client.py`; Phase 6 EMAGE stand-up scoping (license-gated).
+### Stage 3 Phase 3 — DART networked service, LIVE round-trip verified (pushed `96328a4..8c642d5`)
+- `57948fc` contract: box `motion_server` `/generate` AI branch → resident
+  `DartRunner` → clip artifact `{kind:"clip",format:"npz",npz_b64,…}`;
+  `_try_load_ai_backend` loads DART once (lazy import → Mac-importable); `/status`
+  advertises `dart`; emotion→prompt + duration→primitives maps + `(prompt,
+  primitives,seed)` cache. Mac `remote_client.forward_generate` decodes npz →
+  `tools/dart_to_glb` → `/files/animations/dart-generated/<stem>_<sha1>.glb`
+  (content-hash dedup) → `{kind:"clip",format:"glb",url,…}`. `server.py` forwards
+  prompt/seed + passes either union arm through. `api.ts` mirrors
+  `MotionGenerateResponse`; `viewerStore.dispatchClip`/`dispatchMotionResponse`.
+  +12 pytest +4 vitest.
+- `3f22503` LIVE PROOF: deployed `backend.motion` to the box (`/root/DART/backend/`),
+  ran `motion_server` in WSL `dart` env (DART loaded, `/status` `dart:true`),
+  round-tripped from the Mac: wave (cached 234ms) + cheer (fresh 818ms), both
+  render-gated upright/grounded/22-track/6-of-6-frames
+  (`docs/testing/screenshots/2026-06-22-stage3-phase3/`).
 
-## Verification done
-- `dart_to_glb` render-gated on 11 clips total (walk/wave/turn/nod + 8 gestures):
-  upright, grounded, arms track, zero eversion. Screenshots in
-  `docs/testing/screenshots/2026-06-22-stage3-dart/`.
-- `dart_runner` generation live-verified on the RTX 5080 (resident model).
-- 3154 backend pytest green; tsc clean.
+### Decision (Chris, this session)
+- **Phase 3 is closed as a proven, OPTIONAL capability — do NOT harden the box
+  daemon now.** Rationale: live DART is plumbing with no production consumer yet,
+  and an always-on RTX box is a heavy dependency for a privacy-first desktop app;
+  the pre-baked Phase 5.1 library (GPU-free, offline, instant) is the shipping path.
+  Revisit the daemon only if/when novel-motion-on-demand becomes a committed feature.
 
-## Next session (gated)
-1. **Phase 3 networked service** — needs the waifu repo deployed to the box as a
-   persistent daemon in the `dart` conda env (waifu + DART both importable). Then wire
-   `motion_server` AI branch → `DartRunner` → clip-artifact, `remote_client` decode →
-   `dart_to_glb` → `/files` URL, `api.ts` mirror, `/status` advert, live round-trip.
-   Full design: `docs/research/2026-06-22-stage3-phase3-design.md`.
-2. **Phase 5.1 emotion→motion** — wire `dart_gesture_library.json` triggers into the
-   Kokoro/embodiment seam.
-3. **Phase 6 EMAGE** — resolve CC BY-NC-SA license intent, then stand up (separate
-   session). Plan: `docs/research/2026-06-22-emage-cospeech-scoping.md`.
+## Work In Progress
+- None. Both phases complete, committed, pushed, tree effectively clean.
 
-## Box access (reusable)
-`ssh rtx5080 "<cmd>"` (cmd.exe). WSL: base64-pipe with escaped double quotes, OR
-`scp file rtx5080:C:/dev/` then WSL reads `/mnt/c/dev/`. cmd line-length limit (~8KB)
-kills large base64 inline → use scp for files. conda: `source
-/root/miniconda3/etc/profile.d/conda.sh; conda activate dart; cd /root/DART`.
-DART generate: `python -m mld.rollout_mld --text_prompt <file|"action*N"> --export_smpl 1
---use_predicted_joints 1 --denoiser_checkpoint ./mld_denoiser/.../checkpoint_300000.pt`.
+## Known Issues / Bugs
+- None introduced. Pre-existing: see CURRENT_STATUS "Known Issues" (Live2D runtime,
+  embedding model format, Cubism error spam).
+
+## Files Modified (this session, all committed)
+- `frontends/sakura/src/lib/dartGestures.ts` (new), `frontends/sakura/src/lib/api.ts`
+- `frontends/sakura/src/stores/viewerStore.ts`, `frontends/sakura/src/components/ModelPanel.tsx`
+- `backend/motion/motion_server.py`, `backend/motion/remote_client.py`, `backend/server.py`
+- tests: `backend/tests/test_motion_phase3.py`, `frontends/sakura/src/test/{dartGestures,viewerStore.dartGesture,viewerStore.clip}.test.ts`
+- docs: `docs/plans/2026-06-14-stage3-ai-motion.md`, `CURRENT_STATUS.md`, screenshots
+
+## Uncommitted (intentionally left)
+- `.claude/skills/go/SKILL.md` — modified EXTERNALLY (not this session's work; do not commit blind).
+- `docs/testing/screenshots/2026-05-31-retarget-proof/*` — transient render-gate scratch output.
+- `tools/smplx_grab.mjs` — untracked since the prior session (unused MPI downloader).
+
+## Next Session Priorities (Chris said "move on" — pick by appetite)
+1. **Phase 7 CAMDM ambient idle** — the one motion idea that runs ON the M2 itself
+   (no box), always-alive idle motion; fits privacy-first ethos. Separate standup.
+2. **Phase 6 EMAGE co-speech gesture** — highest research value, but GATED on a
+   CC-BY-NC-SA license decision from Chris (prototype-only until resolved).
+   Scoping: `docs/research/2026-06-22-emage-cospeech-scoping.md`.
+3. **Step out of motion entirely** — core companion surface (Kokoro depth, memory,
+   chat UX). No specific task queued; would need fresh scoping.
+
+## Context for Next Session
+- **Box DART service is NOT running** — torn down at session end (it was foreground
+  inside a held-open ssh; not a durable daemon). The Windows portproxy
+  (`0.0.0.0:8081 → <wsl-ip>:8081`) + firewall rule PERSIST, but the WSL IP is
+  dynamic (re-point on reboot via `wsl hostname -I`). Full reproducible setup +
+  daemon-hardening notes are in the plan status log (2026-06-22 Phase 3 entry).
+- The `dart` conda env on the box now also has `fastapi`/`uvicorn`/`pydantic`
+  installed (was inference-only).
+- Active plan: `docs/plans/2026-06-14-stage3-ai-motion.md` — Phases 1/2/3/5.1 ✓ DONE;
+  Phases 5.2 (streaming, sensitive viewer), 6 (EMAGE, gated), 7 (CAMDM) remain.
+- Suggested `/clear` before the next (unrelated) task — context is heavy with
+  DART/box/WSL detail.

@@ -5,6 +5,13 @@
 **Schema:** v89 (unchanged)
 **Tests:** 3,121 backend pytest + 498 sakura vitest passing, tsc clean
 
+## Two open threads (pick either)
+
+1. **Stage 3 DART Phase 2** — convert generated motion → normalized-VRM GLB (details below).
+2. **Build `ds_dispatch`** in `~/Code/lm-mcp/` (TS/Bun) — privacy-gated DeepSeek dispatch tool. Plan: `docs/plans/2026-06-22-lm-mcp-ds-dispatch.md`; routing policy: global `~/.claude/rules/model-routing.md`; council research: `docs/research/2026-06-22-claude-code-model-routing.md`. (Open in the lm-mcp repo, say "build ds_dispatch from the plan".)
+
+**Session 2026-06-22 also added global behavior rules** (`~/.claude/CLAUDE.md`): generality meta-principle (+ point 6: don't assume mutable refs stay fixed), auto-scale review rigor, actor-naming (Chris/Claude), Chrome-tab-not-new-browser, honest-objective-not-sycophant, model-routing, offer-to-make-free-accounts. Untracked `tools/smplx_grab.mjs` left in place (unused MPI CDP downloader).
+
 ## RESUME HERE → Stage 3 AI Motion — Phase 1 DONE, start **Phase 2**
 
 **Plan:** `docs/plans/2026-06-14-stage3-ai-motion.md` · **Full results:** `docs/research/2026-06-14-dart-on-5080.md` (read first — exact paths, file-IDs, measured numbers, access lessons).

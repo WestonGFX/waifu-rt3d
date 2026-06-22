@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import { KOKORO_FACE_TO_BLENDSHAPE, kokoroGazeToLookAt } from '../lib/kokoro';
 import type { KokoroGaze } from '../lib/kokoro';
+import {
+  DART_GESTURE_COOLDOWN_TURNS,
+  dartGestureUrl,
+  resolveDartGesture,
+} from '../lib/dartGestures';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -160,6 +165,15 @@ interface ViewerState {
    * closed; when ``payload.diagnostics.kokoroEnabled`` is false this is a no-op.
    */
   dispatchKokoroEmbodiment: (payload: import('../lib/kokoro').KokoroPayload) => void;
+
+  /**
+   * Play a pre-baked DART gesture clip (Stage 3 Phase 5.1) by library name.
+   *
+   * Loads the normalized-VRM GLB from {@link dartGestureUrl} on first use and
+   * plays it on subsequent use, mirroring the Mixamo gesture-clip pattern. A
+   * missing GLB (e.g. not yet built on this machine) is a no-op. VRM-only.
+   */
+  dispatchDartGesture: (name: string) => void;
 
   /** Route a background change to the VRM viewer. */
   dispatchBackground: (mode: string, value: string) => void;
@@ -482,6 +496,22 @@ const KOKORO_GESTURE_CLIPS: Record<string, string | null> = {
  */
 const loadedGestureClips = new Set<string>();
 
+/**
+ * DART gesture clips already sent to the viewer (Phase 5.1). Like
+ * {@link loadedGestureClips}, cleared on model load. Names are prefixed `dart_`
+ * in the viewer's clip library so they never collide with Mixamo clip stems.
+ */
+const loadedDartClips = new Set<string>();
+
+/**
+ * Throttle state for emotion-driven DART gap-fill gestures.
+ * `_kokoroTurn` increments once per Kokoro embodiment dispatch (≈ one assistant
+ * turn); `_lastDartGestureTurn` records the turn a gap-fill gesture last fired.
+ * Initialised so the first eligible turn always fires.
+ */
+let _kokoroTurn = 0;
+let _lastDartGestureTurn = -DART_GESTURE_COOLDOWN_TURNS;
+
 // ─── Store ──────────────────────────────────────────────────────────────────────
 
 export const useViewerStore = create<ViewerState>()((set, get) => ({
@@ -573,7 +603,8 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     get().dispatchExpression(blendshape, intensity);
     // Step 2 — gesture, unless idle (idle means "do nothing new" — let the
     // talk/idle state machine continue).
-    if (payload.gesture && payload.gesture !== 'idle') {
+    const hasExplicitGesture = !!payload.gesture && payload.gesture !== 'idle';
+    if (hasExplicitGesture) {
       get().dispatchGesture(payload.gesture, blendshape, intensity);
     }
     // Step 3 — gaze direction. Drives the always-on LookAt layer so the
@@ -583,6 +614,55 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     if (payload.gaze) {
       get().dispatchGaze(payload.gaze);
     }
+    // Step 4 — emotion-driven DART gap-fill gesture (Phase 5.1). Only when the
+    // LLM did NOT pick an explicit gesture, the emotion maps to a body gesture
+    // (resolveDartGesture), and the throttle cooldown has elapsed — so the
+    // avatar reacts with her body to emotional tone without becoming a
+    // "caffeinated VTuber." Throttle counts every turn; the gesture fires at
+    // most once per DART_GESTURE_COOLDOWN_TURNS turns. Degrades gracefully: a
+    // missing DART GLB just never plays (same as the Mixamo gesture path).
+    _kokoroTurn += 1;
+    if (!hasExplicitGesture) {
+      const dartName = resolveDartGesture(payload.emotion);
+      if (dartName && _kokoroTurn - _lastDartGestureTurn >= DART_GESTURE_COOLDOWN_TURNS) {
+        _lastDartGestureTurn = _kokoroTurn;
+        get().dispatchDartGesture(dartName);
+      }
+    }
+  },
+
+  dispatchDartGesture: (name) => {
+    const state = get();
+    if (state.mode !== 'vrm') return;
+    const seq = state._seq + 1;
+    const clipName = `dart_${name}`;
+    if (loadedDartClips.has(clipName)) {
+      postToIframe(state.iframeRef, {
+        type: 'playAnimation',
+        payload: { name: clipName, loop: false, fadeIn: 0.25 },
+      });
+    } else {
+      // First use: load the clip into the viewer's library, then request play.
+      // playAnimation on a not-yet-loaded clip is a no-op (the GLB fetch is
+      // async), so the first occurrence of a given gesture is silent and the
+      // next plays for real — identical to the Mixamo gesture path. DART has no
+      // procedural fallback, hence the accepted first-use latency.
+      loadedDartClips.add(clipName);
+      postToIframe(state.iframeRef, {
+        type: 'loadAnimation',
+        payload: { url: dartGestureUrl(name), name: clipName, retarget: true },
+      });
+      postToIframe(state.iframeRef, {
+        type: 'playAnimation',
+        payload: { name: clipName, loop: false, fadeIn: 0.25 },
+      });
+    }
+    const cmd: ViewerCommand = {
+      kind: 'gesture',
+      payload: { gesture: name, expression: null },
+      _seq: seq,
+    };
+    set({ lastCommand: cmd, _seq: seq });
   },
 
   dispatchBackground: (mode, value) => {
@@ -717,6 +797,7 @@ export const useViewerStore = create<ViewerState>()((set, get) => ({
     // New model = the viewer rebuilds its AnimationDirector and clip library,
     // so previously-loaded gesture clips are gone — reload them on next use.
     loadedGestureClips.clear();
+    loadedDartClips.clear();
     const cmd: ViewerCommand = {
       kind: 'loadModel',
       payload: { modelUrl },

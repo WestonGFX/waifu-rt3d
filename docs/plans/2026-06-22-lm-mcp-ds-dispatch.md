@@ -1,7 +1,7 @@
 # Plan: lm-mcp `ds_dispatch` — DeepSeek cloud dispatch tool (privacy-gated)
 
 **Date:** 2026-06-22 · **Repo to edit:** `~/Code/lm-mcp/` (TypeScript / Bun — NOT Python) · **Approved by Chris** (2026-06-22).
-**Design source:** [`docs/research/2026-06-22-claude-code-model-routing.md`](../research/2026-06-22-claude-code-model-routing.md) (6-agent council verdict) · global rule `~/.claude/rules/deepseek-routing.md`.
+**Design source:** [`docs/research/2026-06-22-claude-code-model-routing.md`](../research/2026-06-22-claude-code-model-routing.md) (6-agent council verdict) · global rule `~/.claude/rules/model-routing.md` (the broader local/DeepSeek/Claude policy — read it first; Claude-Max-is-already-paid reframe means DeepSeek is a *narrow, spend-only-when-it-adds-value* tool, and `ds_dispatch` should expect Claude to pass an already-sanitized/summarized brief, with the privacy gate as the backstop).
 
 ## Goal
 

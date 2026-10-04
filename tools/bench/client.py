@@ -98,7 +98,8 @@ class BenchClient:
             RuntimeError: If the server cannot be reached.
         """
         try:
-            r = requests.get(self._v1() + "/models", timeout=(5, 15))
+            headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key and not self.api_key.startswith("env:") else {}
+            r = requests.get(self._v1() + "/models", headers=headers, timeout=(5, 15))
             r.raise_for_status()
             ids = [m["id"] for m in r.json().get("data", []) if m.get("id")]
         except Exception as e:  # noqa: BLE001

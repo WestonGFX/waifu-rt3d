@@ -35,6 +35,17 @@ ANNOTATION = {k: v for k, v in GOOD.items() if k != "reply"}
 _FLAKY = {"down": True}  # toggled by tests to simulate a model that is still loading
 
 
+_LAST = {"auth": None}  # last Authorization header the mock saw on GET /models
+
+
+@pytest.fixture(autouse=True)
+def _reset_flaky():
+    """Reset shared mock state around EVERY test so a failing assertion can't poison later ones."""
+    _FLAKY["down"] = True
+    yield
+    _FLAKY["down"] = True
+
+
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):  # silence
         pass
@@ -49,6 +60,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.endswith("/models"):
+            _LAST["auth"] = self.headers.get("Authorization")
             ids = ["good-json", "prose-only", "broken", "fenced", "prefill-continues", "rejects-schema", "flaky", "prefill-prose",
                    "kokoro-tts-v1", "Qwen3-4B-Instruct",
                    "text-embedding-nomic-embed-text-v1.5"]
@@ -481,3 +493,10 @@ def test_skipped_records_do_not_break_report_rendering(server, sysprompts, tmp_p
 def test_empty_state_delta_is_valid_not_a_failure():
     m = metrics.score_structured(json.dumps(dict(GOOD, stateDelta={})))
     assert m["parse_ok"] and m["schema_valid"] and m["delta_in_clamp"] and m["unknown_dials"] == 0
+
+
+def test_list_models_sends_api_key_when_configured(server):
+    BenchClient(server, api_key="sk-local").list_models()
+    assert _LAST["auth"] == "Bearer sk-local"
+    BenchClient(server).list_models()
+    assert _LAST["auth"] is None

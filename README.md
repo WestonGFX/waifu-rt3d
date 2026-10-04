@@ -3,7 +3,7 @@
 > **AI Companion Platform** — 3D anime avatars with personality-driven animation, local/cloud LLM integration, 45-model catalog with hardware-aware recommendations, director mode, daily streaks, full-duplex voice conversation, 9-provider TTS, offline STT, agentic tool use, mini games, lorebook, tiered memory, character moods, 18 themes, cinematic mode, and OBS streaming overlays.
 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-2703%20passed-brightgreen)](backend/tests/)
+[![Tests](https://img.shields.io/badge/tests-3159%20passed-brightgreen)](backend/tests/)
 [![Schema](https://img.shields.io/badge/DB%20schema-v89-purple)](#)
 [![Themes](https://img.shields.io/badge/themes-18-ff69b4)](#themes)
 [![Frontends](https://img.shields.io/badge/frontends-Neon%20%7C%20Sakura%20%7C%20Nova-ff69b4)](#dual-frontend-architecture)
@@ -668,7 +668,7 @@ waifu-rt3d/
 | `GET` | `/api/characters/{id}/bond/first-memory` | Get the user's first memory with this character |
 | `GET` | `/api/characters/{id}/bond/analytics` | XP source breakdown, session stats, tier history |
 
-### Database Schema (v70)
+### Database Schema (v89)
 
 The SQLite database (schema v89) auto-migrates on startup. Key tables:
 - **sessions** — chat sessions with summary, archive, tags, and author's note

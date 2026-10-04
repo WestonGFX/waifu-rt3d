@@ -45,6 +45,10 @@ class RunConfig:
     between_models_cmd: Optional[str] = None
     retry_failed: bool = False
     between_models_timeout: float = 120.0
+    # S2's second (annotation) call. 500 leaves headroom so verbose models are not cut off mid-JSON,
+    # which would be misread as a model failure rather than a harness cap.
+    extractor_temperature: float = 0.2
+    extractor_max_tokens: int = 500
 
 
 def record_key(rec: dict) -> tuple:
@@ -107,11 +111,11 @@ def check_resume_compat(path: Path, cfg: "RunConfig") -> None:
             continue
         if rec.get("skipped") or "temperature" not in rec:
             continue
-        seen.add((rec.get("temperature"), rec.get("max_tokens")))
-    mine = (cfg.temperature, cfg.max_tokens)
+        seen.add((rec.get("temperature"), rec.get("max_tokens"), rec.get("extractor_max_tokens", cfg.extractor_max_tokens)))
+    mine = (cfg.temperature, cfg.max_tokens, cfg.extractor_max_tokens)
     if seen and seen != {mine}:
         raise ResumeConfigMismatch(
-            f"{path} already holds results with (temperature, max_tokens) = {sorted(seen)}, but this run uses "
+            f"{path} already holds results with (temperature, max_tokens, extractor_max_tokens) = {sorted(seen)}, but this run uses "
             f"{mine}. Use the same settings to resume, or pass a different --out file."
         )
 
@@ -209,7 +213,7 @@ def run_one(
                     "type": "json_schema",
                     "json_schema": {"name": "annotation", "strict": True, "schema": prompts.extractor_schema()},
                 },
-                temperature=0.2, max_tokens=300,
+                temperature=cfg.extractor_temperature, max_tokens=cfg.extractor_max_tokens,
             )
             text2, ok, error = r2.text, r2.ok, r2.error
             scores = {}
@@ -291,7 +295,8 @@ def run_sweep(
                             rec = run_one(client, model, strategy, system_prompts, sc, cfg)
                             streak = 0 if rec["ok"] else streak + 1
                         rec.update({"backend": backend_label, "repeat": rep,
-                                    "temperature": cfg.temperature, "max_tokens": cfg.max_tokens})
+                                    "temperature": cfg.temperature, "max_tokens": cfg.max_tokens,
+                                    "extractor_max_tokens": cfg.extractor_max_tokens})
                         fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
                         fh.flush()
                         written += 1

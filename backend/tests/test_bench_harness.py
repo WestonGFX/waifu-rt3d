@@ -35,7 +35,7 @@ ANNOTATION = {k: v for k, v in GOOD.items() if k != "reply"}
 _FLAKY = {"down": True}  # toggled by tests to simulate a model that is still loading
 
 
-_LAST = {"auth": None}  # last Authorization header the mock saw on GET /models
+_LAST = {"auth": None, "annotation_max_tokens": None}  # last Authorization header the mock saw on GET /models
 
 
 @pytest.fixture(autouse=True)
@@ -83,6 +83,7 @@ class _Handler(BaseHTTPRequestHandler):
         if model == "rejects-schema" and rf:
             return self._send(400, {"error": "response_format json_schema unsupported"})
         if is_annotation:
+            _LAST["annotation_max_tokens"] = req.get("max_tokens")
             text = json.dumps(ANNOTATION)
         elif model == "good-json":
             text = json.dumps(GOOD)
@@ -508,3 +509,13 @@ def test_cli_prints_retry_hint_when_cells_failed(server, tmp_path, capsys):
                        "--turns", "5", "--out", str(out)]) == 0
     msg = capsys.readouterr().out
     assert "failed" in msg and "--retry-failed" in msg
+
+
+def test_extractor_cap_is_configurable_and_recorded(server, sysprompts, tmp_path):
+    out = tmp_path / "x.jsonl"
+    recs = []
+    run_sweep(BenchClient(server), ["prose-only"], ["S2_split"], SCENARIOS[:1], sysprompts, out,
+              backend_label="mock", cfg=RunConfig(extractor_max_tokens=777), on_record=recs.append)
+    assert _LAST["annotation_max_tokens"] == 777
+    assert recs[0]["extractor_max_tokens"] == 777
+    assert RunConfig().extractor_max_tokens == 500          # roomy default, not the old 300

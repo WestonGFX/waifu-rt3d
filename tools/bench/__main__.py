@@ -36,6 +36,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--repeats", type=int, default=1, help="Repeat each turn N times (different sampling).")
     p.add_argument("--temperature", type=float, default=0.8)
     p.add_argument("--max-tokens", type=int, default=700)
+    p.add_argument("--extractor-max-tokens", type=int, default=500,
+                   help="Token cap for the S2 annotation call (default 500; too small truncates the JSON).")
     p.add_argument("--timeout", type=int, default=300, help="Seconds to wait for each reply.")
     p.add_argument("--persona", default=str(prompts.DEFAULT_PERSONA), help="Persona prompt-pack markdown file.")
     p.add_argument("--rp-style", default="explicit_rp", choices=["none", "light_rp", "full_rp", "explicit_rp"],
@@ -108,7 +110,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     cfg = RunConfig(temperature=args.temperature, max_tokens=args.max_tokens, repeats=args.repeats,
-                    between_models_cmd=args.between_models_cmd, retry_failed=args.retry_failed)
+                    between_models_cmd=args.between_models_cmd, retry_failed=args.retry_failed,
+                    extractor_max_tokens=args.extractor_max_tokens)
 
     def progress(rec: dict) -> None:
         flag = "ok " if rec["ok"] else "ERR"

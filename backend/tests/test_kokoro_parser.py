@@ -157,3 +157,12 @@ def test_non_finite_memory_weights_become_default(literal):
     r = parse_companion_response(raw)
     assert r.parse_ok
     assert r.memory_write.importance == 0.0 and r.memory_write.emotional_salience == 0.0
+
+
+@pytest.mark.parametrize("text", ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"])
+def test_string_forms_of_non_finite_weights_become_default(text):
+    """float() happily parses these *strings* too; they must not slip past the finite check."""
+    raw = json.dumps({"reply": "hi", "memoryWrite": {"importance": text, "emotionalSalience": text}})
+    r = parse_companion_response(raw)
+    assert r.parse_ok
+    assert r.memory_write.importance == 0.0 and r.memory_write.emotional_salience == 0.0

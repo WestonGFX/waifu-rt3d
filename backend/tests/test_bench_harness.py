@@ -42,8 +42,10 @@ _LAST = {"auth": None, "annotation_max_tokens": None}  # last Authorization head
 def _reset_flaky():
     """Reset shared mock state around EVERY test so a failing assertion can't poison later ones."""
     _FLAKY["down"] = True
+    _LAST.update(auth=None, annotation_max_tokens=None)
     yield
     _FLAKY["down"] = True
+    _LAST.update(auth=None, annotation_max_tokens=None)
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -556,3 +558,13 @@ def test_between_models_cmd_is_tokenised_without_a_shell(server, sysprompts, tmp
               tmp_path / "s.jsonl", backend_label="mock",
               cfg=RunConfig(between_models_cmd="lms unload --all"), sleep=lambda _s: None)
     assert seen["args"] == ["lms", "unload", "--all"] and not seen["shell"]
+
+
+def test_resume_refuses_changed_extractor_temperature(server, sysprompts, tmp_path):
+    from tools.bench.runner import ResumeConfigMismatch
+    out = tmp_path / "et.jsonl"
+    run_sweep(BenchClient(server), ["prose-only"], ["S2_split"], SCENARIOS[:1], sysprompts, out,
+              backend_label="mock", cfg=RunConfig(extractor_temperature=0.2))
+    with pytest.raises(ResumeConfigMismatch):
+        run_sweep(BenchClient(server), ["prose-only"], ["S2_split"], SCENARIOS[:2], sysprompts, out,
+                  backend_label="mock", cfg=RunConfig(extractor_temperature=0.9))

@@ -112,11 +112,13 @@ def check_resume_compat(path: Path, cfg: "RunConfig") -> None:
             continue
         if rec.get("skipped") or "temperature" not in rec:
             continue
-        seen.add((rec.get("temperature"), rec.get("max_tokens"), rec.get("extractor_max_tokens", cfg.extractor_max_tokens)))
-    mine = (cfg.temperature, cfg.max_tokens, cfg.extractor_max_tokens)
+        seen.add((rec.get("temperature"), rec.get("max_tokens"),
+                  rec.get("extractor_max_tokens", cfg.extractor_max_tokens),
+                  rec.get("extractor_temperature", cfg.extractor_temperature)))
+    mine = (cfg.temperature, cfg.max_tokens, cfg.extractor_max_tokens, cfg.extractor_temperature)
     if seen and seen != {mine}:
         raise ResumeConfigMismatch(
-            f"{path} already holds results with (temperature, max_tokens, extractor_max_tokens) = {sorted(seen)}, but this run uses "
+            f"{path} already holds results with (temperature, max_tokens, extractor_max_tokens, extractor_temperature) = {sorted(seen)}, but this run uses "
             f"{mine}. Use the same settings to resume, or pass a different --out file."
         )
 
@@ -297,7 +299,8 @@ def run_sweep(
                             streak = 0 if rec["ok"] else streak + 1
                         rec.update({"backend": backend_label, "repeat": rep,
                                     "temperature": cfg.temperature, "max_tokens": cfg.max_tokens,
-                                    "extractor_max_tokens": cfg.extractor_max_tokens})
+                                    "extractor_max_tokens": cfg.extractor_max_tokens,
+                                    "extractor_temperature": cfg.extractor_temperature})
                         fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
                         fh.flush()
                         written += 1

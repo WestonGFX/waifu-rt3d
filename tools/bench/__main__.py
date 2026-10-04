@@ -12,7 +12,7 @@ if str(ROOT) not in sys.path:
 
 from tools.bench import prompts, report  # noqa: E402
 from tools.bench.client import BenchClient, guess_backend_label  # noqa: E402
-from tools.bench.runner import STRATEGIES, RunConfig, run_sweep  # noqa: E402
+from tools.bench.runner import STRATEGIES, ResumeConfigMismatch, RunConfig, run_sweep  # noqa: E402
 from tools.bench.scenarios import SCENARIOS  # noqa: E402
 
 DEFAULT_OUT_DIR = ROOT / "docs" / "research" / "data" / "bench"
@@ -120,6 +120,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         n = run_sweep(client, models, strategies, scenarios, sysprompts, out, backend_label=label,
                       cfg=cfg, on_record=progress)
+    except ResumeConfigMismatch as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
     except KeyboardInterrupt:
         print("\nInterrupted - progress is saved. Re-run the same command to resume.")
         return 130

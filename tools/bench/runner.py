@@ -80,6 +80,42 @@ def load_done_keys(path: Path, *, retry_failed: bool = False) -> set:
     return keys
 
 
+class ResumeConfigMismatch(ValueError):
+    """The results file was produced with different sampling settings than this run."""
+
+
+def check_resume_compat(path: Path, cfg: "RunConfig") -> None:
+    """Refuse to mix cells generated with different ``temperature``/``max_tokens``.
+
+    Resume keys deliberately ignore run config (so a re-run fills gaps), but
+    silently blending old and new sampling settings in one file would make the
+    comparison between cells meaningless.
+
+    Raises:
+        ResumeConfigMismatch: If any real record in ``path`` used other settings.
+    """
+    if not path.exists():
+        return
+    seen: set = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if rec.get("skipped") or "temperature" not in rec:
+            continue
+        seen.add((rec.get("temperature"), rec.get("max_tokens")))
+    mine = (cfg.temperature, cfg.max_tokens)
+    if seen and seen != {mine}:
+        raise ResumeConfigMismatch(
+            f"{path} already holds results with (temperature, max_tokens) = {sorted(seen)}, but this run uses "
+            f"{mine}. Use the same settings to resume, or pass a different --out file."
+        )
+
+
 def classify_error(error: str) -> str:
     """Bucket an error string: ``unsupported`` (server rejected structured output) or ``error``.
 
@@ -219,6 +255,7 @@ def run_sweep(
         Number of new records written this call.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    check_resume_compat(out_path, cfg)
     done = load_done_keys(out_path, retry_failed=cfg.retry_failed)
     scenarios = list(scenarios)
     strategies = list(strategies)

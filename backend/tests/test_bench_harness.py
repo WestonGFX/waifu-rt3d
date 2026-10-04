@@ -442,3 +442,42 @@ def test_resume_report_dedupes_without_double_counting(server, sysprompts, tmp_p
     rows = report.aggregate(report.load_records([out]))
     assert len(rows) == 1 and rows[0]["n"] == 5          # not 5 + the stale skipped rows
     _FLAKY["down"] = True
+
+
+# ── fourth review round ─────────────────────────────────────────────────
+
+
+def test_resume_refuses_changed_sampling_settings(server, sysprompts, tmp_path):
+    from tools.bench.runner import ResumeConfigMismatch
+    out = tmp_path / "cfg.jsonl"
+    run_sweep(BenchClient(server), ["good-json"], ["S0_baseline"], SCENARIOS[:2], sysprompts, out,
+              backend_label="mock", cfg=RunConfig(temperature=0.8))
+    with pytest.raises(ResumeConfigMismatch):
+        run_sweep(BenchClient(server), ["good-json"], ["S0_baseline"], SCENARIOS[:3], sysprompts, out,
+                  backend_label="mock", cfg=RunConfig(temperature=0.2))
+    # same settings still resume fine
+    again = []
+    run_sweep(BenchClient(server), ["good-json"], ["S0_baseline"], SCENARIOS[:3], sysprompts, out,
+              backend_label="mock", cfg=RunConfig(temperature=0.8), on_record=again.append)
+    assert len(again) == 1
+
+
+def test_cli_exits_2_on_resume_config_mismatch(server, tmp_path, capsys):
+    out = tmp_path / "m.jsonl"
+    base = ["--base-url", server, "--models", "good-json", "--strategies", "S0_baseline", "--turns", "1",
+            "--out", str(out)]
+    assert bench_main(base + ["--temperature", "0.8"]) == 0
+    assert bench_main(base + ["--temperature", "0.3"]) == 2
+    assert "different --out" in capsys.readouterr().err
+
+
+def test_skipped_records_do_not_break_report_rendering(server, sysprompts, tmp_path):
+    out, recs = _sweep(server, sysprompts, tmp_path, ["broken"], ["S0_baseline", "S3_prefill"], n=6)
+    assert sum(1 for r in recs if r.get("skipped")) == 6    # 3 per strategy
+    md = report.render_markdown(report.load_records([out]))   # skipped rows lack error_kind etc.
+    assert "broken" in md and "0%" in md
+
+
+def test_empty_state_delta_is_valid_not_a_failure():
+    m = metrics.score_structured(json.dumps(dict(GOOD, stateDelta={})))
+    assert m["parse_ok"] and m["schema_valid"] and m["delta_in_clamp"] and m["unknown_dials"] == 0

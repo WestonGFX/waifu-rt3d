@@ -56,3 +56,24 @@ def test_response_format_envelope():
     assert rf["type"] == "json_schema"
     assert rf["json_schema"]["strict"] is True
     assert rf["json_schema"]["schema"]["type"] == "object"
+
+
+def test_memory_weights_bounded_like_the_contract():
+    mw = companion_response_json_schema()["properties"]["memoryWrite"]["properties"]
+    for key in ("importance", "emotionalSalience"):
+        assert mw[key]["minimum"] == 0 and mw[key]["maximum"] == 1
+
+
+def test_schema_stays_in_sync_with_the_prompt_contract_text():
+    """The enums are shared by construction; the *hand-written* contract text must match too."""
+    from backend.kokoro.mind_state import MindState, ThreadState, TraitVector
+    from backend.kokoro.prompt_fragment import build_kokoro_fragment
+    text = build_kokoro_fragment(mind=MindState(character_id=1), traits=TraitVector(character_id=1),
+                                 thread=ThreadState(session_id=1))
+    schema = companion_response_json_schema()
+    for key in schema["required"]:
+        assert f'"{key}"' in text, f"contract text no longer mentions required field {key}"
+    for value in list(VALID_FACES) + list(VALID_GESTURES):
+        assert value in text, f"contract text no longer offers enum value {value}"
+    for key in schema["properties"]["memoryWrite"]["required"]:
+        assert f'"{key}"' in text

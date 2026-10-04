@@ -500,3 +500,11 @@ def test_list_models_sends_api_key_when_configured(server):
     assert _LAST["auth"] == "Bearer sk-local"
     BenchClient(server).list_models()
     assert _LAST["auth"] is None
+
+
+def test_cli_prints_retry_hint_when_cells_failed(server, tmp_path, capsys):
+    out = tmp_path / "h.jsonl"
+    assert bench_main(["--base-url", server, "--models", "broken", "--strategies", "S0_baseline",
+                       "--turns", "5", "--out", str(out)]) == 0
+    msg = capsys.readouterr().out
+    assert "failed" in msg and "--retry-failed" in msg

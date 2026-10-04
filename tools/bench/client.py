@@ -98,6 +98,8 @@ class BenchClient:
             RuntimeError: If the server cannot be reached.
         """
         try:
+            # "env:NAME" keys are resolved by the adapter on the chat path only; for listing we
+            # simply send no header rather than a bogus literal "Bearer env:NAME".
             headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key and not self.api_key.startswith("env:") else {}
             r = requests.get(self._v1() + "/models", headers=headers, timeout=(5, 15))
             r.raise_for_status()

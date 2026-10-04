@@ -127,6 +127,13 @@ def main(argv: list[str] | None = None) -> int:
         print("\nInterrupted - progress is saved. Re-run the same command to resume.")
         return 130
     print(f"\nWrote {n} new records. Build the report with:\n  python -m tools.bench report {out}")
+    latest = report.load_records([out])
+    failed = sum(1 for r in latest if not r.get("ok") and not r.get("skipped"))
+    skipped = sum(1 for r in latest if r.get("skipped"))
+    if failed or skipped:
+        print(f"Note: {failed} turn(s) failed and {skipped} were skipped by the fail-fast guard. If a model was "
+              f"still loading, re-run the same command (skipped turns retry automatically) or add --retry-failed "
+              f"to retry the failures too.")
     return 0
 
 

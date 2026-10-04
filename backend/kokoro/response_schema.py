@@ -48,8 +48,9 @@ def companion_response_json_schema(*, nsfw_active: bool = False) -> dict:
             "properties": {
                 "shouldSave": {"type": "boolean"},
                 "summary": {"type": "string"},
-                "importance": {"type": "number"},
-                "emotionalSalience": {"type": "number"},
+                # The prompt contract defines both as 0.0-1.0 weights.
+                "importance": {"type": "number", "minimum": 0, "maximum": 1},
+                "emotionalSalience": {"type": "number", "minimum": 0, "maximum": 1},
             },
             "required": ["shouldSave", "summary", "importance", "emotionalSalience"],
             "additionalProperties": False,

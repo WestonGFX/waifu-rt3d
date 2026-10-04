@@ -1,86 +1,44 @@
-# Session Handoff — 2026-06-22 (session "b" — Stage 3 Phase 5.1 + Phase 3)
+# Session Handoff — 2026-10-04 (cloud session → local Mac session)
 
-## Branch: master · HEAD `8c642d5` · ALL PUSHED (0 unpushed)
-## Test Status: 3166 backend pytest (+12) · 514 sakura vitest (+4) · tsc clean
+## Branch: `claude/busy-planck-rg90lh` · PR #5 (draft) · ALL PUSHED
+## Test Status (cloud, CI-style Python 3.12 venv): 3233 backend pytest passed (+7 skipped) · 514 sakura vitest · tsc: 6 known errors (see below)
 
-No active `OPEN BUG` / `UNFIXED` / `BLOCKER` markers. Push gate clear.
+Push gate: no active blocking markers in this file or `CURRENT_STATUS.md` at the time of writing.
+
+## Why this handoff exists
+The cloud session built everything that can be built without real models. The next step (benchmarking models) needs LM Studio / Ollama on Chris's Mac, which a cloud container cannot reach. Continue **locally**, on this branch.
 
 ## Completed This Session
+- **Phase 0 — re-baseline.** Verified the suites after the 3.5-month pause. Fixed stale schema numerals (v89) in CLAUDE.md, README, migration rules, status header. Gotcha: run vitest/tsc from `frontends/sakura/`, never the repo root (root run reports a false "60 failed").
+- **Phase 1 — `tools/bench` (code done, NOT yet run on real models).** Sweeps every installed chat model on LM Studio (`:1234/v1`) or Ollama (`:11434`) across four fixes for the "Kokoro parse_ok ≈ 0%" problem: S0 baseline, S1 server-forced `json_schema`, S2 prose reply + schema-forced annotation call, S3 `{` prefill. Real persona prompt (~3.9K tokens) + the app's real RP preset + real Kokoro contract. Resumable JSONL, fail-fast guard, Markdown report + reply sample sheet. Entry: `./run.sh bench`. Docs: `tools/bench/README.md`.
+- `backend/kokoro/response_schema.py` — JSON schema generated from the parser's own enums (pure data, no behaviour change).
+- **One production bug fix:** `parse_companion_response` raised on non-numeric / NaN / Infinity `memoryWrite` weights despite its "never raises" contract. Fixed with `_safe_float`, regression-tested.
+- Plan: `docs/plans/2026-10-04-kokoro-model-bench-and-fix.md` (status log inside).
 
-### Stage 3 Phase 5.1 — emotion→motion gap-fill gestures (pushed `f0bf3bd..96328a4`)
-- New `frontends/sakura/src/lib/dartGestures.ts`: maps Kokoro per-turn `emotion` →
-  a pre-baked DART gesture (excited/proud→cheer, frustrated→cross_arms, sleepy→
-  stretch, playful→shrug; gentle/common emotions intentionally unmapped). Tunable
-  map + `DART_GESTURE_COOLDOWN_TURNS=3` + `dartGestureUrl`/`resolveDartGesture`.
-- `viewerStore.dispatchDartGesture(name)` — load-then-play the normalized-VRM GLB
-  via the gate-proven `loadAnimation`/`playAnimation` retarget path (`dart_`-prefix,
-  VRM-only, cleared on model load).
-- **Firing policy (Chris chose): gap-fill + throttled** — `dispatchKokoroEmbodiment`
-  Step 4 fires ONLY when the LLM picked no explicit gesture, the emotion maps, and
-  the cooldown elapsed. Explicit Kokoro gestures keep using the proven Mixamo clips.
-- No viewer.html change. +12 vitest. Render-gated `cheer` upright/grounded.
+## Work In Progress / Next (in order)
+1. **Run the benchmark on the Mac** (LM Studio first, then a shorter Ollama pass). Steps in `tools/bench/README.md`. LM Studio needs context length ≥ 8192 and Just-in-time model loading on.
+2. Build the report (`./run.sh bench report <file>.jsonl`), commit ONLY the `.md` (raw `.jsonl` is gitignored — it holds roleplay transcripts).
+3. Choose the winning model + fix together → **Phase 2**: wire it into the real chat path (`backend/server.py` stream/finalize ~6021-6048, `openai_compat.py` reasoning bypass, gate `finalizeKokoroTurn` in `chatStore.ts` ~140). Gate: live parse_ok ≥ 80% via `/api/kokoro/qa`.
+4. **Phase 3**: Kokoro v2 Emotional RAG (schema v90) — only after Phase 2.
 
-### Stage 3 Phase 3 — DART networked service, LIVE round-trip verified (pushed `96328a4..8c642d5`)
-- `57948fc` contract: box `motion_server` `/generate` AI branch → resident
-  `DartRunner` → clip artifact `{kind:"clip",format:"npz",npz_b64,…}`;
-  `_try_load_ai_backend` loads DART once (lazy import → Mac-importable); `/status`
-  advertises `dart`; emotion→prompt + duration→primitives maps + `(prompt,
-  primitives,seed)` cache. Mac `remote_client.forward_generate` decodes npz →
-  `tools/dart_to_glb` → `/files/animations/dart-generated/<stem>_<sha1>.glb`
-  (content-hash dedup) → `{kind:"clip",format:"glb",url,…}`. `server.py` forwards
-  prompt/seed + passes either union arm through. `api.ts` mirrors
-  `MotionGenerateResponse`; `viewerStore.dispatchClip`/`dispatchMotionResponse`.
-  +12 pytest +4 vitest.
-- `3f22503` LIVE PROOF: deployed `backend.motion` to the box (`/root/DART/backend/`),
-  ran `motion_server` in WSL `dart` env (DART loaded, `/status` `dart:true`),
-  round-tripped from the Mac: wave (cached 234ms) + cheer (fresh 818ms), both
-  render-gated upright/grounded/22-track/6-of-6-frames
-  (`docs/testing/screenshots/2026-06-22-stage3-phase3/`).
+## Why it matters (one paragraph)
+`docs/research/2026-05-29-kokoro-parse-ok-validation.md` measured Kokoro parse_ok at 0% on real models, and the user's real model (qwen3.5-9b, no longer installed) hits a reasoning-model bypass (`backend/server.py` ~6034) so the JSON contract is never injected. Mood dials, gestures, memory writes and the Stage-3 emotion→gesture hook are therefore mostly dormant until this is fixed.
 
-### Decision (Chris, this session)
-- **Phase 3 is closed as a proven, OPTIONAL capability — do NOT harden the box
-  daemon now.** Rationale: live DART is plumbing with no production consumer yet,
-  and an always-on RTX box is a heavy dependency for a privacy-first desktop app;
-  the pre-baked Phase 5.1 library (GPU-free, offline, instant) is the shipping path.
-  Revisit the daemon only if/when novel-motion-on-demand becomes a committed feature.
+## Decisions still owed by Chris
+1. Which character to benchmark with (default Rin; `--persona PATH`).
+2. Add `@types/node` as a sakura devDependency to restore a clean `tsc` gate? (touches `package.json`; suggest `/verify-servers` after.)
+3. Canonical Python: 3.12 (CI) or 3.14 (CLAUDE.md says Homebrew 3.14 `.venv`)? The cloud baseline used 3.12; 3.14 is unverified.
 
-## Work In Progress
-- None. Both phases complete, committed, pushed, tree effectively clean.
+## Known Issues
+- 6 `tsc` errors: `node:fs` / `node:path` / `__dirname` unresolved in `src/test/viewer.{blinkController,retargetClip}.test.ts` (no `@types/node`). Pre-existing environment gap, not a regression.
+- `backend/llm/adapters/lmstudio.py` (`LMStudioAdapter`) is dead code: never returned by `registry.get_client`, and references undefined `retries`/`backoff`. Left untouched on purpose.
+- README "Database Schema" table list for v72–v89 is unreviewed (numerals were bumped, tables not).
 
-## Known Issues / Bugs
-- None introduced. Pre-existing: see CURRENT_STATUS "Known Issues" (Live2D runtime,
-  embedding model format, Cubism error spam).
+## Files Modified (this session, all committed + pushed)
+`tools/bench/*` (new), `backend/kokoro/response_schema.py` (new), `backend/kokoro/response_parser.py`, `backend/tests/{test_bench_harness,test_kokoro_response_schema,test_kokoro_parser}.py`, `run.sh` (`bench` subcommand), `.gitignore` (bench `.jsonl`), `CLAUDE.md` + `README.md` + `.claude/rules/preflight-migrations.md` (numerals), `CURRENT_STATUS.md`, `docs/plans/2026-10-04-kokoro-model-bench-and-fix.md`.
 
-## Files Modified (this session, all committed)
-- `frontends/sakura/src/lib/dartGestures.ts` (new), `frontends/sakura/src/lib/api.ts`
-- `frontends/sakura/src/stores/viewerStore.ts`, `frontends/sakura/src/components/ModelPanel.tsx`
-- `backend/motion/motion_server.py`, `backend/motion/remote_client.py`, `backend/server.py`
-- tests: `backend/tests/test_motion_phase3.py`, `frontends/sakura/src/test/{dartGestures,viewerStore.dartGesture,viewerStore.clip}.test.ts`
-- docs: `docs/plans/2026-06-14-stage3-ai-motion.md`, `CURRENT_STATUS.md`, screenshots
-
-## Uncommitted (intentionally left)
-- `.claude/skills/go/SKILL.md` — modified EXTERNALLY (not this session's work; do not commit blind).
-- `docs/testing/screenshots/2026-05-31-retarget-proof/*` — transient render-gate scratch output.
-- `tools/smplx_grab.mjs` — untracked since the prior session (unused MPI downloader).
-
-## Next Session Priorities (Chris said "move on" — pick by appetite)
-1. **Phase 7 CAMDM ambient idle** — the one motion idea that runs ON the M2 itself
-   (no box), always-alive idle motion; fits privacy-first ethos. Separate standup.
-2. **Phase 6 EMAGE co-speech gesture** — highest research value, but GATED on a
-   CC-BY-NC-SA license decision from Chris (prototype-only until resolved).
-   Scoping: `docs/research/2026-06-22-emage-cospeech-scoping.md`.
-3. **Step out of motion entirely** — core companion surface (Kokoro depth, memory,
-   chat UX). No specific task queued; would need fresh scoping.
-
-## Context for Next Session
-- **Box DART service is NOT running** — torn down at session end (it was foreground
-  inside a held-open ssh; not a durable daemon). The Windows portproxy
-  (`0.0.0.0:8081 → <wsl-ip>:8081`) + firewall rule PERSIST, but the WSL IP is
-  dynamic (re-point on reboot via `wsl hostname -I`). Full reproducible setup +
-  daemon-hardening notes are in the plan status log (2026-06-22 Phase 3 entry).
-- The `dart` conda env on the box now also has `fastapi`/`uvicorn`/`pydantic`
-  installed (was inference-only).
-- Active plan: `docs/plans/2026-06-14-stage3-ai-motion.md` — Phases 1/2/3/5.1 ✓ DONE;
-  Phases 5.2 (streaming, sensitive viewer), 6 (EMAGE, gated), 7 (CAMDM) remain.
-- Suggested `/clear` before the next (unrelated) task — context is heavy with
-  DART/box/WSL detail.
+## Context for the next session
+- Read order: `CURRENT_STATUS.md` (top block) → `docs/plans/RESUME_PROMPT.md` (top section) → `docs/plans/2026-10-04-kokoro-model-bench-and-fix.md` → `tools/bench/README.md`.
+- PR #5 is a draft; keep it draft until real-model results are reviewed. Bot reviews on it are noisy — act on failing CI and genuine bugs, not repeats.
+- Chris is not deeply technical with LLM tooling: explain GUI steps plainly, no jargon walls.
+- Local box DART service from the June sprint is still torn down (see the 2026-06-22 handoff entries in `CURRENT_STATUS.md`); not needed for this work.

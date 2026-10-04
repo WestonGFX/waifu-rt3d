@@ -4,7 +4,7 @@ globs: backend/preflight.py
 
 # Migration Chain Rules for preflight.py
 
-This file contains 62+ sequential database migrations (v3 → v65). A broken migration chain corrupts every user's local database. Follow these rules exactly.
+This file contains 80+ sequential database migrations (v3 → v89). A broken migration chain corrupts every user's local database. Follow these rules exactly.
 
 ## Append-Only
 

@@ -1,9 +1,10 @@
 # Current Project Status
 
 **Last updated:** 2026-10-04 (post-pause re-baseline; last feature work 2026-06-22 — Stage 3 Phase 5.1 + Phase 3)
-**Branch:** `master` · HEAD = `5eae56e` at re-baseline · synced with origin/master. Work resumed on `claude/busy-planck-rg90lh`.
+**Branch:** work resumed on `claude/busy-planck-rg90lh` (re-baseline snapshot was taken at `5eae56e`, identical to origin/master at that time).
 **Schema version:** v89 (`characters.environment_url` — Stage 2a avatar 3D location; v88 = memory forget/privacy trust spine).
-**Tests (re-verified 2026-10-04, CI-style Python 3.12 venv):** **3,159 backend pytest passed + 7 skipped**, **514 sakura vitest passed (48 files)**. `tsc` has 6 errors, all `node:fs`/`node:path`/`__dirname` in `src/test/viewer.{blinkController,retargetClip}.test.ts` — `@types/node` is not an installed devDependency (only an optional peer in the lockfile). Run vitest/tsc from `frontends/sakura/`, NOT the repo root (root run picks up other dirs → false "60 failed").
+**Tests (re-verified 2026-10-04, CI-style Python 3.12 venv):** **3,159 backend pytest passed + 7 skipped**, **514 sakura vitest passed (48 files)**. `tsc` has 6 errors, all `node:fs`/`node:path`/`__dirname` in `src/test/viewer.{blinkController,retargetClip}.test.ts` — `@types/node` is not an installed devDependency (only an optional peer in the lockfile). Run vitest/tsc from `frontends/sakura/`, NOT the repo root (root run picks up other dirs → false "60 failed"). Verified on Python 3.12 (matches CI); the Homebrew Python 3.14 `.venv` described in CLAUDE.md was NOT exercised.
+**TODO (open decision):** add `@types/node` as a sakura devDependency to restore a clean `tsc` gate (touches `package.json`/lockfile → also triggers the `/verify-servers` suggestion). README schema numerals bumped to v89, but its Database Schema table list for v72–v89 has not been reviewed.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.

@@ -22,7 +22,14 @@ from backend.kokoro.response_schema import DELTA_CAP
 
 _LEAK_RE = re.compile(r'"(stateDelta|facialExpression|memoryWrite|gesture)"\s*:', re.IGNORECASE)
 _ACTION_RE = re.compile(r"\*[^*\n]{2,}\*")
+# Dials a non-NSFW turn may nudge (Tier A + B). The bench always runs with nsfw_active=False, so Tier F
+# dials count as "unknown" here; if a future phase benchmarks the gated contract, parameterise this.
 _LIVE_DIALS = set(TIER_A_FAST + TIER_B_SLOW)
+
+
+def _unit_number(v) -> bool:
+    """True for a real number (not bool) in [0, 1] - the contract's weight range."""
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and 0.0 <= float(v) <= 1.0
 
 
 def _strict_object(text: str) -> Optional[dict]:
@@ -64,6 +71,8 @@ def score_structured(text: str, *, require_reply: bool = True) -> dict:
             and obj.get("facialExpression") in VALID_FACES
             and obj.get("gesture") in VALID_GESTURES
             and isinstance(mw, dict) and isinstance(mw.get("shouldSave"), bool)
+            and isinstance(mw.get("summary"), str)
+            and _unit_number(mw.get("importance")) and _unit_number(mw.get("emotionalSalience"))
             and isinstance(sd, dict)
         )
         if isinstance(sd, dict):

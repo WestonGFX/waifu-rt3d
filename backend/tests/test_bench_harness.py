@@ -519,3 +519,40 @@ def test_extractor_cap_is_configurable_and_recorded(server, sysprompts, tmp_path
     assert _LAST["annotation_max_tokens"] == 777
     assert recs[0]["extractor_max_tokens"] == 777
     assert RunConfig().extractor_max_tokens == 500          # roomy default, not the old 300
+
+
+# ── seventh review round ────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("mw", [
+    {"shouldSave": False, "summary": "", "importance": 1.7, "emotionalSalience": 0.0},   # out of range
+    {"shouldSave": False, "summary": "", "importance": 0.5},                              # missing field
+    {"shouldSave": False, "summary": 3, "importance": 0.5, "emotionalSalience": 0.5},     # summary not a string
+    {"shouldSave": False, "summary": "", "importance": "high", "emotionalSalience": 0.5}, # not numeric
+    {"shouldSave": False, "summary": "", "importance": True, "emotionalSalience": 0.5},   # bool is not a number
+])
+def test_schema_valid_enforces_memory_write_fields(mw):
+    m = metrics.score_structured(json.dumps(dict(GOOD, memoryWrite=mw)))
+    assert m["parse_ok"] and m["strict_json"] and not m["schema_valid"]
+
+
+def test_resume_compat_tolerates_records_without_extractor_cap(tmp_path):
+    from tools.bench.runner import check_resume_compat
+    f = tmp_path / "old.jsonl"
+    f.write_text(json.dumps({"backend": "m", "model": "x", "strategy": "S0_baseline", "scenario": "a",
+                             "repeat": 0, "ok": True, "temperature": 0.8, "max_tokens": 700}) + "\n")
+    check_resume_compat(f, RunConfig())   # must not raise: missing key defaults to the current cap
+
+
+def test_between_models_cmd_is_tokenised_without_a_shell(server, sysprompts, tmp_path, monkeypatch):
+    import subprocess
+    seen = {}
+    real = subprocess.run
+    def spy(args, **kw):
+        seen["args"], seen["shell"] = args, kw.get("shell")
+        return real(["true"], **{k: v for k, v in kw.items() if k != "shell"})
+    monkeypatch.setattr("tools.bench.runner.subprocess.run", spy)
+    run_sweep(BenchClient(server), ["good-json", "fenced"], ["S0_baseline"], SCENARIOS[:1], sysprompts,
+              tmp_path / "s.jsonl", backend_label="mock",
+              cfg=RunConfig(between_models_cmd="lms unload --all"), sleep=lambda _s: None)
+    assert seen["args"] == ["lms", "unload", "--all"] and not seen["shell"]

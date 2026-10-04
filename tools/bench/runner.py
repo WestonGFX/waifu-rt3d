@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shlex
 import subprocess
@@ -268,7 +269,7 @@ def run_sweep(
         for mi, model in enumerate(models):
             if mi > 0 and cfg.between_models_cmd:
                 try:
-                    rc = subprocess.run(shlex.split(cfg.between_models_cmd), check=False,
+                    rc = subprocess.run(shlex.split(cfg.between_models_cmd, posix=(os.name != "nt")), check=False,
                                         timeout=cfg.between_models_timeout).returncode
                 except subprocess.TimeoutExpired:
                     rc = "timeout"   # a hung unload must not stall a multi-hour sweep

@@ -57,6 +57,12 @@ lms server start
 ./run.sh bench report docs/research/data/bench/<date>-lmstudio.jsonl
 ```
 
+**Privacy:** the raw `.jsonl` holds full prompts and replies (including roleplay output), so it is
+**git-ignored and stays on your machine**. Only the generated `.md` report (numbers + 3 short sample replies per row)
+is meant to be committed or pasted back to Claude for analysis.
+
+`--between-models-cmd` runs one plain command (split into arguments, **not** through a shell), so pipes and `&&` won't work.
+
 **Interrupt any time** (`Ctrl-C`). Every result is saved the moment it finishes — re-run the *same command* and it resumes.
 
 ### Useful options

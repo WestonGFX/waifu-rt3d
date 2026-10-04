@@ -14,7 +14,7 @@ Built and unit-tested (29 new tests, run against a fake OpenAI-compatible server
 - Fidelity: uses the app's real persona prompt pack (~3.9K tokens), `_get_rp_style_injection`, `build_kokoro_fragment`, `parse_companion_response`, and `OpenAICompatAdapter` (the adapter the registry actually returns for `provider: openai`/LM Studio).
 - New shared module `backend/kokoro/response_schema.py` (schema generated from parser enums; Tier F dials only when NSFW-gated). No runtime behaviour change.
 - Finding: `backend/llm/adapters/lmstudio.py` (`LMStudioAdapter`) is never returned by `registry.get_client` and references undefined `retries`/`backoff` (would NameError) — dead code, left untouched.
-- **Next action (Chris):** `./run.sh bench --dry-run`, then the sweep; commit the resulting `docs/research/data/bench/*.jsonl` + report. See `tools/bench/README.md`.
+- **Next action (Chris):** `./run.sh bench --dry-run`, then the sweep; keep the raw `.jsonl` local (git-ignored; it contains full RP transcripts) and commit/paste the generated `.md` report. See `tools/bench/README.md`.
 
 ## Phase 2 — Fix Kokoro with the winning strategy ⏸ BLOCKED on Phase 1 numbers
 Pick strategy + model shortlist from results. Touch points: `backend/server.py` stream/finalize path, `openai_compat.py` bypass logic, gate `finalizeKokoroTurn` (`chatStore.ts:140`) so the HUD stops showing a false red for bypassed models. Gate: live parse_ok ≥ 80% via `/api/kokoro/qa`. One hypothesis at a time; 3-strike rule.

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from dataclasses import dataclass, field
 from typing import Optional
@@ -124,9 +125,12 @@ def _safe_float(value, default: float = 0.0) -> float:
     to ``default`` instead of aborting the whole turn's embodiment/memory update.
     """
     try:
-        return float(value if value is not None else default)
+        out = float(value if value is not None else default)
     except (TypeError, ValueError):
         return default
+    # json.loads accepts the NaN / Infinity literals; those would poison salience math and make
+    # the finalize endpoint's JSON response unserialisable, so treat them as "not a number".
+    return out if math.isfinite(out) else default
 
 
 def _valid_or(default: str, value, allowed: set) -> str:

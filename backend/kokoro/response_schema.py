@@ -78,7 +78,11 @@ def companion_response_json_schema(*, nsfw_active: bool = False) -> dict:
 def response_format_for(*, nsfw_active: bool = False, name: str = "companion_response") -> dict:
     """Wrap the schema in the OpenAI-style ``response_format`` envelope.
 
-    LM Studio and Ollama (OpenAI-compat ``/v1``) both accept this shape.
+    LM Studio and Ollama (OpenAI-compat ``/v1``) both accept this shape, but
+    they honour ``strict`` and numeric ``minimum``/``maximum`` to different
+    degrees (some builds ignore or reject them).  Do not assume a schema-forced
+    reply is in range — ``tools/bench`` measures this as ``delta_in_clamp`` and
+    ``apply_state_delta`` still hard-caps every delta server-side.
     """
     return {
         "type": "json_schema",

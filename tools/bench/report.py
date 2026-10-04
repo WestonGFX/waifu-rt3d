@@ -76,12 +76,12 @@ def aggregate(records: list[dict]) -> list[dict]:
 
 def _table(rows: list[dict], first_cols: list[tuple[str, str]]) -> list[str]:
     head = [h for h, _ in first_cols] + ["n", "answered", "parse_ok", "clean JSON", "schema ok",
-                                         "leak", "s/turn", "tok/s"]
+                                         "nudges in range", "leak", "s/turn", "tok/s"]
     out = ["| " + " | ".join(head) + " |", "|" + "|".join("---" for _ in head) + "|"]
     for r in rows:
         cells = [str(r[k]) for _, k in first_cols]
         cells += [str(r["n"]), _pct(r["ok"]), _pct(r["parse_ok"]), _pct(r["strict"]), _pct(r["schema"]),
-                  _pct(r["leak"]), f"{r['latency']:.1f}", f"{r['tps']:.0f}"]
+                  _pct(r.get("clamp", 0.0)), _pct(r["leak"]), f"{r['latency']:.1f}", f"{r['tps']:.0f}"]
         out.append("| " + " | ".join(cells) + " |")
     return out
 
@@ -95,7 +95,7 @@ def render_markdown(records: list[dict], *, title: str = "Kokoro model benchmark
     lines += [
         "**How to read this.** Each row is one model trying one fix over the same fixed set of conversation turns. "
         f"**parse_ok** = how often the app could read the mood/gesture/memory note (target: **>= {_pct(PASS_THRESHOLD)}**). "
-        "**clean JSON** = the model returned *only* JSON (no extra prose). **schema ok** = every field valid. "
+        "**clean JSON** = the model returned *only* JSON (no extra prose). **schema ok** = every field valid. **nudges in range** = mood changes stayed within the +/-0.05 limit. "
         "**leak** = JSON-looking text showed up in what the user would read (bad). **answered** = the model replied "
         "at all (errors/timeouts count against it).",
         "",
@@ -110,6 +110,7 @@ def render_markdown(records: list[dict], *, title: str = "Kokoro model benchmark
         pooled.append({"strategy": s, "what": STRATEGY_BLURB.get(s, ""), "n": len(g), "ok": _rate(g, "ok"),
                        "parse_ok": _rate(g, "parse_ok"), "strict": _rate(g, "strict_json"),
                        "schema": _rate(g, "schema_valid"), "leak": _rate(g, "json_leak"),
+                       "clamp": _rate([x for x in g if x.get("ok")], "delta_in_clamp"),
                        "latency": _med(g, "latency_s"), "tps": _med(g, "tokens_per_s")})
     pooled.sort(key=lambda r: -r["parse_ok"])
     lines += _table(pooled, [("fix", "strategy"), ("what it does", "what")]) + [""]

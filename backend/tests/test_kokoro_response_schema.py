@@ -22,9 +22,17 @@ def test_enums_match_parser_sets():
     assert set(props["gesture"]["enum"]) == VALID_GESTURES
 
 
+def test_delta_cap_matches_apply_state_delta_behaviour():
+    """PER_TURN_CAP is function-local in mind_state, so assert on behaviour, not the literal."""
+    from backend.kokoro.mind_state import MindState, apply_state_delta
+    base = MindState(character_id=1)
+    base.mood = 0.5
+    bumped = apply_state_delta(base, {"mood": 1.0})   # absurd request -> hard-capped
+    assert round(bumped.mood - 0.5, 6) == DELTA_CAP
+
+
 def test_state_delta_bounds_match_per_turn_cap():
     delta = companion_response_json_schema()["properties"]["stateDelta"]["properties"]
-    assert DELTA_CAP == 0.05
     for spec in delta.values():
         assert spec["minimum"] == -DELTA_CAP and spec["maximum"] == DELTA_CAP
 

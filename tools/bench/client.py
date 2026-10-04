@@ -19,7 +19,8 @@ import requests
 from backend.llm.adapters.openai_compat import OpenAICompatAdapter
 
 # Names that are never chat models (LM Studio lists embedding models too).
-_NON_CHAT_RE = re.compile(r"embed|rerank|whisper|tts|nomic-bert", re.IGNORECASE)
+# "tts" only as its own token (kokoro-tts-v1), never inside a longer word.
+_NON_CHAT_RE = re.compile(r"embed|rerank|whisper|(?<![a-z])tts(?![a-z])|nomic-bert", re.IGNORECASE)
 
 
 @dataclass

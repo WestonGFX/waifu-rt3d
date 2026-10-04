@@ -22,10 +22,14 @@ candidate fix makes it work, **without opening the app**.
 
 * **parse_ok** — could the app read the note? Target ≥ 80%.
 * **clean JSON** — model returned *only* JSON, no chatter.
-* **schema ok** — every field valid (real expression/gesture names, mood nudges within ±0.05).
+* **schema ok** — every field valid (real expression/gesture names).
+* **nudges in range** — mood changes stayed within ±0.05.
 * **leak** — JSON-looking junk showed up in what you'd read (bad).
 * **answered** — it replied at all (errors/timeouts count against it).
 * speed: seconds per turn and tokens/sec.
+
+Note: even with `S1`/`S2`, LM Studio and Ollama honour the schema's number limits to different degrees — a
+forced reply can still contain out-of-range mood nudges (shown as the **nudges in range** column); the app hard-caps them anyway.
 
 It **cannot** judge whether she still *sounds like her* — so the report ends with a **sample sheet** of real replies
 for you to skim.

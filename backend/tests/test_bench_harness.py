@@ -46,7 +46,8 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.endswith("/models"):
-            ids = ["good-json", "prose-only", "broken", "fenced", "prefill-continues",
+            ids = ["good-json", "prose-only", "broken", "fenced", "prefill-continues", "rejects-schema",
+                   "kokoro-tts-v1", "Qwen3-4B-Instruct",
                    "text-embedding-nomic-embed-text-v1.5"]
             self._send(200, {"data": [{"id": i} for i in ids]})
         else:
@@ -62,6 +63,8 @@ class _Handler(BaseHTTPRequestHandler):
 
         if model == "broken":
             return self._send(500, {"error": "boom"})
+        if model == "rejects-schema" and rf:
+            return self._send(400, {"error": "response_format json_schema unsupported"})
         if is_annotation:
             text = json.dumps(ANNOTATION)
         elif model == "good-json":
@@ -81,15 +84,16 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 @pytest.fixture(scope="module")
-def server(monkeypatch_module=None):
-    import os
-    os.environ["NO_PROXY"] = "127.0.0.1,localhost"
-    os.environ["no_proxy"] = "127.0.0.1,localhost"
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
-    t = threading.Thread(target=srv.serve_forever, daemon=True)
-    t.start()
-    yield f"http://127.0.0.1:{srv.server_address[1]}/v1"
-    srv.shutdown()
+def server():
+    # Localhost must bypass the sandbox HTTP proxy; scoped so it can't leak into other tests.
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("NO_PROXY", "127.0.0.1,localhost")
+        mp.setenv("no_proxy", "127.0.0.1,localhost")
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+        t = threading.Thread(target=srv.serve_forever, daemon=True)
+        t.start()
+        yield f"http://127.0.0.1:{srv.server_address[1]}/v1"
+        srv.shutdown()
 
 
 @pytest.fixture(scope="module")
@@ -169,6 +173,8 @@ def test_guess_backend_label():
 def test_list_models_filters_embeddings_and_regex(server):
     c = BenchClient(server)
     assert "text-embedding-nomic-embed-text-v1.5" not in c.list_models()
+    assert "kokoro-tts-v1" not in c.list_models()          # a real TTS model is dropped...
+    assert "Qwen3-4B-Instruct" in c.list_models()          # ...but "tts" inside other words is not matched
     assert c.list_models(include="json") == ["good-json"]
     assert "broken" not in c.list_models(exclude="broken")
 
@@ -272,3 +278,31 @@ def test_cli_dry_run_and_report(server, tmp_path, capsys):
 def test_cli_rejects_unknown_strategy_and_dead_server(tmp_path):
     assert bench_main(["--strategies", "nope", "--models", "x"]) == 2
     assert bench_main(["--base-url", "http://127.0.0.1:9", "--models", "all"]) == 1
+
+
+# ── review follow-ups ───────────────────────────────────────────────────
+
+
+def test_ollama_style_base_url_without_v1(server):
+    """Ollama is configured as http://host:11434 (no /v1) — client must add it."""
+    bare = server[: -len("/v1")]
+    c = BenchClient(bare)
+    assert "good-json" in c.list_models()
+    assert c.chat([{"role": "user", "content": "hi"}], "good-json").ok
+
+
+def test_failfast_is_per_strategy_not_per_model(server, sysprompts, tmp_path):
+    """A server rejecting json_schema must not stop the baseline strategy from running."""
+    _, recs = _sweep(server, sysprompts, tmp_path, ["rejects-schema"], ["S1_schema", "S0_baseline"], n=6)
+    s1 = [r for r in recs if r["strategy"] == "S1_schema"]
+    s0 = [r for r in recs if r["strategy"] == "S0_baseline"]
+    assert not any(r["ok"] for r in s1) and sum(1 for r in s1 if r.get("skipped")) == 3
+    assert all(r["ok"] and not r.get("skipped") for r in s0)
+    assert "unsupported" in s1[0]["error"]
+
+
+def test_report_orders_best_parse_rate_first(server, sysprompts, tmp_path):
+    out, _ = _sweep(server, sysprompts, tmp_path, ["prose-only", "good-json"], ["S0_baseline"], n=3)
+    rows = report.aggregate(report.load_records([out]))
+    assert [r["model"] for r in rows] == ["good-json", "prose-only"]
+    assert rows[0]["parse_ok"] == 1.0 and rows[1]["parse_ok"] == 0.0

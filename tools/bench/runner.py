@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shlex
 import subprocess
 import time
@@ -43,6 +44,7 @@ class RunConfig:
     repeats: int = 1
     between_models_cmd: Optional[str] = None
     retry_failed: bool = False
+    between_models_timeout: float = 120.0
 
 
 def record_key(rec: dict) -> tuple:
@@ -87,9 +89,11 @@ def classify_error(error: str) -> str:
     e = (error or "").lower()
     if not e:
         return ""
-    if ("400" in e or "unsupported" in e or "not support" in e or "invalid" in e) and (
-        "response_format" in e or "json_schema" in e or "schema" in e or "grammar" in e
-    ):
+    # The adapter formats API failures as "API Error <status>: <body>"; match the
+    # status explicitly so a stray "400" in a port or a duration can't qualify.
+    rejected = bool(re.search(r"api error (400|422)\b|\bstatus(?: code)?[ :=]+(400|422)\b|\bhttp (400|422)\b", e))
+    mentions_structure = any(k in e for k in ("response_format", "json_schema", "schema", "grammar"))
+    if rejected and mentions_structure:
         return "unsupported"
     return "error"
 
@@ -222,12 +226,16 @@ def run_sweep(
     with out_path.open("a", encoding="utf-8") as fh:
         for mi, model in enumerate(models):
             if mi > 0 and cfg.between_models_cmd:
-                proc = subprocess.run(shlex.split(cfg.between_models_cmd), check=False)
-                if proc.returncode != 0:
+                try:
+                    rc = subprocess.run(shlex.split(cfg.between_models_cmd), check=False,
+                                        timeout=cfg.between_models_timeout).returncode
+                except subprocess.TimeoutExpired:
+                    rc = "timeout"   # a hung unload must not stall a multi-hour sweep
+                if rc != 0:
                     # A failed unload would silently skew the next model's numbers.
-                    logger.warning("between-models command %r exited %s - the previous model may still be "
+                    logger.warning("between-models command %r exited %s (non-zero or timeout) - the previous model may still be "
                                    "loaded, which can skew memory/speed numbers",
-                                   cfg.between_models_cmd, proc.returncode)
+                                   cfg.between_models_cmd, rc)
                 sleep(2)
             for strategy in strategies:
                 streak = 0

@@ -16,7 +16,7 @@ candidate fix makes it work, **without opening the app**.
 | `S0_baseline` | Today's behaviour: the format is *described* in the prompt | Reproduces the problem (control group) |
 | `S1_schema` | Same prompt, but the server is **forced** to emit exactly the right JSON shape | The server can't ignore it |
 | `S2_split` | She replies normally (voice untouched), then a **second small call** annotates mood/gesture/memory | Keeps her personality intact; works even on "thinking" models |
-| `S3_prefill` | The reply is pre-started with `{` | Nudges the model into JSON (experimental; some models mishandle it) |
+| `S3_prefill` | The reply is pre-started with `{` | Nudges the model into JSON (experimental; some models mishandle it). Read its numbers with care: if a server ignores the prefill, or echoes it and then repeats the `{`, the output is scored as-is (a failure), not repaired |
 
 ## What it measures (automatic)
 

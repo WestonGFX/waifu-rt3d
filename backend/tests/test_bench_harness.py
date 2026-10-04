@@ -399,3 +399,46 @@ def test_failed_between_models_command_warns(server, sysprompts, tmp_path, caplo
 def test_report_notes_s2_toks_are_blended(server, sysprompts, tmp_path):
     out, _ = _sweep(server, sysprompts, tmp_path, ["good-json"], ["S0_baseline"], n=1)
     assert "S2 makes two calls per turn" in report.render_markdown(report.load_records([out]))
+
+
+# ── third review round ──────────────────────────────────────────────────
+
+
+def test_classify_error_is_not_fooled_by_stray_400s():
+    from tools.bench.runner import classify_error
+    assert classify_error("Connection Failed: timed out after 14003ms (schema cache)") == "error"
+    assert classify_error("Connection refused on port 4001 json_schema") == "error"
+    assert classify_error("API Error 500: schema compile failed") == "error"
+    assert classify_error("API Error 400: 'response_format' is not supported") == "unsupported"
+    assert classify_error("API Error 422: invalid json_schema") == "unsupported"
+
+
+def test_s2_annotation_without_reply_key_is_parse_ok():
+    """S2's annotation payload has no `reply`; the app's parser must still call it parse_ok."""
+    m = metrics.score_structured(json.dumps(ANNOTATION), require_reply=False)
+    assert m["parse_ok"] and m["schema_valid"]
+
+
+def test_hung_between_models_command_times_out_instead_of_stalling(server, sysprompts, tmp_path, caplog):
+    import time
+    caplog.set_level("WARNING")
+    t0 = time.time()
+    run_sweep(BenchClient(server), ["good-json", "fenced"], ["S0_baseline"], SCENARIOS[:1], sysprompts,
+              tmp_path / "t.jsonl", backend_label="mock",
+              cfg=RunConfig(between_models_cmd="sleep 30", between_models_timeout=0.3), sleep=lambda _s: None)
+    assert time.time() - t0 < 10
+    assert any("timeout" in r.message for r in caplog.records)
+
+
+def test_resume_report_dedupes_without_double_counting(server, sysprompts, tmp_path):
+    """After a retry the file holds placeholder + real record; aggregate must count each cell once."""
+    out = tmp_path / "d.jsonl"
+    _FLAKY["down"] = True
+    run_sweep(BenchClient(server), ["flaky"], ["S0_baseline"], SCENARIOS[:5], sysprompts, out,
+              backend_label="mock", cfg=RunConfig())
+    _FLAKY["down"] = False
+    run_sweep(BenchClient(server), ["flaky"], ["S0_baseline"], SCENARIOS[:5], sysprompts, out,
+              backend_label="mock", cfg=RunConfig())
+    rows = report.aggregate(report.load_records([out]))
+    assert len(rows) == 1 and rows[0]["n"] == 5          # not 5 + the stale skipped rows
+    _FLAKY["down"] = True

@@ -1,9 +1,9 @@
 # Current Project Status
 
-**Last updated:** 2026-06-14 (Stage 2b Phase 1 — click-to-walk navigation with real raycast collision)
-**Branch:** `master` · HEAD = `140c3f8` · **fully synced with origin/master** (Stage 2b Phase 1 pushed `cd27227..140c3f8`).
+**Last updated:** 2026-10-04 (post-pause re-baseline; last feature work 2026-06-22 — Stage 3 Phase 5.1 + Phase 3)
+**Branch:** `master` · HEAD = `5eae56e` at re-baseline · synced with origin/master. Work resumed on `claude/busy-planck-rg90lh`.
 **Schema version:** v89 (`characters.environment_url` — Stage 2a avatar 3D location; v88 = memory forget/privacy trust spine).
-**Tests:** **3,121 backend pytest** + **498 sakura vitest** passing, tsc clean.
+**Tests (re-verified 2026-10-04, CI-style Python 3.12 venv):** **3,159 backend pytest passed + 7 skipped**, **514 sakura vitest passed (48 files)**. `tsc` has 6 errors, all `node:fs`/`node:path`/`__dirname` in `src/test/viewer.{blinkController,retargetClip}.test.ts` — `@types/node` is not an installed devDependency (only an optional peer in the lockfile). Run vitest/tsc from `frontends/sakura/`, NOT the repo root (root run picks up other dirs → false "60 failed").
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.

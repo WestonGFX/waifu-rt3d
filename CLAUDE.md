@@ -110,14 +110,14 @@ Or just use the provided wrapper: `./run.sh` (starts server) · `./run.sh test` 
 
 ## Project Overview
 
-This project uses Python (FastAPI backend) + React/TypeScript frontends + a shared Three.js 3D viewer. Main server: `backend/server.py` (~13K lines). Primary frontend: `frontends/sakura/` (React 19 + Zustand + Framer Motion). 9 frontend directories exist but Sakura is the active one. The 3D viewer runs in an iframe (`frontends/shared/viewer/viewer.html`) controlled via postMessage from `viewerStore.ts`. Schema: v60 (`backend/preflight.py`). Always check for Python f-string backslash issues before committing.
+This project uses Python (FastAPI backend) + React/TypeScript frontends + a shared Three.js 3D viewer. Main server: `backend/server.py` (~13K lines). Primary frontend: `frontends/sakura/` (React 19 + Zustand + Framer Motion). 9 frontend directories exist but Sakura is the active one. The 3D viewer runs in an iframe (`frontends/shared/viewer/viewer.html`) controlled via postMessage from `viewerStore.ts`. Schema: v89 (`backend/preflight.py`). Always check for Python f-string backslash issues before committing.
 
 ## Key Directories
 
 | Path | Purpose |
 |------|---------|
 | `backend/server.py` | FastAPI server (all API endpoints) |
-| `backend/preflight.py` | DB migrations (v3 → v60) |
+| `backend/preflight.py` | DB migrations (v3 → v89) |
 | `backend/llm/` | LLM adapters, context assembler, token counter |
 | `backend/voice/` | Full-duplex voice, audio utils |
 | `backend/spectator/` | Game companion (VLM frame analysis) |

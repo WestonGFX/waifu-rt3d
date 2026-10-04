@@ -116,6 +116,19 @@ def _extract_json_blob(text: str) -> Optional[str]:
     return None
 
 
+def _safe_float(value, default: float = 0.0) -> float:
+    """Coerce an LLM-supplied value to float without ever raising.
+
+    Models sometimes write words ("high") or lists where a number is expected;
+    :func:`parse_companion_response` promises never to raise, so those fall back
+    to ``default`` instead of aborting the whole turn's embodiment/memory update.
+    """
+    try:
+        return float(value if value is not None else default)
+    except (TypeError, ValueError):
+        return default
+
+
 def _valid_or(default: str, value, allowed: set) -> str:
     if isinstance(value, str) and value in allowed:
         return value
@@ -163,8 +176,8 @@ def parse_companion_response(text: str, *, nsfw_active: bool = False) -> Compani
     mw = MemoryWrite(
         should_save=bool(mw_raw.get("shouldSave")),
         summary=str(mw_raw.get("summary", "") or ""),
-        importance=float(mw_raw.get("importance", 0.0) or 0.0),
-        emotional_salience=float(mw_raw.get("emotionalSalience", 0.0) or 0.0),
+        importance=_safe_float(mw_raw.get("importance")),
+        emotional_salience=_safe_float(mw_raw.get("emotionalSalience")),
     )
 
     delta_raw = data.get("stateDelta") or {}

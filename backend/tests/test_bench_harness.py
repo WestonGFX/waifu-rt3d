@@ -32,6 +32,9 @@ GOOD = {
 ANNOTATION = {k: v for k, v in GOOD.items() if k != "reply"}
 
 
+_FLAKY = {"down": True}  # toggled by tests to simulate a model that is still loading
+
+
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):  # silence
         pass
@@ -46,7 +49,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.endswith("/models"):
-            ids = ["good-json", "prose-only", "broken", "fenced", "prefill-continues", "rejects-schema",
+            ids = ["good-json", "prose-only", "broken", "fenced", "prefill-continues", "rejects-schema", "flaky", "prefill-prose",
                    "kokoro-tts-v1", "Qwen3-4B-Instruct",
                    "text-embedding-nomic-embed-text-v1.5"]
             self._send(200, {"data": [{"id": i} for i in ids]})
@@ -63,6 +66,8 @@ class _Handler(BaseHTTPRequestHandler):
 
         if model == "broken":
             return self._send(500, {"error": "boom"})
+        if model == "flaky" and _FLAKY["down"]:
+            return self._send(503, {"error": "model still loading"})
         if model == "rejects-schema" and rf:
             return self._send(400, {"error": "response_format json_schema unsupported"})
         if is_annotation:
@@ -71,6 +76,8 @@ class _Handler(BaseHTTPRequestHandler):
             text = json.dumps(GOOD)
         elif model == "fenced":
             text = "```json\n" + json.dumps(GOOD) + "\n```"
+        elif model == "prefill-prose" and prefilled:
+            text = "Sure! Here you go: *smiles*"  # server ignored the prefill entirely
         elif model == "prefill-continues" and prefilled:
             text = json.dumps(GOOD)[1:]  # continuation WITHOUT the leading brace
         elif model in ("prose-only", "prefill-continues") and rf:
@@ -306,3 +313,89 @@ def test_report_orders_best_parse_rate_first(server, sysprompts, tmp_path):
     rows = report.aggregate(report.load_records([out]))
     assert [r["model"] for r in rows] == ["good-json", "prose-only"]
     assert rows[0]["parse_ok"] == 1.0 and rows[1]["parse_ok"] == 0.0
+
+
+# ── second review round ─────────────────────────────────────────────────
+
+
+def test_resume_retries_skipped_cells_after_transient_failure(server, sysprompts, tmp_path):
+    """A model that was still loading must not stay 'skipped' forever."""
+    out = tmp_path / "flaky.jsonl"
+    _FLAKY["down"] = True
+    run_sweep(BenchClient(server), ["flaky"], ["S0_baseline"], SCENARIOS[:6], sysprompts, out,
+              backend_label="mock", cfg=RunConfig())
+    first = [json.loads(line) for line in out.read_text().splitlines()]
+    assert not any(r["ok"] for r in first) and sum(1 for r in first if r.get("skipped")) == 3
+    assert len(load_done_keys(out)) == 3          # only the 3 real attempts count as done
+
+    _FLAKY["down"] = False                        # model finished loading
+    again = []
+    run_sweep(BenchClient(server), ["flaky"], ["S0_baseline"], SCENARIOS[:6], sysprompts, out,
+              backend_label="mock", cfg=RunConfig(), on_record=again.append)
+    assert len(again) == 3 and all(r["ok"] for r in again)   # the skipped cells were retried
+    # report keeps the newest record per cell, so the stale placeholders disappear
+    recs = report.load_records([out])
+    assert len(recs) == 6
+    assert sum(1 for r in recs if r.get("skipped")) == 0
+    _FLAKY["down"] = True
+
+
+def test_retry_failed_flag_reruns_real_failures(server, sysprompts, tmp_path):
+    out = tmp_path / "rf.jsonl"
+    _FLAKY["down"] = True
+    run_sweep(BenchClient(server), ["flaky"], ["S0_baseline"], SCENARIOS[:2], sysprompts, out,
+              backend_label="mock", cfg=RunConfig())
+    assert len(load_done_keys(out)) == 2
+    assert len(load_done_keys(out, retry_failed=True)) == 0
+    _FLAKY["down"] = False
+    again = []
+    run_sweep(BenchClient(server), ["flaky"], ["S0_baseline"], SCENARIOS[:2], sysprompts, out,
+              backend_label="mock", cfg=RunConfig(retry_failed=True), on_record=again.append)
+    assert len(again) == 2 and all(r["ok"] for r in again)
+    _FLAKY["down"] = True
+
+
+def test_prefill_not_stitched_when_server_ignores_it(server, sysprompts, tmp_path):
+    """Prose from a server that ignored the prefill must not be corrupted with a leading brace."""
+    _, recs = _sweep(server, sysprompts, tmp_path, ["prefill-prose"], ["S3_prefill"], n=2)
+    assert all(r["prefill_stitched"] is False for r in recs)
+    assert all(not r["text"].startswith("{") and not r["parse_ok"] for r in recs)
+
+
+def test_prefill_stitched_flag_true_when_continuation(server, sysprompts, tmp_path):
+    _, recs = _sweep(server, sysprompts, tmp_path, ["prefill-continues"], ["S3_prefill"], n=2)
+    assert all(r["prefill_stitched"] is True and r["parse_ok"] for r in recs)
+
+
+def test_classify_error_separates_unsupported_from_crash():
+    from tools.bench.runner import classify_error
+    assert classify_error("") == ""
+    assert classify_error("API Error 400: response_format json_schema unsupported") == "unsupported"
+    assert classify_error("Request Timed Out") == "error"
+    assert classify_error("API Error 500: boom") == "error"
+
+
+def test_unsupported_rejection_is_labelled_in_records_and_report(server, sysprompts, tmp_path):
+    out, recs = _sweep(server, sysprompts, tmp_path, ["rejects-schema"], ["S1_schema"], n=3)
+    assert all(r["error_kind"] == "unsupported" for r in recs)
+    assert "[server rejected structured output]" in report.render_markdown(report.load_records([out]))
+
+
+def test_guess_backend_label_parses_port_not_substring():
+    assert guess_backend_label("http://host:12345/v1") == "custom"      # not ":1234"
+    assert guess_backend_label("http://host:114345") == "custom"
+    assert guess_backend_label("http://localhost:1234") == "lmstudio"
+    assert guess_backend_label("localhost:11434") == "ollama"
+
+
+def test_failed_between_models_command_warns(server, sysprompts, tmp_path, caplog):
+    caplog.set_level("WARNING")
+    run_sweep(BenchClient(server), ["good-json", "fenced"], ["S0_baseline"], SCENARIOS[:1], sysprompts,
+              tmp_path / "w.jsonl", backend_label="mock",
+              cfg=RunConfig(between_models_cmd="false"), sleep=lambda _s: None)
+    assert any("exited 1" in r.message for r in caplog.records)
+
+
+def test_report_notes_s2_toks_are_blended(server, sysprompts, tmp_path):
+    out, _ = _sweep(server, sysprompts, tmp_path, ["good-json"], ["S0_baseline"], n=1)
+    assert "S2 makes two calls per turn" in report.render_markdown(report.load_records([out]))

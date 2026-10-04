@@ -44,6 +44,8 @@ def _build_parser() -> argparse.ArgumentParser:
                                                "Re-running with the same path resumes.")
     p.add_argument("--between-models-cmd", default=None,
                    help="Shell command run between models, e.g. 'lms unload --all' to free memory.")
+    p.add_argument("--retry-failed", action="store_true",
+                   help="On resume, also re-run turns that failed (skipped placeholders are always retried).")
     p.add_argument("--dry-run", action="store_true", help="Show the plan and prompt size; call no models.")
     return p
 
@@ -106,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     cfg = RunConfig(temperature=args.temperature, max_tokens=args.max_tokens, repeats=args.repeats,
-                    between_models_cmd=args.between_models_cmd)
+                    between_models_cmd=args.between_models_cmd, retry_failed=args.retry_failed)
 
     def progress(rec: dict) -> None:
         flag = "ok " if rec["ok"] else "ERR"

@@ -56,11 +56,13 @@ class ChatResult:
 
 def guess_backend_label(base_url: str) -> str:
     """Label a server by its conventional port (lmstudio / ollama / custom)."""
-    if ":1234" in base_url:
-        return "lmstudio"
-    if ":11434" in base_url:
-        return "ollama"
-    return "custom"
+    from urllib.parse import urlparse  # noqa: PLC0415
+
+    try:
+        port = urlparse(base_url if "//" in base_url else "//" + base_url).port
+    except ValueError:
+        port = None
+    return {1234: "lmstudio", 11434: "ollama"}.get(port, "custom")
 
 
 class BenchClient:

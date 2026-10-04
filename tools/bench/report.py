@@ -24,17 +24,19 @@ PASS_THRESHOLD = 0.80  # the Kokoro v2 Phase-1 gate
 
 def load_records(paths: Iterable[Path | str]) -> list[dict]:
     """Load and concatenate JSONL record files (bad lines are skipped)."""
-    recs: list[dict] = []
+    recs: dict[tuple, dict] = {}
     for p in paths:
         for line in Path(p).read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line:
                 continue
             try:
-                recs.append(json.loads(line))
-            except json.JSONDecodeError:
+                r = json.loads(line)
+                key = (r.get("backend"), r["model"], r["strategy"], r["scenario"], r.get("repeat", 0))
+            except (json.JSONDecodeError, KeyError):
                 continue
-    return recs
+            recs[key] = r  # a re-run (resume/retry) supersedes the older record for the same cell
+    return list(recs.values())
 
 
 def _rate(rows: list[dict], field: str) -> float:
@@ -68,7 +70,8 @@ def aggregate(records: list[dict]) -> list[dict]:
             "leak": _rate(g, "json_leak"), "actions": _rate(g, "action_markup"),
             "reasoning_only": _rate(g, "reasoning_only"),
             "latency": _med(g, "latency_s"), "tps": _med(g, "tokens_per_s"),
-            "errors": sorted({str(x.get("error", ""))[:80] for x in g if not x.get("ok")} - {""})[:2],
+            "errors": sorted({(("[server rejected structured output] " if x.get("error_kind") == "unsupported" else "")
+                               + str(x.get("error", ""))[:80]) for x in g if not x.get("ok")} - {""})[:2],
         })
     rows.sort(key=lambda r: (-r["parse_ok"], -r["schema"], r["latency"]))
     return rows
@@ -97,7 +100,8 @@ def render_markdown(records: list[dict], *, title: str = "Kokoro model benchmark
         f"**parse_ok** = how often the app could read the mood/gesture/memory note (target: **>= {_pct(PASS_THRESHOLD)}**). "
         "**clean JSON** = the model returned *only* JSON (no extra prose). **schema ok** = every field valid. **nudges in range** = mood changes stayed within the +/-0.05 limit. "
         "**leak** = JSON-looking text showed up in what the user would read (bad). **answered** = the model replied "
-        "at all (errors/timeouts count against it).",
+        "at all (errors/timeouts count against it). Note: **S2 makes two calls per turn**, so its s/turn is the sum and its "
+        "tok/s is blended across two differently-sized prompts - don't compare it to S0/S1 tok/s one-to-one.",
         "",
         "## 1. Which fix works best (all models pooled)",
         "",

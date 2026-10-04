@@ -15,6 +15,7 @@ multi-hour sweep resumes exactly where it stopped.
 from __future__ import annotations
 
 import json
+import logging
 import shlex
 import subprocess
 import time
@@ -28,6 +29,8 @@ from . import metrics, prompts
 from .client import BenchClient, ChatResult
 from .scenarios import Scenario
 
+logger = logging.getLogger(__name__)
+
 STRATEGIES = ("S0_baseline", "S1_schema", "S2_split", "S3_prefill")
 MAX_CONSECUTIVE_FAILURES = 3
 
@@ -39,6 +42,7 @@ class RunConfig:
     max_tokens: int = 700
     repeats: int = 1
     between_models_cmd: Optional[str] = None
+    retry_failed: bool = False
 
 
 def record_key(rec: dict) -> tuple:
@@ -46,8 +50,17 @@ def record_key(rec: dict) -> tuple:
     return (rec["backend"], rec["model"], rec["strategy"], rec["scenario"], rec["repeat"])
 
 
-def load_done_keys(path: Path) -> set:
-    """Read an existing JSONL file and return the keys already completed."""
+def load_done_keys(path: Path, *, retry_failed: bool = False) -> set:
+    """Read an existing JSONL file and return the keys already completed.
+
+    Placeholder records written by the fail-fast guard (``skipped``) are never
+    "done": the failure that tripped the guard may have been transient (model
+    still loading, LM Studio swapping models), so a re-run must retry them.
+
+    Args:
+        path: Results file.
+        retry_failed: Also treat every ``ok=False`` record as not done.
+    """
     keys: set = set()
     if not path.exists():
         return keys
@@ -56,10 +69,29 @@ def load_done_keys(path: Path) -> set:
         if not line:
             continue
         try:
-            keys.add(record_key(json.loads(line)))
+            rec = json.loads(line)
+            if rec.get("skipped") or (retry_failed and not rec.get("ok")):
+                continue
+            keys.add(record_key(rec))
         except (json.JSONDecodeError, KeyError):
             continue
     return keys
+
+
+def classify_error(error: str) -> str:
+    """Bucket an error string: ``unsupported`` (server rejected structured output) or ``error``.
+
+    Lets the report distinguish "this server/model can't do json_schema" from a
+    crash or timeout — they mean very different things for the decision.
+    """
+    e = (error or "").lower()
+    if not e:
+        return ""
+    if ("400" in e or "unsupported" in e or "not support" in e or "invalid" in e) and (
+        "response_format" in e or "json_schema" in e or "schema" in e or "grammar" in e
+    ):
+        return "unsupported"
+    return "error"
 
 
 def _tokens(*results: ChatResult) -> tuple[int, int]:
@@ -81,6 +113,7 @@ def run_one(
     kw = {"temperature": cfg.temperature, "max_tokens": cfg.max_tokens}
     user = {"role": "user", "content": scenario.text}
     text2 = ""
+    extra_fields: dict = {}
 
     if strategy == "S0_baseline":
         r = client.chat([{"role": "system", "content": system_prompts["with_contract"]}, user], model, **kw)
@@ -105,8 +138,18 @@ def run_one(
         r = client.chat(msgs, model, **kw)
         ok, error = r.ok, r.error
         text = r.text
+        stitched = False
         if ok and not text.lstrip().startswith("{"):
-            text = "{" + text  # server continued the prefill; stitch it back
+            # Servers that *continue* the prefill return the text after the "{".
+            # Stitch only if that actually yields a JSON object — otherwise the
+            # server ignored the prefill (prose/code fence) and we must not
+            # corrupt its output.
+            try:
+                if isinstance(json.loads("{" + text), dict):
+                    text, stitched = "{" + text, True
+            except (json.JSONDecodeError, ValueError):
+                pass
+        extra_fields = {"prefill_stitched": stitched}
         scores = metrics.score_structured(text) if ok else {}
         reasoning_only, latency = r.reasoning_only, r.latency_s
         ptok, ctok = _tokens(r)
@@ -142,12 +185,13 @@ def run_one(
 
     return {
         "model": model, "strategy": strategy, "scenario": scenario.id, "tone": scenario.tone,
-        "ok": bool(ok), "error": error, "latency_s": round(latency, 3),
+        "ok": bool(ok), "error": error, "error_kind": classify_error(error), "latency_s": round(latency, 3),
         "prompt_tokens": ptok, "completion_tokens": ctok,
         "tokens_per_s": round(ctok / latency, 2) if latency > 0 and ctok > 0 else 0.0,
         "reasoning_only": bool(reasoning_only),
         "text": text, "text2": text2,
         "reply": (text if strategy == "S2_split" else metrics.visible_reply(text)) if ok else "",
+        **extra_fields,
         **scores,
     }
 
@@ -171,14 +215,19 @@ def run_sweep(
         Number of new records written this call.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    done = load_done_keys(out_path)
+    done = load_done_keys(out_path, retry_failed=cfg.retry_failed)
     scenarios = list(scenarios)
     strategies = list(strategies)
     written = 0
     with out_path.open("a", encoding="utf-8") as fh:
         for mi, model in enumerate(models):
             if mi > 0 and cfg.between_models_cmd:
-                subprocess.run(shlex.split(cfg.between_models_cmd), check=False)
+                proc = subprocess.run(shlex.split(cfg.between_models_cmd), check=False)
+                if proc.returncode != 0:
+                    # A failed unload would silently skew the next model's numbers.
+                    logger.warning("between-models command %r exited %s - the previous model may still be "
+                                   "loaded, which can skew memory/speed numbers",
+                                   cfg.between_models_cmd, proc.returncode)
                 sleep(2)
             for strategy in strategies:
                 streak = 0

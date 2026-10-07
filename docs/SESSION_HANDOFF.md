@@ -1,7 +1,7 @@
 # Session Handoff — 2026-10-04 (cloud session → local Mac session)
 
 ## Branch: `claude/busy-planck-rg90lh` · PR #5 (draft) · ALL PUSHED
-## Test Status (cloud, CI-style Python 3.12 venv): 3233 backend pytest passed (+7 skipped) · 514 sakura vitest · tsc: 6 known errors (see below)
+## Test Status (cloud, CI-style Python 3.12 venv): 3233 backend pytest passed (+7 skipped) · 514 sakura vitest · tsc: clean (fixed 2026-10-07 by adding @types/node)
 
 Push gate: no active blocking markers in this file or `CURRENT_STATUS.md` at the time of writing.
 
@@ -24,13 +24,13 @@ The cloud session built everything that can be built without real models. The ne
 ## Why it matters (one paragraph)
 `docs/research/2026-05-29-kokoro-parse-ok-validation.md` measured Kokoro parse_ok at 0% on real models, and the user's real model (qwen3.5-9b, no longer installed) hits a reasoning-model bypass (`backend/server.py` ~6034) so the JSON contract is never injected. Mood dials, gestures, memory writes and the Stage-3 emotion→gesture hook are therefore mostly dormant until this is fixed.
 
-## Decisions still owed by Chris
-1. Which character to benchmark with (default Rin; `--persona PATH`).
-2. Add `@types/node` as a sakura devDependency to restore a clean `tsc` gate? (touches `package.json`; suggest `/verify-servers` after.)
-3. Canonical Python: 3.12 (CI) or 3.14 (CLAUDE.md says Homebrew 3.14 `.venv`)? The cloud baseline used 3.12; 3.14 is unverified.
+## Decisions (answered by Chris, 2026-10-07)
+1. Benchmark character: **Rin** (default; `--persona PATH` still available). ✅
+2. `@types/node`: **added** (`^20`, matches CI) in commit `8bd4ba7`; tsc exit 0, vitest 514 passed, `npm ci` verified. ✅ It touched `package.json` → run `/verify-servers` on the Mac before relying on dev servers.
+3. Canonical Python: **Chris is not sure.** Don't edit CLAUDE.md yet — first run `.venv/bin/python --version` on the Mac, report what it finds (CLAUDE.md claims Homebrew 3.14; CI/cloud used 3.12), run the backend tests on it, THEN decide together.
 
 ## Known Issues
-- 6 `tsc` errors: `node:fs` / `node:path` / `__dirname` unresolved in `src/test/viewer.{blinkController,retargetClip}.test.ts` (no `@types/node`). Pre-existing environment gap, not a regression.
+- ~~6 `tsc` errors from missing `@types/node`~~ — fixed 2026-10-07 (`8bd4ba7`).
 - `backend/llm/adapters/lmstudio.py` (`LMStudioAdapter`) is dead code: never returned by `registry.get_client`, and references undefined `retries`/`backoff`. Left untouched on purpose.
 - README "Database Schema" table list for v72–v89 is unreviewed (numerals were bumped, tables not).
 
@@ -39,6 +39,6 @@ The cloud session built everything that can be built without real models. The ne
 
 ## Context for the next session
 - Read order: `CURRENT_STATUS.md` (top block) → `docs/plans/RESUME_PROMPT.md` (top section) → `docs/plans/2026-10-04-kokoro-model-bench-and-fix.md` → `tools/bench/README.md`.
-- PR #5 is a draft; keep it draft until real-model results are reviewed. Bot reviews on it are noisy — act on failing CI and genuine bugs, not repeats.
+- PR #5 is a draft; keep it draft until real-model results are reviewed. Bot reviews on it are noisy — act on failing CI and genuine bugs, not repeats. The cloud session has **stopped watching** the PR (2026-10-07), so only the local session reacts to it now.
 - Chris is not deeply technical with LLM tooling: explain GUI steps plainly, no jargon walls.
 - Local box DART service from the June sprint is still torn down (see the 2026-06-22 handoff entries in `CURRENT_STATUS.md`); not needed for this work.

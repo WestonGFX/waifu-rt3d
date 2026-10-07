@@ -3,8 +3,8 @@
 **Last updated:** 2026-10-04 (post-pause restart: re-baseline + Kokoro benchmark harness; last feature work before that 2026-06-22)
 **Branch:** work resumed on `claude/busy-planck-rg90lh` (re-baseline snapshot was taken at `5eae56e`, identical to origin/master at that time).
 **Schema version:** v89 (`characters.environment_url` — Stage 2a avatar 3D location; v88 = memory forget/privacy trust spine).
-**Tests (re-verified 2026-10-04, CI-style Python 3.12 venv):** **3,233 backend pytest passed + 7 skipped** (3,159 at baseline + new bench/schema/parser tests), **514 sakura vitest passed (48 files)**. `tsc` has 6 errors, all `node:fs`/`node:path`/`__dirname` in `src/test/viewer.{blinkController,retargetClip}.test.ts` — `@types/node` is not an installed devDependency (only an optional peer in the lockfile). Run vitest/tsc from `frontends/sakura/`, NOT the repo root (root run picks up other dirs → false "60 failed"). Verified on Python 3.12 (matches CI); the Homebrew Python 3.14 `.venv` described in CLAUDE.md was NOT exercised.
-**TODO (open decision):** add `@types/node` as a sakura devDependency to restore a clean `tsc` gate (touches `package.json`/lockfile → also triggers the `/verify-servers` suggestion). README schema numerals bumped to v89, but its Database Schema table list for v72–v89 has not been reviewed.
+**Tests (re-verified 2026-10-04, CI-style Python 3.12 venv):** **3,233 backend pytest passed + 7 skipped** (3,159 at baseline + new bench/schema/parser tests), **514 sakura vitest passed (48 files)**. `tsc` is clean again (exit 0) since `@types/node@^20` was added as a sakura devDependency on 2026-10-07 (it was missing: 6 errors in two viewer tests). Run vitest/tsc from `frontends/sakura/`, NOT the repo root (root run picks up other dirs → false "60 failed"). Verified on Python 3.12 (matches CI); the Homebrew Python 3.14 `.venv` described in CLAUDE.md was NOT exercised.
+**Done 2026-10-07:** `@types/node` added (Chris approved) — `package.json` changed, so `/verify-servers` is suggested before relying on dev servers. README schema table list for v72–v89 is still unreviewed.
 **Automation:** 12 agents, ~22 skills, 6 rules, 0 wired hooks (per Apr 26 audit), 3 MCP servers
 
 **Archive:** Sessions 1-11 + NSFW sprint detail + Mar 29 research expansion moved to [`docs/sessions/ARCHIVE.md`](docs/sessions/ARCHIVE.md) during session 16 token-budget prune. Nothing deleted — relocated.
@@ -14,11 +14,11 @@
 **Session (2026-10-04) — Post-pause restart: re-baseline (P0) + Kokoro model benchmark harness (P1). Branch `claude/busy-planck-rg90lh`, PR #5 (draft), ALL PUSHED. Handing over to a LOCAL Mac session.** Plan: `docs/plans/2026-10-04-kokoro-model-bench-and-fix.md` · handoff: `docs/SESSION_HANDOFF.md` · resume: `docs/plans/RESUME_PROMPT.md`.
 
 - **Why:** `docs/research/2026-05-29-kokoro-parse-ok-validation.md` measured Kokoro `parse_ok` at 0% on real models, and the real model hit the reasoning-model bypass (`backend/server.py` ~6034) so the JSON contract never ran. Mood dials, gestures, memory writes and the Stage-3 emotion→gesture hook are mostly dormant until fixed.
-- **P0 done:** suites re-verified (3233 pytest passed +7 skipped; 514 vitest; tsc has 6 known `@types/node` errors in two viewer tests). Stale schema numerals fixed (v89). Run vitest/tsc from `frontends/sakura/`, never repo root.
+- **P0 done:** suites re-verified (3233 pytest passed +7 skipped; 514 vitest; tsc was red with 6 `@types/node` errors in two viewer tests — fixed 2026-10-07, now clean). Stale schema numerals fixed (v89). Run vitest/tsc from `frontends/sakura/`, never repo root.
 - **P1 code done, NOT yet run on real models:** `tools/bench` (`./run.sh bench`) — one client for LM Studio + Ollama, four fixes compared (S0 baseline / S1 server-forced `json_schema` / S2 prose+annotation split / S3 prefill), real persona + real Kokoro contract, resumable, Markdown report + reply sample sheet. New `backend/kokoro/response_schema.py`. 60+ new tests. Raw `.jsonl` results are gitignored (contain RP transcripts); commit only the `.md`.
 - **Production bug fixed along the way:** `parse_companion_response` used to raise on non-numeric/NaN/Infinity memory weights (broke its "never raises" contract).
 - **NEXT (local Mac):** run the sweep (LM Studio first, then Ollama) → pick winning model + fix → Phase 2 wire into the chat path (gate: live parse_ok >= 80%) → Phase 3 Emotional RAG (schema v90).
-- **Owed by Chris:** character to benchmark (default Rin) · add `@types/node`? · canonical Python 3.12 vs 3.14.
+- **Decisions (2026-10-07):** benchmark character = **Rin** ✅ · `@types/node` **added** ✅ (tsc clean) · canonical Python 3.12 vs 3.14 = **still open** — the Mac session runs `.venv/bin/python --version` and reports before anyone edits CLAUDE.md.
 
 ---
 

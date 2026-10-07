@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-10-04 (post-pause restart — cloud session handing over to a local Mac session)
 **Branch:** `claude/busy-planck-rg90lh` · PR #5 (draft) · all pushed · schema v89 (unchanged)
-**Tests (cloud, py3.12):** 3233 backend pytest passed (+7 skipped), 514 vitest, tsc: 6 known `@types/node` errors
+**Tests (cloud, py3.12):** 3233 backend pytest passed (+7 skipped), 514 vitest, tsc: clean (`@types/node` added 2026-10-07)
 
 ## RESUME HERE → run the model benchmark on the Mac (Phase 1 real run), then Phase 2
 
@@ -15,7 +15,7 @@
 
 **Why:** `docs/research/2026-05-29-kokoro-parse-ok-validation.md` — Kokoro parse_ok measured 0% on real models; the real model hit the reasoning bypass so the JSON contract never ran. Mood dials, gestures, memory writes and the Stage-3 emotion→gesture hook are mostly dormant until fixed.
 
-**Owed by Chris:** which character to benchmark (default Rin) · add `@types/node`? · canonical Python 3.12 vs 3.14.
+**Decisions (2026-10-07):** character = Rin ✅ · `@types/node` added ✅ (`8bd4ba7`) · canonical Python 3.12 vs 3.14 **still open** — check `.venv/bin/python --version` on the Mac and report before editing CLAUDE.md.
 
 ---
 

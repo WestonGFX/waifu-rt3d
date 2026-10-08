@@ -15,7 +15,7 @@ Invoked by `/go` before it declares "servers running," and by the user manually 
 | Name | Port | Probe URL | Evidence of aliveness |
 |---|---|---|---|
 | Backend (FastAPI / uvicorn) | 8080 | `http://127.0.0.1:8080/` | HTTP 200 with HTML body (Sakura landing page served at `/`) |
-| Sakura frontend (Vite dev) | 5175 | `http://127.0.0.1:5175/` | HTTP 200 with `<script type="module">` pointing at `/src/main.tsx` |
+| Sakura frontend (Vite dev) | 5175 | `http://127.0.0.1:5175/sakura/` | HTTP 200 with `<script type="module">` pointing at `/sakura/src/main.tsx` (plain `/` returns a 302 redirect here) |
 | Dashboard | 3333 | `http://127.0.0.1:3333/dashboard.html` | HTTP 200 with `<title>` containing "Dashboard" |
 | Viewer iframe | served via 5175 | `http://127.0.0.1:5175/shared/viewer/viewer.html` | HTTP 200 with `AnimationDirector` string in body |
 

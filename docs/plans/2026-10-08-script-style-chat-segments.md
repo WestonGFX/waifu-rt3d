@@ -99,3 +99,10 @@ Label stripping happens when a reply is finalized/stored, not while tokens strea
 - Segment colours are derived per theme with `color-mix()` against `--color-text-primary` so they stay readable in all 18 themes (verify 1 light + 1 dark).
 - v1 scope: message rendering + the setting. Not yet: composer live-transform (phase 4), prompt telling the model to emit tags (phase 5). Legacy `*action*` and `(narration)` already map to action/narration, so current models show styled segments immediately.
 - Plain single-speech messages render exactly as before (no extra chrome) in every style.
+
+## Decision update 2026-10-08 (Chris) — supersedes "A = default"
+
+- **Default chat style is now C "Storybook"** (A Screenplay and B Transcript stay selectable). Chris: "i kinda want option c from before as the active hud chat style".
+- **Thinking area = option X**: a card directly above the reply, Off / Peek / Open, Thinking + Raw output tabs. Mock-up: `work/visual-decisions/thinking-panel/index.html` (copied to `docs/design/2026-10-08-thinking-panel-options-mockup.html`).
+- **Polish brief:** the first pass looks "cheesy / not luxurious / not sleek"; no emoji — use real icons (Lucide, per project rule) and refined CSS. After the main task, show Chris a before/after so he can judge the difference.
+- Thinking contract (backend ↔ frontend): SSE event `thinking` `{t}` deltas; `done` carries `thinking` and `raw_output`; messages persist `thinking`, `raw_output` (schema v90). Thinking is never re-injected into prompts or memory.

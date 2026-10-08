@@ -30,6 +30,17 @@ _REASONING_MODEL_PATTERNS = re.compile(
 )
 
 
+class ReasoningChunk(str):
+    """A streamed fragment of the model's *reasoning* (``delta.reasoning_content``).
+
+    It is a ``str`` subclass so any consumer that just concatenates tokens keeps
+    working unchanged, while the chat stream can ``isinstance``-check it and route
+    it to the thinking card instead of the reply.
+    """
+
+    __slots__ = ()
+
+
 def _is_reasoning_model(model: str) -> bool:
     """Whether the model name looks like a reasoning/thinking-mode family.
 
@@ -317,7 +328,7 @@ class OpenAICompatAdapter(LLMAdapter):
             if not reply and msg.get("reasoning_content"):
                 reply = msg["reasoning_content"]
                 logger.info("openai_compat: empty content; fell back to reasoning_content (%d chars)", len(reply))
-            return {"ok": True, "reply": reply, "raw": data}
+            return {"ok": True, "reply": reply, "reasoning": msg.get("reasoning_content") or "", "raw": data}
 
         except requests.exceptions.Timeout:
             return {"ok": False, "error": "Request Timed Out", "code": "ERR_TIMEOUT"}
@@ -424,7 +435,7 @@ class OpenAICompatAdapter(LLMAdapter):
                     else:
                         reasoning = delta.get("reasoning_content")
                         if reasoning and (is_reasoning or not saw_any_content):
-                            yield reasoning
+                            yield ReasoningChunk(reasoning)
 
                     # Handle streamed tool calls
                     tool_calls = delta.get("tool_calls")

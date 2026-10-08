@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Where should the model's thinking live? — pick a look</title>
+<style>
+/* Real Blurple tokens (dark, Chris's dev default). Segment colours = same blend rule as segments.css, pre-computed for dark. */
+:root{--bg:#1E1F22;--surface:#2B2D31;--raised:#313338;--border:#3F4147;--text:#DBDEE1;--text2:#949BA4;--accent:#5865F2;--accent-soft:rgba(88,101,242,.15);--accent-text:#fff;
+ --action:#F29BAC;--narration:#E6C57F;--thought:#B9ABF2;--memory:#74D3BE;--warn:#E8B04A;--bad:#F08A8A}
+:root[data-theme="light"]{--bg:#F6F8FB;--surface:#fff;--raised:#F0F3F9;--border:#DCE2EE;--text:#1d2433;--text2:#6a7490;--accent:#5865F2;--accent-soft:rgba(88,101,242,.10);
+ --action:#C94862;--narration:#8A6420;--thought:#6A59B4;--memory:#2A7F6D;--warn:#9A6A10;--bad:#C04A4A}
+*{box-sizing:border-box}
+body{margin:0;padding:64px 16px 40px;background:var(--bg);color:var(--text);font:14.5px/1.5 'Nunito',system-ui,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
+h1{font:600 22px 'Fraunces',Georgia,serif;margin:0 0 4px}
+.lead{color:var(--text2);font-size:13px;margin:0}
+.bar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.bar button.t{font:inherit;font-size:13px;padding:6px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer}
+.opt{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.opt>header{display:flex;gap:14px;align-items:center;justify-content:space-between;padding:14px 18px;flex-wrap:wrap}
+.opt>header h2{font:600 17px 'Fraunces',Georgia,serif;margin:0}
+.opt>header p{margin:2px 0 0;color:var(--text2);font-size:12.5px;max-width:640px}
+.pick{border:0;border-radius:12px;background:var(--accent);color:var(--accent-text);font:800 14px 'Nunito',system-ui,sans-serif;padding:10px 18px;cursor:pointer}
+.pick:hover{filter:brightness(1.1)}
+/* mini app frame */
+.frame{margin:0 18px 18px;border:1px solid var(--border);border-radius:14px;background:var(--bg);overflow:hidden;display:flex;flex-direction:column}
+.fh{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--surface)}
+.fh b{font-size:14px}.fh .sp{flex:1}
+.vis{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)}
+.seg3{display:flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.seg3 button{font:inherit;font-size:12px;padding:4px 10px;border:0;background:transparent;color:var(--text2);cursor:pointer}
+.seg3 button.on{background:var(--accent);color:var(--accent-text);font-weight:800}
+kbd{font:11px ui-monospace,Menlo,monospace;border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:0 5px;color:var(--text2)}
+.body{display:flex;min-height:380px}
+.thread{flex:1;min-width:0;padding:14px;display:flex;flex-direction:column;gap:12px}
+.msg-u{align-self:flex-end;max-width:78%;background:var(--accent);color:var(--accent-text);padding:8px 14px;border-radius:14px 14px 4px 14px;font-size:14px}
+.msg-r{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:6px;position:relative}
+.msg-r .who{font-size:12px;font-weight:800;color:var(--accent)}
+.s-n{color:var(--narration);text-align:center;font-variant:small-caps;font-size:13px}
+.s-a{color:var(--action);font-style:italic;border-left:3px solid var(--action);padding-left:10px}
+.s-s{font-weight:600}.s-t{color:var(--thought);font-style:italic;border-left:3px dotted var(--thought);padding-left:10px}
+.sel{box-shadow:0 0 0 2px var(--accent-soft)}
+.composer{margin:0 14px 12px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text2);font-size:13px;background:var(--surface)}
+/* thinking content */
+.tabs{display:flex;gap:2px}
+.tabs button{font:inherit;font-size:12px;padding:3px 10px;border:0;border-radius:7px;background:transparent;color:var(--text2);cursor:pointer}
+.tabs button.on{background:var(--accent-soft);color:var(--text);font-weight:800}
+.chip{font-size:11px;padding:1px 9px;border-radius:99px;font-weight:800;white-space:nowrap}
+.chip.warn{background:rgba(232,176,74,.18);color:var(--warn)}
+.chip.ok{background:rgba(116,211,190,.16);color:var(--memory)}
+.mono{font:12px/1.55 ui-monospace,Menlo,monospace;white-space:pre-wrap;color:var(--text2);margin:0}
+.mono .tg-n{color:var(--narration)}.mono .tg-a{color:var(--action)}.mono .tg-t{color:var(--thought)}
+.mono .leak{background:rgba(240,138,138,.18);color:var(--bad);text-decoration:line-through;border-radius:4px;padding:0 3px}
+.mono .cut{opacity:.5;border-top:1px dashed var(--border);display:block;margin-top:4px;padding-top:4px}
+.note{font-size:11.5px;color:var(--text2);margin:6px 0 0}
+.copy{font-size:11.5px;color:var(--text2);border:1px solid var(--border);border-radius:7px;padding:2px 8px;background:transparent;cursor:pointer}
+/* X: card above the reply */
+.xcard{border:1.5px dashed var(--thought);border-radius:12px;background:color-mix(in srgb,var(--thought) 7%,var(--surface));padding:8px 12px}
+.xcard .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.xcard .ttl{font-weight:800;font-size:12.5px;color:var(--thought)}
+.xcard .peek{color:var(--text2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:120px}
+.xcard .content{margin-top:8px;max-height:210px;overflow:auto}
+/* Y: side rail */
+.rail{width:0;overflow:hidden;border-left:1px solid var(--border);background:var(--surface);transition:width .2s}
+.rail.peek{width:46px}.rail.open{width:330px}
+.rail .in{padding:10px 12px;width:330px}
+.rail.peek .in{width:46px;padding:10px 8px;text-align:center;color:var(--thought);font-size:18px}
+.rail .rh{display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.rail .ttl{font-weight:800;font-size:12.5px;color:var(--thought)}
+.link{font-size:11px;color:var(--accent);margin:2px 0 8px}
+/* Z: drawer */
+.drawer{margin:0 14px 10px;border:1px solid var(--border);border-radius:12px;background:var(--surface);overflow:hidden}
+.drawer .dh{display:flex;gap:10px;align-items:center;padding:6px 10px;background:var(--raised)}
+.drawer .peek{color:var(--text2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.drawer .dc{padding:10px 12px;max-height:190px;overflow:auto}
+.drawer .parts{display:flex;gap:8px;flex-wrap:wrap}
+.empty{padding:26px;text-align:center;color:var(--text2);font-size:13px}
+@media(max-width:800px){.rail.open{width:240px}.rail .in{width:240px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <div>
+      <h1>Where should the model's thinking live?</h1>
+      <p class="lead">Rin's <b>Thinking</b> (what the model reasons to itself) and <b>Raw output</b> (exactly what it typed before the app cleaned it) — kept apart from her reply. Each option has the same <b>Off / Peek / Open</b> control: try it in every frame. Pick the placement you like; add notes in the banner.</p>
+    </div>
+    <button class="t" id="themeBtn" type="button">Switch to light</button>
+  </div>
+  <div id="opts" style="display:flex;flex-direction:column;gap:26px"></div>
+</div>
+<script>
+const THINK=`Thinking Process:
+
+1. Analyze the Request:
+   * Persona: Rin (cheerful anime girl)
+   * Task: reply in character, 1-2 sentences
+   * Memory: user likes rainy evenings
+2. Determine the Persona & Tone:
+   * Friendly, anime-style, casual
+3. Drafting the Reply:
+   * Draft: Rainy days are the best for cozying up…
+4. Checking Constraints:
+   * 1-2 sentences? Yes`;
+const RAW_HTML=`<span class="leak">[Memory]</span> You said you love rainy evenings.
+<span class="tg-n">[n]Rain taps the window of the little café. Rin looks up from her notebook.[/n]</span>
+<span class="tg-a">*She tucks a strand of hair behind her ear and smiles.*</span>
+Oh! You came, even in this weather… I was hoping you would.
+<span class="tg-t">[t]He remembered I like the window seat.[/t]</span>
+Come, sit. I'll tell you why I love the rain too.
+<span class="cut">&lt;quick_replies&gt; … &lt;/quick_replies&gt;  ← cut before showing</span>`;
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const REPLY=`<div class="who">Rin (Akane)</div>
+<div class="s-n">Rain taps the window of the little café. Rin looks up from her notebook.</div>
+<div class="s-a">She tucks a strand of hair behind her ear and smiles.</div>
+<div class="s-s">Oh! You came, even in this weather… I was hoping you would.</div>
+<div class="s-t">(thinks) He remembered I like the window seat.</div>
+<div class="s-s">Come, sit. I'll tell you why I love the rain too.</div>`;
+const USER=`<div class="msg-u"><i>I shake the rain off my jacket and sit down across from her.</i><br>Hi Rin! Sorry I'm late.</div>`;
+const vis=(id)=>`<div class="vis">Thoughts <div class="seg3" data-f="${id}">${['off','peek','open'].map(m=>`<button data-m="${m}" class="${S[id].mode===m?'on':''}">${m[0].toUpperCase()+m.slice(1)}</button>`).join('')}</div><kbd>T</kbd></div>`;
+const S={x:{mode:'peek',tab:'think'},y:{mode:'open',tab:'think'},z:{mode:'peek',tab:'think'}};
+const tabs=(id)=>`<div class="tabs" data-t="${id}"><button data-k="think" class="${S[id].tab==='think'?'on':''}">Thinking</button><button data-k="raw" class="${S[id].tab==='raw'?'on':''}">Raw output</button>${S[id].tab==='reply'?'':''}</div>`;
+const content=(id)=>S[id].tab==='think'
+  ?`<pre class="mono">${esc(THINK)}</pre><p class="note">Hidden-reasoning text from the model. Never sent back to it, never saved as a memory.</p>`
+  :`<pre class="mono">${RAW_HTML}</pre><p class="note"><span style="color:var(--bad)">Red</span> = internal label the app stripped. Coloured tags = what became action / scene / thought.</p>`;
+const persona=`<span class="chip warn" title="Thinking reads like a generic assistant, not like Rin">⚠ sounds like an assistant</span>`;
+const copyBtn=`<button class="copy" type="button">Copy</button>`;
+
+function frame(id){
+  const m=S[id].mode;
+  let thread, extra='';
+  if(id==='x'){
+    const card = m==='off'?'' : `<div class="xcard"><div class="top"><span class="ttl">🧠 Rin's thinking</span>${persona}
+      ${m==='peek'?`<span class="peek">Thinking Process: 1. Analyze the Request: Persona Rin…</span>`:'<span style="flex:1"></span>'}${m==='open'?tabs(id)+copyBtn:''}
+      <button class="copy" data-expand="x" type="button">${m==='open'?'Collapse':'Expand'}</button></div>${m==='open'?`<div class="content">${content(id)}</div>`:''}</div>`;
+    thread=`${USER}${card}<div class="msg-r">${REPLY}</div>`;
+  } else if(id==='y'){
+    thread=`${USER}<div class="msg-r sel">${REPLY}</div>`;
+    const rail = m==='off'?'' : `<aside class="rail ${m}"><div class="in">${m==='peek'
+      ?`<div title="Open Rin's thinking" data-expand="y" style="cursor:pointer">🧠</div><div style="margin-top:6px"><span class="chip warn" style="padding:1px 5px">⚠</span></div>`
+      :`<div class="rh"><span class="ttl">🧠 Behind this reply</span>${persona}</div><div class="link">↳ attached to Rin's reply</div>${tabs(id)}<div style="margin-top:8px;max-height:260px;overflow:auto">${content(id)}</div><div style="margin-top:8px">${copyBtn} <button class="copy" data-expand="y" type="button">Shrink</button></div>`}</div></aside>`;
+    extra=rail;
+  } else {
+    thread=`${USER}<div class="msg-r">${REPLY}</div>`;
+    const dr = m==='off'?'' : `<div class="drawer"><div class="dh"><span class="chip ok">Backstage</span>${tabs(id)}${m==='peek'?`<span class="peek">Thinking Process: 1. Analyze the Request: Persona Rin…</span>`:'<span style="flex:1"></span>'}${persona}${m==='open'?copyBtn:''}<button class="copy" data-expand="z" type="button">${m==='open'?'Close':'Open'}</button></div>${m==='open'?`<div class="dc">${content(id)}</div>`:''}</div>`;
+    extra=dr;
+  }
+  const emptyMsg = m==='off'?`<div class="empty" style="padding:6px 14px 0;text-align:left">Thoughts are hidden. Press <kbd>T</kbd> or use the control above to show them.</div>`:'';
+  if(id==='y') return `<div class="frame"><div class="fh"><b>Rin (Akane)</b><span class="sp"></span>${vis(id)}</div><div class="body"><div class="thread">${thread}${m==='off'?emptyMsg:''}</div>${extra}</div><div class="composer">Message Rin…</div></div>`;
+  return `<div class="frame"><div class="fh"><b>Rin (Akane)</b><span class="sp"></span>${vis(id)}</div><div class="body"><div class="thread">${thread}</div></div>${m==='off'?emptyMsg:''}${extra}<div class="composer">Message Rin…</div></div>`;
+}
+const OPTS=[
+ {id:'x',choice:'option_x',title:'X — Thought card above her reply',sub:'The thinking sits right on top of the message it belongs to, in a dashed purple card. Open it for Thinking / Raw output tabs. Closest to the message; scrolls with the chat.'},
+ {id:'y',choice:'option_y',title:'Y — Side notes beside the chat',sub:'A slim rail to the right of the chat, tied to the selected reply. Peek = a tiny 🧠 icon; Open = full side panel. The chat never gets taller, so reading flow stays clean.'},
+ {id:'z',choice:'option_z',title:'Z — Backstage drawer under the chat',sub:'A drawer docked above the message box with tabs. Peek = one line, Open = a panel. Always in the same place, easy to find — like a developer console for Rin.'}
+];
+function render(){
+  document.getElementById('opts').innerHTML=OPTS.map(o=>`<section class="opt"><header><div><h2>${o.title}</h2><p>${o.sub}</p></div><button class="pick decision-btn" data-choice="${o.choice}" data-title="${o.title}" type="button">I like ${o.id.toUpperCase()}</button></header>${frame(o.id)}</section>`).join('');
+}
+document.addEventListener('click',e=>{
+  const mb=e.target.closest('.seg3 button');
+  if(mb){const f=mb.parentElement.dataset.f;S[f].mode=mb.dataset.m;render();return;}
+  const tb=e.target.closest('.tabs button');
+  if(tb){const f=tb.parentElement.dataset.t;S[f].tab=tb.dataset.k;render();return;}
+  const ex=e.target.closest('[data-expand]');
+  if(ex){const f=ex.dataset.expand;S[f].mode=S[f].mode==='open'?'peek':'open';render();}
+});
+document.addEventListener('keydown',e=>{if(e.key==='t'||e.key==='T'){['x','y','z'].forEach(f=>{S[f].mode=S[f].mode==='off'?'peek':S[f].mode==='peek'?'open':'off'});render();}});
+document.getElementById('themeBtn').onclick=function(){const d=document.documentElement;const l=d.dataset.theme==='light';d.dataset.theme=l?'dark':'light';this.textContent=l?'Switch to light':'Switch to dark';};
+render();
+</script>
+</body>
+</html>

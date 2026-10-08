@@ -342,3 +342,47 @@ def test_reasoning_defaults_merge_system_for_qwen_only():
     llama = {"messages": list(msgs)}
     _apply_reasoning_defaults(llama, "llama-3.2-1b-instruct")
     assert llama["messages"] == msgs
+
+
+class TestReasoningIsMarkedSeparately:
+    """The thinking card depends on reasoning deltas being distinguishable from the reply."""
+
+    def _stream(self, lines):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.encoding = "utf-8"
+        resp.iter_lines.return_value = iter(lines)
+        return resp
+
+    def _sse(self, **delta):
+        return "data: " + __import__("json").dumps({"choices": [{"delta": delta}]})
+
+    def test_reasoning_deltas_are_reasoning_chunks_and_reply_is_plain(self):
+        from backend.llm.adapters.openai_compat import ReasoningChunk
+
+        lines = [
+            self._sse(reasoning_content="Thinking... "),
+            self._sse(content="Hello!"),
+            "data: [DONE]",
+        ]
+        with patch("backend.llm.adapters.openai_compat.requests.post") as mock_post:
+            mock_post.return_value = self._stream(lines)
+            tokens = list(OpenAICompatAdapter().chat_stream(
+                messages=[{"role": "user", "content": "hi"}],
+                model="qwen/qwen3.5-9b",
+                endpoint="http://localhost:1234/v1",
+                api_key=None,
+            ))
+        assert [type(t) is ReasoningChunk for t in tokens] == [True, False]
+        assert "".join(tokens) == "Thinking... Hello!"  # back-compat: still a str stream
+
+    def test_non_stream_chat_returns_reasoning_separately(self):
+        body = {"choices": [{"message": {"content": "Hi!", "reasoning_content": "because"}}]}
+        resp = MagicMock(status_code=200)
+        resp.json.return_value = body
+        with patch("backend.llm.adapters.openai_compat.requests.post", return_value=resp):
+            out = OpenAICompatAdapter().chat(
+                messages=[{"role": "user", "content": "hi"}],
+                model="qwen/qwen3.5-9b", endpoint="http://localhost:1234/v1", api_key=None,
+            )
+        assert out["reply"] == "Hi!" and out["reasoning"] == "because"

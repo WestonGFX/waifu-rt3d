@@ -6372,6 +6372,51 @@ def migrate_to_v89(con: sqlite3.Connection) -> bool:
         raise
 
 
+def migrate_to_v90(con: sqlite3.Connection) -> bool:
+    """Migrate schema from v89 to v90.
+
+    Adds the model's reasoning and unprocessed output to each message so the chat
+    UI can show them in a card separate from the reply (and so they can be used
+    to measure whether a local model stays in character).
+
+    Columns added (both nullable, NULL for all existing messages):
+        - messages.thinking   (TEXT) — the model's hidden reasoning, if it produced any.
+        - messages.raw_output (TEXT) — the reply exactly as the model typed it, before
+          tags/labels were parsed or stripped.
+
+    Neither column is ever injected back into a prompt or written to memory.
+
+    Args:
+        con: An open ``sqlite3.Connection``.
+
+    Returns:
+        ``True`` on success.
+    """
+    cur_ver = get_schema_version(con)
+    if cur_ver >= 90:
+        logger.info("Schema already at v%d, skipping v90 migration.", cur_ver)
+        return True
+
+    try:
+        for column in ("thinking", "raw_output"):
+            try:
+                con.execute(f"ALTER TABLE messages ADD COLUMN {column} TEXT DEFAULT NULL")
+            except sqlite3.OperationalError:
+                pass  # Column already exists (idempotent re-run)
+
+        con.execute(
+            "INSERT INTO schema_version (version, applied_ts) "
+            "VALUES (90, strftime('%s','now'))"
+        )
+        con.commit()
+        logger.info("✅ Schema v90 migration complete (messages.thinking, messages.raw_output)")
+        return True
+    except Exception as e:
+        logger.error("Schema v90 migration failed: %s", e)
+        con.rollback()
+        raise
+
+
 def ensure_db():
     """Initialize or upgrade database to latest schema version.
 
@@ -7009,14 +7054,20 @@ def ensure_db():
             if migrate_to_v89(con):
                 version = 89
 
+        if version < 90:
+            logger.info("Upgrading database schema from v89 to v90...")
+            logger.info("  - messages.thinking + messages.raw_output (thinking card, raw-output view)")
+            if migrate_to_v90(con):
+                version = 90
+
         # Verify final state
         final_version = get_schema_version(con)
 
-        if final_version < 89:
-            raise RuntimeError(f"Database initialization failed: Expected v89, got v{final_version}")
+        if final_version < 90:
+            raise RuntimeError(f"Database initialization failed: Expected v90, got v{final_version}")
 
-        if final_version > 89:
-            logger.warning(f"Database is newer than application (v{final_version} > v89). Some features might be unused.")
+        if final_version > 90:
+            logger.warning(f"Database is newer than application (v{final_version} > v90). Some features might be unused.")
 
         # Sync PRAGMA user_version with our schema_version table so external
         # tools (DB Browser, etc.) can see the version without querying tables.

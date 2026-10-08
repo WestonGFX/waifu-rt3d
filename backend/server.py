@@ -696,6 +696,7 @@ async def _ensure_lms_model(requested_model: str) -> None:
 # Emotion normalization — canonical 26-emotion set with alias map
 from backend.emotion.normalize import normalize_emotion
 from backend.llm.reply_hygiene import strip_internal_labels
+from backend.llm.adapters.openai_compat import ReasoningChunk
 
 # Feature A6: Lorebook / World Info — keyword-triggered context injection
 from backend.lore.matcher import match_lore, match_lore_hybrid
@@ -6454,6 +6455,7 @@ async def chat_stream(req: Request):
             full_reply = ""
             token_count = 0
             stream_start_time = None  # Set when first token arrives
+            thinking_buf = ""  # model reasoning (ReasoningChunk deltas) — shown in the thinking card, never in the reply
 
             # Sentence-chunked TTS state
             sentence_buffer = ""
@@ -6474,6 +6476,10 @@ async def chat_stream(req: Request):
                     if msg_type == "generating":
                         stream_start_time = time.time()
                         yield f"event: generating\ndata: {json.dumps({'status': 'first_token'})}\n\n"
+
+                    elif msg_type == "token" and isinstance(payload, ReasoningChunk):
+                        thinking_buf += payload
+                        yield f"event: thinking\ndata: {json.dumps({'t': str(payload)})}\n\n"
 
                     elif msg_type == "token":
                         full_reply += payload
@@ -6529,6 +6535,7 @@ async def chat_stream(req: Request):
                 # Stream complete — parse emotion/gesture, save to DB, emit done event
                 # Kokoro turns emit a JSON envelope; persist the reply text, not
                 # the raw blob (else it corrupts history + future-turn context).
+                raw_output_text = full_reply  # exactly what the model typed, before parsing/stripping
                 full_reply = _strip_kokoro_envelope(full_reply, bool(_kokoro_fragment_s))
                 emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
 
@@ -6575,6 +6582,12 @@ async def chat_stream(req: Request):
                         )
                     assistant_message_id = cur.lastrowid
                     con.commit()
+                    try:
+                        cur.execute("UPDATE messages SET thinking=?, raw_output=? WHERE id=?",
+                                    (thinking_buf or None, raw_output_text or None, assistant_message_id))
+                        con.commit()
+                    except sqlite3.OperationalError as _th_err:  # pre-v90 database
+                        logger.debug(f"thinking/raw_output not persisted: {_th_err}")
 
                     # Update relationship scores based on detected emotion + engagement
                     _update_relationship(con, char_id, emotion, user_msg_len=len(text))
@@ -6696,6 +6709,8 @@ async def chat_stream(req: Request):
                 done_data = {
                     "ok": True,
                     "reply": clean_reply,
+                    "thinking": thinking_buf,
+                    "raw_output": raw_output_text,
                     "session_id": session_id,
                     "emotion": emotion,
                     "gesture": gesture,
@@ -7546,13 +7561,21 @@ def get_session_messages(session_id: int, include_branches: bool = False):
     Returns:
         dict: {"messages": [{id, role, text, ts, parent_id, is_active, emotion, char_id,
                              token_count, input_token_count, generation_time_ms,
-                             tokens_per_second, pinned, image_url?, image_prompt?}, ...]}
+                             tokens_per_second, pinned, image_url?, image_prompt?, thinking?, raw_output?}, ...]}
     """
     with db_ctx() as conn:
         cur = conn.cursor()
         cols = ("id, role, text, ts, parent_id, is_active, emotion, char_id, "
                 "token_count, input_token_count, generation_time_ms, tokens_per_second, pinned, "
                 "image_url, image_prompt, edited_at, voice_message_url")
+        # v90 columns are appended last so the index mapping below stays stable;
+        # skipped on a database that has not migrated yet.
+        try:
+            _msg_cols = {row[1] for row in cur.execute("PRAGMA table_info(messages)")}
+        except Exception:
+            _msg_cols = set()
+        if {"thinking", "raw_output"} <= _msg_cols:
+            cols += ", thinking, raw_output"
         if include_branches:
             cur.execute(
                 f"SELECT {cols} FROM messages WHERE session_id=? ORDER BY id ASC",
@@ -7605,6 +7628,11 @@ def get_session_messages(session_id: int, include_branches: bool = False):
             # voice_message_url (v74 column, index 16)
             if len(r) > 16 and r[16] is not None:
                 msg["voice_message_url"] = r[16]
+            # thinking + raw_output (v90 columns): the model's reasoning and unparsed reply
+            if len(r) > 17 and r[17] is not None:
+                msg["thinking"] = r[17]
+            if len(r) > 18 and r[18] is not None:
+                msg["raw_output"] = r[18]
             messages.append(msg)
 
         # Batch-load reactions for all messages in one query (graceful if table absent)

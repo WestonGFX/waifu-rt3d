@@ -20,9 +20,9 @@ export type LayoutMode = 'normal' | 'compact' | 'mobile' | 'minimal';
 
 /**
  * How chat messages read as a script (speech / action / scene / thought / memory).
- * - screenplay: film-script blocks (default)
+ * - screenplay: film-script blocks
  * - transcript: SAY / DO / SCENE / THINK tag gutter
- * - storybook:  speech bubbles with floating actions and cloud thoughts
+ * - storybook:  speech bubbles with floating actions and cloud thoughts (default)
  * Mock-up: docs/design/2026-10-08-script-chat-looks-mockup.html
  */
 export type ChatStyle = 'screenplay' | 'transcript' | 'storybook';
@@ -380,7 +380,7 @@ export const useAppStore = create<AppState>()(
         const current = get().settingsTier;
         get().setSettingsTier(current >= 1 ? 0 : 1);
       },
-      chatStyle: 'screenplay',
+      chatStyle: 'storybook',
       setChatStyle: (style) => set({ chatStyle: style }),
       layoutMode: 'normal',
       setLayoutMode: (mode) => set({

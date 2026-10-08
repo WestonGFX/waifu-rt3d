@@ -4,7 +4,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](requirements.txt)
 [![Tests](https://img.shields.io/badge/tests-3200%2B%20passed-brightgreen)](backend/tests/)
-[![Schema](https://img.shields.io/badge/DB%20schema-v89-purple)](#)
+[![Schema](https://img.shields.io/badge/DB%20schema-v90-purple)](#)
 [![Themes](https://img.shields.io/badge/themes-18-ff69b4)](#themes)
 [![Frontends](https://img.shields.io/badge/frontends-Neon%20%7C%20Sakura%20%7C%20Nova-ff69b4)](#dual-frontend-architecture)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -480,7 +480,7 @@ Most local TTS engines (Kokoro, Chatterbox, XTTS) require running a separate ser
 waifu-rt3d/
 ├── backend/
 │   ├── server.py              # FastAPI server (main application, ~13K lines)
-│   ├── preflight.py           # DB migrations (schema v3 → v89)
+│   ├── preflight.py           # DB migrations (schema v3 → v90)
 │   ├── llm/
 │   │   ├── registry.py        # LLM adapter factory
 │   │   ├── capability_detector.py  # Smart tool protocol detection + cache
@@ -536,7 +536,7 @@ waifu-rt3d/
 │   │   ├── model_catalog.json      # 40-model curated catalog (24 LLM, 10 TTS, 6 STT)
 │   │   └── model_recommendations.json # Legacy 45-model RP/anime catalog
 │   ├── storage/
-│   │   ├── app.db             # SQLite database (schema v89)
+│   │   ├── app.db             # SQLite database (schema v90)
 │   │   ├── avatars/           # Uploaded VRM/GLB files
 │   │   ├── audio/             # Generated TTS audio cache
 │   │   └── images/            # AI-generated images
@@ -668,9 +668,9 @@ waifu-rt3d/
 | `GET` | `/api/characters/{id}/bond/first-memory` | Get the user's first memory with this character |
 | `GET` | `/api/characters/{id}/bond/analytics` | XP source breakdown, session stats, tier history |
 
-### Database Schema (v89)
+### Database Schema (v90)
 
-The SQLite database (schema v89) auto-migrates on startup. Key tables:
+The SQLite database (schema v90) auto-migrates on startup. Key tables:
 - **sessions** — chat sessions with summary, archive, tags, and author's note
 - **messages** — chat history with emotion, branching (parent_id), token stats, pinning, reactions
 - **characters** — full character profiles (40+ columns including animation_profile, capability_profile, diary, voice config, mood settings, greeting config)

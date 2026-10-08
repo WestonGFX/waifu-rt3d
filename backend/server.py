@@ -6211,9 +6211,11 @@ async def chat_stream(req: Request):
                 emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
                 # Phase 2 (piggyback quick-replies): see _parse_quick_replies docstring.
                 _quick_replies, clean_reply = _parse_quick_replies(clean_reply)
+                from backend.llm.reply_hygiene import strip_internal_labels  # noqa: PLC0415
+                clean_reply = strip_internal_labels(clean_reply)
 
                 if not incognito:
-                    _asst_imp_s = _score_msg_s(clean_reply, "assistant", emotion_intensity=1.0)
+                    _asst_imp_s =_score_msg_s(clean_reply, "assistant", emotion_intensity=1.0)
                     try:
                         cur.execute(
                             "INSERT INTO messages(session_id, role, text, emotion, char_id, "
@@ -6534,6 +6536,8 @@ async def chat_stream(req: Request):
                 # block the model was instructed to append. Strip from clean_reply
                 # before persisting so the user never sees the raw markup.
                 _quick_replies, clean_reply = _parse_quick_replies(clean_reply)
+                from backend.llm.reply_hygiene import strip_internal_labels  # noqa: PLC0415
+                clean_reply = strip_internal_labels(clean_reply)
 
                 # T1-7: Apply user-defined regex format rules
                 try:

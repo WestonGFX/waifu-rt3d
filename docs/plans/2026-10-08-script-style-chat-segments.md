@@ -68,3 +68,20 @@ Pydantic↔TS drift if the chat response model gains fields.
 
 - Tag syntax: **short brackets** — `[a]…[/a]` action, `[t]…[/t]` thought, `[n]…[/n]` narration (speech = unmarked). Legacy `*x*` and `(x)` keep working.
 - First slice: **Phase 1 + Phase 2 together** (reply hygiene + `parseSegments` + colours in both bubbles).
+
+## Addendum 2026-10-08 — keep the model's thinking as a feature + as tuning data (Chris)
+
+Chris: the thinking transcript should be viewable by the user (some will want it) and the raw thoughts should be kept as analytical
+data — to tune models, and as a signal: if a local model's thoughts read like a generic assistant ("Thinking Process: 1. Analyze the
+Request…") instead of the character, the roleplay prompt/model is off. Observed live today: `qwen/qwen3.5-9b` thought in assistant-voice
+for ~4.6k tokens (see commit 49c65a3b notes).
+
+Plan (ordered, nothing built yet):
+1. **Thinking card (phase 3):** adapter returns `reasoning` separately from `reply` (no more mixing); SSE gets a `thinking` field; stored in a new
+   `messages.thinking` column via a `preflight.py` migration (append-only, v89 → v90). Collapsed card in the bubble. Never injected into future prompts or memory.
+2. **Persona-drift signal:** cheap heuristic on stored thinking (assistant-voice openers, "the user", numbered analysis headers, no first-person character voice) →
+   a per-model "in character" rate. Same style as the Kokoro bench harness (`tools/bench`), reusable as a new metric.
+3. **Opt-in, local-only training export:** thinking + reply pairs written to a local file only if the user turns it on. These are private chats —
+   never leave the machine (privacy-first rule). Consent switch + a "forget" that also deletes exported rows.
+4. **Model choice (decide with data, not now):** first measure existing open models with the bench harness; only then consider a LoRA. Format: GGUF runs on
+   both the Mac and the Windows GPUs through LM Studio; MLX is Mac-only. Verify current model availability and licences live before picking a base (these change fast).

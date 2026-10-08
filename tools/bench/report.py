@@ -101,7 +101,10 @@ def render_markdown(records: list[dict], *, title: str = "Kokoro model benchmark
         "**clean JSON** = the model returned *only* JSON (no extra prose). **schema ok** = every field valid. **nudges in range** = mood changes stayed within the +/-0.05 limit. "
         "**leak** = JSON-looking text showed up in what the user would read (bad). **answered** = the model replied "
         "at all (errors/timeouts count against it). Note: **S2 makes two calls per turn**, so its s/turn is the sum and its "
-        "tok/s is blended across two differently-sized prompts - don't compare it to S0/S1 tok/s one-to-one.",
+        "tok/s is blended across two differently-sized prompts - don't compare it to S0/S1 tok/s one-to-one. "
+        "Likewise **S2's parse_ok and schema ok are scored on the small annotation call only** (its prose reply is judged "
+        "separately by answered/leak), so its contract is smaller than S0/S1/S3 and its headline number looks better "
+        "partly for that reason.",
         "",
         "## 1. Which fix works best (all models pooled)",
         "",

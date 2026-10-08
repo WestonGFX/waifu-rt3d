@@ -85,3 +85,24 @@
   border-radius: 99px; background: var(--seg-memory-bg);
 }
 .seg-v-storybook .seg-memory::before { content: "\2661  "; }
+
+/* ── Inside the user's own bubble (solid accent background) ───────────
+   Tinted segment colours would clash with the bubble fill, so segments
+   inherit the bubble text colour and are told apart by style alone.      */
+.dialogue-you .seg-script .seg { color: inherit; }
+.dialogue-you .seg-script .seg-action { border-left-color: currentColor; }
+.dialogue-you .seg-script .seg-thought { border-left-color: currentColor; }
+.dialogue-you .seg-script .seg-narration { opacity: 0.85; }
+.dialogue-you .seg-v-storybook .seg-speech { background: color-mix(in srgb, currentColor 14%, transparent); border-color: transparent; }
+.dialogue-you .seg-v-storybook .seg-action,
+.dialogue-you .seg-v-storybook .seg-narration,
+.dialogue-you .seg-v-storybook .seg-thought,
+.dialogue-you .seg-v-storybook .seg-memory { background: color-mix(in srgb, currentColor 14%, transparent); border-color: currentColor; }
+.dialogue-you .seg-v-transcript { border-color: color-mix(in srgb, currentColor 35%, transparent); }
+.dialogue-you .seg-v-transcript .seg { border-top-color: color-mix(in srgb, currentColor 35%, transparent); }
+.dialogue-you .seg-v-transcript .seg-tag { background: color-mix(in srgb, currentColor 18%, transparent); color: inherit; }
+
+/* Keep the generated prefixes ("(thinks)", "remembers:", ♡) on the same line as the text. */
+.seg-v-screenplay .seg-thought,
+.seg-v-screenplay .seg-memory,
+.seg-v-storybook .seg-memory { display: flex; align-items: baseline; gap: 0.4em; }

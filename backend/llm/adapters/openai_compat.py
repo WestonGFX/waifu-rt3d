@@ -54,21 +54,43 @@ def _is_reasoning_model(model: str) -> bool:
     return bool(_REASONING_MODEL_PATTERNS.search(model))
 
 
-def _merge_system_messages(messages: list[dict]) -> list[dict]:
-    """Collapse every ``system`` message into one leading system message.
+def _system_text(content) -> str:
+    """Plain text of a message's ``content`` (string or OpenAI multi-part list).
 
-    Qwen3-family chat templates raise ("System message must be at the beginning")
-    when a system message appears after a user turn, and LM Studio answers with a
-    500. The app legitimately sends several system messages — recalled memories
-    and a trailing quick-reply instruction — so strict-template models need them
-    merged. Order among the non-system messages is preserved.
+    Non-text parts (images etc.) are not representable in a system prompt; they are
+    skipped and logged rather than silently vanishing.
+    """
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        texts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
+        if len(texts) != len(content):
+            logger.warning("openai_compat: dropped %d non-text part(s) from a system message", len(content) - len(texts))
+        return "\n".join(t for t in texts if t).strip()
+    if content:
+        logger.warning("openai_compat: dropped system message with unsupported content type %s", type(content).__name__)
+    return ""
+
+
+def _merge_system_messages(messages: list[dict]) -> list[dict]:
+    """Make the message list valid for strict chat templates (Qwen3 family).
+
+    Qwen3-family templates raise ("System message must be at the beginning") when a
+    system message follows a user turn, and LM Studio answers with a 500. The app
+    legitimately sends several system messages — recalled memories up front and a
+    trailing quick-reply/format instruction — so:
+
+    * system messages before the first non-system message merge into one leading
+      system message;
+    * later system messages are folded into the **final user turn**, in order, so a
+      deliberately trailing instruction keeps its recency (small models obey the
+      last thing they read). With no user turn they join the leading message.
 
     Args:
         messages: OpenAI-style message dicts.
 
     Returns:
-        A new list: one merged system message (if any existed) followed by the
-        remaining messages in their original order.
+        A new list; the input is not mutated.
 
     Example:
         >>> _merge_system_messages([
@@ -76,16 +98,31 @@ def _merge_system_messages(messages: list[dict]) -> list[dict]:
         ...     {"role": "user", "content": "hi"},
         ...     {"role": "system", "content": "B"},
         ... ])
-        [{'role': 'system', 'content': 'A\\n\\nB'}, {'role': 'user', 'content': 'hi'}]
+        [{'role': 'system', 'content': 'A'}, {'role': 'user', 'content': 'hi\\n\\nB'}]
     """
-    system_parts = [
-        m["content"] for m in messages
-        if m.get("role") == "system" and isinstance(m.get("content"), str) and m["content"].strip()
-    ]
-    others = [m for m in messages if m.get("role") != "system"]
-    if not system_parts:
-        return others
-    return [{"role": "system", "content": "\n\n".join(system_parts)}, *others]
+    leading: list[str] = []
+    late: list[str] = []
+    rest: list[dict] = []
+    for m in messages:
+        if m.get("role") == "system":
+            text = _system_text(m.get("content"))
+            if not text:
+                continue
+            (late if rest else leading).append(text)
+        else:
+            rest.append(dict(m))
+
+    if late:
+        for i in range(len(rest) - 1, -1, -1):
+            if rest[i].get("role") == "user" and isinstance(rest[i].get("content"), str):
+                rest[i]["content"] = "\n\n".join([rest[i]["content"], *late])
+                break
+        else:
+            leading.extend(late)
+
+    if not leading:
+        return rest
+    return [{"role": "system", "content": "\n\n".join(leading)}, *rest]
 
 
 def _apply_reasoning_defaults(payload: dict, model: str) -> None:

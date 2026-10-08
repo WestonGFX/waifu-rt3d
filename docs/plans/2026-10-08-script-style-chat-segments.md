@@ -85,3 +85,8 @@ Plan (ordered, nothing built yet):
    never leave the machine (privacy-first rule). Consent switch + a "forget" that also deletes exported rows.
 4. **Model choice (decide with data, not now):** first measure existing open models with the bench harness; only then consider a LoRA. Format: GGUF runs on
    both the Mac and the Windows GPUs through LM Studio; MLX is Mac-only. Verify current model availability and licences live before picking a base (these change fast).
+
+## Known limitation (phase 1) — live bubble (PR #5 review, item 5)
+
+Label stripping happens when a reply is finalized/stored, not while tokens stream. During streaming the user may briefly see a leaked
+`[Memory] …` in the live bubble until the stored version replaces it. The phase-2 `parseSegments` normaliser should also strip internal labels on the live path.

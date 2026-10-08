@@ -283,7 +283,7 @@ class TestChatStreamReasoningFallback:
         assert text_tokens == ["surprise reasoning"]
 
 
-def test_merge_system_messages_puts_one_system_first():
+def test_merge_keeps_trailing_instruction_in_final_user_turn():
     from backend.llm.adapters.openai_compat import _merge_system_messages
 
     merged = _merge_system_messages([
@@ -295,7 +295,39 @@ def test_merge_system_messages_puts_one_system_first():
         {"role": "system", "content": "reply format"},
     ])
     assert [m["role"] for m in merged] == ["system", "user", "assistant", "user"]
-    assert merged[0]["content"] == "persona\n\n[Memory] a\n\nreply format"
+    assert merged[0]["content"] == "persona\n\n[Memory] a"
+    # Recency preserved: the late instruction is the LAST thing the model reads.
+    assert merged[-1]["content"] == "again\n\nreply format"
+    assert merged[1]["content"] == "hi"
+
+
+def test_merge_handles_list_content_and_blank_system_messages():
+    from backend.llm.adapters.openai_compat import _merge_system_messages
+
+    merged = _merge_system_messages([
+        {"role": "system", "content": [{"type": "text", "text": "multi"}, {"type": "text", "text": "part"}]},
+        {"role": "system", "content": "   "},
+        {"role": "user", "content": "hi"},
+    ])
+    assert merged == [
+        {"role": "system", "content": "multi\npart"},
+        {"role": "user", "content": "hi"},
+    ]
+
+
+def test_merge_without_user_turn_joins_late_system_into_leading():
+    from backend.llm.adapters.openai_compat import _merge_system_messages
+
+    merged = _merge_system_messages([{"role": "system", "content": "A"}])
+    assert merged == [{"role": "system", "content": "A"}]
+
+
+def test_merge_does_not_mutate_input():
+    from backend.llm.adapters.openai_compat import _merge_system_messages
+
+    msgs = [{"role": "user", "content": "hi"}, {"role": "system", "content": "late"}]
+    _merge_system_messages(msgs)
+    assert msgs == [{"role": "user", "content": "hi"}, {"role": "system", "content": "late"}]
 
 
 def test_reasoning_defaults_merge_system_for_qwen_only():
@@ -304,7 +336,8 @@ def test_reasoning_defaults_merge_system_for_qwen_only():
     msgs = [{"role": "user", "content": "hi"}, {"role": "system", "content": "late"}]
     qwen = {"messages": list(msgs)}
     _apply_reasoning_defaults(qwen, "qwen/qwen3.5-9b")
-    assert qwen["messages"][0]["role"] == "system"
+    assert all(m["role"] != "system" for m in qwen["messages"])
+    assert "late" in qwen["messages"][-1]["content"]
 
     llama = {"messages": list(msgs)}
     _apply_reasoning_defaults(llama, "llama-3.2-1b-instruct")

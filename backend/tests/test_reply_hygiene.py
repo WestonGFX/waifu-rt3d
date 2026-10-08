@@ -33,3 +33,15 @@ def test_strips_dangling_quick_replies_tag():
 def test_empty_and_none_safe():
     assert strip_internal_labels("") == ""
     assert strip_internal_labels(None) == ""
+
+
+def test_strips_dangling_tag_after_a_closed_block():
+    text = "Hi\n<quick_replies>\na\n</quick_replies>\nbye\n<quick_replies>\nb"
+    assert strip_internal_labels(text) == "Hi\n<quick_replies>\na\n</quick_replies>\nbye"
+
+
+def test_both_finalize_sites_in_server_call_the_stripper():
+    # Guard against one reply-finalize path being edited back out of server.py.
+    import pathlib
+    src = pathlib.Path(__file__).resolve().parents[1].joinpath("server.py").read_text()
+    assert src.count("clean_reply = strip_internal_labels(clean_reply)") == 2

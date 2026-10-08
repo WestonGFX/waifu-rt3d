@@ -5,6 +5,8 @@ enum validation, NSFW gate isolation, and JSON-fence extraction.
 """
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from backend.kokoro.response_parser import (
@@ -124,3 +126,43 @@ def test_reply_falls_back_to_raw_text_when_empty():
 def test_top_level_array_falls_back():
     r = parse_companion_response("[1, 2, 3]")
     assert r.parse_ok is False
+
+
+# --- Regression: parse_companion_response must NEVER raise (bench review, 2026-10-04) ----------
+
+
+@pytest.mark.parametrize("bad", ["high", "", None, [], [1], {"x": 1}, True, "0.5abc"])
+def test_non_numeric_memory_weights_never_raise(bad):
+    """A model writing a word/list where a number belongs must not abort the turn."""
+    raw = json.dumps({"reply": "hi", "memoryWrite": {"shouldSave": True, "summary": "s",
+                                                     "importance": bad, "emotionalSalience": bad}})
+    r = parse_companion_response(raw)
+    assert r.parse_ok and r.reply == "hi"
+    assert r.memory_write.should_save is True
+    assert isinstance(r.memory_write.importance, float)
+    assert isinstance(r.memory_write.emotional_salience, float)
+
+
+def test_numeric_memory_weights_still_parse():
+    raw = json.dumps({"reply": "hi", "memoryWrite": {"importance": "0.7", "emotionalSalience": 0.25}})
+    r = parse_companion_response(raw)
+    assert r.memory_write.importance == 0.7 and r.memory_write.emotional_salience == 0.25
+
+
+@pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity"])
+def test_non_finite_memory_weights_become_default(literal):
+    """Python's json accepts NaN/Infinity literals; they must not reach salience math or the API response."""
+    raw = '{"reply": "hi", "memoryWrite": {"shouldSave": true, "importance": %s, "emotionalSalience": %s}}' % (
+        literal, literal)
+    r = parse_companion_response(raw)
+    assert r.parse_ok
+    assert r.memory_write.importance == 0.0 and r.memory_write.emotional_salience == 0.0
+
+
+@pytest.mark.parametrize("text", ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"])
+def test_string_forms_of_non_finite_weights_become_default(text):
+    """float() happily parses these *strings* too; they must not slip past the finite check."""
+    raw = json.dumps({"reply": "hi", "memoryWrite": {"importance": text, "emotionalSalience": text}})
+    r = parse_companion_response(raw)
+    assert r.parse_ok
+    assert r.memory_write.importance == 0.0 and r.memory_write.emotional_salience == 0.0

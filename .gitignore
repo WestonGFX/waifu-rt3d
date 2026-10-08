@@ -160,3 +160,7 @@ docs/claude-code-handoff/
 # Downloaded animation clip binaries — reproducible via tools/download_animation_packs.py
 backend/storage/animations/
 .claude/*.lock
+
+# Model benchmark raw transcripts (full prompts/replies, incl. RP persona output) stay local.
+# The Markdown report next to them (docs/research/data/bench/*.md) is safe to commit.
+docs/research/data/bench/*.jsonl

@@ -18,6 +18,32 @@ type ChatLayout = 'chat-first' | 'model-first' | 'split';
  */
 export type LayoutMode = 'normal' | 'compact' | 'mobile' | 'minimal';
 
+/**
+ * How chat messages read as a script (speech / action / scene / thought / memory).
+ * - screenplay: film-script blocks
+ * - transcript: SAY / DO / SCENE / THINK tag gutter
+ * - storybook:  speech bubbles with floating actions and cloud thoughts (default)
+ * Mock-up: docs/design/2026-10-08-script-chat-looks-mockup.html
+ */
+export type ChatStyle = 'screenplay' | 'transcript' | 'storybook';
+
+/**
+ * How the model's thinking card shows above each reply.
+ * - off:  hidden entirely
+ * - peek: one quiet line, expandable (default)
+ * - open: expanded with the Thinking / Raw output tabs
+ */
+export type ThoughtsMode = 'off' | 'peek' | 'open';
+
+/**
+ * How a reply appears on screen.
+ * - live:  words stream in as the model produces them (default, today's behaviour)
+ * - fade:  wait for the whole reply, then fade it in
+ * - beats: wait for the whole reply, then reveal it script-beat by beat
+ *          (scene, action, speech, thought each cascade in)
+ */
+export type ReplyDelivery = 'live' | 'fade' | 'beats';
+
 /** Overlay drawers that slide out over the main content. */
 type Overlay =
   | 'settings' | 'memory' | 'vocab' | 'diary' | 'stats' | 'timeline' | 'analytics'
@@ -131,6 +157,12 @@ interface AppState {
   advancedMode: boolean;
   /** @deprecated Use setSettingsTier. Kept for backward compatibility. */
   toggleAdvancedMode: () => void;
+  chatStyle: ChatStyle;
+  setChatStyle: (style: ChatStyle) => void;
+  thoughtsMode: ThoughtsMode;
+  setThoughtsMode: (mode: ThoughtsMode) => void;
+  replyDelivery: ReplyDelivery;
+  setReplyDelivery: (mode: ReplyDelivery) => void;
   layoutMode: LayoutMode;
   setLayoutMode: (mode: LayoutMode) => void;
   /** Computed: true when layoutMode is compact or mobile (hides descriptions). */
@@ -369,6 +401,12 @@ export const useAppStore = create<AppState>()(
         const current = get().settingsTier;
         get().setSettingsTier(current >= 1 ? 0 : 1);
       },
+      chatStyle: 'storybook',
+      setChatStyle: (style) => set({ chatStyle: style }),
+      thoughtsMode: 'peek',
+      setThoughtsMode: (mode) => set({ thoughtsMode: mode }),
+      replyDelivery: 'live',
+      setReplyDelivery: (mode) => set({ replyDelivery: mode }),
       layoutMode: 'normal',
       setLayoutMode: (mode) => set({
         layoutMode: mode,
@@ -488,6 +526,9 @@ export const useAppStore = create<AppState>()(
         chatLayout: s.chatLayout,
         settingsTier: s.settingsTier,
         layoutMode: s.layoutMode,
+        chatStyle: s.chatStyle,
+        thoughtsMode: s.thoughtsMode,
+        replyDelivery: s.replyDelivery,
         sidebarCollapsed: s.sidebarCollapsed,
         sidebarSection: s.sidebarSection,
         customKeyBindings: s.customKeyBindings,

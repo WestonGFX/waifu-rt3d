@@ -29,6 +29,7 @@ import sqlite3
 import time
 from dataclasses import dataclass, field
 
+from backend.llm.reply_hygiene import strip_internal_labels
 from backend.llm.token_counter import count_tokens, count_messages_tokens, is_tiktoken_available
 
 logger = logging.getLogger(__name__)
@@ -314,7 +315,11 @@ def assemble_context(
                 hits = hits[:5]  # AIE off: simple cap, no gate
 
             for hit in hits:
-                hit_text = hit.get("text", "")
+                # Already-stored replies may carry a leaked "[Memory]" prefix; drop it
+                # so the label is not stacked on every recall.
+                hit_text = strip_internal_labels(hit.get("text", ""))
+                if not hit_text:
+                    continue
                 msg_cost = count_tokens(hit_text) + 4
                 if msg_cost > available:
                     break

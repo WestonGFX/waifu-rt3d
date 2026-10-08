@@ -5,6 +5,15 @@
 
 Push gate: no active blocking markers in this file or `CURRENT_STATUS.md` at the time of writing.
 
+## Addendum 2026-10-08 — UI session on the same branch
+
+**UI session (2026-10-08) — script-style chat, thinking card, reply animation. Same branch/PR #5; committed locally, NOT pushed since `be18607e` + the commits listed below.** Entry point for all docs: `docs/INDEX.md`. How it works: `docs/reference/chat-script-and-thinking.md`. Plan + decisions: `docs/plans/2026-10-08-script-style-chat-segments.md`. Every setting/HUD element: `docs/reference/settings-and-hud-inventory.md`.
+- **Shipped:** reply hygiene (`[Memory]` label loop, Qwen3 system-message merge → no more empty 9B replies); `[a][n][t][m]` script segments with 3 selectable looks (default **storybook**); thinking card above the reply (reasoning separated via `ReasoningChunk` + SSE `thinking`; **schema v90** `messages.thinking`/`raw_output`); settings `chatStyle`, `thoughtsMode`, `replyDelivery` (Settings → General). Dev server defaults to the dark **Blurple** theme.
+- **Schema:** now **v90**. The Kokoro Phase-3 Emotional-RAG migration that was planned as v90 must be written as **v91**.
+- **Pending (Chris decides):** pick the thinking-card polish (Quiet glass / Editorial / Pearl); composer live-colouring of `[a]…[/a]` (phase 4); prompt telling the model to use the tags (phase 5); opt-in local training export of thought+reply pairs; typewriter reply animation.
+- **Known issues:** incognito never sends the user's message to the model; leaked `[Memory]` can flash in the live bubble before the stored reply replaces it; a 9B thinking model can reason for minutes; two MemoryBrowser vitest tests flake only under full-suite load (task chip raised).
+- **Tests:** 3,264 backend pytest, 537 vitest, tsc clean. Rules honoured: no single-letter shortcuts, Lucide icons only, theme variables only.
+
 ## Why this handoff exists
 The cloud session built everything that can be built without real models. The next step (benchmarking models) needs LM Studio / Ollama on Chris's Mac, which a cloud container cannot reach. Continue **locally**, on this branch.
 
@@ -19,7 +28,7 @@ The cloud session built everything that can be built without real models. The ne
 1. **Run the benchmark on the Mac** (LM Studio first, then a shorter Ollama pass). Steps in `tools/bench/README.md`. LM Studio needs context length ≥ 8192 and Just-in-time model loading on.
 2. Build the report (`./run.sh bench report <file>.jsonl`), commit ONLY the `.md` (raw `.jsonl` is gitignored — it holds roleplay transcripts).
 3. Choose the winning model + fix together → **Phase 2**: wire it into the real chat path (`backend/server.py` stream/finalize ~6021-6048, `openai_compat.py` reasoning bypass, gate `finalizeKokoroTurn` in `chatStore.ts` ~140). Gate: live parse_ok ≥ 80% via `/api/kokoro/qa`.
-4. **Phase 3**: Kokoro v2 Emotional RAG (schema v90) — only after Phase 2.
+4. **Phase 3**: Kokoro v2 Emotional RAG (schema v91 — v90 taken 2026-10-08) — only after Phase 2.
 
 ## Why it matters (one paragraph)
 `docs/research/2026-05-29-kokoro-parse-ok-validation.md` measured Kokoro parse_ok at 0% on real models, and the user's real model (qwen3.5-9b, no longer installed) hits a reasoning-model bypass (`backend/server.py` ~6034) so the JSON contract is never injected. Mood dials, gestures, memory writes and the Stage-3 emotion→gesture hook are therefore mostly dormant until this is fixed.

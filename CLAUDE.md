@@ -275,3 +275,5 @@ Convention guides live in `docs/conventions/` — consult them when working in u
 - `frontend-and-ui.md` — React/Zustand/theme system
 - `3d-viewer-and-animation.md` — Three.js/VRM/Live2D/viewer.html
 - `llm-and-voice.md` — LLM adapters, voice pipeline, TTS/STT
+
+**Start every session at `docs/INDEX.md`** (map of all docs + active work threads, so parallel chats know about each other). Also: `docs/reference/settings-and-hud-inventory.md` (every setting + HUD element), `docs/reference/chat-script-and-thinking.md` (script-style chat, thinking card, reply animation), `docs/SETTINGS_REFERENCE.md` (backend config). Update the relevant reference + `docs/INDEX.md` in the same commit as a feature.

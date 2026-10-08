@@ -138,6 +138,13 @@ Open **http://localhost:8080** in your browser.
 - Qwen3 thinking mode toggle
 - History auto-summarization at 90% of limit
 
+### Script-Style Chat & Model Thinking
+Messages read like a script: spoken lines, actions, scene narration, thoughts and recalled memories, each in its own colour. Mark parts of a message with `[a]…[/a]` (action), `[n]…[/n]` (scene), `[t]…[/t]` (thought); plain text is speech (legacy `*action*` / `(scene)` still work).
+- **Three looks** (Settings → General → Chat style): Storybook (default), Screenplay, Transcript.
+- **Model thinking card:** the model's reasoning (and, on a second tab, its raw output) shows in a quiet card above the reply — Off / Peek / Open. Never sent back to the model or saved as a memory.
+- **Reply animation:** Live streaming, or wait for the whole reply then Fade or Beats (script lines cascade in).
+- Details: [`docs/reference/chat-script-and-thinking.md`](docs/reference/chat-script-and-thinking.md) · all settings: [`docs/reference/settings-and-hud-inventory.md`](docs/reference/settings-and-hud-inventory.md) · doc map: [`docs/INDEX.md`](docs/INDEX.md)
+
 ### Agentic Characters
 Characters with agentic mode enabled can autonomously use tools during conversation:
 - **Memory search** — RAG-powered retrieval from conversation history

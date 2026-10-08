@@ -1,6 +1,6 @@
 # Resume Prompt
 
-**Last updated:** 2026-10-04 (post-pause restart — cloud session handing over to a local Mac session)
+**Last updated:** 2026-10-08 (UI-session thread added below; benchmark instructions from 2026-10-04 (post-pause restart — cloud session handing over to a local Mac session)
 **Branch:** `claude/busy-planck-rg90lh` · PR #5 (draft) · all pushed · schema v89 (unchanged)
 **Tests (cloud, py3.12):** 3233 backend pytest passed (+7 skipped), 514 vitest, tsc: clean (`@types/node` added 2026-10-07)
 
@@ -11,7 +11,10 @@
 1. `git fetch origin claude/busy-planck-rg90lh && git checkout claude/busy-planck-rg90lh`; verify the baseline (pytest; vitest + tsc FROM `frontends/sakura/`).
 2. LM Studio: start server, Just-in-time loading ON, context length >= 8192. `./run.sh bench --dry-run`, quick pass (`--exclude "(30b|32b|70b|72b)" --turns 5`), then full sweep with `--between-models-cmd "lms unload --all"`; repeat on Ollama (`--base-url http://localhost:11434`).
 3. `./run.sh bench report <file>.jsonl` → commit ONLY the `.md` (raw `.jsonl` is gitignored: it contains RP transcripts). Read results with Chris; judge voice from the sample sheet.
-4. Pick the winning model + fix (target: parse_ok >= 80%, >= 90% answered, low leak) → Phase 2: wire into `backend/server.py` stream/finalize (~6021-6048), `openai_compat.py` reasoning bypass, and gate `finalizeKokoroTurn` (`chatStore.ts` ~140). Then Phase 3: Emotional RAG (schema v90).
+4. Pick the winning model + fix (target: parse_ok >= 80%, >= 90% answered, low leak) → Phase 2: wire into `backend/server.py` stream/finalize (~6021-6048), `openai_compat.py` reasoning bypass, and gate `finalizeKokoroTurn` (`chatStore.ts` ~140). Then Phase 3: Emotional RAG (schema v91 — v90 was taken 2026-10-08 by messages.thinking/raw_output).
+
+## Parallel thread (2026-10-08, UI session) — read `docs/INDEX.md` first
+Script-style chat, thinking card and reply animation are built on this same branch. Resume them from `docs/plans/2026-10-08-script-style-chat-segments.md` (decisions, pending choices) and `docs/reference/chat-script-and-thinking.md` (how it works). Before touching `openai_compat.py` / `chat_stream` for Kokoro Phase 2, read that reference: reasoning now routes through `ReasoningChunk` → SSE `thinking`, and Qwen3 system messages are merged.
 
 **Why:** `docs/research/2026-05-29-kokoro-parse-ok-validation.md` — Kokoro parse_ok measured 0% on real models; the real model hit the reasoning bypass so the JSON contract never ran. Mood dials, gestures, memory writes and the Stage-3 emotion→gesture hook are mostly dormant until fixed.
 

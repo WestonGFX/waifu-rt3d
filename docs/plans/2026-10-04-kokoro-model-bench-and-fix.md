@@ -26,3 +26,8 @@ Schema v90 `memories.mind_state_snapshot`; dial-cosine rerank behind `emotional_
 - 2026-10-04 — Plan created. Phase 0 done (PR #5). Phase 1 harness built + tested; 3,188 backend pytest pass.
 - 2026-10-04 (later) — PR #5 review rounds closed (CI green at `7e5f960`): resume-retry of skipped cells, `--retry-failed`, resume-config mismatch guard, S3 stitch-only-if-valid + `prefill_stitched`, `error_kind: unsupported`, S2 extractor cap 500 (`--extractor-max-tokens`), stricter `schema_valid`, `_safe_float` parser fix (non-numeric / NaN / Infinity), raw `.jsonl` gitignored. Backend suite 3233 passed (+7 skipped). **Handed over to a local Mac session** — see `docs/SESSION_HANDOFF.md` / `docs/plans/RESUME_PROMPT.md`. Phase 1 real-model run is the next action; Phases 2-3 blocked on its numbers.
 - 2026-10-07 — Chris's decisions: benchmark character = Rin; add `@types/node` (done, `8bd4ba7`: tsc clean, vitest 514, `npm ci` verified); canonical Python still open (Mac session to check `.venv/bin/python --version`). Cloud session stopped watching PR #5. Next action unchanged: real-model sweep on the Mac.
+
+
+## Update 2026-10-08 — schema numbering (from the UI session)
+
+Schema **v90 is now taken** by `messages.thinking` + `messages.raw_output` (thinking card; see `docs/reference/chat-script-and-thinking.md`). The Phase 3 Emotional-RAG migration above that said "v90" (`memories.mind_state_snapshot`) must be written as **`migrate_to_v91`**. Also new on the chat path: `ReasoningChunk` routing in `openai_compat.py` + `server.py` `chat_stream` (reasoning no longer mixes into the reply) and `_merge_system_messages` for Qwen3-family models — relevant to Phase 2's "reasoning bypass" work; re-read both before wiring Kokoro into the stream.

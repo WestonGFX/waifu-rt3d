@@ -11,6 +11,9 @@ What gets saved, where it lives, when to create it, and when to archive it.
 | **Plan files** | `~/.claude/plans/` | `YYYY-MM-DD-description.md` | When starting a new multi-phase initiative | Mark `✅ DONE` in header. Archive quarterly. |
 | **Session summaries** | `docs/sessions/` | `SESSION_YYYY-MM-DD.md` | End of any session with 3+ completed tasks | NEVER delete. Historical record. |
 | **Architecture decisions** | `docs/decisions/` | `ADR-NNN-title.md` | When making a significant architectural choice | NEVER delete. Supersede with new ADR. |
+| **Reference docs** | `docs/reference/` | `topic.md` | When a shipped feature or inventory needs one authoritative how-it-works page | Update in the same commit as the feature. |
+| **Design mock-ups** | `docs/design/` | `YYYY-MM-DD-topic-mockup.html` | After a visual decision, so the look can be re-checked later | Keep; supersede with a new dated file. |
+| **Docs index** | `docs/INDEX.md` | (single file) | Already exists — the entry point for any Claude chat | Update whenever a plan, reference doc or mock-up is added. |
 | **Convention guides** | `docs/conventions/` | `domain-name.md` | When documenting patterns for a codebase area | Update in-place as conventions evolve. |
 | **Feature masterlist** | `docs/FEATURE_MASTERLIST.md` | (single file) | Already exists | Update via `/checkpoint`. |
 | **Completed features** | `docs/COMPLETED_FEATURES.md` | (single file) | Already exists | Append via `/checkpoint`. |

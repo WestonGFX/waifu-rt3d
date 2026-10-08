@@ -261,16 +261,21 @@ const SEGMENT_TAG: Record<SegmentKind, string> = {
  * are just speech render exactly as before in every style — no extra chrome.
  * Segment parsing and syntax: lib/parseSegments.ts. Looks: styles/segments.css.
  */
-function ScriptText({ text, query }: { text: string; query: string }) {
+function ScriptText({ text, query, reveal }: { text: string; query: string; reveal?: 'fade' | 'beats' }) {
   const chatStyle = useAppStore((s) => s.chatStyle);
   const segments = parseSegments(text);
   if (segments.length === 0 || (segments.length === 1 && segments[0].kind === 'speech')) {
-    return <MarkdownText text={text} query={query} />;
+    const plain = <MarkdownText text={text} query={query} />;
+    return reveal ? <div className="reply-reveal">{plain}</div> : plain;
   }
   return (
-    <div className={`seg-script seg-v-${chatStyle}`}>
+    <div className={`seg-script seg-v-${chatStyle}${reveal === 'fade' ? ' reply-reveal' : ''}`}>
       {segments.map((seg, i) => (
-        <div key={i} className={`seg seg-${seg.kind}`}>
+        <div
+          key={i}
+          className={`seg seg-${seg.kind}${reveal === 'beats' ? ' seg-beat' : ''}`}
+          style={reveal === 'beats' ? { animationDelay: `${Math.min(i * 0.3, 2.4)}s` } : undefined}
+        >
           {chatStyle === 'transcript' && <span className="seg-tag">{SEGMENT_TAG[seg.kind]}</span>}
           <div className="seg-text"><MarkdownText text={seg.text} query={query} /></div>
         </div>
@@ -553,6 +558,11 @@ function FailedActionCard({ message, onRetry }: { message: import('../lib/types'
 export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onRegenerateImage, onBranchSwitch, onEdit, isLastAssistant = false, isRegenerating = false }: DialogueBubbleProps) {
   const thinkingMode = useAppStore(s => s.thinkingIndicatorMode);
   const thoughtsMode = useAppStore(s => s.thoughtsMode);
+  const replyDelivery = useAppStore(s => s.replyDelivery);
+  // True once this bubble has been seen pending/streaming, i.e. the reply just arrived live
+  // (as opposed to a message loaded from history, which should never animate).
+  const arrivedLive = useRef(false);
+  if (message.status === 'pending' || message.status === 'streaming') arrivedLive.current = true;
   const [pinned, setPinned] = useState(message.pinned ?? false);
   const voiceUrl = message.voiceMessageUrl;
   const [editing, setEditing] = useState(false);
@@ -885,6 +895,14 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               stage={message.stage}
               mode={thinkingMode}
             />
+          ) : message.status === 'streaming' && replyDelivery !== 'live' ? (
+            // Held back: show the waiting state until the whole reply is in, then animate it.
+            <ThinkingPlaceholder
+              charName={character?.name}
+              startedAt={message.createdAt}
+              stage={message.stage}
+              mode={thinkingMode}
+            />
           ) : message.status === 'streaming' ? (
             <span>
               <ScriptText text={stripAnnotations(message.text)} query={searchQuery} />
@@ -933,7 +951,11 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               </div>
             </div>
           ) : (
-            <ScriptText text={stripAnnotations(message.text)} query={searchQuery} />
+            <ScriptText
+              text={stripAnnotations(message.text)}
+              query={searchQuery}
+              reveal={arrivedLive.current && replyDelivery !== 'live' ? replyDelivery : undefined}
+            />
           )}
         </div>
 

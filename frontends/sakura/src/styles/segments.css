@@ -106,3 +106,15 @@
 .seg-v-screenplay .seg-thought,
 .seg-v-screenplay .seg-memory,
 .seg-v-storybook .seg-memory { display: flex; align-items: baseline; gap: 0.4em; }
+
+/* ── Reply animation (Settings → Chat → Reply animation: fade / beats) ───
+   Plays once, when a reply that arrived live is revealed. History never animates. */
+@keyframes replyReveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.reply-reveal { animation: replyReveal 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+.seg-beat     { animation: replyReveal 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .reply-reveal, .seg-beat { animation: none; }
+}

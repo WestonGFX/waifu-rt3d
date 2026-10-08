@@ -2509,7 +2509,7 @@ interface GeneralTabProps {
 }
 
 function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMode, layoutMode, setLayoutMode }: GeneralTabProps) {
-  const { incognito, setIncognito, showQuickChips, setShowQuickChips, settingsMode, setSettingsMode, settingsTier, setSettingsTier, activeCharacter, thinkingIndicatorMode, setThinkingIndicatorMode, chatStyle, setChatStyle, thoughtsMode, setThoughtsMode } = useAppStore();
+  const { incognito, setIncognito, showQuickChips, setShowQuickChips, settingsMode, setSettingsMode, settingsTier, setSettingsTier, activeCharacter, thinkingIndicatorMode, setThinkingIndicatorMode, chatStyle, setChatStyle, thoughtsMode, setThoughtsMode, replyDelivery, setReplyDelivery } = useAppStore();
 
   /** Proactive messages: enabled toggle (per-character, PATCH /api/characters/{id}/proactive). */
   const [proactiveEnabled, setProactiveEnabled] = useState(Boolean(activeCharacter?.proactive_enabled));
@@ -2897,6 +2897,38 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
                   style={{
                     backgroundColor: chatStyle === style ? 'var(--color-accent)' : 'transparent',
                     color: chatStyle === style ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </SettingField>
+
+          {/* Reply animation — live streaming vs wait-then-reveal. */}
+          <SettingField
+            label="Reply animation"
+            description="Live shows words as the model writes them. Fade waits for the whole reply, then fades it in. Beats waits, then reveals it line by line like a script: scene, action, speech, thought. Reduced-motion systems skip the animation."
+          >
+            <div
+              className="flex gap-0.5 p-0.5 rounded-lg"
+              style={{
+                backgroundColor: 'var(--color-background)',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              {([
+                ['live', 'Live'],
+                ['fade', 'Fade'],
+                ['beats', 'Beats'],
+              ] as const).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  onClick={() => setReplyDelivery(mode)}
+                  className="px-3 py-1 rounded-md text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: replyDelivery === mode ? 'var(--color-accent)' : 'transparent',
+                    color: replyDelivery === mode ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
                   }}
                 >
                   {label}

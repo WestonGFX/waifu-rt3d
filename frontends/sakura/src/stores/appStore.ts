@@ -35,6 +35,15 @@ export type ChatStyle = 'screenplay' | 'transcript' | 'storybook';
  */
 export type ThoughtsMode = 'off' | 'peek' | 'open';
 
+/**
+ * How a reply appears on screen.
+ * - live:  words stream in as the model produces them (default, today's behaviour)
+ * - fade:  wait for the whole reply, then fade it in
+ * - beats: wait for the whole reply, then reveal it script-beat by beat
+ *          (scene, action, speech, thought each cascade in)
+ */
+export type ReplyDelivery = 'live' | 'fade' | 'beats';
+
 /** Overlay drawers that slide out over the main content. */
 type Overlay =
   | 'settings' | 'memory' | 'vocab' | 'diary' | 'stats' | 'timeline' | 'analytics'
@@ -152,6 +161,8 @@ interface AppState {
   setChatStyle: (style: ChatStyle) => void;
   thoughtsMode: ThoughtsMode;
   setThoughtsMode: (mode: ThoughtsMode) => void;
+  replyDelivery: ReplyDelivery;
+  setReplyDelivery: (mode: ReplyDelivery) => void;
   layoutMode: LayoutMode;
   setLayoutMode: (mode: LayoutMode) => void;
   /** Computed: true when layoutMode is compact or mobile (hides descriptions). */
@@ -394,6 +405,8 @@ export const useAppStore = create<AppState>()(
       setChatStyle: (style) => set({ chatStyle: style }),
       thoughtsMode: 'peek',
       setThoughtsMode: (mode) => set({ thoughtsMode: mode }),
+      replyDelivery: 'live',
+      setReplyDelivery: (mode) => set({ replyDelivery: mode }),
       layoutMode: 'normal',
       setLayoutMode: (mode) => set({
         layoutMode: mode,
@@ -515,6 +528,7 @@ export const useAppStore = create<AppState>()(
         layoutMode: s.layoutMode,
         chatStyle: s.chatStyle,
         thoughtsMode: s.thoughtsMode,
+        replyDelivery: s.replyDelivery,
         sidebarCollapsed: s.sidebarCollapsed,
         sidebarSection: s.sidebarSection,
         customKeyBindings: s.customKeyBindings,

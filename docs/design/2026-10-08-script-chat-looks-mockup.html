@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script-style chat — pick a look</title>
+<style>
+/* Real Sakura tokens (themes.css): light = "sakura", dark = "dark-sakura". Segment colours are NEW proposals. */
+:root{
+  --bg:#FDF5F7;--surface:#FFFFFF;--raised:#FFFFFF;--border:#F0DEE4;--text:#2D1B24;--text2:#9B8A92;--accent:#E8788A;--accent-soft:rgba(232,120,138,.10);--accent-text:#fff;
+  --shadow:0 1px 3px rgba(0,0,0,.04),0 4px 16px rgba(232,120,138,.06);
+  --seg-speech:#2D1B24;--seg-action:#C94862;--seg-narration:#8A6420;--seg-thought:#6A59B4;--seg-memory:#2A7F6D;
+  --seg-action-bg:rgba(201,72,98,.09);--seg-narration-bg:rgba(138,100,32,.09);--seg-thought-bg:rgba(106,89,180,.09);--seg-memory-bg:rgba(42,127,109,.10);
+}
+:root[data-theme="dark"]{
+  --bg:#1A1518;--surface:#252022;--raised:#2E2729;--border:#3A3234;--text:#F0E6E8;--text2:#9A8B90;--accent:#E88A9A;--accent-soft:rgba(232,138,154,.12);--accent-text:#1A1518;
+  --shadow:0 2px 8px rgba(0,0,0,.20),0 0 1px rgba(232,138,154,.10);
+  --seg-speech:#F0E6E8;--seg-action:#F29BAC;--seg-narration:#E6C57F;--seg-thought:#B9ABF2;--seg-memory:#74D3BE;
+  --seg-action-bg:rgba(242,155,172,.12);--seg-narration-bg:rgba(230,197,127,.11);--seg-thought-bg:rgba(185,171,242,.12);--seg-memory-bg:rgba(116,211,190,.12);
+}
+*{box-sizing:border-box}
+body{margin:0;padding:64px 16px 24px;background:var(--bg);color:var(--text);font:15px/1.55 'Nunito',system-ui,sans-serif}
+h1{font:600 22px 'Fraunces',Georgia,serif;margin:0 0 4px}
+.top{max-width:1500px;margin:0 auto 14px;display:flex;gap:16px;align-items:end;justify-content:space-between;flex-wrap:wrap}
+.top p{margin:0;color:var(--text2);font-size:13px}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tools button{font:inherit;font-size:13px;padding:6px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer}
+.legend{display:flex;gap:6px;flex-wrap:wrap}
+.legend span{font-size:12px;padding:2px 9px;border-radius:99px;font-weight:700}
+.grid{max-width:1500px;margin:0 auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media(max-width:1000px){.grid{grid-template-columns:1fr}}
+.col{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;min-width:0}
+.col>header{padding:14px 16px 6px}
+.col>header h2{font:600 17px 'Fraunces',Georgia,serif;margin:0}
+.col>header p{margin:2px 0 0;font-size:12.5px;color:var(--text2)}
+.pick{margin:0 16px 16px;padding:11px;border:0;border-radius:12px;background:var(--accent);color:var(--accent-text);font:800 14px inherit;font-family:inherit;cursor:pointer}
+.pick:hover{filter:brightness(1.06)}
+.chat{padding:8px 16px 14px;flex:1;display:flex;flex-direction:column;gap:14px;min-height:560px}
+.who{font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);margin-bottom:4px}
+.composer{margin:0 16px 12px;padding:8px 10px;border:1px dashed var(--border);border-radius:10px;font:12px ui-monospace,Menlo,monospace;color:var(--text2)}
+.composer b{color:var(--seg-action)}
+/* thinking card — shared */
+.think{border:1px solid var(--border);border-radius:12px;background:var(--raised);font-size:12.5px;overflow:hidden}
+.think summary{cursor:pointer;padding:7px 11px;color:var(--text2);display:flex;gap:6px 8px;align-items:center;flex-wrap:wrap;list-style:none}
+.think summary::-webkit-details-marker{display:none}
+.think summary::before{content:"▸";color:var(--seg-thought)}
+.think[open] summary::before{content:"▾"}
+.think .flag{margin-left:auto;font-size:11px;color:#B7791F;background:rgba(240,194,122,.25);padding:1px 8px;border-radius:99px}
+.think pre{margin:0;padding:8px 12px 12px;white-space:pre-wrap;font:12px/1.5 ui-monospace,Menlo,monospace;color:var(--text2);border-top:1px solid var(--border);max-height:150px;overflow:auto}
+/* segment colours */
+.s-speech{color:var(--seg-speech)}.s-action{color:var(--seg-action);font-style:italic}.s-narration{color:var(--seg-narration)}.s-thought{color:var(--seg-thought);font-style:italic}.s-memory{color:var(--seg-memory)}
+
+/* ── A: Screenplay (clarity-first) ─────────────────────────── */
+.A .turn{display:flex;flex-direction:column;gap:7px}
+.A .seg{margin:0}
+.A .seg.narration{font-variant:small-caps;letter-spacing:.03em;font-size:14px;text-align:center;padding:2px 10px}
+.A .seg.action{padding-left:12px;border-left:3px solid var(--seg-action)}
+.A .seg.speech{font-size:16px;font-weight:600}
+.A .seg.thought{padding-left:12px;border-left:3px dotted var(--seg-thought)}
+.A .seg.thought::before{content:"(thinks) ";font-style:normal;font-size:12px;font-weight:700}
+.A .seg.memory{font-size:12.5px}
+.A .seg.memory::before{content:"remembers: ";font-weight:800}
+.A .user .seg.speech{text-align:right}.A .user .seg.action{text-align:right;border-left:0;border-right:3px solid var(--seg-action);padding:0 12px 0 0}
+
+/* ── B: Transcript with tag gutter (density-first) ─────────── */
+.B .turn{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.B .row{display:grid;grid-template-columns:62px 1fr;gap:10px;padding:6px 10px;align-items:baseline;border-top:1px solid var(--border)}
+.B .row:first-child{border-top:0}
+.B .tag{font-size:10.5px;font-weight:900;letter-spacing:.07em;text-transform:uppercase;text-align:center;padding:2px 0;border-radius:6px}
+.B .row.speech .tag{background:var(--accent-soft);color:var(--accent)}
+.B .row.action .tag{background:var(--seg-action-bg);color:var(--seg-action)}
+.B .row.narration .tag{background:var(--seg-narration-bg);color:var(--seg-narration)}
+.B .row.thought .tag{background:var(--seg-thought-bg);color:var(--seg-thought)}
+.B .row.memory .tag{background:var(--seg-memory-bg);color:var(--seg-memory)}
+.B .row.thought .txt{font-style:italic}.B .row.action .txt{font-style:italic}
+.B .turn-h{padding:5px 10px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);background:var(--raised)}
+
+/* ── C: Storybook bubbles (character-first) ────────────────── */
+.C .turn{display:flex;flex-direction:column;gap:8px}
+.C .bubble{max-width:88%;padding:9px 14px;border-radius:18px;font-size:15px}
+.C .bubble.speech{background:var(--accent-soft);border:1px solid var(--border);border-bottom-left-radius:5px;align-self:flex-start;font-weight:600}
+.C .user .bubble.speech{background:var(--accent);color:var(--accent-text);border-color:transparent;border-bottom-left-radius:18px;border-bottom-right-radius:5px;align-self:flex-end}
+.C .bubble.speech .s-speech{color:inherit}
+.C .cap{align-self:center;max-width:94%;text-align:center;font-size:13.5px;padding:5px 14px;border-radius:99px}
+.C .cap.action{background:var(--seg-action-bg);color:var(--seg-action);font-style:italic}
+.C .cap.narration{background:var(--seg-narration-bg);color:var(--seg-narration);border-radius:10px}
+.C .cloud{align-self:flex-start;max-width:78%;padding:8px 15px;border:2px dotted var(--seg-thought);border-radius:26px;color:var(--seg-thought);font-style:italic;background:var(--seg-thought-bg);margin-left:10px}
+.C .mem{align-self:flex-start;font-size:12px;padding:3px 11px;border-radius:99px;background:var(--seg-memory-bg);color:var(--seg-memory);font-weight:700}
+.C .user .cap{align-self:flex-end}
+</style>
+</head>
+<body>
+<div class="top">
+  <div>
+    <h1>How should Rin's chat read like a script?</h1>
+    <p>Same conversation, three looks. Pick the one you like — you can add notes in the banner, and mix ideas ("A's colours with B's tags").</p>
+  </div>
+  <div class="tools">
+    <div class="legend" id="legend"></div>
+    <button id="themeBtn" type="button">Switch to dark (Dark Sakura)</button>
+  </div>
+</div>
+<div class="grid" id="grid"></div>
+
+<script>
+/* Same shape the real parseSegments() will output. kinds: speech | action | narration | thought | memory */
+const USER=[
+  {k:'action',t:'I shake the rain off my jacket and sit down across from her.'},
+  {k:'speech',t:'Hi Rin! Sorry I’m late.'}
+];
+const RIN=[
+  {k:'narration',t:'Rain taps the window of the little café. Rin looks up from her notebook.'},
+  {k:'action',t:'She tucks a strand of hair behind her ear and smiles.'},
+  {k:'speech',t:'Oh! You came, even in this weather… I was hoping you would.'},
+  {k:'thought',t:'He remembered I like the window seat.'},
+  {k:'memory',t:'You said you love rainy evenings.'},
+  {k:'speech',t:'Come, sit. I’ll tell you why I love the rain too.'}
+];
+const THINK='Thinking Process:\n\n1. Analyze the Request:\n   * Persona: Rin (cheerful anime girl)\n   * Task: reply in character, 1–2 sentences\n2. Determine the Persona & Tone…\n3. Drafting the reply…';
+const COMPOSER='You typed:  <b>[a]</b>I shake the rain off my jacket and sit down across from her.<b>[/a]</b> Hi Rin! Sorry I’m late.';
+const LABEL={speech:'Say',action:'Do',narration:'Scene',thought:'Think',memory:'Recall'};
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const span=(k,t)=>`<span class="s-${k}">${esc(t)}</span>`;
+
+const thinkCard=()=>`<details class="think"><summary>Rin’s thinking · hidden by default <span class="flag">⚠ sounds like an assistant, not Rin</span></summary><pre>${esc(THINK)}</pre></details>`;
+
+const renderA=(segs,user)=>`<div class="turn ${user?'user':''}"><div class="who">${user?'You':'Rin'}</div>`+segs.map(s=>`<p class="seg ${s.k}">${span(s.k,s.t)}</p>`).join('')+'</div>';
+const renderB=(segs,user)=>`<div class="turn"><div class="turn-h">${user?'You':'Rin'}</div>`+segs.map(s=>`<div class="row ${s.k}"><span class="tag">${LABEL[s.k]}</span><span class="txt">${span(s.k,s.t)}</span></div>`).join('')+'</div>';
+const renderC=(segs,user)=>`<div class="turn ${user?'user':''}">`+segs.map(s=>{
+  if(s.k==='speech')return`<div class="bubble speech">${span('speech',s.t)}</div>`;
+  if(s.k==='thought')return`<div class="cloud">${esc(s.t)}</div>`;
+  if(s.k==='memory')return`<div class="mem">♡ ${esc(s.t)}</div>`;
+  return`<div class="cap ${s.k}">${esc(s.t)}</div>`;}).join('')+'</div>';
+
+const OPTS=[
+ {id:'option_a',cls:'A',title:'A — Screenplay',sub:'Clearest to read. Looks like a film script: scene lines centered, actions with a coloured bar, speech big and bold.',r:renderA},
+ {id:'option_b',cls:'B',title:'B — Transcript with tags',sub:'Most visible. A little SAY / DO / SCENE / THINK label on every line, like a TV-interview transcript.',r:renderB},
+ {id:'option_c',cls:'C',title:'C — Storybook bubbles',sub:'Most personality. Speech stays in chat bubbles; actions and scene float between them; thoughts are cloud bubbles.',r:renderC}
+];
+document.getElementById('grid').innerHTML=OPTS.map(o=>`
+<section class="col ${o.cls}">
+  <header><h2>${o.title}</h2><p>${o.sub}</p></header>
+  <div class="composer">${COMPOSER}</div>
+  <div class="chat">${o.r(USER,true)}${thinkCard()}${o.r(RIN,false)}</div>
+  <button class="pick decision-btn" data-choice="${o.id}" data-title="${o.title}" type="button">I like ${o.cls}</button>
+</section>`).join('');
+document.getElementById('legend').innerHTML=['speech','action','narration','thought','memory'].map(k=>`<span style="background:var(--seg-${k==='speech'?'speech':k}-bg,var(--accent-soft));color:var(--seg-${k})">${LABEL[k]}</span>`).join('');
+const btn=document.getElementById('themeBtn');
+btn.onclick=()=>{const d=document.documentElement;const dark=d.dataset.theme==='dark';d.dataset.theme=dark?'light':'dark';btn.textContent=dark?'Switch to dark (Dark Sakura)':'Switch to light (Sakura)';};
+</script>
+</body>
+</html>

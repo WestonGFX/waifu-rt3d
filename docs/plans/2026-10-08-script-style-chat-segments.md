@@ -90,3 +90,12 @@ Plan (ordered, nothing built yet):
 
 Label stripping happens when a reply is finalized/stored, not while tokens stream. During streaming the user may briefly see a leaked
 `[Memory] …` in the live bubble until the stored version replaces it. The phase-2 `parseSegments` normaliser should also strip internal labels on the live path.
+
+## Decision 2026-10-08 — look (Chris, via visual-decision-lab)
+
+- **A "Screenplay" = default.** B "Transcript with tags" and C "Storybook bubbles" ship as user-selectable **Chat style** options (Settings → General). Chris is especially keen on C; B is his least favourite — all three still ship.
+- Reference mock-up (kept as the visual source of truth, open in a browser; has a light/dark toggle using real Sakura / Dark Sakura tokens):
+  `docs/design/2026-10-08-script-chat-looks-mockup.html`
+- Segment colours are derived per theme with `color-mix()` against `--color-text-primary` so they stay readable in all 18 themes (verify 1 light + 1 dark).
+- v1 scope: message rendering + the setting. Not yet: composer live-transform (phase 4), prompt telling the model to emit tags (phase 5). Legacy `*action*` and `(narration)` already map to action/narration, so current models show styled segments immediately.
+- Plain single-speech messages render exactly as before (no extra chrome) in every style.

@@ -281,3 +281,31 @@ class TestChatStreamReasoningFallback:
             ))
         text_tokens = [t for t in tokens if isinstance(t, str)]
         assert text_tokens == ["surprise reasoning"]
+
+
+def test_merge_system_messages_puts_one_system_first():
+    from backend.llm.adapters.openai_compat import _merge_system_messages
+
+    merged = _merge_system_messages([
+        {"role": "system", "content": "persona"},
+        {"role": "system", "content": "[Memory] a"},
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "hello"},
+        {"role": "user", "content": "again"},
+        {"role": "system", "content": "reply format"},
+    ])
+    assert [m["role"] for m in merged] == ["system", "user", "assistant", "user"]
+    assert merged[0]["content"] == "persona\n\n[Memory] a\n\nreply format"
+
+
+def test_reasoning_defaults_merge_system_for_qwen_only():
+    from backend.llm.adapters.openai_compat import _apply_reasoning_defaults
+
+    msgs = [{"role": "user", "content": "hi"}, {"role": "system", "content": "late"}]
+    qwen = {"messages": list(msgs)}
+    _apply_reasoning_defaults(qwen, "qwen/qwen3.5-9b")
+    assert qwen["messages"][0]["role"] == "system"
+
+    llama = {"messages": list(msgs)}
+    _apply_reasoning_defaults(llama, "llama-3.2-1b-instruct")
+    assert llama["messages"] == msgs

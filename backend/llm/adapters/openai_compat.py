@@ -54,6 +54,40 @@ def _is_reasoning_model(model: str) -> bool:
     return bool(_REASONING_MODEL_PATTERNS.search(model))
 
 
+def _merge_system_messages(messages: list[dict]) -> list[dict]:
+    """Collapse every ``system`` message into one leading system message.
+
+    Qwen3-family chat templates raise ("System message must be at the beginning")
+    when a system message appears after a user turn, and LM Studio answers with a
+    500. The app legitimately sends several system messages — recalled memories
+    and a trailing quick-reply instruction — so strict-template models need them
+    merged. Order among the non-system messages is preserved.
+
+    Args:
+        messages: OpenAI-style message dicts.
+
+    Returns:
+        A new list: one merged system message (if any existed) followed by the
+        remaining messages in their original order.
+
+    Example:
+        >>> _merge_system_messages([
+        ...     {"role": "system", "content": "A"},
+        ...     {"role": "user", "content": "hi"},
+        ...     {"role": "system", "content": "B"},
+        ... ])
+        [{'role': 'system', 'content': 'A\\n\\nB'}, {'role': 'user', 'content': 'hi'}]
+    """
+    system_parts = [
+        m["content"] for m in messages
+        if m.get("role") == "system" and isinstance(m.get("content"), str) and m["content"].strip()
+    ]
+    others = [m for m in messages if m.get("role") != "system"]
+    if not system_parts:
+        return others
+    return [{"role": "system", "content": "\n\n".join(system_parts)}, *others]
+
+
 def _apply_reasoning_defaults(payload: dict, model: str) -> None:
     """Disable thinking-mode output for reasoning-family models.
 
@@ -73,6 +107,8 @@ def _apply_reasoning_defaults(payload: dict, model: str) -> None:
     """
     if not _is_reasoning_model(model):
         return
+    if payload.get("messages"):
+        payload["messages"] = _merge_system_messages(payload["messages"])
     if "chat_template_kwargs" not in payload:
         payload["chat_template_kwargs"] = {"enable_thinking": False}
 

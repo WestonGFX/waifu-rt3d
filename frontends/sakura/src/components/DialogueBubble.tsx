@@ -3,6 +3,7 @@ import { AnimatePresence } from 'framer-motion';
 import { Volume2, Pin, ChevronLeft, ChevronRight, RefreshCw, Check, X, Clock } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
+import { ThinkingCard } from './ThinkingCard';
 import { ChatImageLightbox } from './ChatImageLightbox';
 import { downloadUrl } from '../lib/downloadFile';
 import { api } from '../lib/api';
@@ -551,6 +552,7 @@ function FailedActionCard({ message, onRetry }: { message: import('../lib/types'
 
 export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onRegenerateImage, onBranchSwitch, onEdit, isLastAssistant = false, isRegenerating = false }: DialogueBubbleProps) {
   const thinkingMode = useAppStore(s => s.thinkingIndicatorMode);
+  const thoughtsMode = useAppStore(s => s.thoughtsMode);
   const [pinned, setPinned] = useState(message.pinned ?? false);
   const voiceUrl = message.voiceMessageUrl;
   const [editing, setEditing] = useState(false);
@@ -778,6 +780,12 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
     <div
       className="dialogue-bubble mb-3"
     >
+      <ThinkingCard
+        thinking={message.thinking}
+        rawOutput={message.rawOutput}
+        mode={thoughtsMode}
+        streaming={message.status === 'streaming'}
+      />
       <div
         className="dialogue-her p-4 relative"
         style={{

@@ -27,6 +27,14 @@ export type LayoutMode = 'normal' | 'compact' | 'mobile' | 'minimal';
  */
 export type ChatStyle = 'screenplay' | 'transcript' | 'storybook';
 
+/**
+ * How the model's thinking card shows above each reply.
+ * - off:  hidden entirely
+ * - peek: one quiet line, expandable (default)
+ * - open: expanded with the Thinking / Raw output tabs
+ */
+export type ThoughtsMode = 'off' | 'peek' | 'open';
+
 /** Overlay drawers that slide out over the main content. */
 type Overlay =
   | 'settings' | 'memory' | 'vocab' | 'diary' | 'stats' | 'timeline' | 'analytics'
@@ -142,6 +150,8 @@ interface AppState {
   toggleAdvancedMode: () => void;
   chatStyle: ChatStyle;
   setChatStyle: (style: ChatStyle) => void;
+  thoughtsMode: ThoughtsMode;
+  setThoughtsMode: (mode: ThoughtsMode) => void;
   layoutMode: LayoutMode;
   setLayoutMode: (mode: LayoutMode) => void;
   /** Computed: true when layoutMode is compact or mobile (hides descriptions). */
@@ -382,6 +392,8 @@ export const useAppStore = create<AppState>()(
       },
       chatStyle: 'storybook',
       setChatStyle: (style) => set({ chatStyle: style }),
+      thoughtsMode: 'peek',
+      setThoughtsMode: (mode) => set({ thoughtsMode: mode }),
       layoutMode: 'normal',
       setLayoutMode: (mode) => set({
         layoutMode: mode,
@@ -502,6 +514,7 @@ export const useAppStore = create<AppState>()(
         settingsTier: s.settingsTier,
         layoutMode: s.layoutMode,
         chatStyle: s.chatStyle,
+        thoughtsMode: s.thoughtsMode,
         sidebarCollapsed: s.sidebarCollapsed,
         sidebarSection: s.sidebarSection,
         customKeyBindings: s.customKeyBindings,

@@ -3,4 +3,5 @@
 @import "./styles/base.css";
 @import "./styles/dialogue.css";
 @import "./styles/segments.css";
+@import "./styles/thinking.css";
 @import "./styles/components.css";

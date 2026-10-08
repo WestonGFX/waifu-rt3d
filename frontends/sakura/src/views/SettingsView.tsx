@@ -2509,7 +2509,7 @@ interface GeneralTabProps {
 }
 
 function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMode, layoutMode, setLayoutMode }: GeneralTabProps) {
-  const { incognito, setIncognito, showQuickChips, setShowQuickChips, settingsMode, setSettingsMode, settingsTier, setSettingsTier, activeCharacter, thinkingIndicatorMode, setThinkingIndicatorMode, chatStyle, setChatStyle } = useAppStore();
+  const { incognito, setIncognito, showQuickChips, setShowQuickChips, settingsMode, setSettingsMode, settingsTier, setSettingsTier, activeCharacter, thinkingIndicatorMode, setThinkingIndicatorMode, chatStyle, setChatStyle, thoughtsMode, setThoughtsMode } = useAppStore();
 
   /** Proactive messages: enabled toggle (per-character, PATCH /api/characters/{id}/proactive). */
   const [proactiveEnabled, setProactiveEnabled] = useState(Boolean(activeCharacter?.proactive_enabled));
@@ -2897,6 +2897,39 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
                   style={{
                     backgroundColor: chatStyle === style ? 'var(--color-accent)' : 'transparent',
                     color: chatStyle === style ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </SettingField>
+
+          {/* Model thinking — whether the card with the model's reasoning shows above each reply.
+              Mock-up: docs/design/2026-10-08-thinking-panel-options-mockup.html (option X) */}
+          <SettingField
+            label="Model thinking"
+            description="A quiet card above Rin's reply with what the model reasoned, and on a second tab, exactly what it typed before cleanup. Off hides it. Peek shows one line you can open. Open shows it expanded. It is never sent back to the model or saved as a memory."
+          >
+            <div
+              className="flex gap-0.5 p-0.5 rounded-lg"
+              style={{
+                backgroundColor: 'var(--color-background)',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              {([
+                ['off', 'Off'],
+                ['peek', 'Peek'],
+                ['open', 'Open'],
+              ] as const).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  onClick={() => setThoughtsMode(mode)}
+                  className="px-3 py-1 rounded-md text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: thoughtsMode === mode ? 'var(--color-accent)' : 'transparent',
+                    color: thoughtsMode === mode ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
                   }}
                 >
                   {label}

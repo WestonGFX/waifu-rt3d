@@ -18,6 +18,15 @@ type ChatLayout = 'chat-first' | 'model-first' | 'split';
  */
 export type LayoutMode = 'normal' | 'compact' | 'mobile' | 'minimal';
 
+/**
+ * How chat messages read as a script (speech / action / scene / thought / memory).
+ * - screenplay: film-script blocks (default)
+ * - transcript: SAY / DO / SCENE / THINK tag gutter
+ * - storybook:  speech bubbles with floating actions and cloud thoughts
+ * Mock-up: docs/design/2026-10-08-script-chat-looks-mockup.html
+ */
+export type ChatStyle = 'screenplay' | 'transcript' | 'storybook';
+
 /** Overlay drawers that slide out over the main content. */
 type Overlay =
   | 'settings' | 'memory' | 'vocab' | 'diary' | 'stats' | 'timeline' | 'analytics'
@@ -131,6 +140,8 @@ interface AppState {
   advancedMode: boolean;
   /** @deprecated Use setSettingsTier. Kept for backward compatibility. */
   toggleAdvancedMode: () => void;
+  chatStyle: ChatStyle;
+  setChatStyle: (style: ChatStyle) => void;
   layoutMode: LayoutMode;
   setLayoutMode: (mode: LayoutMode) => void;
   /** Computed: true when layoutMode is compact or mobile (hides descriptions). */
@@ -369,6 +380,8 @@ export const useAppStore = create<AppState>()(
         const current = get().settingsTier;
         get().setSettingsTier(current >= 1 ? 0 : 1);
       },
+      chatStyle: 'screenplay',
+      setChatStyle: (style) => set({ chatStyle: style }),
       layoutMode: 'normal',
       setLayoutMode: (mode) => set({
         layoutMode: mode,
@@ -488,6 +501,7 @@ export const useAppStore = create<AppState>()(
         chatLayout: s.chatLayout,
         settingsTier: s.settingsTier,
         layoutMode: s.layoutMode,
+        chatStyle: s.chatStyle,
         sidebarCollapsed: s.sidebarCollapsed,
         sidebarSection: s.sidebarSection,
         customKeyBindings: s.customKeyBindings,

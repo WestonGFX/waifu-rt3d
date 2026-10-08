@@ -1,0 +1,87 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Script-style chat segments — speech / action / scene / thought / memory.
+   Three user-selectable looks (appStore.chatStyle); reference mock-up:
+   docs/design/2026-10-08-script-chat-looks-mockup.html
+
+   Segment hues are blended with the active theme's text colour so they stay
+   readable in all 18 themes (dark text on light themes, light text on dark).
+   Declared on .seg-script (not :root) so var(--color-text-primary) resolves
+   in the element's own theme context.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.seg-script {
+  --seg-action: color-mix(in srgb, #d8506c 62%, var(--color-text-primary));
+  --seg-narration: color-mix(in srgb, #b8862b 58%, var(--color-text-primary));
+  --seg-thought: color-mix(in srgb, #7a66d0 62%, var(--color-text-primary));
+  --seg-memory: color-mix(in srgb, #2f9a85 58%, var(--color-text-primary));
+  --seg-action-bg: color-mix(in srgb, var(--seg-action) 11%, transparent);
+  --seg-narration-bg: color-mix(in srgb, var(--seg-narration) 11%, transparent);
+  --seg-thought-bg: color-mix(in srgb, var(--seg-thought) 11%, transparent);
+  --seg-memory-bg: color-mix(in srgb, var(--seg-memory) 12%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.seg-script .seg-text p { margin: 0; }
+
+.seg-action .seg-text, .seg-thought .seg-text { font-style: italic; }
+.seg-action { color: var(--seg-action); }
+.seg-narration { color: var(--seg-narration); }
+.seg-thought { color: var(--seg-thought); }
+.seg-memory { color: var(--seg-memory); }
+.seg-speech { color: inherit; }
+
+/* ── A: Screenplay ─────────────────────────────────────────────────── */
+.seg-v-screenplay .seg-narration {
+  font-variant: small-caps; letter-spacing: 0.03em; font-size: 0.93em;
+  text-align: center; padding: 2px 10px;
+}
+.seg-v-screenplay .seg-action { padding-left: 12px; border-left: 3px solid var(--seg-action); }
+.seg-v-screenplay .seg-speech { font-weight: 600; }
+.seg-v-screenplay .seg-thought { padding-left: 12px; border-left: 3px dotted var(--seg-thought); }
+.seg-v-screenplay .seg-thought::before {
+  content: "(thinks) "; font-style: normal; font-size: 0.8em; font-weight: 700;
+}
+.seg-v-screenplay .seg-memory { font-size: 0.85em; }
+.seg-v-screenplay .seg-memory::before { content: "remembers: "; font-weight: 800; }
+
+/* ── B: Transcript with tag gutter ─────────────────────────────────── */
+.seg-v-transcript { gap: 0; border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; }
+.seg-v-transcript .seg {
+  display: grid; grid-template-columns: 58px 1fr; gap: 10px; align-items: baseline;
+  padding: 6px 10px; border-top: 1px solid var(--color-border);
+}
+.seg-v-transcript .seg:first-child { border-top: 0; }
+.seg-v-transcript .seg-tag {
+  font-size: 10px; font-weight: 900; letter-spacing: 0.07em; text-transform: uppercase;
+  text-align: center; padding: 2px 0; border-radius: 6px;
+}
+.seg-v-transcript .seg-speech .seg-tag { background: var(--color-accent-soft); color: var(--color-accent); }
+.seg-v-transcript .seg-action .seg-tag { background: var(--seg-action-bg); }
+.seg-v-transcript .seg-narration .seg-tag { background: var(--seg-narration-bg); }
+.seg-v-transcript .seg-thought .seg-tag { background: var(--seg-thought-bg); }
+.seg-v-transcript .seg-memory .seg-tag { background: var(--seg-memory-bg); }
+
+/* ── C: Storybook ──────────────────────────────────────────────────── */
+.seg-v-storybook { gap: 8px; }
+.seg-v-storybook .seg-speech {
+  align-self: flex-start; max-width: 92%; padding: 8px 14px; font-weight: 600;
+  background: var(--color-accent-soft); border: 1px solid var(--color-border);
+  border-radius: 18px 18px 18px 5px;
+}
+.seg-v-storybook .seg-action,
+.seg-v-storybook .seg-narration {
+  align-self: center; max-width: 96%; text-align: center; font-size: 0.93em; padding: 4px 14px;
+}
+.seg-v-storybook .seg-action { background: var(--seg-action-bg); border-radius: 99px; }
+.seg-v-storybook .seg-narration { background: var(--seg-narration-bg); border-radius: 10px; }
+.seg-v-storybook .seg-thought {
+  align-self: flex-start; max-width: 82%; margin-left: 10px; padding: 7px 15px;
+  border: 2px dotted var(--seg-thought); border-radius: 26px; background: var(--seg-thought-bg);
+}
+.seg-v-storybook .seg-memory {
+  align-self: flex-start; font-size: 0.82em; font-weight: 700; padding: 3px 11px;
+  border-radius: 99px; background: var(--seg-memory-bg);
+}
+.seg-v-storybook .seg-memory::before { content: "\2661  "; }

@@ -7,6 +7,7 @@ import { ChatImageLightbox } from './ChatImageLightbox';
 import { downloadUrl } from '../lib/downloadFile';
 import { api } from '../lib/api';
 import { parseFull } from '../lib/parseActions';
+import { parseSegments, type SegmentKind } from '../lib/parseSegments';
 import { stripAnnotations } from '../lib/textUtils';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
@@ -247,6 +248,34 @@ function MarkdownText({ text, query }: { text: string; query: string }) {
 
   flushPara();
   return <>{elements}</>;
+}
+
+const SEGMENT_TAG: Record<SegmentKind, string> = {
+  speech: 'Say', action: 'Do', narration: 'Scene', thought: 'Think', memory: 'Recall',
+};
+
+/**
+ * Renders a message as a labeled script (speech / action / scene / thought /
+ * memory) in the look chosen in Settings (`chatStyle`). Plain messages that
+ * are just speech render exactly as before in every style — no extra chrome.
+ * Segment parsing and syntax: lib/parseSegments.ts. Looks: styles/segments.css.
+ */
+function ScriptText({ text, query }: { text: string; query: string }) {
+  const chatStyle = useAppStore((s) => s.chatStyle);
+  const segments = parseSegments(text);
+  if (segments.length === 0 || (segments.length === 1 && segments[0].kind === 'speech')) {
+    return <MarkdownText text={text} query={query} />;
+  }
+  return (
+    <div className={`seg-script seg-v-${chatStyle}`}>
+      {segments.map((seg, i) => (
+        <div key={i} className={`seg seg-${seg.kind}`}>
+          {chatStyle === 'transcript' && <span className="seg-tag">{SEGMENT_TAG[seg.kind]}</span>}
+          <div className="seg-text"><MarkdownText text={seg.text} query={query} /></div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -722,7 +751,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
             </div>
           ) : (
             <>
-              <MarkdownText text={stripAnnotations(message.text)} query={searchQuery} />
+              <ScriptText text={stripAnnotations(message.text)} query={searchQuery} />
               {message.editedAt && (
                 <span
                   title={`Edited ${new Date(message.editedAt).toLocaleString()}`}
@@ -850,7 +879,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
             />
           ) : message.status === 'streaming' ? (
             <span>
-              <MarkdownText text={stripAnnotations(message.text)} query={searchQuery} />
+              <ScriptText text={stripAnnotations(message.text)} query={searchQuery} />
               <span
                 style={{
                   display: 'inline-block',
@@ -896,7 +925,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               </div>
             </div>
           ) : (
-            <MarkdownText text={stripAnnotations(message.text)} query={searchQuery} />
+            <ScriptText text={stripAnnotations(message.text)} query={searchQuery} />
           )}
         </div>
 

@@ -209,7 +209,7 @@ async def lifespan(app: FastAPI):
         "onboarded", "avatar_url", "model_vrm", "live2d_model",
         "bg_image", "background_mode", "memory", "services", "system",
         "prompt_tier", "default_frontend", "rp_style_preset", "user_persona",
-        "soundscape_enabled",
+        "soundscape_enabled", "reply_pills_count", "reply_pills_action",
     }
     for key in cfg:
         if key not in _KNOWN_CFG_KEYS:
@@ -1425,23 +1425,24 @@ def _parse_emotion_gesture(text: str) -> tuple:
     return emotion, gesture, clean or text
 
 
-def _parse_quick_replies(text: str) -> tuple[list[str], str]:
+def _parse_quick_replies(text: str, max_replies: int = 3) -> tuple[list[str], str]:
     """Extract a ``<quick_replies>`` block from an LLM reply.
 
-    The chat-stream endpoint instructs the model to append exactly three short
+    The chat-stream endpoint instructs the model to append two or three short
     user-perspective reply suggestions inside a ``<quick_replies>...</quick_replies>``
     block at the very end of its response.  This helper extracts them and returns
     the cleaned reply (with the block removed) so the user only sees the dialogue.
 
     Each line inside the block is treated as one suggestion.  Blank lines and lines
-    longer than 80 characters are dropped; the result is capped at 3 entries.
+    longer than 80 characters are dropped; the result is capped at *max_replies*.
 
     Args:
         text: Raw LLM reply text, possibly ending with a quick_replies block.
+        max_replies: Maximum suggestions to keep (the user's ``reply_pills_count``).
 
     Returns:
         Tuple of ``(replies, clean_reply)`` where:
-          - *replies* is a list of 0-3 short suggestion strings.
+          - *replies* is a list of 0-*max_replies* short suggestion strings.
           - *clean_reply* is *text* with the entire block stripped, whitespace
             trimmed; falls back to the original *text* if stripping leaves an
             empty string.
@@ -1468,27 +1469,46 @@ def _parse_quick_replies(text: str) -> tuple[list[str], str]:
         ln = ln.strip('"\'')
         if ln and len(ln) <= 80:
             cleaned.append(ln)
-        if len(cleaned) >= 3:
+        if len(cleaned) >= max_replies:
             break
     clean_text = re.sub(r'<quick_replies>.*?</quick_replies>', '', text, flags=re.IGNORECASE | re.DOTALL).strip()
     return cleaned, clean_text or text
 
 
-# System message appended to every chat-stream request to elicit context-aware
-# quick-reply suggestions inline with the main reply. Replaces the previous
-# two-phase architecture (regex heuristic + post-hoc /api/llm/generate call)
-# which suffered from silent timeouts and zero conversation context.
-_QUICK_REPLIES_INSTRUCTION = (
-    "After your reply, on a NEW line, append a single block exactly in this format:\n"
-    "<quick_replies>\n"
-    "{a short reply the user might say in their own voice — affectionate or warm}\n"
-    "{a different direction or a curious follow-up question advancing the conversation}\n"
-    "{a playful, teasing, or unexpected option that fits this character}\n"
-    "</quick_replies>\n"
-    "Each suggestion: under 60 characters, written as the USER speaking to the character "
-    "(not the character speaking), and concretely tied to what just happened in this turn. "
-    "No quotes, no bullets, no numbering. Only three lines inside the block."
-)
+def _reply_pills_count(cfg: dict) -> int:
+    """Return the user's ``reply_pills_count`` setting, coerced to 2 or 3 (default 3)."""
+    return 2 if cfg.get("reply_pills_count") == 2 else 3
+
+
+def _build_quick_replies_instruction(count: int = 3) -> str:
+    """Build the system message that asks the model for *count* (2 or 3) reply pills.
+
+    Appended to every chat-stream request to elicit context-aware quick-reply
+    suggestions inline with the main reply. Replaces the previous two-phase
+    architecture (regex heuristic + post-hoc /api/llm/generate call) which
+    suffered from silent timeouts and zero conversation context. With 2 pills the
+    curious follow-up line is dropped, keeping one warm and one playful option.
+    """
+    lines = [
+        "{a short reply the user might say in their own voice — affectionate or warm}\n",
+        "{a different direction or a curious follow-up question advancing the conversation}\n",
+        "{a playful, teasing, or unexpected option that fits this character}\n",
+    ]
+    if count == 2:
+        lines = [lines[0], lines[2]]
+    word = "two" if count == 2 else "three"
+    return (
+        "After your reply, on a NEW line, append a single block exactly in this format:\n"
+        "<quick_replies>\n"
+        + "".join(lines)
+        + "</quick_replies>\n"
+        "Each suggestion: under 60 characters, written as the USER speaking to the character "
+        "(not the character speaking), and concretely tied to what just happened in this turn. "
+        f"No quotes, no bullets, no numbering. Only {word} lines inside the block."
+    )
+
+
+_QUICK_REPLIES_INSTRUCTION = _build_quick_replies_instruction(3)
 
 
 def _maybe_auto_compress(
@@ -6060,11 +6080,13 @@ async def chat_stream(req: Request):
     )
     llm_messages = assembled_s.messages
     # Phase 2 (piggyback quick-replies): append a final system message asking the
-    # model to emit 3 reply suggestions inside a <quick_replies>...</quick_replies>
-    # block at the end of its reply. Parsed + stripped server-side before the
-    # cleaned text is persisted, so users never see the raw block.
+    # model to emit 2-3 reply suggestions (user's reply_pills_count) inside a
+    # <quick_replies>...</quick_replies> block at the end of its reply. Parsed +
+    # stripped server-side before the cleaned text is persisted, so users never
+    # see the raw block.
+    _pill_count_s = _reply_pills_count(cfg)
     llm_messages = list(llm_messages) + [
-        {"role": "system", "content": _QUICK_REPLIES_INSTRUCTION}
+        {"role": "system", "content": _build_quick_replies_instruction(_pill_count_s)}
     ]
     # Derive hist for lorebook keyword scanning (non-system messages)
     hist = [m for m in llm_messages if m["role"] != "system"]
@@ -6210,7 +6232,7 @@ async def chat_stream(req: Request):
                 full_reply = _strip_kokoro_envelope(full_reply, bool(_kokoro_fragment_s))
                 emotion, gesture, clean_reply = _parse_emotion_gesture(full_reply)
                 # Phase 2 (piggyback quick-replies): see _parse_quick_replies docstring.
-                _quick_replies, clean_reply = _parse_quick_replies(clean_reply)
+                _quick_replies, clean_reply = _parse_quick_replies(clean_reply, _pill_count_s)
 
                 if not incognito:
                     _asst_imp_s = _score_msg_s(clean_reply, "assistant", emotion_intensity=1.0)
@@ -6533,7 +6555,7 @@ async def chat_stream(req: Request):
                 # Phase 2 (piggyback quick-replies): extract the <quick_replies>
                 # block the model was instructed to append. Strip from clean_reply
                 # before persisting so the user never sees the raw markup.
-                _quick_replies, clean_reply = _parse_quick_replies(clean_reply)
+                _quick_replies, clean_reply = _parse_quick_replies(clean_reply, _pill_count_s)
 
                 # T1-7: Apply user-defined regex format rules
                 try:

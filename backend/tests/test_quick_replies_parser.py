@@ -11,7 +11,12 @@ from __future__ import annotations
 
 import pytest
 
-from backend.server import _parse_quick_replies
+from backend.server import (
+    _QUICK_REPLIES_INSTRUCTION,
+    _build_quick_replies_instruction,
+    _parse_quick_replies,
+    _reply_pills_count,
+)
 
 
 def test_canonical_block_extracts_three_replies() -> None:
@@ -129,3 +134,47 @@ def test_blank_lines_inside_block_are_ignored() -> None:
     )
     replies, _ = _parse_quick_replies(text)
     assert replies == ["First", "Second", "Third"]
+
+
+def test_max_replies_two_caps_output() -> None:
+    """With ``max_replies=2`` (user picked 2 pills) only the first two are kept."""
+    text = "Hi.\n<quick_replies>\nOne\nTwo\nThree\n</quick_replies>"
+    replies, clean = _parse_quick_replies(text, 2)
+    assert replies == ["One", "Two"]
+    assert clean == "Hi."
+
+
+@pytest.mark.parametrize(
+    ("cfg", "expected"),
+    [
+        ({}, 3),
+        ({"reply_pills_count": 3}, 3),
+        ({"reply_pills_count": 2}, 2),
+        ({"reply_pills_count": 5}, 3),
+        ({"reply_pills_count": "2"}, 3),
+        ({"reply_pills_count": None}, 3),
+    ],
+)
+def test_reply_pills_count_coerces_to_two_or_three(cfg: dict, expected: int) -> None:
+    """Missing or malformed settings fall back to 3; only an exact 2 selects 2."""
+    assert _reply_pills_count(cfg) == expected
+
+
+def test_instruction_default_is_three_pills() -> None:
+    """The legacy constant still asks for three lines (warm, curious, playful)."""
+    assert _QUICK_REPLIES_INSTRUCTION == _build_quick_replies_instruction(3)
+    assert "Only three lines inside the block." in _QUICK_REPLIES_INSTRUCTION
+    assert "affectionate or warm" in _QUICK_REPLIES_INSTRUCTION
+    assert "curious follow-up" in _QUICK_REPLIES_INSTRUCTION
+    assert "playful, teasing" in _QUICK_REPLIES_INSTRUCTION
+
+
+def test_instruction_two_pills_drops_curious_line() -> None:
+    """Two pills keep the warm + playful lines and ask for exactly two lines."""
+    instr = _build_quick_replies_instruction(2)
+    assert "Only two lines inside the block." in instr
+    assert "affectionate or warm" in instr
+    assert "playful, teasing" in instr
+    assert "curious follow-up" not in instr
+    block = instr.split("<quick_replies>\n", 1)[1].split("</quick_replies>", 1)[0]
+    assert len(block.strip().splitlines()) == 2

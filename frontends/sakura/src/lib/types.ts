@@ -286,6 +286,10 @@ export interface ChatResponse {
 }
 
 export interface AppConfig {
+  /** Number of quick-reply pills the model is asked for. Default 3. */
+  reply_pills_count?: 2 | 3;
+  /** Pill click: 'fill' drops it in the composer, 'send' sends it. Default 'fill'. */
+  reply_pills_action?: 'fill' | 'send';
   [key: string]: unknown;
 }
 

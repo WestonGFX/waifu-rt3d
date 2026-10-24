@@ -30,6 +30,7 @@ import { VoiceConversationPanel } from '../components/VoiceConversationPanel';
 // Session-46: GreetingCard removed from render. Import dropped.
 // import { GreetingCard } from '../components/GreetingCard';
 import { RichComposer, type RichComposerHandle } from '../components/RichComposer';
+import { applyReplyPill, getReplyPillAction } from '../lib/replyPills';
 import { LLMProbeAside } from '../components/LLMProbeAside';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -1040,8 +1041,12 @@ export function ChatThread() {
                   <button
                     key={i}
                     onClick={() => {
-                      if (useChatStore.getState().draft) return;
-                      sendMessage(chip, true, incognito, effectiveMaxTokens);
+                      applyReplyPill(chip, getReplyPillAction(config), {
+                        getDraft: () => useChatStore.getState().draft,
+                        setDraft,
+                        send: (text) => sendMessage(text, true, incognito, effectiveMaxTokens),
+                        focusComposer: () => textareaRef.current?.focus(),
+                      });
                     }}
                     className="px-3 py-1.5 text-xs rounded-full transition-all duration-150"
                     style={{

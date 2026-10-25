@@ -30,6 +30,17 @@ _REASONING_MODEL_PATTERNS = re.compile(
 )
 
 
+class ReasoningChunk(str):
+    """A streamed fragment of the model's *reasoning* (``delta.reasoning_content``).
+
+    It is a ``str`` subclass so any consumer that just concatenates tokens keeps
+    working unchanged, while the chat stream can ``isinstance``-check it and route
+    it to the thinking card instead of the reply.
+    """
+
+    __slots__ = ()
+
+
 def _is_reasoning_model(model: str) -> bool:
     """Whether the model name looks like a reasoning/thinking-mode family.
 
@@ -54,6 +65,77 @@ def _is_reasoning_model(model: str) -> bool:
     return bool(_REASONING_MODEL_PATTERNS.search(model))
 
 
+def _system_text(content) -> str:
+    """Plain text of a message's ``content`` (string or OpenAI multi-part list).
+
+    Non-text parts (images etc.) are not representable in a system prompt; they are
+    skipped and logged rather than silently vanishing.
+    """
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        texts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
+        if len(texts) != len(content):
+            logger.warning("openai_compat: dropped %d non-text part(s) from a system message", len(content) - len(texts))
+        return "\n".join(t for t in texts if t).strip()
+    if content:
+        logger.warning("openai_compat: dropped system message with unsupported content type %s", type(content).__name__)
+    return ""
+
+
+def _merge_system_messages(messages: list[dict]) -> list[dict]:
+    """Make the message list valid for strict chat templates (Qwen3 family).
+
+    Qwen3-family templates raise ("System message must be at the beginning") when a
+    system message follows a user turn, and LM Studio answers with a 500. The app
+    legitimately sends several system messages — recalled memories up front and a
+    trailing quick-reply/format instruction — so:
+
+    * system messages before the first non-system message merge into one leading
+      system message;
+    * later system messages are folded into the **final user turn**, in order, so a
+      deliberately trailing instruction keeps its recency (small models obey the
+      last thing they read). With no user turn they join the leading message.
+
+    Args:
+        messages: OpenAI-style message dicts.
+
+    Returns:
+        A new list; the input is not mutated.
+
+    Example:
+        >>> _merge_system_messages([
+        ...     {"role": "system", "content": "A"},
+        ...     {"role": "user", "content": "hi"},
+        ...     {"role": "system", "content": "B"},
+        ... ])
+        [{'role': 'system', 'content': 'A'}, {'role': 'user', 'content': 'hi\\n\\nB'}]
+    """
+    leading: list[str] = []
+    late: list[str] = []
+    rest: list[dict] = []
+    for m in messages:
+        if m.get("role") == "system":
+            text = _system_text(m.get("content"))
+            if not text:
+                continue
+            (late if rest else leading).append(text)
+        else:
+            rest.append(dict(m))
+
+    if late:
+        for i in range(len(rest) - 1, -1, -1):
+            if rest[i].get("role") == "user" and isinstance(rest[i].get("content"), str):
+                rest[i]["content"] = "\n\n".join([rest[i]["content"], *late])
+                break
+        else:
+            leading.extend(late)
+
+    if not leading:
+        return rest
+    return [{"role": "system", "content": "\n\n".join(leading)}, *rest]
+
+
 def _apply_reasoning_defaults(payload: dict, model: str) -> None:
     """Disable thinking-mode output for reasoning-family models.
 
@@ -73,6 +155,8 @@ def _apply_reasoning_defaults(payload: dict, model: str) -> None:
     """
     if not _is_reasoning_model(model):
         return
+    if payload.get("messages"):
+        payload["messages"] = _merge_system_messages(payload["messages"])
     if "chat_template_kwargs" not in payload:
         payload["chat_template_kwargs"] = {"enable_thinking": False}
 
@@ -244,7 +328,7 @@ class OpenAICompatAdapter(LLMAdapter):
             if not reply and msg.get("reasoning_content"):
                 reply = msg["reasoning_content"]
                 logger.info("openai_compat: empty content; fell back to reasoning_content (%d chars)", len(reply))
-            return {"ok": True, "reply": reply, "raw": data}
+            return {"ok": True, "reply": reply, "reasoning": msg.get("reasoning_content") or "", "raw": data}
 
         except requests.exceptions.Timeout:
             return {"ok": False, "error": "Request Timed Out", "code": "ERR_TIMEOUT"}
@@ -351,7 +435,7 @@ class OpenAICompatAdapter(LLMAdapter):
                     else:
                         reasoning = delta.get("reasoning_content")
                         if reasoning and (is_reasoning or not saw_any_content):
-                            yield reasoning
+                            yield ReasoningChunk(reasoning)
 
                     # Handle streamed tool calls
                     tool_calls = delta.get("tool_calls")

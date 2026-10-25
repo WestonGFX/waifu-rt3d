@@ -110,14 +110,14 @@ Or just use the provided wrapper: `./run.sh` (starts server) · `./run.sh test` 
 
 ## Project Overview
 
-This project uses Python (FastAPI backend) + React/TypeScript frontends + a shared Three.js 3D viewer. Main server: `backend/server.py` (~13K lines). Primary frontend: `frontends/sakura/` (React 19 + Zustand + Framer Motion). 9 frontend directories exist but Sakura is the active one. The 3D viewer runs in an iframe (`frontends/shared/viewer/viewer.html`) controlled via postMessage from `viewerStore.ts`. Schema: v60 (`backend/preflight.py`). Always check for Python f-string backslash issues before committing.
+This project uses Python (FastAPI backend) + React/TypeScript frontends + a shared Three.js 3D viewer. Main server: `backend/server.py` (~13K lines). Primary frontend: `frontends/sakura/` (React 19 + Zustand + Framer Motion). 9 frontend directories exist but Sakura is the active one. The 3D viewer runs in an iframe (`frontends/shared/viewer/viewer.html`) controlled via postMessage from `viewerStore.ts`. Schema: v90 (`backend/preflight.py`). Always check for Python f-string backslash issues before committing.
 
 ## Key Directories
 
 | Path | Purpose |
 |------|---------|
 | `backend/server.py` | FastAPI server (all API endpoints) |
-| `backend/preflight.py` | DB migrations (v3 → v60) |
+| `backend/preflight.py` | DB migrations (v3 → v90) |
 | `backend/llm/` | LLM adapters, context assembler, token counter |
 | `backend/voice/` | Full-duplex voice, audio utils |
 | `backend/spectator/` | Game companion (VLM frame analysis) |
@@ -275,3 +275,5 @@ Convention guides live in `docs/conventions/` — consult them when working in u
 - `frontend-and-ui.md` — React/Zustand/theme system
 - `3d-viewer-and-animation.md` — Three.js/VRM/Live2D/viewer.html
 - `llm-and-voice.md` — LLM adapters, voice pipeline, TTS/STT
+
+**Start every session at `docs/INDEX.md`** (map of all docs + active work threads, so parallel chats know about each other). Also: `docs/reference/settings-and-hud-inventory.md` (every setting + HUD element), `docs/reference/chat-script-and-thinking.md` (script-style chat, thinking card, reply animation), `docs/SETTINGS_REFERENCE.md` (backend config). Update the relevant reference + `docs/INDEX.md` in the same commit as a feature.

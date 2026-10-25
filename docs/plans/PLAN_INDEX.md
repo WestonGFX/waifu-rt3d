@@ -8,6 +8,8 @@ All plans stored in `~/.claude/plans/`. Project-specific plans also referenced i
 |------|------|-------------|--------|
 | `2026-03-25-workflow-overhaul-phase-20.md` | 2026-03-25 | Workflow overhaul + Phase 20 completion | IN PROGRESS |
 | `transient-wishing-seahorse.md` | 2026-03-25 | Workflow overhaul execution (Waves 1-5) | IN PROGRESS |
+| `docs/plans/2026-10-08-script-style-chat-segments.md` | 2026-10-08 | Script-style chat (speech/action/scene/thought/memory), thinking card, reply animation. Reference: `docs/reference/chat-script-and-thinking.md` | IN PROGRESS (phases 1-3 + animation shipped locally) |
+| `docs/plans/2026-10-04-kokoro-model-bench-and-fix.md` | 2026-10-04 | Kokoro model benchmark harness → pick model/fix → Emotional RAG (now schema v91) | IN PROGRESS (real sweep not run) |
 | `2026-03-21-research-cycle-2-feature-expansion.md` | 2026-03-21 | Research Cycle 2 + AI Model Ecosystem + Deep Feature Expansion (Phases 14-20) | PARTIAL |
 
 ## Completed Plans

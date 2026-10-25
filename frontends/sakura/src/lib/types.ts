@@ -202,6 +202,10 @@ export interface ChatMessage {
    * image in place. Lives only in the Zustand store; not persisted.
    */
   imagePrompt?: string;
+  /** The model's hidden reasoning for this reply, if it produced any. Shown in the thinking card; never sent back to the model. */
+  thinking?: string;
+  /** The reply exactly as the model typed it, before tags/labels were parsed or stripped. */
+  rawOutput?: string;
   tokens?: number;
   tokensPerSecond?: number;
   latencyMs?: number;

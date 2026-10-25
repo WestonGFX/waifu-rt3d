@@ -29,7 +29,10 @@ const CYCLE: ThemeMode[] = [
 export const useTheme = create<ThemeStore>()(
   persist(
     (set) => ({
-      theme: 'sakura',
+      // Dev server defaults to dark + blue (Blurple) — Chris's preference while developing.
+      // Only a first-run default: a theme saved in localStorage ('sakura-theme') always wins,
+      // and production builds keep 'sakura'.
+      theme: import.meta.env.DEV ? 'blurple' : 'sakura',
       setTheme: (theme) => {
         document.documentElement.setAttribute('data-theme', theme);
         set({ theme });

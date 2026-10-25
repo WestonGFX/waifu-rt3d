@@ -271,6 +271,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       imagePrompt: m.image_prompt ?? undefined,
       editedAt: m.edited_at ?? undefined,
       voiceMessageUrl: m.voice_message_url ?? undefined,
+      thinking: m.thinking ?? undefined,
+      rawOutput: m.raw_output ?? undefined,
       reactions: Array.isArray(m.reactions) ? m.reactions : undefined,
     }));
     set({ messages });
@@ -318,6 +320,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
 
     let fullText = '';
+    let thinkingText = '';
     let tokenCount = 0;
     const streamStart = performance.now();
 
@@ -379,6 +382,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             break;
           }
 
+          case 'thinking':
+            // Model reasoning delta — goes to the thinking card, never into the reply text
+            thinkingText += data.t;
+            patchAssistant({ status: 'streaming', thinking: thinkingText });
+            break;
+
           case 'token':
             // Individual token — append to running text
             fullText += data.t;
@@ -417,6 +426,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
             patchAssistant({
               text: data.reply || fullText,
+              thinking: data.thinking || thinkingText || undefined,
+              rawOutput: data.raw_output || undefined,
               status: 'sent',
               stage: undefined,
               emotion: data.emotion,
@@ -468,6 +479,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           case 'stream_reset':
             // T0-25: Provider failed mid-stream — clear partial text before error
             fullText = '';
+            thinkingText = '';
             tokenCount = 0;
             patchAssistant({ text: '', status: 'pending' });
             break;

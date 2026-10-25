@@ -281,3 +281,108 @@ class TestChatStreamReasoningFallback:
             ))
         text_tokens = [t for t in tokens if isinstance(t, str)]
         assert text_tokens == ["surprise reasoning"]
+
+
+def test_merge_keeps_trailing_instruction_in_final_user_turn():
+    from backend.llm.adapters.openai_compat import _merge_system_messages
+
+    merged = _merge_system_messages([
+        {"role": "system", "content": "persona"},
+        {"role": "system", "content": "[Memory] a"},
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "hello"},
+        {"role": "user", "content": "again"},
+        {"role": "system", "content": "reply format"},
+    ])
+    assert [m["role"] for m in merged] == ["system", "user", "assistant", "user"]
+    assert merged[0]["content"] == "persona\n\n[Memory] a"
+    # Recency preserved: the late instruction is the LAST thing the model reads.
+    assert merged[-1]["content"] == "again\n\nreply format"
+    assert merged[1]["content"] == "hi"
+
+
+def test_merge_handles_list_content_and_blank_system_messages():
+    from backend.llm.adapters.openai_compat import _merge_system_messages
+
+    merged = _merge_system_messages([
+        {"role": "system", "content": [{"type": "text", "text": "multi"}, {"type": "text", "text": "part"}]},
+        {"role": "system", "content": "   "},
+        {"role": "user", "content": "hi"},
+    ])
+    assert merged == [
+        {"role": "system", "content": "multi\npart"},
+        {"role": "user", "content": "hi"},
+    ]
+
+
+def test_merge_without_user_turn_joins_late_system_into_leading():
+    from backend.llm.adapters.openai_compat import _merge_system_messages
+
+    merged = _merge_system_messages([{"role": "system", "content": "A"}])
+    assert merged == [{"role": "system", "content": "A"}]
+
+
+def test_merge_does_not_mutate_input():
+    from backend.llm.adapters.openai_compat import _merge_system_messages
+
+    msgs = [{"role": "user", "content": "hi"}, {"role": "system", "content": "late"}]
+    _merge_system_messages(msgs)
+    assert msgs == [{"role": "user", "content": "hi"}, {"role": "system", "content": "late"}]
+
+
+def test_reasoning_defaults_merge_system_for_qwen_only():
+    from backend.llm.adapters.openai_compat import _apply_reasoning_defaults
+
+    msgs = [{"role": "user", "content": "hi"}, {"role": "system", "content": "late"}]
+    qwen = {"messages": list(msgs)}
+    _apply_reasoning_defaults(qwen, "qwen/qwen3.5-9b")
+    assert all(m["role"] != "system" for m in qwen["messages"])
+    assert "late" in qwen["messages"][-1]["content"]
+
+    llama = {"messages": list(msgs)}
+    _apply_reasoning_defaults(llama, "llama-3.2-1b-instruct")
+    assert llama["messages"] == msgs
+
+
+class TestReasoningIsMarkedSeparately:
+    """The thinking card depends on reasoning deltas being distinguishable from the reply."""
+
+    def _stream(self, lines):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.encoding = "utf-8"
+        resp.iter_lines.return_value = iter(lines)
+        return resp
+
+    def _sse(self, **delta):
+        return "data: " + __import__("json").dumps({"choices": [{"delta": delta}]})
+
+    def test_reasoning_deltas_are_reasoning_chunks_and_reply_is_plain(self):
+        from backend.llm.adapters.openai_compat import ReasoningChunk
+
+        lines = [
+            self._sse(reasoning_content="Thinking... "),
+            self._sse(content="Hello!"),
+            "data: [DONE]",
+        ]
+        with patch("backend.llm.adapters.openai_compat.requests.post") as mock_post:
+            mock_post.return_value = self._stream(lines)
+            tokens = list(OpenAICompatAdapter().chat_stream(
+                messages=[{"role": "user", "content": "hi"}],
+                model="qwen/qwen3.5-9b",
+                endpoint="http://localhost:1234/v1",
+                api_key=None,
+            ))
+        assert [type(t) is ReasoningChunk for t in tokens] == [True, False]
+        assert "".join(tokens) == "Thinking... Hello!"  # back-compat: still a str stream
+
+    def test_non_stream_chat_returns_reasoning_separately(self):
+        body = {"choices": [{"message": {"content": "Hi!", "reasoning_content": "because"}}]}
+        resp = MagicMock(status_code=200)
+        resp.json.return_value = body
+        with patch("backend.llm.adapters.openai_compat.requests.post", return_value=resp):
+            out = OpenAICompatAdapter().chat(
+                messages=[{"role": "user", "content": "hi"}],
+                model="qwen/qwen3.5-9b", endpoint="http://localhost:1234/v1", api_key=None,
+            )
+        assert out["reply"] == "Hi!" and out["reasoning"] == "because"

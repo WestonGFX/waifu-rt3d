@@ -386,7 +386,7 @@ export const api = {
     patch<{ ok: boolean; tags: string[] }>(`/api/sessions/${id}/tags`, { tags }),
   deleteSession: (id: number) => del<{ ok: boolean; deleted_messages: number }>(`/api/sessions/${id}`),
   getMessages: (sessionId: number) =>
-    get<{ messages: Array<{ id: number; role: string; text: string; ts: string; emotion?: string; parent_id?: number | null; is_active?: number; pinned?: number; image_url?: string; image_prompt?: string; edited_at?: number | null; voice_message_url?: string; reactions?: string[] }> }>(
+    get<{ messages: Array<{ id: number; role: string; text: string; ts: string; emotion?: string; parent_id?: number | null; is_active?: number; pinned?: number; image_url?: string; image_prompt?: string; edited_at?: number | null; voice_message_url?: string; thinking?: string; raw_output?: string; reactions?: string[] }> }>(
       `/api/sessions/${sessionId}/messages`
     ),
   /**

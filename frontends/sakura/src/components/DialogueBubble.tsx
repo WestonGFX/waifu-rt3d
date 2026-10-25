@@ -3,10 +3,12 @@ import { AnimatePresence } from 'framer-motion';
 import { Volume2, Pin, ChevronLeft, ChevronRight, RefreshCw, Check, X, Clock } from 'lucide-react';
 import type { ChatMessage, Character } from '../lib/types';
 import { MessageMeta } from './MessageMeta';
+import { ThinkingCard } from './ThinkingCard';
 import { ChatImageLightbox } from './ChatImageLightbox';
 import { downloadUrl } from '../lib/downloadFile';
 import { api } from '../lib/api';
 import { parseFull } from '../lib/parseActions';
+import { parseSegments, type SegmentKind } from '../lib/parseSegments';
 import { stripAnnotations } from '../lib/textUtils';
 import { useAppStore } from '../stores/appStore';
 import { useChatStore } from '../stores/chatStore';
@@ -247,6 +249,39 @@ function MarkdownText({ text, query }: { text: string; query: string }) {
 
   flushPara();
   return <>{elements}</>;
+}
+
+const SEGMENT_TAG: Record<SegmentKind, string> = {
+  speech: 'Say', action: 'Do', narration: 'Scene', thought: 'Think', memory: 'Recall',
+};
+
+/**
+ * Renders a message as a labeled script (speech / action / scene / thought /
+ * memory) in the look chosen in Settings (`chatStyle`). Plain messages that
+ * are just speech render exactly as before in every style — no extra chrome.
+ * Segment parsing and syntax: lib/parseSegments.ts. Looks: styles/segments.css.
+ */
+function ScriptText({ text, query, reveal }: { text: string; query: string; reveal?: 'fade' | 'beats' }) {
+  const chatStyle = useAppStore((s) => s.chatStyle);
+  const segments = parseSegments(text);
+  if (segments.length === 0 || (segments.length === 1 && segments[0].kind === 'speech')) {
+    const plain = <MarkdownText text={text} query={query} />;
+    return reveal ? <div className="reply-reveal">{plain}</div> : plain;
+  }
+  return (
+    <div className={`seg-script seg-v-${chatStyle}${reveal === 'fade' ? ' reply-reveal' : ''}`}>
+      {segments.map((seg, i) => (
+        <div
+          key={i}
+          className={`seg seg-${seg.kind}${reveal === 'beats' ? ' seg-beat' : ''}`}
+          style={reveal === 'beats' ? { animationDelay: `${Math.min(i * 0.3, 2.4)}s` } : undefined}
+        >
+          {chatStyle === 'transcript' && <span className="seg-tag">{SEGMENT_TAG[seg.kind]}</span>}
+          <div className="seg-text"><MarkdownText text={seg.text} query={query} /></div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -522,6 +557,12 @@ function FailedActionCard({ message, onRetry }: { message: import('../lib/types'
 
 export function DialogueBubble({ message, character, onPlayAudio, isPlaying, searchQuery = '', onChoiceSelect, onRegenerate, onRegenerateImage, onBranchSwitch, onEdit, isLastAssistant = false, isRegenerating = false }: DialogueBubbleProps) {
   const thinkingMode = useAppStore(s => s.thinkingIndicatorMode);
+  const thoughtsMode = useAppStore(s => s.thoughtsMode);
+  const replyDelivery = useAppStore(s => s.replyDelivery);
+  // True once this bubble has been seen pending/streaming, i.e. the reply just arrived live
+  // (as opposed to a message loaded from history, which should never animate).
+  const arrivedLive = useRef(false);
+  if (message.status === 'pending' || message.status === 'streaming') arrivedLive.current = true;
   const [pinned, setPinned] = useState(message.pinned ?? false);
   const voiceUrl = message.voiceMessageUrl;
   const [editing, setEditing] = useState(false);
@@ -722,7 +763,7 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
             </div>
           ) : (
             <>
-              <MarkdownText text={stripAnnotations(message.text)} query={searchQuery} />
+              <ScriptText text={stripAnnotations(message.text)} query={searchQuery} />
               {message.editedAt && (
                 <span
                   title={`Edited ${new Date(message.editedAt).toLocaleString()}`}
@@ -749,6 +790,12 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
     <div
       className="dialogue-bubble mb-3"
     >
+      <ThinkingCard
+        thinking={message.thinking}
+        rawOutput={message.rawOutput}
+        mode={thoughtsMode}
+        streaming={message.status === 'streaming'}
+      />
       <div
         className="dialogue-her p-4 relative"
         style={{
@@ -848,9 +895,17 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               stage={message.stage}
               mode={thinkingMode}
             />
+          ) : message.status === 'streaming' && replyDelivery !== 'live' ? (
+            // Held back: show the waiting state until the whole reply is in, then animate it.
+            <ThinkingPlaceholder
+              charName={character?.name}
+              startedAt={message.createdAt}
+              stage={message.stage}
+              mode={thinkingMode}
+            />
           ) : message.status === 'streaming' ? (
             <span>
-              <MarkdownText text={stripAnnotations(message.text)} query={searchQuery} />
+              <ScriptText text={stripAnnotations(message.text)} query={searchQuery} />
               <span
                 style={{
                   display: 'inline-block',
@@ -896,7 +951,11 @@ export function DialogueBubble({ message, character, onPlayAudio, isPlaying, sea
               </div>
             </div>
           ) : (
-            <MarkdownText text={stripAnnotations(message.text)} query={searchQuery} />
+            <ScriptText
+              text={stripAnnotations(message.text)}
+              query={searchQuery}
+              reveal={arrivedLive.current && replyDelivery !== 'live' ? replyDelivery : undefined}
+            />
           )}
         </div>
 

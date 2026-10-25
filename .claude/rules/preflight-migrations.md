@@ -4,7 +4,7 @@ globs: backend/preflight.py
 
 # Migration Chain Rules for preflight.py
 
-This file contains 62+ sequential database migrations (v3 → v65). A broken migration chain corrupts every user's local database. Follow these rules exactly.
+This file contains sequential database migrations (v3 → v89). A broken migration chain corrupts every user's local database. Follow these rules exactly.
 
 ## Append-Only
 
@@ -15,7 +15,7 @@ This file contains 62+ sequential database migrations (v3 → v65). A broken mig
 ## Sequential Ordering
 
 - Migrations MUST be sequential — no gaps in version numbers.
-- Each new migration increments by exactly 1: v65 → v66, never v65 → v67.
+- Each new migration increments by exactly 1: v89 → v90, never v89 → v91.
 - Update `LATEST_SCHEMA_VERSION` constant at the top of the file.
 
 ## Function Signature
@@ -47,5 +47,5 @@ def migrate_to_vNN(con: sqlite3.Connection) -> bool:
 
 1. Run: `.venv/bin/python -m pytest backend/tests/test_preflight.py -q`
 2. Verify the full chain imports cleanly: `.venv/bin/python -c "import backend.preflight"`
-3. Update `CURRENT_STATUS.md` schema badge (e.g., `v65` → `v66`).
+3. Update `CURRENT_STATUS.md` schema badge (e.g., `v89` → `v90`).
 4. Update memory files if schema version changed.

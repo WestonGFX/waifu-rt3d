@@ -9,6 +9,7 @@
 #   ./run.sh check      Run ALL checks (pytest + tsc) + generate HTML dashboard
 #   ./run.sh frontend   Start Sakura frontend dev server (port 5173)
 #   ./run.sh both       Start backend + Sakura frontend concurrently
+#   ./run.sh bench      Benchmark local models on the Kokoro contract (tools/bench)
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -375,6 +376,13 @@ HTMLEOF
         npm run dev
         ;;
 
+    bench)
+        # Model benchmark (Kokoro structured-output). Extra args pass through:
+        #   ./run.sh bench --dry-run      ./run.sh bench report <file.jsonl>
+        cd "$SCRIPT_DIR"
+        exec "$VENV_PYTHON" -m tools.bench "${@:2}"
+        ;;
+
     *)
         printf "\e[31m[ERROR]\e[0m Unknown command: %s\n\n" "$MODE"
         printf "Usage:\n"
@@ -385,6 +393,7 @@ HTMLEOF
         printf "  ./run.sh check        Run ALL checks (pytest + tsc) with dashboard\n"
         printf "  ./run.sh frontend     Start Sakura dev server (port 5173)\n"
         printf "  ./run.sh both         Start backend + Sakura concurrently\n"
+        printf "  ./run.sh bench        Benchmark local models (LM Studio/Ollama) — see tools/bench/README.md\n"
         exit 1
         ;;
 esac

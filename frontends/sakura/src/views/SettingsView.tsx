@@ -2510,6 +2510,8 @@ interface GeneralTabProps {
 
 function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMode, layoutMode, setLayoutMode }: GeneralTabProps) {
   const { incognito, setIncognito, showQuickChips, setShowQuickChips, settingsMode, setSettingsMode, settingsTier, setSettingsTier, activeCharacter, thinkingIndicatorMode, setThinkingIndicatorMode } = useAppStore();
+  const pillCount = cfg('reply_pills_count', 3) === 2 ? 2 : 3;
+  const pillAction = cfg('reply_pills_action', 'fill') === 'send' ? 'send' : 'fill';
 
   /** Proactive messages: enabled toggle (per-character, PATCH /api/characters/{id}/proactive). */
   const [proactiveEnabled, setProactiveEnabled] = useState(Boolean(activeCharacter?.proactive_enabled));
@@ -3002,6 +3004,57 @@ function GeneralTab({ save, cfg, theme, setTheme, advancedMode, toggleAdvancedMo
               className="accent-[var(--color-accent)]"
             />
           </SettingField>
+          <div style={{ opacity: showQuickChips ? 1 : 0.5, pointerEvents: showQuickChips ? 'auto' : 'none' }}>
+            <SettingField
+              label="Pill count"
+              description="How many reply suggestions to show after each AI message."
+            >
+              <div
+                className="flex gap-0.5 p-0.5 rounded-lg"
+                style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border)' }}
+              >
+                {([2, 3] as const).map(n => (
+                  <button
+                    key={n}
+                    onClick={() => save('reply_pills_count', n)}
+                    className="px-3 py-1 rounded-md text-xs font-medium transition-all"
+                    style={{
+                      backgroundColor: pillCount === n ? 'var(--color-accent)' : 'transparent',
+                      color: pillCount === n ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
+                    }}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </SettingField>
+            <SettingField
+              label="On click"
+              description="Fill the composer so you can edit first, or send the reply immediately."
+            >
+              <div
+                className="flex gap-0.5 p-0.5 rounded-lg"
+                style={{ backgroundColor: 'var(--color-background)', border: '1px solid var(--color-border)' }}
+              >
+                {([
+                  { id: 'fill', label: 'Fill composer' },
+                  { id: 'send', label: 'Send immediately' },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => save('reply_pills_action', opt.id)}
+                    className="px-3 py-1 rounded-md text-xs font-medium transition-all"
+                    style={{
+                      backgroundColor: pillAction === opt.id ? 'var(--color-accent)' : 'transparent',
+                      color: pillAction === opt.id ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </SettingField>
+          </div>
           <SettingField
             label="Thinking Indicator Style"
             description="Skeleton: shimmering placeholder + elapsed timer (default). Stages: explicit Reading / Thinking / Generating rows."
